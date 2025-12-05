@@ -131,102 +131,86 @@ export function SettingsLocationTab({ user }: SettingsLocationTabProps) {
         </div>
       )}
 
-      {/* Main Content with Layout */}
-      <div className={`grid gap-6 ${hasLocationInfo ? 'md:grid-cols-2' : 'md:grid-cols-1'}`}>
-        {/* Location Section - Left/Top */}
-        <div>
-          <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-            <MapPin className="w-5 h-5" />
-            {t('profile_setup.location') || 'Localisation'} *
-          </h3>
-          
-          {hasParticipation ? (
-            // Display read-only location info if user has participation
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  {t('settings.continent') || 'Continent'}
-                </label>
-                <div className="w-full px-4 py-3 rounded-lg bg-gray-700 border border-gray-600 text-gray-400">
-                  {continent || '-'}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  {t('settings.region') || 'Région'}
-                </label>
-                <div className="w-full px-4 py-3 rounded-lg bg-gray-700 border border-gray-600 text-gray-400">
-                  {region || '-'}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  {t('settings.country') || 'Pays'}
-                </label>
-                <div className="w-full px-4 py-3 rounded-lg bg-gray-700 border border-gray-600 text-gray-400">
-                  {country || '-'}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  {t('settings.city') || 'Ville'}
-                </label>
-                <div className="w-full px-4 py-3 rounded-lg bg-gray-700 border border-gray-600 text-gray-400">
-                  {city || '-'}
-                </div>
+      {/* Main Content */}
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {hasParticipation ? (
+          // Display read-only location info if user has participation
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                {t('settings.continent') || 'Continent'}
+              </label>
+              <div className="w-full px-4 py-3 rounded-lg bg-gray-700/50 border border-gray-600 text-gray-300">
+                {continent || '-'}
               </div>
             </div>
-          ) : (
-            // Use SimpleLocationSelector if no participation
-            <SimpleLocationSelector
-              onCountryChange={setCountry}
-              onCityChange={setCity}
-              onRegionChange={setRegion}
-              onContinentChange={setContinent}
-              selectedCountry={country}
-              selectedCity={city}
-            />
-          )}
-        </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                {t('settings.region') || 'Région'}
+              </label>
+              <div className="w-full px-4 py-3 rounded-lg bg-gray-700/50 border border-gray-600 text-gray-300">
+                {region || '-'}
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                {t('settings.country') || 'Pays'}
+              </label>
+              <div className="w-full px-4 py-3 rounded-lg bg-gray-700/50 border border-gray-600 text-gray-300">
+                {country || '-'}
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                {t('settings.city') || 'Ville'}
+              </label>
+              <div className="w-full px-4 py-3 rounded-lg bg-gray-700/50 border border-gray-600 text-gray-300">
+                {city || '-'}
+              </div>
+            </div>
+          </div>
+        ) : (
+          // Use SimpleLocationSelector if no participation
+          <SimpleLocationSelector
+            onCountryChange={setCountry}
+            onCityChange={setCity}
+            onRegionChange={setRegion}
+            onContinentChange={setContinent}
+            selectedCountry={country}
+            selectedCity={city}
+          />
+        )}
 
-        {/* Current Location Info - Right/Bottom (only if info exists) */}
+        {/* Current Location Summary */}
         {hasLocationInfo && (
-          <div className="bg-gray-700/50 rounded-lg p-6 border border-gray-600">
-            <h4 className="text-lg font-semibold text-white mb-4">
-              {t('settings.current_location') || 'Localisation actuelle'}
-            </h4>
-            <div className="space-y-3">
-              <div>
-                <p className="text-sm text-gray-400 mb-1">
-                  {t('settings.continent') || 'Continent'}
-                </p>
-                <p className="text-white font-medium">{continent}</p>
+          <div className="bg-gradient-to-r from-myfav-primary/10 to-transparent rounded-lg p-4 border border-myfav-primary/20">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-myfav-primary/20 rounded-lg">
+                <MapPin className="w-5 h-5 text-myfav-primary" />
               </div>
               <div>
-                <p className="text-sm text-gray-400 mb-1">
-                  {t('settings.region') || 'Région'}
+                <p className="text-sm text-gray-400">{t('settings.current_location') || 'Localisation actuelle'}</p>
+                <p className="text-white font-medium">
+                  {city}, {country} • {region}, {continent}
                 </p>
-                <p className="text-white font-medium">{region}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-400 mb-1">
-                  {t('settings.country') || 'Pays'}
-                </p>
-                <p className="text-white font-medium">{country}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-400 mb-1">
-                  {t('settings.city') || 'Ville'}
-                </p>
-                <p className="text-white font-medium">{city}</p>
               </div>
             </div>
           </div>
         )}
-      </div>
+
+        {/* Submit Button */}
+        {!hasParticipation && (
+          <div className="flex justify-end gap-3 pt-6 border-t border-gray-700">
+            <Button
+              type="submit"
+              disabled={isLoading || !city}
+              className="bg-myfav-primary hover:bg-myfav-primary/90 text-white font-bold"
+            >
+              {isLoading ? t('common.submitting') || 'Enregistrement...' : t('settings.save') || 'Enregistrer'}
+            </Button>
+          </div>
+        )}
+      </form>
     </div>
   )
 }
