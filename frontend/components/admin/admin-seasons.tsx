@@ -96,7 +96,6 @@ export default function AdminSeasons() {
             'land': 'level_country',
             'régional': 'level_regional',
             'regional': 'level_regional',
-            'regional': 'level_regional',
             'continent': 'level_continent',
             'continente': 'level_continent',
             'kontinent': 'level_continent',

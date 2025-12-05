@@ -504,9 +504,9 @@ class ContestService {
     
     // Si l'image existe, s'assurer qu'elle est une URL valide
     if (coverImage && coverImage.trim() !== '') {
-      // Vérifier si c'est un emoji (contient des caractères Unicode d'emoji)
-      const emojiRegex = /[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/u
-      const isEmoji = emojiRegex.test(coverImage)
+      // Vérifier si c'est un emoji (caractère unicode haut)
+      const firstCodePoint = coverImage.codePointAt(0) || 0
+      const isEmoji = coverImage.length <= 4 && firstCodePoint > 0x1F000
       
       // Si ce n'est pas un emoji et que ce n'est pas déjà une URL complète
       if (!isEmoji && !coverImage.startsWith('http') && !coverImage.startsWith('data:')) {

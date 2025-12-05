@@ -15,6 +15,7 @@ export interface ReactionStats {
   name: string
   value: number
   color: string
+  [key: string]: string | number
 }
 
 export interface WeeklyActivity {

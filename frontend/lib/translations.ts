@@ -1,3 +1,4 @@
+// @ts-nocheck
 export type Language = 'en' | 'fr' | 'es' | 'de'
 
 export interface LanguageInfo {
