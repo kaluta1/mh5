@@ -10,6 +10,7 @@ import { SettingsSkeleton } from '@/components/ui/skeleton'
 import { SettingsProfileTab } from '@/components/dashboard/settings-profile-tab'
 import { SettingsLocationTab } from '@/components/dashboard/settings-location-tab'
 import { SettingsDemographicsTab } from '@/components/dashboard/settings-demographics-tab'
+import { SettingsPasswordTab } from '@/components/dashboard/settings-password-tab'
 import { 
   User, 
   MapPin, 
@@ -23,10 +24,11 @@ import {
   Share2,
   Camera,
   Fingerprint,
-  ChevronRight
+  ChevronRight,
+  Lock
 } from 'lucide-react'
 
-type Tab = 'profile' | 'location' | 'demographics'
+type Tab = 'profile' | 'location' | 'demographics' | 'password'
 
 // Calcul du pourcentage de complétion du profil
 function calculateProfileCompletion(user: any): { percentage: number; missing: string[] } {
@@ -124,19 +126,25 @@ export default function SettingsPage() {
       id: 'profile',
       label: t('settings.profile') || 'Profil',
       icon: <User className="w-5 h-5" />,
-      description: 'Photo, nom et bio'
+      description: t('settings.profile_short') || 'Photo, nom et bio'
     },
     {
       id: 'location',
       label: t('settings.location') || 'Localisation',
       icon: <MapPin className="w-5 h-5" />,
-      description: 'Pays et ville'
+      description: t('settings.location_short') || 'Pays et ville'
     },
     {
       id: 'demographics',
       label: t('settings.demographics') || 'Identité',
       icon: <Users className="w-5 h-5" />,
-      description: 'Genre et âge'
+      description: t('settings.demographics_short') || 'Genre et âge'
+    },
+    {
+      id: 'password',
+      label: t('settings.password.title') || 'Mot de passe',
+      icon: <Lock className="w-5 h-5" />,
+      description: t('settings.password_short') || 'Sécurité du compte'
     },
   ]
 
@@ -335,6 +343,7 @@ export default function SettingsPage() {
                   {currentTab === 'profile' && (t('settings.profile_description') || 'Modifiez votre photo, nom et biographie')}
                   {currentTab === 'location' && (t('settings.location_description') || 'Définissez votre localisation géographique')}
                   {currentTab === 'demographics' && (t('settings.demographics_description') || 'Renseignez vos informations personnelles')}
+                  {currentTab === 'password' && (t('settings.password.description') || 'Modifiez votre mot de passe pour sécuriser votre compte')}
                 </p>
               </div>
 
@@ -342,6 +351,7 @@ export default function SettingsPage() {
               {currentTab === 'profile' && <SettingsProfileTab user={user} />}
               {currentTab === 'location' && <SettingsLocationTab user={user} />}
               {currentTab === 'demographics' && <SettingsDemographicsTab user={user} />}
+              {currentTab === 'password' && <SettingsPasswordTab user={user} />}
             </div>
           </div>
         </div>

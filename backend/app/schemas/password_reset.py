@@ -31,3 +31,17 @@ class PasswordResetResponse(BaseModel):
                 "message": "Si cet email existe, un lien de réinitialisation a été envoyé"
             }
         }
+
+
+class PasswordChange(BaseModel):
+    """Schéma pour changer le mot de passe (utilisateur connecté)"""
+    current_password: str
+    new_password: str
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "current_password": "mot_de_passe_actuel",
+                "new_password": "nouveau_mot_de_passe_securise"
+            }
+        }

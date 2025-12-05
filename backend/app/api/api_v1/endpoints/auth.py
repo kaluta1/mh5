@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.schemas.token import Token
 from app.schemas.user import UserCreate, User
-from app.schemas.password_reset import PasswordResetRequest, PasswordResetConfirm, PasswordResetResponse
+from app.schemas.password_reset import PasswordResetRequest, PasswordResetConfirm, PasswordResetResponse, PasswordChange
 from app.core.security import (
     create_access_token, 
     get_password_hash, 
@@ -143,3 +143,41 @@ def read_user_me(
     Récupérer les informations de l'utilisateur connecté.
     """
     return current_user
+
+
+@router.post("/change-password", response_model=PasswordResetResponse)
+def change_password(
+    *,
+    db: Session = Depends(get_db),
+    password_data: PasswordChange,
+    current_user = Depends(get_current_active_user)
+) -> Any:
+    """
+    Changer le mot de passe de l'utilisateur connecté.
+    Nécessite de fournir le mot de passe actuel.
+    """
+    # Vérifier le mot de passe actuel
+    if not verify_password(password_data.current_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Mot de passe actuel incorrect"
+        )
+    
+    # Vérifier que le nouveau mot de passe est différent
+    if password_data.current_password == password_data.new_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Le nouveau mot de passe doit être différent de l'ancien"
+        )
+    
+    # Vérifier la longueur minimale du nouveau mot de passe
+    if len(password_data.new_password) < 6:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Le mot de passe doit contenir au moins 6 caractères"
+        )
+    
+    # Mettre à jour le mot de passe
+    crud_user.reset_password(db, user=current_user, new_password=password_data.new_password)
+    
+    return PasswordResetResponse(message="Mot de passe modifié avec succès")
