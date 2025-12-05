@@ -96,24 +96,24 @@ export function SettingsProfileTab({ user }: SettingsProfileTabProps) {
     <form onSubmit={handleSubmit} className="space-y-6">
       {/* Avatar Upload - En haut */}
       <div>
-        <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-4 flex items-center justify-center gap-2">
+        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-4 flex items-center justify-center gap-2">
           <ImageIcon className="w-4 h-4" />
           {t('profile_setup.avatar') || 'Avatar'} *
         </label>
         <div className="flex justify-center mb-8">
           {avatarUrl ? (
             <div className="flex flex-col items-center gap-4">
-              <img src={avatarUrl} alt="Avatar" className="w-32 h-32 rounded-full object-cover border-4 border-myfav-primary" />
+              <img src={avatarUrl} alt="Avatar" className="w-32 h-32 rounded-full object-cover border-4 border-myfav-primary shadow-lg" />
               <button
                 type="button"
                 onClick={() => setAvatarUrl('')}
-                className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm"
+                className="px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors"
               >
                 {t('settings.remove') || 'Supprimer'}
               </button>
             </div>
           ) : (
-            <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 bg-white/50 dark:bg-gray-700/50 w-full max-w-xs">
+            <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-6 bg-gray-50 dark:bg-gray-700/50 w-full max-w-xs">
               <UploadButton
                 endpoint="profileAvatar"
                 onClientUploadComplete={(res) => {
@@ -131,9 +131,9 @@ export function SettingsProfileTab({ user }: SettingsProfileTabProps) {
       </div>
 
       {/* First Name & Last Name */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+          <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
             {t('profile_setup.first_name') || 'Prénom'} *
           </label>
           <input
@@ -142,11 +142,11 @@ export function SettingsProfileTab({ user }: SettingsProfileTabProps) {
             onChange={(e) => setFirstName(e.target.value)}
             placeholder={t('profile_setup.first_name_placeholder') || 'Votre prénom'}
             disabled={isLoading}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myfav-primary"
+            className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-myfav-primary focus:border-transparent transition-all"
           />
         </div>
         <div>
-          <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+          <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
             {t('profile_setup.last_name') || 'Nom'} *
           </label>
           <input
@@ -155,14 +155,14 @@ export function SettingsProfileTab({ user }: SettingsProfileTabProps) {
             onChange={(e) => setLastName(e.target.value)}
             placeholder={t('profile_setup.last_name_placeholder') || 'Votre nom'}
             disabled={isLoading}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myfav-primary"
+            className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-myfav-primary focus:border-transparent transition-all"
           />
         </div>
       </div>
 
       {/* Bio */}
       <div>
-        <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2 flex items-center gap-2">
           <FileText className="w-4 h-4" />
           {t('profile_setup.bio') || 'Bio'} *
         </label>
@@ -173,21 +173,21 @@ export function SettingsProfileTab({ user }: SettingsProfileTabProps) {
           maxLength={500}
           rows={4}
           disabled={isLoading}
-          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myfav-primary resize-none"
+          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-myfav-primary focus:border-transparent resize-none transition-all"
         />
-        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+        <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
           {bio.length}/500 {t('profile_setup.characters') || 'caractères'}
         </p>
       </div>
 
       {/* Submit Button */}
-      <div className="flex justify-end gap-3 pt-6 border-t border-gray-700">
+      <div className="flex justify-end gap-3 pt-6 border-t border-gray-200 dark:border-gray-700">
         <Button
           type="submit"
           disabled={isLoading || !firstName.trim() || !lastName.trim() || !avatarUrl || !bio.trim()}
-          className="bg-myfav-primary hover:bg-myfav-primary-dark text-white font-bold"
+          className="bg-myfav-primary hover:bg-myfav-primary/90 text-white font-bold px-6 py-2.5 rounded-xl transition-all disabled:opacity-50"
         >
-          {isLoading ? t('common.submitting') || 'Soumission...' : t('settings.save') || 'Enregistrer'}
+          {isLoading ? t('common.submitting') || 'Enregistrement...' : t('settings.save') || 'Enregistrer'}
         </Button>
       </div>
     </form>

@@ -108,7 +108,7 @@ export function SettingsLocationTab({ user }: SettingsLocationTabProps) {
   }
 
   if (isCheckingParticipation) {
-    return <div className="text-white">{t('common.loading') || 'Chargement...'}</div>
+    return <div className="text-gray-600 dark:text-gray-300">{t('common.loading') || 'Chargement...'}</div>
   }
 
   // Vérifier si les informations sont remplies
@@ -137,34 +137,34 @@ export function SettingsLocationTab({ user }: SettingsLocationTabProps) {
           // Display read-only location info if user has participation
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-2">
                 {t('settings.continent') || 'Continent'}
               </label>
-              <div className="w-full px-4 py-3 rounded-lg bg-gray-700/50 border border-gray-600 text-gray-300">
+              <div className="w-full px-4 py-3 rounded-xl bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300">
                 {continent || '-'}
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-2">
                 {t('settings.region') || 'Région'}
               </label>
-              <div className="w-full px-4 py-3 rounded-lg bg-gray-700/50 border border-gray-600 text-gray-300">
+              <div className="w-full px-4 py-3 rounded-xl bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300">
                 {region || '-'}
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-2">
                 {t('settings.country') || 'Pays'}
               </label>
-              <div className="w-full px-4 py-3 rounded-lg bg-gray-700/50 border border-gray-600 text-gray-300">
+              <div className="w-full px-4 py-3 rounded-xl bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300">
                 {country || '-'}
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-2">
                 {t('settings.city') || 'Ville'}
               </label>
-              <div className="w-full px-4 py-3 rounded-lg bg-gray-700/50 border border-gray-600 text-gray-300">
+              <div className="w-full px-4 py-3 rounded-xl bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300">
                 {city || '-'}
               </div>
             </div>
@@ -183,14 +183,14 @@ export function SettingsLocationTab({ user }: SettingsLocationTabProps) {
 
         {/* Current Location Summary */}
         {hasLocationInfo && (
-          <div className="bg-gradient-to-r from-myfav-primary/10 to-transparent rounded-lg p-4 border border-myfav-primary/20">
+          <div className="bg-gradient-to-r from-myfav-primary/10 to-transparent rounded-xl p-4 border border-myfav-primary/20">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-myfav-primary/20 rounded-lg">
                 <MapPin className="w-5 h-5 text-myfav-primary" />
               </div>
               <div>
-                <p className="text-sm text-gray-400">{t('settings.current_location') || 'Localisation actuelle'}</p>
-                <p className="text-white font-medium">
+                <p className="text-sm text-gray-500 dark:text-gray-400">{t('settings.current_location') || 'Localisation actuelle'}</p>
+                <p className="text-gray-900 dark:text-white font-medium">
                   {city}, {country} • {region}, {continent}
                 </p>
               </div>
@@ -200,11 +200,11 @@ export function SettingsLocationTab({ user }: SettingsLocationTabProps) {
 
         {/* Submit Button */}
         {!hasParticipation && (
-          <div className="flex justify-end gap-3 pt-6 border-t border-gray-700">
+          <div className="flex justify-end gap-3 pt-6 border-t border-gray-200 dark:border-gray-700">
             <Button
               type="submit"
               disabled={isLoading || !city}
-              className="bg-myfav-primary hover:bg-myfav-primary/90 text-white font-bold"
+              className="bg-myfav-primary hover:bg-myfav-primary/90 text-white font-bold px-6 py-2.5 rounded-xl transition-all disabled:opacity-50"
             >
               {isLoading ? t('common.submitting') || 'Enregistrement...' : t('settings.save') || 'Enregistrer'}
             </Button>

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { useAuth } from '@/hooks/use-auth'
 import { useLanguage } from '@/contexts/language-context'
 import { useToast } from '@/components/ui/toast'
@@ -20,7 +21,9 @@ import {
   Calendar,
   Clock,
   Share2,
-  Camera
+  Camera,
+  Fingerprint,
+  ChevronRight
 } from 'lucide-react'
 
 type Tab = 'profile' | 'location' | 'demographics'
@@ -138,11 +141,11 @@ export default function SettingsPage() {
   ]
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-4 md:p-6">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 p-4 md:p-6 transition-colors">
       <div className="max-w-7xl mx-auto">
         
         {/* Profile Header Card */}
-        <div className="bg-gradient-to-r from-gray-800/80 to-gray-800/40 backdrop-blur-sm rounded-2xl border border-gray-700/50 p-6 mb-6 shadow-xl">
+        <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl border border-gray-200 dark:border-gray-700/50 p-6 mb-6 shadow-xl">
           <div className="flex flex-col md:flex-row gap-6">
             
             {/* Avatar Section */}
@@ -155,13 +158,13 @@ export default function SettingsPage() {
                     className="w-28 h-28 rounded-2xl object-cover border-4 border-myfav-primary/30 shadow-lg"
                   />
                 ) : (
-                  <div className="w-28 h-28 rounded-2xl bg-gradient-to-br from-myfav-primary/20 to-myfav-primary/5 border-4 border-dashed border-gray-600 flex items-center justify-center">
-                    <Camera className="w-10 h-10 text-gray-500" />
+                  <div className="w-28 h-28 rounded-2xl bg-gradient-to-br from-myfav-primary/20 to-myfav-primary/5 border-4 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center">
+                    <Camera className="w-10 h-10 text-gray-400 dark:text-gray-500" />
                   </div>
                 )}
                 {/* Verification Badge */}
                 {user?.identity_verified && (
-                  <div className="absolute -bottom-2 -right-2 bg-green-500 rounded-full p-1.5 border-2 border-gray-800">
+                  <div className="absolute -bottom-2 -right-2 bg-green-500 rounded-full p-1.5 border-2 border-white dark:border-gray-800">
                     <CheckCircle2 className="w-4 h-4 text-white" />
                   </div>
                 )}
@@ -172,7 +175,7 @@ export default function SettingsPage() {
             <div className="flex-grow">
               <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
                 <div>
-                  <h1 className="text-2xl md:text-3xl font-bold text-white mb-1">
+                  <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-1">
                     {user?.first_name && user?.last_name 
                       ? `${user.first_name} ${user.last_name}` 
                       : user?.username || user?.email?.split('@')[0] || 'Utilisateur'}
@@ -181,7 +184,7 @@ export default function SettingsPage() {
                     <p className="text-myfav-primary font-medium">@{user.username}</p>
                   )}
                   {user?.bio && (
-                    <p className="text-gray-400 mt-2 text-sm line-clamp-2 max-w-lg">{user.bio}</p>
+                    <p className="text-gray-500 dark:text-gray-400 mt-2 text-sm line-clamp-2 max-w-lg">{user.bio}</p>
                   )}
                 </div>
 
@@ -194,15 +197,19 @@ export default function SettingsPage() {
                     </span>
                   )}
                   {user?.identity_verified ? (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-green-500/20 text-green-300 border border-green-500/30">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-green-500/20 text-green-400 border border-green-500/30">
                       <CheckCircle2 className="w-3.5 h-3.5" />
                       Vérifié
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                      <AlertCircle className="w-3.5 h-3.5" />
-                      Non vérifié
-                    </span>
+                    <Link 
+                      href="/dashboard/kyc"
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:bg-amber-500/30 transition-colors"
+                    >
+                      <Fingerprint className="w-3.5 h-3.5" />
+                      Vérifier mon identité
+                      <ChevronRight className="w-3 h-3" />
+                    </Link>
                   )}
                 </div>
               </div>
@@ -210,24 +217,24 @@ export default function SettingsPage() {
               {/* Quick Info Grid */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-5">
                 <div className="flex items-center gap-2 text-sm">
-                  <Mail className="w-4 h-4 text-gray-500" />
-                  <span className="text-gray-400 truncate">{user?.email || '-'}</span>
+                  <Mail className="w-4 h-4 text-gray-400 dark:text-gray-500" />
+                  <span className="text-gray-600 dark:text-gray-400 truncate">{user?.email || '-'}</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
-                  <MapPin className="w-4 h-4 text-gray-500" />
-                  <span className="text-gray-400">
+                  <MapPin className="w-4 h-4 text-gray-400 dark:text-gray-500" />
+                  <span className="text-gray-600 dark:text-gray-400">
                     {user?.city && user?.country ? `${user.city}, ${user.country}` : '-'}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
-                  <Calendar className="w-4 h-4 text-gray-500" />
-                  <span className="text-gray-400">
+                  <Calendar className="w-4 h-4 text-gray-400 dark:text-gray-500" />
+                  <span className="text-gray-600 dark:text-gray-400">
                     {userAge ? `${userAge} ans` : '-'}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
-                  <Clock className="w-4 h-4 text-gray-500" />
-                  <span className="text-gray-400">
+                  <Clock className="w-4 h-4 text-gray-400 dark:text-gray-500" />
+                  <span className="text-gray-600 dark:text-gray-400">
                     {user?.last_login ? formatDate(user.last_login) : '-'}
                   </span>
                 </div>
@@ -236,9 +243,9 @@ export default function SettingsPage() {
 
             {/* Profile Completion */}
             <div className="flex-shrink-0 md:w-48">
-              <div className="bg-gray-700/50 rounded-xl p-4 border border-gray-600/50">
+              <div className="bg-gray-100 dark:bg-gray-700/50 rounded-xl p-4 border border-gray-200 dark:border-gray-600/50">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-400">Profil complété</span>
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Profil complété</span>
                   <span className={`text-lg font-bold ${
                     profileCompletion.percentage === 100 ? 'text-green-400' : 
                     profileCompletion.percentage >= 70 ? 'text-yellow-400' : 'text-red-400'
@@ -246,7 +253,7 @@ export default function SettingsPage() {
                     {profileCompletion.percentage}%
                   </span>
                 </div>
-                <div className="h-2 bg-gray-600 rounded-full overflow-hidden">
+                <div className="h-2 bg-gray-300 dark:bg-gray-600 rounded-full overflow-hidden">
                   <div 
                     className={`h-full rounded-full transition-all duration-500 ${
                       profileCompletion.percentage === 100 ? 'bg-green-500' : 
@@ -256,7 +263,7 @@ export default function SettingsPage() {
                   />
                 </div>
                 {profileCompletion.missing.length > 0 && (
-                  <p className="text-xs text-gray-500 mt-2">
+                  <p className="text-xs text-gray-500 dark:text-gray-500 mt-2">
                     Manque: {profileCompletion.missing.slice(0, 2).join(', ')}
                     {profileCompletion.missing.length > 2 && ` +${profileCompletion.missing.length - 2}`}
                   </p>
@@ -268,7 +275,7 @@ export default function SettingsPage() {
                 <div className="mt-3 bg-myfav-primary/10 rounded-xl p-3 border border-myfav-primary/30">
                   <div className="flex items-center gap-2 mb-1">
                     <Share2 className="w-4 h-4 text-myfav-primary" />
-                    <span className="text-xs text-gray-400">Code parrainage</span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">Code parrainage</span>
                   </div>
                   <p className="text-myfav-primary font-mono font-bold text-sm">
                     {user.personal_referral_code}
@@ -284,7 +291,7 @@ export default function SettingsPage() {
           
           {/* Sidebar Navigation */}
           <div className="lg:col-span-1">
-            <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700/50 p-2 sticky top-4">
+            <div className="bg-white/80 dark:bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-200 dark:border-gray-700/50 p-2 sticky top-4">
               <nav className="space-y-1">
                 {tabs.map((tab) => (
                   <button
@@ -293,18 +300,18 @@ export default function SettingsPage() {
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all ${
                       currentTab === tab.id
                         ? 'bg-myfav-primary text-white shadow-lg shadow-myfav-primary/25'
-                        : 'text-gray-400 hover:bg-gray-700/50 hover:text-white'
+                        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/50 hover:text-gray-900 dark:hover:text-white'
                     }`}
                   >
                     <div className={`p-2 rounded-lg ${
-                      currentTab === tab.id ? 'bg-white/20' : 'bg-gray-700'
+                      currentTab === tab.id ? 'bg-white/20' : 'bg-gray-100 dark:bg-gray-700'
                     }`}>
                       {tab.icon}
                     </div>
                     <div>
                       <p className="font-medium">{tab.label}</p>
                       <p className={`text-xs ${
-                        currentTab === tab.id ? 'text-white/70' : 'text-gray-500'
+                        currentTab === tab.id ? 'text-white/70' : 'text-gray-400 dark:text-gray-500'
                       }`}>
                         {tab.description}
                       </p>
@@ -317,14 +324,14 @@ export default function SettingsPage() {
 
           {/* Tab Content */}
           <div className="lg:col-span-3">
-            <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700/50 p-6 shadow-xl">
+            <div className="bg-white/80 dark:bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-200 dark:border-gray-700/50 p-6 shadow-xl">
               {/* Tab Header */}
-              <div className="mb-6 pb-4 border-b border-gray-700">
-                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+              <div className="mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
                   {tabs.find(t => t.id === currentTab)?.icon}
                   {tabs.find(t => t.id === currentTab)?.label}
                 </h2>
-                <p className="text-gray-400 text-sm mt-1">
+                <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
                   {currentTab === 'profile' && (t('settings.profile_description') || 'Modifiez votre photo, nom et biographie')}
                   {currentTab === 'location' && (t('settings.location_description') || 'Définissez votre localisation géographique')}
                   {currentTab === 'demographics' && (t('settings.demographics_description') || 'Renseignez vos informations personnelles')}

@@ -79,7 +79,7 @@ export function SettingsDemographicsTab({ user }: SettingsDemographicsTabProps) 
     <form onSubmit={handleSubmit} className="space-y-6">
       {/* Gender Section */}
       <div>
-        <h3 className="text-lg font-semibold text-white mb-4">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
           {t('profile_setup.gender') || 'Genre'} *
         </h3>
         <div className="grid grid-cols-2 gap-3">
@@ -91,10 +91,10 @@ export function SettingsDemographicsTab({ user }: SettingsDemographicsTabProps) 
           ].map((option) => (
             <label
               key={option.value}
-              className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition ${
+              className={`flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all ${
                 gender === option.value
                   ? 'border-myfav-primary bg-myfav-primary/10'
-                  : 'border-gray-600 bg-gray-700/50 hover:border-gray-500'
+                  : 'border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50 hover:border-gray-300 dark:hover:border-gray-500'
               }`}
             >
               <input
@@ -104,9 +104,9 @@ export function SettingsDemographicsTab({ user }: SettingsDemographicsTabProps) 
                 checked={gender === option.value}
                 onChange={(e) => setGender(e.target.value)}
                 disabled={isLoading}
-                className="w-4 h-4"
+                className="w-4 h-4 text-myfav-primary"
               />
-              <span className="text-white font-medium">{option.label}</span>
+              <span className="text-gray-900 dark:text-white font-medium">{option.label}</span>
             </label>
           ))}
         </div>
@@ -114,7 +114,7 @@ export function SettingsDemographicsTab({ user }: SettingsDemographicsTabProps) 
 
       {/* Date of Birth Section */}
       <div>
-        <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
           <Calendar className="w-5 h-5" />
           {t('profile_setup.date_of_birth') || 'Date de Naissance'} *
         </h3>
@@ -123,18 +123,18 @@ export function SettingsDemographicsTab({ user }: SettingsDemographicsTabProps) 
           value={dateOfBirth}
           onChange={(e) => setDateOfBirth(e.target.value)}
           disabled={isLoading}
-          className="w-full px-4 py-3 rounded-lg bg-gray-700 border border-gray-600 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myfav-primary"
+          className="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myfav-primary focus:border-transparent transition-all"
         />
       </div>
 
       {/* Submit Button */}
-      <div className="flex justify-end gap-3 pt-6 border-t border-gray-700">
+      <div className="flex justify-end gap-3 pt-6 border-t border-gray-200 dark:border-gray-700">
         <Button
           type="submit"
           disabled={isLoading || !dateOfBirth || !gender}
-          className="bg-myfav-primary hover:bg-myfav-primary-dark text-white font-bold"
+          className="bg-myfav-primary hover:bg-myfav-primary/90 text-white font-bold px-6 py-2.5 rounded-xl transition-all disabled:opacity-50"
         >
-          {isLoading ? t('common.submitting') || 'Soumission...' : t('settings.save') || 'Enregistrer'}
+          {isLoading ? t('common.submitting') || 'Enregistrement...' : t('settings.save') || 'Enregistrer'}
         </Button>
       </div>
     </form>
