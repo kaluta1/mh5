@@ -1,0 +1,22 @@
+from fastapi import APIRouter
+
+from app.api.api_v1.endpoints import auth, users, media, contests, votes, kyc, contestant, geography, favorites, search, search_history, comments, admin, season_migration, notifications, analytics, affiliate
+
+api_router = APIRouter()
+api_router.include_router(auth.router, prefix="/auth", tags=["Authentification"])
+api_router.include_router(users.router, prefix="/users", tags=["Utilisateurs"])
+api_router.include_router(media.router, prefix="/media", tags=["Médias"])
+api_router.include_router(contests.router, prefix="/contests", tags=["Concours"])
+api_router.include_router(votes.router, prefix="/votes", tags=["Votes"])
+api_router.include_router(kyc.router, prefix="/kyc", tags=["Vérification KYC"])
+api_router.include_router(contestant.router, prefix="/contestants", tags=["Candidatures"])
+api_router.include_router(comments.router, prefix="/contestants", tags=["Commentaires"])
+api_router.include_router(geography.router, prefix="/geography", tags=["Géographie"])
+api_router.include_router(favorites.router, prefix="/favorites", tags=["Favoris"])
+api_router.include_router(search.router, tags=["Recherche"])
+api_router.include_router(search_history.router, tags=["Historique de recherche"])
+api_router.include_router(admin.router, prefix="/admin", tags=["Administration"])
+api_router.include_router(season_migration.router, prefix="/seasons", tags=["Migrations de saisons"])
+api_router.include_router(notifications.router, prefix="/notifications", tags=["Notifications"])
+api_router.include_router(analytics.router, prefix="/analytics", tags=["Analytics"])
+api_router.include_router(affiliate.router, prefix="/affiliates", tags=["Affiliation"])

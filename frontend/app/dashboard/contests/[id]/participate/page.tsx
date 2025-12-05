@@ -1,0 +1,403 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { useRouter, useParams, useSearchParams } from 'next/navigation'
+import { useAuth } from '@/hooks/use-auth'
+import { useLanguage } from '@/contexts/language-context'
+import { useToast } from '@/components/ui/toast'
+import { ParticipateFormSkeleton } from '@/components/ui/skeleton'
+import { KYCAlert } from '@/components/dashboard/kyc-alert'
+import { ParticipationForm } from '@/components/dashboard/participation-form'
+import { contestService } from '@/services/contest-service'
+import { AlertCircle } from 'lucide-react'
+
+export default function ParticipateInContestPage() {
+  const { t } = useLanguage()
+  const router = useRouter()
+  const params = useParams()
+  const searchParams = useSearchParams()
+  const { user, isAuthenticated, isLoading } = useAuth()
+  const { addToast } = useToast()
+  
+  const contestId = params?.id as string
+  const isEditMode = searchParams.get('edit') === 'true'
+  const [pageLoading, setPageLoading] = useState(true)
+  const [needsProfileSetup, setNeedsProfileSetup] = useState(false)
+  const [needsKYC, setNeedsKYC] = useState(false)
+  const [contest, setContest] = useState<any>(null)
+  const [userAlreadyParticipating, setUserAlreadyParticipating] = useState(false)
+  const [isEditingParticipation, setIsEditingParticipation] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitSuccess, setSubmitSuccess] = useState(false)
+  const [timeRemaining, setTimeRemaining] = useState<string>('')
+  const [existingParticipationData, setExistingParticipationData] = useState<any>(null)
+  const [participantId, setParticipantId] = useState<number | null>(null)
+
+  // Calculer le temps restant
+  useEffect(() => {
+    if (!contest?.submission_end_date) {
+      setTimeRemaining('N/A')
+      return
+    }
+
+    const updateTimeRemaining = () => {
+      const now = new Date().getTime()
+      const endDate = new Date(contest.submission_end_date).getTime()
+      const difference = endDate - now
+
+      if (difference <= 0) {
+        setTimeRemaining('Fermé')
+        return
+      }
+
+      const days = Math.floor(difference / (1000 * 60 * 60 * 24))
+      const hours = Math.floor((difference / (1000 * 60 * 60)) % 24)
+      const minutes = Math.floor((difference / 1000 / 60) % 60)
+      const seconds = Math.floor((difference / 1000) % 60)
+
+      if (days > 0) {
+        setTimeRemaining(`${days}j ${hours}h ${minutes}m`)
+      } else if (hours > 0) {
+        setTimeRemaining(`${hours}h ${minutes}m ${seconds}s`)
+      } else if (minutes > 0) {
+        setTimeRemaining(`${minutes}m ${seconds}s`)
+      } else {
+        setTimeRemaining(`${seconds}s`)
+      }
+    }
+
+    // Mettre à jour immédiatement
+    updateTimeRemaining()
+    
+    // Mettre à jour chaque seconde pour un décompteur en temps réel
+    const interval = setInterval(updateTimeRemaining, 1000)
+
+    return () => clearInterval(interval)
+  }, [contest?.submission_end_date])
+
+  // Redirection si non authentifié
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.push('/')
+    }
+  }, [isAuthenticated, isLoading, router])
+
+  // Vérifier le KYC et charger les données du contest
+  useEffect(() => {
+    const checkKYCAndLoadContest = async () => {
+      try {
+        setPageLoading(true)
+
+        // Vérifier si l'utilisateur a complété son profil (first_name, last_name, country, city, continent)
+        if (!(user as any)?.first_name || !(user as any)?.last_name || !(user as any)?.country || !(user as any)?.city || !(user as any)?.continent) {
+          // Sauvegarder le contestId pour redirection après setup
+          if (contestId) {
+            sessionStorage.setItem('contestId', contestId)
+          }
+          setNeedsProfileSetup(true)
+          return
+        }
+
+        // Vérifier si l'utilisateur a complété son KYC (optionnel, juste pour notification)
+        if (!user?.is_verified) {
+          setNeedsKYC(true)
+        }
+
+        // Charger les données du contest
+        if (contestId) {
+          const contestData = await contestService.getContestById(contestId)
+          setContest(contestData)
+          
+          // Vérifier si l'utilisateur a déjà une candidature
+          const userContestants = await contestService.getContestantsByContest(contestId)
+          const userParticipation = userContestants.find((c: any) => c.user_id === user?.id)
+          if (userParticipation) {
+            setUserAlreadyParticipating(true)
+            setParticipantId(userParticipation.id)
+            // Charger les données existantes pour l'édition
+            console.log('Participation data:', userParticipation)
+            
+            // Parser les image_media_ids (JSON string)
+            let imageUrls: string[] = []
+            if (userParticipation.image_media_ids) {
+              try {
+                const parsed = JSON.parse(userParticipation.image_media_ids)
+                imageUrls = Array.isArray(parsed) ? parsed : []
+              } catch (e) {
+                console.error('Erreur parsing image_media_ids:', e)
+                imageUrls = []
+              }
+            }
+            
+            // Parser les video_media_ids (JSON string)
+            let videoUrl = ''
+            if (userParticipation.video_media_ids) {
+              try {
+                const parsed = JSON.parse(userParticipation.video_media_ids)
+                videoUrl = Array.isArray(parsed) && parsed.length > 0 ? parsed[0] : ''
+              } catch (e) {
+                console.error('Erreur parsing video_media_ids:', e)
+                videoUrl = ''
+              }
+            }
+            
+            setExistingParticipationData({
+              title: userParticipation.title || '',
+              description: userParticipation.description || '',
+              imageUrls: imageUrls,
+              videoUrl: videoUrl
+            })
+            
+            // Si le mode édition est activé, afficher directement le formulaire
+            if (isEditMode) {
+              setIsEditingParticipation(true)
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Erreur lors du chargement:', err)
+        // Ne pas afficher d'erreur générique au chargement
+      } finally {
+        setPageLoading(false)
+      }
+    }
+
+    if (!isLoading && isAuthenticated && user) {
+      checkKYCAndLoadContest()
+    }
+  }, [isLoading, isAuthenticated, user, contestId, isEditMode])
+
+  const handleCancel = () => {
+    // Si en mode édition, retourner à My Applications
+    if (isEditingParticipation) {
+      router.push('/dashboard/my-applications')
+    } else {
+      // Sinon, retourner à la page précédente
+      router.back()
+    }
+  }
+
+  const handleParticipationSubmit = async (
+    title: string,
+    description: string,
+    imageMediaIds?: string,
+    videoMediaIds?: string
+  ) => {
+    setIsSubmitting(true)
+
+    try {
+      let response
+      
+      if (isEditingParticipation && participantId) {
+        // Mettre à jour la candidature existante
+        response = await contestService.updateContestant(
+          participantId,
+          title,
+          description,
+          imageMediaIds,
+          videoMediaIds
+        )
+      } else {
+        // Créer une nouvelle candidature
+        response = await contestService.submitContestant(
+          contestId,
+          title,
+          description,
+          imageMediaIds,
+          videoMediaIds
+        )
+      }
+
+      setSubmitSuccess(true)
+      setUserAlreadyParticipating(true)
+      
+      // Afficher un toast de succès
+      addToast(
+        isEditingParticipation 
+          ? t('dashboard.contests.participation_form.success') 
+          : t('dashboard.contests.participation_form.success'),
+        'success'
+      )
+    } catch (err: any) {
+      console.error('Erreur lors de la soumission:', err)
+      const errorDetail = err?.response?.data?.detail || err?.message || ''
+      
+      // Détecter le type d'erreur et utiliser les traductions appropriées
+      let errorMessage = t('dashboard.contests.participation_form.error.submit_error')
+      
+      if (errorDetail) {
+        const errorLower = errorDetail.toLowerCase()
+        
+        if (errorLower.includes('masculin') || errorLower.includes('male')) {
+          errorMessage = t('dashboard.contests.participation_form.error.gender_restriction_male')
+        } else if (errorLower.includes('féminin') || errorLower.includes('female')) {
+          errorMessage = t('dashboard.contests.participation_form.error.gender_restriction_female')
+        } else if (errorLower.includes('genre') || errorLower.includes('gender')) {
+          errorMessage = t('dashboard.contests.participation_form.error.gender_not_set')
+        } else {
+          // Utiliser le message d'erreur du backend s'il est disponible
+          errorMessage = errorDetail
+        }
+      }
+      
+      // Afficher l'erreur dans un toast
+      addToast(errorMessage, 'error')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  if (isLoading || pageLoading) {
+    return <ParticipateFormSkeleton />
+  }
+
+  if (!isAuthenticated || !user) {
+    return null
+  }
+
+  return (
+    <div className="min-h-[calc(100vh-10rem)] flex items-start justify-center p-4 py-8 overflow-hidden">
+      <div className="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-3 gap-6 relative">
+        {/* Left Column - Participation Form */}
+        <div className="lg:col-span-2">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 md:p-8 sticky top-4 space-y-6">
+            {/* Already Participating Alert */}
+            {userAlreadyParticipating && !isEditingParticipation && !submitSuccess && (
+              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg space-y-3">
+                <p className="text-blue-900 dark:text-blue-200">
+                  {t('dashboard.contests.participation_form.already_participating')}
+                </p>
+                {contest?.is_submission_open && (
+                  <button
+                    onClick={() => {
+                      // Afficher le formulaire en mode édition
+                      setIsEditingParticipation(true)
+                    }}
+                    className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition text-sm"
+                  >
+                    ✏️ {t('dashboard.contests.participation_form.edit_participation') || 'Modifier ma candidature'}
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Header */}
+            {(!userAlreadyParticipating || isEditingParticipation) && (
+              <>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                  {t('dashboard.contests.participation_form.title')}
+                </h2>
+                <p className="text-gray-600 dark:text-gray-400 mb-4 text-sm">
+                  {t('dashboard.contests.participation_form.description')}
+                </p>
+
+                {/* Profile Setup Alert */}
+                {needsProfileSetup && (
+                  <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg mb-4">
+                    <p className="text-yellow-900 dark:text-yellow-200 mb-3 text-sm">
+                      {t('participation.profile_incomplete_title')} {t('participation.profile_incomplete_message')}
+                    </p>
+                    <button
+                      onClick={() => router.push('/settings')}
+                      className="w-full px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg font-medium transition text-sm"
+                    >
+                      {t('participation.complete_profile_button')}
+                    </button>
+                  </div>
+                )}
+
+                {/* KYC Notification (optionnel) */}
+                {needsKYC && (
+                  <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg mb-4">
+                    <p className="text-amber-900 dark:text-amber-200 text-sm">
+                      {t('participation.kyc_notification') || '⚠️ Votre identité n\'a pas été vérifiée. Nous vous recommandons de compléter votre vérification KYC pour une meilleure expérience.'}
+                    </p>
+                  </div>
+                )}
+
+                {/* Participation Form */}
+                {!needsProfileSetup && (
+                  <ParticipationForm
+                    contestId={contestId}
+                    onSubmit={handleParticipationSubmit}
+                    onCancel={handleCancel}
+                    isSubmitting={isSubmitting}
+                    isEditing={isEditingParticipation}
+                    initialData={existingParticipationData}
+                  />
+                )}
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Right Column - Contest Info & Leaderboard */}
+        <div className="lg:col-span-1 space-y-6">
+          {/* Contest Info */}
+          {contest && (
+            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 md:p-8  top-4 z-100">
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
+                {contest.name}
+              </h1>
+              <p className="text-gray-600 dark:text-gray-400 mb-4 text-sm">
+                {contest.description}
+              </p>
+              
+              {/* Contest Details Grid */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-myfav-blue-50 dark:bg-myfav-blue-900/20 rounded-lg p-3">
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
+                    {t('dashboard.contests.contestants')}
+                  </p>
+                  <p className="text-xl font-bold text-gray-900 dark:text-white">
+                    {contest.entries_count || 0}
+                  </p>
+                </div>
+                
+                <div className="bg-myfav-blue-50 dark:bg-myfav-blue-900/20 rounded-lg p-3">
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
+                    {t('dashboard.contests.received')}
+                  </p>
+                  <p className="text-xl font-bold text-gray-900 dark:text-white">
+                    {contest.total_votes || 0}
+                  </p>
+                </div>
+                
+                <div className="bg-myfav-blue-50 dark:bg-myfav-blue-900/20 rounded-lg p-3">
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
+                    {t('dashboard.contests.status')}
+                  </p>
+                  <p className="text-sm font-bold text-myfav-primary">
+                    {contest.is_submission_open ? t('dashboard.contests.open') : t('dashboard.contests.closed')}
+                  </p>
+                </div>
+                
+                <div className="bg-myfav-blue-50 dark:bg-myfav-blue-900/20 rounded-lg p-3">
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
+                    {t('dashboard.contests.level')}
+                  </p>
+                  <p className="text-sm font-bold text-gray-900 dark:text-white capitalize">
+                    {contest.level === 'country' ? t('dashboard.contests.country') : 
+                     contest.level === 'continental' ? t('dashboard.contests.continental') :
+                     contest.level === 'regional' ? t('dashboard.contests.regional') :
+                     contest.level}
+                  </p>
+                </div>
+
+                {/* Time Remaining */}
+                <div className="col-span-2 bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-900/20 dark:to-red-900/20 rounded-lg p-3 border border-orange-200 dark:border-orange-800">
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
+                    ⏱️ {t('dashboard.contests.time_remaining')}
+                  </p>
+                  <p className="text-lg font-bold text-orange-600 dark:text-orange-400">
+                    {timeRemaining || 'Chargement...'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}

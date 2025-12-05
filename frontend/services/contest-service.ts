@@ -1,0 +1,586 @@
+import api from '@/lib/api'
+
+export interface Contest {
+  id: string
+  title: string
+  coverImage: string
+  startDate: Date
+  status: 'city' | 'country' | 'regional' | 'continental' | 'global'
+  received: number
+  contestants: number
+  likes: number
+  comments: number
+  reactions?: number
+  favorites?: number
+  isOpen: boolean
+  genderRestriction?: 'male' | 'female' | null
+  participationStartDate?: Date
+  participationEndDate?: Date
+  votingStartDate?: Date
+}
+
+export interface ContestResponse {
+  id: string
+  name: string
+  description?: string
+  contest_type: string
+  cover_image_url?: string
+  image_url?: string
+  submission_start_date: string
+  submission_end_date: string
+  voting_start_date: string
+  voting_end_date: string
+  is_active: boolean
+  is_submission_open: boolean
+  is_voting_open: boolean
+  level: string
+  season_level?: string
+  location_id?: number
+  gender_restriction?: string
+  voting_restriction?: string
+  max_entries_per_user: number
+  template_id?: number
+  created_at: string
+  updated_at: string
+  entries_count?: number
+  total_votes?: number
+}
+
+export interface ContestantWithAuthorAndStats {
+  id: number
+  user_id: number
+  season_id: number
+  title?: string
+  description?: string
+  image_media_ids?: string
+  video_media_ids?: string
+  registration_date: string
+  is_qualified: boolean
+  
+  // Infos auteur
+  author_name?: string
+  author_country?: string
+  author_city?: string
+  author_continent?: string
+  author_avatar_url?: string
+  
+  // Stats
+  rank?: number
+  votes_count: number
+  images_count: number
+  videos_count: number
+  
+  // Infos du contest
+  contest_title?: string
+  contest_id?: number
+  total_participants?: number
+  
+  // Position dans les favoris
+  position?: number
+  
+  // État du vote
+  has_voted: boolean
+  can_vote: boolean
+}
+
+class ContestService {
+  /**
+   * Récupère tous les contests avec pagination
+   */
+  async getContests(skip: number = 0, limit: number = 100): Promise<ContestResponse[]> {
+    try {
+      const response = await api.get('/api/v1/contests/', {
+        params: { skip, limit }
+      })
+      return response.data
+    } catch (error) {
+      console.error('Error fetching contests:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Récupère un contest par son ID avec ses participants
+   */
+  async getContestById(contestId: string): Promise<ContestResponse> {
+    try {
+      const response = await api.get(`/api/v1/contests/${contestId}`)
+      return response.data
+    } catch (error) {
+      console.error(`Error fetching contest ${contestId}:`, error)
+      throw error
+    }
+  }
+
+  /**
+   * Crée un nouveau contest (admin uniquement)
+   */
+  async createContest(contestData: Partial<ContestResponse>): Promise<ContestResponse> {
+    try {
+      const response = await api.post('/api/v1/contests/', contestData)
+      return response.data
+    } catch (error) {
+      console.error('Error creating contest:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Met à jour un contest (admin uniquement)
+   */
+  async updateContest(contestId: string, contestData: Partial<ContestResponse>): Promise<ContestResponse> {
+    try {
+      const response = await api.put(`/api/v1/contests/${contestId}`, contestData)
+      return response.data
+    } catch (error) {
+      console.error(`Error updating contest ${contestId}:`, error)
+      throw error
+    }
+  }
+
+  /**
+   * Supprime un contest (admin uniquement)
+   */
+  async deleteContest(contestId: string): Promise<void> {
+    try {
+      await api.delete(`/api/v1/contests/${contestId}`)
+    } catch (error) {
+      console.error(`Error deleting contest ${contestId}:`, error)
+      throw error
+    }
+  }
+
+  /**
+   * Soumet une candidature à un contest
+   */
+  async submitContestant(
+    contestId: string,
+    title: string,
+    description: string,
+    imageMediaIds?: string,
+    videoMediaIds?: string
+  ): Promise<any> {
+    try {
+      const response = await api.post(`/api/v1/contestants/${contestId}`, {
+        title: title,
+        description: description,
+        image_media_ids: imageMediaIds,
+        video_media_ids: videoMediaIds
+      })
+      return response.data
+    } catch (error) {
+      console.error(`Error submitting contestant for contest ${contestId}:`, error)
+      throw error
+    }
+  }
+
+  /**
+   * Met à jour une candidature existante
+   */
+  async updateContestant(
+    contestantId: number,
+    title: string,
+    description: string,
+    imageMediaIds?: string,
+    videoMediaIds?: string
+  ): Promise<any> {
+    try {
+      const response = await api.put(`/api/v1/contestants/${contestantId}`, {
+        title: title,
+        description: description,
+        image_media_ids: imageMediaIds,
+        video_media_ids: videoMediaIds
+      })
+      return response.data
+    } catch (error) {
+      console.error(`Error updating contestant ${contestantId}:`, error)
+      throw error
+    }
+  }
+
+  /**
+   * Ajoute une soumission (média) à une candidature
+   */
+  async addSubmission(
+    contestantId: number,
+    mediaType: string,
+    fileUrl: string,
+    title?: string,
+    description?: string
+  ): Promise<any> {
+    try {
+      const response = await api.post(`/api/v1/contestants/${contestantId}/submission`, null, {
+        params: {
+          media_type: mediaType,
+          file_url: fileUrl,
+          title,
+          description
+        }
+      })
+      return response.data
+    } catch (error) {
+      console.error(`Error adding submission for contestant ${contestantId}:`, error)
+      throw error
+    }
+  }
+
+  /**
+   * Récupère un contestant par son ID avec infos auteur et stats
+   */
+  async getContestantById(contestantId: number): Promise<ContestantWithAuthorAndStats | null> {
+    try {
+      const response = await api.get(`/api/v1/contestants/${contestantId}`)
+      console.log(`Contestant ${contestantId} fetched:`, response.data)
+      return response.data
+    } catch (error) {
+      console.error(`Error fetching contestant ${contestantId}:`, error)
+      return null
+    }
+  }
+
+  /**
+   * Récupère les candidatures d'un contest avec infos auteur et stats enrichies
+   */
+  async getContestantsByContest(
+    contestId: string,
+    skip: number = 0,
+    limit: number = 100
+  ): Promise<ContestantWithAuthorAndStats[]> {
+    try {
+      const response = await api.get(`/api/v1/contestants/contest/${contestId}`, {
+        params: { skip, limit }
+      })
+      return response.data
+    } catch (error) {
+      console.error(`Error fetching contestants for contest ${contestId}:`, error)
+      throw error
+    }
+  }
+
+  /**
+   * Ajoute un contestant aux favoris
+   */
+  async addToFavorites(contestantId: number): Promise<void> {
+    try {
+      await api.post(`/api/v1/contestants/${contestantId}/favorite`)
+    } catch (error) {
+      console.error(`Error adding contestant ${contestantId} to favorites:`, error)
+      throw error
+    }
+  }
+
+  /**
+   * Retire un contestant des favoris
+   */
+  async removeFromFavorites(contestantId: number): Promise<void> {
+    try {
+      await api.delete(`/api/v1/contestants/${contestantId}/favorite`)
+    } catch (error) {
+      console.error(`Error removing contestant ${contestantId} from favorites:`, error)
+      throw error
+    }
+  }
+
+  /**
+   * Supprime une candidature (l'utilisateur peut supprimer sa propre candidature)
+   */
+  async deleteContestant(contestantId: number): Promise<void> {
+    try {
+      await api.delete(`/api/v1/contestants/${contestantId}`)
+    } catch (error) {
+      console.error(`Error deleting contestant ${contestantId}:`, error)
+      throw error
+    }
+  }
+
+  /**
+   * Récupère les favoris de l'utilisateur courant
+   */
+  async getUserFavorites(): Promise<number[]> {
+    try {
+      const response = await api.get('/api/v1/contestants/favorites')
+      return response.data
+    } catch (error) {
+      console.error('Error fetching user favorites:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Récupérer les détails des votes avec les noms des utilisateurs
+   */
+  async getVoteDetails(contestantId: number): Promise<any> {
+    try {
+      const response = await api.get(`/api/v1/contestants/${contestantId}/votes/details`)
+      return response.data
+    } catch (error) {
+      console.error(`Error fetching vote details for contestant ${contestantId}:`, error)
+      throw error
+    }
+  }
+
+  /**
+   * Récupérer les détails des favoris avec les noms des utilisateurs
+   */
+  async getFavoriteDetails(contestantId: number): Promise<any> {
+    try {
+      const response = await api.get(`/api/v1/contestants/${contestantId}/favorites/details`)
+      return response.data
+    } catch (error) {
+      console.error(`Error fetching favorite details for contestant ${contestantId}:`, error)
+      throw error
+    }
+  }
+
+  /**
+   * Sauvegarde l'ordre des favoris
+   */
+  async reorderFavorites(favorites: Array<{ contestant_id: number; position: number }>): Promise<void> {
+    try {
+      console.log('[REORDER] Sending favorites to backend:', favorites)
+      const response = await api.put('/api/v1/favorites/contestants/reorder', {
+        favorites
+      })
+      console.log('[REORDER] Response:', response.data)
+      console.log('Favorites reordered successfully')
+    } catch (error) {
+      console.error('[REORDER] Error reordering favorites:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Récupère le classement d'un contest
+   */
+  async getContestLeaderboard(
+    contestId: string,
+    skip: number = 0,
+    limit: number = 100
+  ): Promise<any[]> {
+    try {
+      const response = await api.get(`/api/v1/contestants/leaderboard/contest/${contestId}`, {
+        params: { skip, limit }
+      })
+      return response.data
+    } catch (error) {
+      console.error(`Error fetching leaderboard for contest ${contestId}:`, error)
+      throw error
+    }
+  }
+
+  /**
+   * Vote pour une candidature
+   */
+  async voteForContestant(contestantId: number, score: number = 5): Promise<any> {
+    try {
+      const response = await api.post(`/api/v1/contestants/${contestantId}/vote`)
+      return response.data
+    } catch (error: any) {
+      console.error(`Error voting for contestant ${contestantId}:`, error)
+      throw error
+    }
+  }
+
+  /**
+   * Participe à un contest (ancienne méthode - gardée pour compatibilité)
+   */
+  async participateInContest(contestId: string, mediaId: number): Promise<any> {
+    try {
+      const response = await api.post(`/api/v1/contests/${contestId}/entry`, {
+        media_id: mediaId
+      })
+      return response.data
+    } catch (error) {
+      console.error(`Error participating in contest ${contestId}:`, error)
+      throw error
+    }
+  }
+
+  /**
+   * Récupère les contests filtrés
+   */
+  async getContestsWithFilters(
+    filters: {
+      location_id?: number
+      contest_type?: string
+      active?: boolean
+    },
+    skip: number = 0,
+    limit: number = 100
+  ): Promise<ContestResponse[]> {
+    try {
+      const response = await api.get('/api/v1/contests', {
+        params: { ...filters, skip, limit }
+      })
+      return response.data
+    } catch (error) {
+      console.error('Error fetching filtered contests:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Ajoute un contest aux favoris
+   */
+  async addContestFavorite(contestId: string): Promise<void> {
+    try {
+      await api.post(`/api/v1/favorites/contests/${contestId}`)
+    } catch (error) {
+      console.error('Erreur lors de l\'ajout du contest aux favoris:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Retire un contest des favoris
+   */
+  async removeContestFavorite(contestId: string): Promise<void> {
+    try {
+      await api.delete(`/api/v1/favorites/contests/${contestId}`)
+    } catch (error) {
+      console.error('Erreur lors de la suppression du contest des favoris:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Récupère les contests favoris de l'utilisateur
+   */
+  async getFavoritesContests(skip: number = 0, limit: number = 100): Promise<ContestResponse[]> {
+    try {
+      const response = await api.get('/api/v1/favorites/contests', {
+        params: { skip, limit }
+      })
+      return response.data
+    } catch (error) {
+      console.error('Erreur lors du chargement des contests favoris:', error)
+      return []
+    }
+  }
+
+  /**
+   * Vérifie si un contest est dans les favoris
+   */
+  async isContestFavorite(contestId: string): Promise<boolean> {
+    try {
+      const response = await api.get(`/api/v1/favorites/contests/${contestId}/is-favorite`)
+      return response.data.is_favorite
+    } catch (error) {
+      console.error('Erreur lors de la vérification du favori:', error)
+      return false
+    }
+  }
+
+  /**
+   * Convertit une réponse API en objet Contest pour l'affichage
+   */
+  mapResponseToContest(response: ContestResponse): Contest {
+    // Utiliser season_level si disponible, sinon utiliser level
+    const level = response.season_level || response.level || 'country'
+    
+    // Calculer si le contest est ouvert pour candidater
+    // Un contest est ouvert si :
+    // 1. is_submission_open est true
+    // 2. La date actuelle est entre submission_start_date et submission_end_date
+    // 3. La date de début de vote (voting_start_date) n'a pas encore commencé
+    const now = new Date()
+    const submissionStart = response.submission_start_date ? new Date(response.submission_start_date) : null
+    const submissionEnd = response.submission_end_date ? new Date(response.submission_end_date) : null
+    const votingStart = response.voting_start_date ? new Date(response.voting_start_date) : null
+    
+    let isOpen = response.is_submission_open || false
+    
+    // Vérifier que nous sommes dans la période de candidature
+    if (submissionStart && now < submissionStart) {
+      isOpen = false // Pas encore commencé
+    } else if (submissionEnd && now > submissionEnd) {
+      isOpen = false // Période terminée
+    } else if (votingStart && now >= votingStart) {
+      isOpen = false // Le vote a commencé, on ne peut plus candidater
+    }
+    
+    // Gérer la couverture : utiliser image_url en priorité, puis cover_image_url, sinon emoji
+    let coverImage = response.image_url || response.cover_image_url || ''
+    
+    // Si l'image existe, s'assurer qu'elle est une URL valide
+    if (coverImage && coverImage.trim() !== '') {
+      // Vérifier si c'est un emoji (contient des caractères Unicode d'emoji)
+      const emojiRegex = /[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/u
+      const isEmoji = emojiRegex.test(coverImage)
+      
+      // Si ce n'est pas un emoji et que ce n'est pas déjà une URL complète
+      if (!isEmoji && !coverImage.startsWith('http') && !coverImage.startsWith('data:')) {
+        // Si c'est un chemin relatif, construire l'URL complète
+        if (coverImage.startsWith('/')) {
+          const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+          coverImage = `${API_BASE_URL}${coverImage}`
+        } else {
+          // Sinon, essayer de construire l'URL
+          const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+          coverImage = `${API_BASE_URL}/${coverImage}`
+        }
+      }
+    }
+    
+    // Si toujours pas d'image valide, utiliser l'emoji
+    if (!coverImage || coverImage.trim() === '' || (!coverImage.startsWith('http') && !coverImage.startsWith('/') && !coverImage.startsWith('data:'))) {
+      coverImage = this.getEmojiForType(response.contest_type)
+    }
+    
+    return {
+      id: String(response.id),
+      title: response.name,
+      coverImage: coverImage,
+      startDate: submissionStart || new Date(),
+      status: (level as 'city' | 'country' | 'regional' | 'continental' | 'global') || 'country',
+      received: response.total_votes || 0, // Nombre total de votes
+      contestants: response.entries_count || 0, // Nombre de participants
+      likes: 0, // À implémenter plus tard
+      comments: 0, // À implémenter plus tard
+      isOpen: isOpen,
+      genderRestriction: (() => {
+        // Priorité: gender_restriction, puis voting_restriction
+        let restriction = response.gender_restriction
+        
+        // Si pas de gender_restriction, essayer de l'extraire de voting_restriction
+        if (!restriction && response.voting_restriction) {
+          const votingRestriction = String(response.voting_restriction).toLowerCase().trim()
+          if (votingRestriction === 'male_only') {
+            restriction = 'male'
+          } else if (votingRestriction === 'female_only') {
+            restriction = 'female'
+          }
+        }
+        
+        // Vérifier aussi si gender_restriction est directement 'male' ou 'female'
+        if (restriction && typeof restriction === 'string' && restriction.trim() !== '') {
+          const normalized = restriction.toLowerCase().trim()
+          if (normalized === 'male' || normalized === 'female') {
+            return normalized as 'male' | 'female'
+          }
+        }
+        return null
+      })(),
+      participationStartDate: submissionStart || undefined,
+      participationEndDate: submissionEnd || undefined,
+      votingStartDate: votingStart || undefined
+    }
+  }
+
+  /**
+   * Retourne un emoji basé sur le type de contest
+   */
+  private getEmojiForType(type: string): string {
+    const emojiMap: Record<string, string> = {
+      'beauty': '👑',
+      'handsome': '🤴',
+      'latest_hits': '🌟',
+      'talent': '✨',
+      'photography': '📸',
+      'default': '💎'
+    }
+    return emojiMap[type] || emojiMap['default']
+  }
+}
+
+export const contestService = new ContestService()

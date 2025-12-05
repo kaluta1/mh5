@@ -1,0 +1,63 @@
+/* MyFav Color Palette - Couleurs spécifiées */
+:root {
+  /* Couleurs principales MyFav */
+  --myfav-primary: #1e40af;      /* Bleu principal */
+  --myfav-secondary: #0891b2;    /* Cyan/Turquoise */
+  --myfav-accent: #FFFF79;       /* Jaune accent (hover) */
+  
+  /* Gradients */
+  --myfav-gradient-primary: linear-gradient(to bottom right, #1e40af, #0891b2);
+  --myfav-gradient-light: linear-gradient(to bottom right, #3b82f6, #06b6d4);
+  
+  /* Variations de bleu */
+  --myfav-blue-50: #eff6ff;
+  --myfav-blue-100: #dbeafe;
+  --myfav-blue-200: #bfdbfe;
+  --myfav-blue-300: #93c5fd;
+  --myfav-blue-400: #60a5fa;
+  --myfav-blue-500: #3b82f6;
+  --myfav-blue-600: #2563eb;
+  --myfav-blue-700: #1d4ed8;
+  --myfav-blue-800: #1e40af;
+  --myfav-blue-900: #1e3a8a;
+  
+  /* Variations de cyan */
+  --myfav-cyan-50: #ecfeff;
+  --myfav-cyan-100: #cffafe;
+  --myfav-cyan-200: #a5f3fc;
+  --myfav-cyan-300: #67e8f9;
+  --myfav-cyan-400: #22d3ee;
+  --myfav-cyan-500: #06b6d4;
+  --myfav-cyan-600: #0891b2;
+  --myfav-cyan-700: #0e7490;
+  --myfav-cyan-800: #155e75;
+  --myfav-cyan-900: #164e63;
+}
+
+/* Classes utilitaires MyFav */
+.myfav-bg-primary {
+  background: var(--myfav-gradient-primary);
+}
+
+.myfav-text-primary {
+  color: var(--myfav-primary);
+}
+
+.myfav-text-secondary {
+  color: var(--myfav-secondary);
+}
+
+.myfav-border-primary {
+  border-color: var(--myfav-primary);
+}
+
+.myfav-hover-accent:hover {
+  color: var(--myfav-accent) !important;
+}
+
+.myfav-gradient-text {
+  background: var(--myfav-gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}

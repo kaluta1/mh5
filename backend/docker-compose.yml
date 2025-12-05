@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - redis
+    environment:
+      - DATABASE_URL=postgresql://neondb_owner:npg_Pqpdik54DZNa@ep-noisy-violet-adh359sw-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+      - SECRET_KEY=changez_moi_en_production
+      - REDIS_URL=redis://redis:6379/0
+      - STORAGE_TYPE=local
+      - LOCAL_STORAGE_PATH=/app/storage
+      - CORS_ORIGINS=http://localhost,http://localhost:3000
+    volumes:
+      - ./:/app
+      - media_data:/app/storage
+    command: python start.py --host 0.0.0.0 --port 8000
+
+  db:
+    image: postgres:13
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=myfav
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:6
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:
+  media_data:

@@ -1,0 +1,84 @@
+{
+  "common": {
+    "loading": "Wird geladen...",
+    "error": "Fehler",
+    "success": "Erfolg",
+    "cancel": "Abbrechen",
+    "confirm": "Bestätigen",
+    "save": "Speichern",
+    "edit": "Bearbeiten",
+    "delete": "Löschen",
+    "search": "Suchen",
+    "filter": "Filtern",
+    "sort": "Sortieren",
+    "next": "Weiter",
+    "previous": "Zurück",
+    "close": "Schließen",
+    "or": "Oder"
+  },
+  "navigation": {
+    "home": "Startseite",
+    "contests": "Wettbewerbe",
+    "clubs": "Clubs",
+    "about": "Über uns",
+    "contact": "Kontakt",
+    "login": "Anmelden",
+    "register": "Registrieren",
+    "logout": "Abmelden",
+    "profile": "Profil",
+    "dashboard": "Dashboard"
+  },
+  "hero": {
+    "title": "Entdecke Dein Talent",
+    "subtitle": "Tritt der Globalen Wettbewerbsplattform bei",
+    "description": "Nimm an Schönheits-, Talent- und Kreativitätswettbewerben von lokaler bis globaler Ebene teil. Gewinne Preise, erlange Anerkennung und verbinde dich mit einer weltweiten Gemeinschaft.",
+    "cta_primary": "Beginne zu Konkurrieren",
+    "cta_secondary": "Demo Ansehen",
+    "stats": {
+      "users": "Aktive Nutzer",
+      "contests": "Live Wettbewerbe",
+      "countries": "Länder",
+      "prizes": "Gewonnene Preise Gesamt"
+    }
+  },
+  "auth": {
+    "login": {
+      "title": "Willkommen Zurück",
+      "subtitle": "Melde dich in deinem MyFav-Konto an",
+      "email_placeholder": "deine@email.com oder Benutzername",
+      "password_placeholder": "Dein Passwort",
+      "forgot_password": "Passwort vergessen?",
+      "submit": "Anmelden",
+      "loading": "Wird angemeldet...",
+      "no_account": "Noch kein Konto?",
+      "register_link": "Registrieren",
+      "error": "Anmeldefehler"
+    },
+    "register": {
+      "title": "Bei MyFav Beitreten",
+      "subtitle": "Erstelle dein Konto und beginne zu konkurrieren"
+    }
+  },
+  "features": {
+    "title": "Warum MyFav Wählen?",
+    "subtitle": "Alles was du brauchst, um dein Talent zu zeigen und global zu konkurrieren",
+    "items": {
+      "global_reach": {
+        "title": "Globale Reichweite",
+        "description": "Konkurriere von Stadtebene bis zu weltweiten Wettbewerben"
+      },
+      "multiple_categories": {
+        "title": "Mehrere Kategorien",
+        "description": "Schönheit, Talent, Haustiere, Sportvereine und mehr"
+      },
+      "fair_voting": {
+        "title": "Faires Abstimmungssystem",
+        "description": "Transparente Bewertung mit unserem 5-Punkte-System"
+      },
+      "earn_rewards": {
+        "title": "Belohnungen Verdienen",
+        "description": "Gewinne Preise und verdiene durch unser Partnerprogramm"
+      }
+    }
+  }
+}

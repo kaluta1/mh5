@@ -1,0 +1,542 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { Play, ChevronLeft, ChevronRight } from 'lucide-react'
+import { useLanguage } from '@/contexts/language-context'
+import { VideoPreviewDialog } from '@/components/ui/video-preview-dialog'
+import { MediaViewerModal } from '@/components/media/media-viewer-modal'
+import { contestService } from '@/services/contest-service'
+import { reactionsService } from '@/services/reactions-service'
+import { sharesService } from '@/services/shares-service'
+import { useToast } from '@/components/ui/toast'
+import { StatsBar } from './stats-bar'
+import { VoteButton } from './vote-button'
+import { FavoriteButton } from './favorite-button'
+import { ReactionsButton } from './reactions-button'
+import { CommentsButton } from './comments-button'
+import { CommentsSection } from './comments-section'
+import { AuthorPopover } from './author-popover'
+import { ShareDialog } from './share-dialog'
+import { ContestantActionsMenu } from './contestant-actions-menu'
+
+interface Media {
+  id: string
+  type: 'image' | 'video'
+  url: string
+  thumbnail?: string
+}
+
+interface ContestantCardProps {
+  id: string
+  userId?: number
+  currentUserId?: number
+  name: string
+  country?: string
+  city?: string
+  avatar: string
+  participationTitle?: string
+  votes: number
+  rank?: number
+  imagesCount?: number
+  videosCount?: number
+  canVote?: boolean
+  hasVoted?: boolean
+  isFavorite: boolean
+  media: Media[]
+  description: string
+  comments: number
+  reactions?: number
+  favorites?: number
+  contestId?: string
+  onToggleFavorite: () => void
+  onViewDetails: () => void
+  onVote: () => void
+  onComment?: () => void
+  onShare?: () => void
+  onReport?: () => void
+  onEdit?: () => void
+  onDelete?: () => void
+}
+
+export function ContestantCard({
+  id,
+  userId,
+  currentUserId,
+  name,
+  country,
+  city,
+  avatar,
+  participationTitle,
+  votes,
+  rank,
+  imagesCount = 0,
+  videosCount = 0,
+  canVote = false,
+  hasVoted = false,
+  isFavorite,
+  media,
+  description,
+  comments,
+  reactions = 0,
+  favorites: favoritesCount = 0,
+  contestId,
+  onToggleFavorite,
+  onViewDetails,
+  onVote,
+  onComment,
+  onShare,
+  onReport,
+  onEdit,
+  onDelete
+}: ContestantCardProps) {
+  const { t } = useLanguage()
+  const { addToast } = useToast()
+  const [showVideoDialog, setShowVideoDialog] = useState(false)
+  const [selectedVideo, setSelectedVideo] = useState<Media | null>(null)
+  const [isLiked, setIsLiked] = useState(hasVoted)
+  const [currentImageIndex, setCurrentImageIndex] = useState(0)
+  const [showMediaViewer, setShowMediaViewer] = useState(false)
+  const [selectedMedia, setSelectedMedia] = useState<Media | null>(null)
+  const [showShareDialog, setShowShareDialog] = useState(false)
+  const [shareLink, setShareLink] = useState('')
+  const [showCommentsDialog, setShowCommentsDialog] = useState(false)
+  const [isVoting, setIsVoting] = useState(false)
+  const [currentVotes, setCurrentVotes] = useState(votes)
+  const [currentComments, setCurrentComments] = useState(comments)
+  const [selectedReaction, setSelectedReaction] = useState<string | null>(null)
+  const [reactionsCount, setReactionsCount] = useState(reactions || 0)
+
+  // Charger les stats de réactions au montage
+  useEffect(() => {
+    const loadReactionStats = async () => {
+      try {
+        const stats = await reactionsService.getReactionStats(Number(id))
+        setReactionsCount(stats.total_reactions)
+        if (stats.user_reaction) {
+          setSelectedReaction(stats.user_reaction)
+        }
+      } catch (error) {
+        console.error('Error loading reaction stats:', error)
+      }
+    }
+    loadReactionStats()
+  }, [id])
+
+  const isAuthor = userId && currentUserId && userId === currentUserId
+
+  const images = media.filter(m => m.type === 'image')
+  const videos = media.filter(m => m.type === 'video')
+  const firstVideo = videos[0]
+  const allMedia = [...images, ...videos]
+
+  // Log pour déboguer
+  useEffect(() => {
+    if (id === '1' || id === '2') {
+      console.log(`[ContestantCard] Contestant ${id} - Media data:`, {
+        media,
+        images,
+        videos,
+        firstVideo,
+        allMedia,
+        imagesCount,
+        videosCount
+      })
+    }
+  }, [id, media, images, videos, firstVideo, allMedia, imagesCount, videosCount])
+
+  const handleVideoClick = (video: Media) => {
+    setSelectedVideo(video)
+    setShowVideoDialog(true)
+  }
+
+  const handleMediaClick = (clickedMedia: Media) => {
+    setSelectedMedia(clickedMedia)
+    setShowMediaViewer(true)
+  }
+
+  const handleMediaChange = (newMedia: Media) => {
+    setSelectedMedia(newMedia)
+  }
+
+  const handleVote = async () => {
+    if (!canVote || isVoting) return
+    
+    try {
+      setIsVoting(true)
+      await contestService.voteForContestant(Number(id), 5)
+      setIsLiked(true)
+      setCurrentVotes(prev => prev + 1)
+      addToast(t('dashboard.contests.vote_success') || 'Vote enregistré avec succès!', 'success')
+      onVote()
+    } catch (error: any) {
+      console.error('Error voting:', error)
+      const errorMessage = error.response?.data?.detail || ''
+      
+      // Déterminer le message d'erreur approprié selon la réponse du backend
+      let toastMessage = t('dashboard.contests.vote_error') || 'Erreur lors du vote. Veuillez réessayer.'
+      
+      const errorLower = errorMessage.toLowerCase()
+      
+      if (errorLower.includes('vote') && errorLower.includes('ouvert')) {
+        toastMessage = t('dashboard.contests.voting_not_open') || 'Le vote n\'est pas encore ouvert pour ce concours.'
+      } else if (errorLower.includes('déjà voté') || errorLower.includes('already voted')) {
+        toastMessage = t('dashboard.contests.already_voted_error') || 'Vous avez déjà voté pour ce participant.'
+      } else if (errorLower.includes('propre candidature') || errorLower.includes('own entry')) {
+        toastMessage = t('dashboard.contests.cannot_vote_own') || 'Vous ne pouvez pas voter pour votre propre candidature.'
+      } else if (errorLower.includes('masculins') && errorLower.includes('féminines') && errorLower.includes('voter')) {
+        toastMessage = t('dashboard.contests.vote_gender_restriction_male') || 'Ce concours est réservé aux participants masculins. Seules les participantes féminines peuvent voter.'
+      } else if (errorLower.includes('féminines') && errorLower.includes('masculins') && errorLower.includes('voter')) {
+        toastMessage = t('dashboard.contests.vote_gender_restriction_female') || 'Ce concours est réservé aux participantes féminines. Seuls les participants masculins peuvent voter.'
+      } else if (errorLower.includes('genre') && errorLower.includes('voter')) {
+        toastMessage = t('dashboard.contests.vote_gender_not_set') || 'Votre profil ne contient pas d\'information de genre. Veuillez compléter votre profil pour voter dans ce concours.'
+      } else if (errorMessage) {
+        // Utiliser le message d'erreur du backend s'il est disponible
+        toastMessage = errorMessage
+      }
+      
+      addToast(toastMessage, 'error')
+    } finally {
+      setIsVoting(false)
+    }
+  }
+
+  const handleReaction = async (reactionType: string) => {
+    try {
+      // Si la même réaction est sélectionnée, on la supprime
+      if (selectedReaction === reactionType) {
+        await reactionsService.removeReaction(Number(id))
+        setSelectedReaction(null)
+        addToast(t('dashboard.contests.reaction_removed') || 'Réaction supprimée', 'success')
+      } else {
+        // Sinon, on ajoute ou met à jour la réaction
+        await reactionsService.addReaction(Number(id), reactionType as 'like' | 'love' | 'wow' | 'dislike')
+        setSelectedReaction(reactionType)
+        const reactionLabels: Record<string, string> = {
+          like: t('dashboard.contests.like') || 'J\'aime',
+          love: t('dashboard.contests.love') || 'J\'adore',
+          wow: t('dashboard.contests.wow') || 'Wow',
+          dislike: t('dashboard.contests.dislike') || 'Je n\'aime pas'
+        }
+        addToast(
+          `${t('dashboard.contests.reaction_added') || 'Réaction ajoutée'}: ${reactionLabels[reactionType] || reactionType}`,
+          'success'
+        )
+      }
+      // Recharger les stats
+      const stats = await reactionsService.getReactionStats(Number(id))
+      setReactionsCount(stats.total_reactions)
+    } catch (error: any) {
+      console.error('Error handling reaction:', error)
+      addToast(error.response?.data?.detail || 'Erreur lors de l\'ajout de la réaction', 'error')
+    }
+  }
+
+  const handleOpenComments = () => {
+    setShowCommentsDialog(true)
+  }
+
+  const handleShare = async () => {
+    // Construire le lien de partage avec l'id du contestant et l'id de l'utilisateur qui partage
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
+    const shareUrl = new URL(`${baseUrl}/dashboard/contests/${contestId}/contestant/${id}`)
+    if (currentUserId) {
+      shareUrl.searchParams.set('ref', String(currentUserId))
+    }
+    const shareLinkStr = shareUrl.toString()
+    setShareLink(shareLinkStr)
+    setShowShareDialog(true)
+    
+    // Enregistrer le partage dans la base de données
+    try {
+      await sharesService.shareContestant(
+        Number(id),
+        shareLinkStr,
+        undefined, // platform sera détecté automatiquement si possible
+        currentUserId
+      )
+    } catch (error: any) {
+      console.error('Error recording share:', error)
+      // Ne pas bloquer l'utilisateur si l'enregistrement échoue
+    }
+    
+    if (onShare) onShare()
+  }
+
+  const nextImage = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (images.length > 0) {
+      setCurrentImageIndex((prev) => (prev + 1) % images.length)
+    }
+  }
+
+  const prevImage = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (images.length > 0) {
+      setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length)
+    }
+  }
+
+  return (
+    <>
+      {/* LinkedIn-style Post Card */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow max-w-2xl mx-auto">
+        {/* Header */}
+        <div className="p-4 pb-3">
+          <div className="flex items-start justify-between">
+            <div className="flex items-start gap-3 flex-1">
+              {/* Avatar */}
+            <div className="flex-shrink-0">
+              {avatar && (avatar.startsWith('http') || avatar.startsWith('/')) ? (
+                  <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700">
+                  <img src={avatar} alt={name} className="w-full h-full object-cover" />
+                </div>
+              ) : (
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-myfav-primary to-myfav-primary-dark flex items-center justify-center text-xl">
+                  {avatar || '👤'}
+                </div>
+              )}
+            </div>
+
+              {/* Name and Location */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <AuthorPopover
+                    userId={userId}
+                    name={name}
+                    avatar={avatar}
+                    country={country}
+                    city={city}
+                    rank={rank}
+                    votes={votes}
+                  >
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white hover:underline cursor-pointer">
+                  {name}
+                </h3>
+                  </AuthorPopover>
+                  {rank && (
+                    <span className="text-xs font-bold bg-myfav-primary text-white px-2 py-0.5 rounded">
+                      #{rank}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
+                  {[country, city].filter(Boolean).join(' · ') || t('dashboard.contests.participant') || 'Participant'}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                  {votes} {t('dashboard.contests.votes')}
+                </p>
+              </div>
+            </div>
+
+            {/* Actions Menu */}
+            <ContestantActionsMenu
+              isAuthor={isAuthor}
+              isFavorite={isFavorite}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              onToggleFavorite={onToggleFavorite}
+              onShare={handleShare}
+              onReport={onReport}
+            />
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="px-4 pb-3">
+          {participationTitle && (
+            <h4 
+                  onClick={(e) => {
+                    e.stopPropagation()
+                onViewDetails()
+                  }}
+              className="text-base font-semibold text-gray-900 dark:text-white mb-2 hover:underline cursor-pointer"
+                >
+              {participationTitle}
+            </h4>
+          )}
+          <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words">
+            {description}
+          </p>
+        </div>
+                
+        {/* Media - Video or Image Carousel */}
+        {firstVideo ? (
+          <div className="w-full">
+            <div 
+              className="relative w-full bg-black overflow-hidden cursor-pointer group"
+              onClick={() => handleVideoClick(firstVideo)}
+            >
+              {/* Video Container - Larger size */}
+              <div className="relative w-full aspect-video">
+                <video
+                  src={firstVideo.url}
+                  className="w-full h-full object-cover"
+                  poster={firstVideo.thumbnail}
+                />
+                <div className="absolute inset-0 bg-black/20 group-hover:bg-black/30 transition-all flex items-center justify-center">
+                  <div className="w-20 h-20 rounded-full bg-white/90 dark:bg-gray-800/90 flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg">
+                    <Play className="w-10 h-10 text-myfav-primary ml-1" fill="currentColor" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : images.length > 0 && (
+          <div className="w-full">
+            <div 
+              className="relative w-full bg-gray-100 dark:bg-gray-900 overflow-hidden group cursor-pointer"
+              onClick={() => handleMediaClick(images[currentImageIndex])}
+            >
+              {/* Current Image - Smaller size with 16:9 aspect ratio */}
+              <div className="relative w-full aspect-[16/9]">
+                <img
+                  src={images[currentImageIndex].url}
+                  alt={`${name} - Image ${currentImageIndex + 1}`}
+                  className="w-full h-full object-cover"
+                />
+
+                {/* Navigation Arrows - Show on hover */}
+                {images.length > 1 && (
+                  <>
+                    <button
+                      onClick={prevImage}
+                      className="absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/50 hover:bg-black/70 text-white opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                      aria-label="Image précédente"
+                    >
+                      <ChevronLeft className="w-5 h-5" />
+                    </button>
+                    <button
+                      onClick={nextImage}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/50 hover:bg-black/70 text-white opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                      aria-label="Image suivante"
+                    >
+                      <ChevronRight className="w-5 h-5" />
+                    </button>
+                  </>
+                )}
+
+                {/* Image Counter */}
+                {images.length > 1 && (
+                  <div className="absolute bottom-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                    {currentImageIndex + 1} / {images.length}
+                  </div>
+                )}
+
+                {/* Dots Indicator */}
+                {images.length > 1 && (
+                  <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5">
+                    {images.map((_, idx) => (
+                      <button
+                        key={idx}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setCurrentImageIndex(idx)
+                        }}
+                        className={`w-1.5 h-1.5 rounded-full transition-all ${
+                          idx === currentImageIndex
+                            ? 'bg-white w-4'
+                            : 'bg-white/50 hover:bg-white/75'
+                        }`}
+                        aria-label={`Aller à l'image ${idx + 1}`}
+                      />
+                    ))}
+              </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Stats Bar */}
+        <StatsBar
+          votes={currentVotes}
+          reactions={reactionsCount}
+          comments={currentComments}
+          favorites={favoritesCount}
+        />
+
+        {/* Action Buttons - LinkedIn Style */}
+        <div className="px-2 border-t border-gray-200 dark:border-gray-700">
+          <div className="grid grid-cols-4 divide-x divide-gray-200 dark:divide-gray-700">
+            <VoteButton
+              contestantId={Number(id)}
+              canVote={canVote}
+              hasVoted={isLiked}
+              isVoting={isVoting}
+              onVote={handleVote}
+            />
+            <CommentsButton onClick={handleOpenComments} />
+            <ReactionsButton
+              contestantId={Number(id)}
+              selectedReaction={selectedReaction}
+              onReactionSelect={handleReaction}
+              onReactionSuccess={() => {
+                // Les stats sont déjà rechargées dans handleReaction
+              }}
+            />
+            <FavoriteButton
+              contestantId={Number(id)}
+              isFavorite={isFavorite}
+              onToggle={onToggleFavorite}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Video Preview Dialog */}
+      {selectedVideo && (
+        <VideoPreviewDialog
+          isOpen={showVideoDialog}
+          videoUrl={selectedVideo.url}
+          videoTitle={participationTitle || name}
+          onClose={() => {
+            setShowVideoDialog(false)
+            setSelectedVideo(null)
+          }}
+        />
+      )}
+
+      {/* Media Viewer Modal for Images and Videos */}
+      {selectedMedia && (
+        <MediaViewerModal
+          media={{
+            id: selectedMedia.id,
+            type: selectedMedia.type,
+            url: selectedMedia.url
+          }}
+          allMedia={allMedia.map(m => ({
+            id: m.id,
+            type: m.type,
+            url: m.url
+          }))}
+          onClose={() => {
+            setShowMediaViewer(false)
+            setSelectedMedia(null)
+          }}
+          onMediaChange={(newMedia) => {
+            const found = allMedia.find(m => m.id === newMedia.id)
+            if (found) handleMediaChange(found)
+          }}
+        />
+              )}
+
+      {/* Comments Dialog */}
+      <CommentsSection
+        contestantId={id}
+        initialCount={comments}
+        isOpen={showCommentsDialog}
+        onOpenChange={setShowCommentsDialog}
+        onCountChange={(count) => setCurrentComments(count)}
+      />
+
+      {/* Share Dialog */}
+      <ShareDialog
+        isOpen={showShareDialog}
+        onOpenChange={setShowShareDialog}
+        shareLink={shareLink}
+        title={participationTitle || name}
+        description={description}
+      />
+    </>
+  )
+}

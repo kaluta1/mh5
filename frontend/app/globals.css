@@ -1,0 +1,251 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Import MyFav color palette */
+@import '../styles/colors.css';
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222.2 84% 4.9%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222.2 84% 4.9%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 224 71% 4%;
+    --foreground: 213 31% 91%;
+    --card: 224 71% 4%;
+    --card-foreground: 213 31% 91%;
+    --popover: 224 71% 4%;
+    --popover-foreground: 213 31% 91%;
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 84% 4.9%;
+    --secondary: 215 27.9% 16.9%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 215 27.9% 16.9%;
+    --muted-foreground: 217.9 10.6% 64.9%;
+    --accent: 215 27.9% 16.9%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 215 27.9% 16.9%;
+    --input: 215 27.9% 16.9%;
+    --ring: 216 12.2% 83.9%;
+  }
+  
+  /* Classes DSM pour le dark theme */
+  .dark .dsm-bg-primary {
+    background: linear-gradient(to bottom right, #1e40af, #0891b2);
+  }
+  
+  .dark .dsm-bg-light {
+    background: linear-gradient(to bottom, rgba(30, 64, 175, 0.1), rgba(8, 145, 178, 0.1));
+  }
+  
+  .dark .dsm-bg-card {
+    background: rgba(15, 23, 42, 0.95);
+    border: 2px solid rgba(30, 64, 175, 0.3);
+  }
+  
+  .dark .dsm-bg-hero {
+    background: linear-gradient(to bottom right, #1e40af, #0891b2);
+  }
+  
+  .dark .dsm-bg-glass {
+    background: rgba(15, 23, 42, 0.4);
+    border: 2px solid rgba(255, 255, 255, 0.15);
+  }
+  
+  .dark .dsm-text-primary {
+    color: #3b82f6;
+  }
+  
+  .dark .dsm-text-gray {
+    color: #94a3b8;
+  }
+  
+  .dark .dsm-title {
+    color: #e2e8f0;
+  }
+  
+  .dark .dsm-subtitle {
+    color: #94a3b8;
+  }
+  
+  .dark .dsm-hover-card:hover {
+    background: linear-gradient(to bottom right, rgba(30, 64, 175, 0.1), rgba(8, 145, 178, 0.1));
+    border: 2px solid rgba(255, 255, 121, 0.2);
+  }
+  
+  .dark .dsm-border {
+    border: 2px solid rgba(30, 64, 175, 0.2);
+  }
+
+  /* Thème Cloud-like */
+  .cloud {
+    --background: 200 100% 97%;
+    --foreground: 200 50% 10%;
+    --card: 200 100% 99%;
+    --card-foreground: 200 50% 10%;
+    --popover: 200 100% 99%;
+    --popover-foreground: 200 50% 10%;
+    --primary: 200 100% 50%;
+    --primary-foreground: 200 100% 99%;
+    --secondary: 200 30% 90%;
+    --secondary-foreground: 200 50% 10%;
+    --muted: 200 30% 95%;
+    --muted-foreground: 200 20% 40%;
+    --accent: 200 50% 85%;
+    --accent-foreground: 200 50% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 200 30% 85%;
+    --input: 200 30% 90%;
+    --ring: 200 100% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Classes DSM personnalisées */
+@layer components {
+  /* Couleurs de fond DSM */
+  .dsm-bg-primary {
+    background: linear-gradient(to bottom right, #1e40af, #0891b2);
+  }
+  
+  .dsm-bg-light {
+    background: linear-gradient(to bottom, rgba(30, 64, 175, 0.05), rgba(8, 145, 178, 0.05));
+  }
+  
+  .dsm-bg-card {
+    background: rgba(255, 255, 255, 0.9);
+    border: 2px solid rgba(30, 64, 175, 0.1);
+  }
+  
+  .dsm-bg-hero {
+    background: linear-gradient(to bottom right, #1e40af, #0891b2);
+  }
+  
+  .dsm-bg-glass {
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+  }
+  
+  /* Couleurs de texte DSM */
+  .dsm-text-primary {
+    color: #1e40af;
+  }
+  
+  .dsm-text-white {
+    color: #ffffff;
+  }
+  
+  .dsm-text-yellow {
+    color: #FFFF79;
+  }
+  
+  .dsm-text-gray {
+    color: #6b7280;
+  }
+  
+  /* Boutons DSM */
+  .dsm-btn-primary {
+    background: linear-gradient(to bottom right, #1e40af, #0891b2);
+    color: #ffffff;
+    border: none;
+    transition: all 0.3s ease;
+  }
+  
+  .dsm-btn-primary:hover {
+    background: linear-gradient(to bottom right, #1e40af, #FFFF79);
+    transform: translateY(-2px);
+  }
+  
+  .dsm-btn-glass {
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    color: #ffffff;
+    transition: all 0.3s ease;
+  }
+  
+  .dsm-btn-glass:hover {
+    background: rgba(255, 255, 255, 0.3);
+    color: #FFFF79;
+    transform: translateY(-2px);
+  }
+  
+  /* Icônes DSM */
+  .dsm-icon-primary {
+    color: #1e40af;
+  }
+  
+  .dsm-icon-yellow {
+    color: #FFFF79;
+  }
+  
+  /* Effets hover DSM */
+  .dsm-hover-card {
+    transition: all 0.3s ease;
+  }
+  
+  .dsm-hover-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    background: linear-gradient(to bottom right, rgba(30, 64, 175, 0.05), rgba(8, 145, 178, 0.05));
+    border: 2px solid rgba(255, 255, 121, 0.3);
+  }
+  
+  .dsm-hover-link {
+    transition: all 0.3s ease;
+  }
+  
+  .dsm-hover-link:hover {
+    color: #1e40af;
+    transform: translateY(-1px);
+  }
+  
+  /* Typographie DSM */
+  .dsm-title {
+    font-weight: 900;
+    color: #1e40af;
+  }
+  
+  .dsm-subtitle {
+    color: #6b7280;
+  }
+  
+  /* Bordures DSM */
+  .dsm-border {
+    border: 2px solid rgba(30, 64, 175, 0.1);
+  }
+  
+  .dsm-border-hover {
+    border: 2px solid rgba(255, 255, 121, 0.3);
+  }
+}

@@ -1,0 +1,257 @@
+{
+  "common": {
+    "loading": "Chargement...",
+    "error": "Erreur",
+    "success": "Succès",
+    "cancel": "Annuler",
+    "confirm": "Confirmer",
+    "save": "Enregistrer",
+    "edit": "Modifier",
+    "delete": "Supprimer",
+    "search": "Rechercher",
+    "filter": "Filtrer",
+    "sort": "Trier",
+    "next": "Suivant",
+    "previous": "Précédent",
+    "close": "Fermer",
+    "or": "Ou"
+  },
+  "navigation": {
+    "home": "Accueil",
+    "contests": "Concours",
+    "clubs": "Clubs",
+    "about": "À propos",
+    "contact": "Contact",
+    "login": "Connexion",
+    "register": "S'inscrire",
+    "logout": "Déconnexion",
+    "profile": "Profil",
+    "dashboard": "Tableau de bord"
+  },
+  "hero": {
+    "title": "Concourir & Gagner",
+    "subtitle": "Plateforme de Concours Mondiale",
+    "description": "Participez aux concours, développez votre réseau et gagnez grâce à notre programme d'affiliation à 10 niveaux. Chaque vote, chaque parrainage génère des revenus.",
+    "cta_primary": "Commencer à Gagner",
+    "cta_secondary": "En Savoir Plus",
+    "affiliate": {
+      "title": "Programme d'Affiliation",
+      "description": "Gagnez jusqu'à 10 niveaux de profondeur",
+      "revenue_share": "40% aux participants, 10% aux sponsors"
+    },
+    "carousel": {
+      "winner_1": "Gagnante Concours Beauté 2024",
+      "winner_2": "Champion Show Talent",
+      "winner_3": "Leader Club Sportif",
+      "winner_4": "Star Concours Animaux"
+    }
+  },
+  "auth": {
+    "login": {
+      "title": "Bon Retour",
+      "subtitle": "Connectez-vous à votre compte MyHigh5",
+      "email_placeholder": "votre@email.com ou nom d'utilisateur",
+      "password_placeholder": "Votre mot de passe",
+      "forgot_password": "Mot de passe oublié ?",
+      "submit": "Se Connecter",
+      "loading": "Connexion...",
+      "no_account": "Pas encore de compte ?",
+      "register_link": "S'inscrire",
+      "error": "Erreur de connexion"
+    },
+    "register": {
+      "title": "Rejoindre MyFav",
+      "subtitle": "Créez votre compte et commencez à concourir"
+    }
+  },
+  "features": {
+    "title": "Pourquoi choisir MyHigh5 ?",
+    "subtitle": "Découvrez les fonctionnalités qui font de MyHigh5 la plateforme de concours la plus avancée au monde.",
+    "items": {
+      "multi_level": {
+        "title": "Concours Multi-Niveaux",
+        "description": "Participez à des concours locaux, nationaux et internationaux dans différentes catégories."
+      },
+      "global_community": {
+        "title": "Communauté Mondiale",
+        "description": "Rejoignez plus d'1 million de participants actifs dans 200+ pays à travers le monde."
+      },
+      "international_reach": {
+        "title": "Portée Internationale",
+        "description": "Compétitions organisées par continent, région et pays pour une expérience globale."
+      },
+      "guaranteed_security": {
+        "title": "Sécurité Garantie",
+        "description": "Vérification d'identité et modération automatique pour un environnement sûr."
+      },
+      "innovative_voting": {
+        "title": "Système de Vote Innovant",
+        "description": "Votez avec notre système unique MyHigh5 (5-4-3-2-1 points) par glisser-déposer."
+      },
+      "varied_categories": {
+        "title": "Catégories Variées",
+        "description": "Beauté, Charme, Derniers Hits, Animaux, Clubs Sportifs et bien plus encore."
+      }
+    }
+  },
+  "earnings": {
+    "title": "Multiples Sources de Revenus",
+    "advertising": "Revenus Publicitaires",
+    "affiliate": "Commissions d'Affiliation",
+    "contests": "Prix de Concours",
+    "clubs": "Accès Club Premium"
+  },
+  "cta": {
+    "title": "Prêt à commencer votre aventure ?",
+    "subtitle": "Rejoignez la plus grande communauté de concours au monde. Inscription gratuite, participation immédiate.",
+    "features": {
+      "free_contests": "Concours gratuits",
+      "active_community": "Communauté active",
+      "real_rewards": "Récompenses réelles"
+    },
+    "button": "Commencer maintenant"
+  },
+  "testimonials": {
+    "title": "Ce que dit notre communauté",
+    "subtitle": "Découvrez les expériences de nos membres du monde entier.",
+    "items": {
+      "sarah_m": {
+        "name": "Sarah M.",
+        "location": "Paris, France",
+        "text": "MyHigh5 a changé ma vie ! J'ai gagné 3 concours de beauté et gagné plus de 5 000$ grâce au programme d'affiliation.",
+        "rating": 5
+      },
+      "carlos_r": {
+        "name": "Carlos R.",
+        "location": "Madrid, Espagne",
+        "text": "Le système de vote est révolutionnaire. Équitable, transparent et vraiment amusant à utiliser !",
+        "rating": 5
+      },
+      "emma_l": {
+        "name": "Emma L.",
+        "location": "Londres, Royaume-Uni",
+        "text": "Communauté mondiale incroyable. J'ai fait des amis de tous les continents et découvert des talents incroyables.",
+        "rating": 5
+      }
+    }
+  },
+  "footer": {
+    "description": "Rejoignez la plus grande communauté de concours au monde. Participez, votez et gagnez grâce à notre programme d'affiliation révolutionnaire à 10 niveaux.",
+    "quick_links": {
+      "title": "Liens Rapides",
+      "about": "À Propos",
+      "contests": "Concours",
+      "how_it_works": "Comment Ça Marche",
+      "affiliate": "Programme d'Affiliation",
+      "support": "Support"
+    },
+    "categories": {
+      "title": "Catégories",
+      "beauty": "Beauté",
+      "handsome": "Charme",
+      "latest_hits": "Derniers Hits",
+      "pets": "Animaux",
+      "sports_clubs": "Clubs Sportifs"
+    },
+    "legal": {
+      "title": "Légal",
+      "privacy": "Politique de Confidentialité",
+      "terms": "Conditions d'Utilisation",
+      "cookies": "Politique des Cookies",
+      "gdpr": "Conformité RGPD"
+    },
+    "copyright": " 2024 MyHigh5. Tous droits réservés."
+  },
+  "pages": {
+    "contests": {
+      "title": "Découvrez nos Concours",
+      "subtitle": "Participez à des compétitions passionnantes du niveau local au niveau mondial",
+      "search_placeholder": "Rechercher un concours...",
+      "filters": {
+        "all": "Tous",
+        "city": "Ville",
+        "country": "Pays",
+        "continental": "Continental",
+        "global": "Global"
+      },
+      "stats": {
+        "active": "Concours actifs",
+        "participants": "Participants",
+        "levels": "Niveaux"
+      },
+      "no_results": "Aucun concours trouvé",
+      "try_different_filter": "Essayez un autre filtre ou terme de recherche",
+      "cta": {
+        "title": "Prêt à participer ?",
+        "subtitle": "Créez votre compte gratuitement et commencez à participer aux concours dès aujourd'hui !",
+        "button": "Créer mon compte"
+      }
+    },
+    "clubs": {
+      "title": "Fan Clubs Exclusifs",
+      "subtitle": "Rejoignez des communautés passionnées et accédez à du contenu exclusif",
+      "search_placeholder": "Rechercher un club...",
+      "features": {
+        "dsp": "Paiement DSP",
+        "multi_admin": "Multi-Admin",
+        "affiliate": "Programme Affilié"
+      },
+      "no_results": "Aucun club trouvé",
+      "try_different_filter": "Essayez un autre filtre",
+      "cta": {
+        "title": "Créez votre propre Club",
+        "subtitle": "Monétisez votre contenu, gérez votre communauté et gagnez grâce au programme d'affiliation.",
+        "feature1": "Paiements sécurisés via DSP",
+        "feature2": "Gestion multi-administrateurs",
+        "feature3": "20% de commission sur les ventes",
+        "button": "Créer mon Club"
+      }
+    },
+    "about": {
+      "title": "À Propos de MyHigh5",
+      "subtitle": "La première plateforme mondiale de concours qui connecte les talents du monde entier, du niveau local au niveau mondial.",
+      "mission": {
+        "title": "Notre Mission",
+        "description": "Démocratiser l'accès aux concours et permettre à chaque talent de briller sur la scène mondiale. Du concours de beauté local au championnat mondial, nous créons des opportunités pour tous."
+      },
+      "values": {
+        "title": "Nos Valeurs",
+        "subtitle": "Les principes qui guident chacune de nos décisions"
+      },
+      "timeline": {
+        "title": "Notre Parcours"
+      },
+      "team": {
+        "title": "Notre Équipe",
+        "subtitle": "Des passionnés dédiés à votre succès"
+      },
+      "cta": {
+        "title": "Rejoignez l'Aventure MyHigh5",
+        "subtitle": "Faites partie d'une communauté mondiale de talents et commencez votre parcours vers le sommet.",
+        "button": "Commencer Maintenant"
+      }
+    },
+    "contact": {
+      "title": "Contactez-nous",
+      "subtitle": "Notre équipe est là pour vous aider. Nous répondons généralement sous 24h.",
+      "form": {
+        "title": "Envoyez-nous un message",
+        "name": "Nom complet",
+        "email": "Email",
+        "category": "Catégorie",
+        "subject": "Sujet",
+        "message": "Message",
+        "submit": "Envoyer le message"
+      },
+      "faq": {
+        "title": "Questions Fréquentes"
+      },
+      "hours": {
+        "title": "Heures de support"
+      },
+      "categories": {
+        "title": "Comment pouvons-nous vous aider ?"
+      }
+    }
+  }
+}
