@@ -17,19 +17,25 @@ depends_on = None
 
 
 def upgrade():
-    # Ajouter la colonne sponsor_id à la table users
-    op.add_column('users', sa.Column('sponsor_id', sa.Integer(), nullable=True))
+    # Vérifier si la colonne existe déjà
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    columns = [col['name'] for col in inspector.get_columns('users')]
     
-    # Créer la contrainte de clé étrangère
-    op.create_foreign_key(
-        'fk_users_sponsor_id',
-        'users', 'users',
-        ['sponsor_id'], ['id'],
-        ondelete='SET NULL'
-    )
-    
-    # Créer un index pour améliorer les performances des requêtes sur sponsor_id
-    op.create_index('ix_users_sponsor_id', 'users', ['sponsor_id'])
+    if 'sponsor_id' not in columns:
+        # Ajouter la colonne sponsor_id à la table users
+        op.add_column('users', sa.Column('sponsor_id', sa.Integer(), nullable=True))
+        
+        # Créer la contrainte de clé étrangère
+        op.create_foreign_key(
+            'fk_users_sponsor_id',
+            'users', 'users',
+            ['sponsor_id'], ['id'],
+            ondelete='SET NULL'
+        )
+        
+        # Créer un index pour améliorer les performances des requêtes sur sponsor_id
+        op.create_index('ix_users_sponsor_id', 'users', ['sponsor_id'])
 
 
 def downgrade():
