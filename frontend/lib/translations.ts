@@ -111,6 +111,7 @@ export interface TranslationKeys {
     success: string
     cancel: string
     confirm: string
+    continue: string
     or: string
     redirecting: string
     please_wait: string
@@ -961,6 +962,10 @@ export interface TranslationKeys {
     init_error: string
     max_attempts_reached: string
     max_attempts_description: string
+    max_attempts_can_pay: string
+    buy_attempts: string
+    price_per_attempt: string
+    pay_and_retry: string
     attempts_remaining: string
     attempts_used: string
     verification_status: string
@@ -1034,6 +1039,73 @@ export interface TranslationKeys {
       document_back_required: string
       selfie_required: string
     }
+  }
+  payment: {
+    payment_required: string
+    payment_instructions: string
+    payment_description: string
+    send_exact_amount: string
+    kyc_verification: string
+    efm_membership: string
+    kyc_description: string
+    efm_description: string
+    validity_one_year: string
+    unit: string
+    quantity: string
+    total: string
+    choose_method: string
+    choose_product: string
+    choose_product_description: string
+    payment_method: string
+    cryptocurrencies: string
+    other_methods: string
+    card: string
+    bank_transfer: string
+    network: string
+    amount_to_send: string
+    receiving_address: string
+    bank_details: string
+    beneficiary: string
+    bank_reference_info: string
+    network_warning: string
+    payment_done: string
+    validation_time_info: string
+    min: string
+    min_amount: string
+    min_amount_error: string
+    enter_amount: string
+    custom_amount: string
+    card_coming_soon: string
+    creating_payment: string
+    order_id: string
+    add_recipients: string
+    recipients_description: string
+    method_description: string
+    instructions_description: string
+    recipient: string
+    username_or_email: string
+    user_not_found: string
+    product_type: string
+    amount: string
+    min_100: string
+    add_recipient: string
+    recipients_count: string
+    confirm_close_title: string
+    confirm_close_description: string
+    pay_for_myself: string
+    pay_for_others: string
+    add_other_user: string
+    checking: string
+    waiting_confirmation: string
+    not_received: string
+    success_title: string
+    success_description: string
+    amount_paid: string
+    auto_checking: string
+    last_check: string
+    waiting_payment: string
+    confirming: string
+    partially_paid: string
   }
   contests: {
     profile_incomplete_title: string
@@ -1835,6 +1907,7 @@ export const translations: Record<Language, TranslationKeys> = {
       success: "Succès",
       cancel: "Annuler",
       confirm: "Confirmer",
+      continue: "Continuer",
       or: "ou",
       redirecting: "Redirection en cours...",
       please_wait: "Veuillez patienter...",
@@ -2526,6 +2599,10 @@ export const translations: Record<Language, TranslationKeys> = {
       init_error: "Impossible de démarrer la vérification",
       max_attempts_reached: "Nombre maximum de tentatives atteint",
       max_attempts_description: "Vous avez utilisé toutes vos tentatives de vérification. Veuillez contacter notre support pour obtenir de l'aide.",
+      max_attempts_can_pay: "Vous avez utilisé vos tentatives gratuites. Vous pouvez acheter des tentatives supplémentaires pour continuer.",
+      buy_attempts: "Acheter des tentatives supplémentaires",
+      price_per_attempt: "Prix par tentative",
+      pay_and_retry: "Payer et réessayer",
       attempts_remaining: "Tentatives restantes",
       attempts_used: "Tentatives utilisées",
       verification_status: "Statut de vérification",
@@ -2599,6 +2676,73 @@ export const translations: Record<Language, TranslationKeys> = {
         document_back_required: "La photo arrière du document est requise",
         selfie_required: "Le selfie est requis"
       }
+    },
+    payment: {
+      payment_required: "Paiement requis",
+      payment_instructions: "Instructions de paiement",
+      payment_description: "Pour accéder à {product}, veuillez effectuer un paiement de {amount}.",
+      send_exact_amount: "Envoyez exactement {amount} à l'adresse ci-dessous.",
+      kyc_verification: "Vérification KYC",
+      efm_membership: "Adhésion EFM",
+      kyc_description: "Vérification d'identité pour participer aux concours",
+      efm_description: "Devenez membre fondateur EFM",
+      validity_one_year: "Validité: 1 an par unité",
+      unit: "unité",
+      quantity: "Quantité",
+      total: "Total",
+      choose_method: "Choisissez votre méthode de paiement",
+      choose_product: "Choisir un produit",
+      choose_product_description: "Sélectionnez le produit que vous souhaitez acheter.",
+      payment_method: "Méthode de paiement",
+      cryptocurrencies: "Crypto-monnaies",
+      other_methods: "Autres méthodes",
+      card: "Carte bancaire",
+      bank_transfer: "Virement bancaire",
+      network: "Réseau",
+      amount_to_send: "Montant à envoyer",
+      receiving_address: "Adresse de réception",
+      bank_details: "Coordonnées bancaires",
+      beneficiary: "Bénéficiaire",
+      bank_reference_info: "Indiquez votre email en référence du virement pour faciliter l'identification.",
+      network_warning: "Assurez-vous d'envoyer le montant exact sur le bon réseau. Les erreurs de réseau peuvent entraîner une perte de fonds.",
+      payment_done: "J'ai effectué le paiement",
+      validation_time_info: "Après votre paiement, la validation peut prendre quelques minutes à quelques heures selon la méthode choisie.",
+      min: "Min",
+      min_amount: "Montant minimum",
+      min_amount_error: "Le montant minimum est de {amount}",
+      enter_amount: "Entrez le montant",
+      custom_amount: "Montant personnalisé",
+      card_coming_soon: "Paiement par carte bientôt disponible",
+      creating_payment: "Création du paiement...",
+      order_id: "Référence",
+      add_recipients: "Ajouter des bénéficiaires",
+      recipients_description: "Ajoutez les utilisateurs pour lesquels vous souhaitez payer",
+      method_description: "Choisissez votre méthode de paiement",
+      instructions_description: "Envoyez le montant exact à l'adresse indiquée",
+      recipient: "Bénéficiaire",
+      username_or_email: "Nom d'utilisateur ou email",
+      user_not_found: "Utilisateur non trouvé",
+      product_type: "Type de produit",
+      amount: "Montant",
+      min_100: "Minimum 100 USD",
+      add_recipient: "Ajouter un bénéficiaire",
+      recipients_count: "bénéficiaire(s)",
+      confirm_close_title: "Fermer le paiement ?",
+      confirm_close_description: "Votre progression sera perdue. Êtes-vous sûr de vouloir fermer ?",
+      pay_for_myself: "Payer pour moi",
+      pay_for_others: "Payer pour d'autres",
+      add_other_user: "Ajouter un autre utilisateur",
+      checking: "Vérification...",
+      waiting_confirmation: "Paiement en attente de confirmation...",
+      not_received: "Paiement non encore reçu. Veuillez réessayer.",
+      success_title: "Paiement confirmé !",
+      success_description: "Votre paiement a été reçu et confirmé. Vous pouvez maintenant continuer.",
+      amount_paid: "Montant payé",
+      auto_checking: "Vérification automatique active",
+      last_check: "Dernière vérif.",
+      waiting_payment: "En attente de paiement...",
+      confirming: "Paiement détecté, confirmation en cours...",
+      partially_paid: "Paiement partiel reçu. Veuillez compléter le montant."
     },
     contests: {
       profile_incomplete_title: "Profil incomplet",
@@ -3205,6 +3349,7 @@ export const translations: Record<Language, TranslationKeys> = {
       success: "Success",
       cancel: "Cancel",
       confirm: "Confirm",
+      continue: "Continue",
       or: "Or",
       redirecting: "Login successful! Redirecting to dashboard...",
       please_wait: "Please wait",
@@ -3926,6 +4071,10 @@ export const translations: Record<Language, TranslationKeys> = {
       init_error: "Unable to start verification",
       max_attempts_reached: "Maximum attempts reached",
       max_attempts_description: "You have used all your verification attempts. Please contact our support for assistance.",
+      max_attempts_can_pay: "You have used your free attempts. You can purchase additional attempts to continue.",
+      buy_attempts: "Purchase additional attempts",
+      price_per_attempt: "Price per attempt",
+      pay_and_retry: "Pay and retry",
       attempts_remaining: "Attempts remaining",
       attempts_used: "Attempts used",
       verification_status: "Verification Status",
@@ -3999,6 +4148,73 @@ export const translations: Record<Language, TranslationKeys> = {
         document_back_required: "Document back photo is required",
         selfie_required: "Selfie is required"
       }
+    },
+    payment: {
+      payment_required: "Payment Required",
+      payment_instructions: "Payment Instructions",
+      payment_description: "To access {product}, please make a payment of {amount}.",
+      send_exact_amount: "Send exactly {amount} to the address below.",
+      kyc_verification: "KYC Verification",
+      efm_membership: "EFM Membership",
+      kyc_description: "Identity verification to participate in contests",
+      efm_description: "Become an EFM founding member",
+      validity_one_year: "Validity: 1 year per unit",
+      unit: "unit",
+      quantity: "Quantity",
+      total: "Total",
+      choose_method: "Choose your payment method",
+      choose_product: "Choose a product",
+      choose_product_description: "Select the product you want to purchase.",
+      payment_method: "Payment method",
+      cryptocurrencies: "Cryptocurrencies",
+      other_methods: "Other methods",
+      card: "Bank card",
+      bank_transfer: "Bank transfer",
+      network: "Network",
+      amount_to_send: "Amount to send",
+      receiving_address: "Receiving address",
+      bank_details: "Bank details",
+      beneficiary: "Beneficiary",
+      bank_reference_info: "Include your email as the transfer reference for easier identification.",
+      network_warning: "Make sure to send the exact amount on the correct network. Network errors can result in loss of funds.",
+      payment_done: "I have made the payment",
+      validation_time_info: "After your payment, validation may take a few minutes to a few hours depending on the method chosen.",
+      min: "Min",
+      min_amount: "Minimum amount",
+      min_amount_error: "The minimum amount is {amount}",
+      enter_amount: "Enter the amount",
+      custom_amount: "Custom amount",
+      card_coming_soon: "Card payment coming soon",
+      creating_payment: "Creating payment...",
+      order_id: "Reference",
+      add_recipients: "Add recipients",
+      recipients_description: "Add users you want to pay for",
+      method_description: "Choose your payment method",
+      instructions_description: "Send the exact amount to the address shown",
+      recipient: "Recipient",
+      username_or_email: "Username or email",
+      user_not_found: "User not found",
+      product_type: "Product type",
+      amount: "Amount",
+      min_100: "Minimum 100 USD",
+      add_recipient: "Add a recipient",
+      recipients_count: "recipient(s)",
+      confirm_close_title: "Close payment?",
+      confirm_close_description: "Your progress will be lost. Are you sure you want to close?",
+      pay_for_myself: "Pay for myself",
+      pay_for_others: "Pay for others",
+      add_other_user: "Add another user",
+      checking: "Checking...",
+      waiting_confirmation: "Payment awaiting confirmation...",
+      not_received: "Payment not received yet. Please try again.",
+      success_title: "Payment confirmed!",
+      success_description: "Your payment has been received and confirmed. You can now continue.",
+      amount_paid: "Amount paid",
+      auto_checking: "Auto-verification active",
+      last_check: "Last check",
+      waiting_payment: "Waiting for payment...",
+      confirming: "Payment detected, confirming...",
+      partially_paid: "Partial payment received. Please complete the amount."
     },
     contests: {
       profile_incomplete_title: "Incomplete Profile",
@@ -4605,6 +4821,7 @@ export const translations: Record<Language, TranslationKeys> = {
       success: "Éxito",
       cancel: "Cancelar",
       confirm: "Confirmar",
+      continue: "Continuar",
       or: "O",
       redirecting: "¡Inicio de sesión exitoso! Redirigiendo al dashboard...",
       please_wait: "Por favor espera",
@@ -5305,6 +5522,10 @@ export const translations: Record<Language, TranslationKeys> = {
       init_error: "No se pudo iniciar la verificación",
       max_attempts_reached: "Número máximo de intentos alcanzado",
       max_attempts_description: "Has utilizado todos tus intentos de verificación. Por favor contacta a nuestro soporte para obtener ayuda.",
+      max_attempts_can_pay: "Has utilizado tus intentos gratuitos. Puedes comprar intentos adicionales para continuar.",
+      buy_attempts: "Comprar intentos adicionales",
+      price_per_attempt: "Precio por intento",
+      pay_and_retry: "Pagar y reintentar",
       attempts_remaining: "Intentos restantes",
       attempts_used: "Intentos utilizados",
       verification_status: "Estado de Verificación",
@@ -5378,6 +5599,73 @@ export const translations: Record<Language, TranslationKeys> = {
         document_back_required: "La foto trasera del documento es requerida",
         selfie_required: "El selfie es requerido"
       }
+    },
+    payment: {
+      payment_required: "Pago Requerido",
+      payment_instructions: "Instrucciones de Pago",
+      payment_description: "Para acceder a {product}, realice un pago de {amount}.",
+      send_exact_amount: "Envíe exactamente {amount} a la dirección de abajo.",
+      kyc_verification: "Verificación KYC",
+      efm_membership: "Membresía EFM",
+      kyc_description: "Verificación de identidad para participar en concursos",
+      efm_description: "Conviértase en miembro fundador EFM",
+      validity_one_year: "Validez: 1 año por unidad",
+      unit: "unidad",
+      quantity: "Cantidad",
+      total: "Total",
+      choose_method: "Elija su método de pago",
+      choose_product: "Elegir un producto",
+      choose_product_description: "Seleccione el producto que desea comprar.",
+      payment_method: "Método de pago",
+      cryptocurrencies: "Criptomonedas",
+      other_methods: "Otros métodos",
+      card: "Tarjeta bancaria",
+      bank_transfer: "Transferencia bancaria",
+      network: "Red",
+      amount_to_send: "Cantidad a enviar",
+      receiving_address: "Dirección de recepción",
+      bank_details: "Datos bancarios",
+      beneficiary: "Beneficiario",
+      bank_reference_info: "Incluya su email como referencia de la transferencia para facilitar la identificación.",
+      network_warning: "Asegúrese de enviar la cantidad exacta en la red correcta. Los errores de red pueden resultar en pérdida de fondos.",
+      payment_done: "He realizado el pago",
+      validation_time_info: "Después de su pago, la validación puede tardar de unos minutos a unas horas según el método elegido.",
+      min: "Mín",
+      min_amount: "Cantidad mínima",
+      min_amount_error: "La cantidad mínima es {amount}",
+      enter_amount: "Ingrese la cantidad",
+      custom_amount: "Cantidad personalizada",
+      card_coming_soon: "Pago con tarjeta próximamente",
+      creating_payment: "Creando pago...",
+      order_id: "Referencia",
+      add_recipients: "Agregar beneficiarios",
+      recipients_description: "Agregue los usuarios para los que desea pagar",
+      method_description: "Elija su método de pago",
+      instructions_description: "Envíe la cantidad exacta a la dirección indicada",
+      recipient: "Beneficiario",
+      username_or_email: "Nombre de usuario o correo",
+      user_not_found: "Usuario no encontrado",
+      product_type: "Tipo de producto",
+      amount: "Monto",
+      min_100: "Mínimo 100 USD",
+      add_recipient: "Agregar un beneficiario",
+      recipients_count: "beneficiario(s)",
+      confirm_close_title: "¿Cerrar pago?",
+      confirm_close_description: "Su progreso se perderá. ¿Está seguro de que desea cerrar?",
+      pay_for_myself: "Pagar por mí",
+      pay_for_others: "Pagar por otros",
+      add_other_user: "Agregar otro usuario",
+      checking: "Verificando...",
+      waiting_confirmation: "Pago en espera de confirmación...",
+      not_received: "Pago aún no recibido. Por favor intente de nuevo.",
+      success_title: "¡Pago confirmado!",
+      success_description: "Su pago ha sido recibido y confirmado. Puede continuar ahora.",
+      amount_paid: "Monto pagado",
+      auto_checking: "Verificación automática activa",
+      last_check: "Última verif.",
+      waiting_payment: "Esperando pago...",
+      confirming: "Pago detectado, confirmando...",
+      partially_paid: "Pago parcial recibido. Por favor complete el monto."
     },
     contests: {
       profile_incomplete_title: "Perfil incompleto",
@@ -5984,6 +6272,7 @@ export const translations: Record<Language, TranslationKeys> = {
       success: "Erfolg",
       cancel: "Abbrechen",
       confirm: "Bestätigen",
+      continue: "Fortfahren",
       or: "Oder",
       redirecting: "Anmeldung erfolgreich! Wird zum Dashboard weitergeleitet...",
       please_wait: "Bitte warten",
@@ -6684,6 +6973,10 @@ export const translations: Record<Language, TranslationKeys> = {
       init_error: "Verifizierung konnte nicht gestartet werden",
       max_attempts_reached: "Maximale Anzahl an Versuchen erreicht",
       max_attempts_description: "Sie haben alle Ihre Verifizierungsversuche aufgebraucht. Bitte kontaktieren Sie unseren Support für Hilfe.",
+      max_attempts_can_pay: "Sie haben Ihre kostenlosen Versuche aufgebraucht. Sie können zusätzliche Versuche kaufen, um fortzufahren.",
+      buy_attempts: "Zusätzliche Versuche kaufen",
+      price_per_attempt: "Preis pro Versuch",
+      pay_and_retry: "Bezahlen und erneut versuchen",
       attempts_remaining: "Verbleibende Versuche",
       attempts_used: "Verwendete Versuche",
       verification_status: "Verifizierungsstatus",
@@ -6757,6 +7050,73 @@ export const translations: Record<Language, TranslationKeys> = {
         document_back_required: "Dokumentrückseite erforderlich",
         selfie_required: "Selfie erforderlich"
       }
+    },
+    payment: {
+      payment_required: "Zahlung erforderlich",
+      payment_instructions: "Zahlungsanweisungen",
+      payment_description: "Um auf {product} zuzugreifen, leisten Sie bitte eine Zahlung von {amount}.",
+      send_exact_amount: "Senden Sie genau {amount} an die untenstehende Adresse.",
+      kyc_verification: "KYC-Verifizierung",
+      efm_membership: "EFM-Mitgliedschaft",
+      kyc_description: "Identitätsprüfung zur Teilnahme an Wettbewerben",
+      efm_description: "Werden Sie EFM-Gründungsmitglied",
+      validity_one_year: "Gültigkeit: 1 Jahr pro Einheit",
+      unit: "Einheit",
+      quantity: "Menge",
+      total: "Gesamt",
+      choose_method: "Wählen Sie Ihre Zahlungsmethode",
+      choose_product: "Produkt wählen",
+      choose_product_description: "Wählen Sie das Produkt, das Sie kaufen möchten.",
+      payment_method: "Zahlungsmethode",
+      cryptocurrencies: "Kryptowährungen",
+      other_methods: "Andere Methoden",
+      card: "Bankkarte",
+      bank_transfer: "Banküberweisung",
+      network: "Netzwerk",
+      amount_to_send: "Zu sendender Betrag",
+      receiving_address: "Empfangsadresse",
+      bank_details: "Bankverbindung",
+      beneficiary: "Begünstigter",
+      bank_reference_info: "Geben Sie Ihre E-Mail als Verwendungszweck an, um die Identifizierung zu erleichtern.",
+      network_warning: "Stellen Sie sicher, dass Sie den genauen Betrag im richtigen Netzwerk senden. Netzwerkfehler können zu Geldverlust führen.",
+      payment_done: "Ich habe die Zahlung geleistet",
+      validation_time_info: "Nach Ihrer Zahlung kann die Validierung je nach gewählter Methode einige Minuten bis einige Stunden dauern.",
+      min: "Min",
+      min_amount: "Mindestbetrag",
+      min_amount_error: "Der Mindestbetrag ist {amount}",
+      enter_amount: "Betrag eingeben",
+      custom_amount: "Benutzerdefinierter Betrag",
+      card_coming_soon: "Kartenzahlung bald verfügbar",
+      creating_payment: "Zahlung wird erstellt...",
+      order_id: "Referenz",
+      add_recipients: "Empfänger hinzufügen",
+      recipients_description: "Fügen Sie Benutzer hinzu, für die Sie bezahlen möchten",
+      method_description: "Wählen Sie Ihre Zahlungsmethode",
+      instructions_description: "Senden Sie den genauen Betrag an die angezeigte Adresse",
+      recipient: "Empfänger",
+      username_or_email: "Benutzername oder E-Mail",
+      user_not_found: "Benutzer nicht gefunden",
+      product_type: "Produkttyp",
+      amount: "Betrag",
+      min_100: "Minimum 100 USD",
+      add_recipient: "Empfänger hinzufügen",
+      recipients_count: "Empfänger",
+      confirm_close_title: "Zahlung schließen?",
+      confirm_close_description: "Ihr Fortschritt geht verloren. Sind Sie sicher, dass Sie schließen möchten?",
+      pay_for_myself: "Für mich bezahlen",
+      pay_for_others: "Für andere bezahlen",
+      add_other_user: "Anderen Benutzer hinzufügen",
+      checking: "Überprüfung...",
+      waiting_confirmation: "Zahlung wartet auf Bestätigung...",
+      not_received: "Zahlung noch nicht erhalten. Bitte versuchen Sie es erneut.",
+      success_title: "Zahlung bestätigt!",
+      success_description: "Ihre Zahlung wurde empfangen und bestätigt. Sie können jetzt fortfahren.",
+      amount_paid: "Bezahlter Betrag",
+      auto_checking: "Automatische Überprüfung aktiv",
+      last_check: "Letzte Prüfung",
+      waiting_payment: "Warten auf Zahlung...",
+      confirming: "Zahlung erkannt, Bestätigung läuft...",
+      partially_paid: "Teilzahlung erhalten. Bitte vervollständigen Sie den Betrag."
     },
     contests: {
       profile_incomplete_title: "Unvollständiges Profil",

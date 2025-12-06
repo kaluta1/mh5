@@ -37,6 +37,24 @@ export interface KYCInitiateResponse {
   verification_id: number
 }
 
+export interface PaymentRequiredError {
+  type: 'payment_required'
+  message: string
+  available_attempts: number
+  price: number
+  currency: string
+}
+
+export class KYCPaymentRequiredError extends Error {
+  public data: PaymentRequiredError
+  
+  constructor(data: PaymentRequiredError) {
+    super(data.message)
+    this.name = 'KYCPaymentRequiredError'
+    this.data = data
+  }
+}
+
 class KYCService {
   private baseUrl = API_URL || 'http://localhost:8000'
 
@@ -63,7 +81,20 @@ class KYCService {
       if (!response.ok) {
         const error = await response.json()
         console.error('KYC initiation error:', error)
-        throw new Error(error.detail || error.message || 'Failed to initiate KYC verification')
+        
+        // Gérer l'erreur 402 Payment Required
+        if (response.status === 402) {
+          const detail = typeof error.detail === 'object' ? error.detail : { message: error.detail }
+          throw new KYCPaymentRequiredError({
+            type: 'payment_required',
+            message: detail.message || 'Paiement requis pour la vérification KYC',
+            available_attempts: detail.available_attempts || 0,
+            price: detail.price || 10,
+            currency: detail.currency || 'USD'
+          })
+        }
+        
+        throw new Error(error.detail?.message || error.detail || error.message || 'Failed to initiate KYC verification')
       }
 
       const result = await response.json()

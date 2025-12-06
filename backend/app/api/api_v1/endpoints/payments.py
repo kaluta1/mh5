@@ -134,8 +134,8 @@ async def create_crypto_payment(
         raise HTTPException(status_code=400, detail="Minimum amount for EFM membership is $100")
     
     try:
-        # Add $0.5 fee buffer to avoid network fees issues
-        amount_with_fees = request.amount + 0.5
+        # Add $0.1 fee buffer to avoid network fees issues
+        amount_with_fees = request.amount + 0.1
         
         # Create payment with crypto provider
         payment = await crypto_payment_service.create_payment(
@@ -199,8 +199,8 @@ async def create_payment_invoice(
         raise HTTPException(status_code=404, detail="Product not found")
     
     try:
-        # Add $0.5 fee buffer to avoid network fees issues
-        amount_with_fees = request.amount + 0.5
+        # Add $0.1 fee buffer to avoid network fees issues
+        amount_with_fees = request.amount + 0.1
         
         invoice = await crypto_payment_service.create_invoice(
             price_amount=amount_with_fees,

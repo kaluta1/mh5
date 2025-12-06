@@ -6,7 +6,8 @@ import { useLanguage } from '@/contexts/language-context'
 import { useAuth } from '@/hooks/use-auth'
 import { Button } from '@/components/ui/button'
 import { KYCSkeleton } from '@/components/ui/skeleton'
-import { kycService } from '@/services/kyc-service'
+import { kycService, KYCPaymentRequiredError } from '@/services/kyc-service'
+import { PaymentDialog } from '@/components/dialogs/payment-dialog-v2'
 import { 
   CheckCircle, 
   AlertCircle, 
@@ -18,7 +19,8 @@ import {
   User,
   Camera,
   Clock,
-  XCircle
+  XCircle,
+  CreditCard
 } from 'lucide-react'
 
 interface KYCStatusData {
@@ -33,6 +35,12 @@ interface KYCStatusData {
   max_attempts?: number
   attempts_remaining?: number
   max_attempts_reached?: boolean
+  // Payment info
+  needs_payment?: boolean
+  has_valid_payment?: boolean
+  available_payments?: number
+  kyc_price?: number
+  kyc_currency?: string
 }
 
 function KYCPageContent() {
@@ -46,6 +54,9 @@ function KYCPageContent() {
   const [kycData, setKycData] = useState<KYCStatusData | null>(null)
   const [isLoadingStatus, setIsLoadingStatus] = useState(true)
   const [verificationUrl, setVerificationUrl] = useState<string | null>(null)
+  
+  // Payment dialog state
+  const [showPaymentDialog, setShowPaymentDialog] = useState(false)
 
   // Vérifier si on revient de Shufti Pro
   const statusParam = searchParams.get('status')
@@ -110,7 +121,14 @@ function KYCPageContent() {
       }
     } catch (err) {
       console.error('Error initiating verification:', err)
-      setError(err instanceof Error ? err.message : t('common.error') || 'Une erreur est survenue')
+      
+      // Gérer l'erreur de paiement requis
+      if (err instanceof KYCPaymentRequiredError) {
+        setShowPaymentDialog(true)
+        setError(null) // Ne pas afficher d'erreur, on affiche le dialog
+      } else {
+        setError(err instanceof Error ? err.message : t('common.error') || 'Une erreur est survenue')
+      }
     } finally {
       setIsInitiating(false)
     }
@@ -208,8 +226,8 @@ function KYCPageContent() {
     )
   }
 
-  // Utilisateur déjà vérifié
-  if (user.identity_verified) {
+  // Utilisateur déjà vérifié OU statut approuvé
+  if (user.identity_verified || kycData?.status === 'approved') {
     return (
       <div className="min-h-[calc(100vh-10rem)] flex items-center justify-center p-4">
         <div className="w-full max-w-lg">
@@ -296,26 +314,46 @@ function KYCPageContent() {
     )
   }
 
-  // KYC max tentatives atteint - Bloquer
+  // KYC max tentatives atteint - Proposer le paiement pour continuer
   if (kycData?.max_attempts_reached) {
     return (
       <div className="min-h-[calc(100vh-10rem)] flex items-center justify-center p-4">
         <div className="w-full max-w-lg">
           <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-8 text-center">
-            <div className="w-20 h-20 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-6">
-              <AlertCircle className="w-10 h-10 text-gray-600 dark:text-gray-400" />
+            <div className="w-20 h-20 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
+              <AlertCircle className="w-10 h-10 text-amber-600 dark:text-amber-400" />
             </div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
               {t('kyc.max_attempts_reached') || 'Nombre maximum de tentatives atteint'}
             </h1>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">
-              {t('kyc.max_attempts_description') || 'Vous avez utilisé toutes vos tentatives de vérification. Veuillez contacter notre support pour obtenir de l\'aide.'}
+            <p className="text-gray-600 dark:text-gray-400 mb-4">
+              {t('kyc.max_attempts_can_pay') || 'Vous avez utilisé vos tentatives gratuites. Vous pouvez acheter des tentatives supplémentaires pour continuer.'}
             </p>
             
-            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 mb-6">
+            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 mb-4">
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 {t('kyc.attempts_used') || 'Tentatives utilisées'}: <span className="font-semibold">{kycData.attempts_count}/{kycData.max_attempts}</span>
               </p>
+            </div>
+
+            {/* Option de paiement */}
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
+              <div className="flex items-center gap-2 mb-2">
+                <CreditCard className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                  {t('kyc.buy_attempts') || 'Acheter des tentatives supplémentaires'}
+                </p>
+              </div>
+              <p className="text-sm text-blue-700 dark:text-blue-300 mb-3">
+                {t('kyc.price_per_attempt') || 'Prix par tentative'}: <span className="font-bold">{kycData.kyc_price || 10} {kycData.kyc_currency || 'USD'}</span>
+              </p>
+              <Button
+                onClick={() => setShowPaymentDialog(true)}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                <CreditCard className="w-4 h-4 mr-2" />
+                {t('kyc.pay_and_retry') || 'Payer et réessayer'}
+              </Button>
             </div>
 
             <Button
@@ -326,6 +364,16 @@ function KYCPageContent() {
             </Button>
           </div>
         </div>
+        
+        {/* Payment Dialog */}
+        <PaymentDialog
+          open={showPaymentDialog}
+          onOpenChange={setShowPaymentDialog}
+          initialProductCode="kyc"
+          onPaymentInitiated={() => {
+            handleRefreshStatus()
+          }}
+        />
       </div>
     )
   }
@@ -352,6 +400,29 @@ function KYCPageContent() {
                 <p className="text-sm text-amber-800 dark:text-amber-200">
                   {t('kyc.attempts_remaining') || 'Tentatives restantes'}: <span className="font-bold">{kycData.attempts_remaining}</span> / {kycData.max_attempts}
                 </p>
+              </div>
+            )}
+            
+            {/* Afficher si paiement requis */}
+            {kycData?.needs_payment && (
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <CreditCard className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                    Paiement requis pour une nouvelle tentative
+                  </p>
+                </div>
+                <p className="text-sm text-blue-700 dark:text-blue-300 mb-3">
+                  Prix: <span className="font-bold">{kycData.kyc_price || 10} {kycData.kyc_currency || 'USD'}</span>
+                </p>
+                <Button
+                  onClick={() => setShowPaymentDialog(true)}
+                  size="sm"
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  <CreditCard className="w-4 h-4 mr-2" />
+                  Payer maintenant
+                </Button>
               </div>
             )}
             
@@ -393,6 +464,16 @@ function KYCPageContent() {
             </div>
           </div>
         </div>
+        
+        {/* Payment Dialog */}
+        <PaymentDialog
+          open={showPaymentDialog}
+          onOpenChange={setShowPaymentDialog}
+          initialProductCode="kyc"
+          onPaymentInitiated={() => {
+            handleRefreshStatus()
+          }}
+        />
       </div>
     )
   }
@@ -511,6 +592,17 @@ function KYCPageContent() {
           </p>
         </div>
       </div>
+      
+      {/* Payment Dialog */}
+      <PaymentDialog
+        open={showPaymentDialog}
+        onOpenChange={setShowPaymentDialog}
+        initialProductCode="kyc"
+        onPaymentInitiated={() => {
+          // Rafraîchir le statut après que l'utilisateur dit avoir payé
+          handleRefreshStatus()
+        }}
+      />
     </div>
   )
 }
