@@ -109,7 +109,7 @@ class Deposit(Base):
     
     # Statut
     status: Mapped[DepositStatus] = mapped_column(
-        SQLEnum(DepositStatus), 
+        SQLEnum(DepositStatus, values_callable=lambda x: [e.value for e in x]), 
         default=DepositStatus.PENDING
     )
     
