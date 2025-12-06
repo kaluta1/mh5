@@ -314,7 +314,7 @@ class CRUDContestant:
                 Contestant.is_deleted == False
             )\
             .options(
-                joinedload(Contestant.season),
+                joinedload(Contestant.seasons),
                 joinedload(Contestant.submissions)
             )\
             .order_by(Contestant.registration_date.desc())\
