@@ -40,7 +40,7 @@ print(f"CORS Origins configured: {cors_origins}")
 # IMPORTANT: Ajouter le middleware CORS EN PREMIER
 app.add_middleware(
     CORSMiddleware,
-    allow_origins="*",
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"],
     allow_headers=["*"],
