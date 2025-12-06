@@ -1,80 +1,77 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useLanguage } from '@/contexts/language-context'
+import { useAuth } from '@/hooks/use-auth'
 import { Button } from '@/components/ui/button'
 import { KYCSkeleton } from '@/components/ui/skeleton'
-import { KYCStepSidebar } from '@/components/dashboard/kyc-step-sidebar'
-import { KYCPersonalInfoStep } from '@/components/dashboard/kyc-personal-info-step'
-import { KYCDocumentInfoStep } from '@/components/dashboard/kyc-document-info-step'
-import { KYCDocumentUploadStep } from '@/components/dashboard/kyc-document-upload-step'
-import { KYCReviewStep } from '@/components/dashboard/kyc-review-step'
-import { KYCNavigationButtons } from '@/components/dashboard/kyc-navigation-buttons'
-import { KYCStatusDisplay } from '@/components/dashboard/kyc-status-display'
 import { kycService } from '@/services/kyc-service'
-import { CheckCircle, AlertCircle } from 'lucide-react'
+import { 
+  CheckCircle, 
+  AlertCircle, 
+  Shield, 
+  ExternalLink, 
+  Loader2,
+  RefreshCw,
+  FileCheck,
+  User,
+  Camera,
+  Clock,
+  XCircle
+} from 'lucide-react'
 
-export default function KYCPage() {
+interface KYCStatusData {
+  status: string | null
+  submitted_at?: string
+  processed_at?: string
+  rejection_reason?: string
+  can_restart?: boolean
+  can_continue?: boolean
+  verification_url?: string
+  attempts_count?: number
+  max_attempts?: number
+  attempts_remaining?: number
+  max_attempts_reached?: boolean
+}
+
+function KYCPageContent() {
   const { t } = useLanguage()
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const { user, isAuthenticated, isLoading, refreshUser } = useAuth()
 
-  // TODO: Intégrer avec le contexte d'authentification réel
-  const isLoading = false
-  const isAuthenticated = true
-  const user = { is_verified: false }
-
-  const [currentStep, setCurrentStep] = useState(1)
-  const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    dateOfBirth: '',
-    nationality: '',
-    address: '',
-    documentType: 'passport',
-    documentNumber: '',
-    issuingCountry: '',
-    documentFront: '',
-    documentBack: '',
-    selfie: ''
-  })
-  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isInitiating, setIsInitiating] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState(false)
-  const [kycStatus, setKycStatus] = useState<'pending' | 'approved' | 'rejected' | 'under_review' | null>(null)
-  const [kycSubmissionData, setKycSubmissionData] = useState<any>(null)
+  const [kycData, setKycData] = useState<KYCStatusData | null>(null)
   const [isLoadingStatus, setIsLoadingStatus] = useState(true)
+  const [verificationUrl, setVerificationUrl] = useState<string | null>(null)
+
+  // Vérifier si on revient de Shufti Pro
+  const statusParam = searchParams.get('status')
 
   // Charger le statut KYC au montage
   useEffect(() => {
     const loadKYCStatus = async () => {
       try {
-        // Récupérer le token depuis le localStorage
         const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
         
         if (!token) {
-          setKycStatus(null)
+          setKycData(null)
           setIsLoadingStatus(false)
           return
         }
 
         const status = await kycService.getKYCStatus(token)
-        setKycStatus(status.status as any)
-        setKycSubmissionData(status)
-
-        // Charger aussi les données soumises précédemment
-        try {
-          const submission = await kycService.getKYCSubmission(token)
-          if (submission) {
-            setFormData(submission)
-          }
-        } catch (err) {
-          console.error('Error loading KYC submission data:', err)
+        setKycData(status)
+        
+        // Si le statut est approved, rafraîchir les données utilisateur
+        if (status.status === 'approved') {
+          refreshUser?.()
         }
       } catch (err) {
-        // Pas de soumission précédente ou token invalide
         console.error('Error loading KYC status:', err)
-        setKycStatus(null)
+        setKycData(null)
       } finally {
         setIsLoadingStatus(false)
       }
@@ -82,10 +79,72 @@ export default function KYCPage() {
 
     if (isAuthenticated) {
       loadKYCStatus()
+    } else {
+      setIsLoadingStatus(false)
     }
-  }, [isAuthenticated])
+  }, [isAuthenticated, statusParam, refreshUser])
 
-  if (isLoading) {
+  // Démarrer ou reprendre la vérification Shufti Pro
+  const handleStartVerification = async () => {
+    setIsInitiating(true)
+    setError(null)
+
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
+
+      if (!token) {
+        setError(t('kyc.login_required') || 'Veuillez vous connecter pour continuer')
+        setIsInitiating(false)
+        return
+      }
+
+      // Déterminer la langue
+      const lang = document.documentElement.lang?.toUpperCase() || 'FR'
+
+      const result = await kycService.initiateVerification(token, lang)
+
+      if (result.verification_url) {
+        setVerificationUrl(result.verification_url)
+      } else {
+        setError(t('kyc.init_error') || 'Impossible de démarrer la vérification')
+      }
+    } catch (err) {
+      console.error('Error initiating verification:', err)
+      setError(err instanceof Error ? err.message : t('common.error') || 'Une erreur est survenue')
+    } finally {
+      setIsInitiating(false)
+    }
+  }
+
+  // Continuer une vérification existante
+  const handleContinueVerification = async () => {
+    // Toujours appeler le backend qui gère la réutilisation de l'URL existante
+    // ou en génère une nouvelle si nécessaire
+    await handleStartVerification()
+  }
+
+  // Rafraîchir le statut
+  const handleRefreshStatus = async () => {
+    setIsLoadingStatus(true)
+    try {
+      const token = localStorage.getItem('access_token')
+      if (token) {
+        const status = await kycService.getKYCStatus(token)
+        setKycData(status)
+        
+        // Si approuvé, rafraîchir l'utilisateur
+        if (status.status === 'approved') {
+          refreshUser?.()
+        }
+      }
+    } catch (err) {
+      console.error('Error refreshing status:', err)
+    } finally {
+      setIsLoadingStatus(false)
+    }
+  }
+
+  if (isLoading || isLoadingStatus) {
     return <KYCSkeleton />
   }
 
@@ -93,195 +152,177 @@ export default function KYCPage() {
     return null
   }
 
-  // Si l'utilisateur a déjà soumis un KYC, afficher le statut
-  if (kycStatus) {
-    // Si le statut est en cours de traitement (pending ou under_review), afficher les infos en lecture seule
-    if (kycStatus === 'pending' || kycStatus === 'under_review') {
-      return (
-        <div className="min-h-[calc(100vh-10rem)] flex items-center justify-center p-2 md:p-4 py-8">
-          <div className="w-full">
-            <div className="mb-8">
-              <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
-                {t('kyc.verification_in_progress')}
-              </h1>
-              <p className="text-gray-600 dark:text-gray-400 text-lg">
-                {t('kyc.verification_in_progress_description')}
+  // Affichage de l'iframe Shufti Pro (PRIORITAIRE)
+  if (verificationUrl) {
+    return (
+      <div className="min-h-[calc(100vh-6rem)] p-4">
+        {/* Header compact */}
+        <div className="max-w-4xl mx-auto mb-4">
+          <div className="bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-myfav-primary to-myfav-primary/80 rounded-xl flex items-center justify-center shadow-lg shadow-myfav-primary/20">
+                <Shield className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  {t('kyc.verification_in_progress') || 'Vérification d\'identité'}
+                </h1>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {t('kyc.follow_instructions') || 'Suivez les étapes ci-dessous'}
+                </p>
+              </div>
+            </div>
+            <Button
+              onClick={() => setVerificationUrl(null)}
+              variant="ghost"
+              size="sm"
+              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            >
+              <XCircle className="w-4 h-4 mr-1" />
+              {t('common.cancel') || 'Annuler'}
+            </Button>
+          </div>
+        </div>
+
+        {/* Iframe Shufti Pro */}
+        <div className="max-w-4xl mx-auto">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl shadow-gray-200/50 dark:shadow-gray-900/50 border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <iframe
+              src={verificationUrl}
+              className="w-full border-0"
+              style={{ height: 'calc(100vh - 220px)', minHeight: '500px' }}
+              allow="camera; microphone"
+              title="Shufti Pro Verification"
+            />
+          </div>
+          
+          {/* Footer info */}
+          <div className="mt-4 text-center">
+            <p className="text-xs text-gray-400 dark:text-gray-500 flex items-center justify-center gap-1">
+              <Shield className="w-3 h-3" />
+              {t('kyc.secure_verification') || 'Vérification sécurisée et chiffrée'}
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Utilisateur déjà vérifié
+  if (user.identity_verified) {
+    return (
+      <div className="min-h-[calc(100vh-10rem)] flex items-center justify-center p-4">
+        <div className="w-full max-w-lg">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-8 text-center">
+            <div className="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
+              <CheckCircle className="w-10 h-10 text-green-600 dark:text-green-400" />
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
+              {t('kyc.already_verified') || 'Identité vérifiée'}
+            </h1>
+            <p className="text-gray-600 dark:text-gray-400 mb-6">
+              {t('kyc.already_verified_description') || 'Votre identité a été vérifiée avec succès. Vous pouvez maintenant profiter de toutes les fonctionnalités.'}
+            </p>
+            <Button
+              onClick={() => router.push('/dashboard')}
+              className="bg-myfav-primary hover:bg-myfav-primary/90"
+            >
+              {t('common.back_to_dashboard') || 'Retour au tableau de bord'}
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Statut KYC en cours - avec possibilité de continuer
+  if (kycData?.can_continue) {
+    return (
+      <div className="min-h-[calc(100vh-10rem)] flex items-center justify-center p-4">
+        <div className="w-full max-w-lg">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-8 text-center">
+            <div className="w-20 h-20 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Clock className="w-10 h-10 text-amber-600 dark:text-amber-400" />
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
+              {t('kyc.verification_in_progress') || 'Vérification en cours'}
+            </h1>
+            <p className="text-gray-600 dark:text-gray-400 mb-6">
+              {t('kyc.verification_continue_description') || 'Vous avez une vérification en cours. Vous pouvez la continuer ou actualiser le statut.'}
+            </p>
+            
+            {kycData?.submitted_at && (
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                {t('kyc.submitted_on') || 'Soumis le'}: {new Date(kycData.submitted_at).toLocaleDateString('fr-FR', {
+                  day: 'numeric',
+                  month: 'long',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })}
               </p>
-            </div>
+            )}
 
-            {/* Status Display */}
-            <div className="mb-8">
-              <KYCStatusDisplay
-                status={kycStatus}
-                submittedAt={kycSubmissionData?.submittedAt}
-                reviewedAt={kycSubmissionData?.reviewedAt}
-                rejectionReason={kycSubmissionData?.rejectionReason}
-              />
-            </div>
-
-            {/* Read-only Information */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-4 md:p-6 mb-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Personal Information */}
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                    {t('kyc.personal_info')}
-                  </h3>
-                  <div className="space-y-3">
-                    <div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">{t('auth.first_name')}</p>
-                      <p className="text-gray-900 dark:text-white font-medium">{formData.firstName || '-'}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">{t('auth.last_name')}</p>
-                      <p className="text-gray-900 dark:text-white font-medium">{formData.lastName || '-'}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">{t('kyc.date_of_birth')}</p>
-                      <p className="text-gray-900 dark:text-white font-medium">{formData.dateOfBirth || '-'}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">{t('kyc.nationality')}</p>
-                      <p className="text-gray-900 dark:text-white font-medium">{formData.nationality || '-'}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">{t('kyc.address')}</p>
-                      <p className="text-gray-900 dark:text-white font-medium">{formData.address || '-'}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Document Information */}
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                    {t('kyc.document_info')}
-                  </h3>
-                  <div className="space-y-3">
-                    <div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">{t('kyc.document_type')}</p>
-                      <p className="text-gray-900 dark:text-white font-medium">{formData.documentType || '-'}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">{t('kyc.document_number')}</p>
-                      <p className="text-gray-900 dark:text-white font-medium">{formData.documentNumber || '-'}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">{t('kyc.issuing_country')}</p>
-                      <p className="text-gray-900 dark:text-white font-medium">{formData.issuingCountry || '-'}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Document Images */}
-              <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                  {t('kyc.uploaded_documents')}
-                </h3>
-                {formData.documentFront || formData.documentBack || formData.selfie ? (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {formData.documentFront && (
-                      <div>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">{t('kyc.document_front')}</p>
-                        <img
-                          src={formData.documentFront}
-                          alt="Document Front"
-                          className="w-full h-40 object-cover rounded-lg border border-gray-200 dark:border-gray-700"
-                          onError={(e) => {
-                            console.error('Error loading document front image:', formData.documentFront)
-                            e.currentTarget.style.display = 'none'
-                          }}
-                        />
-                      </div>
-                    )}
-                    {formData.documentBack && (
-                      <div>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">{t('kyc.document_back')}</p>
-                        <img
-                          src={formData.documentBack}
-                          alt="Document Back"
-                          className="w-full h-40 object-cover rounded-lg border border-gray-200 dark:border-gray-700"
-                          onError={(e) => {
-                            console.error('Error loading document back image:', formData.documentBack)
-                            e.currentTarget.style.display = 'none'
-                          }}
-                        />
-                      </div>
-                    )}
-                    {formData.selfie && (
-                      <div>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">{t('kyc.selfie')}</p>
-                        <img
-                          src={formData.selfie}
-                          alt="Selfie"
-                          className="w-full h-40 object-cover rounded-lg border border-gray-200 dark:border-gray-700"
-                          onError={(e) => {
-                            console.error('Error loading selfie image:', formData.selfie)
-                            e.currentTarget.style.display = 'none'
-                          }}
-                        />
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-gray-600 dark:text-gray-400 text-sm">
-                    {t('common.no_documents')}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex gap-3">
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Button
-                onClick={() => router.push('/dashboard')}
-                variant="outline"
+                onClick={handleContinueVerification}
+                disabled={isInitiating}
+                className="bg-myfav-primary hover:bg-myfav-primary/90"
               >
-                {t('common.back_to_dashboard')}
+                {isInitiating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    {t('common.loading') || 'Chargement...'}
+                  </>
+                ) : (
+                  <>
+                    <ExternalLink className="w-4 h-4 mr-2" />
+                    {t('kyc.continue_verification') || 'Continuer la vérification'}
+                  </>
+                )}
+              </Button>
+              <Button
+                onClick={handleRefreshStatus}
+                variant="outline"
+                disabled={isLoadingStatus}
+              >
+                <RefreshCw className={`w-4 h-4 mr-2 ${isLoadingStatus ? 'animate-spin' : ''}`} />
+                {t('common.refresh') || 'Actualiser'}
               </Button>
             </div>
           </div>
         </div>
-      )
-    }
+      </div>
+    )
+  }
 
-    // Pour les autres statuts (approved, rejected), afficher le statut normal
+  // KYC max tentatives atteint - Bloquer
+  if (kycData?.max_attempts_reached) {
     return (
-      <div className="min-h-[calc(100vh-10rem)] flex items-center justify-center p-4 py-8">
-        <div className="w-full ">
-          <div className="mb-8">
-            <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
-              {t('kyc.verification_status')}
-            </h1>
-            <p className="text-gray-600 dark:text-gray-400 text-lg">
-              {t('kyc.verification_status_description')}
-            </p>
-          </div>
-
-          <KYCStatusDisplay
-            status={kycStatus}
-            submittedAt={kycSubmissionData?.submittedAt}
-            reviewedAt={kycSubmissionData?.reviewedAt}
-            rejectionReason={kycSubmissionData?.rejectionReason}
-          />
-
-          {kycStatus === 'rejected' && (
-            <div className="mt-6">
-              <Button
-                onClick={() => setKycStatus(null)}
-                className="bg-myfav-primary hover:bg-myfav-primary-dark text-white"
-              >
-                {t('kyc.submit_again')}
-              </Button>
+      <div className="min-h-[calc(100vh-10rem)] flex items-center justify-center p-4">
+        <div className="w-full max-w-lg">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-8 text-center">
+            <div className="w-20 h-20 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-6">
+              <AlertCircle className="w-10 h-10 text-gray-600 dark:text-gray-400" />
             </div>
-          )}
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
+              {t('kyc.max_attempts_reached') || 'Nombre maximum de tentatives atteint'}
+            </h1>
+            <p className="text-gray-600 dark:text-gray-400 mb-6">
+              {t('kyc.max_attempts_description') || 'Vous avez utilisé toutes vos tentatives de vérification. Veuillez contacter notre support pour obtenir de l\'aide.'}
+            </p>
+            
+            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 mb-6">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {t('kyc.attempts_used') || 'Tentatives utilisées'}: <span className="font-semibold">{kycData.attempts_count}/{kycData.max_attempts}</span>
+              </p>
+            </div>
 
-          <div className="mt-6">
             <Button
               onClick={() => router.push('/dashboard')}
               variant="outline"
             >
-              {t('common.back_to_dashboard')}
+              {t('common.back_to_dashboard') || 'Retour au tableau de bord'}
             </Button>
           </div>
         </div>
@@ -289,287 +330,195 @@ export default function KYCPage() {
     )
   }
 
-  // Si l'utilisateur est déjà vérifié
-  if (user.is_verified) {
+  // KYC rejeté - avec possibilité de reprendre
+  if (kycData?.can_restart || kycData?.status === 'rejected') {
     return (
       <div className="min-h-[calc(100vh-10rem)] flex items-center justify-center p-4">
-        <div className="w-full max-w-2xl bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 md:p-8">
-          <div className="text-center">
-            <div className="flex justify-center mb-4">
-              <div className="w-16 h-16 bg-green-100 dark:bg-green-900/20 rounded-full flex items-center justify-center">
-                <CheckCircle className="w-8 h-8 text-green-600 dark:text-green-400" />
-              </div>
+        <div className="w-full max-w-lg">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-8 text-center">
+            <div className="w-20 h-20 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
+              <XCircle className="w-10 h-10 text-red-600 dark:text-red-400" />
             </div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-              {t('kyc.already_verified')}
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
+              {t('kyc.verification_rejected') || 'Vérification refusée'}
             </h1>
-            <p className="text-gray-600 dark:text-gray-400 mb-8">
-              {t('kyc.already_verified_description')}
+            <p className="text-gray-600 dark:text-gray-400 mb-4">
+              {t('kyc.verification_rejected_description') || 'Votre demande de vérification a été refusée. Vous pouvez soumettre une nouvelle demande.'}
             </p>
-            <Button
-              onClick={() => router.push('/dashboard')}
-              className="bg-myfav-primary hover:bg-myfav-primary-dark text-white"
-            >
-              {t('common.back_to_dashboard')}
-            </Button>
+            
+            {/* Afficher les tentatives restantes */}
+            {kycData?.attempts_remaining !== undefined && kycData.attempts_remaining > 0 && (
+              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 mb-4">
+                <p className="text-sm text-amber-800 dark:text-amber-200">
+                  {t('kyc.attempts_remaining') || 'Tentatives restantes'}: <span className="font-bold">{kycData.attempts_remaining}</span> / {kycData.max_attempts}
+                </p>
+              </div>
+            )}
+            
+            {kycData?.rejection_reason && (
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-6 text-left">
+                <p className="text-sm font-medium text-red-800 dark:text-red-200 mb-1">
+                  {t('kyc.rejection_reason') || 'Raison du refus'}:
+                </p>
+                <p className="text-sm text-red-700 dark:text-red-300">
+                  {kycData.rejection_reason}
+                </p>
+              </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Button
+                onClick={handleStartVerification}
+                disabled={isInitiating}
+                className="bg-myfav-primary hover:bg-myfav-primary/90"
+              >
+                {isInitiating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    {t('common.loading') || 'Chargement...'}
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    {t('kyc.submit_again') || 'Réessayer'}
+                  </>
+                )}
+              </Button>
+              <Button
+                onClick={() => router.push('/dashboard')}
+                variant="outline"
+              >
+                {t('common.back_to_dashboard') || 'Retour'}
+              </Button>
+            </div>
           </div>
         </div>
       </div>
     )
   }
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }))
-  }
-
-  const validateStep = (step: number): boolean => {
-    const errors: string[] = []
-
-    if (step === 1) {
-      // Validation étape 1: Informations personnelles
-      if (!formData.firstName.trim()) errors.push(t('kyc.errors.first_name_required'))
-      if (!formData.lastName.trim()) errors.push(t('kyc.errors.last_name_required'))
-      if (!formData.dateOfBirth) errors.push(t('kyc.errors.date_of_birth_required'))
-      if (!formData.nationality) errors.push(t('kyc.errors.nationality_required'))
-      if (!formData.address.trim()) errors.push(t('kyc.errors.address_required'))
-    } else if (step === 2) {
-      // Validation étape 2: Informations du document
-      if (!formData.documentType) errors.push(t('kyc.errors.document_type_required'))
-      if (!formData.documentNumber.trim()) errors.push(t('kyc.errors.document_number_required'))
-      if (!formData.issuingCountry) errors.push(t('kyc.errors.issuing_country_required'))
-    } else if (step === 3) {
-      // Validation étape 3: Upload de documents
-      if (!formData.documentFront) errors.push(t('kyc.errors.document_front_required'))
-      if (!formData.documentBack) errors.push(t('kyc.errors.document_back_required'))
-      if (!formData.selfie) errors.push(t('kyc.errors.selfie_required'))
-    }
-
-    if (errors.length > 0) {
-      setError(errors.join(', '))
-      return false
-    }
-
-    setError(null)
-    return true
-  }
-
-  const handleNext = () => {
-    if (validateStep(currentStep) && currentStep < 4) {
-      setCurrentStep(currentStep + 1)
-    }
-  }
-
-  const handlePrevious = () => {
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1)
-    }
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError(null)
-
-    // Valider toutes les étapes
-    if (!validateStep(1) || !validateStep(2) || !validateStep(3)) {
-      return
-    }
-
-    setIsSubmitting(true)
-
-    try {
-      // Récupérer le token depuis le localStorage
-      const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
-
-      if (!token) {
-        setError('Authentication token not found. Please log in again.')
-        setIsSubmitting(false)
-        return
-      }
-
-      // Appeler l'API pour soumettre le KYC
-      const response = await kycService.submitKYC(formData, token)
-
-      if (response.success) {
-        setSuccess(true)
-        // Afficher le statut après 2 secondes
-        setTimeout(() => {
-          setKycStatus('pending')
-          setKycSubmissionData({
-            status: 'pending',
-            submittedAt: new Date().toISOString()
-          })
-        }, 2000)
-      } else {
-        setError(response.message || 'Failed to submit KYC')
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Une erreur est survenue')
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
+  // Formulaire initial - Pas encore de KYC
   return (
-    <div className="min-h-[calc(100vh-10rem)] flex items-center justify-center p-2 md:p-4 py-8">
-      <div className="w-full ">
+    <div className="min-h-[calc(100vh-10rem)] p-4 py-8">
+      <div className="max-w-4xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
-            {t('kyc.verification_required')}
+        <div className="mb-8 text-center">
+          <div className="w-16 h-16 bg-myfav-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <Shield className="w-8 h-8 text-myfav-primary" />
+          </div>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+            {t('kyc.verification_required') || 'Vérification d\'identité requise'}
           </h1>
-          <p className="text-gray-600 dark:text-gray-400 text-lg">
-            {t('kyc.verification_required_description')}
+          <p className="text-gray-600 dark:text-gray-400 max-w-xl mx-auto">
+            {t('kyc.verification_required_description') || 'Pour participer aux concours et retirer vos gains, vous devez vérifier votre identité.'}
           </p>
         </div>
 
-        {/* Sidebar - Steps (Mobile) */}
-        <div className="lg:hidden mb-6">
-          <KYCStepSidebar
-            steps={[
-              {
-                number: 1,
-                title: t('kyc.personal_info'),
-                description: t('kyc.personal_info_desc')
-              },
-              {
-                number: 2,
-                title: t('kyc.document_info'),
-                description: t('kyc.document_info_desc')
-              },
-              {
-                number: 3,
-                title: 'Upload Documents',
-                description: 'Upload your documents'
-              },
-              {
-                number: 4,
-                title: t('kyc.review_submit'),
-                description: t('kyc.review_submit_desc')
-              }
-            ]}
-            currentStep={currentStep}
-            onStepClick={setCurrentStep}
-          />
+        {/* Error Message */}
+        {error && (
+          <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 flex items-start gap-3 max-w-xl mx-auto">
+            <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+            <p className="text-red-700 dark:text-red-300">{error}</p>
+          </div>
+        )}
+
+        {/* Process Steps */}
+        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 md:p-8 mb-8">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-6 text-center">
+            {t('kyc.verification_steps') || 'Comment ça marche ?'}
+          </h2>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="text-center">
+              <div className="w-14 h-14 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center mx-auto mb-4">
+                <User className="w-7 h-7 text-blue-600 dark:text-blue-400" />
+              </div>
+              <h3 className="font-medium text-gray-900 dark:text-white mb-2">
+                {t('kyc.step_1_title') || '1. Informations personnelles'}
+              </h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {t('kyc.step_1_desc') || 'Renseignez vos informations personnelles de base'}
+              </p>
+            </div>
+
+            <div className="text-center">
+              <div className="w-14 h-14 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center mx-auto mb-4">
+                <FileCheck className="w-7 h-7 text-purple-600 dark:text-purple-400" />
+              </div>
+              <h3 className="font-medium text-gray-900 dark:text-white mb-2">
+                {t('kyc.step_2_title') || '2. Document d\'identité'}
+              </h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {t('kyc.step_2_desc') || 'Prenez en photo votre pièce d\'identité'}
+              </p>
+            </div>
+
+            <div className="text-center">
+              <div className="w-14 h-14 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl flex items-center justify-center mx-auto mb-4">
+                <Camera className="w-7 h-7 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <h3 className="font-medium text-gray-900 dark:text-white mb-2">
+                {t('kyc.step_3_title') || '3. Selfie de vérification'}
+              </h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {t('kyc.step_3_desc') || 'Prenez un selfie pour confirmer votre identité'}
+              </p>
+            </div>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Sidebar - Steps (Desktop) */}
-          <div className="hidden lg:block">
-            <KYCStepSidebar
-              steps={[
-                {
-                  number: 1,
-                  title: t('kyc.personal_info'),
-                  description: t('kyc.personal_info_desc')
-                },
-                {
-                  number: 2,
-                  title: t('kyc.document_info'),
-                  description: t('kyc.document_info_desc')
-                },
-                {
-                  number: 3,
-                  title: 'Upload Documents',
-                  description: 'Upload your documents'
-                },
-                {
-                  number: 4,
-                  title: t('kyc.review_submit'),
-                  description: t('kyc.review_submit_desc')
-                }
-              ]}
-              currentStep={currentStep}
-              onStepClick={setCurrentStep}
-            />
+        {/* Documents acceptés */}
+        <div className="bg-gray-50 dark:bg-gray-800/50 rounded-2xl p-6 mb-8">
+          <h3 className="font-medium text-gray-900 dark:text-white mb-4 text-center">
+            {t('kyc.accepted_documents') || 'Documents acceptés'}
+          </h3>
+          <div className="flex flex-wrap justify-center gap-3">
+            <span className="px-4 py-2 bg-white dark:bg-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-600">
+              {t('kyc.doc_passport') || 'Passeport'}
+            </span>
+            <span className="px-4 py-2 bg-white dark:bg-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-600">
+              {t('kyc.doc_id_card') || "Carte d'identité"}
+            </span>
+            <span className="px-4 py-2 bg-white dark:bg-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-600">
+              {t('kyc.doc_driving_license') || 'Permis de conduire'}
+            </span>
           </div>
+        </div>
 
-          {/* Main Content */}
-          <div className="lg:col-span-3">
-            <form onSubmit={handleSubmit} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-4 md:p-6">
-              {/* Success Message */}
-              {success && (
-                <div className="mb-6 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 flex items-start gap-3">
-                  <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-green-900 dark:text-green-100 font-medium">
-                      {t('kyc.submission_success')}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* Error Message */}
-              {error && (
-                <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-red-900 dark:text-red-100 font-medium">
-                      {error}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* Step 1: Personal Information */}
-              {currentStep === 1 && (
-                <KYCPersonalInfoStep
-                  data={{
-                    firstName: formData.firstName,
-                    lastName: formData.lastName,
-                    dateOfBirth: formData.dateOfBirth,
-                    nationality: formData.nationality,
-                    address: formData.address
-                  }}
-                  onChange={(field, value) => setFormData(prev => ({ ...prev, [field]: value }))}
-                />
-              )}
-
-              {/* Step 2: Document Information */}
-              {currentStep === 2 && (
-                <KYCDocumentInfoStep
-                  data={{
-                    documentType: formData.documentType,
-                    documentNumber: formData.documentNumber,
-                    issuingCountry: formData.issuingCountry
-                  }}
-                  onChange={(field, value) => setFormData(prev => ({ ...prev, [field]: value }))}
-                />
-              )}
-
-              {/* Step 3: Document Upload */}
-              {currentStep === 3 && (
-                <KYCDocumentUploadStep
-                  data={{
-                    documentFront: formData.documentFront,
-                    documentBack: formData.documentBack,
-                    selfie: formData.selfie
-                  }}
-                  onChange={(field, value) => setFormData(prev => ({ ...prev, [field]: value }))}
-                />
-              )}
-
-              {/* Step 4: Review & Submit */}
-              {currentStep === 4 && (
-                <KYCReviewStep data={formData} />
-              )}
-
-              {/* Navigation Buttons */}
-              <KYCNavigationButtons
-                currentStep={currentStep}
-                totalSteps={4}
-                isSubmitting={isSubmitting}
-                onPrevious={handlePrevious}
-                onNext={handleNext}
-                onSubmit={handleSubmit}
-              />
-            </form>
-          </div>
+        {/* CTA Button */}
+        <div className="text-center">
+          <Button
+            onClick={handleStartVerification}
+            disabled={isInitiating}
+            size="lg"
+            className="bg-myfav-primary hover:bg-myfav-primary/90 text-white px-8 py-6 text-lg rounded-xl shadow-lg shadow-myfav-primary/25"
+          >
+            {isInitiating ? (
+              <>
+                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                {t('kyc.initiating') || 'Démarrage...'}
+              </>
+            ) : (
+              <>
+                <Shield className="w-5 h-5 mr-2" />
+                {t('kyc.start_verification') || 'Démarrer la vérification'}
+              </>
+            )}
+          </Button>
+          
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-4">
+            {t('kyc.secure_verification') || 'Vérification sécurisée par notre partenaire certifié'}
+          </p>
         </div>
       </div>
     </div>
+  )
+}
+
+export default function KYCPage() {
+  return (
+    <Suspense fallback={<KYCSkeleton />}>
+      <KYCPageContent />
+    </Suspense>
   )
 }

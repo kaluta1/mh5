@@ -13,6 +13,7 @@ interface ContestsGridProps {
   onParticipate: (contestId: string) => void
   isLoading?: boolean
   userGender?: 'male' | 'female' | 'other' | 'prefer_not_to_say' | null
+  canParticipate?: boolean
 }
 
 export function ContestsGrid({
@@ -22,7 +23,8 @@ export function ContestsGrid({
   onViewContestants,
   onParticipate,
   isLoading = false,
-  userGender
+  userGender,
+  canParticipate = true
 }: ContestsGridProps) {
   const { t } = useLanguage()
 
@@ -83,6 +85,7 @@ export function ContestsGrid({
           votingStartDate={contest.votingStartDate}
           isFavorite={favorites.includes(contest.id)}
           userGender={userGender}
+          canParticipate={canParticipate}
           onToggleFavorite={() => onToggleFavorite(contest.id)}
           onViewContestants={() => onViewContestants(contest.id)}
           onParticipate={() => onParticipate(contest.id)}

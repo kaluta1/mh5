@@ -1,0 +1,349 @@
+"""
+Service d'intégration Shufti Pro pour la vérification KYC
+Documentation: https://api.shuftipro.com/docs/
+"""
+import aiohttp
+import base64
+import json
+import hashlib
+import hmac
+import logging
+import random
+import string
+from typing import Optional, Dict, Any
+from datetime import datetime, timedelta
+
+from app.core.config import settings
+
+logger = logging.getLogger(__name__)
+
+# URLs Shufti Pro
+SHUFTI_BASE_URL = "https://api.shuftipro.com"
+
+# Configuration
+SHUFTI_RETENTION_DAYS = 5  # Nombre de jours de rétention d'une vérification
+SHUFTI_TTL_MINUTES = (SHUFTI_RETENTION_DAYS + 1) * 24 * 60  # TTL en minutes
+
+
+class ShuftiProService:
+    """Service pour interagir avec l'API Shufti Pro"""
+    
+    def __init__(self):
+        self.client_id = settings.SHUFTI_CLIENT_ID
+        self.secret_key = settings.SHUFTI_SECRET_KEY
+        self.callback_url = settings.SHUFTI_CALLBACK_URL
+        self.redirect_url = settings.SHUFTI_REDIRECT_URL
+        self.frontend_url = settings.FRONTEND_URL
+    
+    def _get_auth_header(self) -> str:
+        """Générer le header d'authentification Basic"""
+        credentials = f"{self.client_id}:{self.secret_key}"
+        encoded = base64.b64encode(credentials.encode()).decode()
+        return f"Basic {encoded}"
+    
+    def _generate_signature(self, payload: str) -> str:
+        """Générer la signature HMAC pour la requête"""
+        return hmac.new(
+            self.secret_key.encode(),
+            payload.encode(),
+            hashlib.sha256
+        ).hexdigest()
+    
+    @staticmethod
+    def generate_reference() -> str:
+        """
+        Générer une référence unique aléatoire (comme dans le code PHP)
+        """
+        chars = string.ascii_letters + string.digits
+        return ''.join(random.choice(chars) for _ in range(16))
+    
+    async def check_reference_validity(self, reference: str) -> Dict[str, Any]:
+        """
+        Vérifier si une référence existante est toujours valide
+        
+        Args:
+            reference: Identifiant de la vérification existante
+        
+        Returns:
+            Dict avec is_valid, event, et les données
+        """
+        payload = {
+            "reference": reference
+        }
+        
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{SHUFTI_BASE_URL}/status",
+                    json=payload,
+                    headers={
+                        "Authorization": self._get_auth_header(),
+                        "Content-Type": "application/json"
+                    },
+                    timeout=aiohttp.ClientTimeout(total=30)
+                ) as response:
+                    result = await response.json()
+                    
+                    event = result.get("event", "")
+                    
+                    # request.invalid signifie que la référence n'est plus valide
+                    if event == "request.invalid":
+                        return {
+                            "is_valid": False,
+                            "event": event,
+                            "data": result
+                        }
+                    
+                    # verification.accepted ou verification.declined = terminé
+                    if event in ["verification.accepted", "verification.declined"]:
+                        return {
+                            "is_valid": False,  # Terminé, doit créer une nouvelle
+                            "is_completed": True,
+                            "is_accepted": event == "verification.accepted",
+                            "event": event,
+                            "data": result
+                        }
+                    
+                    # Encore en cours (request.pending, verification.pending, etc.)
+                    return {
+                        "is_valid": True,
+                        "event": event,
+                        "verification_url": result.get("verification_url"),
+                        "data": result
+                    }
+                    
+        except Exception as e:
+            logger.error(f"Shufti Pro reference check failed: {e}")
+            return {
+                "is_valid": False,
+                "error": str(e)
+            }
+    
+    async def initiate_verification(
+        self,
+        reference: str,
+        email: str,
+        country: Optional[str] = None,
+        language: str = "FR",
+        redirect_url: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Initier une vérification KYC avec Shufti Pro
+        
+        Args:
+            reference: Identifiant unique pour cette vérification
+            email: Email de l'utilisateur
+            country: Code pays ISO (optionnel, pour pré-remplir)
+            language: Langue de l'interface (FR, EN, ES, etc.)
+            redirect_url: URL de redirection après vérification
+        
+        Returns:
+            Dict contenant verification_url et autres données
+        """
+        # Utiliser l'URL de redirect configurée
+        # IMPORTANT: Le domaine doit être enregistré dans Shufti Pro Dashboard
+        if not redirect_url:
+            if self.redirect_url:
+                redirect_url = self.redirect_url
+            else:
+                # Utiliser le même domaine que le callback (digitalshoppingmall.net)
+                redirect_url = "https://digitalshoppingmall.net/shufti_redirect.php"
+        
+        # Payload pour la vérification (basé sur le code PHP fonctionnel)
+        payload = {
+            "reference": reference,
+            "callback_url": self.callback_url,
+            "redirect_url": redirect_url,
+            "email": email,
+            "language": language,
+            "verification_mode": "any",
+            "allow_offline": "1",
+            "allow_online": "1",
+            "show_privacy_policy": "1",
+            "show_results": "1",
+            "show_consent": "1",
+            "show_feedback_form": "0",
+            "ttl": SHUFTI_TTL_MINUTES,  # 6 jours en minutes
+            
+            # Vérification faciale
+            "face": {
+                "proof": ""
+            },
+            
+            # Vérification de document uniquement (address non inclus dans le plan)
+            "document": {
+                "supported_types": ["id_card", "passport", "driving_license"],
+                "name": "",
+                "dob": "",
+                "document_number": "",
+                "issue_date": "",
+                "fetch_enhanced_data": "0",
+                "allow_offline": "1",
+                "allow_online": "1",
+                "verification_instructions": {
+                    "allow_paper_based": "1",
+                    "allow_screenshot": "1",
+                    "allow_cropped": "1",
+                    "allow_scanned": "1",
+                    "allow_e_document": "1"
+                }
+            }
+        }
+        
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{SHUFTI_BASE_URL}/",
+                    json=payload,
+                    headers={
+                        "Authorization": self._get_auth_header(),
+                        "Content-Type": "application/json"
+                    },
+                    timeout=aiohttp.ClientTimeout(total=30)
+                ) as response:
+                    result = await response.json()
+                    
+                    if response.status == 200:
+                        logger.info(f"Shufti Pro verification initiated: {reference}")
+                        return {
+                            "success": True,
+                            "verification_url": result.get("verification_url"),
+                            "reference": reference,
+                            "event": result.get("event"),
+                            "data": result
+                        }
+                    else:
+                        logger.error(f"Shufti Pro error: {result}")
+                        return {
+                            "success": False,
+                            "error": result.get("error", {}).get("message", "Unknown error"),
+                            "data": result
+                        }
+                    
+        except Exception as e:
+            logger.error(f"Shufti Pro request failed: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    async def get_verification_status(self, reference: str) -> Dict[str, Any]:
+        """
+        Récupérer le statut d'une vérification
+        
+        Args:
+            reference: Identifiant de la vérification
+        
+        Returns:
+            Dict avec le statut et les détails
+        """
+        payload = {
+            "reference": reference
+        }
+        
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{SHUFTI_BASE_URL}/status",
+                    json=payload,
+                    headers={
+                        "Authorization": self._get_auth_header(),
+                        "Content-Type": "application/json"
+                    },
+                    timeout=aiohttp.ClientTimeout(total=30)
+                ) as response:
+                    result = await response.json()
+                    
+                    if response.status == 200:
+                        return {
+                            "success": True,
+                            "event": result.get("event"),
+                            "verification_result": result.get("verification_result"),
+                            "data": result
+                        }
+                    else:
+                        return {
+                            "success": False,
+                            "error": result.get("error", {}).get("message", "Unknown error"),
+                            "data": result
+                        }
+                    
+        except Exception as e:
+            logger.error(f"Shufti Pro status check failed: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    def verify_webhook_signature(self, payload: str, signature: str) -> bool:
+        """
+        Vérifier la signature d'un webhook Shufti Pro
+        
+        Args:
+            payload: Corps de la requête webhook
+            signature: Signature fournie dans le header
+        
+        Returns:
+            bool: True si la signature est valide
+        """
+        expected_signature = self._generate_signature(payload)
+        return hmac.compare_digest(expected_signature, signature)
+    
+    def parse_webhook_event(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Parser les données d'un webhook Shufti Pro
+        
+        Args:
+            data: Données du webhook
+        
+        Returns:
+            Dict avec les informations extraites
+        """
+        event = data.get("event", "")
+        reference = data.get("reference", "")
+        
+        result = {
+            "event": event,
+            "reference": reference,
+            "is_accepted": event == "verification.accepted",
+            "is_declined": event == "verification.declined",
+            "declined_reason": data.get("declined_reason"),
+            "verification_data": data.get("verification_data", {}),
+            "proofs": data.get("proofs", {})
+        }
+        
+        # Extraire les données de vérification
+        if "verification_data" in data:
+            vd = data["verification_data"]
+            
+            # Document data
+            if "document" in vd:
+                doc = vd["document"]
+                result["document"] = {
+                    "first_name": doc.get("name", {}).get("first_name"),
+                    "last_name": doc.get("name", {}).get("last_name"),
+                    "dob": doc.get("dob"),
+                    "document_number": doc.get("document_number"),
+                    "document_type": doc.get("document_type"),
+                    "issue_date": doc.get("issue_date"),
+                    "expiry_date": doc.get("expiry_date"),
+                    "country": doc.get("country")
+                }
+            
+            # Address data
+            if "address" in vd:
+                addr = vd["address"]
+                result["address"] = {
+                    "full_address": addr.get("full_address"),
+                    "country": addr.get("country")
+                }
+            
+            # Face match
+            if "face" in vd:
+                result["face_match"] = vd["face"].get("match_percentage", 0)
+        
+        return result
+
+
+# Instance singleton
+shufti_pro_service = ShuftiProService()

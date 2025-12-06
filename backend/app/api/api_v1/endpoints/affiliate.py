@@ -1,5 +1,5 @@
 from typing import List, Optional, Any
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, BackgroundTasks
 from sqlalchemy.orm import Session
 
 from app.api import deps
@@ -8,6 +8,7 @@ from app.crud import (
     referral_click, revenue_share, founding_member,
     user as crud_user
 )
+from app.crud.crud_invitation import invitation as crud_invitation
 from app.schemas.affiliate import (
     AffiliateTree, AffiliateTreeResponse,
     AffiliateCommission, AffiliateCommissionResponse,
@@ -16,6 +17,14 @@ from app.schemas.affiliate import (
     AffiliateStats
 )
 from app.schemas.user import UserSponsorInfo
+from app.schemas.invitation import (
+    InvitationCreate,
+    InvitationBulkCreate,
+    InvitationResponse,
+    InvitationStats,
+    InvitationSendResult
+)
+from app.services.email import email_service
 
 router = APIRouter()
 
@@ -250,3 +259,223 @@ def track_referral_click(
     )
     
     return {"tracked": result}
+
+
+# ============================================
+# ENDPOINTS INVITATIONS
+# ============================================
+
+@router.post("/invitations", response_model=InvitationSendResult)
+def send_invitation(
+    *,
+    db: Session = Depends(deps.get_db),
+    invitation_in: InvitationCreate,
+    background_tasks: BackgroundTasks,
+    current_user = Depends(deps.get_current_active_user)
+):
+    """
+    Envoyer une invitation de parrainage par email.
+    """
+    # Vérifier si l'email n'est pas déjà enregistré
+    existing_user = crud_user.get_by_email(db, email=invitation_in.email)
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cet email est déjà enregistré sur la plateforme"
+        )
+    
+    # Vérifier si une invitation en attente existe déjà
+    existing_invitation = crud_invitation.get_by_email_and_inviter(
+        db, email=invitation_in.email, inviter_id=current_user.id
+    )
+    if existing_invitation:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Une invitation est déjà en attente pour cet email"
+        )
+    
+    # Récupérer le code de parrainage de l'utilisateur
+    referral_code = current_user.personal_referral_code
+    if not referral_code:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Vous n'avez pas de code de parrainage"
+        )
+    
+    # Créer l'invitation
+    invitation_obj = crud_invitation.create_invitation(
+        db,
+        inviter_id=current_user.id,
+        email=invitation_in.email,
+        referral_code=referral_code,
+        message=invitation_in.message
+    )
+    
+    # Envoyer l'email en arrière-plan
+    inviter_name = f"{current_user.first_name or ''} {current_user.last_name or ''}".strip() or current_user.username or "Un ami"
+    
+    background_tasks.add_task(
+        email_service.send_invitation_email,
+        to_email=invitation_in.email,
+        inviter_name=inviter_name,
+        referral_code=referral_code,
+        message=invitation_in.message
+    )
+    
+    return InvitationSendResult(
+        success=True,
+        email=invitation_in.email,
+        message="Invitation envoyée avec succès",
+        invitation_id=invitation_obj.id
+    )
+
+
+@router.post("/invitations/bulk", response_model=List[InvitationSendResult])
+def send_bulk_invitations(
+    *,
+    db: Session = Depends(deps.get_db),
+    invitations_in: InvitationBulkCreate,
+    background_tasks: BackgroundTasks,
+    current_user = Depends(deps.get_current_active_user)
+):
+    """
+    Envoyer plusieurs invitations de parrainage.
+    """
+    referral_code = current_user.personal_referral_code
+    if not referral_code:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Vous n'avez pas de code de parrainage"
+        )
+    
+    inviter_name = f"{current_user.first_name or ''} {current_user.last_name or ''}".strip() or current_user.username or "Un ami"
+    
+    results = []
+    for email in invitations_in.emails:
+        # Vérifier si l'email n'est pas déjà enregistré
+        existing_user = crud_user.get_by_email(db, email=email)
+        if existing_user:
+            results.append(InvitationSendResult(
+                success=False,
+                email=email,
+                message="Email déjà enregistré"
+            ))
+            continue
+        
+        # Vérifier si une invitation en attente existe
+        existing_invitation = crud_invitation.get_by_email_and_inviter(
+            db, email=email, inviter_id=current_user.id
+        )
+        if existing_invitation:
+            results.append(InvitationSendResult(
+                success=False,
+                email=email,
+                message="Invitation déjà envoyée"
+            ))
+            continue
+        
+        # Créer l'invitation
+        invitation_obj = crud_invitation.create_invitation(
+            db,
+            inviter_id=current_user.id,
+            email=email,
+            referral_code=referral_code,
+            message=invitations_in.message
+        )
+        
+        # Envoyer l'email en arrière-plan
+        background_tasks.add_task(
+            email_service.send_invitation_email,
+            to_email=email,
+            inviter_name=inviter_name,
+            referral_code=referral_code,
+            message=invitations_in.message
+        )
+        
+        results.append(InvitationSendResult(
+            success=True,
+            email=email,
+            message="Invitation envoyée",
+            invitation_id=invitation_obj.id
+        ))
+    
+    return results
+
+
+@router.get("/invitations", response_model=List[InvitationResponse])
+def get_my_invitations(
+    db: Session = Depends(deps.get_db),
+    current_user = Depends(deps.get_current_active_user),
+    status: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 50
+):
+    """
+    Récupérer les invitations envoyées par l'utilisateur.
+    """
+    return crud_invitation.get_user_invitations(
+        db, user_id=current_user.id, status=status, skip=skip, limit=limit
+    )
+
+
+@router.get("/invitations/pending", response_model=List[InvitationResponse])
+def get_pending_invitations(
+    db: Session = Depends(deps.get_db),
+    current_user = Depends(deps.get_current_active_user),
+    skip: int = 0,
+    limit: int = 50
+):
+    """
+    Récupérer les invitations en attente.
+    """
+    return crud_invitation.get_pending_invitations(
+        db, user_id=current_user.id, skip=skip, limit=limit
+    )
+
+
+@router.get("/invitations/accepted", response_model=List[InvitationResponse])
+def get_accepted_invitations(
+    db: Session = Depends(deps.get_db),
+    current_user = Depends(deps.get_current_active_user),
+    skip: int = 0,
+    limit: int = 50
+):
+    """
+    Récupérer les invitations acceptées.
+    """
+    return crud_invitation.get_accepted_invitations(
+        db, user_id=current_user.id, skip=skip, limit=limit
+    )
+
+
+@router.get("/invitations/stats", response_model=InvitationStats)
+def get_invitation_stats(
+    db: Session = Depends(deps.get_db),
+    current_user = Depends(deps.get_current_active_user)
+):
+    """
+    Récupérer les statistiques d'invitation.
+    """
+    return crud_invitation.get_invitation_stats(db, user_id=current_user.id)
+
+
+@router.delete("/invitations/{invitation_id}")
+def cancel_invitation(
+    invitation_id: int,
+    db: Session = Depends(deps.get_db),
+    current_user = Depends(deps.get_current_active_user)
+):
+    """
+    Annuler une invitation en attente.
+    """
+    invitation = crud_invitation.cancel_invitation(
+        db, invitation_id=invitation_id, user_id=current_user.id
+    )
+    
+    if not invitation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Invitation non trouvée ou déjà traitée"
+        )
+    
+    return {"message": "Invitation annulée"}

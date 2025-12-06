@@ -28,6 +28,7 @@ class KYCVerificationCreate(KYCVerificationBase):
 class KYCVerificationUpdate(BaseModel):
     status: Optional[KYCStatus] = None
     external_verification_id: Optional[str] = None
+    verification_url: Optional[str] = None
     verified_first_name: Optional[str] = None
     verified_last_name: Optional[str] = None
     verified_date_of_birth: Optional[datetime] = None

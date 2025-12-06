@@ -31,8 +31,49 @@ export interface KYCSubmissionResponse {
   }
 }
 
+export interface KYCInitiateResponse {
+  verification_url: string
+  reference: string
+  verification_id: number
+}
+
 class KYCService {
   private baseUrl = API_URL || 'http://localhost:8000'
+
+  /**
+   * Initier une vérification KYC avec Shufti Pro
+   * Retourne l'URL de vérification où rediriger l'utilisateur
+   */
+  async initiateVerification(token: string, language: string = 'FR'): Promise<KYCInitiateResponse> {
+    try {
+      if (!token) {
+        throw new Error('Authentication token is required')
+      }
+
+      console.log('Initiating Shufti Pro verification...')
+
+      const response = await fetch(`${this.baseUrl}/api/v1/kyc/initiate?language=${language}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        console.error('KYC initiation error:', error)
+        throw new Error(error.detail || error.message || 'Failed to initiate KYC verification')
+      }
+
+      const result = await response.json()
+      console.log('KYC initiation successful:', result)
+      return result
+    } catch (error) {
+      console.error('KYC initiation error:', error)
+      throw error instanceof Error ? error : new Error('An error occurred while initiating KYC')
+    }
+  }
 
   /**
    * Soumettre les données KYC

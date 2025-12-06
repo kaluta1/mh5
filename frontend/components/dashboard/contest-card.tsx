@@ -25,6 +25,7 @@ interface ContestCardProps {
   participationEndDate?: Date
   votingStartDate?: Date
   userGender?: 'male' | 'female' | 'other' | 'prefer_not_to_say' | null
+  canParticipate?: boolean
   onViewContestants: () => void
   onToggleFavorite: () => void
   onParticipate?: () => void
@@ -49,6 +50,7 @@ export function ContestCard({
   participationEndDate,
   votingStartDate,
   userGender,
+  canParticipate: userCanParticipate = true,
   onViewContestants,
   onToggleFavorite,
   onParticipate,
@@ -114,7 +116,7 @@ export function ContestCard({
     return true
   }
   
-  const canParticipate = () => {
+  const isEligibleForContest = () => {
     // Vérifier que le concours est ouvert et que la participation est en cours
     if (!isOpen || !isParticipationOngoing()) {
       return false
@@ -138,6 +140,11 @@ export function ContestCard({
     }
     
     return true
+  }
+
+  // L'utilisateur peut participer seulement s'il est éligible au concours ET a complété son profil/KYC
+  const canParticipate = () => {
+    return isEligibleForContest() && userCanParticipate
   }
 
   const getCountdownText = () => {

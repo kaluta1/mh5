@@ -46,7 +46,7 @@ export default function LoginPage() {
   // Rediriger si déjà connecté
   useEffect(() => {
     if (isAuthenticated) {
-      router.push('/dashboard')
+      router.push('/dashboard/contests')
     }
   }, [isAuthenticated, router])
 

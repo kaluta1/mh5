@@ -67,10 +67,10 @@ export function LoginModal({ open, onOpenChange, onSwitchToRegister, onLoginSucc
       setIsSuccess(true)
       setFormData({ emailOrUsername: "", password: "" })
       
-      // Fermer le modal et rediriger vers le dashboard
+      // Fermer le modal et rediriger vers les contests
       setTimeout(() => {
         onOpenChange(false)
-        router.push('/dashboard')
+        router.push('/dashboard/contests')
       }, 1500)
     } catch (err: any) {
       console.error('Login error:', err)

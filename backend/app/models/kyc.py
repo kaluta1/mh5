@@ -38,7 +38,9 @@ class VerificationProvider(str, enum.Enum):
 
 class KYCVerification(Base):
     __tablename__ = "kyc_verifications"
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    
+    # Un seul enregistrement KYC par utilisateur (contrainte unique)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, unique=True)
     
     # Statut de vérification
     status: Mapped[KYCStatus] = mapped_column(SQLEnum(KYCStatus), default=KYCStatus.PENDING)
@@ -47,6 +49,11 @@ class KYCVerification(Base):
     # Identifiants externes
     external_verification_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     reference_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    verification_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # URL Shufti Pro pour réutiliser
+    
+    # Nombre de tentatives (max 3)
+    attempts_count: Mapped[int] = mapped_column(Integer, default=0)
+    max_attempts: Mapped[int] = mapped_column(Integer, default=3)
     
     # Informations personnelles vérifiées
     verified_first_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)

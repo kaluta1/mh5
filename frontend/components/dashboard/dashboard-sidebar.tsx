@@ -7,33 +7,34 @@ import { cn } from "@/lib/utils"
 import { useLanguage } from "@/contexts/language-context"
 import { useAuth } from "@/hooks/use-auth"
 import { 
-  Users, 
   Heart, 
   FileText, 
   Wallet,
   UserPlus,
   DollarSign,
-  Award,
   Shield,
-  LogOut,
-  Settings
+  Home,
+  Trophy,
+  Star
 } from "lucide-react"
 
 const baseMenuSections = [
   {
-    title: "dashboard.nav.competitions",
+    title: "dashboard.nav.main",
     items: [
-      { name: "dashboard.nav.my_applications", href: "/dashboard/my-applications", icon: FileText },
-      { name: "dashboard.nav.clubs", href: "/dashboard/clubs", icon: Users },
+      { name: "dashboard.nav.overview", href: "/dashboard", icon: Home },
+      { name: "dashboard.nav.contests", href: "/dashboard/contests", icon: Trophy },
+      { name: "dashboard.nav.favorites", href: "/dashboard/favorites", icon: Star },
+       { name: "dashboard.nav.my_applications", href: "/dashboard/my-applications", icon: FileText },
     ]
   },
+ 
   {
     title: "dashboard.nav.business",
     items: [
       { name: "dashboard.nav.wallet", href: "/dashboard/wallet", icon: Wallet },
       { name: "dashboard.nav.affiliates", href: "/dashboard/affiliates", icon: UserPlus },
       { name: "dashboard.nav.commissions", href: "/dashboard/commissions", icon: DollarSign },
-      { name: "dashboard.nav.prize", href: "/dashboard/prize", icon: Award },
     ]
   },
 ]
@@ -53,16 +54,11 @@ interface DashboardSidebarProps {
 export function DashboardSidebar({ isCollapsed = false, onToggleCollapse }: DashboardSidebarProps) {
   const { t } = useLanguage()
   const pathname = usePathname()
-  const { user, logout } = useAuth()
+  const { user } = useAuth()
 
   const displayMenuSections = user?.is_admin 
     ? [...baseMenuSections, adminMenuSection]
     : baseMenuSections
-
-  const handleLogout = async () => {
-    await logout()
-    window.location.href = '/'
-  }
 
   return (
     <>
@@ -89,25 +85,6 @@ export function DashboardSidebar({ isCollapsed = false, onToggleCollapse }: Dash
           </Link>
           
         </div>
-
-        {/* User Profile Card */}
-        {!isCollapsed && user && (
-          <div className="mx-3 mt-4 p-3 rounded-xl bg-gradient-to-br from-gray-50 to-gray-100/50 dark:from-gray-900 dark:to-gray-800/50 border border-gray-100 dark:border-gray-800">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-myfav-primary to-myfav-secondary flex items-center justify-center text-white font-semibold text-sm">
-                {user.full_name?.charAt(0) || user.username?.charAt(0) || 'U'}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">
-                  {user.full_name || user.username}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                  {user.email}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Navigation */}
         <nav className={cn(
@@ -161,42 +138,6 @@ export function DashboardSidebar({ isCollapsed = false, onToggleCollapse }: Dash
             ))}
           </div>
         </nav>
-
-        {/* Footer Actions */}
-        <div className={cn(
-          "border-t border-gray-100 dark:border-gray-800 py-3",
-          isCollapsed ? "px-2" : "px-3"
-        )}>
-          <div className="space-y-1">
-            <Link
-              href="/dashboard/settings"
-              className={cn(
-                "flex items-center gap-3 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800/50 hover:text-gray-900 dark:hover:text-white transition-colors",
-                isCollapsed ? "justify-center p-3" : "px-3 py-2.5"
-              )}
-              title={isCollapsed ? t('dashboard.nav.settings') : undefined}
-            >
-              <Settings className="h-5 w-5" />
-              {!isCollapsed && (
-                <span className="text-sm font-medium">{t('dashboard.nav.settings') || 'Paramètres'}</span>
-              )}
-            </Link>
-            
-            <button
-              onClick={handleLogout}
-              className={cn(
-                "w-full flex items-center gap-3 rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors",
-                isCollapsed ? "justify-center p-3" : "px-3 py-2.5"
-              )}
-              title={isCollapsed ? t('user.logout') : undefined}
-            >
-              <LogOut className="h-5 w-5" />
-              {!isCollapsed && (
-                <span className="text-sm font-medium">{t('user.logout')}</span>
-              )}
-            </button>
-          </div>
-        </div>
       </aside>
     </>
   )

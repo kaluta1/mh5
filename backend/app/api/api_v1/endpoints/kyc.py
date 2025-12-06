@@ -1,10 +1,14 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Request, Header
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from datetime import datetime
+import json
 
 from app.api import deps
+from app.core.config import settings
 from app.crud import crud_kyc
+from app.crud import crud_deposit
 from app.models.user import User
 from app.models.kyc import KYCStatus, DocumentType
 from app.schemas.kyc import (
@@ -14,8 +18,285 @@ from app.schemas.kyc import (
     KYCStatistics, KYCVerificationWithDocuments, KYCVerificationComplete,
     ShuftiProWebhookData, KYCWebhookResponse
 )
+from app.services.shufti_pro import shufti_pro_service
 
 router = APIRouter()
+
+
+@router.post("/initiate")
+async def initiate_shufti_verification(
+    *,
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_active_user),
+    language: str = "FR"
+):
+    """
+    Initier ou reprendre une vérification KYC avec Shufti Pro.
+    
+    Règles:
+    - UN SEUL enregistrement par utilisateur (jamais de doublons)
+    - APPROVED: Bloquer (déjà vérifié)
+    - IN_PROGRESS/PENDING: Réutiliser si la référence Shufti Pro est encore valide
+    - REJECTED/REQUIRES_REVIEW/EXPIRED: Permettre de reprendre avec nouvelle référence
+    """
+    # Récupérer l'enregistrement KYC existant (il ne peut y en avoir qu'un par user)
+    verification = crud_kyc.kyc_verification.get_by_user(db, user_id=current_user.id)
+    
+    # Cas 1: Déjà approuvé → Bloquer
+    if verification and verification.status == KYCStatus.APPROVED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Votre identité est déjà vérifiée"
+        )
+    
+    # Cas 1b: Nombre max de tentatives atteint → Bloquer
+    if verification and verification.attempts_count >= verification.max_attempts:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Vous avez atteint le nombre maximum de tentatives ({verification.max_attempts}). Veuillez contacter le support."
+        )
+    
+    # Cas 1c: Vérifier si l'utilisateur a un paiement valide pour le KYC
+    # (Seulement si c'est une NOUVELLE tentative, pas si on continue une existante)
+    needs_new_payment = False
+    if not verification:
+        # Première tentative → besoin de paiement
+        needs_new_payment = True
+    elif verification.status in [KYCStatus.REJECTED, KYCStatus.REQUIRES_REVIEW, KYCStatus.EXPIRED]:
+        # Nouvelle tentative après échec → besoin de paiement
+        needs_new_payment = True
+    
+    valid_payment = None
+    if needs_new_payment:
+        valid_payment = crud_deposit.deposit.get_valid_deposit_for_product(
+            db, user_id=current_user.id, product_code="kyc"
+        )
+        if not valid_payment:
+            available_count = crud_deposit.deposit.count_valid_deposits_for_product(
+                db, user_id=current_user.id, product_code="kyc"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail={
+                    "message": "Vous devez payer pour effectuer la vérification KYC",
+                    "available_attempts": available_count,
+                    "price": 10.00,
+                    "currency": "USD"
+                }
+            )
+    
+    # Cas 2: Vérification en cours (PENDING/IN_PROGRESS) → Essayer de réutiliser
+    if verification and verification.status in [KYCStatus.PENDING, KYCStatus.IN_PROGRESS]:
+        reference = verification.reference_id
+        
+        if reference:
+            # Vérifier auprès de Shufti Pro si la référence est toujours valide
+            validity_check = await shufti_pro_service.check_reference_validity(reference)
+            
+            # Si la vérification est terminée côté Shufti Pro, mettre à jour notre statut
+            if validity_check.get("is_completed"):
+                new_status = KYCStatus.APPROVED if validity_check.get("is_accepted") else KYCStatus.REJECTED
+                update_data = KYCVerificationUpdate(
+                    status=new_status,
+                    processed_at=datetime.utcnow()
+                )
+                crud_kyc.kyc_verification.update(db=db, db_obj=verification, obj_in=update_data)
+                
+                if validity_check.get("is_accepted"):
+                    # Mettre à jour le user aussi
+                    current_user.identity_verified = True
+                    db.commit()
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Votre identité est déjà vérifiée"
+                    )
+                # Si rejected, on continue pour créer une nouvelle vérification
+            
+            elif validity_check.get("is_valid"):
+                # La référence est encore valide, réutiliser l'URL existante
+                verification_url = validity_check.get("verification_url") or verification.verification_url
+                
+                if verification_url:
+                    return {
+                        "verification_url": verification_url,
+                        "reference": reference,
+                        "verification_id": verification.id,
+                        "reused": True,
+                        "status": "in_progress",
+                        "attempts_count": verification.attempts_count,
+                        "max_attempts": verification.max_attempts,
+                        "attempts_remaining": verification.max_attempts - verification.attempts_count
+                    }
+    
+    # Cas 3: Pas de vérification, ou statut REJECTED/REQUIRES_REVIEW/EXPIRED → Créer/Mettre à jour
+    
+    # Générer une nouvelle référence aléatoire
+    reference = shufti_pro_service.generate_reference()
+    
+    if verification:
+        # Mettre à jour l'enregistrement existant (pas de doublon)
+        # Incrémenter le compteur de tentatives seulement si c'est une nouvelle tentative (après rejet)
+        if verification.status in [KYCStatus.REJECTED, KYCStatus.REQUIRES_REVIEW, KYCStatus.EXPIRED]:
+            verification.attempts_count += 1
+            # Marquer le paiement comme utilisé
+            if valid_payment:
+                crud_deposit.deposit.mark_as_used(db, deposit=valid_payment)
+        
+        verification.reference_id = reference
+        verification.verification_url = None  # Sera mis à jour après l'appel Shufti
+        verification.status = KYCStatus.PENDING
+        verification.submitted_at = datetime.utcnow()
+        verification.processed_at = None
+        verification.rejection_reason = None
+        db.commit()
+        db.refresh(verification)
+    else:
+        # Créer le premier enregistrement pour cet utilisateur (première tentative)
+        verification_create = KYCVerificationCreate(
+            user_id=current_user.id,
+            status=KYCStatus.PENDING,
+            reference_id=reference
+        )
+        verification = crud_kyc.kyc_verification.create(db=db, obj_in=verification_create)
+        # Incrémenter pour la première tentative
+        verification.attempts_count = 1
+        # Marquer le paiement comme utilisé
+        if valid_payment:
+            crud_deposit.deposit.mark_as_used(db, deposit=valid_payment)
+        db.commit()
+        db.refresh(verification)
+    
+    # Appeler Shufti Pro pour obtenir l'URL de vérification
+    result = await shufti_pro_service.initiate_verification(
+        reference=reference,
+        email=current_user.email,
+        country=current_user.country,
+        language=language
+    )
+    
+    if not result.get("success"):
+        # En cas d'erreur, remettre le statut à PENDING pour permettre une nouvelle tentative
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=result.get("error", "Erreur lors de l'initialisation de la vérification")
+        )
+    
+    verification_url = result.get("verification_url")
+    
+    # Mettre à jour avec l'URL et le statut IN_PROGRESS
+    update_data = KYCVerificationUpdate(
+        status=KYCStatus.IN_PROGRESS,
+        external_verification_id=result.get("reference"),
+        verification_url=verification_url
+    )
+    crud_kyc.kyc_verification.update(db=db, db_obj=verification, obj_in=update_data)
+    
+    return {
+        "verification_url": verification_url,
+        "reference": reference,
+        "verification_id": verification.id,
+        "reused": False,
+        "status": "new",
+        "attempts_count": verification.attempts_count,
+        "max_attempts": verification.max_attempts,
+        "attempts_remaining": verification.max_attempts - verification.attempts_count
+    }
+
+
+@router.get("/redirect")
+async def shufti_redirect(
+    status: Optional[str] = None,
+    reference: Optional[str] = None
+):
+    """
+    Endpoint de redirection Shufti Pro.
+    Redirige vers le frontend après la vérification.
+    """
+    frontend_url = settings.FRONTEND_URL
+    redirect_target = f"{frontend_url}/dashboard/kyc?status={status or 'completed'}"
+    if reference:
+        redirect_target += f"&reference={reference}"
+    return RedirectResponse(url=redirect_target)
+
+
+@router.get("/status")
+async def get_kyc_status(
+    *,
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_active_user)
+):
+    """
+    Récupérer le statut KYC de l'utilisateur actuel.
+    Synchronise avec Shufti Pro si une vérification est en cours.
+    """
+    verification = crud_kyc.kyc_verification.get_by_user(db, user_id=current_user.id)
+    
+    if not verification:
+        return {
+            "status": None,
+            "can_start": True,
+            "message": "Aucune vérification KYC trouvée"
+        }
+    
+    # Si en cours, vérifier le statut auprès de Shufti Pro
+    if verification.status in [KYCStatus.PENDING, KYCStatus.IN_PROGRESS] and verification.reference_id:
+        validity_check = await shufti_pro_service.check_reference_validity(verification.reference_id)
+        
+        # Mettre à jour le statut si terminé
+        if validity_check.get("is_completed"):
+            new_status = KYCStatus.APPROVED if validity_check.get("is_accepted") else KYCStatus.REJECTED
+            update_data = KYCVerificationUpdate(
+                status=new_status,
+                processed_at=datetime.utcnow()
+            )
+            crud_kyc.kyc_verification.update(db=db, db_obj=verification, obj_in=update_data)
+            verification.status = new_status
+            
+            # Mettre à jour le user si approuvé
+            if new_status == KYCStatus.APPROVED:
+                current_user.identity_verified = True
+                db.commit()
+    
+    # Déterminer si l'utilisateur peut démarrer/reprendre une vérification
+    max_attempts_reached = verification.attempts_count >= verification.max_attempts
+    can_restart = verification.status in [
+        KYCStatus.REJECTED, 
+        KYCStatus.REQUIRES_REVIEW, 
+        KYCStatus.EXPIRED
+    ] and not max_attempts_reached
+    can_continue = verification.status in [KYCStatus.PENDING, KYCStatus.IN_PROGRESS]
+    
+    # Vérifier le statut de paiement pour les tentatives futures
+    available_payments = crud_deposit.deposit.count_valid_deposits_for_product(
+        db, user_id=current_user.id, product_code="kyc"
+    )
+    has_valid_payment = available_payments > 0
+    
+    # Si can_restart mais pas de paiement, indiquer qu'il faut payer
+    needs_payment = can_restart and not has_valid_payment
+    
+    return {
+        "status": verification.status.value if verification.status else None,
+        "submitted_at": verification.submitted_at,
+        "processed_at": verification.processed_at,
+        "rejection_reason": verification.rejection_reason,
+        "identity_verified": verification.identity_verified,
+        "document_verified": verification.document_verified,
+        "face_verified": verification.face_verified,
+        "can_restart": can_restart and has_valid_payment,  # Ne peut reprendre que si payé
+        "can_continue": can_continue,
+        "verification_url": verification.verification_url if can_continue else None,
+        "attempts_count": verification.attempts_count,
+        "max_attempts": verification.max_attempts,
+        "attempts_remaining": max(0, verification.max_attempts - verification.attempts_count),
+        "max_attempts_reached": max_attempts_reached,
+        # Informations de paiement
+        "available_payments": available_payments,
+        "has_valid_payment": has_valid_payment,
+        "needs_payment": needs_payment,
+        "kyc_price": 10.00,
+        "kyc_currency": "USD"
+    }
 
 
 @router.post("/submit", response_model=KYCVerification)

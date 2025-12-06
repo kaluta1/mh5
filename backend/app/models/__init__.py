@@ -17,6 +17,8 @@ from .comment import Comment, Like, Report
 from .follow import Follow, Affiliation, ReferralCode
 from .search_history import SearchHistory
 from .notification import Notification, NotificationType
+from .invitation import Invitation, InvitationStatus
+from .payment import PaymentMethod, ProductType, Deposit, PaymentMethodCategory, CryptoNetwork, DepositStatus
 
 __all__ = [
     "User", "Role", "UserTransaction", "Wallet",
@@ -35,4 +37,6 @@ __all__ = [
     "Follow", "Affiliation", "ReferralCode",
     "SearchHistory",
     "Notification", "NotificationType",
+    "Invitation", "InvitationStatus",
+    "PaymentMethod", "ProductType", "Deposit", "PaymentMethodCategory", "CryptoNetwork", "DepositStatus",
 ]

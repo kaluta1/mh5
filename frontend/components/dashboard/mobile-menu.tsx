@@ -5,24 +5,50 @@ import { useRouter, usePathname } from "next/navigation"
 import { 
   Home, 
   Trophy, 
-  Users, 
   Heart, 
   Star,
   FileText, 
   Wallet, 
   UserPlus, 
   DollarSign, 
-  Gift,
-  ShoppingBag,
+  Shield,
   X,
   Settings,
   LogOut
 } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 import { useLanguage } from "@/contexts/language-context"
 import { useAuth } from "@/hooks/use-auth"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { LanguageSelector } from "@/components/ui/language-selector"
+
+// Menu sections - identique au sidebar desktop
+const baseMenuSections = [
+  {
+    title: "dashboard.nav.main",
+    items: [
+      { name: "dashboard.nav.overview", href: "/dashboard", icon: Home },
+      { name: "dashboard.nav.contests", href: "/dashboard/contests", icon: Trophy },
+      { name: "dashboard.nav.favorites", href: "/dashboard/favorites", icon: Star },
+      { name: "dashboard.nav.my_applications", href: "/dashboard/my-applications", icon: FileText },
+    ]
+  },
+  {
+    title: "dashboard.nav.business",
+    items: [
+      { name: "dashboard.nav.wallet", href: "/dashboard/wallet", icon: Wallet },
+      { name: "dashboard.nav.affiliates", href: "/dashboard/affiliates", icon: UserPlus },
+      { name: "dashboard.nav.commissions", href: "/dashboard/commissions", icon: DollarSign },
+    ]
+  },
+]
+
+const adminMenuSection = {
+  title: "dashboard.nav.admin",
+  items: [
+    { name: "dashboard.nav.admin_panel", href: "/dashboard/admin", icon: Shield },
+  ]
+}
 
 interface MobileMenuProps {
   isOpen: boolean
@@ -31,78 +57,19 @@ interface MobileMenuProps {
 
 export function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
   const { t } = useLanguage()
-  const { logout } = useAuth()
+  const { user, logout } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
+
+  const displayMenuSections = user?.is_admin 
+    ? [...baseMenuSections, adminMenuSection]
+    : baseMenuSections
 
   const handleLogout = async () => {
     await logout()
     onClose()
     window.location.href = '/'
   }
-
-  // Quick access items (same as navbar)
-  const quickAccessItems = [
-    { 
-      name: t('dashboard.nav.overview') || 'Overview', 
-      href: "/dashboard", 
-      icon: Home,
-      isDefault: true 
-    },
-    { 
-      name: t('dashboard.nav.contests') || 'Contests', 
-      href: "/dashboard/contests", 
-      icon: Trophy 
-    },
-    { 
-      name: t('dashboard.nav.favorites') || 'Favorites', 
-      href: "/dashboard/favorites", 
-      icon: Star 
-    },
-  ]
-
-  // Competition items
-  const competitionItems = [
-    { 
-      name: t('dashboard.nav.my_applications') || 'My Applications', 
-      href: "/dashboard/my-applications", 
-      icon: FileText 
-    },
-    { 
-      name: t('dashboard.nav.clubs') || 'Clubs', 
-      href: "/dashboard/clubs", 
-      icon: Users 
-    },
-  ]
-
-  // Business items
-  const businessItems = [
-    { 
-      name: t('dashboard.nav.wallet') || 'Wallet', 
-      href: "/dashboard/wallet", 
-      icon: Wallet 
-    },
-    { 
-      name: t('dashboard.nav.affiliates') || 'Affiliates', 
-      href: "/dashboard/affiliates", 
-      icon: UserPlus 
-    },
-    { 
-      name: t('dashboard.nav.commissions') || 'Commissions', 
-      href: "/dashboard/commissions", 
-      icon: DollarSign 
-    },
-    { 
-      name: t('dashboard.nav.prize') || 'Prize', 
-      href: "/dashboard/prize", 
-      icon: Gift 
-    },
-    { 
-      name: t('dashboard.nav.shop') || 'Shop', 
-      href: "/dashboard/shop", 
-      icon: ShoppingBag 
-    },
-  ]
 
   const handleItemClick = (href: string) => {
     router.push(href)
@@ -112,147 +79,103 @@ export function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 md:hidden">
+    <div className="fixed inset-0 z-50 lg:hidden">
       {/* Overlay */}
       <div 
-        className="fixed inset-0 bg-black/20 backdrop-blur-sm" 
+        className="fixed inset-0 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200" 
         onClick={onClose}
       />
       
       {/* Menu Panel */}
-      <div className="fixed inset-y-0 left-0 w-80 max-w-[85vw] bg-white dark:bg-gray-900 shadow-xl">
+      <div className="fixed inset-y-0 left-0 w-72 bg-white dark:bg-gray-950 border-r border-gray-100 dark:border-gray-800 animate-in slide-in-from-left duration-300">
         <div className="flex flex-col h-full">
           {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-            <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-gradient-to-br from-myfav-primary to-myfav-secondary">
-                <Heart className="w-5 h-5 text-white fill-current" />
+          <div className="flex items-center justify-between h-16 px-4 border-b border-gray-100 dark:border-gray-800">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-myfav-primary to-myfav-secondary flex items-center justify-center shadow-lg shadow-myfav-primary/25">
+                <Heart className="w-5 h-5 text-white fill-white" />
               </div>
-              <span className="text-xl font-black text-myfav-primary dark:text-myfav-blue-400">
+              <span className="text-lg font-bold text-gray-900 dark:text-white">
                 MyHigh5
               </span>
             </div>
-            <Button 
-              variant="ghost" 
-              size="sm" 
+            <button 
               onClick={onClose}
-              className="p-2"
+              className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
             >
-              <X className="h-5 w-5" />
-            </Button>
+              <X className="h-5 w-5 text-gray-500" />
+            </button>
           </div>
 
-          {/* Menu Items */}
-          <div className="flex-1 overflow-y-auto py-4">
-            <div className="px-4 space-y-4">
-              {/* Quick Access - Overview, Contests, Favorites */}
-              <div className="space-y-1">
-                <p className="px-3 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
-                  {t('dashboard.nav.main') || 'Main'}
-                </p>
-                {quickAccessItems.map((item) => {
-                  const isActive = pathname === item.href || (item.isDefault && pathname === '/dashboard')
-                  return (
-                    <button
-                      key={item.href}
-                      onClick={() => handleItemClick(item.href)}
-                      className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-left transition-all ${
-                        isActive
-                          ? 'bg-gradient-to-r from-myfav-primary to-purple-600 text-white shadow-lg shadow-myfav-primary/25'
-                          : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800'
-                      }`}
-                    >
-                      <item.icon className="h-5 w-5" />
-                      <span className="font-medium">{item.name}</span>
-                    </button>
-                  )
-                })}
-              </div>
+          {/* Navigation */}
+          <nav className="flex-1 overflow-y-auto py-4 px-3">
+            <div className="space-y-6">
+              {displayMenuSections.map((section, idx) => (
+                <div key={idx}>
+                  <p className="px-3 mb-2 text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                    {t(section.title)}
+                  </p>
+                  
+                  <div className="space-y-1">
+                    {section.items.map((item) => {
+                      const Icon = item.icon
+                      const isActive = item.href === "/dashboard"
+                        ? pathname === "/dashboard"
+                        : pathname.startsWith(item.href)
 
-              {/* Competition Items */}
-              <div className="space-y-1">
-                <p className="px-3 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
-                  {t('dashboard.nav.competitions') || 'Competitions'}
-                </p>
-                {competitionItems.map((item) => {
-                  const isActive = pathname === item.href
-                  return (
-                    <button
-                      key={item.href}
-                      onClick={() => handleItemClick(item.href)}
-                      className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-left transition-all ${
-                        isActive
-                          ? 'bg-gradient-to-r from-myfav-primary to-purple-600 text-white shadow-lg shadow-myfav-primary/25'
-                          : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800'
-                      }`}
-                    >
-                      <item.icon className="h-5 w-5" />
-                      <span className="font-medium">{item.name}</span>
-                    </button>
-                  )
-                })}
-              </div>
-
-              {/* Business Items */}
-              <div className="space-y-1">
-                <p className="px-3 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
-                  {t('dashboard.nav.business') || 'Business'}
-                </p>
-                {businessItems.map((item) => {
-                  const isActive = pathname === item.href
-                  return (
-                    <button
-                      key={item.href}
-                      onClick={() => handleItemClick(item.href)}
-                      className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-left transition-all ${
-                        isActive
-                          ? 'bg-gradient-to-r from-myfav-primary to-purple-600 text-white shadow-lg shadow-myfav-primary/25'
-                          : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800'
-                      }`}
-                    >
-                      <item.icon className="h-5 w-5" />
-                      <span className="font-medium">{item.name}</span>
-                    </button>
-                  )
-                })}
-              </div>
+                      return (
+                        <button
+                          key={item.href}
+                          onClick={() => handleItemClick(item.href)}
+                          className={cn(
+                            "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
+                            isActive
+                              ? "bg-myfav-primary text-white shadow-lg shadow-myfav-primary/30"
+                              : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800/50 hover:text-gray-900 dark:hover:text-white"
+                          )}
+                        >
+                          <Icon className="h-5 w-5 flex-shrink-0" />
+                          <span className="text-sm font-medium">
+                            {t(item.name)}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
-          </div>
+          </nav>
 
-          {/* Footer - Theme, Language, Settings & Logout */}
-          <div className="border-t border-gray-200 dark:border-gray-700 p-4 space-y-3">
+          {/* Footer */}
+          <div className="border-t border-gray-100 dark:border-gray-800 p-3 space-y-2">
             {/* Theme & Language */}
-            <div className="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600 dark:text-gray-400">{t('header.theme') || 'Theme'}</span>
-                <ThemeToggle />
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600 dark:text-gray-400">{t('header.language') || 'Language'}</span>
-                <LanguageSelector />
-              </div>
+            <div className="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+              <ThemeToggle />
+              <LanguageSelector />
             </div>
 
             {/* Settings */}
             <button
               onClick={() => handleItemClick('/dashboard/settings')}
-              className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-left transition-all ${
+              className={cn(
+                "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
                 pathname === '/dashboard/settings'
-                  ? 'bg-gradient-to-r from-myfav-primary to-purple-600 text-white shadow-lg shadow-myfav-primary/25'
-                  : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800'
-              }`}
+                  ? "bg-myfav-primary text-white shadow-lg shadow-myfav-primary/30"
+                  : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800/50 hover:text-gray-900 dark:hover:text-white"
+              )}
             >
               <Settings className="h-5 w-5" />
-              <span className="font-medium">{t('dashboard.nav.settings') || 'Settings'}</span>
+              <span className="text-sm font-medium">{t('user.settings') || 'Paramètres'}</span>
             </button>
             
             {/* Logout */}
             <button
               onClick={handleLogout}
-              className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-left transition-all text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20"
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors"
             >
               <LogOut className="h-5 w-5" />
-              <span className="font-medium">{t('user.logout')}</span>
+              <span className="text-sm font-medium">{t('user.logout') || 'Déconnexion'}</span>
             </button>
           </div>
         </div>

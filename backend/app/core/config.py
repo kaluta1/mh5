@@ -46,6 +46,23 @@ class Settings(BaseModel):
     S3_BUCKET_NAME: str = ""
     S3_REGION: str = ""
     
+    # EMAIL
+    SMTP_HOST: str = os.getenv("SMTP_HOST", "smtp.gmail.com")
+    SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
+    SMTP_USER: str = os.getenv("SMTP_USER", "")
+    SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
+    SMTP_FROM_EMAIL: str = os.getenv("SMTP_FROM_EMAIL", "noreply@myhigh5.com")
+    SMTP_FROM_NAME: str = os.getenv("SMTP_FROM_NAME", "MyHigh5")
+    
+    # FRONTEND
+    FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    
+    # SHUFTI PRO KYC
+    SHUFTI_CLIENT_ID: str = os.getenv("SHUFTI_CLIENT_ID", "")
+    SHUFTI_SECRET_KEY: str = os.getenv("SHUFTI_SECRET_KEY", "")
+    SHUFTI_CALLBACK_URL: str = os.getenv("SHUFTI_CALLBACK_URL", "")  # Webhook URL
+    SHUFTI_REDIRECT_URL: str = os.getenv("SHUFTI_REDIRECT_URL", "")  # Redirect URL après vérification
+    
     # Validation des origines CORS
     @field_validator("BACKEND_CORS_ORIGINS", mode="before")
     @classmethod

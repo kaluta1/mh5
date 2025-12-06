@@ -17,8 +17,12 @@ interface UserDropdownProps {
   user: {
     username?: string
     name?: string
+    first_name?: string
+    last_name?: string
+    full_name?: string
     email?: string
     avatar?: string
+    avatar_url?: string
     profile_photo?: string
   }
   onLogout?: () => void
@@ -29,7 +33,12 @@ interface UserDropdownProps {
 
 export function UserDropdown({ user, onLogout, onSettings, onProfile, onKYC }: UserDropdownProps) {
   const { t } = useLanguage()
-  const displayName = user.name || user.username || 'Utilisateur'
+  
+  // Construct display name from available fields
+  const displayName = user.first_name && user.last_name 
+    ? `${user.first_name} ${user.last_name}`
+    : user.full_name || user.name || user.username || 'Utilisateur'
+  
   const initials = displayName
     ? displayName
         .split(' ')
@@ -39,14 +48,14 @@ export function UserDropdown({ user, onLogout, onSettings, onProfile, onKYC }: U
         .slice(0, 2)
     : 'U'
   
-  const avatarUrl = user.profile_photo || user.avatar
+  const avatarUrl = user.avatar_url || user.profile_photo || user.avatar
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="flex items-center gap-2 rounded-full focus:outline-none focus:ring-2 focus:ring-myfav-primary/50 focus:ring-offset-2 transition-all hover:opacity-80">
+        <button className="flex items-center rounded-full focus:outline-none focus:ring-2 focus:ring-myfav-primary/50 transition-all hover:opacity-80">
           {avatarUrl ? (
-            <div className="relative w-10 h-10 rounded-full overflow-hidden ring-2 ring-myfav-primary/20 shadow-lg">
+            <div className="relative w-10 h-10 rounded-full overflow-hidden ring-2 ring-myfav-primary/30 shadow-lg">
               <Image
                 src={avatarUrl}
                 alt={displayName}
@@ -55,7 +64,7 @@ export function UserDropdown({ user, onLogout, onSettings, onProfile, onKYC }: U
               />
             </div>
           ) : (
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-myfav-primary to-purple-600 flex items-center justify-center text-white font-semibold text-sm ring-2 ring-myfav-primary/20 shadow-lg">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-myfav-primary to-purple-600 flex items-center justify-center text-white font-semibold text-sm ring-2 ring-myfav-primary/30 shadow-lg">
               {initials}
             </div>
           )}
@@ -69,31 +78,13 @@ export function UserDropdown({ user, onLogout, onSettings, onProfile, onKYC }: U
         sideOffset={8}
         alignOffset={-8}
       >
-        <DropdownMenuLabel className="font-normal p-3">
-          <div className="flex items-center gap-3">
-            {avatarUrl ? (
-              <div className="relative w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
-                <Image
-                  src={avatarUrl}
-                  alt={displayName}
-                  fill
-                  className="object-cover"
-                />
-              </div>
-            ) : (
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-myfav-primary to-purple-600 flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
-                {initials}
-              </div>
-            )}
-            <div className="flex flex-col min-w-0">
-              <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">
-                {displayName} 
-              </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                {user.email}
-              </p>
-            </div>
-          </div>
+        <DropdownMenuLabel className="font-normal px-3 py-2">
+          <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+            {displayName}
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+            {user.email}
+          </p>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         

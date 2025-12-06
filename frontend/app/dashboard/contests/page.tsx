@@ -1,7 +1,8 @@
 'use client'
 
 import * as React from "react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
+import Link from 'next/link'
 import { useLanguage } from '@/contexts/language-context'
 import { useAuth } from '@/hooks/use-auth'
 import { useRouter } from 'next/navigation'
@@ -11,6 +12,8 @@ import { ContestsHeader } from '@/components/dashboard/contests-header'
 import { ContestsGrid } from '@/components/dashboard/contests-grid'
 import { ContestsLoader } from '@/components/dashboard/contests-loader'
 import { contestService, Contest } from '@/services/contest-service'
+import { AlertCircle, UserCircle, Fingerprint, ChevronRight, X } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 
 export default function ContestsPage() {
   const { t } = useLanguage()
@@ -25,6 +28,7 @@ export default function ContestsPage() {
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [hasMore, setHasMore] = useState(true)
+  const [showMobileAlert, setShowMobileAlert] = useState(true)
   const ITEMS_PER_PAGE = 9
   const observerTarget = React.useRef(null)
   const isLoadingDataRef = React.useRef(false)
@@ -282,22 +286,147 @@ export default function ContestsPage() {
     return null
   }
 
+  // Vérifier si le profil est complet
+  const isProfileComplete = !!(user.first_name && user.last_name && user.avatar_url && user.bio && user.gender && user.date_of_birth && user.country && user.city)
+  
+  // Vérifier si le KYC est passé
+  const isKycVerified = !!user.identity_verified
+  
+  // L'utilisateur peut participer seulement si le profil est complet ET le KYC est vérifié
+  const canParticipate = isProfileComplete && isKycVerified
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8 space-y-4">
           <div className="flex items-center justify-between">
-        <div className="space-y-2">
+            <div className="space-y-2">
               <h1 className="text-4xl font-bold bg-gradient-to-r from-myfav-primary to-myfav-primary-dark bg-clip-text text-transparent">
-            {t('dashboard.contests.title')}
-          </h1>
+                {t('dashboard.contests.title')}
+              </h1>
               <p className="text-lg text-gray-600 dark:text-gray-400">
-            {t('dashboard.contests.description')}
-          </p>
+                {t('dashboard.contests.description')}
+              </p>
             </div>
           </div>
         </div>
+
+        {/* Alertes profil/KYC - Desktop */}
+        {!canParticipate && (
+          <div className="hidden md:block mb-6 space-y-3">
+            {!isProfileComplete && (
+              <div className="flex items-center justify-between gap-4 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50 rounded-xl">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-amber-100 dark:bg-amber-800/50 rounded-lg">
+                    <UserCircle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-amber-900 dark:text-amber-200">
+                      {t('contests.profile_incomplete_title') || 'Profil incomplet'}
+                    </p>
+                    <p className="text-sm text-amber-700 dark:text-amber-300">
+                      {t('contests.profile_incomplete_message') || 'Complétez votre profil pour pouvoir participer aux concours.'}
+                    </p>
+                  </div>
+                </div>
+                <Link href="/dashboard/settings">
+                  <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white rounded-lg">
+                    {t('contests.complete_profile') || 'Compléter'}
+                    <ChevronRight className="w-4 h-4 ml-1" />
+                  </Button>
+                </Link>
+              </div>
+            )}
+
+            {isProfileComplete && !isKycVerified && (
+              <div className="flex items-center justify-between gap-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/50 rounded-xl">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-100 dark:bg-blue-800/50 rounded-lg">
+                    <Fingerprint className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-blue-900 dark:text-blue-200">
+                      {t('contests.kyc_required_title') || 'Vérification d\'identité requise'}
+                    </p>
+                    <p className="text-sm text-blue-700 dark:text-blue-300">
+                      {t('contests.kyc_required_message') || 'Vérifiez votre identité (KYC) pour pouvoir participer aux concours.'}
+                    </p>
+                  </div>
+                </div>
+                <Link href="/dashboard/kyc">
+                  <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg">
+                    {t('contests.verify_identity') || 'Vérifier'}
+                    <ChevronRight className="w-4 h-4 ml-1" />
+                  </Button>
+                </Link>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Notification flottante - Mobile */}
+        {!canParticipate && showMobileAlert && (
+          <div className="md:hidden fixed bottom-4 left-4 right-4 z-50 animate-in slide-in-from-bottom duration-300">
+            {!isProfileComplete ? (
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 p-4">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-xl shrink-0">
+                    <UserCircle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-gray-900 dark:text-white text-sm">
+                      {t('contests.profile_incomplete_title') || 'Profil incomplet'}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">
+                      {t('contests.profile_incomplete_message') || 'Complétez votre profil pour participer.'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowMobileAlert(false)}
+                    className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg shrink-0"
+                  >
+                    <X className="w-4 h-4 text-gray-400" />
+                  </button>
+                </div>
+                <Link href="/dashboard/settings" className="block mt-3">
+                  <Button size="sm" className="w-full bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-sm">
+                    {t('contests.complete_profile') || 'Compléter mon profil'}
+                    <ChevronRight className="w-4 h-4 ml-1" />
+                  </Button>
+                </Link>
+              </div>
+            ) : !isKycVerified ? (
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 p-4">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-xl shrink-0">
+                    <Fingerprint className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-gray-900 dark:text-white text-sm">
+                      {t('contests.kyc_required_title') || 'Vérification requise'}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">
+                      {t('contests.kyc_required_message') || 'Vérifiez votre identité pour participer.'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowMobileAlert(false)}
+                    className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg shrink-0"
+                  >
+                    <X className="w-4 h-4 text-gray-400" />
+                  </button>
+                </div>
+                <Link href="/dashboard/kyc" className="block mt-3">
+                  <Button size="sm" className="w-full bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-sm">
+                    {t('contests.verify_identity') || 'Vérifier mon identité'}
+                    <ChevronRight className="w-4 h-4 ml-1" />
+                  </Button>
+                </Link>
+              </div>
+            ) : null}
+          </div>
+        )}
 
         {/* Grille de contests */}
         <ContestsGrid
@@ -308,6 +437,7 @@ export default function ContestsPage() {
           onParticipate={handleParticipate}
           isLoading={false}
           userGender={(user as any)?.gender as 'male' | 'female' | 'other' | 'prefer_not_to_say' | null | undefined}
+          canParticipate={canParticipate}
         />
 
         {/* Loader pour infinite scroll */}

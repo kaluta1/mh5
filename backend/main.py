@@ -24,8 +24,8 @@ cors_origins = [
     "http://localhost:8000",
     "http://127.0.0.1:3000",
     "http://127.0.0.1:8000",
-    "https://myhigh5.vercel.app",
-    "https://mh5-rx4z.onrender.com",
+    "https://mh5.vercel.app",
+    "https://mh5-sbe4.onrender.com",
 ]
 
 # Ajouter les origines depuis les settings

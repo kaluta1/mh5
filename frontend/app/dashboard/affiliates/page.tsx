@@ -24,9 +24,13 @@ import {
   Zap,
   Target,
   CheckCircle,
-  Clock
+  Clock,
+  Mail,
+  Send,
+  X
 } from 'lucide-react'
 import Link from 'next/link'
+import { InviteDialog } from '@/components/dashboard/invite-dialog'
 
 interface Affiliate {
   id: string
@@ -38,6 +42,16 @@ interface Affiliate {
   status: 'active' | 'inactive'
   country?: string
   city?: string
+}
+
+interface Invitation {
+  id: number
+  email: string
+  message?: string
+  referral_code: string
+  status: 'pending' | 'accepted' | 'expired' | 'cancelled'
+  sent_at: string
+  accepted_at?: string
 }
 
 export default function AffiliatesPage() {
@@ -61,6 +75,16 @@ export default function AffiliatesPage() {
   const [conversionRate, setConversionRate] = useState(0)
   const [affiliates, setAffiliates] = useState<Affiliate[]>([])
   const [pageLoading, setPageLoading] = useState(true)
+  const [showInviteDialog, setShowInviteDialog] = useState(false)
+  const [activeTab, setActiveTab] = useState<'affiliates' | 'pending'>('affiliates')
+  const [pendingInvitations, setPendingInvitations] = useState<Invitation[]>([])
+  const [invitationStats, setInvitationStats] = useState({
+    total_sent: 0,
+    pending: 0,
+    accepted: 0,
+    expired: 0,
+    conversion_rate: 0
+  })
   const [sponsorInfo, setSponsorInfo] = useState<{
     id: number
     username?: string
@@ -153,6 +177,24 @@ export default function AffiliatesPage() {
           setSponsorInfo(sponsorData)
         }
       }
+
+      // Récupérer les invitations en attente
+      const invitationsResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/affiliates/invitations/pending`, {
+        headers
+      })
+      if (invitationsResponse.ok) {
+        const invitationsData = await invitationsResponse.json()
+        setPendingInvitations(invitationsData)
+      }
+
+      // Récupérer les stats d'invitation
+      const invStatsResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/affiliates/invitations/stats`, {
+        headers
+      })
+      if (invStatsResponse.ok) {
+        const invStatsData = await invStatsResponse.json()
+        setInvitationStats(invStatsData)
+      }
     } catch (error) {
       console.error('Error loading affiliates data:', error)
       // Fallback au code de parrainage de l'utilisateur
@@ -186,6 +228,35 @@ export default function AffiliatesPage() {
       'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
     ]
     return colors[level - 1] || colors[0]
+  }
+
+  const cancelInvitation = async (invitationId: number) => {
+    try {
+      const token = localStorage.getItem('access_token')
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/affiliates/invitations/${invitationId}`,
+        {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      )
+      
+      if (response.ok) {
+        setPendingInvitations(prev => prev.filter(inv => inv.id !== invitationId))
+        setInvitationStats(prev => ({
+          ...prev,
+          pending: prev.pending - 1
+        }))
+        addToast(t('affiliates.invitation_cancelled') || 'Invitation annulée', 'success')
+      } else {
+        addToast('Erreur lors de l\'annulation', 'error')
+      }
+    } catch (error) {
+      console.error('Error cancelling invitation:', error)
+      addToast('Erreur lors de l\'annulation', 'error')
+    }
   }
 
   if (isLoading || pageLoading) {
@@ -242,6 +313,7 @@ export default function AffiliatesPage() {
             <span className="hidden sm:inline">{t('dashboard.affiliates.view_commissions') || 'Commissions'}</span>
           </Button>
           <Button 
+            onClick={() => setShowInviteDialog(true)}
             size="sm"
             className="rounded-xl bg-myfav-primary hover:bg-myfav-primary/90 shadow-lg shadow-myfav-primary/25"
           >
@@ -519,89 +591,217 @@ export default function AffiliatesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Affiliates List */}
+      {/* Invite Dialog */}
+      <InviteDialog
+        isOpen={showInviteDialog}
+        onClose={() => {
+          setShowInviteDialog(false)
+          // Recharger les invitations après fermeture
+          loadAffiliatesData()
+        }}
+        referralCode={referralCode}
+        referralLink={referralLinks.home}
+      />
+
+      {/* Tabs */}
       <div className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+        {/* Tab Header */}
         <div className="p-4 sm:p-6 border-b border-gray-100 dark:border-gray-700">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-              <Users className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500" />
-              {t('dashboard.affiliates.your_affiliates')}
-            </h2>
-            <Link href="/dashboard/affiliates/list">
-              <Button variant="ghost" size="sm" className="text-myfav-primary hover:text-myfav-primary/80 text-xs sm:text-sm">
-                {t('dashboard.affiliates.see_all')}
-                <ChevronRight className="w-4 h-4 ml-1" />
-              </Button>
-            </Link>
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-700 p-1 rounded-xl">
+              <button
+                onClick={() => setActiveTab('affiliates')}
+                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
+                  activeTab === 'affiliates'
+                    ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                }`}
+              >
+                <Users className="w-4 h-4" />
+                {t('dashboard.affiliates.your_affiliates') || 'Affiliés'}
+                {directAffiliates > 0 && (
+                  <span className="ml-1 px-1.5 py-0.5 text-xs bg-myfav-primary/10 text-myfav-primary rounded-full">
+                    {directAffiliates}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab('pending')}
+                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
+                  activeTab === 'pending'
+                    ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                }`}
+              >
+                <Mail className="w-4 h-4" />
+                {t('dashboard.affiliates.pending_invitations') || 'En attente'}
+                {invitationStats.pending > 0 && (
+                  <span className="ml-1 px-1.5 py-0.5 text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-full">
+                    {invitationStats.pending}
+                  </span>
+                )}
+              </button>
+            </div>
+
+            {activeTab === 'affiliates' && (
+              <Link href="/dashboard/affiliates/list">
+                <Button variant="ghost" size="sm" className="text-myfav-primary hover:text-myfav-primary/80 text-xs sm:text-sm">
+                  {t('dashboard.affiliates.see_all')}
+                  <ChevronRight className="w-4 h-4 ml-1" />
+                </Button>
+              </Link>
+            )}
           </div>
         </div>
         
-        <div className="divide-y divide-gray-100 dark:divide-gray-700">
-          {affiliates.map((affiliate) => (
-            <div 
-              key={affiliate.id} 
-              className="p-3 sm:p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-            >
-              <div className="flex items-start sm:items-center gap-3 sm:gap-4">
-                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-myfav-primary flex items-center justify-center text-white font-semibold shadow-lg shadow-myfav-primary/20 flex-shrink-0">
-                  {affiliate.name.charAt(0)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-medium text-sm sm:text-base text-gray-900 dark:text-white truncate">
-                      {affiliate.name}
-                    </p>
-                    {affiliate.status === 'active' && (
-                      <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
-                        <Zap className="w-3 h-3" />
-                        <span className="hidden sm:inline">{t('dashboard.affiliates.active')}</span>
-                      </span>
-                    )}
+        {/* Tab Content - Affiliates */}
+        {activeTab === 'affiliates' && (
+          <>
+            <div className="divide-y divide-gray-100 dark:divide-gray-700">
+              {affiliates.map((affiliate) => (
+                <div 
+                  key={affiliate.id} 
+                  className="p-3 sm:p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                >
+                  <div className="flex items-start sm:items-center gap-3 sm:gap-4">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-myfav-primary flex items-center justify-center text-white font-semibold shadow-lg shadow-myfav-primary/20 flex-shrink-0">
+                      {affiliate.name.charAt(0)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-medium text-sm sm:text-base text-gray-900 dark:text-white truncate">
+                          {affiliate.name}
+                        </p>
+                        {affiliate.status === 'active' && (
+                          <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+                            <Zap className="w-3 h-3" />
+                            <span className="hidden sm:inline">{t('dashboard.affiliates.active')}</span>
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1 sm:gap-2 text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+                        {(affiliate.city || affiliate.country) && (
+                          <>
+                            <span className="truncate max-w-[120px] sm:max-w-none">{[affiliate.city, affiliate.country].filter(Boolean).join(', ')}</span>
+                            <span className="hidden sm:inline">•</span>
+                          </>
+                        )}
+                        <span className="whitespace-nowrap">
+                          {new Date(affiliate.joinedAt).toLocaleDateString('fr-FR', {
+                            day: 'numeric',
+                            month: 'short'
+                          })}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-xs sm:text-sm font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
+                        +{affiliate.totalEarnings.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">
+                        {t('dashboard.affiliates.earnings')}
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex flex-wrap items-center gap-1 sm:gap-2 text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-                    {(affiliate.city || affiliate.country) && (
-                      <>
-                        <span className="truncate max-w-[120px] sm:max-w-none">{[affiliate.city, affiliate.country].filter(Boolean).join(', ')}</span>
-                        <span className="hidden sm:inline">•</span>
-                      </>
-                    )}
-                    <span className="whitespace-nowrap">
-                      {new Date(affiliate.joinedAt).toLocaleDateString('fr-FR', {
-                        day: 'numeric',
-                        month: 'short'
-                      })}
-                    </span>
-                  </div>
                 </div>
-                <div className="text-right flex-shrink-0">
-                  <p className="text-xs sm:text-sm font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
-                    +{affiliate.totalEarnings.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">
-                    {t('dashboard.affiliates.earnings')}
-                  </p>
+              ))}
+            </div>
+            
+            {affiliates.length === 0 && (
+              <div className="p-12 text-center">
+                <div className="w-16 h-16 mx-auto rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center mb-4">
+                  <Users className="w-8 h-8 text-gray-400" />
                 </div>
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                  {t('dashboard.affiliates.no_affiliates')}
+                </h3>
+                <p className="text-gray-500 dark:text-gray-400 mb-4">
+                  {t('dashboard.affiliates.start_inviting')}
+                </p>
+                <Button 
+                  onClick={() => setShowInviteDialog(true)}
+                  className="rounded-xl bg-myfav-primary hover:bg-myfav-primary/90"
+                >
+                  <UserPlus className="w-4 h-4 mr-2" />
+                  {t('dashboard.affiliates.invite_friends')}
+                </Button>
               </div>
+            )}
+          </>
+        )}
+
+        {/* Tab Content - Pending Invitations */}
+        {activeTab === 'pending' && (
+          <>
+            <div className="divide-y divide-gray-100 dark:divide-gray-700">
+              {pendingInvitations.map((invitation) => (
+                <div 
+                  key={invitation.id} 
+                  className="p-3 sm:p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                >
+                  <div className="flex items-start sm:items-center gap-3 sm:gap-4">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-amber-600 dark:text-amber-400 font-semibold flex-shrink-0">
+                      <Mail className="w-5 h-5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm sm:text-base text-gray-900 dark:text-white truncate">
+                        {invitation.email}
+                      </p>
+                      <div className="flex flex-wrap items-center gap-1 sm:gap-2 text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {t('dashboard.affiliates.sent_on') || 'Envoyé le'}{' '}
+                          {new Date(invitation.sent_at).toLocaleDateString('fr-FR', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric'
+                          })}
+                        </span>
+                      </div>
+                      {invitation.message && (
+                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 truncate italic">
+                          "{invitation.message}"
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className="px-2 py-1 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-lg">
+                        {t('dashboard.affiliates.pending') || 'En attente'}
+                      </span>
+                      <button
+                        onClick={() => cancelInvitation(invitation.id)}
+                        className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                        title={t('dashboard.affiliates.cancel') || 'Annuler'}
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-        
-        {affiliates.length === 0 && (
-          <div className="p-12 text-center">
-            <div className="w-16 h-16 mx-auto rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center mb-4">
-              <Users className="w-8 h-8 text-gray-400" />
-            </div>
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-              {t('dashboard.affiliates.no_affiliates')}
-            </h3>
-            <p className="text-gray-500 dark:text-gray-400 mb-4">
-              {t('dashboard.affiliates.start_inviting')}
-            </p>
-            <Button className="rounded-xl bg-myfav-primary hover:bg-myfav-primary/90">
-              <UserPlus className="w-4 h-4 mr-2" />
-              {t('dashboard.affiliates.invite_friends')}
-            </Button>
-          </div>
+            
+            {pendingInvitations.length === 0 && (
+              <div className="p-12 text-center">
+                <div className="w-16 h-16 mx-auto rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center mb-4">
+                  <Mail className="w-8 h-8 text-gray-400" />
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                  {t('dashboard.affiliates.no_pending') || 'Aucune invitation en attente'}
+                </h3>
+                <p className="text-gray-500 dark:text-gray-400 mb-4">
+                  {t('dashboard.affiliates.send_invitation_desc') || 'Envoyez des invitations à vos amis pour les parrainer'}
+                </p>
+                <Button 
+                  onClick={() => setShowInviteDialog(true)}
+                  className="rounded-xl bg-myfav-primary hover:bg-myfav-primary/90"
+                >
+                  <Send className="w-4 h-4 mr-2" />
+                  {t('dashboard.affiliates.send_invitation') || 'Envoyer une invitation'}
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

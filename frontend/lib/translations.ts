@@ -134,6 +134,7 @@ export interface TranslationKeys {
     welcome: string
     access_denied: string
     no_permission: string
+    refresh: string
   }
   settings: {
     title: string
@@ -954,9 +955,36 @@ export interface TranslationKeys {
     already_verified_description: string
     verification_in_progress: string
     verification_in_progress_description: string
+    verification_continue_description: string
+    continue_verification: string
+    login_required: string
+    init_error: string
+    max_attempts_reached: string
+    max_attempts_description: string
+    attempts_remaining: string
+    attempts_used: string
     verification_status: string
     verification_status_description: string
+    verification_rejected: string
+    verification_rejected_description: string
+    rejection_reason: string
+    submitted_on: string
     submit_again: string
+    verification_steps: string
+    step_1_title: string
+    step_1_desc: string
+    step_2_title: string
+    step_2_desc: string
+    step_3_title: string
+    step_3_desc: string
+    accepted_documents: string
+    doc_passport: string
+    doc_id_card: string
+    doc_driving_license: string
+    initiating: string
+    redirect_notice: string
+    follow_instructions: string
+    secure_verification: string
     uploaded_documents: string
     document_front: string
     document_back: string
@@ -1006,6 +1034,14 @@ export interface TranslationKeys {
       document_back_required: string
       selfie_required: string
     }
+  }
+  contests: {
+    profile_incomplete_title: string
+    profile_incomplete_message: string
+    complete_profile: string
+    kyc_required_title: string
+    kyc_required_message: string
+    verify_identity: string
   }
   user: {
     profile: string
@@ -1822,6 +1858,7 @@ export const translations: Record<Language, TranslationKeys> = {
       welcome: "Bienvenue",
       access_denied: "Accès refusé",
       no_permission: "Vous n'avez pas les permissions pour accéder à cette page.",
+      refresh: "Actualiser"
     },
     affiliates: {
       grow_network: "Développez Votre Réseau",
@@ -2300,7 +2337,28 @@ export const translations: Record<Language, TranslationKeys> = {
         no_results: "Aucun résultat",
         try_different_filters: "Essayez avec des filtres différents",
         showing: "Affichage",
-        of: "sur"
+        of: "sur",
+        // Invitations
+        pending_invitations: "En attente",
+        invite_friend: "Inviter un ami",
+        invite_description: "Envoyez une invitation par email pour parrainer vos amis",
+        email_address: "Adresse email",
+        personal_message: "Message personnalisé",
+        message_placeholder: "Salut ! Rejoins-moi sur MyHigh5...",
+        send_invitation: "Envoyer l'invitation",
+        sending: "Envoi en cours...",
+        share_link: "Partager votre lien",
+        code_label: "Code",
+        link_copied: "Lien copié !",
+        invite_sent_success: "Invitation envoyée avec succès !",
+        invite_error: "Erreur lors de l'envoi de l'invitation",
+        invite_email_required: "Veuillez entrer un email",
+        pending: "En attente",
+        sent_on: "Envoyé le",
+        cancel: "Annuler",
+        invitation_cancelled: "Invitation annulée",
+        no_pending: "Aucune invitation en attente",
+        send_invitation_desc: "Envoyez des invitations à vos amis pour les parrainer"
       },
       subtitle: "Suivez votre progression, gérez vos concours et développez votre réseau",
       quick_actions: "Actions Rapides",
@@ -2455,16 +2513,43 @@ export const translations: Record<Language, TranslationKeys> = {
       }
     },
     kyc: {
-      verification_required: "Vérification KYC requise",
-      verification_required_description: "Vous devez compléter votre vérification d'identité (KYC) avant de pouvoir participer aux concours.",
-      start_verification: "Commencer la vérification",
-      already_verified: "Déjà vérifié",
-      already_verified_description: "Votre identité a déjà été vérifiée. Vous pouvez maintenant participer aux concours.",
+      verification_required: "Vérification d'identité requise",
+      verification_required_description: "Pour participer aux concours et retirer vos gains, vous devez vérifier votre identité.",
+      start_verification: "Démarrer la vérification",
+      already_verified: "Identité vérifiée",
+      already_verified_description: "Votre identité a été vérifiée avec succès. Vous pouvez maintenant profiter de toutes les fonctionnalités.",
       verification_in_progress: "Vérification en cours",
-      verification_in_progress_description: "Votre vérification est actuellement en cours de traitement. Veuillez patienter.",
+      verification_in_progress_description: "Votre demande de vérification est en cours de traitement. Nous vous notifierons dès que le processus sera terminé.",
+      verification_continue_description: "Vous avez une vérification en cours. Vous pouvez la continuer ou actualiser le statut.",
+      continue_verification: "Continuer la vérification",
+      login_required: "Veuillez vous connecter pour continuer",
+      init_error: "Impossible de démarrer la vérification",
+      max_attempts_reached: "Nombre maximum de tentatives atteint",
+      max_attempts_description: "Vous avez utilisé toutes vos tentatives de vérification. Veuillez contacter notre support pour obtenir de l'aide.",
+      attempts_remaining: "Tentatives restantes",
+      attempts_used: "Tentatives utilisées",
       verification_status: "Statut de vérification",
       verification_status_description: "Consultez le statut de votre vérification d'identité",
-      submit_again: "Soumettre à nouveau",
+      verification_rejected: "Vérification refusée",
+      verification_rejected_description: "Votre demande de vérification a été refusée. Vous pouvez soumettre une nouvelle demande.",
+      rejection_reason: "Raison du refus",
+      submitted_on: "Soumis le",
+      submit_again: "Réessayer",
+      verification_steps: "Comment ça marche ?",
+      step_1_title: "1. Informations personnelles",
+      step_1_desc: "Renseignez vos informations personnelles de base",
+      step_2_title: "2. Document d'identité",
+      step_2_desc: "Prenez en photo votre pièce d'identité",
+      step_3_title: "3. Selfie de vérification",
+      step_3_desc: "Prenez un selfie pour confirmer votre identité",
+      accepted_documents: "Documents acceptés",
+      doc_passport: "Passeport",
+      doc_id_card: "Carte d'identité",
+      doc_driving_license: "Permis de conduire",
+      initiating: "Démarrage...",
+      redirect_notice: "Vous serez redirigé vers notre partenaire de vérification sécurisé",
+      follow_instructions: "Suivez les instructions ci-dessous pour compléter votre vérification d'identité.",
+      secure_verification: "Vérification sécurisée par notre partenaire certifié",
       uploaded_documents: "Documents téléchargés",
       document_front: "Avant du document",
       document_back: "Arrière du document",
@@ -2514,6 +2599,14 @@ export const translations: Record<Language, TranslationKeys> = {
         document_back_required: "La photo arrière du document est requise",
         selfie_required: "Le selfie est requis"
       }
+    },
+    contests: {
+      profile_incomplete_title: "Profil incomplet",
+      profile_incomplete_message: "Complétez votre profil pour pouvoir participer aux concours.",
+      complete_profile: "Compléter",
+      kyc_required_title: "Vérification d'identité requise",
+      kyc_required_message: "Vérifiez votre identité (KYC) pour pouvoir participer aux concours.",
+      verify_identity: "Vérifier"
     },
     user: {
       profile: "Profil",
@@ -3134,7 +3227,8 @@ export const translations: Record<Language, TranslationKeys> = {
       clear: "Clear",
       welcome: "Welcome",
       access_denied: "Access Denied",
-      no_permission: "You do not have permission to access this page."
+      no_permission: "You do not have permission to access this page.",
+      refresh: "Refresh"
     },
     affiliates: {
       grow_network: "Grow Your Network",
@@ -3613,7 +3707,28 @@ export const translations: Record<Language, TranslationKeys> = {
         no_results: "No results",
         try_different_filters: "Try different filters",
         showing: "Showing",
-        of: "of"
+        of: "of",
+        // Invitations
+        pending_invitations: "Pending",
+        invite_friend: "Invite a friend",
+        invite_description: "Send an email invitation to refer your friends",
+        email_address: "Email address",
+        personal_message: "Personal message",
+        message_placeholder: "Hi! Join me on MyHigh5...",
+        send_invitation: "Send invitation",
+        sending: "Sending...",
+        share_link: "Share your link",
+        code_label: "Code",
+        link_copied: "Link copied!",
+        invite_sent_success: "Invitation sent successfully!",
+        invite_error: "Error sending invitation",
+        invite_email_required: "Please enter an email",
+        pending: "Pending",
+        sent_on: "Sent on",
+        cancel: "Cancel",
+        invitation_cancelled: "Invitation cancelled",
+        no_pending: "No pending invitations",
+        send_invitation_desc: "Send invitations to your friends to refer them"
       },
       subtitle: "Track your progress, manage your contests, and grow your network",
       quick_actions: "Quick Actions",
@@ -3798,16 +3913,43 @@ export const translations: Record<Language, TranslationKeys> = {
       }
     },
     kyc: {
-      verification_required: "KYC Verification Required",
-      verification_required_description: "You must complete your identity verification (KYC) before you can participate in contests.",
+      verification_required: "Identity Verification Required",
+      verification_required_description: "To participate in contests and withdraw your winnings, you must verify your identity.",
       start_verification: "Start Verification",
-      already_verified: "Already Verified",
-      already_verified_description: "Your identity has already been verified. You can now participate in contests.",
+      already_verified: "Identity Verified",
+      already_verified_description: "Your identity has been successfully verified. You can now enjoy all features.",
       verification_in_progress: "Verification In Progress",
-      verification_in_progress_description: "Your verification is currently being processed. Please wait.",
+      verification_in_progress_description: "Your verification request is being processed. We will notify you once the process is complete.",
+      verification_continue_description: "You have a verification in progress. You can continue it or refresh the status.",
+      continue_verification: "Continue Verification",
+      login_required: "Please log in to continue",
+      init_error: "Unable to start verification",
+      max_attempts_reached: "Maximum attempts reached",
+      max_attempts_description: "You have used all your verification attempts. Please contact our support for assistance.",
+      attempts_remaining: "Attempts remaining",
+      attempts_used: "Attempts used",
       verification_status: "Verification Status",
       verification_status_description: "Check the status of your identity verification",
-      submit_again: "Submit Again",
+      verification_rejected: "Verification Rejected",
+      verification_rejected_description: "Your verification request was rejected. You can submit a new request.",
+      rejection_reason: "Rejection Reason",
+      submitted_on: "Submitted on",
+      submit_again: "Try Again",
+      verification_steps: "How does it work?",
+      step_1_title: "1. Personal Information",
+      step_1_desc: "Provide your basic personal information",
+      step_2_title: "2. Identity Document",
+      step_2_desc: "Take a photo of your ID document",
+      step_3_title: "3. Verification Selfie",
+      step_3_desc: "Take a selfie to confirm your identity",
+      accepted_documents: "Accepted Documents",
+      doc_passport: "Passport",
+      doc_id_card: "ID Card",
+      doc_driving_license: "Driving License",
+      initiating: "Starting...",
+      redirect_notice: "You will be redirected to our secure verification partner",
+      follow_instructions: "Follow the instructions below to complete your identity verification.",
+      secure_verification: "Secure verification by our certified partner",
       uploaded_documents: "Uploaded Documents",
       document_front: "Document Front",
       document_back: "Document Back",
@@ -3857,6 +3999,14 @@ export const translations: Record<Language, TranslationKeys> = {
         document_back_required: "Document back photo is required",
         selfie_required: "Selfie is required"
       }
+    },
+    contests: {
+      profile_incomplete_title: "Incomplete Profile",
+      profile_incomplete_message: "Complete your profile to participate in contests.",
+      complete_profile: "Complete",
+      kyc_required_title: "Identity Verification Required",
+      kyc_required_message: "Verify your identity (KYC) to participate in contests.",
+      verify_identity: "Verify"
     },
     user: {
       profile: "Profile",
@@ -4477,7 +4627,8 @@ export const translations: Record<Language, TranslationKeys> = {
       clear: "Limpiar",
       welcome: "Bienvenido",
       access_denied: "Acceso Denegado",
-      no_permission: "No tienes permiso para acceder a esta página."
+      no_permission: "No tienes permiso para acceder a esta página.",
+      refresh: "Actualizar"
     },
     affiliates: {
       grow_network: "Haz Crecer Tu Red",
@@ -5141,16 +5292,43 @@ export const translations: Record<Language, TranslationKeys> = {
       of: "de"
     },
     kyc: {
-      verification_required: "Verificación KYC Requerida",
-      verification_required_description: "Debes completar tu verificación de identidad (KYC) antes de poder participar en concursos.",
+      verification_required: "Verificación de Identidad Requerida",
+      verification_required_description: "Para participar en concursos y retirar tus ganancias, debes verificar tu identidad.",
       start_verification: "Iniciar Verificación",
-      already_verified: "Ya Verificado",
-      already_verified_description: "Tu identidad ya ha sido verificada. Ahora puedes participar en concursos.",
+      already_verified: "Identidad Verificada",
+      already_verified_description: "Tu identidad ha sido verificada con éxito. Ahora puedes disfrutar de todas las funciones.",
       verification_in_progress: "Verificación en Progreso",
-      verification_in_progress_description: "Tu verificación está siendo procesada actualmente. Por favor espera.",
+      verification_in_progress_description: "Tu solicitud de verificación está siendo procesada. Te notificaremos cuando el proceso esté completo.",
+      verification_continue_description: "Tienes una verificación en progreso. Puedes continuarla o actualizar el estado.",
+      continue_verification: "Continuar Verificación",
+      login_required: "Por favor inicia sesión para continuar",
+      init_error: "No se pudo iniciar la verificación",
+      max_attempts_reached: "Número máximo de intentos alcanzado",
+      max_attempts_description: "Has utilizado todos tus intentos de verificación. Por favor contacta a nuestro soporte para obtener ayuda.",
+      attempts_remaining: "Intentos restantes",
+      attempts_used: "Intentos utilizados",
       verification_status: "Estado de Verificación",
       verification_status_description: "Verifica el estado de tu verificación de identidad",
-      submit_again: "Enviar de Nuevo",
+      verification_rejected: "Verificación Rechazada",
+      verification_rejected_description: "Tu solicitud de verificación fue rechazada. Puedes enviar una nueva solicitud.",
+      rejection_reason: "Motivo del Rechazo",
+      submitted_on: "Enviado el",
+      submit_again: "Reintentar",
+      verification_steps: "¿Cómo funciona?",
+      step_1_title: "1. Información Personal",
+      step_1_desc: "Proporciona tu información personal básica",
+      step_2_title: "2. Documento de Identidad",
+      step_2_desc: "Toma una foto de tu documento de identidad",
+      step_3_title: "3. Selfie de Verificación",
+      step_3_desc: "Toma una selfie para confirmar tu identidad",
+      accepted_documents: "Documentos Aceptados",
+      doc_passport: "Pasaporte",
+      doc_id_card: "Documento de Identidad",
+      doc_driving_license: "Licencia de Conducir",
+      initiating: "Iniciando...",
+      redirect_notice: "Serás redirigido a nuestro socio de verificación seguro",
+      follow_instructions: "Sigue las instrucciones a continuación para completar tu verificación de identidad.",
+      secure_verification: "Verificación segura por nuestro socio certificado",
       uploaded_documents: "Documentos Cargados",
       document_front: "Frente del Documento",
       document_back: "Reverso del Documento",
@@ -5200,6 +5378,14 @@ export const translations: Record<Language, TranslationKeys> = {
         document_back_required: "La foto trasera del documento es requerida",
         selfie_required: "El selfie es requerido"
       }
+    },
+    contests: {
+      profile_incomplete_title: "Perfil incompleto",
+      profile_incomplete_message: "Completa tu perfil para poder participar en los concursos.",
+      complete_profile: "Completar",
+      kyc_required_title: "Verificación de identidad requerida",
+      kyc_required_message: "Verifica tu identidad (KYC) para poder participar en los concursos.",
+      verify_identity: "Verificar"
     },
     user: {
       profile: "Perfil",
@@ -5820,10 +6006,11 @@ export const translations: Record<Language, TranslationKeys> = {
       clear: "Löschen",
       welcome: "Willkommen",
       access_denied: "Zugriff verweigert",
-      no_permission: "Sie haben keine Berechtigung, auf diese Seite zuzugreifen."
+      no_permission: "Sie haben keine Berechtigung, auf diese Seite zuzugreifen.",
+      refresh: "Aktualisieren"
     },
     affiliates: {
-      grow_network: "Erweitern Sie Ihr Netzwerk",
+      grow_network: "Bauen Sie Ihr Netzwerk aus",
       invite_friends: "Laden Sie Freunde ein und verdienen Sie Provisionen für ihre Aktivitäten",
       invite_now: "Jetzt Einladen",
       title: "Partnerprogramm",
@@ -6484,16 +6671,43 @@ export const translations: Record<Language, TranslationKeys> = {
       of: "von"
     },
     kyc: {
-      verification_required: "KYC-Verifizierung erforderlich",
-      verification_required_description: "Sie müssen Ihre Identitätsverifizierung (KYC) abschließen, bevor Sie an Wettbewerben teilnehmen können.",
+      verification_required: "Identitätsverifizierung erforderlich",
+      verification_required_description: "Um an Wettbewerben teilzunehmen und Ihre Gewinne abzuheben, müssen Sie Ihre Identität verifizieren.",
       start_verification: "Verifizierung starten",
-      already_verified: "Bereits verifiziert",
-      already_verified_description: "Ihre Identität wurde bereits verifiziert. Sie können jetzt an Wettbewerben teilnehmen.",
+      already_verified: "Identität verifiziert",
+      already_verified_description: "Ihre Identität wurde erfolgreich verifiziert. Sie können jetzt alle Funktionen nutzen.",
       verification_in_progress: "Verifizierung läuft",
-      verification_in_progress_description: "Ihre Verifizierung wird derzeit bearbeitet. Bitte warten Sie.",
+      verification_in_progress_description: "Ihre Verifizierungsanfrage wird bearbeitet. Wir benachrichtigen Sie, wenn der Prozess abgeschlossen ist.",
+      verification_continue_description: "Sie haben eine laufende Verifizierung. Sie können sie fortsetzen oder den Status aktualisieren.",
+      continue_verification: "Verifizierung fortsetzen",
+      login_required: "Bitte melden Sie sich an, um fortzufahren",
+      init_error: "Verifizierung konnte nicht gestartet werden",
+      max_attempts_reached: "Maximale Anzahl an Versuchen erreicht",
+      max_attempts_description: "Sie haben alle Ihre Verifizierungsversuche aufgebraucht. Bitte kontaktieren Sie unseren Support für Hilfe.",
+      attempts_remaining: "Verbleibende Versuche",
+      attempts_used: "Verwendete Versuche",
       verification_status: "Verifizierungsstatus",
       verification_status_description: "Überprüfen Sie den Status Ihrer Identitätsverifizierung",
-      submit_again: "Erneut absenden",
+      verification_rejected: "Verifizierung abgelehnt",
+      verification_rejected_description: "Ihre Verifizierungsanfrage wurde abgelehnt. Sie können eine neue Anfrage stellen.",
+      rejection_reason: "Ablehnungsgrund",
+      submitted_on: "Eingereicht am",
+      submit_again: "Erneut versuchen",
+      verification_steps: "Wie funktioniert es?",
+      step_1_title: "1. Persönliche Informationen",
+      step_1_desc: "Geben Sie Ihre grundlegenden persönlichen Daten an",
+      step_2_title: "2. Ausweisdokument",
+      step_2_desc: "Fotografieren Sie Ihr Ausweisdokument",
+      step_3_title: "3. Verifizierungs-Selfie",
+      step_3_desc: "Machen Sie ein Selfie, um Ihre Identität zu bestätigen",
+      accepted_documents: "Akzeptierte Dokumente",
+      doc_passport: "Reisepass",
+      doc_id_card: "Personalausweis",
+      doc_driving_license: "Führerschein",
+      initiating: "Wird gestartet...",
+      redirect_notice: "Sie werden zu unserem sicheren Verifizierungspartner weitergeleitet",
+      follow_instructions: "Befolgen Sie die folgenden Anweisungen, um Ihre Identitätsverifizierung abzuschließen.",
+      secure_verification: "Sichere Verifizierung durch unseren zertifizierten Partner",
       uploaded_documents: "Hochgeladene Dokumente",
       document_front: "Dokumentvorderseite",
       document_back: "Dokumentrückseite",
@@ -6543,6 +6757,14 @@ export const translations: Record<Language, TranslationKeys> = {
         document_back_required: "Dokumentrückseite erforderlich",
         selfie_required: "Selfie erforderlich"
       }
+    },
+    contests: {
+      profile_incomplete_title: "Unvollständiges Profil",
+      profile_incomplete_message: "Vervollständigen Sie Ihr Profil, um an Wettbewerben teilnehmen zu können.",
+      complete_profile: "Vervollständigen",
+      kyc_required_title: "Identitätsverifizierung erforderlich",
+      kyc_required_message: "Verifizieren Sie Ihre Identität (KYC), um an Wettbewerben teilnehmen zu können.",
+      verify_identity: "Verifizieren"
     },
     user: {
       profile: "Profil",

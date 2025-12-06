@@ -1,10 +1,9 @@
 "use client"
 
 import * as React from "react"
-import { useRouter, usePathname } from "next/navigation"
-import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { 
-  Search, Menu, ShoppingBag, Command, Home, Trophy, Star
+  Search, Menu, ShoppingBag, Command
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { UserDropdown } from "@/components/user/user-dropdown"
@@ -22,20 +21,7 @@ interface DashboardNavbarProps {
 export function DashboardNavbar({ onMenuToggle, onSidebarToggle }: DashboardNavbarProps) {
   const { t } = useLanguage()
   const router = useRouter()
-  const pathname = usePathname()
   const { user, logout } = useAuth()
-
-  // Quick navigation items
-  const quickNav = [
-    { name: t('dashboard.nav.overview') || 'Overview', href: '/dashboard', icon: Home },
-    { name: t('dashboard.nav.contests') || 'Contests', href: '/dashboard/contests', icon: Trophy },
-    { name: t('dashboard.nav.favorites') || 'Favorites', href: '/dashboard/favorites', icon: Star },
-  ]
-
-  const isActiveLink = (href: string) => {
-    if (href === '/dashboard') return pathname === '/dashboard'
-    return pathname?.startsWith(href)
-  }
 
   return (
     <header className="fixed top-0 left-0 right-0 z-40 h-16">
@@ -65,29 +51,6 @@ export function DashboardNavbar({ onMenuToggle, onSidebarToggle }: DashboardNavb
             <Menu className="h-5 w-5 text-gray-700 dark:text-gray-300" />
           </Button>
 
-          {/* Quick Nav - Desktop */}
-          <nav className="hidden lg:flex items-center">
-            <div className="flex items-center bg-gray-100/60 dark:bg-gray-800/60 rounded-xl p-1 gap-1">
-              {quickNav.map((item) => {
-                const isActive = isActiveLink(item.href)
-                const Icon = item.icon
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                      isActive 
-                        ? 'bg-white dark:bg-gray-700 text-myfav-primary dark:text-white shadow-sm' 
-                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-gray-700/50'
-                    }`}
-                  >
-                    <Icon className={`w-4 h-4 ${isActive ? 'text-myfav-primary dark:text-purple-400' : ''}`} />
-                    <span>{item.name}</span>
-                  </Link>
-                )
-              })}
-            </div>
-          </nav>
         </div>
 
         {/* Center - Search */}
