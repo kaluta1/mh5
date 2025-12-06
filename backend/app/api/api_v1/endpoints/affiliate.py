@@ -86,6 +86,43 @@ def get_referrals_count(
     return {"count": count}
 
 
+@router.get("/referrals/all")
+def get_all_referrals_multilevel(
+    db: Session = Depends(deps.get_db),
+    current_user = Depends(deps.get_current_active_user),
+    skip: int = 0,
+    limit: int = 50,
+    level: int = None,
+    status: str = None,
+    search: str = None,
+    kyc_status: str = None
+):
+    """
+    Récupérer tous les filleuls (directs et indirects) jusqu'au niveau 10.
+    
+    - **level**: Filtrer par niveau (1-10)
+    - **status**: Filtrer par statut utilisateur ('active' ou 'inactive')
+    - **search**: Rechercher par nom, email ou username
+    - **kyc_status**: Filtrer par statut KYC ('none', 'pending', 'in_progress', 'approved', 'rejected', 'expired', 'requires_review')
+    
+    Retourne les referrals avec:
+    - Niveau dans l'arbre (1 = direct, 2-10 = indirect)
+    - Commissions générées
+    - Statut KYC
+    - Nombre de leurs propres filleuls
+    """
+    return crud_user.get_all_referrals_multilevel(
+        db=db,
+        user_id=current_user.id,
+        skip=skip,
+        limit=limit,
+        level_filter=level,
+        status_filter=status,
+        search_query=search,
+        kyc_status_filter=kyc_status
+    )
+
+
 @router.get("/sponsor", response_model=Optional[UserSponsorInfo])
 def get_my_sponsor(
     db: Session = Depends(deps.get_db),

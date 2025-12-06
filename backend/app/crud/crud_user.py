@@ -166,6 +166,160 @@ class CRUDUser:
     def count_referrals(self, db: Session, user_id: int) -> int:
         """Compte le nombre de filleuls directs d'un utilisateur."""
         return db.query(User).filter(User.sponsor_id == user_id).count()
+    
+    def get_all_referrals_multilevel(
+        self, db: Session, user_id: int, 
+        skip: int = 0, limit: int = 50,
+        level_filter: int = None, status_filter: str = None,
+        search_query: str = None, kyc_status_filter: str = None
+    ) -> dict:
+        """
+        Récupère tous les referrals (directs et indirects) jusqu'au niveau 10
+        avec les commissions générées par chacun.
+        """
+        from app.models.affiliate import AffiliateCommission, CommissionStatus
+        from app.models.payment import Deposit, DepositStatus
+        from app.models.kyc import KYCVerification, KYCStatus
+        from sqlalchemy import func
+        
+        all_referrals = []
+        
+        def get_referrals_at_level(sponsor_ids: List[int], current_level: int):
+            """Récupère les referrals d'un niveau donné"""
+            if current_level > 10 or not sponsor_ids:
+                return []
+            
+            referrals = db.query(User).filter(User.sponsor_id.in_(sponsor_ids)).all()
+            level_referrals = []
+            next_level_sponsor_ids = []
+            
+            for referral in referrals:
+                # Commissions générées par ce filleul pour le parrain principal
+                commissions = db.query(func.sum(AffiliateCommission.commission_amount)).filter(
+                    AffiliateCommission.source_user_id == referral.id,
+                    AffiliateCommission.user_id == user_id,
+                    AffiliateCommission.status.in_([CommissionStatus.APPROVED, CommissionStatus.PAID])
+                ).scalar() or 0.0
+                
+                # Vérifier si le filleul a payé le KYC
+                kyc_payment = db.query(Deposit).filter(
+                    Deposit.user_id == referral.id,
+                    Deposit.status == DepositStatus.VALIDATED
+                ).join(Deposit.product_type).filter_by(code="kyc").first()
+                
+                # Récupérer le statut KYC
+                kyc_verification = db.query(KYCVerification).filter(
+                    KYCVerification.user_id == referral.id
+                ).first()
+                
+                kyc_status = None
+                if kyc_verification:
+                    kyc_status = kyc_verification.status.value if kyc_verification.status else None
+                elif kyc_payment:
+                    kyc_status = "pending"  # A payé mais pas encore de vérification
+                
+                # Compter les filleuls de ce referral
+                sub_referrals_count = db.query(func.count(User.id)).filter(
+                    User.sponsor_id == referral.id
+                ).scalar() or 0
+                
+                level_referrals.append({
+                    "id": referral.id,
+                    "username": referral.username,
+                    "email": referral.email,
+                    "first_name": referral.first_name,
+                    "last_name": referral.last_name,
+                    "full_name": referral.full_name,
+                    "avatar_url": referral.avatar_url,
+                    "country": referral.country,
+                    "city": referral.city,
+                    "created_at": referral.created_at.isoformat() if referral.created_at else None,
+                    "identity_verified": referral.identity_verified,
+                    "is_active": referral.is_active,
+                    "level": current_level,
+                    "has_paid_kyc": kyc_payment is not None,
+                    "kyc_status": kyc_status,
+                    "commissions_generated": float(commissions),
+                    "referrals_count": sub_referrals_count
+                })
+                
+                next_level_sponsor_ids.append(referral.id)
+            
+            return level_referrals, next_level_sponsor_ids
+        
+        # Parcourir tous les niveaux
+        current_sponsor_ids = [user_id]
+        for level in range(1, 11):
+            level_referrals, next_ids = get_referrals_at_level(current_sponsor_ids, level)
+            all_referrals.extend(level_referrals)
+            current_sponsor_ids = next_ids
+            if not next_ids:
+                break
+        
+        # Filtres
+        filtered_referrals = all_referrals
+        
+        if level_filter is not None:
+            filtered_referrals = [r for r in filtered_referrals if r["level"] == level_filter]
+        
+        if status_filter:
+            if status_filter == "active":
+                filtered_referrals = [r for r in filtered_referrals if r["is_active"]]
+            elif status_filter == "inactive":
+                filtered_referrals = [r for r in filtered_referrals if not r["is_active"]]
+        
+        if search_query:
+            search_lower = search_query.lower()
+            filtered_referrals = [r for r in filtered_referrals if 
+                (r["full_name"] and search_lower in r["full_name"].lower()) or
+                (r["email"] and search_lower in r["email"].lower()) or
+                (r["username"] and search_lower in r["username"].lower())
+            ]
+        
+        # Filtre par statut KYC
+        if kyc_status_filter:
+            if kyc_status_filter == "none":
+                # Pas de KYC (n'a pas payé)
+                filtered_referrals = [r for r in filtered_referrals if r["kyc_status"] is None]
+            else:
+                filtered_referrals = [r for r in filtered_referrals if r["kyc_status"] == kyc_status_filter]
+        
+        total_count = len(filtered_referrals)
+        
+        # Pagination
+        paginated = filtered_referrals[skip:skip + limit]
+        
+        # Stats par niveau
+        level_stats = {}
+        for r in all_referrals:
+            lvl = r["level"]
+            if lvl not in level_stats:
+                level_stats[lvl] = {"count": 0, "commissions": 0}
+            level_stats[lvl]["count"] += 1
+            level_stats[lvl]["commissions"] += r["commissions_generated"]
+        
+        # Stats KYC
+        kyc_stats = {
+            "none": 0,
+            "pending": 0,
+            "in_progress": 0,
+            "approved": 0,
+            "rejected": 0,
+            "expired": 0,
+            "requires_review": 0
+        }
+        for r in all_referrals:
+            status = r["kyc_status"] or "none"
+            if status in kyc_stats:
+                kyc_stats[status] += 1
+        
+        return {
+            "referrals": paginated,
+            "total": total_count,
+            "total_all_levels": len(all_referrals),
+            "level_stats": level_stats,
+            "kyc_stats": kyc_stats
+        }
 
     def update(self, db: Session, db_obj: User, obj_in: Union[UserUpdate, Dict[str, Any]]) -> User:
         if isinstance(obj_in, dict):

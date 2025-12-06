@@ -276,12 +276,18 @@ class CRUDAffiliateTree:
 
 
 class CRUDAffiliateCommission:
-    # Taux de commission par niveau (niveau 1 = parrain direct = 20%)
+    # Taux de commission par niveau (niveau 1 = parrain direct = 20%, niveaux 2-10 = 2%)
     COMMISSION_RATES = {
-        1: 0.20,  # 20% pour le parrain direct
-        2: 0.02,  # 2% pour le niveau 2
-        3: 0.02,  # 2% pour le niveau 3
-        # Peut être étendu jusqu'au niveau 10
+        1: 0.20,   # 20% pour le parrain direct
+        2: 0.02,   # 2% pour le niveau 2
+        3: 0.02,   # 2% pour le niveau 3
+        4: 0.02,   # 2% pour le niveau 4
+        5: 0.02,   # 2% pour le niveau 5
+        6: 0.02,   # 2% pour le niveau 6
+        7: 0.02,   # 2% pour le niveau 7
+        8: 0.02,   # 2% pour le niveau 8
+        9: 0.02,   # 2% pour le niveau 9
+        10: 0.02,  # 2% pour le niveau 10
     }
     
     def create_commission(
