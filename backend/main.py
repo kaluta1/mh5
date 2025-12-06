@@ -38,11 +38,12 @@ cors_origins = list(set([origin.strip() for origin in cors_origins if origin]))
 print(f"CORS Origins configured: {cors_origins}")
 
 # IMPORTANT: Ajouter le middleware CORS EN PREMIER
+# Permettre tous les CORS sans restriction pour le développement
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"],
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
     max_age=86400,
