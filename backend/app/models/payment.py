@@ -31,6 +31,8 @@ class DepositStatus(str, Enum):
     VALIDATED = "validated"       # Validé/Confirmé
     REJECTED = "rejected"         # Rejeté
     EXPIRED = "expired"           # Expiré
+    PARTIALLY_PAID = "partially_paid"  # Paiement partiel
+    FAILED = "failed"             # Échec
 
 
 class PaymentMethod(Base):
@@ -101,11 +103,16 @@ class Deposit(Base):
     # Relations
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
     product_type_id: Mapped[int] = mapped_column(Integer, ForeignKey("product_types.id"), nullable=False)
-    payment_method_id: Mapped[int] = mapped_column(Integer, ForeignKey("payment_methods.id"), nullable=False)
+    payment_method_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("payment_methods.id"), nullable=True)
     
-    # Montant
+    # Montant en fiat
     amount: Mapped[float] = mapped_column(Numeric(18, 8), nullable=False)
     currency: Mapped[str] = mapped_column(String(10), default="USD")
+    
+    # Montant en crypto (si paiement crypto)
+    crypto_currency: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # BTC, ETH, USDT
+    crypto_amount: Mapped[Optional[float]] = mapped_column(Numeric(18, 8), nullable=True)
+    payment_address: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # Adresse de paiement
     
     # Statut
     status: Mapped[DepositStatus] = mapped_column(
@@ -113,15 +120,13 @@ class Deposit(Base):
         default=DepositStatus.PENDING
     )
     
-    # Référence unique du paiement
-    reference: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    # Références
+    order_id: Mapped[Optional[str]] = mapped_column(String(100), unique=True, nullable=True)  # Notre référence interne
+    external_payment_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # ID du provider
     
-    # Pour crypto
+    # Pour crypto - transaction
     tx_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     from_address: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    
-    # Pour carte/banque
-    payment_provider_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # ID Stripe, etc.
     
     # Dates
     validated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
@@ -138,7 +143,7 @@ class Deposit(Base):
     # Relations
     user: Mapped["User"] = relationship("User", foreign_keys=[user_id], backref="deposits")
     product_type: Mapped["ProductType"] = relationship("ProductType", back_populates="deposits")
-    payment_method: Mapped["PaymentMethod"] = relationship("PaymentMethod", back_populates="deposits")
+    payment_method: Mapped[Optional["PaymentMethod"]] = relationship("PaymentMethod", back_populates="deposits")
     validator: Mapped[Optional["User"]] = relationship("User", foreign_keys=[validated_by])
     
     def is_valid(self) -> bool:

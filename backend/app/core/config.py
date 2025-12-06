@@ -63,6 +63,12 @@ class Settings(BaseModel):
     SHUFTI_CALLBACK_URL: str = os.getenv("SHUFTI_CALLBACK_URL", "")  # Webhook URL
     SHUFTI_REDIRECT_URL: str = os.getenv("SHUFTI_REDIRECT_URL", "")  # Redirect URL après vérification
     
+    # CRYPTO PAYMENT
+    CRYPTO_PAYMENT_API_KEY: str = os.getenv("CRYPTO_DEPOSIT_API_KEY", "")
+    CRYPTO_PAYMENT_PUBLIC_KEY: str = os.getenv("CRYPTO_DEPOSIT_PUBLIC_KEY", "")
+    CRYPTO_PAYMENT_IPN_SECRET: str = os.getenv("CRYPTO_PAYMENT_IPN_SECRET", "")  # Pour vérifier les webhooks
+    CRYPTO_PAYMENT_API_URL: str = "https://api.nowpayments.io/v1"
+    
     # Validation des origines CORS
     @field_validator("BACKEND_CORS_ORIGINS", mode="before")
     @classmethod

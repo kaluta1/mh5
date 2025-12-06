@@ -49,6 +49,10 @@ class CRUDDeposit:
         """Récupère un dépôt par sa référence"""
         return db.query(Deposit).filter(Deposit.reference == reference).first()
     
+    def get_by_order_id(self, db: Session, *, order_id: str) -> Optional[Deposit]:
+        """Récupère un dépôt par son order_id"""
+        return db.query(Deposit).filter(Deposit.order_id == order_id).first()
+    
     def get_by_user(
         self, 
         db: Session, 

@@ -1,10 +1,26 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from contextlib import asynccontextmanager
 import uvicorn
 import os
 from app.core.config import settings
 from app.api.api_v1.api import api_router
+from app.services.payment_scheduler import payment_scheduler
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan - start/stop background services"""
+    # Startup
+    print("Starting payment scheduler...")
+    await payment_scheduler.start()
+    
+    yield
+    
+    # Shutdown
+    print("Stopping payment scheduler...")
+    await payment_scheduler.stop()
 
 # Import all models to ensure they are registered with SQLAlchemy
 import app.models
@@ -16,6 +32,7 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
     redirect_slashes=False,
+    lifespan=lifespan,
 )
 
 # Configuration CORS - DOIT être avant les autres middlewares
