@@ -276,6 +276,74 @@ class CRUDAffiliateTree:
 
 
 class CRUDAffiliateCommission:
+    # Taux de commission par niveau (niveau 1 = parrain direct = 20%)
+    COMMISSION_RATES = {
+        1: 0.20,  # 20% pour le parrain direct
+        2: 0.02,  # 2% pour le niveau 2
+        3: 0.02,  # 2% pour le niveau 3
+        # Peut être étendu jusqu'au niveau 10
+    }
+    
+    def create_commission(
+        self, db: Session, 
+        source_user_id: int,  # L'utilisateur qui a payé
+        commission_type: CommissionType,
+        base_amount: float,  # Montant de la transaction
+        reference_id: str = None,
+        reference_type: str = None
+    ) -> List[AffiliateCommission]:
+        """
+        Crée des commissions pour tous les sponsors dans la hiérarchie.
+        Retourne la liste des commissions créées.
+        """
+        commissions_created = []
+        
+        # Trouver le parrain direct de l'utilisateur
+        source_user = db.query(User).filter(User.id == source_user_id).first()
+        if not source_user or not source_user.sponsor_id:
+            return commissions_created
+        
+        # Remonter l'arbre des parrains jusqu'au niveau max
+        current_sponsor_id = source_user.sponsor_id
+        level = 1
+        
+        while current_sponsor_id and level <= len(self.COMMISSION_RATES):
+            rate = self.COMMISSION_RATES.get(level, 0)
+            if rate <= 0:
+                break
+            
+            commission_amount = base_amount * rate
+            
+            # Créer la commission
+            commission = AffiliateCommission(
+                user_id=current_sponsor_id,  # Le parrain qui reçoit
+                source_user_id=source_user_id,  # L'utilisateur qui a payé
+                commission_type=commission_type,
+                level=level,
+                min_amount=base_amount,
+                commission_rate=rate,
+                commission_amount=commission_amount,
+                reference_id=reference_id,
+                reference_type=reference_type,
+                status=CommissionStatus.APPROVED,  # Auto-approuvé
+                transaction_date=datetime.utcnow()
+            )
+            
+            db.add(commission)
+            commissions_created.append(commission)
+            
+            # Trouver le parrain du parrain pour le niveau suivant
+            sponsor = db.query(User).filter(User.id == current_sponsor_id).first()
+            current_sponsor_id = sponsor.sponsor_id if sponsor else None
+            level += 1
+        
+        if commissions_created:
+            db.commit()
+            for c in commissions_created:
+                db.refresh(c)
+        
+        return commissions_created
+    
     def get_user_commissions(
         self, db: Session, user_id: int, skip: int = 0, limit: int = 50,
         commission_type: Optional[str] = None

@@ -7,17 +7,19 @@ from app.db.base_class import Base
 
 
 class CommissionType(str, enum.Enum):
-    AD_REVENUE = "ad_revenue"
-    CLUB_MEMBERSHIP = "club_membership"
-    SHOP_PURCHASE = "shop_purchase"
-    CONTEST_PARTICIPATION = "contest_participation"
+    AD_REVENUE = "AD_REVENUE"
+    CLUB_MEMBERSHIP = "CLUB_MEMBERSHIP"
+    SHOP_PURCHASE = "SHOP_PURCHASE"
+    CONTEST_PARTICIPATION = "CONTEST_PARTICIPATION"
+    KYC_PAYMENT = "KYC_PAYMENT"
+    EFM_MEMBERSHIP = "EFM_MEMBERSHIP"
 
 
 class CommissionStatus(str, enum.Enum):
-    PENDING = "pending"
-    APPROVED = "approved"
-    PAID = "paid"
-    CANCELLED = "cancelled"
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    PAID = "PAID"
+    CANCELLED = "CANCELLED"
 
 
 class AffiliateTree(Base):

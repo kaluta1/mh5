@@ -59,6 +59,21 @@ def get_direct_referrals(
     return referrals
 
 
+@router.get("/referrals/detailed")
+def get_referrals_with_commissions(
+    db: Session = Depends(deps.get_db),
+    current_user = Depends(deps.get_current_active_user),
+    skip: int = 0,
+    limit: int = 50
+):
+    """
+    Récupérer les filleuls avec les commissions générées et statut KYC.
+    """
+    return crud_user.get_referrals_with_commissions(
+        db=db, user_id=current_user.id, skip=skip, limit=limit
+    )
+
+
 @router.get("/referrals/count")
 def get_referrals_count(
     db: Session = Depends(deps.get_db),

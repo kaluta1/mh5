@@ -9,7 +9,9 @@ from typing import List
 
 from sqlalchemy.orm import Session
 from app.db.session import SessionLocal
-from app.models.payment import Deposit, DepositStatus
+from app.models.payment import Deposit, DepositStatus, ProductType
+from app.models.affiliate import CommissionType
+from app.crud.crud_affiliate import affiliate_commission
 from app.services.crypto_payment import crypto_payment_service, CryptoPaymentError
 
 logger = logging.getLogger(__name__)
@@ -113,6 +115,11 @@ class PaymentScheduler:
                 deposit.status = DepositStatus.VALIDATED
                 deposit.validated_at = datetime.utcnow()
                 logger.info(f"Deposit {deposit.id} marked as VALIDATED")
+                
+                # Créer les commissions pour le parrain si le paiement est validé
+                if old_status != DepositStatus.VALIDATED:
+                    self._create_sponsor_commission(db, deposit)
+                    
             elif payment_status == "partially_paid":
                 deposit.status = DepositStatus.PARTIALLY_PAID
             elif payment_status in ["failed", "expired", "refunded"]:
@@ -131,6 +138,44 @@ class PaymentScheduler:
                 
         except CryptoPaymentError as e:
             logger.warning(f"Could not check payment {deposit.external_payment_id}: {e.message}")
+    
+    def _create_sponsor_commission(self, db: Session, deposit: Deposit):
+        """Crée les commissions pour les parrains quand un paiement est validé"""
+        try:
+            # Récupérer le type de produit
+            product = db.query(ProductType).filter(ProductType.id == deposit.product_type_id).first()
+            if not product:
+                return
+            
+            # Déterminer le type de commission selon le produit
+            commission_type = None
+            if product.code == "kyc":
+                commission_type = CommissionType.KYC_PAYMENT
+            elif product.code == "efm_membership":
+                commission_type = CommissionType.EFM_MEMBERSHIP
+            else:
+                # Autres produits pourraient avoir leurs propres types
+                return
+            
+            # Créer les commissions (20% niveau 1, 2% niveaux 2-3)
+            commissions = affiliate_commission.create_commission(
+                db=db,
+                source_user_id=deposit.user_id,
+                commission_type=commission_type,
+                base_amount=float(deposit.amount),
+                reference_id=str(deposit.id),
+                reference_type="deposit"
+            )
+            
+            if commissions:
+                print(f"[PaymentScheduler] Created {len(commissions)} commission(s) for deposit {deposit.id}")
+                for c in commissions:
+                    print(f"  - User {c.user_id} (level {c.level}): ${c.commission_amount:.2f} ({c.commission_rate*100:.0f}%)")
+                logger.info(f"Created {len(commissions)} commission(s) for deposit {deposit.id}")
+            
+        except Exception as e:
+            print(f"[PaymentScheduler] Error creating commission: {e}")
+            logger.error(f"Error creating commission for deposit {deposit.id}: {e}")
 
 
 # Global instance
@@ -154,10 +199,16 @@ async def check_payment_now(db: Session, deposit_id: int) -> dict:
         status_response = await crypto_payment_service.get_payment_status(payment_id)
         
         payment_status = status_response.get("payment_status")
+        old_status = deposit.status
         
         if payment_status in ["finished", "confirmed"]:
             deposit.status = DepositStatus.VALIDATED
             deposit.validated_at = datetime.utcnow()
+            
+            # Créer les commissions si c'est une nouvelle validation
+            if old_status != DepositStatus.VALIDATED:
+                _create_commission_for_deposit(db, deposit)
+                
         elif payment_status == "partially_paid":
             deposit.status = DepositStatus.PARTIALLY_PAID
         elif payment_status in ["failed", "expired", "refunded"]:
@@ -176,3 +227,34 @@ async def check_payment_now(db: Session, deposit_id: int) -> dict:
         
     except CryptoPaymentError as e:
         return {"error": str(e.message), "status": str(deposit.status.value)}
+
+
+def _create_commission_for_deposit(db: Session, deposit: Deposit):
+    """Fonction helper pour créer les commissions lors d'une vérification manuelle"""
+    try:
+        product = db.query(ProductType).filter(ProductType.id == deposit.product_type_id).first()
+        if not product:
+            return
+        
+        commission_type = None
+        if product.code == "kyc":
+            commission_type = CommissionType.KYC_PAYMENT
+        elif product.code == "efm_membership":
+            commission_type = CommissionType.EFM_MEMBERSHIP
+        else:
+            return
+        
+        commissions = affiliate_commission.create_commission(
+            db=db,
+            source_user_id=deposit.user_id,
+            commission_type=commission_type,
+            base_amount=float(deposit.amount),
+            reference_id=str(deposit.id),
+            reference_type="deposit"
+        )
+        
+        if commissions:
+            print(f"[ManualCheck] Created {len(commissions)} commission(s) for deposit {deposit.id}")
+            
+    except Exception as e:
+        print(f"[ManualCheck] Error creating commission: {e}")

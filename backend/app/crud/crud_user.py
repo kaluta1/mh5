@@ -121,6 +121,47 @@ class CRUDUser:
     def get_referrals(self, db: Session, user_id: int, skip: int = 0, limit: int = 50) -> List[User]:
         """Récupère les filleuls directs d'un utilisateur."""
         return db.query(User).filter(User.sponsor_id == user_id).offset(skip).limit(limit).all()
+    
+    def get_referrals_with_commissions(self, db: Session, user_id: int, skip: int = 0, limit: int = 50) -> List[dict]:
+        """Récupère les filleuls avec leurs commissions générées pour le parrain."""
+        from app.models.affiliate import AffiliateCommission, CommissionStatus
+        from app.models.payment import Deposit, DepositStatus
+        from sqlalchemy import func
+        
+        referrals = db.query(User).filter(User.sponsor_id == user_id).offset(skip).limit(limit).all()
+        
+        result = []
+        for referral in referrals:
+            # Commissions générées par ce filleul pour le parrain
+            commissions = db.query(func.sum(AffiliateCommission.commission_amount)).filter(
+                AffiliateCommission.source_user_id == referral.id,
+                AffiliateCommission.user_id == user_id,
+                AffiliateCommission.status.in_([CommissionStatus.APPROVED, CommissionStatus.PAID])
+            ).scalar() or 0.0
+            
+            # Vérifier si le filleul a payé le KYC
+            kyc_payment = db.query(Deposit).filter(
+                Deposit.user_id == referral.id,
+                Deposit.status == DepositStatus.VALIDATED
+            ).join(Deposit.product_type).filter_by(code="kyc").first()
+            
+            result.append({
+                "id": referral.id,
+                "username": referral.username,
+                "email": referral.email,
+                "first_name": referral.first_name,
+                "last_name": referral.last_name,
+                "full_name": referral.full_name,
+                "avatar_url": referral.avatar_url,
+                "country": referral.country,
+                "city": referral.city,
+                "created_at": referral.created_at.isoformat() if referral.created_at else None,
+                "identity_verified": referral.identity_verified,
+                "has_paid_kyc": kyc_payment is not None,
+                "commissions_generated": float(commissions)
+            })
+        
+        return result
 
     def count_referrals(self, db: Session, user_id: int) -> int:
         """Compte le nombre de filleuls directs d'un utilisateur."""

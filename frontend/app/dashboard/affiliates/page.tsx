@@ -42,6 +42,9 @@ interface Affiliate {
   status: 'active' | 'inactive'
   country?: string
   city?: string
+  identity_verified?: boolean
+  has_paid_kyc?: boolean
+  commissions_generated?: number
 }
 
 interface Invitation {
@@ -147,8 +150,8 @@ export default function AffiliatesPage() {
         setReferralLinks(generateReferralLinks(code))
       }
       
-      // Récupérer les parrainages directs (filleuls)
-      const referralsResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/affiliates/referrals?limit=5`, {
+      // Récupérer les parrainages directs (filleuls) avec les commissions
+      const referralsResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/affiliates/referrals/detailed?limit=10`, {
         headers
       })
       
@@ -160,10 +163,13 @@ export default function AffiliatesPage() {
           avatar: r.avatar_url,
           joinedAt: r.created_at || new Date().toISOString(),
           level: 1,
-          totalEarnings: 0,
+          totalEarnings: r.commissions_generated || 0,
           status: 'active',
           country: r.country,
-          city: r.city
+          city: r.city,
+          identity_verified: r.identity_verified,
+          has_paid_kyc: r.has_paid_kyc,
+          commissions_generated: r.commissions_generated || 0
         })))
       }
 
@@ -672,10 +678,16 @@ export default function AffiliatesPage() {
                         <p className="font-medium text-sm sm:text-base text-gray-900 dark:text-white truncate">
                           {affiliate.name}
                         </p>
-                        {affiliate.status === 'active' && (
-                          <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
-                            <Zap className="w-3 h-3" />
-                            <span className="hidden sm:inline">{t('dashboard.affiliates.active')}</span>
+                        {affiliate.identity_verified && (
+                          <span className="flex items-center gap-1 px-1.5 py-0.5 bg-green-100 dark:bg-green-900/30 rounded text-xs text-green-600 dark:text-green-400">
+                            <CheckCircle className="w-3 h-3" />
+                            <span className="hidden sm:inline">KYC</span>
+                          </span>
+                        )}
+                        {affiliate.has_paid_kyc && !affiliate.identity_verified && (
+                          <span className="flex items-center gap-1 px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/30 rounded text-xs text-amber-600 dark:text-amber-400">
+                            <Clock className="w-3 h-3" />
+                            <span className="hidden sm:inline">{t('dashboard.affiliates.kyc_pending') || 'KYC en cours'}</span>
                           </span>
                         )}
                       </div>
@@ -695,12 +707,20 @@ export default function AffiliatesPage() {
                       </div>
                     </div>
                     <div className="text-right flex-shrink-0">
-                      <p className="text-xs sm:text-sm font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
-                        +{affiliate.totalEarnings.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">
-                        {t('dashboard.affiliates.earnings')}
-                      </p>
+                      {affiliate.commissions_generated && affiliate.commissions_generated > 0 ? (
+                        <>
+                          <p className="text-xs sm:text-sm font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
+                            +${affiliate.commissions_generated.toFixed(2)}
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">
+                            {t('dashboard.affiliates.commission') || 'Commission'}
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-xs text-gray-400 dark:text-gray-500">
+                          {t('dashboard.affiliates.no_commission') || 'Aucune commission'}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
