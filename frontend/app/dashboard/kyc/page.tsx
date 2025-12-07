@@ -378,6 +378,69 @@ function KYCPageContent() {
     )
   }
 
+  // Tentatives épuisées ou paiement requis
+  if (kycData?.max_attempts_reached || (kycData?.needs_payment && !kycData?.has_valid_payment)) {
+    return (
+      <div className="min-h-[calc(100vh-10rem)] flex items-center justify-center p-4">
+        <div className="w-full max-w-lg">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-8 text-center">
+            <div className="w-20 h-20 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
+              <CreditCard className="w-10 h-10 text-amber-600 dark:text-amber-400" />
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
+              {kycData?.max_attempts_reached 
+                ? (t('kyc.max_attempts_reached') || 'Tentatives épuisées')
+                : (t('kyc.payment_required') || 'Paiement requis')
+              }
+            </h1>
+            <p className="text-gray-600 dark:text-gray-400 mb-6">
+              {kycData?.max_attempts_reached 
+                ? (t('kyc.max_attempts_reached_description') || 'Vous avez utilisé toutes vos tentatives gratuites. Pour continuer la vérification, veuillez payer les frais de vérification.')
+                : (t('kyc.payment_required_description') || 'Pour effectuer la vérification d\'identité, veuillez d\'abord payer les frais de vérification.')
+              }
+            </p>
+            
+            {/* Prix de la vérification */}
+            <div className="bg-gradient-to-r from-myfav-primary/10 to-myfav-secondary/10 border border-myfav-primary/20 rounded-xl p-4 mb-6">
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
+                {t('kyc.verification_fee') || 'Frais de vérification'}
+              </p>
+              <p className="text-2xl font-bold text-myfav-primary">
+                {kycData?.kyc_price || 10} {kycData?.kyc_currency || 'USD'}
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Button
+                onClick={() => setShowPaymentDialog(true)}
+                className="bg-myfav-primary hover:bg-myfav-primary/90"
+              >
+                <CreditCard className="w-4 h-4 mr-2" />
+                {t('kyc.pay_now') || 'Payer maintenant'}
+              </Button>
+              <Button
+                onClick={() => router.push('/dashboard')}
+                variant="outline"
+              >
+                {t('common.back_to_dashboard') || 'Retour'}
+              </Button>
+            </div>
+          </div>
+        </div>
+        
+        {/* Payment Dialog */}
+        <PaymentDialog
+          open={showPaymentDialog}
+          onOpenChange={setShowPaymentDialog}
+          initialProductCode="kyc"
+          onPaymentInitiated={() => {
+            handleRefreshStatus()
+          }}
+        />
+      </div>
+    )
+  }
+
   // KYC rejeté - avec possibilité de reprendre
   if (kycData?.can_restart || kycData?.status === 'rejected') {
     return (
