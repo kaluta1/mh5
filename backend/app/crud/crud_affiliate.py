@@ -7,7 +7,7 @@ from sqlalchemy import func, and_
 from app.models.affiliate import (
     AffiliateTree, AffiliateCommission, CommissionRate,
     ReferralLink, ReferralClick, FoundingMember, RevenueShare,
-    CommissionStatus
+    CommissionStatus, CommissionType
 )
 from app.models.user import User
 
