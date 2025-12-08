@@ -8,6 +8,7 @@ Create Date: 2025-12-07
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+from sqlalchemy import inspect
 
 # revision identifiers
 revision = 'add_contest_verification'
@@ -16,20 +17,21 @@ branch_labels = None
 depends_on = None
 
 
+def column_exists(table_name, column_name):
+    """Check if a column exists in a table"""
+    bind = op.get_bind()
+    insp = inspect(bind)
+    columns = [c['name'] for c in insp.get_columns(table_name)]
+    return column_name in columns
+
+
+def add_column_if_not_exists(table_name, column):
+    """Add column only if it doesn't exist"""
+    if not column_exists(table_name, column.name):
+        op.add_column(table_name, column)
+
+
 def upgrade():
-    # Créer les enums
-    verification_type = postgresql.ENUM(
-        'none', 'visual', 'voice', 'brand', 'content',
-        name='verificationtype',
-        create_type=False
-    )
-    
-    participant_type = postgresql.ENUM(
-        'individual', 'pet', 'club', 'content',
-        name='participanttype',
-        create_type=False
-    )
-    
     # Créer les types ENUM si ils n'existent pas
     op.execute("""
         DO $$ BEGIN
@@ -49,10 +51,10 @@ def upgrade():
     # ============== Ajouter les colonnes à la table contest ==============
     
     # KYC obligatoire (défaut: true)
-    op.add_column('contest', sa.Column('requires_kyc', sa.Boolean(), nullable=False, server_default='true'))
+    add_column_if_not_exists('contest', sa.Column('requires_kyc', sa.Boolean(), nullable=False, server_default='true'))
     
     # Type de vérification
-    op.add_column('contest', sa.Column(
+    add_column_if_not_exists('contest', sa.Column(
         'verification_type',
         sa.Enum('none', 'visual', 'voice', 'brand', 'content', name='verificationtype'),
         nullable=False,
@@ -60,7 +62,7 @@ def upgrade():
     ))
     
     # Type de participant
-    op.add_column('contest', sa.Column(
+    add_column_if_not_exists('contest', sa.Column(
         'participant_type',
         sa.Enum('individual', 'pet', 'club', 'content', name='participanttype'),
         nullable=False,
@@ -68,22 +70,22 @@ def upgrade():
     ))
     
     # Vérifications spécifiques
-    op.add_column('contest', sa.Column('requires_visual_verification', sa.Boolean(), nullable=False, server_default='false'))
-    op.add_column('contest', sa.Column('requires_voice_verification', sa.Boolean(), nullable=False, server_default='false'))
-    op.add_column('contest', sa.Column('requires_brand_verification', sa.Boolean(), nullable=False, server_default='false'))
-    op.add_column('contest', sa.Column('requires_content_verification', sa.Boolean(), nullable=False, server_default='false'))
+    add_column_if_not_exists('contest', sa.Column('requires_visual_verification', sa.Boolean(), nullable=False, server_default='false'))
+    add_column_if_not_exists('contest', sa.Column('requires_voice_verification', sa.Boolean(), nullable=False, server_default='false'))
+    add_column_if_not_exists('contest', sa.Column('requires_brand_verification', sa.Boolean(), nullable=False, server_default='false'))
+    add_column_if_not_exists('contest', sa.Column('requires_content_verification', sa.Boolean(), nullable=False, server_default='false'))
     
     # Restrictions d'âge
-    op.add_column('contest', sa.Column('min_age', sa.Integer(), nullable=True))
-    op.add_column('contest', sa.Column('max_age', sa.Integer(), nullable=True))
+    add_column_if_not_exists('contest', sa.Column('min_age', sa.Integer(), nullable=True))
+    add_column_if_not_exists('contest', sa.Column('max_age', sa.Integer(), nullable=True))
     
     # ============== Ajouter les colonnes à la table contest_template ==============
     
     # KYC obligatoire par défaut
-    op.add_column('contest_template', sa.Column('default_requires_kyc', sa.Boolean(), nullable=False, server_default='true'))
+    add_column_if_not_exists('contest_template', sa.Column('default_requires_kyc', sa.Boolean(), nullable=False, server_default='true'))
     
     # Type de vérification par défaut
-    op.add_column('contest_template', sa.Column(
+    add_column_if_not_exists('contest_template', sa.Column(
         'default_verification_type',
         sa.Enum('none', 'visual', 'voice', 'brand', 'content', name='verificationtype'),
         nullable=False,
@@ -91,7 +93,7 @@ def upgrade():
     ))
     
     # Type de participant par défaut
-    op.add_column('contest_template', sa.Column(
+    add_column_if_not_exists('contest_template', sa.Column(
         'default_participant_type',
         sa.Enum('individual', 'pet', 'club', 'content', name='participanttype'),
         nullable=False,
@@ -99,14 +101,14 @@ def upgrade():
     ))
     
     # Vérifications par défaut
-    op.add_column('contest_template', sa.Column('default_visual_verification', sa.Boolean(), nullable=False, server_default='false'))
-    op.add_column('contest_template', sa.Column('default_voice_verification', sa.Boolean(), nullable=False, server_default='false'))
-    op.add_column('contest_template', sa.Column('default_brand_verification', sa.Boolean(), nullable=False, server_default='false'))
-    op.add_column('contest_template', sa.Column('default_content_verification', sa.Boolean(), nullable=False, server_default='false'))
+    add_column_if_not_exists('contest_template', sa.Column('default_visual_verification', sa.Boolean(), nullable=False, server_default='false'))
+    add_column_if_not_exists('contest_template', sa.Column('default_voice_verification', sa.Boolean(), nullable=False, server_default='false'))
+    add_column_if_not_exists('contest_template', sa.Column('default_brand_verification', sa.Boolean(), nullable=False, server_default='false'))
+    add_column_if_not_exists('contest_template', sa.Column('default_content_verification', sa.Boolean(), nullable=False, server_default='false'))
     
     # Restrictions d'âge par défaut
-    op.add_column('contest_template', sa.Column('default_min_age', sa.Integer(), nullable=True))
-    op.add_column('contest_template', sa.Column('default_max_age', sa.Integer(), nullable=True))
+    add_column_if_not_exists('contest_template', sa.Column('default_min_age', sa.Integer(), nullable=True))
+    add_column_if_not_exists('contest_template', sa.Column('default_max_age', sa.Integer(), nullable=True))
     
     # ============== Mettre à jour les templates existants avec des valeurs par défaut ==============
     # Beauty contest - nécessite vérification visuelle

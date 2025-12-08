@@ -31,52 +31,84 @@ UPLOADTHING_APP_ID=your_app_id
 - ✅ Détection de visages
 - ✅ Comparaison de visages (ownership verification)
 
-## Flux de modération
+## Flux de modération (AVANT upload)
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                     UPLOAD DE CONTENU                           │
+│                  1. SÉLECTION DU FICHIER                        │
+│                     (Client)                                    │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                 1. MODÉRATION DE CONTENU                        │
-│                    (Sightengine)                                │
-│                                                                 │
-│  ✓ Pas de nudité/contenu adulte                                │
-│  ✓ Pas de violence/gore                                        │
-│  ✓ Pas d'armes                                                 │
-│  ✓ Pas de contenu offensant                                    │
+│           2. ENVOI À /api/upload/moderated                      │
+│              (Fichier en base64)                                │
 └─────────────────────────────────────────────────────────────────┘
                               │
-                    ┌─────────┴─────────┐
-                    │                   │
-              ✅ Approuvé          ❌ Rejeté
-                    │                   │
-                    ▼                   ▼
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│           3. MODÉRATION SIGHTENGINE                             │
+│  ✗ Nudité / Contenu adulte                                     │
+│  ✗ Violence / Gore / Sang / Cadavres                           │
+│  ✗ Armes                                                        │
+│  ✗ Contenu offensant                                           │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+              ┌───────────────┴───────────────┐
+              │                               │
+        ✅ Approuvé                      ❌ Rejeté
+              │                               │
+              ▼                               ▼
 ┌─────────────────────────┐   ┌─────────────────────────┐
-│ 2. VÉRIF. OWNERSHIP     │   │  Fichier supprimé       │
-│   (Si visage détecté)   │   │  Message d'erreur       │
-│                         │   └─────────────────────────┘
-│ Comparer avec selfie    │
-│ de vérification         │
-└─────────────────────────┘
-                    │
-          ┌────────┴────────┐
-          │                 │
-    ✅ Match           ⚠️ Non-match
-          │                 │
-          ▼                 ▼
-┌──────────────────┐  ┌──────────────────┐
-│ Contenu sauvegardé│  │ Alerte admin     │
-└──────────────────┘  │ Révision manuelle│
-                      └──────────────────┘
+│ 4. OWNERSHIP CHECK      │   │ Erreur 422 retournée    │
+│   (si visage détecté)   │   │ Fichier NON uploadé     │
+└─────────────────────────┘   └─────────────────────────┘
+              │
+              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│           5. UPLOAD VERS UPLOADTHING                            │
+│              (Seulement si tout est OK)                         │
+└─────────────────────────────────────────────────────────────────┘
+              │
+              ▼
+        ✅ URL retournée au client
 ```
 
 ## API Endpoints
 
+### POST /api/upload/moderated (Principal)
+Upload avec modération AVANT stockage. C'est l'endpoint utilisé par le formulaire de participation.
+
+```json
+// Request: FormData
+// - file: File (image ou vidéo)
+// - verificationImageUrl: string (optionnel, pour ownership check)
+
+// Response (succès)
+{
+  "success": true,
+  "file": {
+    "url": "https://utfs.io/f/xxx",
+    "key": "xxx",
+    "name": "image.jpg",
+    "size": 12345,
+    "type": "image/jpeg"
+  },
+  "moderated": true
+}
+
+// Response (rejeté - 422)
+{
+  "error": "Contenu rejeté par la modération",
+  "flags": [
+    { "type": "adult", "severity": "high", "confidence": 0.95, "description": "Contenu adulte détecté" }
+  ],
+  "details": "Contenu adulte détecté"
+}
+```
+
 ### POST /api/content/moderate
-Modère un contenu (image ou vidéo).
+Modère un contenu déjà uploadé (pour vérification manuelle).
 
 ```json
 // Request

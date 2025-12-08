@@ -1,15 +1,14 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { X, Upload, FileText, Image as ImageIcon, Video, Eye, Link, Plus, AlertCircle, CheckCircle } from 'lucide-react'
+import React, { useState, useEffect, useRef } from 'react'
+import { X, Upload, FileText, Image as ImageIcon, Video, Eye, Link, Plus, AlertCircle, CheckCircle, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ImagePreviewDialog } from '@/components/ui/image-preview-dialog'
 import { VideoPreviewDialog } from '@/components/ui/video-preview-dialog'
 import { useLanguage } from '@/contexts/language-context'
 import { useRouter } from 'next/navigation'
-import { UploadButton } from '@uploadthing/react'
-import type { OurFileRouter } from '@/app/api/uploadthing/core'
+import { useModeratedUpload } from '@/hooks/use-moderated-upload'
 import { useToast } from '@/components/ui/toast'
 
 interface MediaRequirements {
@@ -76,6 +75,68 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
       setAccessToken(token)
     }
   }, [])
+
+  // Hook pour upload modéré des images
+  const imageUpload = useModeratedUpload({
+    accessToken,
+    onSuccess: (result) => {
+      setImageUrls(prev => [...prev, result.url])
+      addToast(t('participation.image_added') || 'Image ajoutée', 'success')
+    },
+    onError: (error, flags) => {
+      if (flags && flags.length > 0) {
+        addToast(t('moderation.content_rejected') || `⚠️ ${error}`, 'error')
+      } else {
+        addToast(`${t('participation.uploadError') || "Erreur d'upload"}: ${error}`, 'error')
+      }
+    }
+  })
+
+  // Hook pour upload modéré des vidéos
+  const videoUpload = useModeratedUpload({
+    accessToken,
+    onSuccess: (result) => {
+      setVideoUrl(result.url)
+      addToast(t('participation.video_added') || 'Vidéo ajoutée', 'success')
+    },
+    onError: (error, flags) => {
+      if (flags && flags.length > 0) {
+        addToast(t('moderation.content_rejected') || `⚠️ ${error}`, 'error')
+      } else {
+        addToast(`${t('participation.uploadError') || "Erreur d'upload"}: ${error}`, 'error')
+      }
+    }
+  })
+
+  // Référence pour les inputs fichier
+  const imageInputRef = useRef<HTMLInputElement>(null)
+  const videoInputRef = useRef<HTMLInputElement>(null)
+
+  // Handlers pour les uploads
+  const handleImageFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+    if (files.length === 0) return
+    
+    for (const file of files) {
+      if (imageUrls.length >= maxImages) break
+      await imageUpload.upload(file)
+    }
+    
+    if (imageInputRef.current) {
+      imageInputRef.current.value = ''
+    }
+  }
+
+  const handleVideoFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    
+    await videoUpload.upload(file)
+    
+    if (videoInputRef.current) {
+      videoInputRef.current.value = ''
+    }
+  }
 
   const handleRemoveImage = (index: number) => {
     setImageUrls(imageUrls.filter((_, i) => i !== index))
@@ -251,46 +312,55 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
         
         {imageUrls.length < maxImages && (
           <div className="space-y-3 mb-4">
-            {/* Upload button */}
-            <div className="p-6 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg bg-white/50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition">
-              {accessToken && (
-                <UploadButton<OurFileRouter, 'contestantMedia'>
-                  endpoint="contestantMedia"
-                  headers={{
-                    'x-access-token': accessToken
-                  }}
-                  onClientUploadComplete={(res) => {
-                    if (res && res.length > 0) {
-                      const newUrls = res.map(file => file.url)
-                      setImageUrls([...imageUrls, ...newUrls])
-                    }
-                  }}
-                  onUploadError={(error: Error) => {
-                    // Vérifier si c'est une erreur de modération
-                    if (error.message.includes('Contenu rejeté')) {
-                      addToast(t('moderation.content_rejected') || `⚠️ ${error.message}`, 'error')
-                    } else {
-                      addToast(`${t('participation.uploadError') || "Erreur d'upload"}: ${error.message}`, 'error')
-                    }
-                  }}
-                  content={{
-                    button({ ready }) {
-                      if (ready) return <div className="font-semibold">{t('dashboard.contests.participation_form.click_add_images')}</div>
-                      return t('dashboard.contests.participation_form.preparing')
-                    },
-                    allowedContent({ ready, fileTypes, isUploading }) {
-                      if (!ready) return t('dashboard.contests.participation_form.checking_files')
-                      if (isUploading) return t('dashboard.contests.participation_form.uploading')
-                      return `${t('dashboard.contests.participation_form.images_format')} (${fileTypes.join(', ')})`
-                    },
-                  }}
-                  appearance={{
-                    button: 'ut-uploading:opacity-50 bg-gray-800 hover:bg-gray-900 dark:bg-gray-700 dark:hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg transition',
-                    container: 'w-full',
-                    allowedContent: 'text-sm text-gray-600 dark:text-gray-400 mt-2',
-                  }}
-                  disabled={isSubmitting || imageUrls.length >= maxImages}
-                />
+            {/* Upload button avec modération */}
+            <div 
+              className="p-6 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg bg-white/50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition cursor-pointer"
+              onClick={() => !imageUpload.isUploading && !isSubmitting && imageInputRef.current?.click()}
+            >
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={handleImageFileSelect}
+                className="hidden"
+                disabled={isSubmitting || imageUpload.isUploading || imageUrls.length >= maxImages}
+              />
+              
+              <div className="flex flex-col items-center justify-center text-center">
+                {imageUpload.isUploading ? (
+                  <>
+                    <Loader2 className="w-8 h-8 text-gray-400 mb-2 animate-spin" />
+                    <p className="font-semibold text-gray-700 dark:text-gray-300">
+                      {t('moderation.analyzing') || 'Modération et upload...'} ({Math.round(imageUpload.progress)}%)
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-8 h-8 text-gray-400 mb-2" />
+                    <p className="font-semibold text-gray-700 dark:text-gray-300">
+                      {t('dashboard.contests.participation_form.click_add_images') || 'Cliquez pour ajouter des images'}
+                    </p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                      {t('dashboard.contests.participation_form.images_format') || 'JPG, PNG, GIF, WebP'}
+                    </p>
+                  </>
+                )}
+              </div>
+
+              {/* Afficher les erreurs de modération */}
+              {imageUpload.error && imageUpload.moderationFlags.length > 0 && (
+                <div className="mt-3 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-xs">
+                  <p className="text-red-700 dark:text-red-300 font-medium flex items-center gap-1">
+                    <AlertCircle className="w-4 h-4" />
+                    {t('moderation.content_rejected') || 'Contenu rejeté'}
+                  </p>
+                  <ul className="list-disc list-inside text-red-600 dark:text-red-400 mt-1">
+                    {imageUpload.moderationFlags.map((flag, idx) => (
+                      <li key={idx}>{flag.description}</li>
+                    ))}
+                  </ul>
+                </div>
               )}
             </div>
 
@@ -382,45 +452,54 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
         
         {!videoUrl && (
           <div className="space-y-3">
-            {/* Upload button */}
-            <div className="p-6 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg bg-white/50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition">
-              {accessToken && (
-                <UploadButton<OurFileRouter, 'contestantMedia'>
-                  endpoint="contestantMedia"
-                  headers={{
-                    'x-access-token': accessToken
-                  }}
-                  onClientUploadComplete={(res) => {
-                    if (res && res.length > 0) {
-                      setVideoUrl(res[0].url)
-                    }
-                  }}
-                  onUploadError={(error: Error) => {
-                    // Vérifier si c'est une erreur de modération
-                    if (error.message.includes('Contenu rejeté')) {
-                      addToast(t('moderation.content_rejected') || `⚠️ ${error.message}`, 'error')
-                    } else {
-                      addToast(`${t('participation.uploadError') || "Erreur d'upload"}: ${error.message}`, 'error')
-                    }
-                  }}
-                  content={{
-                    button({ ready }) {
-                      if (ready) return <div className="font-semibold">{t('dashboard.contests.participation_form.click_add_video')}</div>
-                      return t('dashboard.contests.participation_form.preparing')
-                    },
-                    allowedContent({ ready, fileTypes, isUploading }) {
-                      if (!ready) return t('dashboard.contests.participation_form.checking_files')
-                      if (isUploading) return t('dashboard.contests.participation_form.uploading')
-                      return `${t('dashboard.contests.participation_form.video_format')} (${fileTypes.join(', ')})`
-                    },
-                  }}
-                  appearance={{
-                    button: 'ut-uploading:opacity-50 bg-gray-800 hover:bg-gray-900 dark:bg-gray-700 dark:hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg transition',
-                    container: 'w-full',
-                    allowedContent: 'text-sm text-gray-600 dark:text-gray-400 mt-2',
-                  }}
-                  disabled={isSubmitting}
-                />
+            {/* Upload button avec modération */}
+            <div 
+              className="p-6 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg bg-white/50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition cursor-pointer"
+              onClick={() => !videoUpload.isUploading && !isSubmitting && videoInputRef.current?.click()}
+            >
+              <input
+                ref={videoInputRef}
+                type="file"
+                accept="video/*"
+                onChange={handleVideoFileSelect}
+                className="hidden"
+                disabled={isSubmitting || videoUpload.isUploading}
+              />
+              
+              <div className="flex flex-col items-center justify-center text-center">
+                {videoUpload.isUploading ? (
+                  <>
+                    <Loader2 className="w-8 h-8 text-gray-400 mb-2 animate-spin" />
+                    <p className="font-semibold text-gray-700 dark:text-gray-300">
+                      {t('moderation.analyzing') || 'Modération et upload...'} ({Math.round(videoUpload.progress)}%)
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <Video className="w-8 h-8 text-gray-400 mb-2" />
+                    <p className="font-semibold text-gray-700 dark:text-gray-300">
+                      {t('dashboard.contests.participation_form.click_add_video') || 'Cliquez pour ajouter une vidéo'}
+                    </p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                      {t('dashboard.contests.participation_form.video_format') || 'MP4, WebM, MOV'}
+                    </p>
+                  </>
+                )}
+              </div>
+
+              {/* Afficher les erreurs de modération */}
+              {videoUpload.error && videoUpload.moderationFlags.length > 0 && (
+                <div className="mt-3 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-xs">
+                  <p className="text-red-700 dark:text-red-300 font-medium flex items-center gap-1">
+                    <AlertCircle className="w-4 h-4" />
+                    {t('moderation.content_rejected') || 'Contenu rejeté'}
+                  </p>
+                  <ul className="list-disc list-inside text-red-600 dark:text-red-400 mt-1">
+                    {videoUpload.moderationFlags.map((flag, idx) => (
+                      <li key={idx}>{flag.description}</li>
+                    ))}
+                  </ul>
+                </div>
               )}
             </div>
 
