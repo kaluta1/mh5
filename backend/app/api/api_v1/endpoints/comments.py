@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session, joinedload
 from app.api import deps
@@ -15,6 +16,7 @@ from app.schemas.comment import (
     CommentListResponse
 )
 from typing import Optional
+from app.services.content_moderation import content_moderation_service
 
 router = APIRouter()
 
@@ -145,6 +147,23 @@ def create_contestant_comment(
             detail="Contestant not found"
         )
     
+    # ============================================
+    # MODÉRATION DU CONTENU AVANT CRÉATION
+    # ============================================
+    logger = logging.getLogger(__name__)
+    logger.info(f"Moderating comment text: '{comment_data.content[:50]}...'")
+    
+    text_moderation = content_moderation_service.moderate_text(comment_data.content)
+    logger.info(f"Comment moderation result: approved={text_moderation.is_approved}, flags={len(text_moderation.flags)}")
+    
+    if not text_moderation.is_approved:
+        flags_desc = ", ".join([f.description for f in text_moderation.flags])
+        logger.warning(f"Comment rejected: {flags_desc}")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Commentaire rejeté: {flags_desc}"
+        )
+    
     comment = comment_crud.create_comment(
         db,
         user_id=current_user.id,
@@ -246,6 +265,15 @@ def create_media_comment(
             detail="Contestant not found"
         )
     
+    # Modérer le contenu avant création
+    text_moderation = content_moderation_service.moderate_text(comment_data.content)
+    if not text_moderation.is_approved:
+        flags_desc = ", ".join([f.description for f in text_moderation.flags])
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Commentaire rejeté: {flags_desc}"
+        )
+    
     # Pour maintenant, on stocke le commentaire au niveau du contestant
     # avec target_id = media_id (string)
     comment = comment_crud.create_comment(
@@ -305,6 +333,15 @@ def update_comment(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Permission 'edit_own_comment' required"
+        )
+    
+    # Modérer le nouveau contenu
+    text_moderation = content_moderation_service.moderate_text(comment_data.content)
+    if not text_moderation.is_approved:
+        flags_desc = ", ".join([f.description for f in text_moderation.flags])
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Commentaire rejeté: {flags_desc}"
         )
     
     updated_comment = comment_crud.update_comment(db, comment_id, comment_data.content)

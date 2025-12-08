@@ -13,12 +13,18 @@ ENABLE_CONTENT_MODERATION=true
 SLIGTHENGINE_API_USER=your_api_user
 SLIGTHENGINE_API_KEY=your_api_key
 
+# AssemblyAI - Modération audio + Transcription
+# Inscription: https://www.assemblyai.com/
+ASSEMBLYAI_API_KEY=your_assemblyai_api_key
+
 # Uploadthing
 UPLOADTHING_SECRET=your_uploadthing_secret
 UPLOADTHING_APP_ID=your_app_id
 ```
 
-## Service utilisé : Sightengine
+## Services utilisés
+
+### Sightengine (Images/Vidéos)
 
 **Prix** : À partir de $29/mois
 
@@ -30,6 +36,18 @@ UPLOADTHING_APP_ID=your_app_id
 - ✅ Modération de vidéos
 - ✅ Détection de visages
 - ✅ Comparaison de visages (ownership verification)
+
+### AssemblyAI (Audio)
+
+**Prix** : À partir de $0.25/heure d'audio
+
+**Fonctionnalités utilisées** :
+- ✅ Transcription audio
+- ✅ Détection de discours haineux
+- ✅ Détection de langage vulgaire (profanity)
+- ✅ Détection de menaces/violence verbale
+- ✅ Détection de contenu sensible
+- ✅ Vérification de présence vocale (voice ownership basique)
 
 ## Flux de modération (AVANT upload)
 

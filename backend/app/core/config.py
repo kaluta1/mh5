@@ -69,6 +69,14 @@ class Settings(BaseModel):
     CRYPTO_PAYMENT_IPN_SECRET: str = os.getenv("CRYPTO_PAYMENT_IPN_SECRET", "")  # Pour vérifier les webhooks
     CRYPTO_PAYMENT_API_URL: str = "https://api.nowpayments.io/v1"
     
+    # CONTENT MODERATION (Sightengine)
+    ENABLE_CONTENT_MODERATION: bool = os.getenv("ENABLE_CONTENT_MODERATION", "false").lower() == "true"
+    SIGHTENGINE_API_USER: str = os.getenv("SIGHTENGINE_API_USER", "")
+    SIGHTENGINE_API_KEY: str = os.getenv("SIGHTENGINE_API_KEY", "")
+    
+    # CONTENT RELEVANCE (OpenAI - optionnel pour analyse IA)
+    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    
     # Validation des origines CORS
     @field_validator("BACKEND_CORS_ORIGINS", mode="before")
     @classmethod

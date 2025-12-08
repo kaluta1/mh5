@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.api_v1.endpoints import auth, users, media, contests, votes, kyc, contestant, geography, favorites, search, search_history, comments, admin, season_migration, notifications, analytics, affiliate, payments, roles
+from app.api.api_v1.endpoints import auth, users, media, contests, votes, kyc, contestant, geography, favorites, search, search_history, comments, admin, season_migration, notifications, analytics, affiliate, payments, roles, verifications
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["Authentification"])
@@ -9,6 +9,7 @@ api_router.include_router(media.router, prefix="/media", tags=["Médias"])
 api_router.include_router(contests.router, prefix="/contests", tags=["Concours"])
 api_router.include_router(votes.router, prefix="/votes", tags=["Votes"])
 api_router.include_router(kyc.router, prefix="/kyc", tags=["Vérification KYC"])
+api_router.include_router(verifications.router, prefix="/verifications", tags=["Vérifications utilisateur"])
 api_router.include_router(payments.router, prefix="/payments", tags=["Paiements"])
 api_router.include_router(contestant.router, prefix="/contestants", tags=["Candidatures"])
 api_router.include_router(comments.router, prefix="/contestants", tags=["Commentaires"])

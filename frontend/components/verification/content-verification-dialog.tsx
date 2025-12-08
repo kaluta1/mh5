@@ -15,12 +15,15 @@ import {
   AlertTriangle,
   Image as ImageIcon
 } from 'lucide-react'
+import { verificationService } from '@/services/verification-service'
 
 interface ContentVerificationDialogProps {
   isOpen: boolean
   onClose: () => void
   onComplete: (data: ContentVerificationData) => void
   maxSizeMb?: number
+  contestId?: number
+  contestantId?: number
 }
 
 export interface ContentVerificationData {
@@ -34,7 +37,9 @@ export function ContentVerificationDialog({
   isOpen,
   onClose,
   onComplete,
-  maxSizeMb = 50
+  maxSizeMb = 50,
+  contestId,
+  contestantId
 }: ContentVerificationDialogProps) {
   const { t } = useLanguage()
   const [contentUrl, setContentUrl] = useState('')
@@ -80,11 +85,30 @@ export function ContentVerificationDialog({
     setError(null)
 
     try {
-      // In production, upload the proof image to your storage
-      // For now, we'll pass the base64 or URL
+      let proofImageUrl = proofImage
+      
+      // Si une image a été sélectionnée, l'uploader
+      if (proofImage && proofImage.startsWith('data:')) {
+        const response = await fetch(proofImage)
+        const blob = await response.blob()
+        
+        const verification = await verificationService.uploadAndCreateVerification(
+          blob,
+          `content_proof_${Date.now()}.jpg`,
+          'content',
+          'image',
+          {
+            contest_id: contestId,
+            contestant_id: contestantId
+          }
+        )
+        
+        proofImageUrl = verification.media_url
+      }
+      
       const verificationData: ContentVerificationData = {
         contentUrl: contentUrl || undefined,
-        proofImageUrl: proofImage || undefined,
+        proofImageUrl: proofImageUrl || undefined,
         description: description.trim(),
         platform: platform || undefined
       }
@@ -92,7 +116,7 @@ export function ContentVerificationDialog({
       onComplete(verificationData)
     } catch (err) {
       console.error('Content verification error:', err)
-      setError(t('verification.submit_error') || 'Erreur lors de la soumission')
+      setError(err instanceof Error ? err.message : (t('verification.submit_error') || 'Erreur lors de la soumission'))
     } finally {
       setIsUploading(false)
     }

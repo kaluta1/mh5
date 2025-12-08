@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Any
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 
 from sqlalchemy.orm import Session
@@ -19,6 +19,8 @@ from app.schemas.contestant import (
     ContestantCreate, ContestantResponse, ContestantListResponse, ContestantSubmissionResponse,
     ContestantWithAuthorAndStats
 )
+from app.services.content_moderation import content_moderation_service, ContentType
+from app.services.content_relevance import content_relevance_service
 
 router = APIRouter()
 
@@ -262,6 +264,138 @@ def create_contestant(
             detail="Vous avez déjà une candidature pour ce concours"
         )
     
+    # ============================================
+    # MODÉRATION DU CONTENU AVANT CRÉATION
+    # ============================================
+    import json
+    import logging
+    from app.models.media import Media
+    
+    logger = logging.getLogger(__name__)
+    logger.info(f"Starting content moderation for contestant submission by user {current_user.id}")
+    
+    # Modérer le texte (titre et description)
+    text_to_moderate = f"{contestant_data.title} {contestant_data.description}"
+    logger.info("Moderating text content...")
+    text_moderation = content_moderation_service.moderate_text(text_to_moderate)
+    logger.info(f"Text moderation completed: approved={text_moderation.is_approved}")
+    
+    if not text_moderation.is_approved:
+        flags_desc = ", ".join([f.description for f in text_moderation.flags])
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Contenu textuel rejeté: {flags_desc}"
+        )
+    
+    # Helper pour extraire l'URL d'un média (ID ou URL directe)
+    def get_media_url(media_ref: Any) -> Optional[str]:
+        """Retourne l'URL du média, que ce soit un ID ou une URL directe"""
+        if isinstance(media_ref, str):
+            # Si c'est déjà une URL
+            if media_ref.startswith(('http://', 'https://')):
+                return media_ref
+            # Si c'est un ID sous forme de string
+            try:
+                media_id = int(media_ref)
+                media = db.query(Media).filter(Media.id == media_id).first()
+                return media.url if media else None
+            except ValueError:
+                return None
+        elif isinstance(media_ref, int):
+            media = db.query(Media).filter(Media.id == media_ref).first()
+            return media.url if media else None
+        return None
+    
+    # Modérer les images si présentes
+    if contestant_data.image_media_ids:
+        logger.info(f"Moderating images: {contestant_data.image_media_ids[:100]}")
+        try:
+            image_refs = json.loads(contestant_data.image_media_ids)
+            if isinstance(image_refs, list):
+                for idx, media_ref in enumerate(image_refs[:10]):  # Max 10 images
+                    media_url = get_media_url(media_ref)
+                    if media_url:
+                        logger.info(f"Moderating image {idx+1}/{len(image_refs)}")
+                        moderation_result = content_moderation_service.moderate_image(media_url)
+                        logger.info(f"Image {idx+1} moderation: approved={moderation_result.is_approved}")
+                        if not moderation_result.is_approved:
+                            flags_desc = ", ".join([f.description for f in moderation_result.flags])
+                            raise HTTPException(
+                                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                                detail=f"Image rejetée par la modération: {flags_desc}"
+                            )
+        except json.JSONDecodeError as e:
+            logger.warning(f"JSON decode error for image_media_ids: {e}")
+    else:
+        logger.info("No images to moderate")
+    
+    # Modérer les vidéos si présentes
+    if contestant_data.video_media_ids:
+        logger.info(f"Moderating videos: {contestant_data.video_media_ids[:100]}")
+        try:
+            video_refs = json.loads(contestant_data.video_media_ids)
+            if isinstance(video_refs, list):
+                for idx, media_ref in enumerate(video_refs[:5]):  # Max 5 vidéos
+                    media_url = get_media_url(media_ref)
+                    if media_url:
+                        logger.info(f"Moderating video {idx+1}/{len(video_refs)}")
+                        moderation_result = content_moderation_service.moderate_video(media_url)
+                        logger.info(f"Video {idx+1} moderation: approved={moderation_result.is_approved}")
+                        if not moderation_result.is_approved:
+                            flags_desc = ", ".join([f.description for f in moderation_result.flags])
+                            raise HTTPException(
+                                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                                detail=f"Vidéo rejetée par la modération: {flags_desc}"
+                            )
+        except json.JSONDecodeError as e:
+            logger.warning(f"JSON decode error for video_media_ids: {e}")
+    else:
+        logger.info("No videos to moderate")
+    
+    logger.info("Content moderation completed successfully")
+    
+    # ============================================
+    # VÉRIFICATION DE LA PERTINENCE
+    # ============================================
+    logger.info("Starting relevance check...")
+    
+    # Récupérer les infos du concours pour la vérification de pertinence
+    contest_title = ""
+    contest_description = ""
+    contest_type = None
+    
+    if contest:
+        contest_title = contest.title or ""
+        contest_description = contest.description or ""
+        contest_type = getattr(contest, 'contest_type', None)
+        if contest_type and hasattr(contest_type, 'value'):
+            contest_type = contest_type.value
+    elif season:
+        contest_title = season.title or ""
+        contest_description = getattr(season, 'description', "") or ""
+    
+    # Vérifier la pertinence de la candidature par rapport au concours
+    relevance_result = content_relevance_service.check_relevance(
+        contestant_title=contestant_data.title,
+        contestant_description=contestant_data.description,
+        contest_title=contest_title,
+        contest_description=contest_description,
+        contest_type=contest_type
+    )
+    
+    logger.info(f"Relevance check completed: is_relevant={relevance_result.is_relevant}, score={relevance_result.score}")
+    
+    if not relevance_result.is_relevant:
+        suggestions_text = " ".join(relevance_result.suggestions[:2])
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Candidature non pertinente pour ce concours. {suggestions_text}"
+        )
+    
+    # ============================================
+    # CRÉATION DE LA CANDIDATURE
+    # ============================================
+    logger.info("Starting contestant creation...")
     # Créer la candidature
     try:
         # Lier automatiquement le contestant à la saison "city"
@@ -502,6 +636,75 @@ def update_contestant(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Vous ne pouvez mettre à jour que votre propre candidature"
         )
+    
+    # ============================================
+    # MODÉRATION DU CONTENU AVANT MISE À JOUR
+    # ============================================
+    import json
+    from app.models.media import Media
+    
+    # Modérer le texte (titre et description)
+    text_to_moderate = f"{contestant_data.title} {contestant_data.description}"
+    text_moderation = content_moderation_service.moderate_text(text_to_moderate)
+    
+    if not text_moderation.is_approved:
+        flags_desc = ", ".join([f.description for f in text_moderation.flags])
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Contenu textuel rejeté: {flags_desc}"
+        )
+    
+    # Helper pour extraire l'URL d'un média (ID ou URL directe)
+    def get_media_url(media_ref: Any) -> Optional[str]:
+        if isinstance(media_ref, str):
+            if media_ref.startswith(('http://', 'https://')):
+                return media_ref
+            try:
+                media_id = int(media_ref)
+                media = db.query(Media).filter(Media.id == media_id).first()
+                return media.url if media else None
+            except ValueError:
+                return None
+        elif isinstance(media_ref, int):
+            media = db.query(Media).filter(Media.id == media_ref).first()
+            return media.url if media else None
+        return None
+    
+    # Modérer les images si présentes
+    if contestant_data.image_media_ids:
+        try:
+            image_refs = json.loads(contestant_data.image_media_ids)
+            if isinstance(image_refs, list):
+                for media_ref in image_refs[:10]:
+                    media_url = get_media_url(media_ref)
+                    if media_url:
+                        moderation_result = content_moderation_service.moderate_image(media_url)
+                        if not moderation_result.is_approved:
+                            flags_desc = ", ".join([f.description for f in moderation_result.flags])
+                            raise HTTPException(
+                                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                                detail=f"Image rejetée par la modération: {flags_desc}"
+                            )
+        except json.JSONDecodeError:
+            pass
+    
+    # Modérer les vidéos si présentes
+    if contestant_data.video_media_ids:
+        try:
+            video_refs = json.loads(contestant_data.video_media_ids)
+            if isinstance(video_refs, list):
+                for media_ref in video_refs[:5]:
+                    media_url = get_media_url(media_ref)
+                    if media_url:
+                        moderation_result = content_moderation_service.moderate_video(media_url)
+                        if not moderation_result.is_approved:
+                            flags_desc = ", ".join([f.description for f in moderation_result.flags])
+                            raise HTTPException(
+                                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                                detail=f"Vidéo rejetée par la modération: {flags_desc}"
+                            )
+        except json.JSONDecodeError:
+            pass
     
     # Mettre à jour la candidature
     updated_contestant = crud_contestant.update(

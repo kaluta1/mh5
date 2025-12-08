@@ -37,18 +37,45 @@ export interface OwnershipVerificationResult {
   }
 }
 
-// Configuration - Sightengine (utilisé pour tout: modération + ownership)
+export interface AudioModerationResult {
+  isApproved: boolean
+  confidence: number
+  flags: ContentFlag[]
+  transcript?: string
+  contentSafety?: {
+    hate_speech: number
+    profanity: number
+    violence: number
+    sensitive_content: number
+  }
+}
+
+export interface VoiceOwnershipResult {
+  isMatch: boolean
+  confidence: number
+  voiceDetected: boolean
+  speechDuration?: number
+  matchDetails?: {
+    similarity: number
+    referenceVoiceId?: string
+  }
+}
+
+// Configuration - Sightengine (utilisé pour images/vidéos)
 const SIGHTENGINE_API_USER = process.env.SLIGTHENGINE_API_USER || ''
 const SIGHTENGINE_API_SECRET = process.env.SLIGTHENGINE_API_KEY || ''
+
+// Configuration - AssemblyAI (utilisé pour audio)
+const ASSEMBLYAI_API_KEY = process.env.ASSEMBLYAI_API_KEY || ''
 
 // Seuils de modération (ajustables)
 const MODERATION_THRESHOLDS = {
   nudity: 0.6,        // Score au-delà duquel le contenu est considéré adulte
-  violence: 0.7,      // Score au-delà duquel le contenu est considéré violent
-  gore: 0.5,          // Score pour gore/cadavres/sang
-  weapons: 0.8,       // Score pour armes
-  offensive: 0.7,     // Score pour contenu offensant
-  drugs: 0.8,         // Score pour drogues
+  violence: 0.6,      // Score au-delà duquel le contenu est considéré violent
+  gore: 0.4,          // Score pour gore/cadavres/sang
+  weapons: 0.6,       // Score pour armes
+  offensive: 0.6,     // Score pour contenu offensant
+  drugs: 0.6,         // Score pour drogues
 }
 
 /**
@@ -285,6 +312,266 @@ function processSightengineResponse(data: any): ModerationResult {
 }
 
 /**
+ * Analyse un fichier audio avec AssemblyAI
+ * Transcrit l'audio et vérifie le contenu
+ */
+export async function moderateAudio(audioUrl: string): Promise<AudioModerationResult> {
+  if (!ASSEMBLYAI_API_KEY) {
+    console.warn('AssemblyAI API key not configured, skipping audio moderation')
+    return {
+      isApproved: true,
+      confidence: 0,
+      flags: []
+    }
+  }
+
+  try {
+    // 1. Soumettre l'audio pour transcription avec content safety
+    const submitResponse = await fetch('https://api.assemblyai.com/v2/transcript', {
+      method: 'POST',
+      headers: {
+        'Authorization': ASSEMBLYAI_API_KEY,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        audio_url: audioUrl,
+        content_safety: true,           // Activer la détection de contenu sensible
+        content_safety_confidence: 50,  // Seuil de confiance (0-100)
+        speech_threshold: 0.2           // Seuil de détection de parole
+      })
+    })
+
+    if (!submitResponse.ok) {
+      throw new Error(`AssemblyAI submit error: ${submitResponse.status}`)
+    }
+
+    const submitData = await submitResponse.json()
+    const transcriptId = submitData.id
+
+    // 2. Poll pour le résultat (max 60 secondes)
+    const result = await pollAudioTranscript(transcriptId)
+    return processAudioModerationResult(result)
+
+  } catch (error) {
+    console.error('Audio moderation error:', error)
+    return {
+      isApproved: true,
+      confidence: 0,
+      flags: []
+    }
+  }
+}
+
+/**
+ * Poll pour le résultat de transcription audio
+ */
+async function pollAudioTranscript(transcriptId: string, maxAttempts = 20): Promise<any> {
+  for (let i = 0; i < maxAttempts; i++) {
+    await new Promise(resolve => setTimeout(resolve, 3000)) // Attendre 3 secondes
+
+    try {
+      const response = await fetch(
+        `https://api.assemblyai.com/v2/transcript/${transcriptId}`,
+        {
+          headers: { 'Authorization': ASSEMBLYAI_API_KEY }
+        }
+      )
+
+      const data = await response.json()
+      
+      if (data.status === 'completed') {
+        return data
+      } else if (data.status === 'error') {
+        throw new Error(data.error || 'Transcription failed')
+      }
+      // Continue polling if status is 'queued' or 'processing'
+    } catch (error) {
+      console.error('Audio polling error:', error)
+    }
+  }
+
+  throw new Error('Audio transcription timeout')
+}
+
+/**
+ * Traite le résultat de modération audio
+ */
+function processAudioModerationResult(data: any): AudioModerationResult {
+  const flags: ContentFlag[] = []
+  let isApproved = true
+  let maxConfidence = 0
+
+  // Vérifier les résultats de content safety
+  if (data.content_safety_labels && data.content_safety_labels.results) {
+    for (const result of data.content_safety_labels.results) {
+      for (const label of result.labels || []) {
+        const confidence = label.confidence || 0
+        
+        // Map AssemblyAI labels to our flag types
+        if (label.label === 'hate_speech' && confidence > 0.5) {
+          isApproved = false
+          maxConfidence = Math.max(maxConfidence, confidence)
+          flags.push({
+            type: 'hate',
+            severity: confidence > 0.8 ? 'high' : 'medium',
+            confidence,
+            description: 'Discours haineux détecté'
+          })
+        }
+        
+        if (label.label === 'profanity' && confidence > 0.6) {
+          maxConfidence = Math.max(maxConfidence, confidence)
+          flags.push({
+            type: 'offensive',
+            severity: confidence > 0.8 ? 'high' : 'medium',
+            confidence,
+            description: 'Langage vulgaire détecté'
+          })
+          // Profanity léger ne bloque pas forcément
+          if (confidence > 0.8) {
+            isApproved = false
+          }
+        }
+        
+        if ((label.label === 'violence' || label.label === 'threats') && confidence > 0.5) {
+          isApproved = false
+          maxConfidence = Math.max(maxConfidence, confidence)
+          flags.push({
+            type: 'violence',
+            severity: confidence > 0.8 ? 'high' : 'medium',
+            confidence,
+            description: 'Contenu violent ou menaces détectées'
+          })
+        }
+        
+        if (label.label === 'self_harm' && confidence > 0.5) {
+          isApproved = false
+          maxConfidence = Math.max(maxConfidence, confidence)
+          flags.push({
+            type: 'selfharm',
+            severity: 'high',
+            confidence,
+            description: 'Contenu d\'automutilation détecté'
+          })
+        }
+        
+        if (label.label === 'sensitive_content' && confidence > 0.6) {
+          maxConfidence = Math.max(maxConfidence, confidence)
+          flags.push({
+            type: 'offensive',
+            severity: 'medium',
+            confidence,
+            description: 'Contenu sensible détecté'
+          })
+        }
+      }
+    }
+  }
+
+  // Extraire les scores de sécurité globaux
+  const summaryLabels = data.content_safety_labels?.summary || {}
+
+  return {
+    isApproved,
+    confidence: maxConfidence || 1,
+    flags,
+    transcript: data.text,
+    contentSafety: {
+      hate_speech: summaryLabels.hate_speech || 0,
+      profanity: summaryLabels.profanity || 0,
+      violence: summaryLabels.violence || 0,
+      sensitive_content: summaryLabels.sensitive_content || 0
+    }
+  }
+}
+
+/**
+ * Vérifie l'ownership d'un audio (comparaison vocale)
+ * Compare l'empreinte vocale avec une référence
+ */
+export async function verifyVoiceOwnership(
+  referenceAudioUrl: string,
+  uploadedAudioUrl: string
+): Promise<VoiceOwnershipResult> {
+  // NOTE: La comparaison vocale nécessite un service spécialisé comme:
+  // - Azure Speaker Recognition
+  // - Amazon Voice ID
+  // - Nuance Voice Biometrics
+  // 
+  // Pour l'instant, on implémente une vérification basique:
+  // - On transcrit les deux audios
+  // - On vérifie qu'il y a de la parole dans les deux
+  // - La vraie comparaison vocale sera ajoutée ultérieurement
+  
+  if (!ASSEMBLYAI_API_KEY) {
+    console.warn('AssemblyAI API key not configured, voice verification disabled')
+    return {
+      isMatch: true,
+      confidence: 0,
+      voiceDetected: false
+    }
+  }
+
+  try {
+    // Vérifier que l'audio uploadé contient de la parole
+    const submitResponse = await fetch('https://api.assemblyai.com/v2/transcript', {
+      method: 'POST',
+      headers: {
+        'Authorization': ASSEMBLYAI_API_KEY,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        audio_url: uploadedAudioUrl,
+        speech_threshold: 0.2
+      })
+    })
+
+    if (!submitResponse.ok) {
+      throw new Error(`AssemblyAI submit error: ${submitResponse.status}`)
+    }
+
+    const submitData = await submitResponse.json()
+    const result = await pollAudioTranscript(submitData.id)
+
+    // Vérifier la durée de parole
+    const speechDuration = result.audio_duration || 0
+    const hasVoice = result.text && result.text.length > 10
+
+    if (!hasVoice) {
+      return {
+        isMatch: false,
+        confidence: 0,
+        voiceDetected: false,
+        speechDuration,
+        matchDetails: {
+          similarity: 0
+        }
+      }
+    }
+
+    // TODO: Implémenter la vraie comparaison vocale avec un service biométrique
+    // Pour l'instant, on accepte si une voix est détectée
+    return {
+      isMatch: true,
+      confidence: 0.5, // Confiance moyenne car pas de vraie comparaison
+      voiceDetected: true,
+      speechDuration,
+      matchDetails: {
+        similarity: 0.5
+      }
+    }
+
+  } catch (error) {
+    console.error('Voice ownership verification error:', error)
+    return {
+      isMatch: true,
+      confidence: 0,
+      voiceDetected: false
+    }
+  }
+}
+
+/**
  * Traite la réponse de modération vidéo
  */
 function processVideoModerationResponse(data: any): ModerationResult {
@@ -460,28 +747,45 @@ async function detectFaces(imageUrl: string): Promise<any[]> {
 }
 
 /**
- * Modère le contenu (image ou vidéo) et vérifie l'ownership
+ * Modère le contenu (image, vidéo ou audio) et vérifie l'ownership
  */
 export async function moderateAndVerifyContent(
   contentUrl: string,
-  contentType: 'image' | 'video',
-  verificationImageUrl?: string
+  contentType: 'image' | 'video' | 'audio',
+  verificationUrl?: string
 ): Promise<{
-  moderation: ModerationResult
+  moderation: ModerationResult | AudioModerationResult
   ownership?: OwnershipVerificationResult
+  voiceOwnership?: VoiceOwnershipResult
 }> {
-  // Modération du contenu
-  const moderation = contentType === 'image'
-    ? await moderateImage(contentUrl)
-    : await moderateVideo(contentUrl)
+  // Modération du contenu selon le type
+  let moderation: ModerationResult | AudioModerationResult
 
-  // Vérification d'ownership si une image de vérification est fournie
-  let ownership: OwnershipVerificationResult | undefined
-  if (verificationImageUrl && contentType === 'image') {
-    ownership = await verifyOwnership(verificationImageUrl, contentUrl)
+  switch (contentType) {
+    case 'image':
+      moderation = await moderateImage(contentUrl)
+      break
+    case 'video':
+      moderation = await moderateVideo(contentUrl)
+      break
+    case 'audio':
+      moderation = await moderateAudio(contentUrl)
+      break
   }
 
-  return { moderation, ownership }
+  // Vérification d'ownership si une URL de vérification est fournie
+  let ownership: OwnershipVerificationResult | undefined
+  let voiceOwnership: VoiceOwnershipResult | undefined
+
+  if (verificationUrl) {
+    if (contentType === 'image') {
+      ownership = await verifyOwnership(verificationUrl, contentUrl)
+    } else if (contentType === 'audio') {
+      voiceOwnership = await verifyVoiceOwnership(verificationUrl, contentUrl)
+    }
+  }
+
+  return { moderation, ownership, voiceOwnership }
 }
 
 /**

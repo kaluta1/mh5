@@ -16,12 +16,15 @@ import {
   Image as ImageIcon,
   Building2
 } from 'lucide-react'
+import { verificationService } from '@/services/verification-service'
 
 interface BrandVerificationDialogProps {
   isOpen: boolean
   onClose: () => void
   onComplete: (data: BrandVerificationData) => void
   maxSizeMb?: number
+  contestId?: number
+  contestantId?: number
 }
 
 export interface BrandVerificationData {
@@ -36,7 +39,9 @@ export function BrandVerificationDialog({
   isOpen,
   onClose,
   onComplete,
-  maxSizeMb = 50
+  maxSizeMb = 50,
+  contestId,
+  contestantId
 }: BrandVerificationDialogProps) {
   const { t } = useLanguage()
   const [brandName, setBrandName] = useState('')
@@ -88,10 +93,32 @@ export function BrandVerificationDialog({
     setError(null)
 
     try {
+      let proofDocumentUrl = proofDocument
+      
+      // Si un document a été sélectionné, l'uploader
+      if (proofDocument && proofDocument.startsWith('data:')) {
+        const response = await fetch(proofDocument)
+        const blob = await response.blob()
+        const ext = proofDocument.includes('pdf') ? 'pdf' : 'jpg'
+        
+        const verification = await verificationService.uploadAndCreateVerification(
+          blob,
+          `brand_proof_${Date.now()}.${ext}`,
+          'brand',
+          proofDocument.includes('pdf') ? 'document' : 'image',
+          {
+            contest_id: contestId,
+            contestant_id: contestantId
+          }
+        )
+        
+        proofDocumentUrl = verification.media_url
+      }
+      
       const verificationData: BrandVerificationData = {
         brandName: brandName.trim(),
         brandWebsite: brandWebsite || undefined,
-        proofDocumentUrl: proofDocument || undefined,
+        proofDocumentUrl: proofDocumentUrl || undefined,
         description: description.trim(),
         role: role || undefined
       }
@@ -99,7 +126,7 @@ export function BrandVerificationDialog({
       onComplete(verificationData)
     } catch (err) {
       console.error('Brand verification error:', err)
-      setError(t('verification.submit_error') || 'Erreur lors de la soumission')
+      setError(err instanceof Error ? err.message : (t('verification.submit_error') || 'Erreur lors de la soumission'))
     } finally {
       setIsUploading(false)
     }

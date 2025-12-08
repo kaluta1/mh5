@@ -15,6 +15,7 @@ import {
   Loader2,
   Volume2
 } from 'lucide-react'
+import { verificationService } from '@/services/verification-service'
 
 interface VoiceVerificationDialogProps {
   isOpen: boolean
@@ -22,6 +23,8 @@ interface VoiceVerificationDialogProps {
   onComplete: (audioUrl: string) => void
   maxDurationSeconds?: number
   maxSizeMb?: number
+  contestId?: number
+  contestantId?: number
 }
 
 export function VoiceVerificationDialog({
@@ -29,7 +32,9 @@ export function VoiceVerificationDialog({
   onClose,
   onComplete,
   maxDurationSeconds = 30,
-  maxSizeMb = 50
+  maxSizeMb = 50,
+  contestId,
+  contestantId
 }: VoiceVerificationDialogProps) {
   const { t } = useLanguage()
   const [mode, setMode] = useState<'idle' | 'recording' | 'preview'>('idle')
@@ -153,13 +158,24 @@ export function VoiceVerificationDialog({
     
     setIsUploading(true)
     try {
-      // Here you would upload the audio to your server/storage
-      // For now, we'll just pass the blob URL
-      await new Promise(resolve => setTimeout(resolve, 1000)) // Simulate upload
-      onComplete(audioUrl || '')
+      // Upload et créer la vérification
+      const verification = await verificationService.uploadAndCreateVerification(
+        recordedAudio,
+        `voice_${Date.now()}.webm`,
+        'voice',
+        'audio',
+        {
+          duration_seconds: recordingTime,
+          contest_id: contestId,
+          contestant_id: contestantId
+        }
+      )
+      
+      onComplete(verification.media_url)
       handleClose()
     } catch (err) {
-      setError(t('verification.upload_error') || 'Erreur lors de l\'envoi')
+      console.error('Voice verification upload error:', err)
+      setError(err instanceof Error ? err.message : (t('verification.upload_error') || 'Erreur lors de l\'envoi'))
     } finally {
       setIsUploading(false)
     }

@@ -13,6 +13,7 @@ import {
   Loader2,
   Image as ImageIcon
 } from 'lucide-react'
+import { verificationService, type VerificationType } from '@/services/verification-service'
 
 interface SelfieVerificationDialogProps {
   isOpen: boolean
@@ -20,6 +21,8 @@ interface SelfieVerificationDialogProps {
   onComplete: (imageUrl: string) => void
   verificationType: 'selfie' | 'selfie_with_pet' | 'selfie_with_document'
   maxSizeMb?: number
+  contestId?: number
+  contestantId?: number
 }
 
 export function SelfieVerificationDialog({
@@ -27,7 +30,9 @@ export function SelfieVerificationDialog({
   onClose,
   onComplete,
   verificationType,
-  maxSizeMb = 50
+  maxSizeMb = 50,
+  contestId,
+  contestantId
 }: SelfieVerificationDialogProps) {
   const { t } = useLanguage()
   const [mode, setMode] = useState<'select' | 'camera' | 'preview'>('select')
@@ -138,13 +143,27 @@ export function SelfieVerificationDialog({
     
     setIsUploading(true)
     try {
-      // Here you would upload the image to your server/storage
-      // For now, we'll just pass the data URL
-      await new Promise(resolve => setTimeout(resolve, 1000)) // Simulate upload
-      onComplete(capturedImage)
+      // Convertir data URL en Blob
+      const response = await fetch(capturedImage)
+      const blob = await response.blob()
+      
+      // Upload et créer la vérification
+      const verification = await verificationService.uploadAndCreateVerification(
+        blob,
+        `selfie_${Date.now()}.jpg`,
+        verificationType as VerificationType,
+        'image',
+        {
+          contest_id: contestId,
+          contestant_id: contestantId
+        }
+      )
+      
+      onComplete(verification.media_url)
       onClose()
     } catch (err) {
-      setError(t('verification.upload_error') || 'Erreur lors de l\'envoi')
+      console.error('Verification upload error:', err)
+      setError(err instanceof Error ? err.message : (t('verification.upload_error') || 'Erreur lors de l\'envoi'))
     } finally {
       setIsUploading(false)
     }

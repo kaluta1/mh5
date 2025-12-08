@@ -63,20 +63,21 @@ export async function POST(request: NextRequest) {
     // Vérifier le type de fichier
     const isImage = file.type.startsWith('image/')
     const isVideo = file.type.startsWith('video/')
+    const isAudio = file.type.startsWith('audio/')
+    const isDocument = file.type === 'application/pdf'
     
-    if (!isImage && !isVideo) {
+    if (!isImage && !isVideo && !isAudio && !isDocument) {
       return NextResponse.json({ error: 'Type de fichier non supporté' }, { status: 400 })
     }
 
-    // Convertir en base64 pour Sightengine
+    // Convertir en base64 pour Sightengine (seulement pour images/vidéos)
     const bytes = await file.arrayBuffer()
     const base64 = Buffer.from(bytes).toString('base64')
-    const dataUri = `data:${file.type};base64,${base64}`
 
     // ============================================
-    // ÉTAPE 1: MODÉRATION DU CONTENU
+    // ÉTAPE 1: MODÉRATION DU CONTENU (seulement images/vidéos)
     // ============================================
-    if (ENABLE_MODERATION && SIGHTENGINE_API_USER && SIGHTENGINE_API_SECRET) {
+    if (ENABLE_MODERATION && SIGHTENGINE_API_USER && SIGHTENGINE_API_SECRET && (isImage || isVideo)) {
       console.log('🔍 Modération du contenu avant upload...')
       
       const moderationResult = await moderateContent(base64, file.type, isVideo)
@@ -110,6 +111,9 @@ export async function POST(request: NextRequest) {
         
         console.log('✅ Ownership vérifié')
       }
+    } else if (isAudio || isDocument) {
+      // Audio et documents ne passent pas par la modération visuelle
+      console.log('📁 Fichier audio/document - pas de modération visuelle')
     }
 
     // ============================================
