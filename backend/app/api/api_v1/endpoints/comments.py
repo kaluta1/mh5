@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session, joinedload
 from app.api import deps
+from app.api.deps import is_owner_or_has_permission, check_user_permission
 from app.models.comment import Comment, Like
 from app.models.user import User
 from app.models.contests import Contestant
@@ -284,7 +285,7 @@ def update_comment(
     current_user: User = Depends(deps.get_current_active_user),
     db: Session = Depends(deps.get_db)
 ):
-    """Mettre à jour un commentaire"""
+    """Mettre à jour un commentaire. Seul l'auteur peut modifier son commentaire."""
     comment = comment_crud.get_comment(db, comment_id)
     if not comment:
         raise HTTPException(
@@ -292,11 +293,18 @@ def update_comment(
             detail="Comment not found"
         )
     
-    # Vérifier que l'utilisateur est l'auteur
+    # Vérifier que l'utilisateur est l'auteur (permission: edit_own_comment)
     if comment.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to update this comment"
+        )
+    
+    # Vérifier la permission
+    if not check_user_permission(current_user, 'edit_own_comment'):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission 'edit_own_comment' required"
         )
     
     updated_comment = comment_crud.update_comment(db, comment_id, comment_data.content)
@@ -309,7 +317,11 @@ def delete_comment(
     current_user: User = Depends(deps.get_current_active_user),
     db: Session = Depends(deps.get_db)
 ):
-    """Supprimer un commentaire"""
+    """
+    Supprimer un commentaire.
+    - L'auteur peut supprimer son propre commentaire (permission: delete_own_comment)
+    - Les modérateurs peuvent supprimer n'importe quel commentaire (permission: delete_comment)
+    """
     comment = comment_crud.get_comment(db, comment_id)
     if not comment:
         raise HTTPException(
@@ -317,8 +329,12 @@ def delete_comment(
             detail="Comment not found"
         )
     
-    # Vérifier que l'utilisateur est l'auteur
-    if comment.user_id != current_user.id:
+    # Vérifier les permissions
+    is_owner = comment.user_id == current_user.id
+    can_delete_own = is_owner and check_user_permission(current_user, 'delete_own_comment')
+    can_delete_any = check_user_permission(current_user, 'delete_comment')
+    
+    if not (can_delete_own or can_delete_any):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to delete this comment"

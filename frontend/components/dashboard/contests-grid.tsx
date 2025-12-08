@@ -14,6 +14,7 @@ interface ContestsGridProps {
   isLoading?: boolean
   userGender?: 'male' | 'female' | 'other' | 'prefer_not_to_say' | null
   canParticipate?: boolean
+  isKycVerified?: boolean
 }
 
 export function ContestsGrid({
@@ -24,7 +25,8 @@ export function ContestsGrid({
   onParticipate,
   isLoading = false,
   userGender,
-  canParticipate = true
+  canParticipate = true,
+  isKycVerified = false
 }: ContestsGridProps) {
   const { t } = useLanguage()
 
@@ -86,6 +88,17 @@ export function ContestsGrid({
           isFavorite={favorites.includes(contest.id)}
           userGender={userGender}
           canParticipate={canParticipate}
+          isKycVerified={isKycVerified}
+          // Verification requirements
+          requiresKyc={contest.requiresKyc}
+          verificationType={contest.verificationType}
+          participantType={contest.participantType}
+          requiresVisualVerification={contest.requiresVisualVerification}
+          requiresVoiceVerification={contest.requiresVoiceVerification}
+          requiresBrandVerification={contest.requiresBrandVerification}
+          requiresContentVerification={contest.requiresContentVerification}
+          minAge={contest.minAge}
+          maxAge={contest.maxAge}
           onToggleFavorite={() => onToggleFavorite(contest.id)}
           onViewContestants={() => onViewContestants(contest.id)}
           onParticipate={() => onParticipate(contest.id)}

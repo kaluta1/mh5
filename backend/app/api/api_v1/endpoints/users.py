@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_active_user
 from app.crud import user as crud_user
 from app.db.session import get_db
-from app.schemas.user import User, UserUpdate, UserWithRoles
+from app.schemas.user import User, UserUpdate
 
 router = APIRouter()
 
@@ -49,7 +49,7 @@ def read_user_by_id(
         )
     return user
 
-@router.get("/", response_model=List[UserWithRoles])
+@router.get("/", response_model=List[User])
 def read_users(
     db: Session = Depends(get_db),
     skip: int = 0,

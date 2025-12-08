@@ -13,6 +13,40 @@ class VotingRestriction(str, enum.Enum):
     GEOGRAPHIC = "geographic"
     AGE_RESTRICTED = "age_restricted"
 
+
+class VerificationType(str, enum.Enum):
+    """Types de vérification requis pour participer à un concours."""
+    NONE = "none"                      # Aucune vérification spécifique
+    VISUAL = "visual"                  # Vérification visuelle (Beauty, Handsome, Pet)
+    VOICE = "voice"                    # Vérification vocale (Musique, Chant)
+    BRAND = "brand"                    # Vérification de marque/club
+    CONTENT_OWNERSHIP = "content"      # Vérification propriété du contenu
+
+
+class ParticipantType(str, enum.Enum):
+    """Type de participant au concours."""
+    INDIVIDUAL = "individual"          # Personne physique
+    PET = "pet"                        # Animal de compagnie
+    CLUB = "club"                      # Club sportif ou fan club
+    CONTENT = "content"                # Contenu (musique, vidéo, etc.)
+
+
+class ContestantVerificationStatus(str, enum.Enum):
+    """Statut de vérification d'un contestant."""
+    PENDING = "pending"                # En attente de validation
+    APPROVED = "approved"              # Approuvé
+    REJECTED = "rejected"              # Rejeté
+
+
+class ContestantVerificationType(str, enum.Enum):
+    """Types de vérification pour un contestant."""
+    SELFIE = "selfie"                          # Selfie simple
+    SELFIE_WITH_PET = "selfie_with_pet"        # Selfie avec animal
+    SELFIE_WITH_DOCUMENT = "selfie_with_doc"   # Selfie avec document
+    VOICE_RECORDING = "voice_recording"        # Enregistrement vocal
+    VIDEO_VERIFICATION = "video_verification"  # Vidéo de vérification
+    BRAND_PROOF = "brand_proof"                # Preuve de marque/club
+
 if TYPE_CHECKING:
     from app.models.user import User
     from app.models.media import Media
@@ -67,6 +101,68 @@ class Contest(Base):
     # Nombre de participants
     participant_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     
+    # ============== VERIFICATION REQUIREMENTS ==============
+    # KYC obligatoire pour participer (défaut: oui)
+    requires_kyc: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    
+    # Type de vérification requis
+    verification_type: Mapped[VerificationType] = mapped_column(
+        Enum(VerificationType, values_callable=lambda x: [e.value for e in x]), 
+        default=VerificationType.NONE, 
+        nullable=False
+    )
+    
+    # Type de participant
+    participant_type: Mapped[ParticipantType] = mapped_column(
+        Enum(ParticipantType, values_callable=lambda x: [e.value for e in x]), 
+        default=ParticipantType.INDIVIDUAL, 
+        nullable=False
+    )
+    
+    # Vérification visuelle: comparer le contenu avec l'identité vérifiée
+    requires_visual_verification: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    
+    # Vérification vocale: pour les concours de musique/chant
+    requires_voice_verification: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    
+    # Vérification de marque/propriété: pour les clubs, marques
+    requires_brand_verification: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    
+    # Vérification de propriété du contenu (pas de plagiat)
+    requires_content_verification: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    
+    # Âge minimum pour participer (null = pas de restriction)
+    min_age: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    
+    # Âge maximum pour participer (null = pas de restriction)
+    max_age: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    
+    # ============== MEDIA REQUIREMENTS ==============
+    # Vidéo obligatoire pour la participation
+    requires_video: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    
+    # Nombre maximum de vidéos autorisées (pour la participation)
+    max_videos: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    
+    # Durée max des vidéos de participation en secondes (défaut: 50 min = 3000s)
+    video_max_duration: Mapped[int] = mapped_column(Integer, default=3000, nullable=False)
+    
+    # Taille max des vidéos en MB
+    video_max_size_mb: Mapped[int] = mapped_column(Integer, default=500, nullable=False)
+    
+    # Nombre minimum d'images requises
+    min_images: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    
+    # Nombre maximum d'images autorisées
+    max_images: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    
+    # ============== VERIFICATION MEDIA LIMITS ==============
+    # Durée max des vidéos de vérification en secondes (défaut: 30s)
+    verification_video_max_duration: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    
+    # Taille max des médias de vérification en MB
+    verification_max_size_mb: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
+    
     # Soft delete
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
@@ -83,6 +179,34 @@ class ContestTemplate(Base):
     has_gender_restrictions: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     default_submission_days: Mapped[int] = mapped_column(Integer, default=60, nullable=False)
     default_voting_days: Mapped[int] = mapped_column(Integer, default=60, nullable=False)
+    
+    # ============== VERIFICATION DEFAULTS ==============
+    # KYC obligatoire par défaut
+    default_requires_kyc: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    
+    # Type de vérification par défaut
+    default_verification_type: Mapped[VerificationType] = mapped_column(
+        Enum(VerificationType, values_callable=lambda x: [e.value for e in x]), 
+        default=VerificationType.NONE, 
+        nullable=False
+    )
+    
+    # Type de participant par défaut
+    default_participant_type: Mapped[ParticipantType] = mapped_column(
+        Enum(ParticipantType, values_callable=lambda x: [e.value for e in x]), 
+        default=ParticipantType.INDIVIDUAL, 
+        nullable=False
+    )
+    
+    # Vérifications par défaut
+    default_visual_verification: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    default_voice_verification: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    default_brand_verification: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    default_content_verification: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    
+    # Restrictions d'âge par défaut
+    default_min_age: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    default_max_age: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     
     # Relations
     contests: Mapped[List["Contest"]] = relationship("Contest", back_populates="template")
@@ -143,3 +267,51 @@ class ContestFavorite(Base):
     # Relations
     user: Mapped["User"] = relationship("User")
     contest: Mapped["Contest"] = relationship("Contest")
+
+
+class ContestantVerification(Base):
+    """
+    Table de vérification des contestants.
+    Chaque concours qui exige une vérification aura une entrée par contestant.
+    Les vérifications sont spécifiques à chaque participation (pas réutilisables).
+    """
+    __tablename__ = "contestant_verifications"
+    
+    # Référence au contestant
+    contestant_id: Mapped[int] = mapped_column(Integer, ForeignKey("contestants.id"), nullable=False)
+    
+    # Type de vérification
+    verification_type: Mapped[ContestantVerificationType] = mapped_column(
+        Enum(ContestantVerificationType, values_callable=lambda x: [e.value for e in x]),
+        nullable=False
+    )
+    
+    # URL du média de vérification (image, vidéo, audio)
+    media_url: Mapped[str] = mapped_column(String(500), nullable=False)
+    
+    # Type de média (image, video, audio)
+    media_type: Mapped[str] = mapped_column(String(20), nullable=False)  # 'image', 'video', 'audio'
+    
+    # Durée en secondes (pour vidéo/audio)
+    duration_seconds: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    
+    # Taille en bytes
+    file_size_bytes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    
+    # Statut de la vérification
+    status: Mapped[ContestantVerificationStatus] = mapped_column(
+        Enum(ContestantVerificationStatus, values_callable=lambda x: [e.value for e in x]),
+        default=ContestantVerificationStatus.PENDING,
+        nullable=False
+    )
+    
+    # Raison du rejet (si rejeté)
+    rejection_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    
+    # Admin qui a validé/rejeté
+    reviewed_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    
+    # Relations
+    contestant: Mapped["Contestant"] = relationship("Contestant", back_populates="verifications")
+    reviewer: Mapped[Optional["User"]] = relationship("User", foreign_keys=[reviewed_by])

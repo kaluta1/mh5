@@ -24,13 +24,25 @@ class UserStatus(str, enum.Enum):
     BANNED = "banned"
     PENDING_VERIFICATION = "pending_verification"
 
-# Table d'association pour les rôles utilisateurs
-user_roles = Table(
-    "user_roles",
+# Table d'association pour les permissions des rôles
+role_permissions = Table(
+    "role_permissions",
     Base.metadata,
-    Column("user_id", Integer, ForeignKey("users.id"), primary_key=True),
-    Column("role_id", Integer, ForeignKey("role.id"), primary_key=True),
+    Column("role_id", Integer, ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
+    Column("permission_id", Integer, ForeignKey("permissions.id", ondelete="CASCADE"), primary_key=True),
 )
+
+
+class Permission(Base):
+    """Modèle pour les permissions individuelles."""
+    __tablename__ = "permissions"
+    
+    name: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    category: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # Pour grouper les permissions (user, moderator, admin)
+    
+    # Relations
+    roles: Mapped[List["Role"]] = relationship("Role", secondary=role_permissions, back_populates="permissions")
 
 class User(Base):
     __tablename__ = "users"
@@ -91,8 +103,9 @@ class User(Base):
     sponsor: Mapped[Optional["User"]] = relationship("User", remote_side="User.id", foreign_keys=[sponsor_id], back_populates="referrals")
     referrals: Mapped[List["User"]] = relationship("User", foreign_keys="User.sponsor_id", back_populates="sponsor")
     
-    # Relations système MyFav
-    roles: Mapped[List["Role"]] = relationship("Role", secondary=user_roles, back_populates="users")
+    # Rôle unique de l'utilisateur
+    role_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("roles.id"), nullable=True)
+    role: Mapped[Optional["Role"]] = relationship("Role", back_populates="users")
     medias: Mapped[List["Media"]] = relationship("Media", back_populates="user")
     
     # Relations concours
@@ -149,10 +162,26 @@ class User(Base):
     referral_codes: Mapped[List["ReferralCode"]] = relationship("ReferralCode", back_populates="user")
 
 class Role(Base):
-    __tablename__ = "role"
+    """Modèle pour les rôles utilisateurs."""
+    __tablename__ = "roles"
     
     name: Mapped[str] = mapped_column(String(64), index=True, nullable=False, unique=True)
     description: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    is_system: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)  # Rôles système non supprimables
+    inherit_from_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("roles.id"), nullable=True)  # Héritage de permissions
     
     # Relations
-    users: Mapped[List["User"]] = relationship("User", secondary=user_roles, back_populates="roles")
+    users: Mapped[List["User"]] = relationship("User", back_populates="role", foreign_keys="User.role_id")
+    permissions: Mapped[List["Permission"]] = relationship("Permission", secondary=role_permissions, back_populates="roles")
+    inherit_from: Mapped[Optional["Role"]] = relationship("Role", remote_side="Role.id", foreign_keys=[inherit_from_id])
+    
+    def get_all_permissions(self) -> List[str]:
+        """Récupère toutes les permissions incluant celles héritées."""
+        perms = set(p.name for p in self.permissions)
+        if self.inherit_from:
+            perms.update(self.inherit_from.get_all_permissions())
+        return list(perms)
+    
+    def has_permission(self, permission_name: str) -> bool:
+        """Vérifie si le rôle a une permission donnée."""
+        return permission_name in self.get_all_permissions()

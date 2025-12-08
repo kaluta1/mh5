@@ -1,8 +1,25 @@
-from typing import List, Optional, Any
+from typing import List, Optional, Any, Literal
 from datetime import date
 from pydantic import BaseModel, Field
+from enum import Enum
 
 from app.schemas.media import Media
+
+
+# Enums pour les schémas
+class VerificationTypeEnum(str, Enum):
+    NONE = "none"
+    VISUAL = "visual"
+    VOICE = "voice"
+    BRAND = "brand"
+    CONTENT = "content"
+
+
+class ParticipantTypeEnum(str, Enum):
+    INDIVIDUAL = "individual"
+    PET = "pet"
+    CLUB = "club"
+    CONTENT = "content"
 
 
 # Schéma de base pour les concours
@@ -21,9 +38,20 @@ class ContestBase(BaseModel):
     level: str  # city, country, region, continent, global
     location_id: Optional[int] = None
     gender_restriction: Optional[str] = None
-    voting_restriction: Optional[str] = None  # Ajout du champ voting_restriction
+    voting_restriction: Optional[str] = None
     max_entries_per_user: int = 1
     template_id: Optional[int] = None
+    
+    # ============== VERIFICATION REQUIREMENTS ==============
+    requires_kyc: bool = True
+    verification_type: VerificationTypeEnum = VerificationTypeEnum.NONE
+    participant_type: ParticipantTypeEnum = ParticipantTypeEnum.INDIVIDUAL
+    requires_visual_verification: bool = False
+    requires_voice_verification: bool = False
+    requires_brand_verification: bool = False
+    requires_content_verification: bool = False
+    min_age: Optional[int] = None
+    max_age: Optional[int] = None
 
 
 # Schéma pour créer un concours
@@ -32,14 +60,35 @@ class ContestCreate(ContestBase):
 
 
 # Schéma pour mettre à jour un concours
-class ContestUpdate(ContestBase):
+class ContestUpdate(BaseModel):
     name: Optional[str] = None
+    description: Optional[str] = None
     contest_type: Optional[str] = None
+    cover_image_url: Optional[str] = None
     submission_start_date: Optional[date] = None
     submission_end_date: Optional[date] = None
     voting_start_date: Optional[date] = None
     voting_end_date: Optional[date] = None
+    is_active: Optional[bool] = None
+    is_submission_open: Optional[bool] = None
+    is_voting_open: Optional[bool] = None
     level: Optional[str] = None
+    location_id: Optional[int] = None
+    gender_restriction: Optional[str] = None
+    voting_restriction: Optional[str] = None
+    max_entries_per_user: Optional[int] = None
+    template_id: Optional[int] = None
+    image_url: Optional[str] = None
+    # Verification requirements - accept strings for flexibility
+    requires_kyc: Optional[bool] = None
+    verification_type: Optional[str] = None  # Accept string, convert in CRUD
+    participant_type: Optional[str] = None   # Accept string, convert in CRUD
+    requires_visual_verification: Optional[bool] = None
+    requires_voice_verification: Optional[bool] = None
+    requires_brand_verification: Optional[bool] = None
+    requires_content_verification: Optional[bool] = None
+    min_age: Optional[int] = None
+    max_age: Optional[int] = None
 
 
 # Schéma pour une participation à un concours
@@ -120,6 +169,17 @@ class ContestTemplateBase(BaseModel):
     has_gender_restrictions: bool = False
     default_submission_days: int = 60
     default_voting_days: int = 60
+    
+    # ============== VERIFICATION DEFAULTS ==============
+    default_requires_kyc: bool = True
+    default_verification_type: VerificationTypeEnum = VerificationTypeEnum.NONE
+    default_participant_type: ParticipantTypeEnum = ParticipantTypeEnum.INDIVIDUAL
+    default_visual_verification: bool = False
+    default_voice_verification: bool = False
+    default_brand_verification: bool = False
+    default_content_verification: bool = False
+    default_min_age: Optional[int] = None
+    default_max_age: Optional[int] = None
 
 
 # Schéma pour créer un template de concours

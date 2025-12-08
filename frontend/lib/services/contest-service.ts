@@ -14,6 +14,26 @@ export interface CreateContestData {
   voting_end_date?: string  // Optional - auto-generated on backend
   image_url?: string
   voting_restriction: string
+  // Verification requirements
+  requires_kyc?: boolean
+  verification_type?: string
+  participant_type?: string
+  requires_visual_verification?: boolean
+  requires_voice_verification?: boolean
+  requires_brand_verification?: boolean
+  requires_content_verification?: boolean
+  min_age?: number | null
+  max_age?: number | null
+  // Media requirements
+  requires_video?: boolean
+  max_videos?: number
+  video_max_duration?: number  // in seconds
+  video_max_size_mb?: number
+  min_images?: number
+  max_images?: number
+  // Verification media limits
+  verification_video_max_duration?: number  // in seconds
+  verification_max_size_mb?: number
 }
 
 export interface Contest extends CreateContestData {
@@ -43,6 +63,26 @@ export interface ContestResponse {
   pending_count?: number
   created_at: string
   updated_at: string
+  // Verification requirements
+  requires_kyc?: boolean
+  verification_type?: string
+  participant_type?: string
+  requires_visual_verification?: boolean
+  requires_voice_verification?: boolean
+  requires_brand_verification?: boolean
+  requires_content_verification?: boolean
+  min_age?: number | null
+  max_age?: number | null
+  // Media requirements
+  requires_video?: boolean
+  max_videos?: number
+  video_max_duration?: number
+  video_max_size_mb?: number
+  min_images?: number
+  max_images?: number
+  // Verification media limits
+  verification_video_max_duration?: number
+  verification_max_size_mb?: number
 }
 
 class ContestService {

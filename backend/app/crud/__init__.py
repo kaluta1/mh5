@@ -14,6 +14,9 @@ from .crud_affiliate import (
     referral_click, revenue_share, founding_member
 )
 
+# RBAC - Rôles et Permissions
+from .crud_role import role, permission
+
 # Modules non implémentés - commentés temporairement
 # from .crud_clubs import fan_club, club_membership, club_wallet
 # from .crud_dsp import dsp_wallet, dsp_transaction, digital_product

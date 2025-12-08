@@ -46,6 +46,7 @@ class UserUpdate(UserBase):
 
 # Schéma pour afficher un rôle
 class RoleBase(BaseModel):
+    id: int
     name: str
     description: Optional[str] = None
     
@@ -67,6 +68,9 @@ class User(UserBase):
     phone_number: Optional[str] = None
     personal_referral_code: Optional[str] = None
     sponsor_id: Optional[int] = None
+    role_id: Optional[int] = None
+    role: Optional[RoleBase] = None
+    identity_verified: Optional[bool] = False
     # Anciens champs (dépréciés)
     city_id: Optional[int] = None
     country_id: Optional[int] = None
@@ -95,9 +99,9 @@ class UserSponsorInfo(BaseModel):
         from_attributes = True
 
 
-# Schéma pour afficher un utilisateur avec ses rôles
-class UserWithRoles(User):
-    roles: List[RoleBase] = []
+# Schéma pour afficher un utilisateur avec ses permissions
+class UserWithPermissions(User):
+    permissions: List[str] = []
 
 
 # Schéma pour afficher un utilisateur avec son parrain

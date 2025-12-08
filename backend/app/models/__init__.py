@@ -1,5 +1,5 @@
 # Import all models to ensure they are registered with SQLAlchemy
-from .user import User, Role
+from .user import User, Role, Permission, role_permissions
 from .transaction import UserTransaction, Wallet
 from .kyc import KYCVerification, KYCDocument, KYCAuditLog
 from .voting import Vote, VoteSession, MyFavorites, ContestComment, ContestLike, PageView, ContestantReaction, ContestantShare, ReactionType
@@ -21,7 +21,7 @@ from .invitation import Invitation, InvitationStatus
 from .payment import PaymentMethod, ProductType, Deposit, PaymentMethodCategory, CryptoNetwork, DepositStatus
 
 __all__ = [
-    "User", "Role", "UserTransaction", "Wallet",
+    "User", "Role", "Permission", "role_permissions", "UserTransaction", "Wallet",
     "KYCVerification", "KYCDocument", "KYCAuditLog",
     "Vote", "VoteSession", "MyFavorites", "ContestComment", "ContestLike", "PageView", "ContestantReaction", "ContestantShare", "ReactionType",
     "Continent", "Region", "Country", "City",

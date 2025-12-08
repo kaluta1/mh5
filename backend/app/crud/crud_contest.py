@@ -38,9 +38,26 @@ class CRUDContest:
 
     def create(self, db: Session, *, obj_in: ContestCreate) -> Contest:
         """Crée un nouveau concours"""
+        from app.models.contest import VerificationType, ParticipantType
+        
         # Convertir location_id=0 en None pour éviter les violations de FK
         location_id = obj_in.location_id if obj_in.location_id and obj_in.location_id > 0 else None
         template_id = obj_in.template_id if obj_in.template_id and obj_in.template_id > 0 else None
+        
+        # Convertir les strings en enums si nécessaire
+        verification_type = obj_in.verification_type
+        if isinstance(verification_type, str):
+            try:
+                verification_type = VerificationType(verification_type)
+            except ValueError:
+                verification_type = VerificationType.NONE
+        
+        participant_type = obj_in.participant_type
+        if isinstance(participant_type, str):
+            try:
+                participant_type = ParticipantType(participant_type)
+            except ValueError:
+                participant_type = ParticipantType.INDIVIDUAL
         
         db_obj = Contest(
             name=obj_in.name,
@@ -58,7 +75,17 @@ class CRUDContest:
             location_id=location_id,
             gender_restriction=obj_in.gender_restriction,
             max_entries_per_user=obj_in.max_entries_per_user,
-            template_id=template_id
+            template_id=template_id,
+            # Verification requirements
+            requires_kyc=obj_in.requires_kyc,
+            verification_type=verification_type,
+            participant_type=participant_type,
+            requires_visual_verification=obj_in.requires_visual_verification,
+            requires_voice_verification=obj_in.requires_voice_verification,
+            requires_brand_verification=obj_in.requires_brand_verification,
+            requires_content_verification=obj_in.requires_content_verification,
+            min_age=obj_in.min_age,
+            max_age=obj_in.max_age
         )
         db.add(db_obj)
         db.commit()
@@ -68,6 +95,8 @@ class CRUDContest:
 
     def update(self, db: Session, *, db_obj: Contest, obj_in: Union[ContestUpdate, Dict[str, Any]]) -> Contest:
         """Met à jour un concours existant"""
+        from app.models.contest import VerificationType, ParticipantType
+        
         if isinstance(obj_in, dict):
             update_data = obj_in
         else:
@@ -79,6 +108,20 @@ class CRUDContest:
                 # Convertir les IDs 0 en None pour éviter les violations de FK
                 if field in ('location_id', 'template_id') and value == 0:
                     value = None
+                # Convertir les strings en enums pour verification_type
+                elif field == 'verification_type' and value is not None:
+                    if isinstance(value, str):
+                        try:
+                            value = VerificationType(value)
+                        except ValueError:
+                            value = VerificationType.NONE
+                # Convertir les strings en enums pour participant_type
+                elif field == 'participant_type' and value is not None:
+                    if isinstance(value, str):
+                        try:
+                            value = ParticipantType(value)
+                        except ValueError:
+                            value = ParticipantType.INDIVIDUAL
                 setattr(db_obj, field, value)
         
         db.add(db_obj)
@@ -244,6 +287,21 @@ class CRUDContest:
         # Utiliser gender_restriction si disponible, sinon utiliser voting_restriction
         final_gender_restriction = contest.gender_restriction or gender_restriction_from_voting
         
+        # Extraire les valeurs des enums de vérification
+        verification_type_value = 'none'
+        if hasattr(contest, 'verification_type') and contest.verification_type:
+            if hasattr(contest.verification_type, 'value'):
+                verification_type_value = contest.verification_type.value
+            else:
+                verification_type_value = str(contest.verification_type)
+        
+        participant_type_value = 'individual'
+        if hasattr(contest, 'participant_type') and contest.participant_type:
+            if hasattr(contest.participant_type, 'value'):
+                participant_type_value = contest.participant_type.value
+            else:
+                participant_type_value = str(contest.participant_type)
+        
         result = {
             "id": contest.id,
             "name": contest.name,
@@ -269,6 +327,16 @@ class CRUDContest:
             "updated_at": contest.updated_at,
             "entries_count": entries_count,
             "total_votes": total_votes,
+            # Verification requirements
+            "requires_kyc": getattr(contest, 'requires_kyc', True),
+            "verification_type": verification_type_value,
+            "participant_type": participant_type_value,
+            "requires_visual_verification": getattr(contest, 'requires_visual_verification', False),
+            "requires_voice_verification": getattr(contest, 'requires_voice_verification', False),
+            "requires_brand_verification": getattr(contest, 'requires_brand_verification', False),
+            "requires_content_verification": getattr(contest, 'requires_content_verification', False),
+            "min_age": getattr(contest, 'min_age', None),
+            "max_age": getattr(contest, 'max_age', None),
         }
         
         return result

@@ -132,6 +132,7 @@ class Contestant(Base):
     rankings: Mapped[List["ContestantRanking"]] = relationship("ContestantRanking", back_populates="contestant")
     comments: Mapped[List["Comment"]] = relationship("Comment", back_populates="contestant")
     seasons: Mapped[List["ContestantSeason"]] = relationship("ContestantSeason", back_populates="contestant")
+    verifications: Mapped[List["ContestantVerification"]] = relationship("ContestantVerification", back_populates="contestant")
 
 
 class ContestSubmission(Base):

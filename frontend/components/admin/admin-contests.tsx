@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
-import { Plus, Edit2, Trash2, Eye, Calendar, Users, Clock, Zap, X, Trophy, MapPin, CheckCircle2, AlertCircle, Upload, Vote } from 'lucide-react'
+import { Plus, Edit2, Trash2, Eye, Calendar, Users, Clock, Zap, X, Trophy, MapPin, CheckCircle2, AlertCircle, Upload, Vote, ShieldCheck, Mic, FileCheck, PawPrint, Users2, Music, Award } from 'lucide-react'
 import { UploadButton } from '@/components/ui/upload-button'
 import { contestService, type ContestResponse } from '@/lib/services/contest-service'
 import api from '@/lib/api'
@@ -34,6 +34,25 @@ interface Contest {
   participant_count?: number
   approved_count?: number
   pending_count?: number
+  // Verification requirements
+  requires_kyc?: boolean
+  verification_type?: string
+  participant_type?: string
+  requires_visual_verification?: boolean
+  requires_voice_verification?: boolean
+  requires_brand_verification?: boolean
+  requires_content_verification?: boolean
+  min_age?: number | null
+  max_age?: number | null
+  // Media requirements
+  requires_video?: boolean
+  max_videos?: number
+  video_max_duration?: number
+  video_max_size_mb?: number
+  min_images?: number
+  max_images?: number
+  verification_video_max_duration?: number
+  verification_max_size_mb?: number
 }
 
 export default function AdminContests() {
@@ -66,7 +85,26 @@ export default function AdminContests() {
     image_url: '',
     cover_image_url: '',
     voting_restriction: 'none',
-    participant_count: 0
+    participant_count: 0,
+    // Verification requirements
+    requires_kyc: false,
+    verification_type: 'none',
+    participant_type: 'individual',
+    requires_visual_verification: false,
+    requires_voice_verification: false,
+    requires_brand_verification: false,
+    requires_content_verification: false,
+    min_age: null as number | null,
+    max_age: null as number | null,
+    // Media requirements
+    requires_video: false,
+    max_videos: 1,
+    video_max_duration: 3000, // 50 minutes
+    video_max_size_mb: 500,
+    min_images: 0,
+    max_images: 10,
+    verification_video_max_duration: 30, // 30 seconds
+    verification_max_size_mb: 50
   })
   const [uploadedImage, setUploadedImage] = useState<string>('')
   const [seasons, setSeasons] = useState<Array<{ id: number; title: string; level: string }>>([])
@@ -140,7 +178,26 @@ export default function AdminContests() {
         is_submission_open: formData.is_submission_open,
         is_voting_open: formData.is_voting_open,
         image_url: formData.image_url,
-        voting_restriction: formData.voting_restriction
+        voting_restriction: formData.voting_restriction,
+        // Verification requirements
+        requires_kyc: formData.requires_kyc,
+        verification_type: formData.verification_type,
+        participant_type: formData.participant_type,
+        requires_visual_verification: formData.requires_visual_verification,
+        requires_voice_verification: formData.requires_voice_verification,
+        requires_brand_verification: formData.requires_brand_verification,
+        requires_content_verification: formData.requires_content_verification,
+        min_age: formData.min_age,
+        max_age: formData.max_age,
+        // Media requirements
+        requires_video: formData.requires_video,
+        max_videos: formData.max_videos,
+        video_max_duration: formData.video_max_duration,
+        video_max_size_mb: formData.video_max_size_mb,
+        min_images: formData.min_images,
+        max_images: formData.max_images,
+        verification_video_max_duration: formData.verification_video_max_duration,
+        verification_max_size_mb: formData.verification_max_size_mb
       }
 
       if (editingId) {
@@ -179,7 +236,25 @@ export default function AdminContests() {
       image_url: '',
       cover_image_url: '',
       voting_restriction: 'none',
-      participant_count: 0
+      participant_count: 0,
+      requires_kyc: false,
+      verification_type: 'none',
+      participant_type: 'individual',
+      requires_visual_verification: false,
+      requires_voice_verification: false,
+      requires_brand_verification: false,
+      requires_content_verification: false,
+      min_age: null,
+      max_age: null,
+      // Media requirements
+      requires_video: false,
+      max_videos: 1,
+      video_max_duration: 3000,
+      video_max_size_mb: 500,
+      min_images: 0,
+      max_images: 10,
+      verification_video_max_duration: 30,
+      verification_max_size_mb: 50
     })
     setUploadedImage('')
   }
@@ -200,7 +275,25 @@ export default function AdminContests() {
       image_url: contest.image_url || '',
       cover_image_url: contest.cover_image_url || '',
       voting_restriction: contest.voting_restriction || 'none',
-      participant_count: contest.participant_count || 0
+      participant_count: contest.participant_count || 0,
+      requires_kyc: contest.requires_kyc ?? false,
+      verification_type: contest.verification_type || 'none',
+      participant_type: contest.participant_type || 'individual',
+      requires_visual_verification: contest.requires_visual_verification ?? false,
+      requires_voice_verification: contest.requires_voice_verification ?? false,
+      requires_brand_verification: contest.requires_brand_verification ?? false,
+      requires_content_verification: contest.requires_content_verification ?? false,
+      min_age: contest.min_age ?? null,
+      max_age: contest.max_age ?? null,
+      // Media requirements
+      requires_video: contest.requires_video ?? false,
+      max_videos: contest.max_videos ?? 1,
+      video_max_duration: contest.video_max_duration ?? 3000,
+      video_max_size_mb: contest.video_max_size_mb ?? 500,
+      min_images: contest.min_images ?? 0,
+      max_images: contest.max_images ?? 10,
+      verification_video_max_duration: contest.verification_video_max_duration ?? 30,
+      verification_max_size_mb: contest.verification_max_size_mb ?? 50
     })
     if (contest.cover_image_url || contest.image_url) {
       setUploadedImage(contest.cover_image_url || contest.image_url || '')
@@ -234,11 +327,11 @@ export default function AdminContests() {
 
   const getLevelLabel = (level: string) => {
     const labels: Record<string, string> = {
-      city: 'Ville',
-      country: 'Pays',
-      region: 'Région',
-      continent: 'Continent',
-      global: 'Mondial'
+      city: t('admin.contests.level_city') || 'Ville',
+      country: t('admin.contests.level_country') || 'Pays',
+      region: t('admin.contests.level_region') || 'Région',
+      continent: t('admin.contests.level_continent') || 'Continent',
+      global: t('admin.contests.level_global') || 'Mondial'
     }
     return labels[level] || level
   }
@@ -261,11 +354,11 @@ export default function AdminContests() {
             <div className="flex gap-6 mt-4 text-sm">
               <div className="flex items-center gap-2 text-white dark:text-gray-300">
                 <Users className="h-4 w-4" />
-                <span>{contests.length} concours</span>
+                <span>{contests.length} {t('admin.contests.contests_count') || 'concours'}</span>
               </div>
               <div className="flex items-center gap-2 text-white dark:text-gray-300">
                 <CheckCircle2 className="h-4 w-4" />
-                <span>{contests.filter(c => c.is_active).length} actifs</span>
+                <span>{contests.filter(c => c.is_active).length} {t('admin.contests.active_count') || 'actifs'}</span>
               </div>
             </div>
           </div>
@@ -312,7 +405,7 @@ export default function AdminContests() {
                     <div className="mb-3 relative">
                       <img src={uploadedImage} alt="Preview" className="h-40 w-40 object-cover rounded-lg border-2 border-myfav-primary/20" />
                       {editingId && (
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Image actuelle</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">{t('admin.contests.current_image') || 'Image actuelle'}</p>
                       )}
                     </div>
                   )}
@@ -391,7 +484,7 @@ export default function AdminContests() {
                   <Input
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="Ex: Concours de beauté 2024"
+                    placeholder={t('admin.contests.name_placeholder') || 'Ex: Concours de beauté 2024'}
                     required
                     className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   />
@@ -405,7 +498,7 @@ export default function AdminContests() {
                   <Input
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    placeholder="Description du concours"
+                    placeholder={t('admin.contests.description_placeholder') || 'Description du concours'}
                     className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   />
                 </div>
@@ -418,7 +511,7 @@ export default function AdminContests() {
                   <Input
                     value={formData.contest_type}
                     onChange={(e) => setFormData({ ...formData, contest_type: e.target.value })}
-                    placeholder="Ex: beauty, handsome"
+                    placeholder={t('admin.contests.type_placeholder') || 'Ex: beauty, handsome'}
                     required
                     className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   />
@@ -488,6 +581,241 @@ export default function AdminContests() {
                   </Select>
                 </div>
 
+                {/* ============== VERIFICATION REQUIREMENTS ============== */}
+                <div className="bg-amber-50 dark:bg-amber-900/20 rounded-xl p-5 border border-amber-200 dark:border-amber-800">
+                  <h4 className="font-semibold text-sm text-amber-900 dark:text-amber-200 mb-4 flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4" />
+                    {t('admin.contests.verification_requirements') || 'Exigences de vérification'}
+                  </h4>
+                  
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    {/* Type de participant */}
+                    <div>
+                      <label className="block text-xs font-medium text-amber-700 dark:text-amber-300 mb-2">
+                        {t('admin.contests.participant_type') || 'Type de participant'}
+                      </label>
+                      <Select value={formData.participant_type} onValueChange={(value) => setFormData({ ...formData, participant_type: value })}>
+                        <SelectTrigger className="dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="dark:bg-gray-700">
+                          <SelectItem value="individual"><span className="flex items-center gap-2"><Users className="h-4 w-4" /> {t('admin.contests.participant_individual') || 'Personne'}</span></SelectItem>
+                          <SelectItem value="pet"><span className="flex items-center gap-2"><PawPrint className="h-4 w-4" /> {t('admin.contests.participant_pet') || 'Animal'}</span></SelectItem>
+                          <SelectItem value="club"><span className="flex items-center gap-2"><Users2 className="h-4 w-4" /> {t('admin.contests.participant_club') || 'Club'}</span></SelectItem>
+                          <SelectItem value="content"><span className="flex items-center gap-2"><Music className="h-4 w-4" /> {t('admin.contests.participant_content') || 'Contenu'}</span></SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Type de vérification */}
+                    <div>
+                      <label className="block text-xs font-medium text-amber-700 dark:text-amber-300 mb-2">
+                        {t('admin.contests.verification_type') || 'Type de vérification'}
+                      </label>
+                      <Select value={formData.verification_type} onValueChange={(value) => setFormData({ ...formData, verification_type: value })}>
+                        <SelectTrigger className="dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="dark:bg-gray-700">
+                          <SelectItem value="none">{t('admin.contests.verification_none') || 'Aucune'}</SelectItem>
+                          <SelectItem value="visual"><span className="flex items-center gap-2"><Eye className="h-4 w-4" /> {t('admin.contests.verification_visual') || 'Visuelle'}</span></SelectItem>
+                          <SelectItem value="voice"><span className="flex items-center gap-2"><Mic className="h-4 w-4" /> {t('admin.contests.verification_voice') || 'Vocale'}</span></SelectItem>
+                          <SelectItem value="brand"><span className="flex items-center gap-2"><Trophy className="h-4 w-4" /> {t('admin.contests.verification_brand') || 'Marque'}</span></SelectItem>
+                          <SelectItem value="content"><span className="flex items-center gap-2"><FileCheck className="h-4 w-4" /> {t('admin.contests.verification_content') || 'Contenu'}</span></SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Restrictions d'âge */}
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <label className="block text-xs font-medium text-amber-700 dark:text-amber-300 mb-2 flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        {t('admin.contests.min_age') || 'Âge minimum'}
+                      </label>
+                      <Input
+                        type="number"
+                        value={formData.min_age ?? ''}
+                        onChange={(e) => setFormData({ ...formData, min_age: e.target.value ? parseInt(e.target.value) : null })}
+                        placeholder={t('admin.contests.min_age_placeholder') || 'Ex: 18'}
+                        min="0"
+                        max="120"
+                        className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-amber-700 dark:text-amber-300 mb-2 flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        {t('admin.contests.max_age') || 'Âge maximum'}
+                      </label>
+                      <Input
+                        type="number"
+                        value={formData.max_age ?? ''}
+                        onChange={(e) => setFormData({ ...formData, max_age: e.target.value ? parseInt(e.target.value) : null })}
+                        placeholder={t('admin.contests.max_age_placeholder') || 'Ex: 35'}
+                        min="0"
+                        max="120"
+                        className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Checkboxes de vérification */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex items-center gap-2 p-2 rounded-lg bg-white/50 dark:bg-gray-800/50">
+                      <input
+                        type="checkbox"
+                        id="requires_kyc"
+                        checked={formData.requires_kyc}
+                        onChange={(e) => setFormData({ ...formData, requires_kyc: e.target.checked })}
+                        className="rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+                      />
+                      <label htmlFor="requires_kyc" className="text-xs font-medium cursor-pointer text-amber-800 dark:text-amber-200 flex items-center gap-1.5">
+                        <ShieldCheck className="h-3.5 w-3.5" />
+                        {t('admin.contests.requires_kyc') || 'KYC obligatoire'}
+                      </label>
+                    </div>
+                    <div className="flex items-center gap-2 p-2 rounded-lg bg-white/50 dark:bg-gray-800/50">
+                      <input
+                        type="checkbox"
+                        id="requires_visual_verification"
+                        checked={formData.requires_visual_verification}
+                        onChange={(e) => setFormData({ ...formData, requires_visual_verification: e.target.checked })}
+                        className="rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+                      />
+                      <label htmlFor="requires_visual_verification" className="text-xs font-medium cursor-pointer text-amber-800 dark:text-amber-200 flex items-center gap-1.5">
+                        <Eye className="h-3.5 w-3.5" />
+                        {t('admin.contests.requires_visual') || 'Vérif. visuelle'}
+                      </label>
+                    </div>
+                    <div className="flex items-center gap-2 p-2 rounded-lg bg-white/50 dark:bg-gray-800/50">
+                      <input
+                        type="checkbox"
+                        id="requires_voice_verification"
+                        checked={formData.requires_voice_verification}
+                        onChange={(e) => setFormData({ ...formData, requires_voice_verification: e.target.checked })}
+                        className="rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+                      />
+                      <label htmlFor="requires_voice_verification" className="text-xs font-medium cursor-pointer text-amber-800 dark:text-amber-200 flex items-center gap-1.5">
+                        <Mic className="h-3.5 w-3.5" />
+                        {t('admin.contests.requires_voice') || 'Vérif. vocale'}
+                      </label>
+                    </div>
+                    <div className="flex items-center gap-2 p-2 rounded-lg bg-white/50 dark:bg-gray-800/50">
+                      <input
+                        type="checkbox"
+                        id="requires_brand_verification"
+                        checked={formData.requires_brand_verification}
+                        onChange={(e) => setFormData({ ...formData, requires_brand_verification: e.target.checked })}
+                        className="rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+                      />
+                      <label htmlFor="requires_brand_verification" className="text-xs font-medium cursor-pointer text-amber-800 dark:text-amber-200 flex items-center gap-1.5">
+                        <Trophy className="h-3.5 w-3.5" />
+                        {t('admin.contests.requires_brand') || 'Vérif. marque'}
+                      </label>
+                    </div>
+                    <div className="flex items-center gap-2 p-2 rounded-lg bg-white/50 dark:bg-gray-800/50 col-span-2">
+                      <input
+                        type="checkbox"
+                        id="requires_content_verification"
+                        checked={formData.requires_content_verification}
+                        onChange={(e) => setFormData({ ...formData, requires_content_verification: e.target.checked })}
+                        className="rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+                      />
+                      <label htmlFor="requires_content_verification" className="text-xs font-medium cursor-pointer text-amber-800 dark:text-amber-200 flex items-center gap-1.5">
+                        <FileCheck className="h-3.5 w-3.5" />
+                        {t('admin.contests.requires_content') || 'Vérif. propriété du contenu'}
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Media Requirements Section */}
+                <div className="p-4 rounded-xl bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 border border-purple-200 dark:border-purple-800">
+                  <h4 className="text-sm font-semibold text-purple-900 dark:text-purple-200 mb-4 flex items-center gap-2">
+                    <Upload className="h-4 w-4" />
+                    {t('admin.contests.media_requirements') || 'Exigences Média'}
+                  </h4>
+                  
+                  {/* Video requirement checkbox */}
+                  <div className="flex items-center gap-2 p-2 rounded-lg bg-white/50 dark:bg-gray-800/50 mb-4">
+                    <input
+                      type="checkbox"
+                      id="requires_video"
+                      checked={formData.requires_video}
+                      onChange={(e) => setFormData({ ...formData, requires_video: e.target.checked })}
+                      className="rounded border-purple-300 text-purple-600 focus:ring-purple-500"
+                    />
+                    <label htmlFor="requires_video" className="text-xs font-medium cursor-pointer text-purple-800 dark:text-purple-200 flex items-center gap-1.5">
+                      <Zap className="h-3.5 w-3.5" />
+                      {t('admin.contests.requires_video') || 'Vidéo obligatoire'}
+                    </label>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    {/* Max videos */}
+                    <div>
+                      <label className="block text-xs font-medium text-purple-700 dark:text-purple-300 mb-1">
+                        {t('admin.contests.max_videos') || 'Vidéos max'}
+                      </label>
+                      <Input
+                        type="number"
+                        value={formData.max_videos}
+                        onChange={(e) => setFormData({ ...formData, max_videos: parseInt(e.target.value) || 1 })}
+                        min="1"
+                        max="10"
+                        className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      />
+                    </div>
+                    
+                    {/* Video max duration */}
+                    <div>
+                      <label className="block text-xs font-medium text-purple-700 dark:text-purple-300 mb-1">
+                        {t('admin.contests.video_duration') || 'Durée max (min)'}
+                      </label>
+                      <Input
+                        type="number"
+                        value={Math.round(formData.video_max_duration / 60)}
+                        onChange={(e) => setFormData({ ...formData, video_max_duration: (parseInt(e.target.value) || 50) * 60 })}
+                        min="1"
+                        max="60"
+                        className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      />
+                    </div>
+                    
+                    {/* Min images */}
+                    <div>
+                      <label className="block text-xs font-medium text-purple-700 dark:text-purple-300 mb-1">
+                        {t('admin.contests.min_images') || 'Images min'}
+                      </label>
+                      <Input
+                        type="number"
+                        value={formData.min_images}
+                        onChange={(e) => setFormData({ ...formData, min_images: parseInt(e.target.value) || 0 })}
+                        min="0"
+                        max="10"
+                        className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      />
+                    </div>
+                    
+                    {/* Max images */}
+                    <div>
+                      <label className="block text-xs font-medium text-purple-700 dark:text-purple-300 mb-1">
+                        {t('admin.contests.max_images') || 'Images max'}
+                      </label>
+                      <Input
+                        type="number"
+                        value={formData.max_images}
+                        onChange={(e) => setFormData({ ...formData, max_images: parseInt(e.target.value) || 10 })}
+                        min="1"
+                        max="20"
+                        className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+
                 {/* Checkboxes */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 dark:bg-gray-700">
@@ -519,13 +847,13 @@ export default function AdminContests() {
                 {/* Info: Dates are auto-generated */}
                 <div className="p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
                   <p className="text-sm text-blue-900 dark:text-blue-200">
-                    <strong>ℹ️ Dates automatiques :</strong> Les dates sont générées automatiquement :
+                    <strong>ℹ️ {t('admin.contests.auto_dates_title') || 'Dates automatiques'} :</strong> {t('admin.contests.auto_dates_description') || 'Les dates sont générées automatiquement'} :
                   </p>
                   <ul className="text-sm text-blue-900 dark:text-blue-200 mt-2 ml-4 list-disc">
-                    <li>Début des uploads : date de création</li>
-                    <li>Fin des uploads : 1 mois après le début</li>
-                    <li>Début du vote : 1 jour après la fin des uploads</li>
-                    <li>Fin du vote : 1 mois après le début du vote</li>
+                    <li>{t('admin.contests.auto_date_upload_start') || 'Début des uploads : date de création'}</li>
+                    <li>{t('admin.contests.auto_date_upload_end') || 'Fin des uploads : 1 mois après le début'}</li>
+                    <li>{t('admin.contests.auto_date_vote_start') || 'Début du vote : 1 jour après la fin des uploads'}</li>
+                    <li>{t('admin.contests.auto_date_vote_end') || 'Fin du vote : 1 mois après le début du vote'}</li>
                   </ul>
                 </div>
 
@@ -576,7 +904,7 @@ export default function AdminContests() {
               </label>
               <Input
                 type="text"
-                placeholder="Nom, type, description..."
+                placeholder={t('admin.contests.search_input_placeholder') || 'Nom, type, description...'}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="dark:bg-gray-700 dark:border-gray-600 dark:text-white border-gray-300 focus:border-myfav-primary focus:ring-myfav-primary"
@@ -614,7 +942,7 @@ export default function AdminContests() {
           {searchQuery && (
             <div className="mt-4 text-sm font-medium text-gray-600 dark:text-gray-400 flex items-center gap-2">
               <AlertCircle className="h-4 w-4" />
-              {filteredContests.length} {filteredContests.length === 1 ? 'résultat' : 'résultats'} trouvé(s)
+              {filteredContests.length} {filteredContests.length === 1 ? (t('admin.contests.result') || 'résultat') : (t('admin.contests.results') || 'résultats')} {t('admin.contests.found') || 'trouvé(s)'}
             </div>
           )}
         </div>
@@ -635,109 +963,174 @@ export default function AdminContests() {
         <Card className="border-2 border-dashed border-gray-300 dark:border-gray-600">
           <CardContent className="pt-12 pb-12 text-center">
             <Zap className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-600 dark:text-gray-400 text-lg">Aucun résultat pour "{searchQuery}"</p>
+            <p className="text-gray-600 dark:text-gray-400 text-lg">{t('admin.contests.no_results_for') || 'Aucun résultat pour'} "{searchQuery}"</p>
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4">
+        <div className="grid gap-5">
           {filteredContests.map((contest) => (
-            <Card key={contest.id} className="overflow-hidden hover:shadow-xl transition-all duration-300 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 hover:border-myfav-primary/50 dark:hover:border-myfav-primary/30">
+            <Card key={contest.id} className="group overflow-hidden hover:shadow-2xl transition-all duration-500 dark:bg-gray-800/80 bg-white border-0 shadow-lg hover:scale-[1.01]">
               <CardContent className="p-0">
-                <div className="flex gap-4 h-36 md:h-40">
-                  {/* Image de couverture */}
-                  <div className="w-40 h-36 md:h-40 flex-shrink-0 bg-gray-200 dark:bg-gray-700 overflow-hidden rounded-l-lg">
+                <div className="flex flex-col md:flex-row">
+                  {/* Image de couverture avec overlay */}
+                  <div className="relative w-full md:w-48 h-48 md:h-auto flex-shrink-0 overflow-hidden">
                     {contest.cover_image_url || contest.image_url ? (
                       <img
                         src={contest.cover_image_url || contest.image_url}
                         alt={contest.name}
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                       />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-myfav-primary to-myfav-secondary">
-                        <Zap className="h-8 w-8 text-white" />
+                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-myfav-primary via-myfav-primary-dark to-purple-600">
+                        <Trophy className="h-12 w-12 text-white/80" />
                       </div>
                     )}
-                  </div>
-
-                  {/* Contenu */}
-                  <div className="flex-1 py-4 px-4 flex flex-col justify-between">
-                    <div>
-                      <div className="mb-3">
-                        <h3 className="font-bold text-lg text-gray-900 dark:text-white leading-tight">{contest.name}</h3>
-                        <p className="text-xs text-myfav-primary dark:text-myfav-secondary font-semibold mt-1">{contest.contest_type.toUpperCase()}</p>
+                    {/* Overlay avec statut */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                    <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold shadow-lg ${contest.is_active ? 'bg-emerald-500 text-white' : 'bg-gray-500 text-white'}`}>
+                        {contest.is_active ? t('admin.contests.active') || 'Actif' : t('admin.contests.inactive') || 'Inactif'}
+                      </span>
+                      <div className="flex gap-1">
+                        {contest.is_submission_open && (
+                          <span className="px-2 py-1 bg-purple-500 text-white rounded-full text-xs font-bold shadow-lg flex items-center gap-1">
+                            <Upload className="h-3 w-3" />
+                          </span>
+                        )}
+                        {contest.is_voting_open && (
+                          <span className="px-2 py-1 bg-orange-500 text-white rounded-full text-xs font-bold shadow-lg flex items-center gap-1">
+                            <Vote className="h-3 w-3" />
+                          </span>
+                        )}
                       </div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">{contest.description}</p>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2 items-center pt-2">
-                      <span className="inline-flex items-center gap-1 bg-myfav-primary/15 text-myfav-primary dark:bg-myfav-primary/25 dark:text-myfav-secondary px-2.5 py-1.5 rounded-full text-xs font-semibold">
-                        <MapPin className="h-3.5 w-3.5" />
-                        {getLevelLabel(contest.level)}
-                      </span>
-                      <span className="inline-flex items-center gap-1 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-2.5 py-1.5 rounded-full text-xs font-semibold">
-                        <Users className="h-3.5 w-3.5" />
-                        {contest.participant_count || 0}
-                      </span>
-                      {(contest.approved_count || 0) > 0 && (
-                        <span className="inline-flex items-center gap-1 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 px-2.5 py-1.5 rounded-full text-xs font-semibold">
-                          <CheckCircle2 className="h-3.5 w-3.5" />
-                          {contest.approved_count}
-                        </span>
-                      )}
-                      {(contest.pending_count || 0) > 0 && (
-                        <span className="inline-flex items-center gap-1 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 px-2.5 py-1.5 rounded-full text-xs font-semibold">
-                          <AlertCircle className="h-3.5 w-3.5" />
-                          {contest.pending_count}
-                        </span>
-                      )}
-                      <span className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-semibold ${contest.is_active ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-400'}`}>
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                        {contest.is_active ? 'Actif' : 'Inactif'}
-                      </span>
-                      {contest.is_submission_open && (
-                        <span className="inline-flex items-center gap-1 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 px-2.5 py-1.5 rounded-full text-xs font-semibold">
-                          <Upload className="h-3.5 w-3.5" />
-                          Upload
-                        </span>
-                      )}
-                      {contest.is_voting_open && (
-                        <span className="inline-flex items-center gap-1 bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 px-2.5 py-1.5 rounded-full text-xs font-semibold">
-                          <Vote className="h-3.5 w-3.5" />
-                          Vote
-                        </span>
-                      )}
                     </div>
                   </div>
 
-                  {/* Actions */}
-                  <div className="flex flex-col gap-2 py-4 pr-4 min-w-fit justify-center">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleEdit(contest)}
-                      className="gap-1.5 hover:bg-myfav-primary/10 hover:text-myfav-primary dark:hover:bg-myfav-primary/20 border-gray-300 dark:border-gray-600"
-                    >
-                      <Edit2 className="h-4 w-4" />
-                      {t('admin.contests.edit') || 'Modifier'}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => router.push(`/dashboard/admin/contests/${contest.id}/contestants`)}
-                      className="gap-1.5 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                    >
-                      <Users className="h-4 w-4" />
-                      {t('admin.contests.candidates') || 'Candidats'}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => handleDeleteClick(contest.id)}
-                      className="gap-1.5 hover:bg-red-600 dark:hover:bg-red-700"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      {t('admin.contests.delete') || 'Supprimer'}
-                    </Button>
+                  {/* Contenu principal */}
+                  <div className="flex-1 p-5 flex flex-col">
+                    {/* Header */}
+                    <div className="flex items-start justify-between gap-4 mb-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="px-2 py-0.5 bg-myfav-primary/10 text-myfav-primary dark:bg-myfav-primary/20 dark:text-myfav-secondary rounded text-xs font-bold uppercase tracking-wide">
+                            {contest.contest_type}
+                          </span>
+                          <span className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded text-xs font-medium flex items-center gap-1">
+                            <MapPin className="h-3 w-3" />
+                            {getLevelLabel(contest.level)}
+                          </span>
+                        </div>
+                        <h3 className="font-bold text-xl text-gray-900 dark:text-white leading-tight">{contest.name}</h3>
+                        {contest.description && (
+                          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 line-clamp-1">{contest.description}</p>
+                        )}
+                      </div>
+                      
+                      {/* Stats rapides */}
+                      <div className="flex gap-3 text-center">
+                        <div className="bg-blue-50 dark:bg-blue-900/30 rounded-lg px-3 py-2">
+                          <div className="text-lg font-bold text-blue-600 dark:text-blue-400">{contest.participant_count || 0}</div>
+                          <div className="text-xs text-blue-500 dark:text-blue-300">{t('admin.contests.participants') || 'Participants'}</div>
+                        </div>
+                        {(contest.approved_count || 0) > 0 && (
+                          <div className="bg-green-50 dark:bg-green-900/30 rounded-lg px-3 py-2">
+                            <div className="text-lg font-bold text-green-600 dark:text-green-400">{contest.approved_count}</div>
+                            <div className="text-xs text-green-500 dark:text-green-300">{t('admin.contests.approved') || 'Approuvés'}</div>
+                          </div>
+                        )}
+                        {(contest.pending_count || 0) > 0 && (
+                          <div className="bg-amber-50 dark:bg-amber-900/30 rounded-lg px-3 py-2">
+                            <div className="text-lg font-bold text-amber-600 dark:text-amber-400">{contest.pending_count}</div>
+                            <div className="text-xs text-amber-500 dark:text-amber-300">{t('admin.contests.pending') || 'En attente'}</div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Badges de vérification */}
+                    <div className="flex flex-wrap gap-2 mb-4 pb-4 border-b border-gray-100 dark:border-gray-700">
+                      {/* Type de participant */}
+                      {contest.participant_type && (
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${
+                          contest.participant_type === 'individual' ? 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300' :
+                          contest.participant_type === 'pet' ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300' :
+                          contest.participant_type === 'club' ? 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300' :
+                          'bg-pink-100 dark:bg-pink-900/40 text-pink-700 dark:text-pink-300'
+                        }`}>
+                          {contest.participant_type === 'individual' && <><Users className="h-3.5 w-3.5" /> {t('admin.contests.participant_individual') || 'Individuel'}</>}
+                          {contest.participant_type === 'pet' && <><PawPrint className="h-3.5 w-3.5" /> {t('admin.contests.participant_pet') || 'Animal'}</>}
+                          {contest.participant_type === 'club' && <><Users2 className="h-3.5 w-3.5" /> {t('admin.contests.participant_club') || 'Club'}</>}
+                          {contest.participant_type === 'content' && <><Music className="h-3.5 w-3.5" /> {t('admin.contests.participant_content') || 'Contenu'}</>}
+                        </span>
+                      )}
+                      
+                      {/* KYC */}
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${
+                        contest.requires_kyc 
+                          ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' 
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500'
+                      }`} title={contest.requires_kyc ? t('admin.contests.kyc_required') || 'KYC requis' : t('admin.contests.kyc_not_required') || 'KYC non requis'}>
+                        <ShieldCheck className="h-3.5 w-3.5" />
+                        {contest.requires_kyc ? t('admin.contests.kyc_required') || 'KYC requis' : t('admin.contests.kyc_not_required') || 'Sans KYC'}
+                      </span>
+                      
+                      {/* Vérifications spécifiques */}
+                      {contest.requires_visual_verification && (
+                        <span className="inline-flex items-center gap-1.5 bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 px-2.5 py-1 rounded-lg text-xs font-semibold" title={t('admin.contests.requires_visual') || 'Vérification visuelle requise'}>
+                          <Eye className="h-3.5 w-3.5" /> {t('admin.contests.verification_visual') || 'Visuel'}
+                        </span>
+                      )}
+                      {contest.requires_voice_verification && (
+                        <span className="inline-flex items-center gap-1.5 bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 px-2.5 py-1 rounded-lg text-xs font-semibold" title={t('admin.contests.requires_voice') || 'Vérification vocale requise'}>
+                          <Mic className="h-3.5 w-3.5" /> {t('admin.contests.verification_voice') || 'Vocal'}
+                        </span>
+                      )}
+                      {contest.requires_brand_verification && (
+                        <span className="inline-flex items-center gap-1.5 bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300 px-2.5 py-1 rounded-lg text-xs font-semibold" title={t('admin.contests.requires_brand') || 'Vérification marque requise'}>
+                          <Award className="h-3.5 w-3.5" /> {t('admin.contests.verification_brand') || 'Marque'}
+                        </span>
+                      )}
+                      {contest.requires_content_verification && (
+                        <span className="inline-flex items-center gap-1.5 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 px-2.5 py-1 rounded-lg text-xs font-semibold" title={t('admin.contests.requires_content') || 'Vérification de contenu requise'}>
+                          <FileCheck className="h-3.5 w-3.5" /> {t('admin.contests.verification_content') || 'Contenu'}
+                        </span>
+                      )}
+                      {(contest.min_age || contest.max_age) && (
+                        <span className="inline-flex items-center gap-1.5 bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 px-2.5 py-1 rounded-lg text-xs font-semibold" title={t('admin.contests.age_restricted') || 'Restriction d\'âge'}>
+                          <Calendar className="h-3.5 w-3.5" />
+                          {contest.min_age && contest.max_age ? `${contest.min_age}-${contest.max_age} ${t('admin.contests.years') || 'ans'}` : contest.min_age ? `${contest.min_age}+ ${t('admin.contests.years') || 'ans'}` : `<${contest.max_age} ${t('admin.contests.years') || 'ans'}`}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-2 mt-auto">
+                      <Button
+                        size="sm"
+                        onClick={() => handleEdit(contest)}
+                        className="gap-1.5 bg-myfav-primary hover:bg-myfav-primary-dark text-white shadow-md hover:shadow-lg transition-all"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                        {t('admin.contests.edit') || 'Modifier'}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => router.push(`/dashboard/admin/contests/${contest.id}/contestants`)}
+                        className="gap-1.5 border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30"
+                      >
+                        <Users className="h-4 w-4" />
+                        {t('admin.contests.candidates') || 'Candidats'}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleDeleteClick(contest.id)}
+                        className="gap-1.5 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 ml-auto"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </CardContent>

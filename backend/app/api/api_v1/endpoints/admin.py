@@ -31,6 +31,26 @@ class ContestCreateRequest(BaseModel):
     voting_end_date: Optional[str] = None  # Will be auto-generated if not provided
     image_url: Optional[str] = None
     voting_restriction: str = "none"
+    # Verification requirements
+    requires_kyc: bool = False
+    verification_type: str = "none"
+    participant_type: str = "individual"
+    requires_visual_verification: bool = False
+    requires_voice_verification: bool = False
+    requires_brand_verification: bool = False
+    requires_content_verification: bool = False
+    min_age: Optional[int] = None
+    max_age: Optional[int] = None
+    # Media requirements
+    requires_video: bool = False
+    max_videos: int = 1
+    video_max_duration: int = 3000  # 50 minutes in seconds
+    video_max_size_mb: int = 500
+    min_images: int = 0
+    max_images: int = 10
+    # Verification media limits
+    verification_video_max_duration: int = 30  # 30 seconds
+    verification_max_size_mb: int = 50
 
     class Config:
         from_attributes = True
@@ -50,12 +70,33 @@ class ContestResponse(BaseModel):
     voting_start_date: datetime
     voting_end_date: datetime
     image_url: Optional[str]
+    cover_image_url: Optional[str] = None
     voting_restriction: str
     participant_count: int
     approved_count: int
     pending_count: int
     created_at: datetime
     updated_at: datetime
+    # Verification requirements
+    requires_kyc: bool = False
+    verification_type: str = "none"
+    participant_type: str = "individual"
+    requires_visual_verification: bool = False
+    requires_voice_verification: bool = False
+    requires_brand_verification: bool = False
+    requires_content_verification: bool = False
+    min_age: Optional[int] = None
+    max_age: Optional[int] = None
+    # Media requirements
+    requires_video: bool = False
+    max_videos: int = 1
+    video_max_duration: int = 3000
+    video_max_size_mb: int = 500
+    min_images: int = 0
+    max_images: int = 10
+    # Verification media limits
+    verification_video_max_duration: int = 30
+    verification_max_size_mb: int = 50
 
     class Config:
         from_attributes = True
@@ -182,12 +223,32 @@ async def get_all_contests(
                 'voting_start_date': contest.voting_start_date,
                 'voting_end_date': contest.voting_end_date,
                 'image_url': contest.image_url,
+                'cover_image_url': contest.cover_image_url,
                 'voting_restriction': contest.voting_restriction.value if contest.voting_restriction else 'none',
                 'participant_count': total,
                 'approved_count': approved,
                 'pending_count': pending,
                 'created_at': contest.created_at,
-                'updated_at': contest.updated_at
+                'updated_at': contest.updated_at,
+                # Verification fields
+                'requires_kyc': contest.requires_kyc,
+                'verification_type': contest.verification_type.value if contest.verification_type else 'none',
+                'participant_type': contest.participant_type.value if contest.participant_type else 'individual',
+                'requires_visual_verification': contest.requires_visual_verification,
+                'requires_voice_verification': contest.requires_voice_verification,
+                'requires_brand_verification': contest.requires_brand_verification,
+                'requires_content_verification': contest.requires_content_verification,
+                'min_age': contest.min_age,
+                'max_age': contest.max_age,
+                # Media requirements
+                'requires_video': getattr(contest, 'requires_video', False),
+                'max_videos': getattr(contest, 'max_videos', 1),
+                'video_max_duration': getattr(contest, 'video_max_duration', 3000),
+                'video_max_size_mb': getattr(contest, 'video_max_size_mb', 500),
+                'min_images': getattr(contest, 'min_images', 0),
+                'max_images': getattr(contest, 'max_images', 10),
+                'verification_video_max_duration': getattr(contest, 'verification_video_max_duration', 30),
+                'verification_max_size_mb': getattr(contest, 'verification_max_size_mb', 50)
             }
             result.append(contest_dict)
         
@@ -246,12 +307,32 @@ async def get_contest(
         'voting_start_date': contest.voting_start_date,
         'voting_end_date': contest.voting_end_date,
         'image_url': contest.image_url,
+        'cover_image_url': contest.cover_image_url,
         'voting_restriction': contest.voting_restriction.value if contest.voting_restriction else 'none',
         'participant_count': total,
         'approved_count': approved,
         'pending_count': pending,
         'created_at': contest.created_at,
-        'updated_at': contest.updated_at
+        'updated_at': contest.updated_at,
+        # Verification fields
+        'requires_kyc': contest.requires_kyc,
+        'verification_type': contest.verification_type.value if contest.verification_type else 'none',
+        'participant_type': contest.participant_type.value if contest.participant_type else 'individual',
+        'requires_visual_verification': contest.requires_visual_verification,
+        'requires_voice_verification': contest.requires_voice_verification,
+        'requires_brand_verification': contest.requires_brand_verification,
+        'requires_content_verification': contest.requires_content_verification,
+        'min_age': contest.min_age,
+        'max_age': contest.max_age,
+        # Media requirements
+        'requires_video': getattr(contest, 'requires_video', False),
+        'max_videos': getattr(contest, 'max_videos', 1),
+        'video_max_duration': getattr(contest, 'video_max_duration', 3000),
+        'video_max_size_mb': getattr(contest, 'video_max_size_mb', 500),
+        'min_images': getattr(contest, 'min_images', 0),
+        'max_images': getattr(contest, 'max_images', 10),
+        'verification_video_max_duration': getattr(contest, 'verification_video_max_duration', 30),
+        'verification_max_size_mb': getattr(contest, 'verification_max_size_mb', 50)
     }
 
 @router.get("/contestants")
@@ -635,6 +716,17 @@ async def create_contest(
             contest_data.submission_start_date
         )
         
+        # Handle enum conversions for verification_type and participant_type
+        from app.models.contest import VerificationType, ParticipantType
+        try:
+            verification_type = VerificationType(contest_data.verification_type)
+        except (ValueError, TypeError):
+            verification_type = VerificationType.NONE
+        try:
+            participant_type = ParticipantType(contest_data.participant_type)
+        except (ValueError, TypeError):
+            participant_type = ParticipantType.INDIVIDUAL
+        
         # Create contest with auto-generated values
         new_contest = Contest(
             name=contest_data.name,
@@ -649,7 +741,26 @@ async def create_contest(
             voting_start_date=voting_start,
             voting_end_date=voting_end,
             image_url=contest_data.image_url,
-            voting_restriction=contest_data.voting_restriction
+            voting_restriction=contest_data.voting_restriction,
+            # Verification fields
+            requires_kyc=contest_data.requires_kyc,
+            verification_type=verification_type,
+            participant_type=participant_type,
+            requires_visual_verification=contest_data.requires_visual_verification,
+            requires_voice_verification=contest_data.requires_voice_verification,
+            requires_brand_verification=contest_data.requires_brand_verification,
+            requires_content_verification=contest_data.requires_content_verification,
+            min_age=contest_data.min_age,
+            max_age=contest_data.max_age,
+            # Media requirements
+            requires_video=contest_data.requires_video,
+            max_videos=contest_data.max_videos,
+            video_max_duration=contest_data.video_max_duration,
+            video_max_size_mb=contest_data.video_max_size_mb,
+            min_images=contest_data.min_images,
+            max_images=contest_data.max_images,
+            verification_video_max_duration=contest_data.verification_video_max_duration,
+            verification_max_size_mb=contest_data.verification_max_size_mb
         )
         
         db.add(new_contest)
@@ -686,12 +797,32 @@ async def create_contest(
             'voting_start_date': new_contest.voting_start_date,
             'voting_end_date': new_contest.voting_end_date,
             'image_url': new_contest.image_url,
+            'cover_image_url': new_contest.cover_image_url,
             'voting_restriction': new_contest.voting_restriction.value if new_contest.voting_restriction else 'none',
             'participant_count': total,
             'approved_count': approved,
             'pending_count': pending,
             'created_at': new_contest.created_at,
-            'updated_at': new_contest.updated_at
+            'updated_at': new_contest.updated_at,
+            # Verification fields
+            'requires_kyc': new_contest.requires_kyc,
+            'verification_type': new_contest.verification_type.value if new_contest.verification_type else 'none',
+            'participant_type': new_contest.participant_type.value if new_contest.participant_type else 'individual',
+            'requires_visual_verification': new_contest.requires_visual_verification,
+            'requires_voice_verification': new_contest.requires_voice_verification,
+            'requires_brand_verification': new_contest.requires_brand_verification,
+            'requires_content_verification': new_contest.requires_content_verification,
+            'min_age': new_contest.min_age,
+            'max_age': new_contest.max_age,
+            # Media requirements
+            'requires_video': new_contest.requires_video,
+            'max_videos': new_contest.max_videos,
+            'video_max_duration': new_contest.video_max_duration,
+            'video_max_size_mb': new_contest.video_max_size_mb,
+            'min_images': new_contest.min_images,
+            'max_images': new_contest.max_images,
+            'verification_video_max_duration': new_contest.verification_video_max_duration,
+            'verification_max_size_mb': new_contest.verification_max_size_mb
         }
     except Exception as e:
         db.rollback()
@@ -745,6 +876,36 @@ async def update_contest(
         contest.is_voting_open = contest_data.is_voting_open
         contest.image_url = contest_data.image_url
         contest.voting_restriction = contest_data.voting_restriction
+        
+        # Update verification fields
+        contest.requires_kyc = contest_data.requires_kyc
+        contest.requires_visual_verification = contest_data.requires_visual_verification
+        contest.requires_voice_verification = contest_data.requires_voice_verification
+        contest.requires_brand_verification = contest_data.requires_brand_verification
+        contest.requires_content_verification = contest_data.requires_content_verification
+        contest.min_age = contest_data.min_age
+        contest.max_age = contest_data.max_age
+        
+        # Update media requirements fields
+        contest.requires_video = contest_data.requires_video
+        contest.max_videos = contest_data.max_videos
+        contest.video_max_duration = contest_data.video_max_duration
+        contest.video_max_size_mb = contest_data.video_max_size_mb
+        contest.min_images = contest_data.min_images
+        contest.max_images = contest_data.max_images
+        contest.verification_video_max_duration = contest_data.verification_video_max_duration
+        contest.verification_max_size_mb = contest_data.verification_max_size_mb
+        
+        # Handle enum conversions for verification_type and participant_type
+        from app.models.contest import VerificationType, ParticipantType
+        try:
+            contest.verification_type = VerificationType(contest_data.verification_type)
+        except (ValueError, TypeError):
+            contest.verification_type = VerificationType.NONE
+        try:
+            contest.participant_type = ParticipantType(contest_data.participant_type)
+        except (ValueError, TypeError):
+            contest.participant_type = ParticipantType.INDIVIDUAL
         
         # Gérer la liaison avec la saison
         if contest_data.season_id is not None:
@@ -822,12 +983,32 @@ async def update_contest(
             'voting_start_date': contest.voting_start_date,
             'voting_end_date': contest.voting_end_date,
             'image_url': contest.image_url,
+            'cover_image_url': contest.cover_image_url,
             'voting_restriction': contest.voting_restriction.value if contest.voting_restriction else 'none',
             'participant_count': total,
             'approved_count': approved,
             'pending_count': pending,
             'created_at': contest.created_at,
-            'updated_at': contest.updated_at
+            'updated_at': contest.updated_at,
+            # Verification fields
+            'requires_kyc': contest.requires_kyc,
+            'verification_type': contest.verification_type.value if contest.verification_type else 'none',
+            'participant_type': contest.participant_type.value if contest.participant_type else 'individual',
+            'requires_visual_verification': contest.requires_visual_verification,
+            'requires_voice_verification': contest.requires_voice_verification,
+            'requires_brand_verification': contest.requires_brand_verification,
+            'requires_content_verification': contest.requires_content_verification,
+            'min_age': contest.min_age,
+            'max_age': contest.max_age,
+            # Media requirements
+            'requires_video': getattr(contest, 'requires_video', False),
+            'max_videos': getattr(contest, 'max_videos', 1),
+            'video_max_duration': getattr(contest, 'video_max_duration', 3000),
+            'video_max_size_mb': getattr(contest, 'video_max_size_mb', 500),
+            'min_images': getattr(contest, 'min_images', 0),
+            'max_images': getattr(contest, 'max_images', 10),
+            'verification_video_max_duration': getattr(contest, 'verification_video_max_duration', 30),
+            'verification_max_size_mb': getattr(contest, 'verification_max_size_mb', 50)
         }
     except Exception as e:
         db.rollback()

@@ -3,6 +3,12 @@
 import * as React from 'react'
 import { authService } from '@/lib/api'
 
+export interface UserRole {
+  id: number
+  name: string
+  description?: string
+}
+
 export interface User {
   id: number
   email: string
@@ -36,15 +42,25 @@ export interface User {
   // Referral
   personal_referral_code?: string
   sponsor_id?: number
+  
+  // RBAC
+  role_id?: number
+  role?: UserRole
 }
 
 interface AuthContextType {
   user: User | null
   isLoading: boolean
   isAuthenticated: boolean
+  permissions: string[]
   login: (credentials: { email_or_username: string; password: string }) => Promise<void>
   logout: () => Promise<void>
   refreshUser: () => Promise<void>
+  hasPermission: (permission: string) => boolean
+  hasAnyPermission: (...permissions: string[]) => boolean
+  hasAllPermissions: (...permissions: string[]) => boolean
+  isAdmin: boolean
+  isModerator: boolean
 }
 
 const AuthContext = React.createContext<AuthContextType | undefined>(undefined)
@@ -59,9 +75,33 @@ export function useAuth() {
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = React.useState<User | null>(null)
+  const [permissions, setPermissions] = React.useState<string[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
 
   const isAuthenticated = !!user && authService.isAuthenticated()
+  
+  // Helper pour vérifier les rôles
+  const isAdmin = user?.role?.name === 'admin' || user?.is_admin || false
+  const isModerator = user?.role?.name === 'moderator' || isAdmin
+
+  // Fonction pour charger les permissions
+  const loadPermissions = async () => {
+    try {
+      const token = localStorage.getItem('access_token')
+      if (!token) return
+      
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/rbac/me/permissions`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      
+      if (response.ok) {
+        const perms = await response.json()
+        setPermissions(perms)
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des permissions:', error)
+    }
+  }
 
   // Vérifier l'authentification au chargement
   React.useEffect(() => {
@@ -73,6 +113,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             ...userData,
             is_admin: (userData as any).is_admin || false
           })
+          // Charger les permissions après avoir récupéré l'utilisateur
+          await loadPermissions()
         }
       } catch (error) {
         console.error('Erreur lors de la vérification de l\'authentification:', error)
@@ -97,11 +139,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       ...userData,
       is_admin: userData.is_admin || false
     })
+    
+    // Charger les permissions
+    await loadPermissions()
   }
 
   const logout = async () => {
     await authService.logout()
     setUser(null)
+    setPermissions([])
   }
 
   const refreshUser = async () => {
@@ -109,6 +155,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const userData = await authService.getCurrentUser()
         setUser(userData)
+        await loadPermissions()
       } catch (error) {
         console.error('Erreur lors du rafraîchissement de l\'utilisateur:', error)
         await logout()
@@ -116,13 +163,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  // Fonctions de vérification des permissions
+  const hasPermission = (permission: string): boolean => {
+    if (permissions.includes('all')) return true // Admin avec toutes les permissions
+    return permissions.includes(permission)
+  }
+
+  const hasAnyPermission = (...perms: string[]): boolean => {
+    if (permissions.includes('all')) return true
+    return perms.some(p => permissions.includes(p))
+  }
+
+  const hasAllPermissions = (...perms: string[]): boolean => {
+    if (permissions.includes('all')) return true
+    return perms.every(p => permissions.includes(p))
+  }
+
   const value: AuthContextType = {
     user,
     isLoading,
     isAuthenticated,
+    permissions,
     login,
     logout,
-    refreshUser
+    refreshUser,
+    hasPermission,
+    hasAnyPermission,
+    hasAllPermissions,
+    isAdmin,
+    isModerator
   }
 
   return (

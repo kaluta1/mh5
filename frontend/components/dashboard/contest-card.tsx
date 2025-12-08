@@ -1,11 +1,12 @@
 'use client'
 
 import Image from 'next/image'
-import { Heart, Users, Clock, ArrowRight } from 'lucide-react'
+import { Heart, Users, Clock, ArrowRight, Eye, Mic, ShieldCheck, FileCheck, PawPrint, Users2, Music, Trophy, Calendar, Vote, Sparkles, MapPin } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useLanguage } from '@/contexts/language-context'
 import { Badge } from '@/components/ui/badge'
 import { useState, useEffect } from 'react'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 interface ContestCardProps {
   id: string
@@ -26,6 +27,17 @@ interface ContestCardProps {
   votingStartDate?: Date
   userGender?: 'male' | 'female' | 'other' | 'prefer_not_to_say' | null
   canParticipate?: boolean
+  isKycVerified?: boolean
+  // Verification requirements
+  requiresKyc?: boolean
+  verificationType?: 'none' | 'visual' | 'voice' | 'brand' | 'content'
+  participantType?: 'individual' | 'pet' | 'club' | 'content'
+  requiresVisualVerification?: boolean
+  requiresVoiceVerification?: boolean
+  requiresBrandVerification?: boolean
+  requiresContentVerification?: boolean
+  minAge?: number | null
+  maxAge?: number | null
   onViewContestants: () => void
   onToggleFavorite: () => void
   onParticipate?: () => void
@@ -51,6 +63,17 @@ export function ContestCard({
   votingStartDate,
   userGender,
   canParticipate: userCanParticipate = true,
+  isKycVerified = false,
+  // Verification requirements - KYC n'est PAS requis par défaut
+  requiresKyc = false,
+  verificationType = 'none',
+  participantType = 'individual',
+  requiresVisualVerification = false,
+  requiresVoiceVerification = false,
+  requiresBrandVerification = false,
+  requiresContentVerification = false,
+  minAge = null,
+  maxAge = null,
   onViewContestants,
   onToggleFavorite,
   onParticipate,
@@ -105,6 +128,10 @@ export function ContestCard({
   }
 
   const isParticipationOngoing = () => {
+    // Si le backend dit que la soumission est ouverte (isOpen), faire confiance
+    if (isOpen) return true
+    
+    // Sinon, vérifier les dates
     if (!participationStartDate || !participationEndDate) return false
     const now = currentTime
     const start = new Date(participationStartDate)
@@ -117,8 +144,8 @@ export function ContestCard({
   }
   
   const isEligibleForContest = () => {
-    // Vérifier que le concours est ouvert et que la participation est en cours
-    if (!isOpen || !isParticipationOngoing()) {
+    // Vérifier que la participation est en cours
+    if (!isParticipationOngoing()) {
       return false
     }
     
@@ -142,9 +169,12 @@ export function ContestCard({
     return true
   }
 
-  // L'utilisateur peut participer seulement s'il est éligible au concours ET a complété son profil/KYC
+  // L'utilisateur peut participer seulement s'il est éligible au concours ET a complété son profil
+  // Le KYC est requis uniquement si le concours l'exige
   const canParticipate = () => {
-    return isEligibleForContest() && userCanParticipate
+    if (!isEligibleForContest() || !userCanParticipate) return false
+    if (requiresKyc && !isKycVerified) return false
+    return true
   }
 
   const getCountdownText = () => {
@@ -235,6 +265,14 @@ export function ContestCard({
                 }
               </Badge>
             )}
+            {/* Participant type badge */}
+            {participantType !== 'individual' && (
+              <Badge className="bg-indigo-500/95 text-white border-0 text-xs font-bold shadow-lg backdrop-blur-md px-3 py-1.5 whitespace-nowrap flex items-center gap-1">
+                {participantType === 'pet' && <><PawPrint className="w-3 h-3" /> Animal</>}
+                {participantType === 'club' && <><Users2 className="w-3 h-3" /> Club</>}
+                {participantType === 'content' && <><Music className="w-3 h-3" /> Contenu</>}
+              </Badge>
+            )}
           </div>
           
           <button
@@ -254,60 +292,169 @@ export function ContestCard({
           </button>
         </div>
 
-        {/* Title - Visible par défaut, masqué au hover */}
+        {/* Title and Verification badges - Visible par défaut, masqué au hover */}
         <div className="absolute bottom-0 left-0 right-0 p-6 z-20 transition-opacity duration-500 group-hover:opacity-0">
           <div className="bg-black/40 backdrop-blur-md rounded-xl px-4 py-3 border border-white/10">
             <h3 className={`${isFeatured ? 'text-3xl' : 'text-2xl'} font-bold text-white drop-shadow-lg line-clamp-2 leading-tight`}>
               {title}
             </h3>
+            {/* Verification requirement icons */}
+            {(requiresKyc || requiresVisualVerification || requiresVoiceVerification || requiresBrandVerification || requiresContentVerification || minAge || maxAge) && (
+              <TooltipProvider>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {requiresKyc && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="inline-flex items-center justify-center w-6 h-6 bg-emerald-500/80 rounded-full">
+                          <ShieldCheck className="w-3.5 h-3.5 text-white" />
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent><p>KYC requis</p></TooltipContent>
+                    </Tooltip>
+                  )}
+                  {requiresVisualVerification && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="inline-flex items-center justify-center w-6 h-6 bg-blue-500/80 rounded-full">
+                          <Eye className="w-3.5 h-3.5 text-white" />
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent><p>Vérification visuelle</p></TooltipContent>
+                    </Tooltip>
+                  )}
+                  {requiresVoiceVerification && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="inline-flex items-center justify-center w-6 h-6 bg-purple-500/80 rounded-full">
+                          <Mic className="w-3.5 h-3.5 text-white" />
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent><p>Vérification vocale</p></TooltipContent>
+                    </Tooltip>
+                  )}
+                  {requiresContentVerification && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="inline-flex items-center justify-center w-6 h-6 bg-amber-500/80 rounded-full">
+                          <FileCheck className="w-3.5 h-3.5 text-white" />
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent><p>Vérification contenu</p></TooltipContent>
+                    </Tooltip>
+                  )}
+                  {(minAge || maxAge) && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="inline-flex items-center justify-center px-2 h-6 bg-orange-500/80 rounded-full text-white text-xs font-bold">
+                          {minAge && maxAge ? `${minAge}-${maxAge}` : minAge ? `${minAge}+` : `<${maxAge}`}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent><p>Âge requis: {minAge && maxAge ? `${minAge}-${maxAge} ans` : minAge ? `${minAge}+ ans` : `moins de ${maxAge} ans`}</p></TooltipContent>
+                    </Tooltip>
+                  )}
+                </div>
+              </TooltipProvider>
+            )}
           </div>
         </div>
 
         {/* Hover Overlay - Shows additional info only on hover */}
-        <div className="absolute inset-0 bg-black/75 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-all duration-500 flex flex-col items-center justify-center p-6 z-20 pointer-events-none">
-          {/* Time Remaining */}
-          {canParticipate() && getCountdownText() && (
-            <div className="mb-8 text-center transform translate-y-4 group-hover:translate-y-0 transition-transform duration-500 delay-100">
-              <div className="flex items-center justify-center gap-2 mb-3">
-                <Clock className="w-6 h-6 text-white animate-pulse" />
-                <span className="text-white/90 text-sm font-semibold uppercase tracking-wide">
-                  {t('dashboard.contests.time_remaining') || 'Temps restant'}
-                </span>
+        <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/80 to-black/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-all duration-400 flex flex-col p-5 z-20 pointer-events-none">
+          
+          {/* Top Section - Level & Status */}
+          <div className="flex items-center justify-between transform -translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
+            <div className="flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-myfav-secondary" />
+              <span className="text-white/90 text-sm font-medium">{getStatusLabel()}</span>
             </div>
-              <p className="text-4xl font-bold text-white font-mono tracking-tight">
-                {getCountdownText()}
-              </p>
-          </div>
-        )}
-
-          {/* Number of Participants */}
-          <div className={`text-center transform translate-y-4 group-hover:translate-y-0 transition-transform duration-500 ${canParticipate() && getCountdownText() ? 'mb-8' : 'mb-8'}`}>
-            <div className="flex items-center justify-center gap-2 mb-3">
-              <Users className="w-6 h-6 text-white" />
-              <span className="text-white/90 text-sm font-semibold uppercase tracking-wide">
-                {t('dashboard.contests.contestants')}
+            {isOpen && (
+              <span className="flex items-center gap-1.5 bg-green-500/20 text-green-400 px-2.5 py-1 rounded-full text-xs font-semibold border border-green-500/30">
+                <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
+                {t('dashboard.contests.open') || 'Ouvert'}
               </span>
+            )}
           </div>
-            <p className="text-4xl font-bold text-white">
-              {contestants.toLocaleString()}
-            </p>
-        </div>
 
-          {/* Participate Button */}
-          {canParticipate() && onParticipate && (
-            <div className="transform translate-y-4 group-hover:translate-y-0 transition-transform duration-500 delay-200 pointer-events-auto">
+          {/* Middle Section - Stats */}
+          <div className="flex-1 flex flex-col items-center justify-center gap-4">
+            {/* Stats Grid */}
+            <div className="grid grid-cols-2 gap-4 w-full max-w-[280px] transform translate-y-4 group-hover:translate-y-0 transition-transform duration-400 delay-75">
+              {/* Participants */}
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 text-center border border-white/10">
+                <div className="flex items-center justify-center gap-1.5 mb-1">
+                  <Users className="w-4 h-4 text-blue-400" />
+                  <span className="text-white/70 text-xs">{t('dashboard.contests.contestants') || 'Participants'}</span>
+                </div>
+                <p className="text-2xl font-bold text-white">{contestants.toLocaleString()}</p>
+              </div>
+              
+              {/* Votes */}
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 text-center border border-white/10">
+                <div className="flex items-center justify-center gap-1.5 mb-1">
+                  <Vote className="w-4 h-4 text-amber-400" />
+                  <span className="text-white/70 text-xs">{t('dashboard.contests.votes') || 'Votes'}</span>
+                </div>
+                <p className="text-2xl font-bold text-white">{received.toLocaleString()}</p>
+              </div>
+            </div>
+
+            {/* Time Remaining */}
+            {canParticipate() && getCountdownText() && (
+              <div className="bg-gradient-to-r from-myfav-primary/20 to-purple-500/20 backdrop-blur-sm rounded-xl px-4 py-2.5 border border-myfav-primary/30 transform translate-y-4 group-hover:translate-y-0 transition-transform duration-400 delay-100">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-myfav-secondary animate-pulse" />
+                  <span className="text-white/80 text-xs">{t('dashboard.contests.time_remaining') || 'Temps restant'}</span>
+                  <span className="text-white font-bold font-mono">{getCountdownText()}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Requirements Summary */}
+            {(requiresKyc || requiresVisualVerification || requiresVoiceVerification || genderRestriction) && (
+              <div className="flex flex-wrap items-center justify-center gap-2 transform translate-y-4 group-hover:translate-y-0 transition-transform duration-400 delay-150">
+                {requiresKyc && (
+                  <span className="flex items-center gap-1 bg-emerald-500/20 text-emerald-300 px-2 py-1 rounded-lg text-xs border border-emerald-500/30">
+                    <ShieldCheck className="w-3 h-3" /> KYC
+                  </span>
+                )}
+                {genderRestriction && (
+                  <span className="flex items-center gap-1 bg-pink-500/20 text-pink-300 px-2 py-1 rounded-lg text-xs border border-pink-500/30">
+                    {genderRestriction === 'female' ? '♀' : '♂'} {genderRestriction === 'female' ? (t('dashboard.contests.women') || 'Femmes') : (t('dashboard.contests.men') || 'Hommes')}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Bottom Section - Action Button */}
+          <div className="transform translate-y-4 group-hover:translate-y-0 transition-transform duration-400 delay-200 pointer-events-auto">
+            {canParticipate() && onParticipate ? (
               <Button
                 onClick={(e) => {
                   e.stopPropagation()
                   onParticipate()
                 }}
-                className="bg-gradient-to-r from-myfav-primary to-myfav-primary-dark hover:from-myfav-primary-dark hover:to-purple-600 text-white font-bold px-10 py-7 text-lg shadow-2xl hover:shadow-myfav-primary/50 transition-all hover:scale-110 rounded-xl"
-            >
-              {t('dashboard.contests.participate')}
-                <ArrowRight className="w-5 h-5 ml-2" />
-            </Button>
-            </div>
-          )}
+                className="w-full bg-myfav-primary hover:bg-myfav-primary-dark text-white font-bold py-4 text-base shadow-lg shadow-myfav-primary/20 hover:shadow-myfav-primary/40 transition-all hover:scale-[1.02] rounded-xl group/btn relative overflow-hidden"
+              >
+                <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover/btn:translate-x-full transition-transform duration-700" />
+                <Sparkles className="w-5 h-5 mr-2" />
+                {t('dashboard.contests.participate') || 'Participer'}
+                <ArrowRight className="w-5 h-5 ml-2 group-hover/btn:translate-x-1 transition-transform" />
+              </Button>
+            ) : (
+              <Button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onViewContestants()
+                }}
+                variant="outline"
+                className="w-full bg-white/10 hover:bg-white/20 text-white border-white/20 hover:border-white/40 font-semibold py-4 text-base rounded-xl transition-all"
+              >
+                <Trophy className="w-5 h-5 mr-2" />
+                {t('dashboard.contests.view_contestants') || 'Voir les candidats'}
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     </div>

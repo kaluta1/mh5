@@ -9,7 +9,14 @@ import { ParticipateFormSkeleton } from '@/components/ui/skeleton'
 import { KYCAlert } from '@/components/dashboard/kyc-alert'
 import { ParticipationForm } from '@/components/dashboard/participation-form'
 import { contestService } from '@/services/contest-service'
-import { AlertCircle } from 'lucide-react'
+import { AlertCircle, Shield, Camera, Mic, Video, Award, FileCheck } from 'lucide-react'
+import { 
+  VerificationRequirementsDialog, 
+  SelfieVerificationDialog, 
+  VoiceVerificationDialog,
+  ContentVerificationDialog,
+  BrandVerificationDialog
+} from '@/components/verification'
 
 export default function ParticipateInContestPage() {
   const { t } = useLanguage()
@@ -32,6 +39,18 @@ export default function ParticipateInContestPage() {
   const [timeRemaining, setTimeRemaining] = useState<string>('')
   const [existingParticipationData, setExistingParticipationData] = useState<any>(null)
   const [participantId, setParticipantId] = useState<number | null>(null)
+  
+  // Verification states
+  const [showVerificationDialog, setShowVerificationDialog] = useState(false)
+  const [showSelfieDialog, setShowSelfieDialog] = useState(false)
+  const [showVoiceDialog, setShowVoiceDialog] = useState(false)
+  const [showBrandDialog, setShowBrandDialog] = useState(false)
+  const [showContentDialog, setShowContentDialog] = useState(false)
+  const [hasVisualVerification, setHasVisualVerification] = useState(false)
+  const [hasVoiceVerification, setHasVoiceVerification] = useState(false)
+  const [hasBrandVerification, setHasBrandVerification] = useState(false)
+  const [hasContentVerification, setHasContentVerification] = useState(false)
+  const [verificationsCompleted, setVerificationsCompleted] = useState(false)
 
   // Calculer le temps restant
   useEffect(() => {
@@ -107,6 +126,29 @@ export default function ParticipateInContestPage() {
         if (contestId) {
           const contestData = await contestService.getContestById(contestId)
           setContest(contestData)
+          
+          // Vérifier si des vérifications sont requises pour ce contest
+          const needsVerification = 
+            contestData.requires_kyc || 
+            contestData.requires_visual_verification || 
+            contestData.requires_voice_verification ||
+            contestData.requires_brand_verification ||
+            contestData.requires_content_verification
+          
+          // Si des vérifications sont requises et pas encore complétées, afficher le dialog
+          if (needsVerification && !isEditMode) {
+            // Vérifier quelles vérifications sont déjà faites
+            const kycDone = !contestData.requires_kyc || user?.identity_verified
+            const visualDone = !contestData.requires_visual_verification || hasVisualVerification
+            const voiceDone = !contestData.requires_voice_verification || hasVoiceVerification
+            const brandDone = !contestData.requires_brand_verification || hasBrandVerification
+            const contentDone = !contestData.requires_content_verification || hasContentVerification
+            
+            // Afficher le dialog si au moins une vérification est requise
+            if (!kycDone || !visualDone || !voiceDone || !brandDone || !contentDone) {
+              setShowVerificationDialog(true)
+            }
+          }
           
           // Vérifier si l'utilisateur a déjà une candidature
           const userContestants = await contestService.getContestantsByContest(contestId)
@@ -324,6 +366,14 @@ export default function ParticipateInContestPage() {
                     isSubmitting={isSubmitting}
                     isEditing={isEditingParticipation}
                     initialData={existingParticipationData}
+                    mediaRequirements={{
+                      requiresVideo: contest?.requires_video,
+                      maxVideos: contest?.max_videos,
+                      videoMaxDuration: contest?.video_max_duration,
+                      videoMaxSizeMb: contest?.video_max_size_mb,
+                      minImages: contest?.min_images,
+                      maxImages: contest?.max_images
+                    }}
                   />
                 )}
               </>
@@ -398,6 +448,102 @@ export default function ParticipateInContestPage() {
           )}
         </div>
       </div>
+
+      {/* Verification Dialogs */}
+      {contest && (
+        <>
+          <VerificationRequirementsDialog
+            isOpen={showVerificationDialog}
+            onClose={() => setShowVerificationDialog(false)}
+            contestName={contest.name}
+            requirements={{
+              requiresKyc: contest.requires_kyc,
+              requiresVisualVerification: contest.requires_visual_verification,
+              requiresVoiceVerification: contest.requires_voice_verification,
+              requiresBrandVerification: contest.requires_brand_verification,
+              requiresContentVerification: contest.requires_content_verification,
+              requiresVideo: contest.requires_video
+            }}
+            userVerifications={{
+              isKycVerified: user?.identity_verified || false,
+              hasVisualVerification,
+              hasVoiceVerification,
+              hasBrandVerification,
+              hasContentVerification
+            }}
+            onStartVerification={(type) => {
+              setShowVerificationDialog(false)
+              if (type === 'kyc') {
+                router.push('/dashboard/kyc')
+              } else if (type === 'visual') {
+                setShowSelfieDialog(true)
+              } else if (type === 'voice') {
+                setShowVoiceDialog(true)
+              } else if (type === 'brand') {
+                setShowBrandDialog(true)
+              } else if (type === 'content') {
+                setShowContentDialog(true)
+              }
+            }}
+            onProceed={() => {
+              setShowVerificationDialog(false)
+              setVerificationsCompleted(true)
+            }}
+          />
+
+          <SelfieVerificationDialog
+            isOpen={showSelfieDialog}
+            onClose={() => setShowSelfieDialog(false)}
+            onComplete={(imageUrl) => {
+              setHasVisualVerification(true)
+              setShowSelfieDialog(false)
+              setShowVerificationDialog(true)
+              addToast(t('verification.selfie_success') || 'Selfie enregistré avec succès', 'success')
+            }}
+            verificationType={contest.participant_type === 'pet' ? 'selfie_with_pet' : 'selfie'}
+            maxSizeMb={contest.verification_max_size_mb || 50}
+          />
+
+          <VoiceVerificationDialog
+            isOpen={showVoiceDialog}
+            onClose={() => setShowVoiceDialog(false)}
+            onComplete={(audioUrl) => {
+              setHasVoiceVerification(true)
+              setShowVoiceDialog(false)
+              setShowVerificationDialog(true)
+              addToast(t('verification.voice_success') || 'Enregistrement vocal enregistré avec succès', 'success')
+            }}
+            maxDurationSeconds={contest.verification_video_max_duration || 30}
+            maxSizeMb={contest.verification_max_size_mb || 50}
+          />
+
+          <BrandVerificationDialog
+            isOpen={showBrandDialog}
+            onClose={() => setShowBrandDialog(false)}
+            onComplete={(data) => {
+              setHasBrandVerification(true)
+              setShowBrandDialog(false)
+              setShowVerificationDialog(true)
+              addToast(t('verification.brand_success') || 'Vérification de marque soumise', 'success')
+              // TODO: Save brand verification data to backend
+            }}
+            maxSizeMb={contest.verification_max_size_mb || 50}
+          />
+
+          <ContentVerificationDialog
+            isOpen={showContentDialog}
+            onClose={() => setShowContentDialog(false)}
+            onComplete={(data) => {
+              setHasContentVerification(true)
+              setShowContentDialog(false)
+              setShowVerificationDialog(true)
+              addToast(t('verification.content_success') || 'Vérification de contenu soumise', 'success')
+              // TODO: Save content verification data to backend
+            }}
+            maxSizeMb={contest.verification_max_size_mb || 50}
+          />
+        </>
+      )}
     </div>
   )
 }

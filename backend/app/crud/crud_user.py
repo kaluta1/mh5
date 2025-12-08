@@ -67,7 +67,7 @@ class CRUDUser:
         return db.query(User).filter(User.personal_referral_code == referral_code).first()
 
     def create_with_sponsor(self, db: Session, obj_in: UserCreate, sponsor_code: Optional[str] = None) -> User:
-        """Crée un utilisateur avec un parrain optionnel."""
+        """Crée un utilisateur avec un parrain optionnel et le rôle 'user' par défaut."""
         # Générer un code de parrainage unique
         referral_code = self._generate_unique_referral_code(db)
         
@@ -77,6 +77,10 @@ class CRUDUser:
             sponsor = self.get_by_referral_code(db, sponsor_code)
             if sponsor:
                 sponsor_id = sponsor.id
+        
+        # Récupérer le rôle par défaut 'user'
+        default_role = self.get_role_by_name(db, 'user')
+        role_id = default_role.id if default_role else None
         
         db_obj = User(
             email=obj_in.email,
@@ -95,7 +99,8 @@ class CRUDUser:
             country=obj_in.country,
             city=obj_in.city,
             personal_referral_code=referral_code,
-            sponsor_id=sponsor_id
+            sponsor_id=sponsor_id,
+            role_id=role_id
         )
         db.add(db_obj)
         db.commit()

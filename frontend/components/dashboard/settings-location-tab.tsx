@@ -44,7 +44,7 @@ export function SettingsLocationTab({ user }: SettingsLocationTabProps) {
       }
 
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-      const response = await fetch(`${apiUrl}/api/v1/contestants/user`, {
+      const response = await fetch(`${apiUrl}/api/v1/contestants/user/my-entries`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },

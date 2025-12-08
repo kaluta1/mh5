@@ -17,6 +17,25 @@ export interface Contest {
   participationStartDate?: Date
   participationEndDate?: Date
   votingStartDate?: Date
+  // Verification requirements
+  requiresKyc?: boolean
+  verificationType?: 'none' | 'visual' | 'voice' | 'brand' | 'content'
+  participantType?: 'individual' | 'pet' | 'club' | 'content'
+  requiresVisualVerification?: boolean
+  requiresVoiceVerification?: boolean
+  requiresBrandVerification?: boolean
+  requiresContentVerification?: boolean
+  minAge?: number | null
+  maxAge?: number | null
+  // Media requirements
+  requiresVideo?: boolean
+  maxVideos?: number
+  videoMaxDuration?: number
+  videoMaxSizeMb?: number
+  minImages?: number
+  maxImages?: number
+  verificationVideoMaxDuration?: number
+  verificationMaxSizeMb?: number
 }
 
 export interface ContestResponse {
@@ -44,6 +63,25 @@ export interface ContestResponse {
   updated_at: string
   entries_count?: number
   total_votes?: number
+  // Verification requirements
+  requires_kyc?: boolean
+  verification_type?: string
+  participant_type?: string
+  requires_visual_verification?: boolean
+  requires_voice_verification?: boolean
+  requires_brand_verification?: boolean
+  requires_content_verification?: boolean
+  min_age?: number | null
+  max_age?: number | null
+  // Media requirements
+  requires_video?: boolean
+  max_videos?: number
+  video_max_duration?: number
+  video_max_size_mb?: number
+  min_images?: number
+  max_images?: number
+  verification_video_max_duration?: number
+  verification_max_size_mb?: number
 }
 
 export interface ContestantWithAuthorAndStats {
@@ -478,26 +516,15 @@ class ContestService {
     // Utiliser season_level si disponible, sinon utiliser level
     const level = response.season_level || response.level || 'country'
     
-    // Calculer si le contest est ouvert pour candidater
-    // Un contest est ouvert si :
-    // 1. is_submission_open est true
-    // 2. La date actuelle est entre submission_start_date et submission_end_date
-    // 3. La date de début de vote (voting_start_date) n'a pas encore commencé
+    // Le contest est ouvert pour candidater si le backend dit is_submission_open: true
+    // On fait confiance au backend pour gérer les dates
     const now = new Date()
     const submissionStart = response.submission_start_date ? new Date(response.submission_start_date) : null
     const submissionEnd = response.submission_end_date ? new Date(response.submission_end_date) : null
     const votingStart = response.voting_start_date ? new Date(response.voting_start_date) : null
     
-    let isOpen = response.is_submission_open || false
-    
-    // Vérifier que nous sommes dans la période de candidature
-    if (submissionStart && now < submissionStart) {
-      isOpen = false // Pas encore commencé
-    } else if (submissionEnd && now > submissionEnd) {
-      isOpen = false // Période terminée
-    } else if (votingStart && now >= votingStart) {
-      isOpen = false // Le vote a commencé, on ne peut plus candidater
-    }
+    // Faire confiance au backend pour la valeur de is_submission_open
+    const isOpen = response.is_submission_open || false
     
     // Gérer la couverture : utiliser image_url en priorité, puis cover_image_url, sinon emoji
     let coverImage = response.image_url || response.cover_image_url || ''
@@ -563,7 +590,26 @@ class ContestService {
       })(),
       participationStartDate: submissionStart || undefined,
       participationEndDate: submissionEnd || undefined,
-      votingStartDate: votingStart || undefined
+      votingStartDate: votingStart || undefined,
+      // Verification requirements - KYC n'est PAS requis par défaut
+      requiresKyc: response.requires_kyc ?? false,
+      verificationType: (response.verification_type as 'none' | 'visual' | 'voice' | 'brand' | 'content') || 'none',
+      participantType: (response.participant_type as 'individual' | 'pet' | 'club' | 'content') || 'individual',
+      requiresVisualVerification: response.requires_visual_verification ?? false,
+      requiresVoiceVerification: response.requires_voice_verification ?? false,
+      requiresBrandVerification: response.requires_brand_verification ?? false,
+      requiresContentVerification: response.requires_content_verification ?? false,
+      minAge: response.min_age ?? null,
+      maxAge: response.max_age ?? null,
+      // Media requirements
+      requiresVideo: response.requires_video ?? false,
+      maxVideos: response.max_videos ?? 1,
+      videoMaxDuration: response.video_max_duration ?? 3000,
+      videoMaxSizeMb: response.video_max_size_mb ?? 500,
+      minImages: response.min_images ?? 0,
+      maxImages: response.max_images ?? 10,
+      verificationVideoMaxDuration: response.verification_video_max_duration ?? 30,
+      verificationMaxSizeMb: response.verification_max_size_mb ?? 50
     }
   }
 

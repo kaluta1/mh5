@@ -1,7 +1,16 @@
 import { createUploadthing, type FileRouter } from "uploadthing/next";
 import { UploadThingError } from "uploadthing/server";
+import { 
+  moderateImage, 
+  moderateVideo, 
+  deleteUploadthingFile,
+  type ModerationResult 
+} from "@/lib/services/content-moderation-service";
 
 const f = createUploadthing();
+
+// Configuration de modération
+const ENABLE_CONTENT_MODERATION = process.env.ENABLE_CONTENT_MODERATION === 'true';
 
 /**
  * Middleware pour vérifier l'authentification
@@ -167,6 +176,7 @@ export const ourFileRouter = {
 
   /**
    * Route pour uploader les médias de candidature (images et vidéos)
+   * Avec modération de contenu automatique
    */
   contestantMedia: f({
     image: { maxFileSize: "8MB", maxFileCount: 10 },
@@ -179,12 +189,81 @@ export const ourFileRouter = {
     .onUploadComplete(async ({ metadata, file }) => {
       console.log("Contestant media uploaded:", file);
       
+      let moderation: ModerationResult | null = null;
+      
+      // Modération de contenu si activée
+      if (ENABLE_CONTENT_MODERATION) {
+        try {
+          const isVideo = file.type?.startsWith('video/') || file.name?.endsWith('.mp4') || file.name?.endsWith('.webm');
+          
+          if (isVideo) {
+            moderation = await moderateVideo(file.url);
+          } else {
+            moderation = await moderateImage(file.url);
+          }
+          
+          console.log("Content moderation result:", moderation);
+          
+          // Si le contenu n'est pas approuvé, supprimer le fichier
+          if (!moderation.isApproved) {
+            console.warn("Content rejected by moderation:", moderation.flags);
+            
+            // Extraire la clé du fichier depuis l'URL
+            const fileKey = file.key || file.url.split('/').pop();
+            if (fileKey) {
+              await deleteUploadthingFile(fileKey);
+            }
+            
+            // Retourner une erreur avec les détails
+            throw new UploadThingError(
+              `Contenu rejeté: ${moderation.flags.map(f => f.description).join(', ')}`
+            );
+          }
+        } catch (error) {
+          if (error instanceof UploadThingError) {
+            throw error;
+          }
+          console.error("Moderation error:", error);
+          // En cas d'erreur de modération, on laisse passer (fail-open)
+        }
+      }
+      
       return {
         uploadedBy: metadata.userId,
         url: file.url,
         name: file.name,
         size: file.size,
-        type: file.type
+        type: file.type,
+        moderationApproved: moderation?.isApproved ?? true,
+        moderationConfidence: moderation?.confidence ?? 1,
+        moderationFlags: moderation?.flags?.map(f => f.type).join(',') ?? ''
+      };
+    }),
+
+  /**
+   * Route pour uploader les médias de vérification (selfie, voix, etc.)
+   */
+  verificationMedia: f({
+    image: { maxFileSize: "8MB", maxFileCount: 1 },
+    video: { maxFileSize: "32MB", maxFileCount: 1 },
+    "audio/webm": { maxFileSize: "8MB", maxFileCount: 1 },
+    "audio/mp4": { maxFileSize: "8MB", maxFileCount: 1 },
+    "audio/mpeg": { maxFileSize: "8MB", maxFileCount: 1 }
+  })
+    .middleware(async ({ req }) => {
+      const user = await auth(req);
+      return user;
+    })
+    .onUploadComplete(async ({ metadata, file }) => {
+      console.log("Verification media uploaded:", file);
+      
+      return {
+        uploadedBy: metadata.userId,
+        url: file.url,
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        purpose: 'verification'
       };
     })
 } satisfies FileRouter;
