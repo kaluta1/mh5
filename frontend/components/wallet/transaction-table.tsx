@@ -52,12 +52,20 @@ export function TransactionTable({
   emptyTitle,
   emptyDescription
 }: TransactionTableProps) {
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
   const [showResumeDialog, setShowResumeDialog] = useState(false)
 
+  // Mapping des langues vers les locales
+  const localeMap: Record<string, string> = {
+    fr: 'fr-FR',
+    en: 'en-US',
+    es: 'es-ES',
+    de: 'de-DE'
+  }
+
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', { 
+    return new Intl.NumberFormat(localeMap[language] || 'en-US', { 
       style: 'currency', 
       currency: 'USD',
       minimumFractionDigits: 2
@@ -66,7 +74,7 @@ export function TransactionTable({
 
   const formatDate = (dateString: string) => {
     if (!dateString) return '-'
-    return new Date(dateString).toLocaleDateString('fr-FR', {
+    return new Date(dateString).toLocaleDateString(localeMap[language] || 'en-US', {
       day: 'numeric',
       month: 'long',
       year: 'numeric',

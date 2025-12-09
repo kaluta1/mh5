@@ -59,10 +59,18 @@ interface Invitation {
 }
 
 export default function AffiliatesPage() {
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
   const router = useRouter()
   const { user, isAuthenticated, isLoading } = useAuth()
   const { addToast } = useToast()
+  
+  // Mapping des langues vers les locales
+  const localeMap: Record<string, string> = {
+    fr: 'fr-FR',
+    en: 'en-US',
+    es: 'es-ES',
+    de: 'de-DE'
+  }
   
   const [referralCode, setReferralCode] = useState('')
   const [referralLinks, setReferralLinks] = useState({
@@ -700,7 +708,7 @@ export default function AffiliatesPage() {
                           </>
                         )}
                         <span className="whitespace-nowrap">
-                          {new Date(affiliate.joinedAt).toLocaleDateString('fr-FR', {
+                          {new Date(affiliate.joinedAt).toLocaleDateString(localeMap[language] || 'en-US', {
                             day: 'numeric',
                             month: 'short'
                           })}
@@ -772,7 +780,7 @@ export default function AffiliatesPage() {
                         <span className="flex items-center gap-1">
                           <Clock className="w-3 h-3" />
                           {t('dashboard.affiliates.sent_on') || 'Envoyé le'}{' '}
-                          {new Date(invitation.sent_at).toLocaleDateString('fr-FR', {
+                          {new Date(invitation.sent_at).toLocaleDateString(localeMap[language] || 'en-US', {
                             day: 'numeric',
                             month: 'short',
                             year: 'numeric'

@@ -55,7 +55,15 @@ interface CommissionStats {
 }
 
 export default function CommissionsPage() {
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
+  
+  // Mapping des langues vers les locales
+  const localeMap: Record<string, string> = {
+    fr: 'fr-FR',
+    en: 'en-US',
+    es: 'es-ES',
+    de: 'de-DE'
+  }
   const router = useRouter()
   const { user, isAuthenticated, isLoading } = useAuth()
   
@@ -317,7 +325,7 @@ export default function CommissionsPage() {
     { code: 'all', label: t('dashboard.commissions.filter_all') },
     { code: 'kyc_verification', label: t('dashboard.commissions.types.KYC_PAYMENT') },
     { code: 'annual_membership', label: t('dashboard.commissions.types.ANNUAL_MEMBERSHIP_FEE') },
-    { code: 'efm_membership', label: t('dashboard.commissions.types.EFM_MEMBERSHIP') },
+    { code: 'mfm_membership', label: t('dashboard.commissions.types.MFM_MEMBERSHIP') },
     { code: 'club_membership', label: t('dashboard.commissions.types.CLUB_MEMBERSHIP') },
     { code: 'contest_participation', label: t('dashboard.commissions.types.CONTEST_PARTICIPATION') },
     { code: 'shop_purchase', label: t('dashboard.commissions.types.SHOP_PURCHASE') },
@@ -564,14 +572,14 @@ export default function CommissionsPage() {
                     </div>
                     
                     <p className="text-xs text-gray-400 dark:text-gray-500">
-                      {new Date(commission.createdAt).toLocaleDateString('fr-FR', {
+                      {new Date(commission.createdAt).toLocaleDateString(localeMap[language] || 'en-US', {
                         day: 'numeric',
                         month: 'long',
                         year: 'numeric'
                       })}
                       {commission.baseAmount && (
                         <span className="ml-2">
-                          • Base: {commission.baseAmount.toLocaleString('fr-FR', { style: 'currency', currency: 'USD' })}
+                          • Base: {commission.baseAmount.toLocaleString(localeMap[language] || 'en-US', { style: 'currency', currency: 'USD' })}
                         </span>
                       )}
                     </p>

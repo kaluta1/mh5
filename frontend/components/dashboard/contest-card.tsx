@@ -365,7 +365,7 @@ export function ContestCard({
           <div className="flex items-center justify-between transform -translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
             <div className="flex items-center gap-2">
               <MapPin className="w-4 h-4 text-myfav-secondary" />
-              <span className="text-white/90 text-sm font-medium">{getStatusLabel()}</span>
+              <span className="text-white/90 text-sm font-medium">{getStatusLabel(status)}</span>
             </div>
             {isOpen && (
               <span className="flex items-center gap-1.5 bg-green-500/20 text-green-400 px-2.5 py-1 rounded-full text-xs font-semibold border border-green-500/30">
