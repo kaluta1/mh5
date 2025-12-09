@@ -2,12 +2,15 @@
 Payment models - Deposit, Payment Methods, Product Types
 """
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from sqlalchemy import String, Integer, Boolean, Text, ForeignKey, Numeric, Enum as SQLEnum, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from enum import Enum
 
 from app.db.base_class import Base
+
+if TYPE_CHECKING:
+    from app.models.affiliate import AffiliateCommission
 
 
 class PaymentMethodCategory(str, Enum):
@@ -68,12 +71,12 @@ class PaymentMethod(Base):
 
 class ProductType(Base):
     """
-    Types de produits payables
-    Ex: KYC, Subscription Club, EFM Membership
+    Types de produits payables avec configuration des commissions d'affiliation.
+    Ex: KYC, Subscription Club, EFM Membership, Founding Membership
     """
     __tablename__ = "product_types"
     
-    code: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)  # kyc, subscription_club, efm_membership
+    code: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)  # kyc, founding_membership, annual_membership
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     
@@ -81,7 +84,7 @@ class ProductType(Base):
     price: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(10), default="USD")
     
-    # Durée de validité en jours (365 pour 1 an)
+    # Durée de validité en jours (365 pour 1 an, 0 pour one-time)
     validity_days: Mapped[int] = mapped_column(Integer, default=365)
     
     # Configuration
@@ -90,8 +93,24 @@ class ProductType(Base):
     # Pour les produits qui consomment des tentatives (comme KYC)
     is_consumable: Mapped[bool] = mapped_column(Boolean, default=True)  # True = 1 paiement = 1 utilisation
     
+    # ============================================
+    # CONFIGURATION COMMISSIONS D'AFFILIATION
+    # ============================================
+    
+    # Activer les commissions pour ce produit
+    has_affiliate_commission: Mapped[bool] = mapped_column(Boolean, default=False)
+    
+    # Commission Niveau 1 (parrainage direct)
+    affiliate_direct_amount: Mapped[Optional[float]] = mapped_column(Numeric(10, 2), nullable=True)  # Montant fixe (ex: 20$)
+    affiliate_direct_rate: Mapped[Optional[float]] = mapped_column(Numeric(5, 4), nullable=True)  # OU pourcentage (ex: 0.20)
+    
+    # Commission Niveaux 2-10 (parrainages indirects)
+    affiliate_indirect_amount: Mapped[Optional[float]] = mapped_column(Numeric(10, 2), nullable=True)  # Montant fixe (ex: 2$)
+    affiliate_indirect_rate: Mapped[Optional[float]] = mapped_column(Numeric(5, 4), nullable=True)  # OU pourcentage (ex: 0.02)
+    
     # Relations
     deposits: Mapped[list["Deposit"]] = relationship("Deposit", back_populates="product_type")
+    affiliate_commissions: Mapped[list["AffiliateCommission"]] = relationship("AffiliateCommission", back_populates="product_type")
 
 
 class Deposit(Base):

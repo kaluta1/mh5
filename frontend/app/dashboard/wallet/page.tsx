@@ -8,29 +8,17 @@ import { useToast } from '@/components/ui/toast'
 import { Button } from '@/components/ui/button'
 import { 
   Wallet, 
-  ArrowUpRight, 
-  ArrowDownLeft, 
-  CreditCard,
   TrendingUp,
-  Clock,
-  CheckCircle,
-  XCircle,
-  Plus,
-  Send,
   History,
   Sparkles,
-  Gift,
-  DollarSign
+  ChevronRight,
+  ShoppingBag,
+  Clock
 } from 'lucide-react'
+import Link from 'next/link'
+import { PaymentDialog } from '@/components/dialogs/payment-dialog-v2'
+import { TransactionTable, Transaction } from '@/components/wallet/transaction-table'
 
-interface Transaction {
-  id: string
-  type: 'credit' | 'debit' | 'withdrawal' | 'bonus'
-  amount: number
-  description: string
-  date: string
-  status: 'completed' | 'pending' | 'failed'
-}
 
 export default function WalletPage() {
   const { t } = useLanguage()
@@ -41,8 +29,11 @@ export default function WalletPage() {
   const [balance, setBalance] = useState(0)
   const [pendingBalance, setPendingBalance] = useState(0)
   const [totalEarnings, setTotalEarnings] = useState(0)
+  const [thisMonth, setThisMonth] = useState(0)
+  const [growthRate, setGrowthRate] = useState(0)
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [pageLoading, setPageLoading] = useState(true)
+  const [showPaymentDialog, setShowPaymentDialog] = useState(false)
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', { 
@@ -62,53 +53,44 @@ export default function WalletPage() {
 
   const loadWalletData = async () => {
     try {
-      // TODO: Fetch real wallet data from API
-      // Simulated data for now
-      setBalance(1250.50)
-      setPendingBalance(320.00)
-      setTotalEarnings(4580.75)
-      setTransactions([
-        {
-          id: '1',
-          type: 'credit',
-          amount: 150.00,
-          description: t('wallet.commission_affiliate') || 'Commission affilié - Jean Dupont',
-          date: '2024-12-04',
-          status: 'completed'
-        },
-        {
-          id: '2',
-          type: 'bonus',
-          amount: 50.00,
-          description: t('wallet.welcome_bonus') || 'Bonus de bienvenue',
-          date: '2024-12-03',
-          status: 'completed'
-        },
-        {
-          id: '3',
-          type: 'withdrawal',
-          amount: 500.00,
-          description: t('wallet.bank_withdrawal') || 'Retrait vers compte bancaire',
-          date: '2024-12-02',
-          status: 'pending'
-        },
-        {
-          id: '4',
-          type: 'credit',
-          amount: 75.00,
-          description: t('wallet.commission_affiliate') || 'Commission affilié - Marie Martin',
-          date: '2024-12-01',
-          status: 'completed'
-        },
-        {
-          id: '5',
-          type: 'debit',
-          amount: 25.00,
-          description: t('wallet.premium_votes') || 'Achat de votes premium',
-          date: '2024-11-30',
-          status: 'completed'
-        }
-      ])
+      const token = localStorage.getItem('access_token')
+      const headers = token ? { 'Authorization': `Bearer ${token}` } : {}
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      
+      // Charger le solde du portefeuille
+      const balanceResponse = await fetch(`${apiUrl}/api/v1/wallet/balance`, { headers })
+      
+      if (balanceResponse.ok) {
+        const balanceData = await balanceResponse.json()
+        setBalance(balanceData.available_balance || 0)
+        setPendingBalance(balanceData.pending_balance || 0)
+        setTotalEarnings(balanceData.total_earnings || 0)
+        setThisMonth(balanceData.this_month || 0)
+        setGrowthRate(balanceData.growth_rate || 0)
+      }
+      
+      // Charger les transactions
+      const transactionsResponse = await fetch(`${apiUrl}/api/v1/wallet/transactions?limit=20`, { headers })
+      
+      if (transactionsResponse.ok) {
+        const transactionsData = await transactionsResponse.json()
+        setTransactions(transactionsData.map((t: any) => ({
+          id: t.id,
+          type: t.type,
+          category: t.category,
+          amount: t.amount,
+          description: t.description,
+          date: t.date,
+          status: t.status,
+          commission_type: t.commission_type,
+          commission_type_label: t.commission_type_label,
+          level: t.level,
+          product_code: t.product_code,
+          source_user: t.source_user,
+          deposit_id: t.deposit_id,
+          external_payment_id: t.external_payment_id
+        })))
+      }
     } catch (error) {
       console.error('Error loading wallet data:', error)
       addToast(t('common.error') || 'Erreur lors du chargement des données', 'error')
@@ -117,48 +99,6 @@ export default function WalletPage() {
     }
   }
 
-  const getTransactionIcon = (type: string) => {
-    switch (type) {
-      case 'credit':
-        return <ArrowDownLeft className="w-5 h-5 text-green-500" />
-      case 'debit':
-        return <ArrowUpRight className="w-5 h-5 text-red-500" />
-      case 'withdrawal':
-        return <Send className="w-5 h-5 text-orange-500" />
-      case 'bonus':
-        return <Gift className="w-5 h-5 text-myfav-primary" />
-      default:
-        return <DollarSign className="w-5 h-5 text-gray-500" />
-    }
-  }
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return (
-          <span className="flex items-center gap-1 text-xs font-medium text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/30 px-2 py-1 rounded-full">
-            <CheckCircle className="w-3 h-3" />
-            {t('dashboard.wallet.completed')}
-          </span>
-        )
-      case 'pending':
-        return (
-          <span className="flex items-center gap-1 text-xs font-medium text-orange-600 dark:text-orange-400 bg-orange-100 dark:bg-orange-900/30 px-2 py-1 rounded-full">
-            <Clock className="w-3 h-3" />
-            {t('dashboard.wallet.pending')}
-          </span>
-        )
-      case 'failed':
-        return (
-          <span className="flex items-center gap-1 text-xs font-medium text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/30 px-2 py-1 rounded-full">
-            <XCircle className="w-3 h-3" />
-            {t('dashboard.wallet.failed')}
-          </span>
-        )
-      default:
-        return null
-    }
-  }
 
   if (isLoading || pageLoading) {
     return (
@@ -194,18 +134,21 @@ export default function WalletPage() {
           </p>
         </div>
         <div className="flex gap-3">
+          <Link href="/dashboard/wallet/transactions">
+            <Button 
+              variant="outline"
+              className="rounded-xl border-2"
+            >
+              <History className="w-4 h-4 mr-2" />
+              {t('dashboard.wallet.history')}
+            </Button>
+          </Link>
           <Button 
-            variant="outline"
-            className="rounded-xl border-2"
+            onClick={() => setShowPaymentDialog(true)}
+            className="rounded-xl bg-sky-600 hover:bg-sky-700 shadow-lg shadow-sky-600/25"
           >
-            <History className="w-4 h-4 mr-2" />
-            {t('dashboard.wallet.history')}
-          </Button>
-          <Button 
-            className="rounded-xl bg-myfav-primary hover:bg-myfav-primary/90 shadow-lg shadow-myfav-primary/25"
-          >
-            <Send className="w-4 h-4 mr-2" />
-            {t('dashboard.wallet.withdraw')}
+            <ShoppingBag className="w-4 h-4 mr-2" />
+            {t('dashboard.wallet.buy_service')}
           </Button>
         </div>
       </div>
@@ -226,7 +169,10 @@ export default function WalletPage() {
             </div>
             <div className="flex items-center gap-2 text-sm opacity-80">
               <TrendingUp className="w-4 h-4" />
-              <span>+12.5% {t('dashboard.wallet.this_month')}</span>
+              <span>{growthRate >= 0 ? '+' : ''}{growthRate.toFixed(1)}% {t('dashboard.wallet.this_month')}</span>
+            </div>
+            <div className="text-xs mt-1 opacity-70">
+              {t('dashboard.wallet.this_month')}: {formatCurrency(thisMonth)}
             </div>
           </div>
         </div>
@@ -268,37 +214,6 @@ export default function WalletPage() {
         </div>
       </div>
 
-      {/* Quick Actions */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <button className="flex flex-col items-center gap-2 p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-myfav-primary/50 dark:hover:border-myfav-primary/50 hover:shadow-lg transition-all group">
-          <div className="w-12 h-12 rounded-full bg-myfav-primary/10 dark:bg-myfav-primary/20 flex items-center justify-center group-hover:scale-110 transition-transform">
-            <Plus className="w-6 h-6 text-myfav-primary" />
-          </div>
-          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('dashboard.wallet.add_funds')}</span>
-        </button>
-        
-        <button className="flex flex-col items-center gap-2 p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-purple-300 dark:hover:border-purple-700 hover:shadow-lg transition-all group">
-          <div className="w-12 h-12 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center group-hover:scale-110 transition-transform">
-            <Send className="w-6 h-6 text-purple-600 dark:text-purple-400" />
-          </div>
-          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('dashboard.wallet.withdraw')}</span>
-        </button>
-        
-        <button className="flex flex-col items-center gap-2 p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-pink-300 dark:hover:border-pink-700 hover:shadow-lg transition-all group">
-          <div className="w-12 h-12 rounded-full bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center group-hover:scale-110 transition-transform">
-            <Gift className="w-6 h-6 text-pink-600 dark:text-pink-400" />
-          </div>
-          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('dashboard.wallet.redeem')}</span>
-        </button>
-        
-        <button className="flex flex-col items-center gap-2 p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-orange-300 dark:hover:border-orange-700 hover:shadow-lg transition-all group">
-          <div className="w-12 h-12 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center group-hover:scale-110 transition-transform">
-            <CreditCard className="w-6 h-6 text-orange-600 dark:text-orange-400" />
-          </div>
-          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('dashboard.wallet.cards')}</span>
-        </button>
-      </div>
-
       {/* Recent Transactions */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 overflow-hidden">
         <div className="p-6 border-b border-gray-100 dark:border-gray-700">
@@ -307,56 +222,33 @@ export default function WalletPage() {
               <History className="w-5 h-5 text-gray-500" />
               {t('dashboard.wallet.recent_transactions')}
             </h2>
-            <Button variant="ghost" size="sm" className="text-myfav-primary hover:text-myfav-primary/80">
-              {t('dashboard.wallet.see_all')}
-            </Button>
+            <Link href="/dashboard/wallet/transactions">
+              <Button variant="ghost" size="sm" className="text-myfav-primary hover:text-myfav-primary/80">
+                {t('dashboard.wallet.see_all')}
+                <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+            </Link>
           </div>
         </div>
         
-        <div className="divide-y divide-gray-100 dark:divide-gray-700">
-          {transactions.map((transaction) => (
-            <div 
-              key={transaction.id} 
-              className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-            >
-              <div className="flex items-center gap-4">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                  transaction.type === 'credit' || transaction.type === 'bonus'
-                    ? 'bg-green-100 dark:bg-green-900/30'
-                    : transaction.type === 'withdrawal'
-                    ? 'bg-orange-100 dark:bg-orange-900/30'
-                    : 'bg-red-100 dark:bg-red-900/30'
-                }`}>
-                  {getTransactionIcon(transaction.type)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                    {transaction.description}
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {new Date(transaction.date).toLocaleDateString('fr-FR', {
-                      day: 'numeric',
-                      month: 'long',
-                      year: 'numeric'
-                    })}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className={`text-sm font-semibold ${
-                    transaction.type === 'credit' || transaction.type === 'bonus'
-                      ? 'text-green-600 dark:text-green-400'
-                      : 'text-red-600 dark:text-red-400'
-                  }`}>
-                    {transaction.type === 'credit' || transaction.type === 'bonus' ? '+' : '-'}
-                    {formatCurrency(transaction.amount)}
-                  </p>
-                  {getStatusBadge(transaction.status)}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+        <TransactionTable 
+          transactions={transactions.slice(0, 5)}
+          showActions={true}
+          onPaymentCompleted={loadWalletData}
+          emptyTitle={t('dashboard.wallet.no_transactions') || 'Aucune transaction'}
+          emptyDescription={t('dashboard.wallet.no_transactions_desc') || "Vous n'avez pas encore de transactions"}
+        />
       </div>
+      
+      {/* Payment Dialog */}
+      <PaymentDialog
+        open={showPaymentDialog}
+        onOpenChange={setShowPaymentDialog}
+        initialProductCode="kyc"
+        onPaymentInitiated={() => {
+          loadWalletData()
+        }}
+      />
     </div>
   )
 }

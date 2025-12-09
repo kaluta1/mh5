@@ -70,18 +70,29 @@ class CommissionRate(CommissionRateBase):
 class AffiliateCommissionBase(BaseModel):
     user_id: int
     source_user_id: int
+    product_type_id: Optional[int] = None  # Lien vers le type de produit
     commission_type: CommissionType
     level: int
-    base_amount: float
-    commission_rate: float
-    commission_amount: float
-    reference_id: Optional[str] = None
-    reference_type: Optional[str] = None
+    base_amount: Optional[float] = None  # Montant de base de la transaction
+    commission_rate: Optional[float] = None  # Taux appliqué (si pourcentage)
+    commission_amount: float  # Commission calculée
+    deposit_id: Optional[int] = None  # Référence vers le dépôt d'origine
+    reference_id: Optional[str] = None  # Legacy
+    reference_type: Optional[str] = None  # Legacy
     status: CommissionStatus = CommissionStatus.PENDING
 
 
-class AffiliateCommissionCreate(AffiliateCommissionBase):
-    pass
+class AffiliateCommissionCreate(BaseModel):
+    """Schéma de création simplifié"""
+    user_id: int
+    source_user_id: int
+    product_type_id: Optional[int] = None
+    commission_type: CommissionType
+    level: int
+    base_amount: Optional[float] = None
+    commission_rate: Optional[float] = None
+    commission_amount: float
+    deposit_id: Optional[int] = None
 
 
 class AffiliateCommissionUpdate(BaseModel):
@@ -97,9 +108,11 @@ class AffiliateCommission(AffiliateCommissionBase):
 
 
 class AffiliateCommissionResponse(AffiliateCommission):
-    """Réponse avec informations utilisateur"""
+    """Réponse avec informations utilisateur et produit"""
     user_name: Optional[str] = None
     source_user_name: Optional[str] = None
+    product_type_name: Optional[str] = None
+    product_type_code: Optional[str] = None
 
 
 # Referral Link schemas

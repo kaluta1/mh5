@@ -138,23 +138,36 @@ def get_my_sponsor(
     return sponsor
 
 
-@router.get("/commissions", response_model=List[AffiliateCommission])
+@router.get("/commissions")
 def get_commissions(
     db: Session = Depends(deps.get_db),
     current_user = Depends(deps.get_current_active_user),
     skip: int = 0,
     limit: int = 50,
-    commission_type: Optional[str] = None
+    commission_type: Optional[str] = None,
+    product_type: Optional[str] = None,
+    sort_by: Optional[str] = "date",  # date, amount, type
+    status: Optional[str] = None  # pending, paid, cancelled
 ):
     """
-    Récupérer les commissions d'affiliation de l'utilisateur.
+    Récupérer les commissions d'affiliation de l'utilisateur avec détails.
+    
+    - **commission_type**: Filtrer par type de commission (legacy)
+    - **product_type**: Filtrer par code produit (founding_membership, annual_membership, etc.)
+    - **sort_by**: Trier par date, amount ou type
+    - **status**: Filtrer par statut (pending, paid, cancelled)
+    
+    Inclut les informations de l'utilisateur source (nom, avatar) et du produit.
     """
-    commissions = affiliate_commission.get_user_commissions(
+    commissions = affiliate_commission.get_user_commissions_detailed(
         db=db,
         user_id=current_user.id,
         skip=skip,
         limit=limit,
-        commission_type=commission_type
+        commission_type=commission_type,
+        product_type_code=product_type,
+        sort_by=sort_by,
+        status=status
     )
     return commissions
 
@@ -171,6 +184,20 @@ def get_commissions_summary(
         db=db, user_id=current_user.id
     )
     return summary
+
+
+@router.get("/commissions/stats")
+def get_commissions_stats(
+    db: Session = Depends(deps.get_db),
+    current_user = Depends(deps.get_current_active_user)
+):
+    """
+    Récupérer les statistiques de commissions pour le dashboard.
+    """
+    stats = affiliate_commission.get_commissions_stats(
+        db=db, user_id=current_user.id
+    )
+    return stats
 
 
 @router.get("/referral-links", response_model=List[ReferralLink])

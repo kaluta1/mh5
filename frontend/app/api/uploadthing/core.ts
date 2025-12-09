@@ -102,7 +102,7 @@ export const ourFileRouter = {
       
       return {
         uploadedBy: metadata.userId,
-        url: file.url,
+        url: file.ufsUrl,
         name: file.name,
         size: file.size,
         type: file.type
@@ -124,7 +124,7 @@ export const ourFileRouter = {
       
       return {
         uploadedBy: metadata.userId,
-        url: file.url,
+        url: file.ufsUrl,
         name: file.name
       };
     }),
@@ -144,7 +144,7 @@ export const ourFileRouter = {
       
       return {
         uploadedBy: metadata.userId,
-        url: file.url,
+        url: file.ufsUrl,
         name: file.name
       };
     }),
@@ -167,7 +167,7 @@ export const ourFileRouter = {
       
       return {
         uploadedBy: metadata.userId,
-        url: file.url,
+        url: file.ufsUrl,
         name: file.name,
         size: file.size,
         type: file.type
@@ -197,9 +197,9 @@ export const ourFileRouter = {
           const isVideo = file.type?.startsWith('video/') || file.name?.endsWith('.mp4') || file.name?.endsWith('.webm');
           
           if (isVideo) {
-            moderation = await moderateVideo(file.url);
+            moderation = await moderateVideo(file.ufsUrl);
           } else {
-            moderation = await moderateImage(file.url);
+            moderation = await moderateImage(file.ufsUrl);
           }
           
           console.log("Content moderation result:", moderation);
@@ -209,7 +209,7 @@ export const ourFileRouter = {
             console.warn("Content rejected by moderation:", moderation.flags);
             
             // Extraire la clé du fichier depuis l'URL
-            const fileKey = file.key || file.url.split('/').pop();
+            const fileKey = file.key || file.ufsUrl.split('/').pop();
             if (fileKey) {
               await deleteUploadthingFile(fileKey);
             }
@@ -230,7 +230,7 @@ export const ourFileRouter = {
       
       return {
         uploadedBy: metadata.userId,
-        url: file.url,
+        url: file.ufsUrl,
         name: file.name,
         size: file.size,
         type: file.type,
@@ -259,7 +259,7 @@ export const ourFileRouter = {
       
       return {
         uploadedBy: metadata.userId,
-        url: file.url,
+        url: file.ufsUrl,
         name: file.name,
         size: file.size,
         type: file.type,

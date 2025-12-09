@@ -1,18 +1,28 @@
-from typing import Optional, List
+from typing import Optional, List, TYPE_CHECKING
 from sqlalchemy import Column, Integer, String, ForeignKey, Float, Text, DateTime, Boolean, Numeric, Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime
 import enum
 from app.db.base_class import Base
 
+if TYPE_CHECKING:
+    from app.models.payment import ProductType, Deposit
+
 
 class CommissionType(str, enum.Enum):
-    AD_REVENUE = "AD_REVENUE"
-    CLUB_MEMBERSHIP = "CLUB_MEMBERSHIP"
-    SHOP_PURCHASE = "SHOP_PURCHASE"
-    CONTEST_PARTICIPATION = "CONTEST_PARTICIPATION"
-    KYC_PAYMENT = "KYC_PAYMENT"
-    EFM_MEMBERSHIP = "EFM_MEMBERSHIP"
+    # Commissions d'affiliation standard
+    AD_REVENUE = "AD_REVENUE"                              # Revenus publicitaires
+    CLUB_MEMBERSHIP = "CLUB_MEMBERSHIP"                    # Abonnement club
+    SHOP_PURCHASE = "SHOP_PURCHASE"                        # Achat boutique
+    CONTEST_PARTICIPATION = "CONTEST_PARTICIPATION"        # Participation concours
+    KYC_PAYMENT = "KYC_PAYMENT"                            # Paiement KYC
+    EFM_MEMBERSHIP = "EFM_MEMBERSHIP"                      # Abonnement EFM
+    
+    # Commissions Founding Members
+    FOUNDING_MEMBERSHIP_FEE = "FOUNDING_MEMBERSHIP_FEE"    # 100$ fee - 20$ direct, 2$ indirect L2-10
+    ANNUAL_MEMBERSHIP_FEE = "ANNUAL_MEMBERSHIP_FEE"        # 50$/an - 10$ direct, 1$ indirect L2-10
+    MONTHLY_REVENUE_POOL = "MONTHLY_REVENUE_POOL"          # 10% revenus nets mensuels (pool FM)
+    ANNUAL_PROFIT_POOL = "ANNUAL_PROFIT_POOL"              # 20% profits annuels après taxes
 
 
 class CommissionStatus(str, enum.Enum):
@@ -56,17 +66,22 @@ class AffiliateCommission(Base):
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)  # Bénéficiaire
     source_user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)  # Générateur
     
+    # Lien vers le type de produit (nouvelle approche)
+    product_type_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("product_types.id"), nullable=True)
+    
+    # Type de commission (pour rétrocompatibilité et cas spéciaux comme les pools)
     commission_type: Mapped[CommissionType] = mapped_column(SQLEnum(CommissionType), nullable=False)
-    level: Mapped[int] = mapped_column(Integer, nullable=False)  # Niveau d'affiliation
+    level: Mapped[int] = mapped_column(Integer, nullable=False)  # Niveau d'affiliation (1 = direct, 2-10 = indirect)
     
     # Montants
-    min_amount: Mapped[Optional[float]] = mapped_column(Numeric(10, 2), nullable=True)  # Montant de base
-    commission_rate: Mapped[float] = mapped_column(Numeric(5, 4), nullable=False)  # Taux appliqué
+    base_amount: Mapped[Optional[float]] = mapped_column(Numeric(10, 2), nullable=True)  # Montant de base de la transaction
+    commission_rate: Mapped[Optional[float]] = mapped_column(Numeric(5, 4), nullable=True)  # Taux appliqué (si pourcentage)
     commission_amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)  # Commission calculée
     
-    # Références
-    reference_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # ID transaction source
-    reference_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # Type de référence
+    # Références vers la transaction d'origine
+    deposit_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("deposits.id"), nullable=True)
+    reference_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # ID transaction source (legacy)
+    reference_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # Type de référence (legacy)
     
     status: Mapped[CommissionStatus] = mapped_column(SQLEnum(CommissionStatus), default=CommissionStatus.PENDING)
     transaction_date: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -75,6 +90,8 @@ class AffiliateCommission(Base):
     # Relations
     user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
     source_user: Mapped["User"] = relationship("User", foreign_keys=[source_user_id])
+    product_type: Mapped[Optional["ProductType"]] = relationship("ProductType", back_populates="affiliate_commissions")
+    deposit: Mapped[Optional["Deposit"]] = relationship("Deposit")
 
 
 class ReferralLink(Base):

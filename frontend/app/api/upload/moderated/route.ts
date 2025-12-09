@@ -138,12 +138,14 @@ export async function POST(request: NextRequest) {
     }
 
     const uploadedFile = uploadResponse[0].data
-    console.log('✅ Fichier uploadé:', uploadedFile.url)
+    // Utiliser ufsUrl (nouveau format) avec fallback sur url (déprécié)
+    const fileUrl = (uploadedFile as any).ufsUrl || uploadedFile.url
+    console.log('✅ Fichier uploadé:', fileUrl)
 
     return NextResponse.json({
       success: true,
       file: {
-        url: uploadedFile.url,
+        url: fileUrl,
         key: uploadedFile.key,
         name: uploadedFile.name,
         size: uploadedFile.size,

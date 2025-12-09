@@ -25,6 +25,9 @@ def init_db() -> None:
         # Création des localisations de base
         create_base_locations(db)
         
+        # Création des types de produits avec commissions
+        create_product_types(db)
+        
     except Exception as e:
         logger.error(f"Erreur lors de l'initialisation de la base de données: {e}")
         raise
@@ -165,6 +168,145 @@ def create_base_locations(db: Session) -> None:
     except Exception as e:
         db.rollback()
         logger.error(f"Erreur lors de la création des continents: {e}")
+
+
+def create_product_types(db: Session) -> None:
+    """Crée les types de produits avec configuration des commissions d'affiliation"""
+    try:
+        from app.models.payment import ProductType
+        
+        product_types = [
+            # ============================================
+            # FOUNDING MEMBERS
+            # ============================================
+            {
+                "code": "founding_membership",
+                "name": "Founding Membership",
+                "description": "Adhésion au programme Founding Members (100$). Donne accès au pool mensuel et annuel.",
+                "price": 100.00,
+                "currency": "USD",
+                "validity_days": 0,  # One-time fee
+                "is_active": True,
+                "is_consumable": False,
+                "has_affiliate_commission": True,
+                "affiliate_direct_amount": 20.00,   # 20$ par parrainage direct
+                "affiliate_indirect_amount": 2.00,  # 2$ par parrainage indirect (N2-10)
+            },
+            {
+                "code": "annual_membership",
+                "name": "Annual Membership Fee",
+                "description": "Cotisation annuelle des Founding Members (50$/an) pour maintenir le statut.",
+                "price": 50.00,
+                "currency": "USD",
+                "validity_days": 365,
+                "is_active": True,
+                "is_consumable": False,
+                "has_affiliate_commission": True,
+                "affiliate_direct_amount": 10.00,   # 10$ par parrainage direct
+                "affiliate_indirect_amount": 1.00,  # 1$ par parrainage indirect (N2-10)
+            },
+            # ============================================
+            # KYC
+            # ============================================
+            {
+                "code": "kyc_verification",
+                "name": "KYC Verification",
+                "description": "Vérification d'identité KYC",
+                "price": 10.00,
+                "currency": "USD",
+                "validity_days": 0,
+                "is_active": True,
+                "is_consumable": True,
+                "has_affiliate_commission": True,
+                "affiliate_direct_rate": 0.20,      # 20% du montant
+                "affiliate_indirect_rate": 0.02,    # 2% du montant (N2-10)
+            },
+            # ============================================
+            # EFM (Enhanced Features Membership)
+            # ============================================
+            {
+                "code": "efm_membership",
+                "name": "EFM Membership",
+                "description": "Abonnement aux fonctionnalités avancées",
+                "price": 9.99,
+                "currency": "USD",
+                "validity_days": 30,
+                "is_active": True,
+                "is_consumable": False,
+                "has_affiliate_commission": True,
+                "affiliate_direct_rate": 0.20,      # 20% du montant
+                "affiliate_indirect_rate": 0.02,    # 2% du montant (N2-10)
+            },
+            # ============================================
+            # CLUB MEMBERSHIP
+            # ============================================
+            {
+                "code": "club_membership",
+                "name": "Club Membership",
+                "description": "Abonnement à un club",
+                "price": 4.99,
+                "currency": "USD",
+                "validity_days": 30,
+                "is_active": True,
+                "is_consumable": False,
+                "has_affiliate_commission": True,
+                "affiliate_direct_rate": 0.20,      # 20% du montant
+                "affiliate_indirect_rate": 0.02,    # 2% du montant (N2-10)
+            },
+            # ============================================
+            # CONTEST PARTICIPATION
+            # ============================================
+            {
+                "code": "contest_participation",
+                "name": "Contest Participation",
+                "description": "Participation à un concours payant",
+                "price": 5.00,
+                "currency": "USD",
+                "validity_days": 0,
+                "is_active": True,
+                "is_consumable": True,
+                "has_affiliate_commission": True,
+                "affiliate_direct_rate": 0.20,      # 20% du montant
+                "affiliate_indirect_rate": 0.02,    # 2% du montant (N2-10)
+            },
+            # ============================================
+            # SHOP PURCHASE
+            # ============================================
+            {
+                "code": "shop_purchase",
+                "name": "Shop Purchase",
+                "description": "Achat en boutique",
+                "price": 0.00,  # Variable selon le produit
+                "currency": "USD",
+                "validity_days": 0,
+                "is_active": True,
+                "is_consumable": True,
+                "has_affiliate_commission": True,
+                "affiliate_direct_rate": 0.20,      # 20% du montant
+                "affiliate_indirect_rate": 0.02,    # 2% du montant (N2-10)
+            },
+        ]
+        
+        for product_data in product_types:
+            product = db.query(ProductType).filter(
+                ProductType.code == product_data["code"]
+            ).first()
+            
+            if not product:
+                product = ProductType(**product_data)
+                db.add(product)
+                logger.info(f"Type de produit '{product_data['code']}' créé avec commissions")
+            else:
+                # Mise à jour des commissions si le produit existe déjà
+                for key, value in product_data.items():
+                    if key.startswith("affiliate_") or key == "has_affiliate_commission":
+                        setattr(product, key, value)
+                logger.info(f"Commissions mises à jour pour '{product_data['code']}'")
+        
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Erreur lors de la création des types de produits: {e}")
 
 
 if __name__ == "__main__":

@@ -13,6 +13,7 @@ from app.models.payment import Deposit, DepositStatus, ProductType
 from app.models.affiliate import CommissionType
 from app.crud.crud_affiliate import affiliate_commission
 from app.services.crypto_payment import crypto_payment_service, CryptoPaymentError
+from app.services.commission_distribution import process_payment_validation
 
 logger = logging.getLogger(__name__)
 
@@ -68,11 +69,12 @@ class PaymentScheduler:
         """Check all pending payments and update their status"""
         db: Session = SessionLocal()
         try:
-            # Get all pending deposits from the last 24 hours
-            cutoff_time = datetime.utcnow() - timedelta(hours=24)
+            # Expiration time: 1 hour
+            expiration_time = datetime.utcnow() - timedelta(hours=1)
+            
+            # Get only PENDING deposits with external payment ID
             pending_deposits: List[Deposit] = db.query(Deposit).filter(
                 Deposit.status == DepositStatus.PENDING,
-                Deposit.created_at >= cutoff_time,
                 Deposit.external_payment_id.isnot(None)
             ).all()
             
@@ -85,6 +87,14 @@ class PaymentScheduler:
             
             for deposit in pending_deposits:
                 try:
+                    # Check if payment is expired (older than 1 hour)
+                    if deposit.created_at < expiration_time:
+                        deposit.status = DepositStatus.EXPIRED
+                        logger.info(f"Deposit {deposit.id} marked as EXPIRED (created at {deposit.created_at})")
+                        print(f"[PaymentScheduler] Deposit {deposit.id} EXPIRED after 1 hour")
+                        continue
+                    
+                    # Otherwise, check payment status with provider
                     await self._check_single_payment(db, deposit)
                 except Exception as e:
                     logger.error(f"Error checking deposit {deposit.id}: {e}")
@@ -123,8 +133,8 @@ class PaymentScheduler:
             elif payment_status == "partially_paid":
                 deposit.status = DepositStatus.PARTIALLY_PAID
             elif payment_status in ["failed", "expired", "refunded"]:
-                deposit.status = DepositStatus.FAILED
-                logger.info(f"Deposit {deposit.id} marked as FAILED ({payment_status})")
+                deposit.status = DepositStatus.EXPIRED
+                logger.info(f"Deposit {deposit.id} marked as EXPIRED ({payment_status})")
             elif payment_status in ["waiting", "confirming", "sending"]:
                 # Still pending, no change
                 pass
@@ -142,36 +152,16 @@ class PaymentScheduler:
     def _create_sponsor_commission(self, db: Session, deposit: Deposit):
         """Crée les commissions pour les parrains quand un paiement est validé"""
         try:
-            # Récupérer le type de produit
-            product = db.query(ProductType).filter(ProductType.id == deposit.product_type_id).first()
-            if not product:
-                return
+            # Utiliser le nouveau service de distribution des commissions
+            print(f"[PaymentScheduler] Processing commission distribution for deposit {deposit.id}")
+            success = process_payment_validation(db, deposit)
             
-            # Déterminer le type de commission selon le produit
-            commission_type = None
-            if product.code == "kyc":
-                commission_type = CommissionType.KYC_PAYMENT
-            elif product.code == "efm_membership":
-                commission_type = CommissionType.EFM_MEMBERSHIP
+            if success:
+                print(f"[PaymentScheduler] Commission distribution completed for deposit {deposit.id}")
+                logger.info(f"Commission distribution completed for deposit {deposit.id}")
             else:
-                # Autres produits pourraient avoir leurs propres types
-                return
-            
-            # Créer les commissions (20% niveau 1, 2% niveaux 2-3)
-            commissions = affiliate_commission.create_commission(
-                db=db,
-                source_user_id=deposit.user_id,
-                commission_type=commission_type,
-                base_amount=float(deposit.amount),
-                reference_id=str(deposit.id),
-                reference_type="deposit"
-            )
-            
-            if commissions:
-                print(f"[PaymentScheduler] Created {len(commissions)} commission(s) for deposit {deposit.id}")
-                for c in commissions:
-                    print(f"  - User {c.user_id} (level {c.level}): ${c.commission_amount:.2f} ({c.commission_rate*100:.0f}%)")
-                logger.info(f"Created {len(commissions)} commission(s) for deposit {deposit.id}")
+                print(f"[PaymentScheduler] Commission distribution failed for deposit {deposit.id}")
+                logger.warning(f"Commission distribution failed for deposit {deposit.id}")
             
         except Exception as e:
             print(f"[PaymentScheduler] Error creating commission: {e}")
@@ -186,13 +176,35 @@ async def check_payment_now(db: Session, deposit_id: int) -> dict:
     """
     Manually check a single payment status
     Returns the updated status
+    Only checks PENDING payments, and expires them after 1 hour
     """
     deposit = db.query(Deposit).filter(Deposit.id == deposit_id).first()
     if not deposit:
         return {"error": "Deposit not found", "status": None}
     
+    # Only check pending payments
+    if deposit.status != DepositStatus.PENDING:
+        return {
+            "status": str(deposit.status.value),
+            "payment_status": deposit.status.value,
+            "is_confirmed": deposit.status == DepositStatus.VALIDATED,
+            "message": "Payment is not pending"
+        }
+    
     if not deposit.external_payment_id:
         return {"error": "No external payment ID", "status": str(deposit.status)}
+    
+    # Check if expired (older than 1 hour)
+    expiration_time = datetime.utcnow() - timedelta(hours=1)
+    if deposit.created_at < expiration_time:
+        deposit.status = DepositStatus.EXPIRED
+        db.commit()
+        return {
+            "status": "expired",
+            "payment_status": "expired",
+            "is_confirmed": False,
+            "message": "Payment expired after 1 hour"
+        }
     
     try:
         payment_id = int(deposit.external_payment_id)
@@ -212,7 +224,7 @@ async def check_payment_now(db: Session, deposit_id: int) -> dict:
         elif payment_status == "partially_paid":
             deposit.status = DepositStatus.PARTIALLY_PAID
         elif payment_status in ["failed", "expired", "refunded"]:
-            deposit.status = DepositStatus.FAILED
+            deposit.status = DepositStatus.EXPIRED
         
         if status_response.get("actually_paid"):
             deposit.crypto_amount = status_response.get("actually_paid")
@@ -232,29 +244,16 @@ async def check_payment_now(db: Session, deposit_id: int) -> dict:
 def _create_commission_for_deposit(db: Session, deposit: Deposit):
     """Fonction helper pour créer les commissions lors d'une vérification manuelle"""
     try:
-        product = db.query(ProductType).filter(ProductType.id == deposit.product_type_id).first()
-        if not product:
-            return
+        # Utiliser le nouveau service de distribution des commissions
+        from app.services.commission_distribution import process_payment_validation
         
-        commission_type = None
-        if product.code == "kyc":
-            commission_type = CommissionType.KYC_PAYMENT
-        elif product.code == "efm_membership":
-            commission_type = CommissionType.EFM_MEMBERSHIP
+        print(f"[ManualCheck] Processing commission distribution for deposit {deposit.id}")
+        success = process_payment_validation(db, deposit)
+        
+        if success:
+            print(f"[ManualCheck] Commission distribution completed for deposit {deposit.id}")
         else:
-            return
-        
-        commissions = affiliate_commission.create_commission(
-            db=db,
-            source_user_id=deposit.user_id,
-            commission_type=commission_type,
-            base_amount=float(deposit.amount),
-            reference_id=str(deposit.id),
-            reference_type="deposit"
-        )
-        
-        if commissions:
-            print(f"[ManualCheck] Created {len(commissions)} commission(s) for deposit {deposit.id}")
+            print(f"[ManualCheck] Commission distribution failed for deposit {deposit.id}")
             
     except Exception as e:
         print(f"[ManualCheck] Error creating commission: {e}")

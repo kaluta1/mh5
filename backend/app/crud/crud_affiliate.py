@@ -386,6 +386,173 @@ class CRUDAffiliateCommission:
             }
             for s in summary
         ]
+    
+    def get_commissions_stats(self, db: Session, user_id: int) -> dict:
+        """Statistiques de commissions pour le dashboard."""
+        from datetime import datetime, timedelta
+        from calendar import monthrange
+        
+        now = datetime.utcnow()
+        
+        # Début du mois actuel
+        first_day_this_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        
+        # Début du mois dernier
+        last_month = (first_day_this_month - timedelta(days=1)).replace(day=1)
+        
+        # Total gagné (toutes commissions approuvées/payées)
+        total_earned = db.query(func.sum(AffiliateCommission.commission_amount)).filter(
+            AffiliateCommission.user_id == user_id,
+            AffiliateCommission.status.in_([CommissionStatus.APPROVED, CommissionStatus.PAID])
+        ).scalar() or 0.0
+        
+        # Montant en attente
+        pending_amount = db.query(func.sum(AffiliateCommission.commission_amount)).filter(
+            AffiliateCommission.user_id == user_id,
+            AffiliateCommission.status == CommissionStatus.PENDING
+        ).scalar() or 0.0
+        
+        # Montant payé
+        paid_amount = db.query(func.sum(AffiliateCommission.commission_amount)).filter(
+            AffiliateCommission.user_id == user_id,
+            AffiliateCommission.status == CommissionStatus.PAID
+        ).scalar() or 0.0
+        
+        # Ce mois
+        this_month = db.query(func.sum(AffiliateCommission.commission_amount)).filter(
+            AffiliateCommission.user_id == user_id,
+            AffiliateCommission.transaction_date >= first_day_this_month,
+            AffiliateCommission.status.in_([CommissionStatus.APPROVED, CommissionStatus.PAID, CommissionStatus.PENDING])
+        ).scalar() or 0.0
+        
+        # Mois dernier
+        last_month_amount = db.query(func.sum(AffiliateCommission.commission_amount)).filter(
+            AffiliateCommission.user_id == user_id,
+            AffiliateCommission.transaction_date >= last_month,
+            AffiliateCommission.transaction_date < first_day_this_month,
+            AffiliateCommission.status.in_([CommissionStatus.APPROVED, CommissionStatus.PAID, CommissionStatus.PENDING])
+        ).scalar() or 0.0
+        
+        # Taux de croissance
+        if last_month_amount > 0:
+            growth_rate = ((this_month - last_month_amount) / last_month_amount) * 100
+        else:
+            growth_rate = 100 if this_month > 0 else 0
+        
+        return {
+            "total_earned": float(total_earned),
+            "pending_amount": float(pending_amount),
+            "paid_amount": float(paid_amount),
+            "this_month": float(this_month),
+            "last_month": float(last_month_amount),
+            "growth_rate": round(growth_rate, 1)
+        }
+    
+    def get_user_commissions_detailed(
+        self, db: Session, user_id: int, skip: int = 0, limit: int = 50,
+        commission_type: Optional[str] = None, product_type_code: Optional[str] = None,
+        sort_by: Optional[str] = "date", status: Optional[str] = None
+    ) -> List[dict]:
+        """Récupère les commissions avec les détails de l'utilisateur source et du produit."""
+        from app.models.payment import ProductType
+        
+        query = db.query(AffiliateCommission).filter(
+            AffiliateCommission.user_id == user_id
+        )
+        
+        if commission_type:
+            query = query.filter(AffiliateCommission.commission_type == commission_type)
+        
+        # Mapping entre les codes produit et les types de commission
+        product_to_commission_type = {
+            'kyc_verification': [CommissionType.KYC_PAYMENT, CommissionType.FOUNDING_MEMBERSHIP_FEE],
+            'founding_membership': [CommissionType.KYC_PAYMENT, CommissionType.FOUNDING_MEMBERSHIP_FEE],
+            'annual_membership': [CommissionType.ANNUAL_MEMBERSHIP_FEE],
+            'efm_membership': [CommissionType.EFM_MEMBERSHIP],
+            'club_membership': [CommissionType.CLUB_MEMBERSHIP],
+            'contest_participation': [CommissionType.CONTEST_PARTICIPATION],
+            'shop_purchase': [CommissionType.SHOP_PURCHASE],
+            'ad_revenue': [CommissionType.AD_REVENUE],
+        }
+        
+        if product_type_code and product_type_code in product_to_commission_type:
+            # Filtrer par commission_type (pour les données existantes)
+            commission_types = product_to_commission_type[product_type_code]
+            query = query.filter(AffiliateCommission.commission_type.in_(commission_types))
+        
+        # Filtre par statut
+        if status:
+            try:
+                status_enum = CommissionStatus(status.upper())
+                query = query.filter(AffiliateCommission.status == status_enum)
+            except ValueError:
+                pass  # Ignorer si le statut n'est pas valide
+        
+        # Tri
+        if sort_by == "amount":
+            query = query.order_by(AffiliateCommission.commission_amount.desc())
+        elif sort_by == "type":
+            # Trier par type de commission, puis par date
+            query = query.order_by(
+                AffiliateCommission.commission_type.asc(),
+                AffiliateCommission.transaction_date.desc()
+            )
+        else:  # date (default)
+            query = query.order_by(AffiliateCommission.transaction_date.desc())
+        
+        commissions = query.offset(skip).limit(limit).all()
+        
+        result = []
+        for c in commissions:
+            # Récupérer les infos de l'utilisateur source
+            source_user = db.query(User).filter(User.id == c.source_user_id).first()
+            
+            # Récupérer les infos du type de produit
+            product_type = None
+            if c.product_type_id:
+                product_type = db.query(ProductType).filter(ProductType.id == c.product_type_id).first()
+            
+            result.append({
+                "id": c.id,
+                "amount": float(c.commission_amount) if c.commission_amount else 0,
+                "base_amount": float(c.base_amount) if c.base_amount else None,
+                "level": c.level,
+                "status": c.status.value.lower() if c.status else "pending",
+                "commission_type": c.commission_type.value if c.commission_type else None,
+                "product_type_id": c.product_type_id,
+                "product_type_code": product_type.code if product_type else None,
+                "product_type_name": product_type.name if product_type else None,
+                "source_user_id": c.source_user_id,
+                "source_user_name": source_user.full_name or source_user.username if source_user else "Utilisateur",
+                "source_user_avatar": source_user.avatar_url if source_user else None,
+                "description": self._get_commission_description(c, product_type),
+                "created_at": c.transaction_date.isoformat() if c.transaction_date else None,
+                "paid_at": c.paid_date.isoformat() if c.paid_date else None
+            })
+        
+        return result
+    
+    def _get_commission_description(self, commission: AffiliateCommission, product_type=None) -> str:
+        """Génère une description pour la commission."""
+        # Si le produit est lié, utiliser son nom
+        if product_type:
+            level_str = "direct" if commission.level == 1 else f"niveau {commission.level}"
+            return f"Commission {level_str} sur {product_type.name}"
+        
+        # Sinon, utiliser le type de commission (legacy)
+        type_descriptions = {
+            CommissionType.AD_REVENUE: "Commission sur revenus publicitaires",
+            CommissionType.CLUB_MEMBERSHIP: "Commission sur abonnement club",
+            CommissionType.SHOP_PURCHASE: "Commission sur achat boutique",
+            CommissionType.CONTEST_PARTICIPATION: "Commission sur participation concours",
+            CommissionType.KYC_PAYMENT: "Commission sur paiement KYC",
+            CommissionType.EFM_MEMBERSHIP: "Commission sur abonnement EFM",
+            CommissionType.FOUNDING_MEMBERSHIP_FEE: "Commission sur adhésion Founding Member (100$)",
+            CommissionType.ANNUAL_MEMBERSHIP_FEE: "Commission sur cotisation annuelle (50$)",
+            CommissionType.MONTHLY_REVENUE_POOL: "Part du pool mensuel (10% revenus nets)",
+            CommissionType.ANNUAL_PROFIT_POOL: "Part du pool annuel (20% profits)"
+        }
+        return type_descriptions.get(commission.commission_type, "Commission d'affiliation")
 
 
 class CRUDReferralLink:

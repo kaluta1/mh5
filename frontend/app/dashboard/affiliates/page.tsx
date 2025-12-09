@@ -27,7 +27,8 @@ import {
   Clock,
   Mail,
   Send,
-  X
+  X,
+  DollarSign
 } from 'lucide-react'
 import Link from 'next/link'
 import { InviteDialog } from '@/components/dashboard/invite-dialog'
@@ -354,11 +355,11 @@ export default function AffiliatesPage() {
         <div className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl p-3 sm:p-5 border border-gray-100 dark:border-gray-700 shadow-sm">
           <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
             <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-              <Euro className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600 dark:text-emerald-400" />
+              <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600 dark:text-emerald-400" />
             </div>
           </div>
           <p className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white">
-            {totalCommissions.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+            {totalCommissions.toLocaleString('fr-FR', { style: 'currency', currency: 'USD' })}
           </p>
           <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">{t('dashboard.affiliates.total_commissions')}</p>
         </div>

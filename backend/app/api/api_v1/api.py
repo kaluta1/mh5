@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.api_v1.endpoints import auth, users, media, contests, votes, kyc, contestant, geography, favorites, search, search_history, comments, admin, season_migration, notifications, analytics, affiliate, payments, roles, verifications
+from app.api.api_v1.endpoints import auth, users, media, contests, votes, kyc, contestant, geography, favorites, search, search_history, comments, admin, season_migration, notifications, analytics, affiliate, payments, roles, verifications, wallet
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["Authentification"])
@@ -22,4 +22,5 @@ api_router.include_router(season_migration.router, prefix="/seasons", tags=["Mig
 api_router.include_router(notifications.router, prefix="/notifications", tags=["Notifications"])
 api_router.include_router(analytics.router, prefix="/analytics", tags=["Analytics"])
 api_router.include_router(affiliate.router, prefix="/affiliates", tags=["Affiliation"])
+api_router.include_router(wallet.router, prefix="/wallet", tags=["Portefeuille"])
 api_router.include_router(roles.router, prefix="/rbac", tags=["Rôles et Permissions"])

@@ -44,7 +44,10 @@ import {
   User,
   Trash2,
   Users,
-  ChevronRight
+  ChevronRight,
+  Crown,
+  Calendar,
+  CheckCircle2
 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { paymentService, CryptoPaymentResponse, VerifiedUser, PaymentRecipient } from '@/services/payment-service'
@@ -61,13 +64,13 @@ interface Recipient {
   id: string
   usernameOrEmail: string
   verifiedUser: VerifiedUser | null
-  productCode: 'kyc' | 'efm_membership'
+  productCode: 'kyc' | 'mfm_membership' | 'annual_membership'
   amount: number
   isVerifying: boolean
   error: string | null
 }
 
-const paymentMethods: PaymentMethod[] = [
+const getPaymentMethods = (t: (key: string) => string | undefined): PaymentMethod[] => [
   {
     id: 'usdtbsc',
     name: 'USDT (BNB Chain)',
@@ -98,13 +101,13 @@ const paymentMethods: PaymentMethod[] = [
   },
   {
     id: 'card',
-    name: 'Carte bancaire',
+    name: t('payment.card') || 'Carte bancaire',
     icon: <CreditCard className="w-5 h-5 text-blue-500" />,
     category: 'card'
   },
   {
     id: 'bank',
-    name: 'Virement bancaire',
+    name: t('payment.bank_transfer') || 'Virement bancaire',
     icon: <Building2 className="w-5 h-5 text-gray-500" />,
     category: 'bank'
   }
@@ -126,6 +129,9 @@ export function PaymentDialog({
   const { t } = useLanguage()
   const { user } = useAuth()
   
+  // Get payment methods with translations
+  const paymentMethods = getPaymentMethods(t)
+  
   // Steps: 'recipients' | 'method' | 'payment' | 'success'
   const [step, setStep] = useState<'recipients' | 'method' | 'payment' | 'success'>('recipients')
   const [recipients, setRecipients] = useState<Recipient[]>([])
@@ -136,8 +142,11 @@ export function PaymentDialog({
   const [copied, setCopied] = useState(false)
   const [showCloseConfirm, setShowCloseConfirm] = useState(false)
   const [includeMyself, setIncludeMyself] = useState(true)
-  const [myselfProduct, setMyselfProduct] = useState<'kyc' | 'efm_membership'>(initialProductCode as 'kyc' | 'efm_membership')
-  const [myselfAmount, setMyselfAmount] = useState(initialProductCode === 'kyc' ? 10 : 100)
+  const [myselfProduct, setMyselfProduct] = useState<'kyc' | 'mfm_membership' | 'annual_membership'>(initialProductCode as 'kyc' | 'mfm_membership' | 'annual_membership')
+  const [myselfAmount, setMyselfAmount] = useState(
+    initialProductCode === 'kyc' ? 10 : 
+    initialProductCode === 'annual_membership' ? 50 : 100
+  )
   const [isCheckingPayment, setIsCheckingPayment] = useState(false)
   const [paymentConfirmed, setPaymentConfirmed] = useState(false)
   const [lastCheckTime, setLastCheckTime] = useState<Date | null>(null)
@@ -241,7 +250,7 @@ export function PaymentDialog({
       
       // Auto-set amount based on product
       if (field === 'productCode') {
-        updated.amount = value === 'kyc' ? 10 : 100
+        updated.amount = value === 'kyc' ? 10 : value === 'annual_membership' ? 50 : 100
       }
       
       // Clear verification when username changes
@@ -286,7 +295,7 @@ export function PaymentDialog({
   const othersValid = recipients.every(r => r.verifiedUser !== null && r.amount > 0)
   const hasAtLeastOne = includeMyself || recipients.length > 0
   const allRecipientsValid = hasAtLeastOne && othersValid && 
-    (!includeMyself || myselfAmount >= (myselfProduct === 'efm_membership' ? 100 : 10))
+    (!includeMyself || myselfAmount >= (myselfProduct === 'mfm_membership' ? 100 : myselfProduct === 'annual_membership' ? 50 : 10))
 
   // Copy to clipboard
   const copyToClipboard = async (text: string) => {
@@ -426,8 +435,11 @@ export function PaymentDialog({
     setPaymentError(null)
     setShowCloseConfirm(false)
     setIncludeMyself(true)
-    setMyselfProduct(initialProductCode as 'kyc' | 'efm_membership')
-    setMyselfAmount(initialProductCode === 'kyc' ? 10 : 100)
+    setMyselfProduct(initialProductCode as 'kyc' | 'mfm_membership' | 'annual_membership')
+    setMyselfAmount(
+      initialProductCode === 'kyc' ? 10 : 
+      initialProductCode === 'annual_membership' ? 50 : 100
+    )
     setIsCheckingPayment(false)
     setPaymentConfirmed(false)
     setLastCheckTime(null)
@@ -447,128 +459,240 @@ export function PaymentDialog({
 
   // Get product name
   const getProductName = (code: string) => {
-    return code === 'kyc' 
-      ? (t('payment.kyc_verification') || 'Vérification KYC')
-      : (t('payment.efm_membership') || 'Adhésion EFM')
+    switch (code) {
+      case 'kyc':
+        return t('payment.kyc_verification') || 'KYC Service'
+      case 'mfm_membership':
+        return t('payment.mfm_membership') || 'MFM'
+      case 'annual_membership':
+        return t('payment.annual_membership') || 'Annual Membership'
+      default:
+        return code
+    }
   }
 
   return (
     <>
       <Dialog open={open} onOpenChange={() => handleClose()}>
         <DialogContent 
-          className="sm:max-w-lg max-h-[90vh] overflow-y-auto"
+          className="sm:max-w-xl max-h-[90vh] overflow-y-auto p-0"
           onPointerDownOutside={(e) => e.preventDefault()}
           onEscapeKeyDown={(e) => e.preventDefault()}
         >
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              {step === 'success' ? (
-                <Check className="w-5 h-5 text-green-500" />
-              ) : (
-                <Shield className="w-5 h-5 text-myfav-primary" />
+          {/* Header */}
+          <div className="border-b border-gray-100 dark:border-gray-800 p-5 pb-4">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-3 text-lg font-semibold text-gray-900 dark:text-white">
+                {step === 'success' ? (
+                  <div className="w-9 h-9 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                    <CheckCircle2 className="w-5 h-5 text-green-600" />
+                  </div>
+                ) : (
+                  <div className="w-9 h-9 rounded-lg bg-myfav-primary/10 flex items-center justify-center">
+                    <CreditCard className="w-5 h-5 text-myfav-primary" />
+                  </div>
+                )}
+                {step === 'recipients' && (t('payment.buy_services') || 'Acheter des services')}
+                {step === 'method' && (t('payment.payment_method') || 'Méthode de paiement')}
+                {step === 'payment' && (t('payment.payment_instructions') || 'Instructions de paiement')}
+                {step === 'success' && (t('payment.success_title') || 'Paiement confirmé')}
+              </DialogTitle>
+              {step !== 'success' && (
+                <DialogDescription className="mt-1 text-sm">
+                  {step === 'recipients' && (t('payment.recipients_description') || 'Sélectionnez les services que vous souhaitez acheter')}
+                  {step === 'method' && (t('payment.method_description') || 'Choisissez votre méthode de paiement préférée')}
+                  {step === 'payment' && (t('payment.instructions_description') || 'Scannez le QR code ou copiez l\'adresse')}
+                </DialogDescription>
               )}
-              {step === 'recipients' && (t('payment.add_recipients') || 'Ajouter des bénéficiaires')}
-              {step === 'method' && (t('payment.payment_method') || 'Méthode de paiement')}
-              {step === 'payment' && (t('payment.payment_instructions') || 'Instructions de paiement')}
-              {step === 'success' && (t('payment.success_title') || 'Paiement confirmé')}
-            </DialogTitle>
+            </DialogHeader>
+            
+            {/* Step indicator */}
             {step !== 'success' && (
-              <DialogDescription>
-                {step === 'recipients' && (t('payment.recipients_description') || 'Ajoutez les utilisateurs pour lesquels vous souhaitez payer')}
-                {step === 'method' && (t('payment.method_description') || 'Choisissez votre méthode de paiement')}
-                {step === 'payment' && (t('payment.instructions_description') || 'Envoyez le montant exact à l\'adresse indiquée')}
-              </DialogDescription>
+              <div className="flex items-center justify-center gap-1 mt-4">
+                {['recipients', 'method', 'payment'].map((s, i) => (
+                  <div key={s} className="flex items-center">
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold transition-all ${
+                      step === s 
+                        ? 'bg-myfav-primary text-white' 
+                        : ['recipients', 'method', 'payment'].indexOf(step) > i
+                          ? 'bg-myfav-secondary text-white'
+                          : 'bg-gray-100 dark:bg-gray-800 text-gray-400'
+                    }`}>
+                      {['recipients', 'method', 'payment'].indexOf(step) > i ? (
+                        <Check className="w-3.5 h-3.5" />
+                      ) : (
+                        i + 1
+                      )}
+                    </div>
+                    {i < 2 && (
+                      <div className={`w-10 h-0.5 mx-1 ${
+                        ['recipients', 'method', 'payment'].indexOf(step) > i
+                          ? 'bg-myfav-secondary'
+                          : 'bg-gray-200 dark:bg-gray-700'
+                      }`} />
+                    )}
+                  </div>
+                ))}
+              </div>
             )}
-          </DialogHeader>
+          </div>
+          
+          <div className="p-5">
 
           {/* Step 1: Recipients */}
           {step === 'recipients' && (
-            <div className="space-y-4 mt-4">
-              {/* Current user section */}
-              <div className={`p-4 rounded-xl border-2 transition-all ${includeMyself ? 'border-myfav-primary bg-myfav-primary/5' : 'border-gray-200 dark:border-gray-700'}`}>
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={includeMyself}
-                    onChange={(e) => setIncludeMyself(e.target.checked)}
-                    className="w-5 h-5 rounded border-gray-300 text-myfav-primary focus:ring-myfav-primary"
-                  />
-                  <div className="flex items-center gap-2 flex-1">
-                    <div className="w-10 h-10 rounded-full bg-myfav-primary/20 flex items-center justify-center">
-                      <User className="w-5 h-5 text-myfav-primary" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900 dark:text-white">
-                        {t('payment.pay_for_myself') || 'Payer pour moi'}
-                      </p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        @{user?.username || user?.email}
-                      </p>
-                    </div>
-                  </div>
-                </label>
-
+            <div className="space-y-4">
+              {/* Section header */}
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {t('payment.select_for_myself') || 'Pour moi-même'} <span className="text-gray-400 font-normal">({t('common.optional') || 'optionnel'})</span>
+                </p>
                 {includeMyself && (
-                  <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                    <div>
-                      <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">
-                        {t('payment.product_type') || 'Produit'}
-                      </label>
-                      <Select
-                        value={myselfProduct}
-                        onValueChange={(value: 'kyc' | 'efm_membership') => {
-                          setMyselfProduct(value)
-                          setMyselfAmount(value === 'kyc' ? 10 : 100)
-                        }}
-                      >
-                        <SelectTrigger className="bg-white dark:bg-gray-800">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="kyc">
-                            <div className="flex items-center gap-2">
-                              <Shield className="w-4 h-4 text-green-500" />
-                              <span>KYC - 10 USD</span>
-                            </div>
-                          </SelectItem>
-                          <SelectItem value="efm_membership">
-                            <div className="flex items-center gap-2">
-                              <Users className="w-4 h-4 text-blue-500" />
-                              <span>EFM - Min 100 USD</span>
-                            </div>
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">
-                        {t('payment.amount') || 'Montant'}
-                      </label>
-                      <div className="relative">
-                        <Input
-                          type="number"
-                          min={myselfProduct === 'efm_membership' ? 100 : 10}
-                          step={10}
-                          value={myselfAmount}
-                          onChange={(e) => setMyselfAmount(parseFloat(e.target.value) || 0)}
-                          disabled={myselfProduct === 'kyc'}
-                          className="pr-12 bg-white dark:bg-gray-800"
-                        />
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">USD</span>
-                      </div>
-                    </div>
-                  </div>
+                  <button 
+                    onClick={() => setIncludeMyself(false)}
+                    className="text-xs text-gray-500 hover:text-red-500 transition-colors"
+                  >
+                    {t('common.clear') || 'Effacer'}
+                  </button>
                 )}
               </div>
 
+              {/* Service cards */}
+              <div className="space-y-2">
+                {/* KYC Card */}
+                <button
+                  onClick={() => {
+                    if (includeMyself && myselfProduct === 'kyc') {
+                      setIncludeMyself(false)
+                    } else {
+                      setIncludeMyself(true)
+                      setMyselfProduct('kyc')
+                      setMyselfAmount(10)
+                    }
+                  }}
+                  className={`relative w-full p-3 rounded-lg border transition-all text-left ${
+                    includeMyself && myselfProduct === 'kyc'
+                      ? 'border-myfav-primary bg-myfav-primary/5'
+                      : 'border-gray-200 dark:border-gray-700 hover:border-myfav-primary/50'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                      includeMyself && myselfProduct === 'kyc'
+                        ? 'border-myfav-primary bg-myfav-primary'
+                        : 'border-gray-300 dark:border-gray-600'
+                    }`}>
+                      {includeMyself && myselfProduct === 'kyc' && (
+                        <Check className="w-3 h-3 text-white" />
+                      )}
+                    </div>
+                    <div className="w-8 h-8 rounded-lg bg-myfav-primary/10 flex items-center justify-center">
+                      <Shield className="w-4 h-4 text-myfav-primary" />
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="text-sm font-medium text-gray-900 dark:text-white">KYC Service</h4>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {t('payment.kyc_description') || 'Vérification d\'identité'}
+                      </p>
+                    </div>
+                    <span className="text-sm font-bold text-myfav-primary">$10</span>
+                  </div>
+                </button>
+
+                {/* MFM Card */}
+                <button
+                  onClick={() => {
+                    if (includeMyself && myselfProduct === 'mfm_membership') {
+                      setIncludeMyself(false)
+                    } else {
+                      setIncludeMyself(true)
+                      setMyselfProduct('mfm_membership')
+                      setMyselfAmount(100)
+                    }
+                  }}
+                  className={`relative w-full p-3 rounded-lg border transition-all text-left ${
+                    includeMyself && myselfProduct === 'mfm_membership'
+                      ? 'border-myfav-secondary bg-myfav-secondary/5'
+                      : 'border-gray-200 dark:border-gray-700 hover:border-myfav-secondary/50'
+                  }`}
+                >
+                  <div className="absolute -top-1.5 right-2">
+                    <span className="bg-myfav-accent text-gray-900 text-[10px] font-bold px-1.5 py-0.5 rounded">
+                      PREMIUM
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                      includeMyself && myselfProduct === 'mfm_membership'
+                        ? 'border-myfav-secondary bg-myfav-secondary'
+                        : 'border-gray-300 dark:border-gray-600'
+                    }`}>
+                      {includeMyself && myselfProduct === 'mfm_membership' && (
+                        <Check className="w-3 h-3 text-white" />
+                      )}
+                    </div>
+                    <div className="w-8 h-8 rounded-lg bg-myfav-secondary/10 flex items-center justify-center">
+                      <Crown className="w-4 h-4 text-myfav-secondary" />
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="text-sm font-medium text-gray-900 dark:text-white">{t('payment.mfm_membership') || 'MFM'}</h4>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {t('payment.mfm_description') || 'Pool 10% mensuel + 20% annuel'}
+                      </p>
+                    </div>
+                    <span className="text-sm font-bold text-myfav-secondary">$100</span>
+                  </div>
+                </button>
+
+                {/* Annual Membership Card */}
+                <button
+                  onClick={() => {
+                    if (includeMyself && myselfProduct === 'annual_membership') {
+                      setIncludeMyself(false)
+                    } else {
+                      setIncludeMyself(true)
+                      setMyselfProduct('annual_membership')
+                      setMyselfAmount(50)
+                    }
+                  }}
+                  className={`relative w-full p-3 rounded-lg border transition-all text-left ${
+                    includeMyself && myselfProduct === 'annual_membership'
+                      ? 'border-myfav-primary bg-myfav-primary/5'
+                      : 'border-gray-200 dark:border-gray-700 hover:border-myfav-primary/50'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                      includeMyself && myselfProduct === 'annual_membership'
+                        ? 'border-myfav-primary bg-myfav-primary'
+                        : 'border-gray-300 dark:border-gray-600'
+                    }`}>
+                      {includeMyself && myselfProduct === 'annual_membership' && (
+                        <Check className="w-3 h-3 text-white" />
+                      )}
+                    </div>
+                    <div className="w-8 h-8 rounded-lg bg-myfav-primary/10 flex items-center justify-center">
+                      <Calendar className="w-4 h-4 text-myfav-primary" />
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="text-sm font-medium text-gray-900 dark:text-white">Annual Membership</h4>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {t('payment.annual_description') || 'Renouvellement FM'}
+                      </p>
+                    </div>
+                    <span className="text-sm font-bold text-myfav-primary">$50</span>
+                  </div>
+                </button>
+              </div>
+
               {/* Divider */}
-              <div className="relative">
+              <div className="relative py-3">
                 <div className="absolute inset-0 flex items-center">
                   <div className="w-full border-t border-gray-200 dark:border-gray-700"></div>
                 </div>
                 <div className="relative flex justify-center">
-                  <span className="px-3 bg-white dark:bg-gray-900 text-sm text-gray-500">
-                    {t('payment.pay_for_others') || 'Payer pour d\'autres'}
+                  <span className="px-3 bg-white dark:bg-gray-900 text-xs text-gray-400 uppercase tracking-wide">
+                    {t('payment.pay_for_others') || 'Ou payer pour d\'autres'}
                   </span>
                 </div>
               </div>
@@ -630,17 +754,21 @@ export function PaymentDialog({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="kyc">KYC - 10 USD</SelectItem>
-                        <SelectItem value="efm_membership">EFM - Min 100 USD</SelectItem>
+                        <SelectItem value="kyc">KYC Service - 10 USD</SelectItem>
+                        <SelectItem value="mfm_membership">{t('payment.mfm_membership') || 'MFM'} - 100 USD</SelectItem>
+                        <SelectItem value="annual_membership">Annual Membership - 50 USD</SelectItem>
                       </SelectContent>
                     </Select>
                     <div className="relative">
                       <Input
                         type="number"
-                        min={recipient.productCode === 'efm_membership' ? 100 : 10}
+                        min={
+                          recipient.productCode === 'mfm_membership' ? 100 : 
+                          recipient.productCode === 'annual_membership' ? 50 : 10
+                        }
                         value={recipient.amount}
                         onChange={(e) => updateRecipient(recipient.id, 'amount', parseFloat(e.target.value) || 0)}
-                        disabled={recipient.productCode === 'kyc'}
+                        disabled={true}
                         className="pr-12 bg-white dark:bg-gray-800"
                       />
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">USD</span>
@@ -693,15 +821,24 @@ export function PaymentDialog({
 
           {/* Step 2: Payment Method */}
           {step === 'method' && (
-            <div className="space-y-4 mt-4">
-              {/* Summary */}
-              <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-lg">
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                  {(includeMyself ? 1 : 0) + recipients.length} {t('payment.recipients_count') || 'bénéficiaire(s)'}
-                </p>
-                <p className="text-xl font-bold text-myfav-primary">
-                  {totalAmount.toFixed(2)} USD
-                </p>
+            <div className="space-y-4">
+              {/* Summary Card */}
+              <div className="bg-myfav-primary/5 dark:bg-myfav-primary/10 rounded-xl p-4 border border-myfav-primary/20">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {t('payment.total_to_pay') || 'Total à payer'}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {(includeMyself ? 1 : 0) + recipients.length} {t('payment.recipients_count') || 'service(s)'}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold text-myfav-primary">
+                      ${totalAmount.toFixed(2)} USD
+                    </p>
+                  </div>
+                </div>
               </div>
 
               {/* Loading */}
@@ -726,7 +863,7 @@ export function PaymentDialog({
               {!isLoading && (
                 <>
                   <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide font-medium">
                       {t('payment.cryptocurrencies') || 'Crypto-monnaies'}
                     </p>
                     <div className="grid grid-cols-2 gap-2">
@@ -737,7 +874,9 @@ export function PaymentDialog({
                           disabled={isLoading}
                           className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-myfav-primary hover:bg-myfav-primary/5 transition-all text-left disabled:opacity-50"
                         >
-                          {method.icon}
+                          <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                            {method.icon}
+                          </div>
                           <span className="text-sm font-medium text-gray-900 dark:text-white">{method.name}</span>
                         </button>
                       ))}
@@ -745,7 +884,7 @@ export function PaymentDialog({
                   </div>
 
                   <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide font-medium">
                       {t('payment.other_methods') || 'Autres méthodes'}
                     </p>
                     <div className="grid grid-cols-2 gap-2">
@@ -753,11 +892,16 @@ export function PaymentDialog({
                         <button
                           key={method.id}
                           onClick={() => handleMethodSelect(method.id)}
-                          disabled={isLoading}
-                          className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-myfav-primary hover:bg-myfav-primary/5 transition-all text-left disabled:opacity-50"
+                          disabled={true}
+                          className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 text-left opacity-50 cursor-not-allowed relative"
                         >
-                          {method.icon}
+                          <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                            {method.icon}
+                          </div>
                           <span className="text-sm font-medium text-gray-900 dark:text-white">{method.name}</span>
+                          <span className="absolute top-1 right-1 text-[10px] bg-gray-200 dark:bg-gray-700 text-gray-500 px-1.5 py-0.5 rounded">
+                            {t('common.coming_soon') || 'Bientôt'}
+                          </span>
                         </button>
                       ))}
                     </div>
@@ -776,27 +920,29 @@ export function PaymentDialog({
 
           {/* Step 3: Payment Instructions */}
           {step === 'payment' && cryptoPayment && (
-            <div className="space-y-4 mt-4">
+            <div className="space-y-4">
               {/* QR Code */}
-              <div className="flex justify-center p-4 bg-white rounded-lg">
-                <QRCodeSVG 
-                  value={cryptoPayment.pay_address}
-                  size={180}
-                  level="H"
-                  includeMargin={true}
-                />
+              <div className="flex justify-center">
+                <div className="p-3 bg-white rounded-xl border border-gray-200">
+                  <QRCodeSVG 
+                    value={cryptoPayment.pay_address}
+                    size={160}
+                    level="H"
+                    includeMargin={true}
+                  />
+                </div>
               </div>
 
               {/* Amount */}
-              <div className="bg-myfav-primary/10 dark:bg-myfav-primary/20 rounded-lg p-4 text-center">
+              <div className="bg-myfav-primary/5 dark:bg-myfav-primary/10 rounded-xl p-4 text-center border border-myfav-primary/20">
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
                   {t('payment.amount_to_send') || 'Montant à envoyer'}
                 </p>
-                <p className="text-3xl font-bold text-myfav-primary">
+                <p className="text-2xl font-bold text-myfav-primary">
                   {cryptoPayment.pay_amount} {cryptoPayment.pay_currency.toUpperCase()}
                 </p>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                  ≈ {cryptoPayment.price_amount.toFixed(2)} {cryptoPayment.price_currency.toUpperCase()}
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  ≈ ${cryptoPayment.price_amount.toFixed(2)} USD
                 </p>
               </div>
 
@@ -897,27 +1043,27 @@ export function PaymentDialog({
 
           {/* Step 4: Success */}
           {step === 'success' && (
-            <div className="space-y-6 mt-4 py-8">
+            <div className="space-y-5 py-6">
               {/* Success Icon */}
               <div className="flex justify-center">
-                <div className="w-20 h-20 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-                  <Check className="w-10 h-10 text-green-500" />
+                <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                  <CheckCircle2 className="w-8 h-8 text-green-600" />
                 </div>
               </div>
 
               {/* Success Message */}
               <div className="text-center">
-                <h3 className="text-xl font-bold text-green-600 dark:text-green-400 mb-2">
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-1">
                   {t('payment.success_title') || 'Paiement confirmé !'}
                 </h3>
-                <p className="text-gray-600 dark:text-gray-400">
-                  {t('payment.success_description') || 'Votre paiement a été reçu et confirmé. Vous pouvez maintenant continuer.'}
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  {t('payment.success_description') || 'Votre paiement a été reçu et confirmé.'}
                 </p>
               </div>
 
               {/* Amount Summary */}
-              <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 text-center">
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
+              <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-4 text-center border border-green-200 dark:border-green-800">
+                <p className="text-sm text-gray-600 dark:text-gray-400">
                   {t('payment.amount_paid') || 'Montant payé'}
                 </p>
                 <p className="text-2xl font-bold text-green-600 dark:text-green-400">
@@ -931,13 +1077,14 @@ export function PaymentDialog({
                   onPaymentInitiated?.()
                   resetAndClose()
                 }}
-                className="w-full bg-green-600 hover:bg-green-700"
+                className="w-full bg-myfav-primary hover:bg-myfav-primary/90"
               >
                 {t('common.continue') || 'Continuer'}
               </Button>
             </div>
           )}
 
+          </div>
         </DialogContent>
       </Dialog>
 

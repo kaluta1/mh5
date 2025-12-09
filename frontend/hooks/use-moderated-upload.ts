@@ -1,13 +1,15 @@
 'use client'
 
 import { useState, useCallback } from 'react'
+import { getCachedFile, addToCache, calculateFileHash } from '@/lib/utils/file-cache'
 
 interface UploadResult {
   url: string
-  key: string
+  key?: string
   name: string
   size: number
   type: string
+  fromCache?: boolean
 }
 
 interface ModerationFlag {
@@ -49,6 +51,35 @@ export function useModeratedUpload(options: UseModeratedUploadOptions = {}) {
     })
 
     try {
+      // ============================================
+      // VÉRIFIER LE CACHE D'ABORD
+      // ============================================
+      const cachedFile = await getCachedFile(file)
+      if (cachedFile) {
+        console.log('📦 Fichier déjà uploadé, utilisation du cache:', cachedFile.url)
+        
+        const result: UploadResult = {
+          url: cachedFile.url,
+          name: cachedFile.name,
+          size: cachedFile.size,
+          type: cachedFile.type,
+          fromCache: true
+        }
+
+        setState({
+          isUploading: false,
+          progress: 100,
+          error: null,
+          moderationFlags: []
+        })
+
+        options.onSuccess?.(result)
+        return result
+      }
+
+      // Calculer le hash pour le cache
+      const fileHash = await calculateFileHash(file)
+
       // Créer le FormData
       const formData = new FormData()
       formData.append('file', file)
@@ -98,8 +129,12 @@ export function useModeratedUpload(options: UseModeratedUploadOptions = {}) {
         key: data.file.key,
         name: data.file.name,
         size: data.file.size,
-        type: data.file.type
+        type: data.file.type,
+        fromCache: false
       }
+
+      // Ajouter au cache pour la prochaine fois
+      addToCache(file, result.url, fileHash)
 
       setState({
         isUploading: false,
