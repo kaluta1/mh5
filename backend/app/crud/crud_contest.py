@@ -1,4 +1,5 @@
 from typing import Any, Dict, List, Optional, Union
+from datetime import datetime
 
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
@@ -180,6 +181,8 @@ class CRUDContest:
     def enrich_contest_with_stats(self, db: Session, contest: Contest) -> Dict[str, Any]:
         """Enrichit un contest avec les statistiques (nombre de participants et votes)"""
         from app.models.contests import ContestSeasonLink, ContestSeason
+        from app.models.user import User
+        from app.models.voting import Vote
         
         # Compter le nombre de participants (contestants avec season_id = contest.id)
         # Utiliser distinct pour éviter les doublons et exclure les supprimés
@@ -189,6 +192,101 @@ class CRUDContest:
                 Contestant.is_deleted == False
             )\
             .scalar() or 0
+        
+        # Récupérer les top 5 contestants par votes
+        top_contestants = []
+        try:
+            # Sous-requête pour compter les votes par contestant
+            votes_subq = db.query(
+                Vote.contestant_id,
+                func.count(Vote.id).label('votes_count')
+            ).group_by(Vote.contestant_id).subquery()
+            
+            # Récupérer les contestants avec leurs votes et infos utilisateur
+            contestants_with_votes = db.query(
+                Contestant,
+                User,
+                func.coalesce(votes_subq.c.votes_count, 0).label('votes_count')
+            ).join(
+                User, Contestant.user_id == User.id
+            ).outerjoin(
+                votes_subq, Contestant.id == votes_subq.c.contestant_id
+            ).filter(
+                Contestant.season_id == contest.id,
+                Contestant.is_deleted == False
+            ).order_by(
+                func.coalesce(votes_subq.c.votes_count, 0).desc()
+            ).limit(5).all()
+            
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"Found {len(contestants_with_votes)} contestants for contest {contest.id}")
+            
+            for rank, (contestant, user, votes_count) in enumerate(contestants_with_votes, 1):
+                # Extraire la première image du contestant depuis image_media_ids
+                contestant_image_url = None
+                logger.debug(f"Contestant {contestant.id} - image_media_ids: {contestant.image_media_ids}")
+                
+                if contestant.image_media_ids:
+                    try:
+                        import json
+                        from app.models.media import Media
+                        
+                        raw_value = contestant.image_media_ids.strip() if isinstance(contestant.image_media_ids, str) else contestant.image_media_ids
+                        
+                        # Cas 1: C'est déjà une URL directe (pas du JSON)
+                        if isinstance(raw_value, str) and raw_value.startswith(('http://', 'https://')):
+                            contestant_image_url = raw_value
+                            logger.debug(f"image_media_ids is direct URL: {raw_value[:50]}")
+                        # Cas 2: C'est du JSON
+                        elif isinstance(raw_value, str) and (raw_value.startswith('[') or raw_value.startswith('{')):
+                            image_ids = json.loads(raw_value)
+                            if isinstance(image_ids, list) and len(image_ids) > 0:
+                                first_image = image_ids[0]
+                                logger.debug(f"First image from JSON: {first_image}")
+                                
+                                # Si c'est une URL directe
+                                if isinstance(first_image, str) and first_image.startswith(('http://', 'https://')):
+                                    contestant_image_url = first_image
+                                # Si c'est un ID de média (int ou string numérique)
+                                else:
+                                    try:
+                                        media_id = int(first_image) if isinstance(first_image, str) else first_image
+                                        # Récupérer l'URL depuis la table Media
+                                        media = db.query(Media).filter(Media.id == media_id).first()
+                                        if media and media.url:
+                                            contestant_image_url = media.url
+                                            logger.debug(f"Got URL from Media table: {media.url[:50] if media.url else 'None'}")
+                                        else:
+                                            logger.warning(f"Media {media_id} not found in database")
+                                    except (ValueError, TypeError) as ve:
+                                        logger.warning(f"Error converting media_id: {ve}")
+                        # Cas 3: C'est peut-être juste un ID
+                        elif raw_value:
+                            try:
+                                media_id = int(raw_value)
+                                media = db.query(Media).filter(Media.id == media_id).first()
+                                if media and media.url:
+                                    contestant_image_url = media.url
+                            except (ValueError, TypeError):
+                                pass
+                    except (json.JSONDecodeError, TypeError) as e:
+                        logger.warning(f"Error parsing image_media_ids for contestant {contestant.id}: {e}")
+                
+                logger.info(f"Contestant {contestant.id} - Final image_url: {contestant_image_url}")
+                
+                top_contestants.append({
+                    "id": contestant.id,
+                    "author_name": f"{user.first_name or ''} {user.last_name or ''}".strip() or user.username or "Anonyme",
+                    "author_avatar_url": user.avatar_url,
+                    "image_url": contestant_image_url,
+                    "votes_count": votes_count,
+                    "rank": rank
+                })
+        except Exception as e:
+            # En cas d'erreur, on continue sans les top contestants
+            import logging
+            logging.getLogger(__name__).warning(f"Error fetching top contestants: {e}")
         
         # Compter le nombre total de votes
         # Les votes peuvent venir de ContestVote ou être comptés via ContestEntry
@@ -302,6 +400,51 @@ class CRUDContest:
             else:
                 participant_type_value = str(contest.participant_type)
         
+        # Calculer dynamiquement is_submission_open basé sur les dates
+        from datetime import date
+        today = date.today()
+        
+        # is_submission_open est true seulement si:
+        # 1. Le flag dans la DB est true (admin peut fermer manuellement)
+        # 2. La date actuelle est >= submission_start_date (si définie)
+        # 3. La date actuelle est <= submission_end_date (si définie)
+        is_submission_open_calculated = contest.is_submission_open
+        
+        if is_submission_open_calculated:
+            # Vérifier si la date de début est passée
+            if contest.submission_start_date:
+                start_date = contest.submission_start_date
+                if isinstance(start_date, datetime):
+                    start_date = start_date.date()
+                if today < start_date:
+                    is_submission_open_calculated = False
+            
+            # Vérifier si la date de fin est passée
+            if contest.submission_end_date:
+                end_date = contest.submission_end_date
+                if isinstance(end_date, datetime):
+                    end_date = end_date.date()
+                if today > end_date:
+                    is_submission_open_calculated = False
+        
+        # Calculer dynamiquement is_voting_open basé sur les dates
+        is_voting_open_calculated = contest.is_voting_open
+        
+        if is_voting_open_calculated:
+            if contest.voting_start_date:
+                voting_start = contest.voting_start_date
+                if isinstance(voting_start, datetime):
+                    voting_start = voting_start.date()
+                if today < voting_start:
+                    is_voting_open_calculated = False
+            
+            if contest.voting_end_date:
+                voting_end = contest.voting_end_date
+                if isinstance(voting_end, datetime):
+                    voting_end = voting_end.date()
+                if today > voting_end:
+                    is_voting_open_calculated = False
+        
         result = {
             "id": contest.id,
             "name": contest.name,
@@ -314,8 +457,8 @@ class CRUDContest:
             "voting_start_date": contest.voting_start_date,
             "voting_end_date": contest.voting_end_date,
             "is_active": contest.is_active,
-            "is_submission_open": contest.is_submission_open,
-            "is_voting_open": contest.is_voting_open,
+            "is_submission_open": is_submission_open_calculated,
+            "is_voting_open": is_voting_open_calculated,
             "level": contest.level,
             "season_level": season_level,  # Niveau depuis la season
             "location_id": contest.location_id,
@@ -337,6 +480,8 @@ class CRUDContest:
             "requires_content_verification": getattr(contest, 'requires_content_verification', False),
             "min_age": getattr(contest, 'min_age', None),
             "max_age": getattr(contest, 'max_age', None),
+            # Top contestants preview
+            "top_contestants": top_contestants,
         }
         
         return result
