@@ -1976,6 +1976,7 @@ export const translations: Record<Language, TranslationKeys> = {
         terms_accept: "J'accepte les conditions d'utilisation",
         success_title: "Inscription réussie !",
         success_message: "Bienvenue ! Votre compte a été créé avec succès.",
+        continue_button: "Se connecter",
         errors: {
           required_fields: "Tous les champs obligatoires doivent être remplis",
           password_mismatch: "Les mots de passe ne correspondent pas",
@@ -3695,6 +3696,7 @@ export const translations: Record<Language, TranslationKeys> = {
         terms_accept: "By signing up, you agree to our terms of service",
         success_title: "Registration Successful!",
         success_message: "Welcome! Your account has been created successfully.",
+        continue_button: "Sign In",
         errors: {
           required_fields: "All required fields must be filled",
           password_mismatch: "Passwords do not match",
@@ -5444,6 +5446,7 @@ export const translations: Record<Language, TranslationKeys> = {
         terms_accept: "Al registrarte, aceptas nuestros términos de servicio",
         success_title: "¡Registro exitoso!",
         success_message: "¡Bienvenido! Tu cuenta ha sido creada con éxito.",
+        continue_button: "Iniciar sesión",
         errors: {
           required_fields: "Todos los campos obligatorios deben completarse",
           password_mismatch: "Las contraseñas no coinciden",
@@ -7113,6 +7116,7 @@ export const translations: Record<Language, TranslationKeys> = {
         terms_accept: "Ich akzeptiere die Nutzungsbedingungen",
         success_title: "Registrierung erfolgreich!",
         success_message: "Willkommen! Ihr Konto wurde erfolgreich erstellt.",
+        continue_button: "Anmelden",
         errors: {
           required_fields: "Alle erforderlichen Felder müssen ausgefüllt werden",
           password_mismatch: "Passwörter stimmen nicht überein",

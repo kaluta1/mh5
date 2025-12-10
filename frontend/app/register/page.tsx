@@ -174,11 +174,6 @@ export default function RegisterPage() {
       // Afficher le message de succès
       setIsSuccess(true)
       
-      // Rediriger vers le dashboard après 2 secondes
-      setTimeout(() => {
-        router.push('/dashboard')
-      }, 2000)
-      
     } catch (err: any) {
       console.error('Registration error:', err)
       setError(err.response?.data?.detail || t('auth.registerError'))
@@ -247,8 +242,10 @@ export default function RegisterPage() {
           <div className="bg-white/80 dark:bg-gray-800/90 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/20 dark:border-gray-700/50 p-8">
             {isSuccess ? (
               <div className="flex flex-col items-center justify-center py-12">
-                <div className="mb-6 animate-bounce">
-                  <CheckCircle className="w-16 h-16 text-green-500" />
+                <div className="mb-6">
+                  <div className="w-20 h-20 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                    <CheckCircle className="w-12 h-12 text-green-500" />
+                  </div>
                 </div>
                 <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
                   {t('auth.register.success_title') || 'Inscription réussie !'}
@@ -256,10 +253,13 @@ export default function RegisterPage() {
                 <p className="text-center text-gray-700 dark:text-gray-200 mb-6">
                   {t('auth.register.success_message') || 'Bienvenue ! Votre compte a été créé avec succès.'}
                 </p>
-                <div className="flex items-center space-x-2">
-                  <Loader2 className="w-5 h-5 animate-spin text-myfav-primary" />
-                  <span className="text-sm text-gray-600 dark:text-gray-400">{t('common.redirecting') || 'Redirection en cours...'}</span>
-                </div>
+                <Button
+                  onClick={() => router.push('/login')}
+                  className="w-full h-12 text-lg font-semibold bg-gradient-to-r from-myfav-primary to-purple-600 hover:from-myfav-primary-dark hover:to-purple-700 text-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+                >
+                  <Heart className="mr-2 h-5 w-5" />
+                  {t('auth.register.continue_button') || 'Se connecter'}
+                </Button>
               </div>
             ) : (
             <form onSubmit={handleSubmit} className="space-y-6">
