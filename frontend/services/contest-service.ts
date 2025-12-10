@@ -1,5 +1,14 @@
 import api from '@/lib/api'
 
+export interface TopContestant {
+  id: number
+  author_name?: string
+  author_avatar_url?: string
+  image_url?: string  // Image de soumission du contestant
+  votes_count?: number
+  rank?: number
+}
+
 export interface Contest {
   id: string
   title: string
@@ -17,6 +26,7 @@ export interface Contest {
   participationStartDate?: Date
   participationEndDate?: Date
   votingStartDate?: Date
+  topContestants?: TopContestant[]
   // Verification requirements
   requiresKyc?: boolean
   verificationType?: 'none' | 'visual' | 'voice' | 'brand' | 'content'
@@ -82,6 +92,15 @@ export interface ContestResponse {
   max_images?: number
   verification_video_max_duration?: number
   verification_max_size_mb?: number
+  // Top contestants preview
+  top_contestants?: Array<{
+    id: number
+    author_name?: string
+    author_avatar_url?: string
+    image_url?: string
+    votes_count?: number
+    rank?: number
+  }>
 }
 
 export interface ContestantWithAuthorAndStats {
@@ -609,7 +628,16 @@ class ContestService {
       minImages: response.min_images ?? 0,
       maxImages: response.max_images ?? 10,
       verificationVideoMaxDuration: response.verification_video_max_duration ?? 30,
-      verificationMaxSizeMb: response.verification_max_size_mb ?? 50
+      verificationMaxSizeMb: response.verification_max_size_mb ?? 50,
+      // Top contestants preview
+      topContestants: response.top_contestants?.map((c, index) => ({
+        id: c.id,
+        author_name: c.author_name,
+        author_avatar_url: c.author_avatar_url,
+        image_url: c.image_url,
+        votes_count: c.votes_count,
+        rank: c.rank ?? (index + 1)
+      })) || []
     }
   }
 

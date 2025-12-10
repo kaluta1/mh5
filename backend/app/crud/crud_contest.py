@@ -182,7 +182,6 @@ class CRUDContest:
         """Enrichit un contest avec les statistiques (nombre de participants et votes)"""
         from app.models.contests import ContestSeasonLink, ContestSeason
         from app.models.user import User
-        from app.models.voting import Vote
         
         # Compter le nombre de participants (contestants avec season_id = contest.id)
         # Utiliser distinct pour éviter les doublons et exclure les supprimés
@@ -195,43 +194,35 @@ class CRUDContest:
         
         # Récupérer les top 5 contestants par votes
         top_contestants = []
+        import logging
+        import json
+        logger = logging.getLogger(__name__)
+        
         try:
-            # Sous-requête pour compter les votes par contestant
-            votes_subq = db.query(
-                Vote.contestant_id,
-                func.count(Vote.id).label('votes_count')
-            ).group_by(Vote.contestant_id).subquery()
+            from app.models.media import Media
             
-            # Récupérer les contestants avec leurs votes et infos utilisateur
-            contestants_with_votes = db.query(
+            # Récupérer les contestants avec leurs infos utilisateur (sans votes pour simplifier)
+            contestants_with_user = db.query(
                 Contestant,
-                User,
-                func.coalesce(votes_subq.c.votes_count, 0).label('votes_count')
+                User
             ).join(
                 User, Contestant.user_id == User.id
-            ).outerjoin(
-                votes_subq, Contestant.id == votes_subq.c.contestant_id
             ).filter(
                 Contestant.season_id == contest.id,
                 Contestant.is_deleted == False
             ).order_by(
-                func.coalesce(votes_subq.c.votes_count, 0).desc()
+                Contestant.created_at.desc()
             ).limit(5).all()
             
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.info(f"Found {len(contestants_with_votes)} contestants for contest {contest.id}")
+            logger.info(f"Found {len(contestants_with_user)} contestants for contest {contest.id}")
             
-            for rank, (contestant, user, votes_count) in enumerate(contestants_with_votes, 1):
+            for rank, (contestant, user) in enumerate(contestants_with_user, 1):
                 # Extraire la première image du contestant depuis image_media_ids
                 contestant_image_url = None
-                logger.debug(f"Contestant {contestant.id} - image_media_ids: {contestant.image_media_ids}")
+                logger.info(f"Processing contestant {contestant.id} - image_media_ids: {contestant.image_media_ids}")
                 
                 if contestant.image_media_ids:
                     try:
-                        import json
-                        from app.models.media import Media
-                        
                         raw_value = contestant.image_media_ids.strip() if isinstance(contestant.image_media_ids, str) else contestant.image_media_ids
                         
                         # Cas 1: C'est déjà une URL directe (pas du JSON)
@@ -280,13 +271,14 @@ class CRUDContest:
                     "author_name": f"{user.first_name or ''} {user.last_name or ''}".strip() or user.username or "Anonyme",
                     "author_avatar_url": user.avatar_url,
                     "image_url": contestant_image_url,
-                    "votes_count": votes_count,
+                    "votes_count": 0,  # Simplified - no vote count for now
                     "rank": rank
                 })
         except Exception as e:
             # En cas d'erreur, on continue sans les top contestants
-            import logging
-            logging.getLogger(__name__).warning(f"Error fetching top contestants: {e}")
+            import traceback
+            logger.error(f"Error fetching top contestants for contest {contest.id}: {e}")
+            logger.error(traceback.format_exc())
         
         # Compter le nombre total de votes
         # Les votes peuvent venir de ContestVote ou être comptés via ContestEntry

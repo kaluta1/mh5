@@ -89,6 +89,7 @@ export function ContestsGrid({
           userGender={userGender}
           canParticipate={canParticipate}
           isKycVerified={isKycVerified}
+          topContestants={contest.topContestants}
           // Verification requirements
           requiresKyc={contest.requiresKyc}
           verificationType={contest.verificationType}

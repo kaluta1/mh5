@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Eye, EyeOff, Loader2, ArrowLeft, Heart, Mail, Lock, User, Phone, Gift } from 'lucide-react'
+import { Eye, EyeOff, Loader2, ArrowLeft, Heart, Mail, Lock, User, Phone, Gift, CheckCircle } from 'lucide-react'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { LanguageSelector } from '@/components/ui/language-selector'
 import { LocationSelectorSimple } from '@/components/auth/location-selector-simple'
@@ -34,6 +34,7 @@ export default function RegisterPage() {
   const [acceptTerms, setAcceptTerms] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
+  const [isSuccess, setIsSuccess] = useState(false)
   const [referralCode, setReferralCode] = useState<string | null>(null)
 
   // Vérifier si un code de parrainage est présent dans l'URL ou localStorage
@@ -170,8 +171,13 @@ export default function RegisterPage() {
         localStorage.removeItem('referral_code')
       }
 
-      // Rediriger vers le dashboard
-      router.push('/dashboard')
+      // Afficher le message de succès
+      setIsSuccess(true)
+      
+      // Rediriger vers le dashboard après 2 secondes
+      setTimeout(() => {
+        router.push('/dashboard')
+      }, 2000)
       
     } catch (err: any) {
       console.error('Registration error:', err)
@@ -237,8 +243,25 @@ export default function RegisterPage() {
             </div>
           )}
 
-          {/* Formulaire */}
+          {/* Formulaire ou Succès */}
           <div className="bg-white/80 dark:bg-gray-800/90 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/20 dark:border-gray-700/50 p-8">
+            {isSuccess ? (
+              <div className="flex flex-col items-center justify-center py-12">
+                <div className="mb-6 animate-bounce">
+                  <CheckCircle className="w-16 h-16 text-green-500" />
+                </div>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                  {t('auth.register.success_title') || 'Inscription réussie !'}
+                </h2>
+                <p className="text-center text-gray-700 dark:text-gray-200 mb-6">
+                  {t('auth.register.success_message') || 'Bienvenue ! Votre compte a été créé avec succès.'}
+                </p>
+                <div className="flex items-center space-x-2">
+                  <Loader2 className="w-5 h-5 animate-spin text-myfav-primary" />
+                  <span className="text-sm text-gray-600 dark:text-gray-400">{t('common.redirecting') || 'Redirection en cours...'}</span>
+                </div>
+              </div>
+            ) : (
             <form onSubmit={handleSubmit} className="space-y-6">
               {error && (
                 <div className="p-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl dark:bg-red-900/20 dark:border-red-800 dark:text-red-400">
@@ -394,6 +417,7 @@ export default function RegisterPage() {
                 </Link>
               </div>
             </form>
+            )}
           </div>
         </div>
       </div>

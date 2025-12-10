@@ -114,6 +114,19 @@ class ContestEntry(ContestEntryBase):
         from_attributes = True
 
 
+# Schéma pour un contestant dans le top (aperçu)
+class TopContestantPreview(BaseModel):
+    id: int
+    author_name: Optional[str] = None
+    author_avatar_url: Optional[str] = None
+    image_url: Optional[str] = None
+    votes_count: int = 0
+    rank: int = 0
+    
+    class Config:
+        from_attributes = True
+
+
 # Schéma pour afficher un concours
 class Contest(ContestBase):
     id: int
@@ -123,6 +136,7 @@ class Contest(ContestBase):
     total_votes: int = 0  # Nombre total de votes
     season_level: Optional[str] = None  # Niveau depuis la season
     image_url: Optional[str] = None  # URL de l'image principale
+    top_contestants: List[TopContestantPreview] = []  # Top contestants preview
     
     class Config:
         from_attributes = True

@@ -8,6 +8,15 @@ import { Badge } from '@/components/ui/badge'
 import { useState, useEffect } from 'react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
+interface TopContestant {
+  id: number
+  author_name?: string
+  author_avatar_url?: string
+  image_url?: string  // Image de soumission du contestant
+  votes_count?: number
+  rank?: number
+}
+
 interface ContestCardProps {
   id: string
   title: string
@@ -28,6 +37,8 @@ interface ContestCardProps {
   userGender?: 'male' | 'female' | 'other' | 'prefer_not_to_say' | null
   canParticipate?: boolean
   isKycVerified?: boolean
+  // Top contestants for preview
+  topContestants?: TopContestant[]
   // Verification requirements
   requiresKyc?: boolean
   verificationType?: 'none' | 'visual' | 'voice' | 'brand' | 'content'
@@ -64,6 +75,7 @@ export function ContestCard({
   userGender,
   canParticipate: userCanParticipate = true,
   isKycVerified = false,
+  topContestants = [],
   // Verification requirements - KYC n'est PAS requis par défaut
   requiresKyc = false,
   verificationType = 'none',
@@ -92,6 +104,8 @@ export function ContestCard({
     return () => clearInterval(interval)
   }, [])
 
+  // Debug: Log topContestants data
+  console.log(`Contest ${id} - topContestants:`, topContestants?.length || 0, topContestants?.map(c => ({ id: c.id, image_url: c.image_url?.substring(0, 50) })))
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -128,18 +142,12 @@ export function ContestCard({
   }
 
   const isParticipationOngoing = () => {
-    // Si le backend dit que la soumission est ouverte (isOpen), faire confiance
-    if (isOpen) return true
+    // Le backend est l'autorité principale via isOpen (is_submission_open)
+    // Si isOpen est false, les inscriptions sont fermées
+    if (!isOpen) return false
     
-    // Sinon, vérifier les dates
-    if (!participationStartDate || !participationEndDate) return false
-    const now = currentTime
-    const start = new Date(participationStartDate)
-    const end = new Date(participationEndDate)
-    const votingStart = votingStartDate ? new Date(votingStartDate) : null
-    
-    if (now < start || now > end) return false
-    if (votingStart && now >= votingStart) return false
+    // Si isOpen est true, on peut aussi vérifier les dates côté client pour le décompte
+    // mais le backend a déjà vérifié, donc on fait confiance
     return true
   }
   
@@ -251,8 +259,8 @@ export function ContestCard({
         {/* Gradient Overlay - Légère par défaut, plus sombre au hover */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent group-hover:from-black/80 group-hover:via-black/60 transition-all duration-500"></div>
         
-        {/* Top Bar with Badges and Favorite - Always visible */}
-        <div className="absolute top-0 left-0 right-0 p-4 flex items-start justify-between z-30">
+        {/* Top Bar with Badges - Visible par défaut, masqué au hover */}
+        <div className="absolute top-0 left-0 right-0 p-4 flex items-start justify-between z-30 transition-all duration-300 group-hover:opacity-0 group-hover:-translate-y-4">
           <div className="flex flex-wrap gap-2">
             <Badge className={`${getStatusColor(status)} border-0 text-xs font-bold shadow-lg backdrop-blur-md px-3 py-1.5`}>
               {getStatusLabel(status)}
@@ -274,23 +282,60 @@ export function ContestCard({
               </Badge>
             )}
           </div>
-          
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onToggleFavorite()
-            }}
-            className="p-2.5 bg-white/20 dark:bg-gray-800/20 backdrop-blur-md rounded-full hover:bg-white/30 dark:hover:bg-gray-700/30 transition-all shadow-lg hover:scale-110 z-30"
-          >
-            <Heart
-              className={`w-5 h-5 transition-all ${
-                isFavorite
-                  ? 'fill-red-500 text-red-500 scale-110'
-                  : 'text-white hover:text-red-300'
-              }`}
-            />
-          </button>
         </div>
+
+        {/* Top Contestants Images - Horizontal, petites, en bas */}
+        {topContestants && topContestants.length > 0 && (
+          <div className="absolute bottom-20 left-3 right-3 z-25 transition-all duration-300 group-hover:opacity-0 group-hover:translate-y-2">
+            <div className="flex items-center gap-1.5">
+              {/* Horizontal small images */}
+              {topContestants.slice(0, 5).map((contestant, index) => (
+                <div
+                  key={contestant.id}
+                  className="relative w-9 h-9 rounded-lg border border-white/80 shadow-md overflow-hidden bg-gradient-to-br from-gray-600 to-gray-800 flex-shrink-0"
+                >
+                  {contestant.image_url ? (
+                    <Image
+                      src={contestant.image_url}
+                      alt={contestant.author_name || 'Participant'}
+                      fill
+                      className="object-cover"
+                      sizes="36px"
+                      unoptimized
+                    />
+                  ) : contestant.author_avatar_url ? (
+                    <Image
+                      src={contestant.author_avatar_url}
+                      alt={contestant.author_name || 'Participant'}
+                      fill
+                      className="object-cover"
+                      sizes="36px"
+                      unoptimized
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-white text-xs font-bold bg-gradient-to-br from-myfav-primary to-purple-600">
+                      {contestant.author_name?.charAt(0)?.toUpperCase() || '?'}
+                    </div>
+                  )}
+                  {/* Small rank indicator */}
+                  {contestant.rank && contestant.rank <= 3 && (
+                    <div className={`absolute -top-0.5 -left-0.5 w-3.5 h-3.5 rounded-full flex items-center justify-center text-[8px] font-bold text-white ${
+                      contestant.rank === 1 ? 'bg-amber-500' : contestant.rank === 2 ? 'bg-gray-400' : 'bg-amber-700'
+                    }`}>
+                      {contestant.rank}
+                    </div>
+                  )}
+                </div>
+              ))}
+              {/* Counter for more */}
+              {contestants > 5 && (
+                <span className="text-white/80 text-xs font-semibold bg-black/40 backdrop-blur-sm px-2 py-1 rounded-lg">
+                  +{contestants - 5}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Title and Verification badges - Visible par défaut, masqué au hover */}
         <div className="absolute bottom-0 left-0 right-0 p-6 z-20 transition-opacity duration-500 group-hover:opacity-0">
@@ -361,18 +406,34 @@ export function ContestCard({
         {/* Hover Overlay - Shows additional info only on hover */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/80 to-black/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-all duration-400 flex flex-col p-5 z-20 pointer-events-none">
           
-          {/* Top Section - Level & Status */}
+          {/* Top Section - Level, Status & Favorite */}
           <div className="flex items-center justify-between transform -translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
             <div className="flex items-center gap-2">
               <MapPin className="w-4 h-4 text-myfav-secondary" />
               <span className="text-white/90 text-sm font-medium">{getStatusLabel(status)}</span>
+              {isOpen && (
+                <span className="flex items-center gap-1.5 bg-green-500/20 text-green-400 px-2 py-0.5 rounded-full text-xs font-semibold border border-green-500/30">
+                  <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
+                  {t('dashboard.contests.open') || 'Ouvert'}
+                </span>
+              )}
             </div>
-            {isOpen && (
-              <span className="flex items-center gap-1.5 bg-green-500/20 text-green-400 px-2.5 py-1 rounded-full text-xs font-semibold border border-green-500/30">
-                <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
-                {t('dashboard.contests.open') || 'Ouvert'}
-              </span>
-            )}
+            {/* Favorite Button - Only visible on hover */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onToggleFavorite()
+              }}
+              className="p-2.5 bg-white/20 backdrop-blur-md rounded-full hover:bg-white/30 transition-all shadow-lg hover:scale-110 pointer-events-auto"
+            >
+              <Heart
+                className={`w-5 h-5 transition-all ${
+                  isFavorite
+                    ? 'fill-red-500 text-red-500 scale-110'
+                    : 'text-white hover:text-red-300'
+                }`}
+              />
+            </button>
           </div>
 
           {/* Middle Section - Stats */}
@@ -409,19 +470,57 @@ export function ContestCard({
               </div>
             )}
 
-            {/* Requirements Summary */}
-            {(requiresKyc || requiresVisualVerification || requiresVoiceVerification || genderRestriction) && (
-              <div className="flex flex-wrap items-center justify-center gap-2 transform translate-y-4 group-hover:translate-y-0 transition-transform duration-400 delay-150">
-                {requiresKyc && (
-                  <span className="flex items-center gap-1 bg-emerald-500/20 text-emerald-300 px-2 py-1 rounded-lg text-xs border border-emerald-500/30">
-                    <ShieldCheck className="w-3 h-3" /> KYC
-                  </span>
-                )}
-                {genderRestriction && (
-                  <span className="flex items-center gap-1 bg-pink-500/20 text-pink-300 px-2 py-1 rounded-lg text-xs border border-pink-500/30">
-                    {genderRestriction === 'female' ? '♀' : '♂'} {genderRestriction === 'female' ? (t('dashboard.contests.women') || 'Femmes') : (t('dashboard.contests.men') || 'Hommes')}
-                  </span>
-                )}
+            {/* Requirements Summary with explanatory text */}
+            {(requiresKyc || requiresVisualVerification || requiresVoiceVerification || requiresBrandVerification || requiresContentVerification || genderRestriction || minAge || maxAge) && (
+              <div className="w-full max-w-[320px] bg-white/5 backdrop-blur-sm rounded-xl p-3 border border-white/10 transform translate-y-4 group-hover:translate-y-0 transition-transform duration-400 delay-150">
+                <p className="text-white/60 text-[10px] uppercase tracking-wider mb-2 text-center font-semibold">
+                  {t('dashboard.contests.requirements') || 'Conditions requises'}
+                </p>
+                <div className="flex flex-wrap justify-center gap-1.5">
+                  {requiresKyc && (
+                    <span className="flex items-center gap-1 bg-emerald-500/20 text-emerald-300 px-2 py-1 rounded-lg text-[10px] border border-emerald-500/30">
+                      <ShieldCheck className="w-3 h-3" /> {t('dashboard.contests.kyc_required') || 'Identité vérifiée'}
+                    </span>
+                  )}
+                  {requiresVisualVerification && (
+                    <span className="flex items-center gap-1 bg-blue-500/20 text-blue-300 px-2 py-1 rounded-lg text-[10px] border border-blue-500/30">
+                      <Eye className="w-3 h-3" /> {t('dashboard.contests.visual_verification') || 'Photo de vous'}
+                    </span>
+                  )}
+                  {requiresVoiceVerification && (
+                    <span className="flex items-center gap-1 bg-purple-500/20 text-purple-300 px-2 py-1 rounded-lg text-[10px] border border-purple-500/30">
+                      <Mic className="w-3 h-3" /> {t('dashboard.contests.voice_verification') || 'Vérification vocale'}
+                    </span>
+                  )}
+                  {requiresBrandVerification && (
+                    <span className="flex items-center gap-1 bg-amber-500/20 text-amber-300 px-2 py-1 rounded-lg text-[10px] border border-amber-500/30">
+                      <Trophy className="w-3 h-3" /> {t('dashboard.contests.brand_verification') || 'Marque vérifiée'}
+                    </span>
+                  )}
+                  {requiresContentVerification && (
+                    <span className="flex items-center gap-1 bg-cyan-500/20 text-cyan-300 px-2 py-1 rounded-lg text-[10px] border border-cyan-500/30">
+                      <FileCheck className="w-3 h-3" /> {t('dashboard.contests.content_verification') || 'Contenu original'}
+                    </span>
+                  )}
+                  {genderRestriction && (
+                    <span className="flex items-center gap-1 bg-pink-500/20 text-pink-300 px-2 py-1 rounded-lg text-[10px] border border-pink-500/30">
+                      {genderRestriction === 'female' ? '♀' : '♂'} {genderRestriction === 'female' 
+                        ? (t('dashboard.contests.female_only') || 'Femmes uniquement') 
+                        : (t('dashboard.contests.male_only') || 'Hommes uniquement')}
+                    </span>
+                  )}
+                  {(minAge || maxAge) && (
+                    <span className="flex items-center gap-1 bg-orange-500/20 text-orange-300 px-2 py-1 rounded-lg text-[10px] border border-orange-500/30">
+                      <Calendar className="w-3 h-3" /> 
+                      {minAge && maxAge 
+                        ? `${minAge}-${maxAge} ${t('dashboard.contests.years') || 'ans'}`
+                        : minAge 
+                          ? `${minAge}+ ${t('dashboard.contests.years') || 'ans'}`
+                          : `< ${maxAge} ${t('dashboard.contests.years') || 'ans'}`
+                      }
+                    </span>
+                  )}
+                </div>
               </div>
             )}
           </div>

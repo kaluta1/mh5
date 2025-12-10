@@ -91,6 +91,14 @@ export default function ContestsPage() {
         // Récupérer les contests du backend (jusqu'à 100)
         const apiContests = await contestService.getContests(0, 100)
         console.log('[ContestsPage] API response received:', apiContests?.length || 0, 'contests')
+        // Debug: Log first contest's top_contestants
+        if (apiContests?.length > 0) {
+          console.log('[ContestsPage] First contest raw data:', {
+            id: apiContests[0].id,
+            name: apiContests[0].name,
+            top_contestants: apiContests[0].top_contestants
+          })
+        }
         
         if (!isMountedRef.current) {
           console.log('[ContestsPage] Component unmounted, aborting')

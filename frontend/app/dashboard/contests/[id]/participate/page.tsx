@@ -357,8 +357,20 @@ export default function ParticipateInContestPage() {
                   </div>
                 )}
 
+                {/* Submission Closed Alert */}
+                {contest && !contest.is_submission_open && (
+                  <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg mb-4">
+                    <p className="text-red-900 dark:text-red-200 font-medium">
+                      🚫 {t('dashboard.contests.submission_closed') || 'Les inscriptions sont fermées pour ce concours.'}
+                    </p>
+                    <p className="text-red-700 dark:text-red-300 text-sm mt-1">
+                      {t('dashboard.contests.submission_closed_message') || 'La date limite de soumission est dépassée.'}
+                    </p>
+                  </div>
+                )}
+
                 {/* Participation Form */}
-                {!needsProfileSetup && (
+                {!needsProfileSetup && contest?.is_submission_open && (
                   <ParticipationForm
                     contestId={contestId}
                     onSubmit={handleParticipationSubmit}
