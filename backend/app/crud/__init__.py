@@ -6,7 +6,7 @@ from .crud_media import media
 from .crud_voting import vote, voting_stats, voting_session
 from .crud_geography import continent, region, country, city
 from .crud_kyc import kyc_verification, kyc_document, kyc_audit_log
-from .crud_contestant import crud_contestant as contestant
+from .crud_contestant import crud_contestant as contestant, contest_submission
 from .crud_favorite import favorite
 # Modules affiliés
 from .crud_affiliate import (
@@ -16,6 +16,16 @@ from .crud_affiliate import (
 
 # RBAC - Rôles et Permissions
 from .crud_role import role, permission
+
+# Module crud_contestants pour compatibilité avec myfav_contests.py
+class _CRUDContestants:
+    """Wrapper pour accéder aux CRUDs contestants et submissions"""
+    def __init__(self):
+        from .crud_contestant import crud_contestant, contest_submission
+        self.contestant = crud_contestant
+        self.contest_submission = contest_submission
+
+crud_contestants = _CRUDContestants()
 
 # Modules non implémentés - commentés temporairement
 # from .crud_clubs import fan_club, club_membership, club_wallet

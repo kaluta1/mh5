@@ -1,11 +1,12 @@
 from typing import List, Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, date
 import json
 
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, and_
 
 from app.models.contests import Contestant, ContestSubmission, ContestSeason
+from app.models.contest import Contest
 from app.models.voting import Vote, MyFavorites, ContestLike, ContestComment
 
 
@@ -461,7 +462,172 @@ class CRUDContestant:
             db.refresh(db_obj)
             return True
         return False
+    
+    def check_registration_eligibility(
+        self, db: Session, *, user_id: int, season_id: int, category_id: Optional[int] = None
+    ) -> Dict[str, Any]:
+        """
+        Vérifie si un utilisateur peut s'inscrire à un concours.
+        Retourne un dict avec 'eligible' (bool) et 'reason' (str si non éligible).
+        Le season_id peut être un Contest.id ou un ContestSeason.id.
+        """
+        # Vérifier si l'utilisateur a déjà une candidature pour cette saison
+        existing = self.get_by_season_and_user(db, season_id, user_id)
+        if existing:
+            return {
+                "eligible": False,
+                "reason": "Vous êtes déjà inscrit à ce concours"
+            }
+        
+        # D'abord, essayer de récupérer comme un Contest (table contest)
+        contest = db.query(Contest).filter(Contest.id == season_id, Contest.is_deleted == False).first()
+        
+        if contest:
+            # C'est un Contest - vérifier les dates et l'état
+            if not contest.is_active:
+                return {
+                    "eligible": False,
+                    "reason": "Ce concours n'est pas actif"
+                }
+            
+            # Vérifier is_submission_open
+            if not contest.is_submission_open:
+                return {
+                    "eligible": False,
+                    "reason": "Les inscriptions sont fermées pour ce concours"
+                }
+            
+            # Vérifier les dates de soumission
+            today = date.today()
+            
+            if contest.submission_start_date and today < contest.submission_start_date:
+                return {
+                    "eligible": False,
+                    "reason": "La période d'inscription n'a pas encore commencé"
+                }
+            
+            if contest.submission_end_date and today > contest.submission_end_date:
+                return {
+                    "eligible": False,
+                    "reason": "La période d'inscription est terminée"
+                }
+            
+            return {
+                "eligible": True,
+                "reason": None
+            }
+        
+        # Sinon, essayer comme ContestSeason
+        season = db.query(ContestSeason).filter(ContestSeason.id == season_id).first()
+        if not season:
+            return {
+                "eligible": False,
+                "reason": "Concours non trouvé"
+            }
+        
+        # ContestSeason n'a pas de dates de soumission par défaut, on vérifie juste s'il existe
+        return {
+            "eligible": True,
+            "reason": None
+        }
+    
+    def is_submission_period_open(self, db: Session, *, contestant_id: int) -> bool:
+        """
+        Vérifie si la période de soumission est ouverte pour un contestant.
+        Le season_id peut être un Contest.id ou un ContestSeason.id.
+        """
+        contestant = self.get(db, contestant_id)
+        if not contestant:
+            return False
+        
+        # D'abord, essayer comme Contest
+        contest = db.query(Contest).filter(
+            Contest.id == contestant.season_id, 
+            Contest.is_deleted == False
+        ).first()
+        
+        if contest:
+            # Vérifier is_submission_open
+            if not contest.is_submission_open:
+                return False
+            
+            # Vérifier is_active
+            if not contest.is_active:
+                return False
+            
+            # Vérifier les dates
+            today = date.today()
+            
+            if contest.submission_start_date and today < contest.submission_start_date:
+                return False
+            
+            if contest.submission_end_date and today > contest.submission_end_date:
+                return False
+            
+            return True
+        
+        # Sinon, essayer comme ContestSeason
+        season = db.query(ContestSeason).filter(ContestSeason.id == contestant.season_id).first()
+        if not season:
+            return False
+        
+        # ContestSeason n'a pas de dates de soumission par défaut, on considère que c'est ouvert
+        return True
+    
+    def create_with_user(
+        self, db: Session, *, obj_in: Any, user_id: int
+    ) -> Contestant:
+        """Crée une candidature pour un utilisateur"""
+        return self.create(
+            db,
+            user_id=user_id,
+            season_id=obj_in.season_id,
+            title=getattr(obj_in, 'title', None),
+            description=getattr(obj_in, 'description', None),
+            image_media_ids=getattr(obj_in, 'image_media_ids', None),
+            video_media_ids=getattr(obj_in, 'video_media_ids', None)
+        )
 
 
 # Instance globale
 crud_contestant = CRUDContestant()
+
+
+# Classe pour les soumissions de contest
+class CRUDContestSubmission:
+    """CRUD operations for ContestSubmission model"""
+    
+    def create_with_contestant(
+        self, db: Session, *, obj_in: Any, contestant_id: int
+    ) -> ContestSubmission:
+        """Crée une soumission pour un contestant"""
+        submission = ContestSubmission(
+            contestant_id=contestant_id,
+            media_type=getattr(obj_in, 'media_type', 'image'),
+            file_url=getattr(obj_in, 'file_url', None),
+            external_url=getattr(obj_in, 'external_url', None),
+            title=getattr(obj_in, 'title', None),
+            description=getattr(obj_in, 'description', None),
+            upload_date=datetime.utcnow(),
+            is_approved=False,
+            moderation_status="pending"
+        )
+        db.add(submission)
+        db.commit()
+        db.refresh(submission)
+        return submission
+    
+    def handle_media_upload(
+        self, db: Session, *, contestant_id: int, file: Any,
+        title: Optional[str] = None, description: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Gère l'upload d'un fichier média"""
+        # TODO: Implémenter l'upload vers le service de stockage
+        return {
+            "success": False,
+            "error": "L'upload de fichiers n'est pas encore implémenté"
+        }
+
+
+# Instance globale
+contest_submission = CRUDContestSubmission()
