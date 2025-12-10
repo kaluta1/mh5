@@ -172,8 +172,8 @@ export function TransactionTable({
     // Extract deposit ID from transaction id (format: "dep_123")
     const depositId = transaction.deposit_id || transaction.id.replace('dep_', '')
     
-    // Open invoice in new tab
-    window.open(`${apiUrl}/api/v1/payments/invoice/${depositId}?token=${token}`, '_blank')
+    // Open invoice in new tab with language parameter
+    window.open(`${apiUrl}/api/v1/payments/invoice/${depositId}?token=${token}&lang=${language}`, '_blank')
   }
 
   if (transactions.length === 0) {
