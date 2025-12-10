@@ -1,7 +1,7 @@
 from datetime import timedelta
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
@@ -19,6 +19,7 @@ from app.core.config import settings
 from app.db.session import get_db
 from app.crud import user as crud_user
 from app.api.deps import get_current_active_user
+from app.services.email import email_service
 
 router = APIRouter()
 
@@ -27,12 +28,15 @@ def register_user(
     *,
     db: Session = Depends(get_db),
     user_in: UserCreate,
-    sponsor_code: Optional[str] = Query(None, description="Code de parrainage du parrain")
+    background_tasks: BackgroundTasks,
+    sponsor_code: Optional[str] = Query(None, description="Code de parrainage du parrain"),
+    lang: Optional[str] = Query("fr", description="Langue préférée (fr, en, es, de)")
 ) -> Any:
     """
     Créer un nouvel utilisateur.
     
     - **sponsor_code**: Code de parrainage optionnel pour associer l'utilisateur à un parrain
+    - **lang**: Langue préférée pour les communications
     """
     user = crud_user.get_by_email(db, email=user_in.email)
     if user:
@@ -43,6 +47,21 @@ def register_user(
     
     # Créer l'utilisateur avec le parrain si un code est fourni
     user = crud_user.create_with_sponsor(db, obj_in=user_in, sponsor_code=sponsor_code)
+    
+    # Mettre à jour la langue préférée
+    if lang and hasattr(user, 'preferred_language'):
+        user.preferred_language = lang
+        db.commit()
+    
+    # Envoyer l'email de bienvenue
+    verify_url = f"{settings.FRONTEND_URL}/verify-email?token={create_password_reset_token(user.email)}"
+    background_tasks.add_task(
+        email_service.send_welcome_email,
+        to_email=user.email,
+        verify_url=verify_url,
+        lang=lang or "fr"
+    )
+    
     return user
 
 @router.post("/login", response_model=Token)
@@ -75,11 +94,12 @@ def login_access_token(
 def request_password_reset(
     *,
     db: Session = Depends(get_db),
-    password_reset: PasswordResetRequest
+    password_reset: PasswordResetRequest,
+    background_tasks: BackgroundTasks
 ) -> Any:
     """
     Demander une réinitialisation de mot de passe.
-    Envoie un token de réinitialisation (normalement par email).
+    Envoie un token de réinitialisation par email.
     """
     user = crud_user.get_by_email(db, email=password_reset.email)
     
@@ -89,9 +109,19 @@ def request_password_reset(
         # Générer le token de réinitialisation
         reset_token = create_password_reset_token(user.email)
         
-        # TODO: Ici, vous devriez envoyer un email avec le token
-        # Pour le développement, on peut logger le token
-        print(f"Token de réinitialisation pour {user.email}: {reset_token}")
+        # Construire l'URL de réinitialisation
+        reset_url = f"{settings.FRONTEND_URL}/reset-password?token={reset_token}"
+        
+        # Récupérer la langue préférée de l'utilisateur
+        user_lang = getattr(user, 'preferred_language', 'fr') or 'fr'
+        
+        # Envoyer l'email de réinitialisation
+        background_tasks.add_task(
+            email_service.send_password_reset_email,
+            to_email=user.email,
+            reset_url=reset_url,
+            lang=user_lang
+        )
         
     return PasswordResetResponse(
         message="Si cet email existe, un lien de réinitialisation a été envoyé"

@@ -392,13 +392,15 @@ def send_invitation(
     
     # Envoyer l'email en arrière-plan
     inviter_name = f"{current_user.first_name or ''} {current_user.last_name or ''}".strip() or current_user.username or "Un ami"
+    inviter_lang = getattr(current_user, 'preferred_language', 'fr') or 'fr'
     
     background_tasks.add_task(
         email_service.send_invitation_email,
         to_email=invitation_in.email,
         inviter_name=inviter_name,
         referral_code=referral_code,
-        message=invitation_in.message
+        message=invitation_in.message,
+        lang=inviter_lang
     )
     
     return InvitationSendResult(
@@ -463,12 +465,14 @@ def send_bulk_invitations(
         )
         
         # Envoyer l'email en arrière-plan
+        inviter_lang = getattr(current_user, 'preferred_language', 'fr') or 'fr'
         background_tasks.add_task(
             email_service.send_invitation_email,
             to_email=email,
             inviter_name=inviter_name,
             referral_code=referral_code,
-            message=invitations_in.message
+            message=invitations_in.message,
+            lang=inviter_lang
         )
         
         results.append(InvitationSendResult(

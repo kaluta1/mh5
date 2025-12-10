@@ -16,6 +16,7 @@ import logging
 from app.models.user import User
 from app.models.affiliate import AffiliateCommission, CommissionType, CommissionStatus
 from app.models.payment import Deposit, ProductType
+from app.services.email import email_service
 
 logger = logging.getLogger(__name__)
 
@@ -183,6 +184,21 @@ def process_payment_validation(db: Session, deposit: Deposit) -> bool:
                     logger.info(f"Annual membership renewed for user {user.id}")
             
             db.commit()
+            
+            # Envoyer l'email de confirmation de paiement
+            try:
+                user_lang = getattr(user, 'preferred_language', 'fr') or 'fr'
+                email_service.send_payment_confirmation_email(
+                    to_email=user.email,
+                    amount=f"${float(deposit.amount):.2f}",
+                    product=product_type.name,
+                    reference=str(deposit.external_payment_id or deposit.id),
+                    date=datetime.utcnow().strftime('%d/%m/%Y'),
+                    lang=user_lang
+                )
+                logger.info(f"Payment confirmation email sent to {user.email}")
+            except Exception as e:
+                logger.error(f"Failed to send payment confirmation email: {e}")
         
         return True
         

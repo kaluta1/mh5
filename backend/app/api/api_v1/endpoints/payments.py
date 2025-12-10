@@ -513,6 +513,9 @@ async def get_invoice(
     if deposit.status != DepositStatus.VALIDATED:
         raise HTTPException(status_code=400, detail="Invoice only available for validated payments")
     
+    # Use user's preferred language if no lang parameter provided
+    user_lang = lang or getattr(current_user, 'preferred_language', 'fr') or 'fr'
+    
     # Get product info
     product = db.query(ProductType).filter(ProductType.id == deposit.product_type_id).first()
     product_name = product.name if product else "Service"
@@ -593,7 +596,7 @@ async def get_invoice(
         }
     }
     
-    t = translations.get(lang, translations["fr"])
+    t = translations.get(user_lang, translations["fr"])
     
     # Generate invoice HTML
     invoice_html = f"""

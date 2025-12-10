@@ -1,5 +1,5 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Request, Header
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Request, Header, BackgroundTasks
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from datetime import datetime
@@ -19,6 +19,7 @@ from app.schemas.kyc import (
     ShuftiProWebhookData, KYCWebhookResponse
 )
 from app.services.shufti_pro import shufti_pro_service
+from app.services.email import email_service
 
 router = APIRouter()
 
@@ -554,6 +555,7 @@ def approve_kyc_verification(
     *,
     db: Session = Depends(deps.get_db),
     verification_id: int,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(deps.get_current_admin_user)
 ) -> KYCVerification:
     """
@@ -572,9 +574,21 @@ def approve_kyc_verification(
             detail="Cette vérification ne peut pas être approuvée"
         )
     
-    return crud_kyc.kyc_verification.approve_verification(
+    result = crud_kyc.kyc_verification.approve_verification(
         db, verification_id=verification_id, admin_user_id=current_user.id
     )
+    
+    # Envoyer l'email de confirmation KYC approuvé
+    verified_user = db.query(User).filter(User.id == verification.user_id).first()
+    if verified_user:
+        user_lang = getattr(verified_user, 'preferred_language', 'fr') or 'fr'
+        background_tasks.add_task(
+            email_service.send_kyc_approved_email,
+            to_email=verified_user.email,
+            lang=user_lang
+        )
+    
+    return result
 
 
 @router.post("/admin/verification/{verification_id}/reject", response_model=KYCVerification)
@@ -582,6 +596,7 @@ def reject_kyc_verification(
     *,
     db: Session = Depends(deps.get_db),
     verification_id: int,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(deps.get_current_admin_user),
     reason: str = Form(...),
     details: Optional[str] = Form(None)
@@ -602,10 +617,23 @@ def reject_kyc_verification(
             detail="Cette vérification ne peut pas être rejetée"
         )
     
-    return crud_kyc.kyc_verification.reject_verification(
+    result = crud_kyc.kyc_verification.reject_verification(
         db, verification_id=verification_id, reason=reason, 
         details=details, admin_user_id=current_user.id
     )
+    
+    # Envoyer l'email de notification KYC rejeté
+    rejected_user = db.query(User).filter(User.id == verification.user_id).first()
+    if rejected_user:
+        user_lang = getattr(rejected_user, 'preferred_language', 'fr') or 'fr'
+        background_tasks.add_task(
+            email_service.send_kyc_rejected_email,
+            to_email=rejected_user.email,
+            reason=reason,
+            lang=user_lang
+        )
+    
+    return result
 
 
 @router.get("/admin/statistics", response_model=KYCStatistics)
