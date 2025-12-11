@@ -32,6 +32,32 @@ export function AffiliatesGrowthChart({
   const directsLabel = t('dashboard.analytics.direct_affiliates') || 'Direct Affiliates'
   const totalLabel = t('dashboard.analytics.total_network') || 'Total Network'
 
+  // Traduire les mois
+  const translateMonth = (month: string) => {
+    const translations: Record<string, string> = {
+      'Jan': t('common.months.jan') || 'Jan',
+      'Feb': t('common.months.feb') || 'Fév',
+      'Mar': t('common.months.mar') || 'Mar',
+      'Apr': t('common.months.apr') || 'Avr',
+      'May': t('common.months.may') || 'Mai',
+      'Jun': t('common.months.jun') || 'Juin',
+      'Jul': t('common.months.jul') || 'Juil',
+      'Aug': t('common.months.aug') || 'Août',
+      'Sep': t('common.months.sep') || 'Sep',
+      'Oct': t('common.months.oct') || 'Oct',
+      'Nov': t('common.months.nov') || 'Nov',
+      'Dec': t('common.months.dec') || 'Déc',
+      'Fév': t('common.months.feb') || 'Fév',
+      'Avr': t('common.months.apr') || 'Avr',
+      'Mai': t('common.months.may') || 'Mai',
+      'Juin': t('common.months.jun') || 'Juin',
+      'Juil': t('common.months.jul') || 'Juil',
+      'Août': t('common.months.aug') || 'Août',
+      'Déc': t('common.months.dec') || 'Déc'
+    }
+    return translations[month] || month
+  }
+
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl p-6 border border-gray-100 dark:border-gray-800">
       <div className="flex items-center justify-between mb-6">
@@ -54,7 +80,7 @@ export function AffiliatesGrowthChart({
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
-            <XAxis dataKey="month" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
+            <XAxis dataKey="month" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} tickFormatter={translateMonth} />
             <YAxis tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
             <Tooltip 
               contentStyle={{ 
@@ -107,6 +133,32 @@ export function CommissionsChart({
   const chartSubtitle = subtitle || t('dashboard.analytics.monthly_commissions_desc') || 'Revenue from your network'
   const commissionsLabel = t('dashboard.analytics.commissions') || 'Commissions'
 
+  // Traduire les mois
+  const translateMonth = (month: string) => {
+    const translations: Record<string, string> = {
+      'Jan': t('common.months.jan') || 'Jan',
+      'Feb': t('common.months.feb') || 'Fév',
+      'Mar': t('common.months.mar') || 'Mar',
+      'Apr': t('common.months.apr') || 'Avr',
+      'May': t('common.months.may') || 'Mai',
+      'Jun': t('common.months.jun') || 'Juin',
+      'Jul': t('common.months.jul') || 'Juil',
+      'Aug': t('common.months.aug') || 'Août',
+      'Sep': t('common.months.sep') || 'Sep',
+      'Oct': t('common.months.oct') || 'Oct',
+      'Nov': t('common.months.nov') || 'Nov',
+      'Dec': t('common.months.dec') || 'Déc',
+      'Fév': t('common.months.feb') || 'Fév',
+      'Avr': t('common.months.apr') || 'Avr',
+      'Mai': t('common.months.may') || 'Mai',
+      'Juin': t('common.months.jun') || 'Juin',
+      'Juil': t('common.months.jul') || 'Juil',
+      'Août': t('common.months.aug') || 'Août',
+      'Déc': t('common.months.dec') || 'Déc'
+    }
+    return translations[month] || month
+  }
+
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl p-6 border border-gray-100 dark:border-gray-800">
       <div className="flex items-center justify-between mb-6">
@@ -119,7 +171,7 @@ export function CommissionsChart({
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
-            <XAxis dataKey="month" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
+            <XAxis dataKey="month" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} tickFormatter={translateMonth} />
             <YAxis 
               tick={{ fontSize: 12 }} 
               tickLine={false} 

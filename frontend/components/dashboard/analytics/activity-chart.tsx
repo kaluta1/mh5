@@ -31,6 +31,27 @@ export function ActivityChart({
   const votesLabel = t('dashboard.analytics.total_votes') || 'Votes'
   const viewsLabel = t('dashboard.analytics.total_views') || 'Views'
 
+  // Traduire les jours de la semaine
+  const translateDay = (day: string) => {
+    const translations: Record<string, string> = {
+      'Mon': t('common.days.mon') || 'Lun',
+      'Tue': t('common.days.tue') || 'Mar',
+      'Wed': t('common.days.wed') || 'Mer',
+      'Thu': t('common.days.thu') || 'Jeu',
+      'Fri': t('common.days.fri') || 'Ven',
+      'Sat': t('common.days.sat') || 'Sam',
+      'Sun': t('common.days.sun') || 'Dim',
+      'Lun': t('common.days.mon') || 'Lun',
+      'Mar': t('common.days.tue') || 'Mar',
+      'Mer': t('common.days.wed') || 'Mer',
+      'Jeu': t('common.days.thu') || 'Jeu',
+      'Ven': t('common.days.fri') || 'Ven',
+      'Sam': t('common.days.sat') || 'Sam',
+      'Dim': t('common.days.sun') || 'Dim',
+    }
+    return translations[day] || day
+  }
+
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl p-6 border border-gray-100 dark:border-gray-800">
       <div className="flex items-center justify-between mb-6">
@@ -53,7 +74,7 @@ export function ActivityChart({
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
-            <XAxis dataKey="day" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
+            <XAxis dataKey="day" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} tickFormatter={translateDay} />
             <YAxis tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
             <Tooltip 
               contentStyle={{ 

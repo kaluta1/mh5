@@ -129,7 +129,7 @@ export function LoginModal({ open, onOpenChange, onSwitchToRegister, onLoginSucc
 
           <div className="space-y-2">
             <Label htmlFor="emailOrUsername" className="text-gray-700 dark:text-gray-200">
-              {t('auth.email')}
+              {t('auth.email')} {t('common.or')} {t('auth.username')} *
             </Label>
             <div className="relative">
               <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400 dark:text-gray-500" />

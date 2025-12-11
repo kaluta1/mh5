@@ -68,8 +68,12 @@ export function ContestsGrid({
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8 auto-rows-fr">
       {contests.map((contest, index) => (
-        <ContestCard
+        <div
           key={contest.id}
+          className="animate-in fade-in slide-in-from-bottom-4 duration-500"
+          style={{ animationDelay: `${index * 50}ms`, animationFillMode: 'both' }}
+        >
+        <ContestCard
           id={contest.id}
           title={contest.title}
           coverImage={contest.coverImage}
@@ -105,6 +109,7 @@ export function ContestsGrid({
           onParticipate={() => onParticipate(contest.id)}
           onOpenDetails={() => onViewContestants(contest.id)}
         />
+        </div>
       ))}
     </div>
   )
