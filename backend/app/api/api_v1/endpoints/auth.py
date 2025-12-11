@@ -33,7 +33,7 @@ def register_user(
     user_in: UserCreate,
     background_tasks: BackgroundTasks,
     sponsor_code: Optional[str] = Query(None, description="Code de parrainage du parrain"),
-    lang: Optional[str] = Query("fr", description="Langue préférée (fr, en, es, de)")
+    lang: Optional[str] = Query("en", description="Langue préférée (fr, en, es, de)")
 ) -> Any:
     """
     Créer un nouvel utilisateur.
@@ -177,7 +177,7 @@ def request_password_reset(
         reset_url = f"{settings.FRONTEND_URL}/reset-password?token={reset_token}"
         
         # Récupérer la langue préférée de l'utilisateur
-        user_lang = getattr(user, 'preferred_language', 'fr') or 'fr'
+        user_lang = getattr(user, 'preferred_language', 'en') or 'en'
         
         # Envoyer l'email de réinitialisation
         background_tasks.add_task(
