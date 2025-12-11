@@ -306,12 +306,12 @@ export default function ContestsPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-0 sm:px-6 lg:px-8 py-4 sm:py-8">
         {/* Header */}
-        <div className="mb-8 space-y-4">
+        <div className="mb-6 sm:mb-8 space-y-4 animate-in fade-in slide-in-from-top-4 duration-500 px-4 sm:px-0">
           <div className="flex items-center justify-between">
             <div className="space-y-2">
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-myfav-primary to-myfav-primary-dark bg-clip-text text-transparent">
+              <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-myfav-primary to-myfav-primary-dark bg-clip-text text-transparent">
                 {t('dashboard.contests.title')}
               </h1>
               <p className="text-lg text-gray-600 dark:text-gray-400">
@@ -323,7 +323,7 @@ export default function ContestsPage() {
 
         {/* Alertes profil/KYC - Desktop */}
         {!canParticipate && (
-          <div className="hidden md:block mb-6 space-y-3">
+          <div className="hidden md:block mb-6 space-y-3 animate-in fade-in slide-in-from-top-2 duration-500 delay-150">
             {!isProfileComplete && (
               <div className="flex items-center justify-between gap-4 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50 rounded-xl">
                 <div className="flex items-center gap-3">
@@ -353,7 +353,7 @@ export default function ContestsPage() {
 
         {/* Alerte KYC informative (non bloquante) - certains concours peuvent l'exiger */}
         {isProfileComplete && !isKycVerified && (
-          <div className="hidden md:block mb-6">
+          <div className="hidden md:block mb-6 animate-in fade-in slide-in-from-top-2 duration-500 delay-200">
             <div className="flex items-center justify-between gap-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/50 rounded-xl">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-blue-100 dark:bg-blue-800/50 rounded-lg">

@@ -1780,6 +1780,7 @@ export const translations: Record<Language, TranslationKeys> = {
         years: "ans",
         max_favorites: "5 favoris maximum",
         favorite_limit_reached: "Limite de 5 favoris atteinte",
+        open_to_all: "Ouvert à tous les participants",
         top_participants: "Top Participants",
         top_5_description: "Les 5 meilleurs participants du concours",
         view_contestants: "Voir les participants",
@@ -1987,6 +1988,23 @@ export const translations: Record<Language, TranslationKeys> = {
           invalid_email: "Adresse email invalide",
           location_required: "Veuillez sélectionner votre pays et votre ville"
         }
+      },
+      verify_email: {
+        verifying: "Vérification de votre email...",
+        please_wait: "Veuillez patienter pendant que nous vérifions votre adresse email...",
+        verified_title: "Email vérifié !",
+        failed_title: "Échec de la vérification",
+        success: "Votre adresse email a été vérifiée avec succès !",
+        error: "Une erreur s'est produite lors de la vérification",
+        no_token: "Aucun token de vérification fourni",
+        invalid_token: "Lien de vérification invalide ou expiré",
+        user_not_found: "Utilisateur non trouvé",
+        go_to_login: "Se connecter",
+        can_login_now: "Vous pouvez maintenant vous connecter à votre compte",
+        register_again: "S'inscrire à nouveau",
+        go_home: "Retour à l'accueil",
+        need_help: "Besoin d'aide ?",
+        contact_support: "Contacter le support"
       }
     },
     common: {
@@ -1999,6 +2017,29 @@ export const translations: Record<Language, TranslationKeys> = {
       continue: "Continuer",
       or: "ou",
       redirecting: "Redirection en cours...",
+      days: {
+        mon: "Lun",
+        tue: "Mar",
+        wed: "Mer",
+        thu: "Jeu",
+        fri: "Ven",
+        sat: "Sam",
+        sun: "Dim"
+      },
+      months: {
+        jan: "Jan",
+        feb: "Fév",
+        mar: "Mar",
+        apr: "Avr",
+        may: "Mai",
+        jun: "Juin",
+        jul: "Juil",
+        aug: "Août",
+        sep: "Sep",
+        oct: "Oct",
+        nov: "Nov",
+        dec: "Déc"
+      },
       please_wait: "Veuillez patienter...",
       back: "Retour",
       back_to_dashboard: "Retour au tableau de bord",
@@ -2718,6 +2759,7 @@ export const translations: Record<Language, TranslationKeys> = {
         years: "ans",
         max_favorites: "5 favoris maximum",
         favorite_limit_reached: "Limite de 5 favoris atteinte",
+        open_to_all: "Ouvert à tous les participants",
         top_participants: "Top Participants",
         top_5_description: "Les 5 meilleurs participants du concours",
         view_contestants: "Voir les participants",
@@ -3712,12 +3754,52 @@ export const translations: Record<Language, TranslationKeys> = {
           invalid_email: "Invalid email address",
           location_required: "Please select your country and city"
         }
+      },
+      verify_email: {
+        verifying: "Verifying your email...",
+        please_wait: "Please wait while we verify your email address...",
+        verified_title: "Email Verified!",
+        failed_title: "Verification Failed",
+        success: "Your email has been verified successfully!",
+        error: "An error occurred during verification",
+        no_token: "No verification token provided",
+        invalid_token: "Invalid or expired verification link",
+        user_not_found: "User not found",
+        go_to_login: "Go to Login",
+        can_login_now: "You can now log in to your account",
+        register_again: "Register Again",
+        go_home: "Go to Homepage",
+        need_help: "Need help?",
+        contact_support: "Contact Support"
       }
     },
     common: {
       loading: "Loading...",
       error: "Error",
       success: "Success",
+      days: {
+        mon: "Mon",
+        tue: "Tue",
+        wed: "Wed",
+        thu: "Thu",
+        fri: "Fri",
+        sat: "Sat",
+        sun: "Sun"
+      },
+      months: {
+        jan: "Jan",
+        feb: "Feb",
+        mar: "Mar",
+        apr: "Apr",
+        may: "May",
+        jun: "Jun",
+        jul: "Jul",
+        aug: "Aug",
+        sep: "Sep",
+        oct: "Oct",
+        nov: "Nov",
+        dec: "Dec"
+      },
       network_error: "Connection error. Please check your internet connection.",
       cancel: "Cancel",
       confirm: "Confirm",
@@ -4447,6 +4529,7 @@ export const translations: Record<Language, TranslationKeys> = {
         favorite_limit_reached: "Favorite limit reached",
         top_participants: "Top Participants",
         top_5_description: "The 5 best participants in the contest",
+        open_to_all: "Open to all participants",
         view_contestants: "View contestants",
         time_remaining: "Time remaining",
         candidacy_ends: "Candidacy ends",
@@ -5467,12 +5550,52 @@ export const translations: Record<Language, TranslationKeys> = {
           invalid_email: "Dirección de correo electrónico inválida",
           location_required: "Por favor selecciona tu país y ciudad"
         }
+      },
+      verify_email: {
+        verifying: "Verificando tu correo...",
+        please_wait: "Por favor espera mientras verificamos tu dirección de correo...",
+        verified_title: "¡Correo verificado!",
+        failed_title: "Verificación fallida",
+        success: "¡Tu correo ha sido verificado con éxito!",
+        error: "Ocurrió un error durante la verificación",
+        no_token: "No se proporcionó token de verificación",
+        invalid_token: "Enlace de verificación inválido o expirado",
+        user_not_found: "Usuario no encontrado",
+        go_to_login: "Iniciar sesión",
+        can_login_now: "Ahora puedes iniciar sesión en tu cuenta",
+        register_again: "Registrarse de nuevo",
+        go_home: "Ir al inicio",
+        need_help: "¿Necesitas ayuda?",
+        contact_support: "Contactar soporte"
       }
     },
     common: {
       loading: "Cargando...",
       error: "Error",
       success: "Éxito",
+      days: {
+        mon: "Lun",
+        tue: "Mar",
+        wed: "Mié",
+        thu: "Jue",
+        fri: "Vie",
+        sat: "Sáb",
+        sun: "Dom"
+      },
+      months: {
+        jan: "Ene",
+        feb: "Feb",
+        mar: "Mar",
+        apr: "Abr",
+        may: "May",
+        jun: "Jun",
+        jul: "Jul",
+        aug: "Ago",
+        sep: "Sep",
+        oct: "Oct",
+        nov: "Nov",
+        dec: "Dic"
+      },
       network_error: "Error de conexión. Verifica tu conexión a internet.",
       cancel: "Cancelar",
       confirm: "Confirmar",
@@ -6071,6 +6194,7 @@ export const translations: Record<Language, TranslationKeys> = {
         favorite_limit_reached: "Límite de favoritos alcanzado",
         top_participants: "Top Participantes",
         top_5_description: "Los 5 mejores participantes del concurso",
+        open_to_all: "Abierto a todos los participantes",
         view_contestants: "Ver participantes",
         time_remaining: "Tiempo restante",
         candidacy_ends: "Fin de candidaturas",
@@ -7142,12 +7266,52 @@ export const translations: Record<Language, TranslationKeys> = {
           invalid_email: "Ungültige E-Mail-Adresse",
           location_required: "Bitte wählen Sie Ihr Land und Ihre Stadt aus"
         }
+      },
+      verify_email: {
+        verifying: "E-Mail wird überprüft...",
+        please_wait: "Bitte warten Sie, während wir Ihre E-Mail-Adresse überprüfen...",
+        verified_title: "E-Mail verifiziert!",
+        failed_title: "Verifizierung fehlgeschlagen",
+        success: "Ihre E-Mail wurde erfolgreich verifiziert!",
+        error: "Bei der Verifizierung ist ein Fehler aufgetreten",
+        no_token: "Kein Verifizierungstoken angegeben",
+        invalid_token: "Ungültiger oder abgelaufener Verifizierungslink",
+        user_not_found: "Benutzer nicht gefunden",
+        go_to_login: "Zur Anmeldung",
+        can_login_now: "Sie können sich jetzt in Ihr Konto einloggen",
+        register_again: "Erneut registrieren",
+        go_home: "Zur Startseite",
+        need_help: "Brauchen Sie Hilfe?",
+        contact_support: "Support kontaktieren"
       }
     },
     common: {
       loading: "Wird geladen...",
       error: "Fehler",
       success: "Erfolg",
+      days: {
+        mon: "Mo",
+        tue: "Di",
+        wed: "Mi",
+        thu: "Do",
+        fri: "Fr",
+        sat: "Sa",
+        sun: "So"
+      },
+      months: {
+        jan: "Jan",
+        feb: "Feb",
+        mar: "Mär",
+        apr: "Apr",
+        may: "Mai",
+        jun: "Jun",
+        jul: "Jul",
+        aug: "Aug",
+        sep: "Sep",
+        oct: "Okt",
+        nov: "Nov",
+        dec: "Dez"
+      },
       network_error: "Verbindungsfehler. Bitte überprüfen Sie Ihre Internetverbindung.",
       cancel: "Abbrechen",
       confirm: "Bestätigen",
@@ -7746,6 +7910,7 @@ export const translations: Record<Language, TranslationKeys> = {
         favorite_limit_reached: "Favoritenlimit erreicht",
         top_participants: "Top Teilnehmer",
         top_5_description: "Die 5 besten Teilnehmer des Wettbewerbs",
+        open_to_all: "Offen für alle Teilnehmer",
         view_contestants: "Teilnehmer anzeigen",
         time_remaining: "Verbleibende Zeit",
         candidacy_ends: "Ende der Bewerbungen",
