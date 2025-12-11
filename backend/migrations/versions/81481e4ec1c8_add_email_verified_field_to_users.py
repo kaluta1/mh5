@@ -20,6 +20,7 @@ def upgrade():
     op.add_column('users', sa.Column('email_verified', sa.Boolean(), nullable=False, server_default=sa.text('false')))
 
 
+
 def downgrade():
     """Remove email_verified column from users table."""
     op.drop_column('users', 'email_verified')
