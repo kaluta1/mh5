@@ -4,6 +4,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from app.schemas.token import Token
 from app.schemas.user import UserCreate, User
@@ -38,6 +39,7 @@ def register_user(
     - **sponsor_code**: Code de parrainage optionnel pour associer l'utilisateur à un parrain
     - **lang**: Langue préférée pour les communications
     """
+    # Vérifier si l'email existe déjà
     user = crud_user.get_by_email(db, email=user_in.email)
     if user:
         raise HTTPException(
@@ -45,8 +47,36 @@ def register_user(
             detail="Un utilisateur avec cet email existe déjà."
         )
     
+    # Vérifier si le username existe déjà
+    if user_in.username:
+        existing_user = crud_user.get_by_username(db, username=user_in.username)
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Ce nom d'utilisateur est déjà pris."
+            )
+    
     # Créer l'utilisateur avec le parrain si un code est fourni
-    user = crud_user.create_with_sponsor(db, obj_in=user_in, sponsor_code=sponsor_code)
+    try:
+        user = crud_user.create_with_sponsor(db, obj_in=user_in, sponsor_code=sponsor_code)
+    except IntegrityError as e:
+        db.rollback()
+        error_str = str(e.orig).lower()
+        if 'email' in error_str:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Un utilisateur avec cet email existe déjà."
+            )
+        elif 'username' in error_str:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Ce nom d'utilisateur est déjà pris."
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Erreur lors de la création du compte. Veuillez réessayer."
+            )
     
     # Mettre à jour la langue préférée
     if lang and hasattr(user, 'preferred_language'):

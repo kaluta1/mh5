@@ -1981,7 +1981,11 @@ export const translations: Record<Language, TranslationKeys> = {
           required_fields: "Tous les champs obligatoires doivent être remplis",
           password_mismatch: "Les mots de passe ne correspondent pas",
           password_min_length: "Le mot de passe doit contenir au moins 6 caractères",
-          terms_required: "Vous devez accepter les conditions d'utilisation"
+          terms_required: "Vous devez accepter les conditions d'utilisation",
+          email_exists: "Un utilisateur avec cet email existe déjà",
+          username_exists: "Ce nom d'utilisateur est déjà pris",
+          invalid_email: "Adresse email invalide",
+          location_required: "Veuillez sélectionner votre pays et votre ville"
         }
       }
     },
@@ -1989,6 +1993,7 @@ export const translations: Record<Language, TranslationKeys> = {
       loading: "Chargement...",
       error: "Erreur",
       success: "Succès",
+      network_error: "Erreur de connexion. Vérifiez votre connexion internet.",
       cancel: "Annuler",
       confirm: "Confirmer",
       continue: "Continuer",
@@ -3701,7 +3706,11 @@ export const translations: Record<Language, TranslationKeys> = {
           required_fields: "All required fields must be filled",
           password_mismatch: "Passwords do not match",
           password_min_length: "Password must be at least 6 characters",
-          terms_required: "You must accept the terms of service"
+          terms_required: "You must accept the terms of service",
+          email_exists: "A user with this email already exists",
+          username_exists: "This username is already taken",
+          invalid_email: "Invalid email address",
+          location_required: "Please select your country and city"
         }
       }
     },
@@ -3709,6 +3718,7 @@ export const translations: Record<Language, TranslationKeys> = {
       loading: "Loading...",
       error: "Error",
       success: "Success",
+      network_error: "Connection error. Please check your internet connection.",
       cancel: "Cancel",
       confirm: "Confirm",
       continue: "Continue",
@@ -5451,7 +5461,11 @@ export const translations: Record<Language, TranslationKeys> = {
           required_fields: "Todos los campos obligatorios deben completarse",
           password_mismatch: "Las contraseñas no coinciden",
           password_min_length: "La contraseña debe tener al menos 6 caracteres",
-          terms_required: "Debes aceptar los términos de servicio"
+          terms_required: "Debes aceptar los términos de servicio",
+          email_exists: "Ya existe un usuario con este correo electrónico",
+          username_exists: "Este nombre de usuario ya está en uso",
+          invalid_email: "Dirección de correo electrónico inválida",
+          location_required: "Por favor selecciona tu país y ciudad"
         }
       }
     },
@@ -5459,6 +5473,7 @@ export const translations: Record<Language, TranslationKeys> = {
       loading: "Cargando...",
       error: "Error",
       success: "Éxito",
+      network_error: "Error de conexión. Verifica tu conexión a internet.",
       cancel: "Cancelar",
       confirm: "Confirmar",
       continue: "Continuar",
@@ -7121,7 +7136,11 @@ export const translations: Record<Language, TranslationKeys> = {
           required_fields: "Alle erforderlichen Felder müssen ausgefüllt werden",
           password_mismatch: "Passwörter stimmen nicht überein",
           password_min_length: "Das Passwort muss mindestens 6 Zeichen lang sein",
-          terms_required: "Sie müssen den Nutzungsbedingungen zustimmen"
+          terms_required: "Sie müssen den Nutzungsbedingungen zustimmen",
+          email_exists: "Ein Benutzer mit dieser E-Mail existiert bereits",
+          username_exists: "Dieser Benutzername ist bereits vergeben",
+          invalid_email: "Ungültige E-Mail-Adresse",
+          location_required: "Bitte wählen Sie Ihr Land und Ihre Stadt aus"
         }
       }
     },
@@ -7129,6 +7148,7 @@ export const translations: Record<Language, TranslationKeys> = {
       loading: "Wird geladen...",
       error: "Fehler",
       success: "Erfolg",
+      network_error: "Verbindungsfehler. Bitte überprüfen Sie Ihre Internetverbindung.",
       cancel: "Abbrechen",
       confirm: "Bestätigen",
       continue: "Fortfahren",

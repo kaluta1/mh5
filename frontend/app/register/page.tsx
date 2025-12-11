@@ -12,11 +12,13 @@ import { LanguageSelector } from '@/components/ui/language-selector'
 import { LocationSelectorSimple } from '@/components/auth/location-selector-simple'
 import { authService } from '@/lib/api'
 import { useLanguage } from '@/contexts/language-context'
+import { useToast } from '@/components/ui/toast'
 
 export default function RegisterPage() {
   const { t } = useLanguage()
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { addToast } = useToast()
   
   const [formData, setFormData] = useState({
     email: '',
@@ -34,6 +36,7 @@ export default function RegisterPage() {
   const [acceptTerms, setAcceptTerms] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<Record<string, boolean>>({})
   const [isSuccess, setIsSuccess] = useState(false)
   const [referralCode, setReferralCode] = useState<string | null>(null)
 
@@ -65,6 +68,10 @@ export default function RegisterPage() {
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }))
     if (error) setError('')
+    // Clear field error when user starts typing
+    if (fieldErrors[field]) {
+      setFieldErrors(prev => ({ ...prev, [field]: false }))
+    }
   }
 
   // Callbacks pour la localisation - mémorisés pour éviter la boucle infinie
@@ -106,30 +113,57 @@ export default function RegisterPage() {
 
   const validateForm = () => {
     console.log('Validation formData:', formData)
+    const errors: Record<string, boolean> = {}
+    let errorMessage = ''
     
-    if (!formData.email || !formData.username || !formData.password || !formData.confirmPassword) {
-      setError(t('auth.register.errors.required_fields'))
-      return false
+    // Vérifier les champs requis
+    if (!formData.email) {
+      errors.email = true
+      errorMessage = t('auth.register.errors.required_fields')
+    }
+    if (!formData.username) {
+      errors.username = true
+      errorMessage = t('auth.register.errors.required_fields')
+    }
+    if (!formData.password) {
+      errors.password = true
+      errorMessage = t('auth.register.errors.required_fields')
+    }
+    if (!formData.confirmPassword) {
+      errors.confirmPassword = true
+      errorMessage = t('auth.register.errors.required_fields')
     }
 
-    if (!formData.country || !formData.city) {
-      console.log('Pays manquant:', !formData.country, 'Ville manquante:', !formData.city)
-      setError('Veuillez sélectionner votre pays et votre ville')
-      return false
+    if (!formData.country) {
+      errors.country = true
+      errorMessage = t('auth.register.errors.location_required') || 'Veuillez sélectionner votre pays et votre ville'
+    }
+    if (!formData.city) {
+      errors.city = true
+      errorMessage = t('auth.register.errors.location_required') || 'Veuillez sélectionner votre pays et votre ville'
     }
 
-    if (formData.password !== formData.confirmPassword) {
-      setError(t('auth.register.errors.password_mismatch'))
-      return false
+    if (formData.password && formData.confirmPassword && formData.password !== formData.confirmPassword) {
+      errors.password = true
+      errors.confirmPassword = true
+      errorMessage = t('auth.register.errors.password_mismatch')
     }
 
-    if (formData.password.length < 6) {
-      setError(t('auth.register.errors.password_min_length'))
-      return false
+    if (formData.password && formData.password.length < 6) {
+      errors.password = true
+      errorMessage = t('auth.register.errors.password_min_length')
     }
 
     if (!acceptTerms) {
-      setError(t('auth.register.errors.terms_required'))
+      errors.terms = true
+      errorMessage = t('auth.register.errors.terms_required')
+    }
+
+    // S'il y a des erreurs, les afficher
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors)
+      setError(errorMessage)
+      addToast(errorMessage, 'error', 6000)
       return false
     }
 
@@ -176,7 +210,73 @@ export default function RegisterPage() {
       
     } catch (err: any) {
       console.error('Registration error:', err)
-      setError(err.response?.data?.detail || t('auth.registerError'))
+      
+      // Fonction pour mapper les erreurs backend aux traductions
+      const mapErrorToTranslation = (message: string): string => {
+        const lowerMessage = message.toLowerCase()
+        
+        // Email déjà utilisé
+        if (lowerMessage.includes('email') && (lowerMessage.includes('existe') || lowerMessage.includes('exists') || lowerMessage.includes('already'))) {
+          return t('auth.register.errors.email_exists') || message
+        }
+        // Username déjà utilisé
+        if ((lowerMessage.includes('username') || lowerMessage.includes("nom d'utilisateur") || lowerMessage.includes('utilisateur')) && 
+            (lowerMessage.includes('existe') || lowerMessage.includes('exists') || lowerMessage.includes('already') || lowerMessage.includes('taken') || lowerMessage.includes('pris'))) {
+          return t('auth.register.errors.username_exists') || message
+        }
+        // Email invalide
+        if (lowerMessage.includes('email') && (lowerMessage.includes('invalid') || lowerMessage.includes('invalide'))) {
+          return t('auth.register.errors.invalid_email') || message
+        }
+        
+        return message
+      }
+      
+      // Capturer les différents formats d'erreur
+      let errorMessage = t('auth.registerError') || 'Une erreur est survenue lors de l\'inscription'
+      
+      if (err.response?.data) {
+        const data = err.response.data
+        // Format: { detail: "message" }
+        if (typeof data.detail === 'string') {
+          errorMessage = mapErrorToTranslation(data.detail)
+        }
+        // Format: { detail: [{ msg: "message", ... }] }
+        else if (Array.isArray(data.detail) && data.detail.length > 0) {
+          const messages = data.detail.map((e: any) => e.msg || e.message || JSON.stringify(e))
+          errorMessage = messages.map(mapErrorToTranslation).join(', ')
+        }
+        // Format: { message: "message" }
+        else if (data.message) {
+          errorMessage = mapErrorToTranslation(data.message)
+        }
+        // Format: { error: "message" }
+        else if (data.error) {
+          errorMessage = mapErrorToTranslation(data.error)
+        }
+      } else if (err.message) {
+        // Erreur réseau ou autre
+        if (err.message === 'Network Error') {
+          errorMessage = t('common.network_error') || 'Erreur de connexion. Vérifiez votre connexion internet.'
+        } else {
+          errorMessage = mapErrorToTranslation(err.message)
+        }
+      }
+      
+      // Déterminer quel champ a l'erreur
+      const lowerError = errorMessage.toLowerCase()
+      const newFieldErrors: Record<string, boolean> = {}
+      
+      if (lowerError.includes('email')) {
+        newFieldErrors.email = true
+      }
+      if (lowerError.includes('username') || lowerError.includes("nom d'utilisateur") || lowerError.includes('utilisateur')) {
+        newFieldErrors.username = true
+      }
+      
+      setFieldErrors(newFieldErrors)
+      setError(errorMessage)
+      addToast(errorMessage, 'error', 8000)
     } finally {
       setIsLoading(false)
     }
@@ -263,26 +363,20 @@ export default function RegisterPage() {
               </div>
             ) : (
             <form onSubmit={handleSubmit} className="space-y-6">
-              {error && (
-                <div className="p-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl dark:bg-red-900/20 dark:border-red-800 dark:text-red-400">
-                  {error}
-                </div>
-              )}
-
               <div className="space-y-6">
                 {/* Email */}
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+                  <label className={`block text-sm font-semibold mb-2 ${fieldErrors.email ? 'text-red-500' : 'text-gray-700 dark:text-gray-200'}`}>
                     {t('auth.email')} *
                   </label>
                   <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                    <Mail className={`absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 ${fieldErrors.email ? 'text-red-400' : 'text-gray-400'}`} />
                     <Input
                       type="email"
                       placeholder={t('auth.register.email_placeholder')}
                       value={formData.email}
                       onChange={(e) => handleInputChange('email', e.target.value)}
-                      className="pl-10 h-12 rounded-xl border-gray-200 dark:border-gray-600 focus:border-myfav-primary focus:ring-myfav-primary dsm-input"
+                      className={`pl-10 h-12 rounded-xl dsm-input ${fieldErrors.email ? 'border-red-500 focus:border-red-500 focus:ring-red-500 bg-red-50 dark:bg-red-900/10' : 'border-gray-200 dark:border-gray-600 focus:border-myfav-primary focus:ring-myfav-primary'}`}
                       required
                     />
                   </div>
@@ -290,35 +384,35 @@ export default function RegisterPage() {
 
                 {/* Username */}
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+                  <label className={`block text-sm font-semibold mb-2 ${fieldErrors.username ? 'text-red-500' : 'text-gray-700 dark:text-gray-200'}`}>
                     {t('auth.username')} *
                   </label>
                   <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                    <User className={`absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 ${fieldErrors.username ? 'text-red-400' : 'text-gray-400'}`} />
                     <Input
                       type="text"
                       placeholder={t('auth.register.username_placeholder')}
                       value={formData.username}
                       onChange={(e) => handleInputChange('username', e.target.value)}
-                      className="pl-10 h-12 rounded-xl border-gray-200 dark:border-gray-600 focus:border-myfav-primary focus:ring-myfav-primary dsm-input"
-                        required
+                      className={`pl-10 h-12 rounded-xl dsm-input ${fieldErrors.username ? 'border-red-500 focus:border-red-500 focus:ring-red-500 bg-red-50 dark:bg-red-900/10' : 'border-gray-200 dark:border-gray-600 focus:border-myfav-primary focus:ring-myfav-primary'}`}
+                      required
                     />
                   </div>
                 </div>
 
                 {/* Password */}
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+                  <label className={`block text-sm font-semibold mb-2 ${fieldErrors.password ? 'text-red-500' : 'text-gray-700 dark:text-gray-200'}`}>
                     {t('auth.password')} *
                   </label>
                   <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                    <Lock className={`absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 ${fieldErrors.password ? 'text-red-400' : 'text-gray-400'}`} />
                     <Input
                       type={showPassword ? 'text' : 'password'}
                       placeholder={t('auth.register.password_placeholder')}
                       value={formData.password}
                       onChange={(e) => handleInputChange('password', e.target.value)}
-                      className="pl-10 pr-10 h-12 rounded-xl border-gray-200 dark:border-gray-600 focus:border-myfav-primary focus:ring-myfav-primary dsm-input"
+                      className={`pl-10 pr-10 h-12 rounded-xl dsm-input ${fieldErrors.password ? 'border-red-500 focus:border-red-500 focus:ring-red-500 bg-red-50 dark:bg-red-900/10' : 'border-gray-200 dark:border-gray-600 focus:border-myfav-primary focus:ring-myfav-primary'}`}
                       required
                     />
                     <button
@@ -333,17 +427,17 @@ export default function RegisterPage() {
 
                 {/* Confirm Password */}
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+                  <label className={`block text-sm font-semibold mb-2 ${fieldErrors.confirmPassword ? 'text-red-500' : 'text-gray-700 dark:text-gray-200'}`}>
                     {t('auth.register.confirm_password_placeholder')} *
                   </label>
                   <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                    <Lock className={`absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 ${fieldErrors.confirmPassword ? 'text-red-400' : 'text-gray-400'}`} />
                     <Input
                       type={showConfirmPassword ? 'text' : 'password'}
                       placeholder={t('auth.register.confirm_password_placeholder')}
                       value={formData.confirmPassword}
                       onChange={(e) => handleInputChange('confirmPassword', e.target.value)}
-                      className="pl-10 pr-10 h-12 rounded-xl border-gray-200 dark:border-gray-600 focus:border-myfav-primary focus:ring-myfav-primary dsm-input"
+                      className={`pl-10 pr-10 h-12 rounded-xl dsm-input ${fieldErrors.confirmPassword ? 'border-red-500 focus:border-red-500 focus:ring-red-500 bg-red-50 dark:bg-red-900/10' : 'border-gray-200 dark:border-gray-600 focus:border-myfav-primary focus:ring-myfav-primary'}`}
                       required
                     />
                     <button
