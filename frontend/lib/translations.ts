@@ -747,6 +747,9 @@ export interface TranslationKeys {
       competitions: string
       business: string
       resources: string
+      founding_member: string
+      affiliate_program: string
+      affiliate_agreement: string
       account: string
       settings: string
       admin: string
@@ -1712,6 +1715,9 @@ export const translations: Record<Language, TranslationKeys> = {
         competitions: "Compétitions",
         business: "Affaires",
         resources: "Ressources",
+        founding_member: "Founding Membership",
+        affiliate_program: "Programme d'Affiliation",
+        affiliate_agreement: "Accord d'Affiliation",
         account: "Compte",
         settings: "Paramètres",
         admin: "Administration",
@@ -2404,6 +2410,9 @@ export const translations: Record<Language, TranslationKeys> = {
         competitions: "Compétitions",
         business: "Affaires",
         resources: "Ressources",
+        founding_member: "Founding Membership",
+        affiliate_program: "Programme d'Affiliation",
+        affiliate_agreement: "Accord d'Affiliation",
         account: "Compte",
         settings: "Paramètres",
         admin: "Administration",
@@ -4129,6 +4138,9 @@ export const translations: Record<Language, TranslationKeys> = {
         competitions: "Competitions",
         business: "Business",
         resources: "Resources",
+        founding_member: "Founding Membership",
+        affiliate_program: "Affiliate Program",
+        affiliate_agreement: "Affiliate Agreement",
         account: "Account",
         settings: "Settings",
         admin: "Administration",
@@ -5833,6 +5845,9 @@ export const translations: Record<Language, TranslationKeys> = {
         competitions: "Competiciones",
         business: "Negocios",
         resources: "Recursos",
+        founding_member: "Founding Membership",
+        affiliate_program: "Programa de Afiliación",
+        affiliate_agreement: "Acuerdo de Afiliación",
         account: "Cuenta",
         settings: "Configuración",
         admin: "Administración",

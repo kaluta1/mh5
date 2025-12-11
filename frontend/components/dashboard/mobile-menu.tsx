@@ -14,7 +14,9 @@ import {
   Shield,
   X,
   Settings,
-  LogOut
+  LogOut,
+  BookOpen,
+  Network
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useLanguage } from "@/contexts/language-context"
@@ -39,6 +41,14 @@ const baseMenuSections = [
       { name: "dashboard.nav.wallet", href: "/dashboard/wallet", icon: Wallet },
       { name: "dashboard.nav.affiliates", href: "/dashboard/affiliates", icon: UserPlus },
       { name: "dashboard.nav.commissions", href: "/dashboard/commissions", icon: DollarSign },
+    ]
+  },
+  {
+    title: "dashboard.nav.resources",
+    items: [
+      { name: "dashboard.nav.founding_member", href: "/dashboard/founding-member", icon: BookOpen },
+      { name: "dashboard.nav.affiliate_program", href: "/dashboard/affiliate-program", icon: Network },
+      { name: "dashboard.nav.affiliate_agreement", href: "/dashboard/affiliate-agreement", icon: FileText },
     ]
   },
 ]
