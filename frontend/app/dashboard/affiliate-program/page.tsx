@@ -4,7 +4,7 @@ import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { useLanguage } from '@/contexts/language-context'
-import { Network, DollarSign, Users, Link2, TrendingUp, Award, CheckCircle2, Share2, Target, Zap } from 'lucide-react'
+import { Network, DollarSign, Users, Link2, TrendingUp, Award, CheckCircle2, Share2, Target, ShoppingBag, Megaphone, BookOpen } from 'lucide-react'
 import Link from 'next/link'
 
 export default function AffiliateProgramPage() {
@@ -194,6 +194,7 @@ export default function AffiliateProgramPage() {
             </div>
 
             <div className="grid md:grid-cols-2 gap-4">
+              {/* KYC Payments */}
               <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
                 <div className="flex items-center gap-3 mb-3">
                   <div className="w-10 h-10 rounded-lg bg-myfav-primary/10 dark:bg-myfav-primary/20 flex items-center justify-center">
@@ -211,54 +212,111 @@ export default function AffiliateProgramPage() {
                 </p>
               </div>
 
+              {/* Founding Membership */}
+              <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-lg bg-myfav-primary/10 dark:bg-myfav-primary/20 flex items-center justify-center">
+                    <BookOpen className="w-5 h-5 text-myfav-primary" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    Founding Membership
+                  </h3>
+                </div>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                  Earn commissions when network members join as Founding Members ($100 joining fee)
+                </p>
+                <p className="text-lg font-bold text-myfav-primary">
+                  $20 on Level 1, $2 on Levels 2-10
+                </p>
+              </div>
+
+              {/* Annual Membership Fee */}
               <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
                 <div className="flex items-center gap-3 mb-3">
                   <div className="w-10 h-10 rounded-lg bg-myfav-primary/10 dark:bg-myfav-primary/20 flex items-center justify-center">
                     <Award className="w-5 h-5 text-myfav-primary" />
                   </div>
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    Annual Membership Fee
+                  </h3>
+                </div>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                  Earn commissions when Founding Members pay their annual membership fee ($50)
+                </p>
+                <p className="text-lg font-bold text-myfav-primary">
+                  $10 on Level 1, $1 on Levels 2-10
+                </p>
+              </div>
+
+              {/* Club Memberships */}
+              <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-lg bg-myfav-primary/10 dark:bg-myfav-primary/20 flex items-center justify-center">
+                    <Users className="w-5 h-5 text-myfav-primary" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                     Club Memberships
                   </h3>
                 </div>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                  Earn commissions on premium club membership purchases
+                  Earn commissions on paid club membership fees. The website charges 20% of membership fees, and you earn a share of that.
                 </p>
                 <p className="text-lg font-bold text-myfav-primary">
                   20% on Level 1, 2% on Levels 2-10
                 </p>
               </div>
 
+              {/* Shop Purchases */}
               <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
                 <div className="flex items-center gap-3 mb-3">
                   <div className="w-10 h-10 rounded-lg bg-myfav-primary/10 dark:bg-myfav-primary/20 flex items-center justify-center">
-                    <Zap className="w-5 h-5 text-myfav-primary" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                    Contest Participation
-                  </h3>
-                </div>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                  Earn commissions when network members participate in paid contests
-                </p>
-                <p className="text-lg font-bold text-myfav-primary">
-                  20% on Level 1, 2% on Levels 2-10
-                </p>
-              </div>
-
-              <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-lg bg-myfav-primary/10 dark:bg-myfav-primary/20 flex items-center justify-center">
-                    <DollarSign className="w-5 h-5 text-myfav-primary" />
+                    <ShoppingBag className="w-5 h-5 text-myfav-primary" />
                   </div>
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                     Shop Purchases
                   </h3>
                 </div>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                  Earn commissions on purchases made in the MyHigh5 shop
+                  Earn commissions on digital content purchases in the MyHigh5 shop. The website charges 20% platform fees, and you earn a share of that.
                 </p>
                 <p className="text-lg font-bold text-myfav-primary">
                   20% on Level 1, 2% on Levels 2-10
+                </p>
+              </div>
+
+              {/* Ad Revenue Sharing */}
+              <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-lg bg-myfav-primary/10 dark:bg-myfav-primary/20 flex items-center justify-center">
+                    <Megaphone className="w-5 h-5 text-myfav-primary" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    Ad Revenue Sharing
+                  </h3>
+                </div>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                  Earn commissions from ad revenues generated on contest pages of members in your network
+                </p>
+                <p className="text-lg font-bold text-myfav-primary">
+                  10% on Level 1, 1% on Levels 2-10
+                </p>
+              </div>
+
+              {/* Advertisement */}
+              <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-lg bg-myfav-primary/10 dark:bg-myfav-primary/20 flex items-center justify-center">
+                    <Megaphone className="w-5 h-5 text-myfav-primary" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    Advertisement Campaigns
+                  </h3>
+                </div>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                  Earn commissions from advertising campaigns purchased by members in your network through the native ad platform
+                </p>
+                <p className="text-lg font-bold text-myfav-primary">
+                  Commission structure varies by campaign type
                 </p>
               </div>
             </div>
