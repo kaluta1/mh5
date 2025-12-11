@@ -46,12 +46,17 @@ class Settings(BaseModel):
     S3_BUCKET_NAME: str = ""
     S3_REGION: str = ""
     
-    # EMAIL
+    # EMAIL - Resend API
+    RESEND_API_KEY: str = os.getenv("RESEND_API_KEY", "")
+    EMAIL_FROM: str = os.getenv("EMAIL_FROM", "MyHigh5 <noreply@digitalshoppingmall.net>")
+    EMAIL_FROM_NAME: str = os.getenv("EMAIL_FROM_NAME", "MyHigh5")
+    
+    # SMTP (fallback - deprecated)
     SMTP_HOST: str = os.getenv("SMTP_HOST", "smtp.gmail.com")
     SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
     SMTP_USER: str = os.getenv("SMTP_USER", "")
     SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
-    SMTP_FROM_EMAIL: str = os.getenv("SMTP_FROM_EMAIL", "noreply@myhigh5.com")
+    SMTP_FROM_EMAIL: str = os.getenv("SMTP_FROM_EMAIL", "noreply@digitalshoppingmall.net")
     SMTP_FROM_NAME: str = os.getenv("SMTP_FROM_NAME", "MyHigh5")
     
     # FRONTEND

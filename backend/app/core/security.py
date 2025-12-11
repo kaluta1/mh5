@@ -50,11 +50,33 @@ def create_password_reset_token(email: str) -> str:
     )
     return encoded_jwt
 
+def create_email_verification_token(email: str) -> str:
+    """Créer un token de vérification d'email"""
+    delta = timedelta(hours=24)  # 24 heures pour vérifier l'email
+    now = datetime.utcnow()
+    expires = now + delta
+    encoded_jwt = jwt.encode(
+        {"exp": expires, "sub": email, "type": "email_verification"}, 
+        settings.SECRET_KEY, 
+        algorithm=settings.ALGORITHM
+    )
+    return encoded_jwt
+
 def verify_password_reset_token(token: str) -> str:
     """Vérifier et décoder un token de réinitialisation"""
     try:
         decoded_token = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         if decoded_token.get("type") != "password_reset":
+            return None
+        return decoded_token.get("sub")
+    except jwt.JWTError:
+        return None
+
+def verify_email_verification_token(token: str) -> str:
+    """Vérifier et décoder un token de vérification d'email"""
+    try:
+        decoded_token = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        if decoded_token.get("type") != "email_verification":
             return None
         return decoded_token.get("sub")
     except jwt.JWTError:

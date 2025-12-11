@@ -14,7 +14,9 @@ from app.core.security import (
     get_password_hash, 
     verify_password,
     create_password_reset_token,
-    verify_password_reset_token
+    verify_password_reset_token,
+    create_email_verification_token,
+    verify_email_verification_token
 )
 from app.core.config import settings
 from app.db.session import get_db
@@ -83,16 +85,48 @@ def register_user(
         user.preferred_language = lang
         db.commit()
     
-    # Envoyer l'email de bienvenue
-    verify_url = f"{settings.FRONTEND_URL}/verify-email?token={create_password_reset_token(user.email)}"
+    # Envoyer l'email de bienvenue avec token de vérification
+    verify_url = f"{settings.FRONTEND_URL}/verify-email?token={create_email_verification_token(user.email)}"
     background_tasks.add_task(
         email_service.send_welcome_email,
         to_email=user.email,
         verify_url=verify_url,
-        lang=lang or "fr"
+        lang=lang or "en"
     )
     
     return user
+
+@router.post("/verify-email")
+def verify_email(
+    *,
+    db: Session = Depends(get_db),
+    token: str = Query(..., description="Token de vérification d'email")
+) -> Any:
+    """
+    Vérifier l'adresse email d'un utilisateur avec le token reçu par email.
+    """
+    # Vérifier le token
+    email = verify_email_verification_token(token)
+    if not email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Token invalide ou expiré"
+        )
+    
+    # Récupérer l'utilisateur
+    user = crud_user.get_by_email(db, email=email)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Utilisateur non trouvé"
+        )
+    
+    # Marquer l'email comme vérifié
+    user.email_verified = True
+    db.commit()
+    db.refresh(user)
+    
+    return {"message": "Email vérifié avec succès", "email": email}
 
 @router.post("/login", response_model=Token)
 def login_access_token(

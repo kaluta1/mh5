@@ -86,12 +86,13 @@ class User(Base):
     status: Mapped[UserStatus] = mapped_column(SQLEnum(UserStatus), default=UserStatus.PENDING_VERIFICATION)
     last_login: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    email_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     
     # Code de parrainage personnel
     personal_referral_code: Mapped[Optional[str]] = mapped_column(String(50), unique=True, nullable=True)
     
-    # Langue préférée (fr, en, es, de)
-    preferred_language: Mapped[str] = mapped_column(String(5), default="fr", nullable=False)
+    # Langue préférée (en, fr, es, de)
+    preferred_language: Mapped[str] = mapped_column(String(5), default="en", nullable=False)
     
     # Parrain (qui a référé cet utilisateur)
     sponsor_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)

@@ -1,9 +1,7 @@
 """
-Service d'envoi d'emails pour MYHIGH5
+Service d'envoi d'emails pour MYHIGH5 via Resend API
 """
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import resend
 from typing import Optional, List
 import logging
 
@@ -23,28 +21,17 @@ logger = logging.getLogger(__name__)
 
 
 class EmailService:
-    """Service pour l'envoi d'emails"""
+    """Service pour l'envoi d'emails via Resend API"""
     
     def __init__(self):
-        self.smtp_host = settings.SMTP_HOST
-        self.smtp_port = settings.SMTP_PORT
-        self.smtp_user = settings.SMTP_USER
-        self.smtp_password = settings.SMTP_PASSWORD
-        self.from_email = settings.SMTP_FROM_EMAIL
-        self.from_name = settings.SMTP_FROM_NAME
+        self.api_key = settings.RESEND_API_KEY
+        self.from_email = settings.EMAIL_FROM
+        self.from_name = settings.EMAIL_FROM_NAME
         self.frontend_url = settings.FRONTEND_URL
-    
-    def _create_connection(self):
-        """Créer une connexion SMTP"""
-        try:
-            server = smtplib.SMTP(self.smtp_host, self.smtp_port)
-            server.starttls()
-            if self.smtp_user and self.smtp_password:
-                server.login(self.smtp_user, self.smtp_password)
-            return server
-        except Exception as e:
-            logger.error(f"Erreur connexion SMTP: {e}")
-            raise
+        
+        # Configurer Resend
+        if self.api_key:
+            resend.api_key = self.api_key
     
     def send_email(
         self,
@@ -54,7 +41,7 @@ class EmailService:
         text_content: Optional[str] = None
     ) -> bool:
         """
-        Envoyer un email
+        Envoyer un email via Resend API
         
         Args:
             to_email: Adresse email du destinataire
@@ -65,37 +52,77 @@ class EmailService:
         Returns:
             bool: True si envoyé avec succès
         """
+        if not self.api_key:
+            logger.warning("RESEND_API_KEY non configurée - email non envoyé")
+            return False
+            
         try:
-            msg = MIMEMultipart("alternative")
-            msg["Subject"] = subject
-            msg["From"] = f"{self.from_name} <{self.from_email}>"
-            msg["To"] = to_email
+            params = {
+                "from": self.from_email,
+                "to": [to_email],
+                "subject": subject,
+                "html": html_content,
+            }
             
-            # Version texte
+            # Ajouter le texte brut si fourni
             if text_content:
-                part1 = MIMEText(text_content, "plain")
-                msg.attach(part1)
+                params["text"] = text_content
             
-            # Version HTML
-            part2 = MIMEText(html_content, "html")
-            msg.attach(part2)
+            # Envoyer via Resend
+            response = resend.Emails.send(params)
             
-            # Envoyer
-            with self._create_connection() as server:
-                server.sendmail(self.from_email, to_email, msg.as_string())
-            
-            logger.info(f"Email envoyé à {to_email}")
+            logger.info(f"Email envoyé à {to_email} - ID: {response.get('id', 'N/A')}")
             return True
             
         except Exception as e:
             logger.error(f"Erreur envoi email à {to_email}: {e}")
             return False
     
+    def send_batch_emails(
+        self,
+        emails: List[dict]
+    ) -> bool:
+        """
+        Envoyer plusieurs emails en batch via Resend API
+        
+        Args:
+            emails: Liste de dictionnaires avec to, subject, html, text (optionnel)
+        
+        Returns:
+            bool: True si tous envoyés avec succès
+        """
+        if not self.api_key:
+            logger.warning("RESEND_API_KEY non configurée - emails non envoyés")
+            return False
+            
+        try:
+            batch_params = []
+            for email in emails:
+                param = {
+                    "from": self.from_email,
+                    "to": [email["to"]],
+                    "subject": email["subject"],
+                    "html": email["html"],
+                }
+                if email.get("text"):
+                    param["text"] = email["text"]
+                batch_params.append(param)
+            
+            # Envoyer en batch
+            response = resend.Batch.send(batch_params)
+            
+            logger.info(f"Batch de {len(emails)} emails envoyé")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Erreur envoi batch emails: {e}")
+            return False
+    
     def send_welcome_email(
         self,
         to_email: str,
         verify_url: str,
-        lang: str = "fr"
+        lang: str = "en"
     ) -> bool:
         """Send welcome email with verification link"""
         subject, html_content, text_content = get_welcome_email(lang, verify_url)
@@ -105,7 +132,7 @@ class EmailService:
         self,
         to_email: str,
         verify_url: str,
-        lang: str = "fr"
+        lang: str = "en"
     ) -> bool:
         """Send email verification link"""
         subject, html_content, text_content = get_verify_email(lang, verify_url)
@@ -115,7 +142,7 @@ class EmailService:
         self,
         to_email: str,
         reset_url: str,
-        lang: str = "fr"
+        lang: str = "en"
     ) -> bool:
         """Send password reset email"""
         subject, html_content, text_content = get_password_reset_email(lang, reset_url)
@@ -127,7 +154,7 @@ class EmailService:
         inviter_name: str,
         referral_code: str,
         message: Optional[str] = None,
-        lang: str = "fr"
+        lang: str = "en"
     ) -> bool:
         """Send referral invitation email"""
         referral_link = f"{self.frontend_url}/?ref={referral_code}"
@@ -143,7 +170,7 @@ class EmailService:
         product: str,
         reference: str,
         date: str,
-        lang: str = "fr"
+        lang: str = "en"
     ) -> bool:
         """Send payment confirmation email"""
         subject, html_content, text_content = get_payment_confirmation_email(
@@ -154,7 +181,7 @@ class EmailService:
     def send_kyc_approved_email(
         self,
         to_email: str,
-        lang: str = "fr"
+        lang: str = "en"
     ) -> bool:
         """Send KYC approved notification email"""
         subject, html_content, text_content = get_kyc_approved_email(lang)
@@ -164,7 +191,7 @@ class EmailService:
         self,
         to_email: str,
         reason: Optional[str] = None,
-        lang: str = "fr"
+        lang: str = "en"
     ) -> bool:
         """Send KYC rejected notification email"""
         subject, html_content, text_content = get_kyc_rejected_email(lang, reason)
@@ -176,7 +203,7 @@ class EmailService:
         amount: str,
         commission_type: str,
         source_name: str,
-        lang: str = "fr"
+        lang: str = "en"
     ) -> bool:
         """Send commission notification email"""
         subject, html_content, text_content = get_commission_email(

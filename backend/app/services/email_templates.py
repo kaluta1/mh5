@@ -306,8 +306,8 @@ EMAIL_TRANSLATIONS = {
 
 def get_translation(lang: str, key: str, **kwargs) -> str:
     """Get a translated string with optional formatting"""
-    translations = EMAIL_TRANSLATIONS.get(lang, EMAIL_TRANSLATIONS["fr"])
-    text = translations.get(key, EMAIL_TRANSLATIONS["fr"].get(key, key))
+    translations = EMAIL_TRANSLATIONS.get(lang, EMAIL_TRANSLATIONS["en"])
+    text = translations.get(key, EMAIL_TRANSLATIONS["en"].get(key, key))
     if kwargs:
         text = text.format(**kwargs)
     return text
@@ -338,12 +338,7 @@ def get_base_email_template(lang: str, title: str, content: str, button_text: Op
 <body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f5;">
     <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
         <!-- Header -->
-        <div style="text-align: center; margin-bottom: 32px;">
-            <div style="display: inline-block; width: 60px; height: 60px; background: linear-gradient(135deg, #8B5CF6, #EC4899); border-radius: 16px; margin-bottom: 16px;">
-                <span style="font-size: 32px; line-height: 60px;">🖐️</span>
-            </div>
-            <h1 style="margin: 0; color: #18181b; font-size: 28px; font-weight: 700;">{t('company_name')}</h1>
-        </div>
+      
         
         <!-- Content Card -->
         <div style="background-color: white; border-radius: 16px; padding: 32px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);">
