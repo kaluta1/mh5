@@ -16,11 +16,17 @@ depends_on = None
 
 
 def upgrade():
-    """Add email_verified column to users table."""
-    op.add_column(
-        'users',
-        sa.Column('email_verified', sa.Boolean(), nullable=False, server_default=sa.text('false')),
+    """Add email_verified column to users table.
+
+    Use IF NOT EXISTS so that if the column is already present (for example
+    when the DB was manually altered or a previous migration partially ran),
+    the migration does not fail.
+    """
+    op.execute(
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT false NOT NULL;"
     )
 def downgrade():
-    """Remove email_verified column from users table."""
-    op.drop_column('users', 'email_verified')
+    """Remove email_verified column from users table (if present)."""
+    op.execute(
+        "ALTER TABLE users DROP COLUMN IF EXISTS email_verified;"
+    )
