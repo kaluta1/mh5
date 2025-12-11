@@ -155,9 +155,11 @@ export function ContestCard({
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
     const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
     const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
+    const diffSeconds = Math.floor((diffMs % (1000 * 60)) / 1000)
     if (diffDays > 0) return `${diffDays}j ${diffHours}h`
     if (diffHours > 0) return `${diffHours}h ${diffMinutes}m`
-    if (diffMinutes > 0) return `${diffMinutes}m`
+    if (diffMinutes > 0) return `${diffMinutes}m ${diffSeconds}s`
+    if (diffSeconds > 0) return `${diffSeconds}s`
     return ''
   }
 
@@ -285,7 +287,7 @@ export function ContestCard({
             </div>
 
             {/* Countdown if applicable */}
-            {getCountdownText() && (
+            {canParticipate() && getCountdownText() && (
               <div className="flex items-center gap-2 text-xs">
                 <Clock className="w-3.5 h-3.5 text-myfav-secondary" />
                 <span className="text-gray-400">{t('dashboard.contests.time_remaining') || 'Temps restant'}:</span>
