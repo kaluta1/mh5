@@ -63,6 +63,9 @@ export interface TranslationKeys {
     forgotPassword: string
     loginError: string
     registerError: string
+    referral_detected: string
+    referral_code: string
+    referral_bonus: string
     login: {
       title: string
       subtitle: string
@@ -136,6 +139,7 @@ export interface TranslationKeys {
     access_denied: string
     no_permission: string
     refresh: string
+    network_error: string
   }
   settings: {
     title: string

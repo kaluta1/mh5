@@ -37,35 +37,40 @@ export function LoginModal({ open, onOpenChange, onSwitchToRegister, onLoginSucc
   })
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState("")
   const [isSuccess, setIsSuccess] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const validateForm = () => {
-    if (!formData.emailOrUsername || !formData.password) {
-      setError(t('auth.login.errors.required_fields'))
+    if (!formData.emailOrUsername.trim() || !formData.password.trim()) {
+      setError(t('auth.login.errors.required_fields') || t('auth.login.errors.invalid_credentials'))
       return false
     }
+    setError(null)
     return true
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    e.stopPropagation()
     
-    if (!validateForm()) return
+    if (!validateForm()) return false
+    
+    if (isLoading) return false
     
     setIsLoading(true)
-    setError("")
+    setError(null)
 
     try {
       // Utiliser la fonction login du hook useAuth pour mettre à jour le contexte
       await login({
-        email_or_username: formData.emailOrUsername,
+        email_or_username: formData.emailOrUsername.trim(),
         password: formData.password,
       })
 
       // Afficher la page de succès
       setIsSuccess(true)
       setFormData({ emailOrUsername: "", password: "" })
+      setError(null)
       
       // Fermer le modal et rediriger vers les contests
       setTimeout(() => {
@@ -74,35 +79,65 @@ export function LoginModal({ open, onOpenChange, onSwitchToRegister, onLoginSucc
       }, 1500)
     } catch (err: any) {
       console.error('Login error:', err)
+      
+      // Fonction pour mapper les erreurs backend aux traductions
+      const mapErrorToTranslation = (message: string): string => {
+        const lowerMessage = message.toLowerCase()
+        
+        // Détecter les erreurs d'identifiants invalides dans différentes langues
+        if (lowerMessage.includes('incorrect') || 
+            lowerMessage.includes('invalid') || 
+            lowerMessage.includes('invalide') ||
+            lowerMessage.includes('inválido') ||
+            lowerMessage.includes('ungültig') ||
+            lowerMessage.includes('email') && (lowerMessage.includes('password') || lowerMessage.includes('mot de passe') || lowerMessage.includes('contraseña') || lowerMessage.includes('passwort')) ||
+            lowerMessage.includes('username') && (lowerMessage.includes('password') || lowerMessage.includes('mot de passe') || lowerMessage.includes('contraseña') || lowerMessage.includes('passwort')) ||
+            lowerMessage.includes('nom d\'utilisateur') && (lowerMessage.includes('mot de passe')) ||
+            lowerMessage.includes('nombre de usuario') && (lowerMessage.includes('contraseña')) ||
+            lowerMessage.includes('benutzername') && (lowerMessage.includes('passwort'))) {
+          return t('auth.login.errors.invalid_credentials')
+        }
+        
+        return message
+      }
+      
       let errorMessage = t('auth.login.errors.invalid_credentials')
       
       if (err.response?.data) {
         const errorData = err.response.data
         if (typeof errorData === 'string') {
-          errorMessage = errorData
+          errorMessage = mapErrorToTranslation(errorData)
         } else if (errorData.detail) {
           if (typeof errorData.detail === 'string') {
-            errorMessage = errorData.detail
+            errorMessage = mapErrorToTranslation(errorData.detail)
           } else if (Array.isArray(errorData.detail)) {
-            errorMessage = errorData.detail.map(e => e.msg || e).join(', ')
+            const messages = errorData.detail.map(e => e.msg || e).join(', ')
+            errorMessage = mapErrorToTranslation(messages)
           } else {
             errorMessage = t('auth.login.errors.invalid_credentials')
           }
         } else if (errorData.message) {
-          errorMessage = errorData.message
+          errorMessage = mapErrorToTranslation(errorData.message)
         }
       } else if (err.message) {
-        errorMessage = err.message
+        errorMessage = mapErrorToTranslation(err.message)
       }
       
+      // Afficher l'erreur en haut du formulaire
       setError(errorMessage)
+    } finally {
       setIsLoading(false)
     }
+    
+    return false
   }
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }))
-    if (error) setError("")
+    // Effacer l'erreur quand l'utilisateur commence à taper
+    if (error) {
+      setError(null)
+    }
   }
 
   return (
@@ -120,10 +155,10 @@ export function LoginModal({ open, onOpenChange, onSwitchToRegister, onLoginSucc
         {isSuccess ? (
           <SuccessPage />
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} noValidate className="space-y-4">
           {error && (
             <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md dark:bg-red-900/20 dark:border-red-800 dark:text-red-400">
-              {typeof error === 'string' ? error : t('common.error')}
+              {error}
             </div>
           )}
 
@@ -193,7 +228,16 @@ export function LoginModal({ open, onOpenChange, onSwitchToRegister, onLoginSucc
             </Button>
           </div>
 
-          <Button type="submit" className="w-full bg-myfav-primary hover:bg-myfav-primary-dark text-white font-semibold" disabled={isLoading}>
+          <Button 
+            type="button" 
+            className="w-full bg-myfav-primary hover:bg-myfav-primary-dark text-white font-semibold" 
+            disabled={isLoading}
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              handleSubmit(e as any)
+            }}
+          >
             {isLoading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

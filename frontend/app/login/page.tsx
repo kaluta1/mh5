@@ -10,12 +10,14 @@ import { ThemeToggle } from '@/components/theme-toggle'
 import { LanguageSelector } from '@/components/ui/language-selector'
 import { useLanguage } from '@/contexts/language-context'
 import { useAuth } from '@/hooks/use-auth'
+import { useToast } from '@/components/ui/toast'
 
 export default function LoginPage() {
   const { t } = useLanguage()
   const router = useRouter()
   const searchParams = useSearchParams()
   const { isAuthenticated, login } = useAuth()
+  const { addToast } = useToast()
   
   const [formData, setFormData] = useState({
     emailOrUsername: '',
@@ -23,7 +25,6 @@ export default function LoginPage() {
   })
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState('')
   const [isSuccess, setIsSuccess] = useState(false)
   const [referralCode, setReferralCode] = useState<string | null>(null)
 
@@ -52,18 +53,26 @@ export default function LoginPage() {
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }))
-    if (error) setError('')
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleLogin = async () => {
+    // Empêcher les soumissions multiples
+    if (isLoading) {
+      return
+    }
+    
+    // Validation basique côté client
+    if (!formData.emailOrUsername.trim() || !formData.password.trim()) {
+      addToast(t('auth.login.errors.invalid_credentials'), 'error', 6000)
+      return
+    }
+    
     setIsLoading(true)
-    setError('')
 
     try {
       // Utiliser la fonction login du hook useAuth pour mettre à jour le contexte
       await login({
-        email_or_username: formData.emailOrUsername,
+        email_or_username: formData.emailOrUsername.trim(),
         password: formData.password,
       })
 
@@ -72,30 +81,64 @@ export default function LoginPage() {
       // La redirection se fait via le useEffect qui surveille isAuthenticated
     } catch (err: any) {
       console.error('Login error:', err)
+      
+      // Fonction pour mapper les erreurs backend aux traductions
+      const mapErrorToTranslation = (message: string): string => {
+        const lowerMessage = message.toLowerCase()
+        
+        // Détecter les erreurs d'identifiants invalides dans différentes langues
+        if (lowerMessage.includes('incorrect') || 
+            lowerMessage.includes('invalid') || 
+            lowerMessage.includes('invalide') ||
+            lowerMessage.includes('inválido') ||
+            lowerMessage.includes('ungültig') ||
+            lowerMessage.includes('email') && (lowerMessage.includes('password') || lowerMessage.includes('mot de passe') || lowerMessage.includes('contraseña') || lowerMessage.includes('passwort')) ||
+            lowerMessage.includes('username') && (lowerMessage.includes('password') || lowerMessage.includes('mot de passe') || lowerMessage.includes('contraseña') || lowerMessage.includes('passwort')) ||
+            lowerMessage.includes('nom d\'utilisateur') && (lowerMessage.includes('mot de passe')) ||
+            lowerMessage.includes('nombre de usuario') && (lowerMessage.includes('contraseña')) ||
+            lowerMessage.includes('benutzername') && (lowerMessage.includes('passwort'))) {
+          return t('auth.login.errors.invalid_credentials')
+        }
+        
+        return message
+      }
+      
       let errorMessage = t('auth.login.errors.invalid_credentials')
       
       if (err.response?.data) {
         const errorData = err.response.data
         if (typeof errorData === 'string') {
-          errorMessage = errorData
+          errorMessage = mapErrorToTranslation(errorData)
         } else if (errorData.detail) {
           if (typeof errorData.detail === 'string') {
-            errorMessage = errorData.detail
+            errorMessage = mapErrorToTranslation(errorData.detail)
           } else if (Array.isArray(errorData.detail)) {
-            errorMessage = errorData.detail.map(e => e.msg || e).join(', ')
+            const messages = errorData.detail.map(e => e.msg || e).join(', ')
+            errorMessage = mapErrorToTranslation(messages)
           } else {
             errorMessage = t('auth.login.errors.invalid_credentials')
           }
         } else if (errorData.message) {
-          errorMessage = errorData.message
+          errorMessage = mapErrorToTranslation(errorData.message)
         }
       } else if (err.message) {
-        errorMessage = err.message
+        errorMessage = mapErrorToTranslation(err.message)
       }
       
-      setError(errorMessage)
+      // Afficher l'erreur dans un toast (pas de rechargement de page)
+      addToast(errorMessage, 'error', 6000)
+    } finally {
       setIsLoading(false)
     }
+  }
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    // Empêcher le comportement par défaut du formulaire
+    e.preventDefault()
+    e.stopPropagation()
+    // Appeler la fonction de login
+    handleLogin()
+    return false
   }
 
   return (
@@ -174,13 +217,17 @@ export default function LoginPage() {
                 </div>
               </div>
             ) : (
-              <form onSubmit={handleSubmit} className="space-y-6">
-              {error && (
-                <div className="p-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl dark:bg-red-900/20 dark:border-red-800 dark:text-red-400">
-                  {error}
-                </div>
-              )}
-
+              <form 
+                onSubmit={handleSubmit} 
+                noValidate
+                className="space-y-6"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && isLoading) {
+                    e.preventDefault()
+                    e.stopPropagation()
+                  }
+                }}
+              >
               {/* Email/Username */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
@@ -193,6 +240,11 @@ export default function LoginPage() {
                     placeholder={t('auth.login.email_placeholder')}
                     value={formData.emailOrUsername}
                     onChange={(e) => handleInputChange('emailOrUsername', e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && isLoading) {
+                        e.preventDefault()
+                      }
+                    }}
                     className="pl-10 h-12 rounded-xl border-gray-200 dark:border-gray-600 focus:border-myfav-primary focus:ring-myfav-primary dsm-input"
                     required
                     disabled={isLoading}
@@ -212,6 +264,11 @@ export default function LoginPage() {
                     placeholder={t('auth.login.password_placeholder')}
                     value={formData.password}
                     onChange={(e) => handleInputChange('password', e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && isLoading) {
+                        e.preventDefault()
+                      }
+                    }}
                     className="pl-10 pr-10 h-12 rounded-xl border-gray-200 dark:border-gray-600 focus:border-myfav-primary focus:ring-myfav-primary dsm-input"
                     required
                     disabled={isLoading}
@@ -243,9 +300,14 @@ export default function LoginPage() {
 
               {/* Submit Button */}
               <Button
-                type="submit"
+                type="button"
                 className="w-full h-12 bg-myfav-primary hover:bg-myfav-primary-dark text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-200"
                 disabled={isLoading}
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  handleLogin()
+                }}
               >
                 {isLoading ? (
                   <>
