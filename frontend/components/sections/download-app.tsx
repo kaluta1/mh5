@@ -53,8 +53,8 @@ export function DownloadApp() {
                 >
                   <Apple className="w-6 h-6 mr-3" />
                   <div className="text-left">
-                    <div className="text-xs opacity-70">Télécharger sur</div>
-                    <div className="text-lg font-bold">App Store</div>
+                    <div className="text-xs opacity-70">{t('landing.download_app.download_on') || 'Télécharger sur'}</div>
+                    <div className="text-lg font-bold">{t('landing.download_app.app_store') || 'App Store'}</div>
                   </div>
                 </Button>
                 
@@ -69,8 +69,8 @@ export function DownloadApp() {
                 >
                   <Play className="w-6 h-6 mr-3" />
                   <div className="text-left">
-                    <div className="text-xs opacity-70">Disponible sur</div>
-                    <div className="text-lg font-bold">Google Play</div>
+                    <div className="text-xs opacity-70">{t('landing.download_app.available_on') || 'Disponible sur'}</div>
+                    <div className="text-lg font-bold">{t('landing.download_app.google_play') || 'Google Play'}</div>
                   </div>
                 </Button>
               </div>
@@ -79,11 +79,11 @@ export function DownloadApp() {
               <div className="grid grid-cols-2 gap-4 max-w-md mx-auto lg:mx-0">
                 <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
                   <div className="text-2xl font-bold mb-1">24/7</div>
-                  <div className="text-sm opacity-90">Accès continu</div>
+                  <div className="text-sm opacity-90">{t('landing.download_app.access_24_7') || 'Accès continu'}</div>
                 </div>
                 <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
                   <div className="text-2xl font-bold mb-1">100%</div>
-                  <div className="text-sm opacity-90">Gratuit</div>
+                  <div className="text-sm opacity-90">{t('landing.download_app.free') || 'Gratuit'}</div>
                 </div>
               </div>
             </div>

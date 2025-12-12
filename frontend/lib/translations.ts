@@ -2363,7 +2363,13 @@ export const translations: Record<Language, TranslationKeys> = {
         badge: "Application mobile",
         title: "Téléchargez l'application MyHigh5",
         subtitle: "Participez aux concours, votez et gagnez de l'argent où que vous soyez avec notre application mobile",
-        scan_qr: "Scannez pour télécharger"
+        scan_qr: "Scannez pour télécharger",
+        download_on: "Télécharger sur",
+        app_store: "App Store",
+        available_on: "Disponible sur",
+        google_play: "Google Play",
+        access_24_7: "Accès continu",
+        free: "Gratuit"
       }
     },
     footer: {
@@ -4217,7 +4223,13 @@ export const translations: Record<Language, TranslationKeys> = {
         badge: "Mobile App",
         title: "Download the MyHigh5 App",
         subtitle: "Participate in contests, vote and earn money wherever you are with our mobile app",
-        scan_qr: "Scan to download"
+        scan_qr: "Scan to download",
+        download_on: "Download on",
+        app_store: "App Store",
+        available_on: "Available on",
+        google_play: "Google Play",
+        access_24_7: "24/7 Access",
+        free: "Free"
       }
     },
     footer: {
@@ -5937,6 +5949,77 @@ export const translations: Record<Language, TranslationKeys> = {
         support: "Soporte 24/7"
       }
     },
+    landing: {
+      ways_to_earn: {
+        badge: "Gana dinero",
+        title: "Diferentes formas de ganar",
+        subtitle: "Únete a nuestro programa de afiliados y gana comisiones en múltiples fuentes de ingresos",
+        kyc_payments: {
+          title: "Pagos KYC",
+          description: "Gana comisiones cuando los miembros de tu red completen su verificación KYC",
+          commission: "20% en Nivel 1, 2% en Niveles 2-10"
+        },
+        founding_membership: {
+          title: "Membresía Fundadora",
+          description: "Gana comisiones cuando los miembros de la red se unan como Miembros Fundadores (tarifa de inscripción de $100)",
+          commission: "$20 en Nivel 1, $2 en Niveles 2-10"
+        },
+        annual_membership: {
+          title: "Tarifa de membresía anual",
+          description: "Gana comisiones cuando los Miembros Fundadores pagan su tarifa de membresía anual ($50)",
+          commission: "$10 en Nivel 1, $1 en Niveles 2-10"
+        },
+        club_memberships: {
+          title: "Membresías de clubes",
+          description: "Gana comisiones en las tarifas de membresía de clubes pagadas. El sitio web cobra el 20% de las tarifas de membresía, y tú obtienes una parte de eso.",
+          commission: "20% en Nivel 1, 2% en Niveles 2-10"
+        },
+        shop_purchases: {
+          title: "Compras en la tienda",
+          description: "Gana comisiones en compras de contenido digital en la tienda MyHigh5. El sitio web cobra 20% de tarifas de plataforma, y tú obtienes una parte de eso.",
+          commission: "20% en Nivel 1, 2% en Niveles 2-10"
+        },
+        ad_revenue: {
+          title: "Compartir ingresos publicitarios",
+          description: "Gana comisiones de los ingresos publicitarios generados en las páginas de concursos de los miembros de tu red",
+          commission: "10% en Nivel 1, 1% en Niveles 2-10"
+        },
+        ad_campaigns: {
+          title: "Campañas publicitarias",
+          description: "Gana comisiones de las campañas publicitarias compradas por los miembros de tu red a través de la plataforma publicitaria nativa",
+          commission: "Estructura de comisión variable"
+        }
+      },
+      faq: {
+        badge: "Preguntas frecuentes",
+        title: "Preguntas frecuentes",
+        subtitle: "Encuentra respuestas a las preguntas más comunes sobre MyHigh5",
+        question_1: "¿Cómo puedo ganar dinero en MyHigh5?",
+        answer_1: "Puedes ganar dinero de varias maneras: participando en concursos y ganando premios, uniéndote al programa de afiliados para ganar comisiones por los miembros que refieras, y convirtiéndote en miembro fundador para participar en los fondos de ingresos y ganancias.",
+        question_2: "¿Cómo funciona el programa de afiliados?",
+        answer_2: "El programa de afiliados de MyHigh5 funciona en 10 niveles. Ganas 20% de comisión en las actividades de los miembros que refieras directamente (nivel 1), y 2% en los niveles 2 a 10. Puedes ganar comisiones en pagos KYC, membresías, compras en la tienda, y más.",
+        question_3: "¿Qué es el estatus de Miembro Fundador?",
+        answer_3: "El estatus de Miembro Fundador es una oportunidad limitada que requiere un pago único de $100 y la verificación de tu cuenta. Los miembros fundadores participan en fondos de comisiones mensuales (10% de los ingresos netos) y un fondo de ganancias anual (20% de las ganancias después de impuestos).",
+        question_4: "¿Cómo puedo participar en concursos?",
+        answer_4: "Para participar en concursos, necesitas crear una cuenta gratuita, completar tu perfil, y enviar tu solicitud con fotos o videos según los requisitos del concurso. Algunos concursos pueden requerir verificación KYC.",
+        question_5: "¿Los concursos son gratuitos?",
+        answer_5: "Sí, la participación en concursos es gratuita. Sin embargo, algunos concursos pueden requerir verificación KYC que puede tener un costo. Los miembros fundadores tienen acceso a beneficios exclusivos y oportunidades de ingresos adicionales.",
+        question_6: "¿Cómo puedo retirar mis ganancias?",
+        answer_6: "Puedes retirar tus ganancias a través de tu billetera en el panel de control. Los pagos se procesan mensualmente con un umbral mínimo de $50 CAD. Los métodos de pago incluyen transferencia bancaria (para afiliados canadienses), PayPal, o criptomoneda."
+      },
+      download_app: {
+        badge: "Aplicación móvil",
+        title: "Descarga la aplicación MyHigh5",
+        subtitle: "Participa en concursos, vota y gana dinero donde quiera que estés con nuestra aplicación móvil",
+        scan_qr: "Escanear para descargar",
+        download_on: "Descargar en",
+        app_store: "App Store",
+        available_on: "Disponible en",
+        google_play: "Google Play",
+        access_24_7: "Acceso 24/7",
+        free: "Gratis"
+      }
+    },
     footer: {
       description: "La plataforma de concursos más popular del mundo. Participa, vota y gana en competencias emocionantes.",
       copyright: " 2024 MyHigh5. Todos los derechos reservados.",
@@ -7623,6 +7706,77 @@ export const translations: Record<Language, TranslationKeys> = {
         instant: "Registrierung in 30 Sekunden",
         secure: "Keine Kreditkarte erforderlich",
         support: "24/7 Support"
+      }
+    },
+    landing: {
+      ways_to_earn: {
+        badge: "Geld verdienen",
+        title: "Verschiedene Möglichkeiten zu verdienen",
+        subtitle: "Treten Sie unserem Affiliate-Programm bei und verdienen Sie Provisionen aus mehreren Einnahmequellen",
+        kyc_payments: {
+          title: "KYC-Zahlungen",
+          description: "Verdienen Sie Provisionen, wenn Mitglieder in Ihrem Netzwerk ihre KYC-Verifizierung abschließen",
+          commission: "20% auf Stufe 1, 2% auf Stufen 2-10"
+        },
+        founding_membership: {
+          title: "Gründungsmitgliedschaft",
+          description: "Verdienen Sie Provisionen, wenn Netzwerkmitglieder als Gründungsmitglieder beitreten (Beitrittsgebühr von 100$)",
+          commission: "20$ auf Stufe 1, 2$ auf Stufen 2-10"
+        },
+        annual_membership: {
+          title: "Jährliche Mitgliedsgebühr",
+          description: "Verdienen Sie Provisionen, wenn Gründungsmitglieder ihre jährliche Mitgliedsgebühr (50$) zahlen",
+          commission: "10$ auf Stufe 1, 1$ auf Stufen 2-10"
+        },
+        club_memberships: {
+          title: "Club-Mitgliedschaften",
+          description: "Verdienen Sie Provisionen auf bezahlte Club-Mitgliedsgebühren. Die Website berechnet 20% der Mitgliedsgebühren, und Sie erhalten einen Anteil davon.",
+          commission: "20% auf Stufe 1, 2% auf Stufen 2-10"
+        },
+        shop_purchases: {
+          title: "Einkäufe im Shop",
+          description: "Verdienen Sie Provisionen auf digitale Inhaltskäufe im MyHigh5-Shop. Die Website berechnet 20% Plattformgebühren, und Sie erhalten einen Anteil davon.",
+          commission: "20% auf Stufe 1, 2% auf Stufen 2-10"
+        },
+        ad_revenue: {
+          title: "Werbeeinnahmen teilen",
+          description: "Verdienen Sie Provisionen aus Werbeeinnahmen, die auf Wettbewerbsseiten von Mitgliedern in Ihrem Netzwerk generiert werden",
+          commission: "10% auf Stufe 1, 1% auf Stufen 2-10"
+        },
+        ad_campaigns: {
+          title: "Werbekampagnen",
+          description: "Verdienen Sie Provisionen aus Werbekampagnen, die von Mitgliedern in Ihrem Netzwerk über die native Werbeplattform gekauft werden",
+          commission: "Variable Provisionsstruktur"
+        }
+      },
+      faq: {
+        badge: "Häufig gestellte Fragen",
+        title: "Häufig gestellte Fragen",
+        subtitle: "Finden Sie Antworten auf die häufigsten Fragen zu MyHigh5",
+        question_1: "Wie kann ich bei MyHigh5 Geld verdienen?",
+        answer_1: "Sie können auf verschiedene Weise Geld verdienen: durch Teilnahme an Wettbewerben und Gewinnen von Preisen, durch Beitritt zum Affiliate-Programm, um Provisionen für Mitglieder zu verdienen, die Sie werben, und durch Gründungsmitgliedschaft, um an Einnahme- und Gewinnpools teilzunehmen.",
+        question_2: "Wie funktioniert das Affiliate-Programm?",
+        answer_2: "Das MyHigh5 Affiliate-Programm funktioniert auf 10 Ebenen. Sie verdienen 20% Provision auf Aktivitäten von Mitgliedern, die Sie direkt werben (Stufe 1), und 2% auf Stufen 2 bis 10. Sie können Provisionen auf KYC-Zahlungen, Mitgliedschaften, Shop-Einkäufe und mehr verdienen.",
+        question_3: "Was ist der Status eines Gründungsmitglieds?",
+        answer_3: "Der Status eines Gründungsmitglieds ist eine begrenzte Gelegenheit, die eine einmalige Zahlung von 100$ und die Verifizierung Ihres Kontos erfordert. Gründungsmitglieder nehmen an monatlichen Provisionspools (10% der Nettoumsätze) und einem jährlichen Gewinnpool (20% der Gewinne nach Steuern) teil.",
+        question_4: "Wie kann ich an Wettbewerben teilnehmen?",
+        answer_4: "Um an Wettbewerben teilzunehmen, müssen Sie ein kostenloses Konto erstellen, Ihr Profil vervollständigen und Ihre Bewerbung mit Fotos oder Videos gemäß den Anforderungen des Wettbewerbs einreichen. Einige Wettbewerbe können eine KYC-Verifizierung erfordern.",
+        question_5: "Sind Wettbewerbe kostenlos?",
+        answer_5: "Ja, die Teilnahme an Wettbewerben ist kostenlos. Einige Wettbewerbe können jedoch eine KYC-Verifizierung erfordern, die Kosten verursachen kann. Gründungsmitglieder haben Zugang zu exklusiven Vorteilen und zusätzlichen Einnahmemöglichkeiten.",
+        question_6: "Wie kann ich meine Einnahmen abheben?",
+        answer_6: "Sie können Ihre Einnahmen über Ihre Brieftasche im Dashboard abheben. Zahlungen werden monatlich mit einem Mindestbetrag von 50$ CAD verarbeitet. Zahlungsmethoden umfassen Banküberweisung (für kanadische Affiliates), PayPal oder Kryptowährung."
+      },
+      download_app: {
+        badge: "Mobile App",
+        title: "Laden Sie die MyHigh5 App herunter",
+        subtitle: "Nehmen Sie an Wettbewerben teil, stimmen Sie ab und verdienen Sie Geld, wo immer Sie sind, mit unserer mobilen App",
+        scan_qr: "Zum Herunterladen scannen",
+        download_on: "Herunterladen auf",
+        app_store: "App Store",
+        available_on: "Verfügbar auf",
+        google_play: "Google Play",
+        access_24_7: "24/7 Zugang",
+        free: "Kostenlos"
       }
     },
     footer: {
