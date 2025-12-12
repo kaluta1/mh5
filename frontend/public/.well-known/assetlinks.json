@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.investissement.investir",
+      "sha256_cert_fingerprints": [
+        "6C:D0:A0:54:EC:BA:D9:97:6F:B4:A6:B9:36:51:F6:78:64:E5:71:CE:64:2C:6E:37:B0:03:94:4B:79:1A:60:E7"
+      ]
+    }
+  }
+]
