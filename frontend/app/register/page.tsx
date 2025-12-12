@@ -393,7 +393,17 @@ export default function RegisterPage() {
                       type="text"
                       placeholder={t('auth.register.username_placeholder')}
                       value={formData.username}
-                      onChange={(e) => handleInputChange('username', e.target.value)}
+                      onChange={(e) => {
+                        // Supprimer automatiquement les espaces
+                        const valueWithoutSpaces = e.target.value.replace(/\s/g, '')
+                        handleInputChange('username', valueWithoutSpaces)
+                      }}
+                      onKeyDown={(e) => {
+                        // Empêcher la saisie d'espaces
+                        if (e.key === ' ') {
+                          e.preventDefault()
+                        }
+                      }}
                       className={`pl-10 h-12 rounded-xl dsm-input ${fieldErrors.username ? 'border-red-500 focus:border-red-500 focus:ring-red-500 bg-red-50 dark:bg-red-900/10' : 'border-gray-200 dark:border-gray-600 focus:border-myfav-primary focus:ring-myfav-primary'}`}
                       required
                     />
