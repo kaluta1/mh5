@@ -9,10 +9,18 @@ import { ContestCard } from "@/components/dashboard/contest-card"
 import { contestService, Contest, ContestResponse } from "@/services/contest-service"
 import { useLanguage } from "@/contexts/language-context"
 import { useAuth } from "@/hooks/use-auth"
-import { Search, Trophy, Globe, MapPin, Users, Flame, Building2, Flag, Globe2 } from "lucide-react"
+import { Search, Trophy, Globe, MapPin, Users, Flame, Building2, Flag, Globe2, Lock, LogIn, UserPlus } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Skeleton, SkeletonButton } from "@/components/ui/skeleton"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { LoginModal } from "@/components/auth/login-modal"
 
 // Contest Card Skeleton
 function ContestCardSkeleton() {
@@ -42,6 +50,9 @@ export default function ContestsPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedFilter, setSelectedFilter] = useState<string>("all")
   const [favorites, setFavorites] = useState<string[]>([])
+  const [showAuthDialog, setShowAuthDialog] = useState(false)
+  const [showLoginModal, setShowLoginModal] = useState(false)
+  const [selectedContestId, setSelectedContestId] = useState<string | null>(null)
 
   // Capturer le code de parrainage depuis l'URL
   useEffect(() => {
@@ -99,12 +110,31 @@ export default function ContestsPage() {
     )
   }
 
-  // Redirect to register if not authenticated, otherwise go to contest
+  // Show auth dialog if not authenticated, otherwise go to contest
   const handleContestClick = (contestId: string) => {
     if (isAuthenticated) {
       router.push(`/dashboard/contests/${contestId}`)
     } else {
-      router.push('/register')
+      setSelectedContestId(contestId)
+      setShowAuthDialog(true)
+    }
+  }
+
+  const handleLoginClick = () => {
+    setShowAuthDialog(false)
+    setShowLoginModal(true)
+  }
+
+  const handleRegisterClick = () => {
+    setShowAuthDialog(false)
+    const refCode = localStorage.getItem('referral_code')
+    router.push(refCode ? `/register?ref=${refCode}` : '/register')
+  }
+
+  const handleLoginSuccess = () => {
+    setShowLoginModal(false)
+    if (selectedContestId) {
+      router.push(`/dashboard/contests/${selectedContestId}`)
     }
   }
 
@@ -341,6 +371,69 @@ export default function ContestsPage() {
       </main>
       
       <Footer />
+
+      {/* Auth Required Dialog */}
+      <Dialog open={showAuthDialog} onOpenChange={setShowAuthDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-myfav-primary/10 flex items-center justify-center">
+              <Lock className="w-8 h-8 text-myfav-primary" />
+            </div>
+            <DialogTitle className="text-2xl font-bold text-center">
+              {t('pages.contests.auth_required_title') || "Connexion requise"}
+            </DialogTitle>
+            <DialogDescription className="text-center text-base mt-2">
+              {t('pages.contests.auth_required_description') || "Vous devez être connecté pour participer aux concours ou voir les participants."}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 mt-6">
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <Users className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-blue-900 dark:text-blue-100">
+                  <p className="font-semibold mb-1">
+                    {t('pages.contests.auth_required_benefits_title') || "En vous connectant, vous pourrez :"}
+                  </p>
+                  <ul className="list-disc list-inside space-y-1 text-blue-800 dark:text-blue-200">
+                    <li>{t('pages.contests.auth_required_benefit_participate') || "Participer aux concours"}</li>
+                    <li>{t('pages.contests.auth_required_benefit_view_contestants') || "Voir les participants"}</li>
+                    <li>{t('pages.contests.auth_required_benefit_vote') || "Voter pour vos favoris"}</li>
+                    <li>{t('pages.contests.auth_required_benefit_comment') || "Commenter et interagir"}</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <Button
+                onClick={handleLoginClick}
+                className="w-full bg-myfav-primary hover:bg-myfav-primary-dark text-white font-semibold h-12"
+              >
+                <LogIn className="w-5 h-5 mr-2" />
+                {t('pages.contests.auth_required_login') || "Se connecter"}
+              </Button>
+              
+              <Button
+                onClick={handleRegisterClick}
+                variant="outline"
+                className="w-full border-2 border-myfav-primary text-myfav-primary hover:bg-myfav-primary/10 font-semibold h-12"
+              >
+                <UserPlus className="w-5 h-5 mr-2" />
+                {t('pages.contests.auth_required_register') || "Créer un compte"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Login Modal */}
+      <LoginModal
+        open={showLoginModal}
+        onOpenChange={setShowLoginModal}
+        onLoginSuccess={handleLoginSuccess}
+        onRegisterClick={handleRegisterClick}
+      />
     </div>
   )
 }

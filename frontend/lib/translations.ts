@@ -1185,6 +1185,15 @@ export interface TranslationKeys {
       }
       no_results: string
       try_different_filter: string
+      auth_required_title: string
+      auth_required_description: string
+      auth_required_benefits_title: string
+      auth_required_benefit_participate: string
+      auth_required_benefit_view_contestants: string
+      auth_required_benefit_vote: string
+      auth_required_benefit_comment: string
+      auth_required_login: string
+      auth_required_register: string
       cta: {
         title: string
         subtitle: string
@@ -3085,6 +3094,15 @@ export const translations: Record<Language, TranslationKeys> = {
         },
         no_results: "Aucun concours trouvé",
         try_different_filter: "Essayez un autre filtre ou terme de recherche",
+        auth_required_title: "Connexion requise",
+        auth_required_description: "Vous devez être connecté pour participer aux concours ou voir les participants.",
+        auth_required_benefits_title: "En vous connectant, vous pourrez :",
+        auth_required_benefit_participate: "Participer aux concours",
+        auth_required_benefit_view_contestants: "Voir les participants",
+        auth_required_benefit_vote: "Voter pour vos favoris",
+        auth_required_benefit_comment: "Commenter et interagir",
+        auth_required_login: "Se connecter",
+        auth_required_register: "Créer un compte",
         cta: {
           title: "Prêt à participer ?",
           subtitle: "Créez votre compte gratuitement et commencez à participer aux concours dès aujourd'hui !",
@@ -4843,6 +4861,15 @@ export const translations: Record<Language, TranslationKeys> = {
         },
         no_results: "No contest found",
         try_different_filter: "Try another filter or search term",
+        auth_required_title: "Login Required",
+        auth_required_description: "You must be logged in to participate in contests or view contestants.",
+        auth_required_benefits_title: "By logging in, you will be able to:",
+        auth_required_benefit_participate: "Participate in contests",
+        auth_required_benefit_view_contestants: "View contestants",
+        auth_required_benefit_vote: "Vote for your favorites",
+        auth_required_benefit_comment: "Comment and interact",
+        auth_required_login: "Sign In",
+        auth_required_register: "Create an account",
         cta: {
           title: "Ready to participate?",
           subtitle: "Create your free account and start competing today!",
@@ -6521,6 +6548,15 @@ export const translations: Record<Language, TranslationKeys> = {
         },
         no_results: "Ningún concurso encontrado",
         try_different_filter: "Prueba otro filtro o término de búsqueda",
+        auth_required_title: "Inicio de sesión requerido",
+        auth_required_description: "Debes iniciar sesión para participar en concursos o ver participantes.",
+        auth_required_benefits_title: "Al iniciar sesión, podrás:",
+        auth_required_benefit_participate: "Participar en concursos",
+        auth_required_benefit_view_contestants: "Ver participantes",
+        auth_required_benefit_vote: "Votar por tus favoritos",
+        auth_required_benefit_comment: "Comentar e interactuar",
+        auth_required_login: "Iniciar sesión",
+        auth_required_register: "Crear una cuenta",
         cta: {
           title: "¿Listo para participar?",
           subtitle: "¡Crea tu cuenta gratis y comienza a competir hoy!",
@@ -8194,6 +8230,15 @@ export const translations: Record<Language, TranslationKeys> = {
         },
         no_results: "Kein Wettbewerb gefunden",
         try_different_filter: "Versuchen Sie einen anderen Filter oder Suchbegriff",
+        auth_required_title: "Anmeldung erforderlich",
+        auth_required_description: "Sie müssen angemeldet sein, um an Wettbewerben teilzunehmen oder Teilnehmer anzuzeigen.",
+        auth_required_benefits_title: "Durch die Anmeldung können Sie:",
+        auth_required_benefit_participate: "An Wettbewerben teilnehmen",
+        auth_required_benefit_view_contestants: "Teilnehmer anzeigen",
+        auth_required_benefit_vote: "Für Ihre Favoriten abstimmen",
+        auth_required_benefit_comment: "Kommentieren und interagieren",
+        auth_required_login: "Anmelden",
+        auth_required_register: "Konto erstellen",
         cta: {
           title: "Bereit teilzunehmen?",
           subtitle: "Erstellen Sie Ihr kostenloses Konto und beginnen Sie noch heute zu konkurrieren!",
