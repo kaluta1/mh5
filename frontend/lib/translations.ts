@@ -89,6 +89,7 @@ export interface TranslationKeys {
       username_placeholder: string
       username_hint: string
       username_no_spaces_warning: string
+      username_space_not_allowed: string
       password_placeholder: string
       confirm_password_placeholder: string
       full_name_placeholder: string
@@ -108,7 +109,16 @@ export interface TranslationKeys {
         password_mismatch: string
         password_min_length: string
         terms_required: string
+        username_invalid_chars: string
+        invalid_email: string
+        password_requirements: string
       }
+      password_requirements_title: string
+      password_requirement_length: string
+      password_requirement_uppercase: string
+      password_requirement_lowercase: string
+      password_requirement_number: string
+      password_requirement_special: string
     }
   }
   common: {
@@ -1983,8 +1993,14 @@ export const translations: Record<Language, TranslationKeys> = {
         subtitle: "Créez votre compte MyFav gratuitement",
         email_placeholder: "Votre adresse email",
         username_placeholder: "Nom d'utilisateur",
-        username_hint: "Le nom d'utilisateur ne peut pas contenir d'espaces",
-        username_no_spaces_warning: "Les espaces ne sont pas autorisés dans le nom d'utilisateur",
+        username_hint: "Seules les lettres, chiffres et underscores sont autorisés",
+        username_no_spaces_warning: "Caractères non autorisés",
+        username_space_not_allowed: "Les espaces ne sont pas autorisés",
+        password_requirements_title: "Le mot de passe doit contenir :",
+        password_requirement_uppercase: "Une majuscule (A-Z)",
+        password_requirement_lowercase: "Une minuscule (a-z)",
+        password_requirement_number: "Un chiffre (0-9)",
+        password_requirement_special: "Un caractère spécial (*_/@=)",
         password_placeholder: "Mot de passe",
         confirm_password_placeholder: "Confirmez le mot de passe",
         full_name_placeholder: "Nom complet",
@@ -2002,14 +2018,21 @@ export const translations: Record<Language, TranslationKeys> = {
         success_title: "Inscription réussie !",
         success_message: "Bienvenue ! Votre compte a été créé avec succès.",
         continue_button: "Se connecter",
+        password_requirements_title: "Le mot de passe doit contenir :",
+        password_requirement_uppercase: "Une majuscule (A-Z)",
+        password_requirement_lowercase: "Une minuscule (a-z)",
+        password_requirement_number: "Un chiffre (0-9)",
+        password_requirement_special: "Un caractère spécial (*_/@=)",
         errors: {
           required_fields: "Tous les champs obligatoires doivent être remplis",
           password_mismatch: "Les mots de passe ne correspondent pas",
-          password_min_length: "Le mot de passe doit contenir au moins 6 caractères",
+          password_min_length: "Le mot de passe doit contenir au moins 8 caractères",
           terms_required: "Vous devez accepter les conditions d'utilisation",
           email_exists: "Un utilisateur avec cet email existe déjà",
           username_exists: "Ce nom d'utilisateur est déjà pris",
-          invalid_email: "Adresse email invalide",
+          invalid_email: "Format d'email invalide",
+          username_invalid_chars: "Seuls les lettres, chiffres et underscores sont autorisés",
+          password_requirements: "Le mot de passe doit contenir une majuscule, une minuscule, un chiffre et un caractère spécial (*_/@=)",
           location_required: "Veuillez sélectionner votre pays et votre ville"
         }
       }
@@ -3794,8 +3817,15 @@ export const translations: Record<Language, TranslationKeys> = {
         subtitle: "Create your free MyFav account",
         email_placeholder: "Your email address",
         username_placeholder: "Username",
-        username_hint: "Username cannot contain spaces",
-        username_no_spaces_warning: "Spaces are not allowed in username",
+        username_hint: "Only letters, numbers, and underscores are allowed",
+        username_no_spaces_warning: "Invalid characters",
+        username_space_not_allowed: "Spaces are not allowed",
+        password_requirements_title: "Password must contain:",
+        password_requirement_length: "At least 8 characters",
+        password_requirement_uppercase: "An uppercase letter (A-Z)",
+        password_requirement_lowercase: "A lowercase letter (a-z)",
+        password_requirement_number: "A number (0-9)",
+        password_requirement_special: "A special character (*_/@=)",
         password_placeholder: "Password",
         confirm_password_placeholder: "Confirm password",
         full_name_placeholder: "Full name (optional)",
@@ -3816,11 +3846,13 @@ export const translations: Record<Language, TranslationKeys> = {
         errors: {
           required_fields: "All required fields must be filled",
           password_mismatch: "Passwords do not match",
-          password_min_length: "Password must be at least 6 characters",
+          password_min_length: "Password must be at least 8 characters",
           terms_required: "You must accept the terms of service",
           email_exists: "A user with this email already exists",
           username_exists: "This username is already taken",
-          invalid_email: "Invalid email address",
+          invalid_email: "Invalid email format",
+          username_invalid_chars: "Only letters, numbers, and underscores are allowed",
+          password_requirements: "Password must contain an uppercase letter, a lowercase letter, a number, and a special character (*_/@=)",
           location_required: "Please select your country and city"
         }
       }
@@ -5635,8 +5667,15 @@ export const translations: Record<Language, TranslationKeys> = {
         subtitle: "Crea tu cuenta MyFav gratis",
         email_placeholder: "Tu dirección de correo",
         username_placeholder: "Nombre de usuario",
-        username_hint: "El nombre de usuario no puede contener espacios",
-        username_no_spaces_warning: "Los espacios no están permitidos en el nombre de usuario",
+        username_hint: "Solo se permiten letras, números y guiones bajos",
+        username_no_spaces_warning: "Caracteres no permitidos",
+        username_space_not_allowed: "Los espacios no están permitidos",
+        password_requirements_title: "La contraseña debe contener:",
+        password_requirement_length: "Al menos 8 caracteres",
+        password_requirement_uppercase: "Una letra mayúscula (A-Z)",
+        password_requirement_lowercase: "Una letra minúscula (a-z)",
+        password_requirement_number: "Un número (0-9)",
+        password_requirement_special: "Un carácter especial (*_/@=)",
         password_placeholder: "Contraseña",
         confirm_password_placeholder: "Confirmar contraseña",
         full_name_placeholder: "Nombre completo (opcional)",
@@ -5657,11 +5696,13 @@ export const translations: Record<Language, TranslationKeys> = {
         errors: {
           required_fields: "Todos los campos obligatorios deben completarse",
           password_mismatch: "Las contraseñas no coinciden",
-          password_min_length: "La contraseña debe tener al menos 6 caracteres",
+          password_min_length: "La contraseña debe tener al menos 8 caracteres",
           terms_required: "Debes aceptar los términos de servicio",
           email_exists: "Ya existe un usuario con este correo electrónico",
           username_exists: "Este nombre de usuario ya está en uso",
-          invalid_email: "Dirección de correo electrónico inválida",
+          invalid_email: "Formato de correo electrónico inválido",
+          username_invalid_chars: "Solo se permiten letras, números y guiones bajos",
+          password_requirements: "La contraseña debe contener una letra mayúscula, una letra minúscula, un número y un carácter especial (*_/@=)",
           location_required: "Por favor selecciona tu país y ciudad"
         }
       }
@@ -7396,8 +7437,15 @@ export const translations: Record<Language, TranslationKeys> = {
         subtitle: "Erstellen Sie Ihr kostenloses MyFav-Konto",
         email_placeholder: "Ihre E-Mail-Adresse",
         username_placeholder: "Benutzername",
-        username_hint: "Der Benutzername darf keine Leerzeichen enthalten",
-        username_no_spaces_warning: "Leerzeichen sind im Benutzernamen nicht erlaubt",
+        username_hint: "Nur Buchstaben, Zahlen und Unterstriche sind erlaubt",
+        username_no_spaces_warning: "Ungültige Zeichen",
+        username_space_not_allowed: "Leerzeichen sind nicht erlaubt",
+        password_requirements_title: "Das Passwort muss enthalten:",
+        password_requirement_length: "Mindestens 8 Zeichen",
+        password_requirement_uppercase: "Einen Großbuchstaben (A-Z)",
+        password_requirement_lowercase: "Einen Kleinbuchstaben (a-z)",
+        password_requirement_number: "Eine Zahl (0-9)",
+        password_requirement_special: "Ein Sonderzeichen (*_/@=)",
         password_placeholder: "Passwort",
         confirm_password_placeholder: "Passwort bestätigen",
         full_name_placeholder: "Vollständiger Name",
@@ -7418,11 +7466,13 @@ export const translations: Record<Language, TranslationKeys> = {
         errors: {
           required_fields: "Alle erforderlichen Felder müssen ausgefüllt werden",
           password_mismatch: "Passwörter stimmen nicht überein",
-          password_min_length: "Das Passwort muss mindestens 6 Zeichen lang sein",
+          password_min_length: "Das Passwort muss mindestens 8 Zeichen lang sein",
           terms_required: "Sie müssen den Nutzungsbedingungen zustimmen",
           email_exists: "Ein Benutzer mit dieser E-Mail existiert bereits",
           username_exists: "Dieser Benutzername ist bereits vergeben",
-          invalid_email: "Ungültige E-Mail-Adresse",
+          invalid_email: "Ungültiges E-Mail-Format",
+          username_invalid_chars: "Nur Buchstaben, Zahlen und Unterstriche sind erlaubt",
+          password_requirements: "Das Passwort muss einen Großbuchstaben, einen Kleinbuchstaben, eine Zahl und ein Sonderzeichen (*_/@=) enthalten",
           location_required: "Bitte wählen Sie Ihr Land und Ihre Stadt aus"
         }
       }

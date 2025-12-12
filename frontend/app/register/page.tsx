@@ -40,6 +40,15 @@ export default function RegisterPage() {
   const [isSuccess, setIsSuccess] = useState(false)
   const [referralCode, setReferralCode] = useState<string | null>(null)
   const [showSpaceWarning, setShowSpaceWarning] = useState(false)
+  const [spaceWarningMessage, setSpaceWarningMessage] = useState('')
+  const [usernameError, setUsernameError] = useState('')
+  const [emailError, setEmailError] = useState('')
+  const [passwordErrors, setPasswordErrors] = useState({
+    hasUpperCase: false,
+    hasLowerCase: false,
+    hasNumber: false,
+    hasSpecialChar: false
+  })
 
   // Vérifier si un code de parrainage est présent dans l'URL ou localStorage
   useEffect(() => {
@@ -73,6 +82,63 @@ export default function RegisterPage() {
     if (fieldErrors[field]) {
       setFieldErrors(prev => ({ ...prev, [field]: false }))
     }
+    
+    // Validation en temps réel
+    if (field === 'username') {
+      validateUsername(value)
+    } else if (field === 'email') {
+      validateEmail(value)
+    } else if (field === 'password') {
+      validatePassword(value)
+    }
+  }
+  
+  const validateUsername = (value: string) => {
+    // Seulement lettres, chiffres et underscores
+    const usernameRegex = /^[a-zA-Z0-9_]*$/
+    if (value && !usernameRegex.test(value)) {
+      setUsernameError(t('auth.register.errors.username_invalid_chars') || 'Seuls les lettres, chiffres et underscores sont autorisés')
+      setFieldErrors(prev => ({ ...prev, username: true }))
+    } else {
+      setUsernameError('')
+      setFieldErrors(prev => ({ ...prev, username: false }))
+    }
+  }
+  
+  const validateEmail = (value: string) => {
+    if (!value) {
+      setEmailError('')
+      return
+    }
+    // Format email valide
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(value)) {
+      setEmailError(t('auth.register.errors.invalid_email') || 'Format d\'email invalide')
+      setFieldErrors(prev => ({ ...prev, email: true }))
+    } else {
+      setEmailError('')
+      setFieldErrors(prev => ({ ...prev, email: false }))
+    }
+  }
+  
+  const validatePassword = (value: string) => {
+    const errors = {
+      hasUpperCase: /[A-Z]/.test(value),
+      hasLowerCase: /[a-z]/.test(value),
+      hasNumber: /[0-9]/.test(value),
+      hasSpecialChar: /[*_/@=]/.test(value)
+    }
+    setPasswordErrors(errors)
+  }
+  
+  // Vérifier si toutes les exigences du mot de passe sont remplies
+  const isPasswordValid = () => {
+    if (!formData.password) return false
+    return formData.password.length >= 8 &&
+           passwordErrors.hasUpperCase &&
+           passwordErrors.hasLowerCase &&
+           passwordErrors.hasNumber &&
+           passwordErrors.hasSpecialChar
   }
 
   // Callbacks pour la localisation - mémorisés pour éviter la boucle infinie
@@ -150,9 +216,45 @@ export default function RegisterPage() {
       errorMessage = t('auth.register.errors.password_mismatch')
     }
 
-    if (formData.password && formData.password.length < 6) {
+    if (formData.password && formData.password.length < 8) {
       errors.password = true
       errorMessage = t('auth.register.errors.password_min_length')
+    }
+    
+    // Vérifier les exigences du mot de passe
+    if (formData.password) {
+      if (formData.password.length < 8) {
+        errors.password = true
+        errorMessage = t('auth.register.errors.password_min_length')
+      } else {
+        const hasUpperCase = /[A-Z]/.test(formData.password)
+        const hasLowerCase = /[a-z]/.test(formData.password)
+        const hasNumber = /[0-9]/.test(formData.password)
+        const hasSpecialChar = /[*_/@=]/.test(formData.password)
+        
+        if (!hasUpperCase || !hasLowerCase || !hasNumber || !hasSpecialChar) {
+          errors.password = true
+          errorMessage = t('auth.register.errors.password_requirements') || 'Le mot de passe doit contenir une majuscule, une minuscule, un chiffre et un caractère spécial (*_/@=)'
+        }
+      }
+    }
+    
+    // Vérifier le format du username
+    if (formData.username) {
+      const usernameRegex = /^[a-zA-Z0-9_]*$/
+      if (!usernameRegex.test(formData.username)) {
+        errors.username = true
+        errorMessage = t('auth.register.errors.username_invalid_chars') || 'Seuls les lettres, chiffres et underscores sont autorisés'
+      }
+    }
+    
+    // Vérifier le format de l'email
+    if (formData.email) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      if (!emailRegex.test(formData.email)) {
+        errors.email = true
+        errorMessage = t('auth.register.errors.invalid_email') || 'Format d\'email invalide'
+      }
     }
 
     if (!acceptTerms) {
@@ -381,6 +483,12 @@ export default function RegisterPage() {
                       required
                     />
                   </div>
+                  {emailError && (
+                    <p className="mt-1.5 text-xs text-red-600 dark:text-red-400 flex items-center gap-1">
+                      <span>⚠️</span>
+                      {emailError}
+                    </p>
+                  )}
                 </div>
 
                 {/* Username */}
@@ -396,24 +504,41 @@ export default function RegisterPage() {
                       value={formData.username}
                       onChange={(e) => {
                         const originalValue = e.target.value
-                        const valueWithoutSpaces = originalValue.replace(/\s/g, '')
+                        // Supprimer les espaces et caractères non autorisés
+                        const cleanedValue = originalValue.replace(/[^a-zA-Z0-9_]/g, '')
                         
-                        // Afficher un avertissement si l'utilisateur essaie de mettre un espace
-                        if (originalValue !== valueWithoutSpaces) {
+                        // Afficher un avertissement si l'utilisateur essaie de mettre des caractères non autorisés
+                        if (originalValue !== cleanedValue) {
+                          // Vérifier si c'est un espace
+                          if (originalValue.includes(' ')) {
+                            setSpaceWarningMessage(t('auth.register.username_space_not_allowed') || 'Les espaces ne sont pas autorisés')
+                          } else {
+                            setSpaceWarningMessage(t('auth.register.username_no_spaces_warning') || 'Caractères non autorisés')
+                          }
                           setShowSpaceWarning(true)
-                          // Masquer l'avertissement après 3 secondes
-                          setTimeout(() => setShowSpaceWarning(false), 3000)
+                          setTimeout(() => {
+                            setShowSpaceWarning(false)
+                            setSpaceWarningMessage('')
+                          }, 3000)
                         }
                         
-                        handleInputChange('username', valueWithoutSpaces)
+                        handleInputChange('username', cleanedValue)
                       }}
                       onKeyDown={(e) => {
-                        // Empêcher la saisie d'espaces et afficher un avertissement
-                        if (e.key === ' ') {
+                        // Empêcher la saisie de caractères non autorisés
+                        if (!/^[a-zA-Z0-9_]$/.test(e.key) && !['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.key)) {
                           e.preventDefault()
+                          // Vérifier si c'est un espace
+                          if (e.key === ' ') {
+                            setSpaceWarningMessage(t('auth.register.username_space_not_allowed') || 'Les espaces ne sont pas autorisés')
+                          } else {
+                            setSpaceWarningMessage(t('auth.register.username_no_spaces_warning') || 'Caractères non autorisés')
+                          }
                           setShowSpaceWarning(true)
-                          // Masquer l'avertissement après 3 secondes
-                          setTimeout(() => setShowSpaceWarning(false), 3000)
+                          setTimeout(() => {
+                            setShowSpaceWarning(false)
+                            setSpaceWarningMessage('')
+                          }, 3000)
                         }
                       }}
                       className={`pl-10 h-12 rounded-xl dsm-input ${fieldErrors.username ? 'border-red-500 focus:border-red-500 focus:ring-red-500 bg-red-50 dark:bg-red-900/10' : 'border-gray-200 dark:border-gray-600 focus:border-myfav-primary focus:ring-myfav-primary'}`}
@@ -422,14 +547,19 @@ export default function RegisterPage() {
                   </div>
                   {/* Hint et avertissement */}
                   <div className="mt-1.5">
-                    {showSpaceWarning ? (
+                    {usernameError ? (
+                      <p className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1">
+                        <span>⚠️</span>
+                        {usernameError}
+                      </p>
+                    ) : showSpaceWarning ? (
                       <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
                         <span>⚠️</span>
-                        {t('auth.register.username_no_spaces_warning') || 'Les espaces ne sont pas autorisés dans le nom d\'utilisateur'}
+                        {spaceWarningMessage || t('auth.register.username_no_spaces_warning') || 'Caractères non autorisés'}
                       </p>
                     ) : (
                       <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {t('auth.register.username_hint') || 'Le nom d\'utilisateur ne peut pas contenir d\'espaces'}
+                        {t('auth.register.username_hint') || 'Seules les lettres, chiffres et underscores sont autorisés'}
                       </p>
                     )}
                   </div>
@@ -437,17 +567,17 @@ export default function RegisterPage() {
 
                 {/* Password */}
                 <div>
-                  <label className={`block text-sm font-semibold mb-2 ${fieldErrors.password ? 'text-red-500' : 'text-gray-700 dark:text-gray-200'}`}>
+                  <label className={`block text-sm font-semibold mb-2 ${fieldErrors.password || (formData.password && !isPasswordValid()) ? 'text-red-500' : 'text-gray-700 dark:text-gray-200'}`}>
                     {t('auth.password')} *
                   </label>
                   <div className="relative">
-                    <Lock className={`absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 ${fieldErrors.password ? 'text-red-400' : 'text-gray-400'}`} />
+                    <Lock className={`absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 ${fieldErrors.password || (formData.password && !isPasswordValid()) ? 'text-red-400' : 'text-gray-400'}`} />
                     <Input
                       type={showPassword ? 'text' : 'password'}
                       placeholder={t('auth.register.password_placeholder')}
                       value={formData.password}
                       onChange={(e) => handleInputChange('password', e.target.value)}
-                      className={`pl-10 pr-10 h-12 rounded-xl dsm-input ${fieldErrors.password ? 'border-red-500 focus:border-red-500 focus:ring-red-500 bg-red-50 dark:bg-red-900/10' : 'border-gray-200 dark:border-gray-600 focus:border-myfav-primary focus:ring-myfav-primary'}`}
+                      className={`pl-10 pr-10 h-12 rounded-xl dsm-input ${fieldErrors.password || (formData.password && !isPasswordValid()) ? 'border-red-500 focus:border-red-500 focus:ring-red-500 bg-red-50 dark:bg-red-900/10' : 'border-gray-200 dark:border-gray-600 focus:border-myfav-primary focus:ring-myfav-primary'}`}
                       required
                     />
                     <button
@@ -458,6 +588,36 @@ export default function RegisterPage() {
                       {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                     </button>
                   </div>
+                  {/* Exigences du mot de passe */}
+                  {formData.password && (
+                    <div className="mt-2 space-y-1">
+                      <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        {t('auth.register.password_requirements_title') || 'Le mot de passe doit contenir :'}
+                      </p>
+                      <div className="space-y-0.5">
+                        <div className={`text-xs flex items-center gap-2 ${formData.password.length >= 8 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                          <span>{formData.password.length >= 8 ? '✓' : '○'}</span>
+                          {t('auth.register.password_requirement_length') || 'Au moins 8 caractères'}
+                        </div>
+                        <div className={`text-xs flex items-center gap-2 ${passwordErrors.hasUpperCase ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                          <span>{passwordErrors.hasUpperCase ? '✓' : '○'}</span>
+                          {t('auth.register.password_requirement_uppercase') || 'Une majuscule (A-Z)'}
+                        </div>
+                        <div className={`text-xs flex items-center gap-2 ${passwordErrors.hasLowerCase ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                          <span>{passwordErrors.hasLowerCase ? '✓' : '○'}</span>
+                          {t('auth.register.password_requirement_lowercase') || 'Une minuscule (a-z)'}
+                        </div>
+                        <div className={`text-xs flex items-center gap-2 ${passwordErrors.hasNumber ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                          <span>{passwordErrors.hasNumber ? '✓' : '○'}</span>
+                          {t('auth.register.password_requirement_number') || 'Un chiffre (0-9)'}
+                        </div>
+                        <div className={`text-xs flex items-center gap-2 ${passwordErrors.hasSpecialChar ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                          <span>{passwordErrors.hasSpecialChar ? '✓' : '○'}</span>
+                          {t('auth.register.password_requirement_special') || 'Un caractère spécial (*_/@=)'}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Confirm Password */}
