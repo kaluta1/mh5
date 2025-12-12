@@ -39,6 +39,7 @@ export default function RegisterPage() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, boolean>>({})
   const [isSuccess, setIsSuccess] = useState(false)
   const [referralCode, setReferralCode] = useState<string | null>(null)
+  const [showSpaceWarning, setShowSpaceWarning] = useState(false)
 
   // Vérifier si un code de parrainage est présent dans l'URL ou localStorage
   useEffect(() => {
@@ -394,19 +395,43 @@ export default function RegisterPage() {
                       placeholder={t('auth.register.username_placeholder')}
                       value={formData.username}
                       onChange={(e) => {
-                        // Supprimer automatiquement les espaces
-                        const valueWithoutSpaces = e.target.value.replace(/\s/g, '')
+                        const originalValue = e.target.value
+                        const valueWithoutSpaces = originalValue.replace(/\s/g, '')
+                        
+                        // Afficher un avertissement si l'utilisateur essaie de mettre un espace
+                        if (originalValue !== valueWithoutSpaces) {
+                          setShowSpaceWarning(true)
+                          // Masquer l'avertissement après 3 secondes
+                          setTimeout(() => setShowSpaceWarning(false), 3000)
+                        }
+                        
                         handleInputChange('username', valueWithoutSpaces)
                       }}
                       onKeyDown={(e) => {
-                        // Empêcher la saisie d'espaces
+                        // Empêcher la saisie d'espaces et afficher un avertissement
                         if (e.key === ' ') {
                           e.preventDefault()
+                          setShowSpaceWarning(true)
+                          // Masquer l'avertissement après 3 secondes
+                          setTimeout(() => setShowSpaceWarning(false), 3000)
                         }
                       }}
                       className={`pl-10 h-12 rounded-xl dsm-input ${fieldErrors.username ? 'border-red-500 focus:border-red-500 focus:ring-red-500 bg-red-50 dark:bg-red-900/10' : 'border-gray-200 dark:border-gray-600 focus:border-myfav-primary focus:ring-myfav-primary'}`}
                       required
                     />
+                  </div>
+                  {/* Hint et avertissement */}
+                  <div className="mt-1.5">
+                    {showSpaceWarning ? (
+                      <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                        <span>⚠️</span>
+                        {t('auth.register.username_no_spaces_warning') || 'Les espaces ne sont pas autorisés dans le nom d\'utilisateur'}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {t('auth.register.username_hint') || 'Le nom d\'utilisateur ne peut pas contenir d\'espaces'}
+                      </p>
+                    )}
                   </div>
                 </div>
 

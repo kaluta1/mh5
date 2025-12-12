@@ -87,6 +87,8 @@ export interface TranslationKeys {
       subtitle: string
       email_placeholder: string
       username_placeholder: string
+      username_hint: string
+      username_no_spaces_warning: string
       password_placeholder: string
       confirm_password_placeholder: string
       full_name_placeholder: string
@@ -1981,6 +1983,8 @@ export const translations: Record<Language, TranslationKeys> = {
         subtitle: "Créez votre compte MyFav gratuitement",
         email_placeholder: "Votre adresse email",
         username_placeholder: "Nom d'utilisateur",
+        username_hint: "Le nom d'utilisateur ne peut pas contenir d'espaces",
+        username_no_spaces_warning: "Les espaces ne sont pas autorisés dans le nom d'utilisateur",
         password_placeholder: "Mot de passe",
         confirm_password_placeholder: "Confirmez le mot de passe",
         full_name_placeholder: "Nom complet",
@@ -3790,6 +3794,8 @@ export const translations: Record<Language, TranslationKeys> = {
         subtitle: "Create your free MyFav account",
         email_placeholder: "Your email address",
         username_placeholder: "Username",
+        username_hint: "Username cannot contain spaces",
+        username_no_spaces_warning: "Spaces are not allowed in username",
         password_placeholder: "Password",
         confirm_password_placeholder: "Confirm password",
         full_name_placeholder: "Full name (optional)",
@@ -5629,6 +5635,8 @@ export const translations: Record<Language, TranslationKeys> = {
         subtitle: "Crea tu cuenta MyFav gratis",
         email_placeholder: "Tu dirección de correo",
         username_placeholder: "Nombre de usuario",
+        username_hint: "El nombre de usuario no puede contener espacios",
+        username_no_spaces_warning: "Los espacios no están permitidos en el nombre de usuario",
         password_placeholder: "Contraseña",
         confirm_password_placeholder: "Confirmar contraseña",
         full_name_placeholder: "Nombre completo (opcional)",
@@ -7388,6 +7396,8 @@ export const translations: Record<Language, TranslationKeys> = {
         subtitle: "Erstellen Sie Ihr kostenloses MyFav-Konto",
         email_placeholder: "Ihre E-Mail-Adresse",
         username_placeholder: "Benutzername",
+        username_hint: "Der Benutzername darf keine Leerzeichen enthalten",
+        username_no_spaces_warning: "Leerzeichen sind im Benutzernamen nicht erlaubt",
         password_placeholder: "Passwort",
         confirm_password_placeholder: "Passwort bestätigen",
         full_name_placeholder: "Vollständiger Name",
