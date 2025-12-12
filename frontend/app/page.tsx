@@ -5,8 +5,9 @@ import { useSearchParams } from "next/navigation"
 import { Header } from "@/components/layout/header"
 import { Hero } from "@/components/sections/hero"
 import { Features } from "@/components/sections/features"
-import { Testimonials } from "@/components/sections/testimonials"
-import { CTA } from "@/components/sections/cta"
+import { WaysToEarn } from "@/components/sections/ways-to-earn"
+import { FAQ } from "@/components/sections/faq"
+import { DownloadApp } from "@/components/sections/download-app"
 import { Footer } from "@/components/sections/footer"
 import { LoginModal } from "@/components/auth/login-modal"
 
@@ -46,23 +47,19 @@ export default function HomePage() {
   }
 
   return (
-    <div className=" bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+    <div className="min-h-screen bg-gradient-to-br from-white via-blue-50/30 to-purple-50/30 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
       <Header 
         user={user}
         onLoginClick={handleLoginClick}
         onLogout={handleLogout}
       />
       
-      <main className="pt-10 flex-1">
+      <main className="relative">
         <Hero />
-        <div className="py-16 dsm-bg-light">
-        <div className="container">
-          <Features />
-          <Testimonials />
-        </div>  
-        </div>
-        
-        
+        <Features />
+        <WaysToEarn />
+        <FAQ />
+        <DownloadApp />
       </main>
       
       <Footer />

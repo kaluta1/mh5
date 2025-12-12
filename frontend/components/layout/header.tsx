@@ -16,12 +16,12 @@ import {
   X, 
   Home, 
   Trophy, 
-  Users, 
   Info, 
   Mail, 
   LayoutDashboard,
   Sparkles,
-  ChevronRight
+  ChevronRight,
+  Smartphone
 } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 
@@ -57,7 +57,6 @@ export function Header({ user, onLoginClick, onLogout }: HeaderProps) {
     { name: t('navigation.home'), href: "/", icon: Home },
     ...(isAuthenticated ? [{ name: t('navigation.dashboard'), href: "/dashboard", icon: LayoutDashboard }] : []),
     { name: t('navigation.contests'), href: "/contests", icon: Trophy },
-    { name: t('navigation.clubs'), href: "/clubs", icon: Users },
     { name: t('navigation.about'), href: "/about", icon: Info },
     { name: t('navigation.contact'), href: "/contact", icon: Mail }
   ]
@@ -125,6 +124,23 @@ export function Header({ user, onLoginClick, onLogout }: HeaderProps) {
 
             {/* Right Side Actions */}
             <div className="flex items-center gap-2 sm:gap-3">
+              {/* Download App Button (Desktop) */}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  // Scroll to download section or open app store
+                  const downloadSection = document.getElementById('download-app')
+                  if (downloadSection) {
+                    downloadSection.scrollIntoView({ behavior: 'smooth' })
+                  }
+                }}
+                className="hidden lg:flex items-center gap-2 font-semibold text-sm text-gray-700 dark:text-gray-300 hover:text-myfav-primary dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full px-4"
+              >
+                <Smartphone className="w-4 h-4" />
+                <span>{t('navigation.download_app') || 'Télécharger l\'app'}</span>
+              </Button>
+
               {/* Settings (Desktop) */}
               <div className="hidden md:flex items-center gap-1 bg-gray-100/80 dark:bg-gray-800/80 rounded-full px-2 py-1.5">
                 <LanguageSelector />
@@ -226,6 +242,24 @@ export function Header({ user, onLoginClick, onLogout }: HeaderProps) {
                 <span className="text-sm font-medium text-gray-600 dark:text-gray-400">{t('header.theme')}</span>
                 <ThemeToggle />
               </div>
+            </div>
+
+            {/* Download App Button (Mobile) */}
+            <div className="pt-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const downloadSection = document.getElementById('download-app')
+                  if (downloadSection) {
+                    downloadSection.scrollIntoView({ behavior: 'smooth' })
+                  }
+                  setMobileMenuOpen(false)
+                }}
+                className="w-full h-12 rounded-xl font-semibold border-2 border-gray-200 dark:border-gray-700 flex items-center justify-center gap-2"
+              >
+                <Smartphone className="w-5 h-5" />
+                {t('navigation.download_app') || 'Télécharger l\'app'}
+              </Button>
             </div>
 
             {/* Mobile Auth Buttons */}

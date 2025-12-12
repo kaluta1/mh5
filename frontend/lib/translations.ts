@@ -51,6 +51,7 @@ export interface TranslationKeys {
     contact: string
     login: string
     register: string
+    download_app: string
   }
   header: {
     language: string
@@ -1943,7 +1944,8 @@ export const translations: Record<Language, TranslationKeys> = {
       about: "À propos",
       contact: "Contact",
       login: "Se connecter",
-      register: "S'inscrire"
+      register: "S'inscrire",
+      download_app: "Télécharger l'app"
     },
     header: {
       language: "Langue",
@@ -2297,6 +2299,71 @@ export const translations: Record<Language, TranslationKeys> = {
         instant: "Inscription en 30 secondes",
         secure: "Aucune carte de crédit requise",
         support: "Support 24/7"
+      }
+    },
+    landing: {
+      ways_to_earn: {
+        badge: "Gagnez de l'argent",
+        title: "Différentes façons de gagner",
+        subtitle: "Rejoignez notre programme d'affiliation et gagnez des commissions sur plusieurs sources de revenus",
+        kyc_payments: {
+          title: "Paiements KYC",
+          description: "Gagnez des commissions lorsque les membres de votre réseau complètent leur vérification KYC",
+          commission: "20% sur le niveau 1, 2% sur les niveaux 2-10"
+        },
+        founding_membership: {
+          title: "Adhésion Fondateur",
+          description: "Gagnez des commissions lorsque les membres du réseau rejoignent en tant que Membres Fondateurs (frais d'adhésion de 100$)",
+          commission: "20$ sur le niveau 1, 2$ sur les niveaux 2-10"
+        },
+        annual_membership: {
+          title: "Frais d'adhésion annuel",
+          description: "Gagnez des commissions lorsque les Membres Fondateurs paient leurs frais d'adhésion annuels (50$)",
+          commission: "10$ sur le niveau 1, 1$ sur les niveaux 2-10"
+        },
+        club_memberships: {
+          title: "Adhésions aux clubs",
+          description: "Gagnez des commissions sur les frais d'adhésion aux clubs payants. Le site facture 20% des frais d'adhésion, et vous en recevez une part.",
+          commission: "20% sur le niveau 1, 2% sur les niveaux 2-10"
+        },
+        shop_purchases: {
+          title: "Achats en boutique",
+          description: "Gagnez des commissions sur les achats de contenu numérique dans la boutique MyHigh5. Le site facture 20% de frais de plateforme, et vous en recevez une part.",
+          commission: "20% sur le niveau 1, 2% sur les niveaux 2-10"
+        },
+        ad_revenue: {
+          title: "Partage des revenus publicitaires",
+          description: "Gagnez des commissions sur les revenus publicitaires générés sur les pages de concours des membres de votre réseau",
+          commission: "10% sur le niveau 1, 1% sur les niveaux 2-10"
+        },
+        ad_campaigns: {
+          title: "Campagnes publicitaires",
+          description: "Gagnez des commissions sur les campagnes publicitaires achetées par les membres de votre réseau via la plateforme publicitaire native",
+          commission: "Structure de commission variable"
+        }
+      },
+      faq: {
+        badge: "Questions fréquentes",
+        title: "Questions fréquentes",
+        subtitle: "Trouvez les réponses aux questions les plus courantes sur MyHigh5",
+        question_1: "Comment puis-je gagner de l'argent sur MyHigh5 ?",
+        answer_1: "Vous pouvez gagner de l'argent de plusieurs façons : en participant aux concours et en remportant des prix, en rejoignant le programme d'affiliation pour gagner des commissions sur les membres que vous référez, et en devenant membre fondateur pour participer aux pools de revenus et de profits.",
+        question_2: "Comment fonctionne le programme d'affiliation ?",
+        answer_2: "Le programme d'affiliation MyHigh5 fonctionne sur 10 niveaux. Vous gagnez 20% de commission sur les activités des membres que vous référez directement (niveau 1), et 2% sur les niveaux 2 à 10. Vous pouvez gagner des commissions sur les paiements KYC, les adhésions, les achats en boutique, et plus encore.",
+        question_3: "Qu'est-ce que le statut de Membre Fondateur ?",
+        answer_3: "Le statut de Membre Fondateur est une opportunité limitée qui nécessite un paiement unique de 100$ et la vérification de votre compte. Les membres fondateurs participent à des pools de commissions mensuelles (10% des revenus nets) et à un pool de profits annuels (20% des profits après impôts).",
+        question_4: "Comment puis-je participer aux concours ?",
+        answer_4: "Pour participer aux concours, vous devez créer un compte gratuit, compléter votre profil, et soumettre votre candidature avec des photos ou vidéos selon les exigences du concours. Certains concours peuvent nécessiter une vérification KYC.",
+        question_5: "Les concours sont-ils gratuits ?",
+        answer_5: "Oui, la participation aux concours est gratuite. Cependant, certains concours peuvent nécessiter une vérification KYC qui peut avoir un coût. Les membres fondateurs ont accès à des avantages exclusifs et à des opportunités de revenus supplémentaires.",
+        question_6: "Comment puis-je retirer mes gains ?",
+        answer_6: "Vous pouvez retirer vos gains via votre portefeuille dans le tableau de bord. Les paiements sont traités mensuellement avec un seuil minimum de 50$ CAD. Les méthodes de paiement incluent le virement bancaire (pour les affiliés canadiens), PayPal, ou la cryptomonnaie."
+      },
+      download_app: {
+        badge: "Application mobile",
+        title: "Téléchargez l'application MyHigh5",
+        subtitle: "Participez aux concours, votez et gagnez de l'argent où que vous soyez avec notre application mobile",
+        scan_qr: "Scannez pour télécharger"
       }
     },
     footer: {
@@ -3680,7 +3747,8 @@ export const translations: Record<Language, TranslationKeys> = {
       about: "About",
       contact: "Contact",
       login: "Login",
-      register: "Sign Up"
+      register: "Sign Up",
+      download_app: "Download App"
     },
     header: {
       language: "Language",
@@ -4085,6 +4153,71 @@ export const translations: Record<Language, TranslationKeys> = {
         instant: "Registration in 30 seconds",
         secure: "No credit card required",
         support: "24/7 Support"
+      }
+    },
+    landing: {
+      ways_to_earn: {
+        badge: "Earn Money",
+        title: "Different Ways to Earn",
+        subtitle: "Join our affiliate program and earn commissions on multiple revenue streams",
+        kyc_payments: {
+          title: "KYC Payments",
+          description: "Earn commissions when members in your network complete their KYC verification",
+          commission: "20% on Level 1, 2% on Levels 2-10"
+        },
+        founding_membership: {
+          title: "Founding Membership",
+          description: "Earn commissions when network members join as Founding Members ($100 joining fee)",
+          commission: "$20 on Level 1, $2 on Levels 2-10"
+        },
+        annual_membership: {
+          title: "Annual Membership Fee",
+          description: "Earn commissions when Founding Members pay their annual membership fee ($50)",
+          commission: "$10 on Level 1, $1 on Levels 2-10"
+        },
+        club_memberships: {
+          title: "Club Memberships",
+          description: "Earn commissions on paid club membership fees. The website charges 20% of membership fees, and you earn a share of that.",
+          commission: "20% on Level 1, 2% on Levels 2-10"
+        },
+        shop_purchases: {
+          title: "Shop Purchases",
+          description: "Earn commissions on digital content purchases in the MyHigh5 shop. The website charges 20% platform fees, and you earn a share of that.",
+          commission: "20% on Level 1, 2% on Levels 2-10"
+        },
+        ad_revenue: {
+          title: "Ad Revenue Sharing",
+          description: "Earn commissions from ad revenues generated on contest pages of members in your network",
+          commission: "10% on Level 1, 1% on Levels 2-10"
+        },
+        ad_campaigns: {
+          title: "Advertisement Campaigns",
+          description: "Earn commissions from advertising campaigns purchased by members in your network through the native ad platform",
+          commission: "Variable commission structure"
+        }
+      },
+      faq: {
+        badge: "Frequently Asked Questions",
+        title: "Frequently Asked Questions",
+        subtitle: "Find answers to the most common questions about MyHigh5",
+        question_1: "How can I earn money on MyHigh5?",
+        answer_1: "You can earn money in several ways: by participating in contests and winning prizes, by joining the affiliate program to earn commissions on members you refer, and by becoming a founding member to participate in revenue and profit pools.",
+        question_2: "How does the affiliate program work?",
+        answer_2: "The MyHigh5 affiliate program works on 10 levels. You earn 20% commission on activities of members you directly refer (level 1), and 2% on levels 2 to 10. You can earn commissions on KYC payments, memberships, shop purchases, and more.",
+        question_3: "What is the Founding Member status?",
+        answer_3: "The Founding Member status is a limited opportunity that requires a one-time payment of $100 and verification of your account. Founding members participate in monthly commission pools (10% of net revenues) and an annual profit pool (20% of profits after taxes).",
+        question_4: "How can I participate in contests?",
+        answer_4: "To participate in contests, you need to create a free account, complete your profile, and submit your application with photos or videos according to the contest requirements. Some contests may require KYC verification.",
+        question_5: "Are contests free?",
+        answer_5: "Yes, contest participation is free. However, some contests may require KYC verification which may have a cost. Founding members have access to exclusive benefits and additional revenue opportunities.",
+        question_6: "How can I withdraw my earnings?",
+        answer_6: "You can withdraw your earnings via your wallet in the dashboard. Payments are processed monthly with a minimum threshold of $50 CAD. Payment methods include bank transfer (for Canadian affiliates), PayPal, or cryptocurrency."
+      },
+      download_app: {
+        badge: "Mobile App",
+        title: "Download the MyHigh5 App",
+        subtitle: "Participate in contests, vote and earn money wherever you are with our mobile app",
+        scan_qr: "Scan to download"
       }
     },
     footer: {
@@ -5447,7 +5580,8 @@ export const translations: Record<Language, TranslationKeys> = {
       about: "Acerca de",
       contact: "Contacto",
       login: "Iniciar Sesión",
-      register: "Registrarse"
+      register: "Registrarse",
+      download_app: "Descargar App"
     },
     header: {
       language: "Idioma",
@@ -7134,7 +7268,8 @@ export const translations: Record<Language, TranslationKeys> = {
       about: "Über uns",
       contact: "Kontakt",
       login: "Anmelden",
-      register: "Registrieren"
+      register: "Registrieren",
+      download_app: "App herunterladen"
     },
     header: {
       language: "Sprache",
