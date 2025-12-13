@@ -11,9 +11,10 @@ interface ReactionsButtonProps {
   selectedReaction?: string | null
   onReactionSelect: (reactionType: string) => void
   onReactionSuccess?: () => void
+  isAuthor?: boolean
 }
 
-export function ReactionsButton({ contestantId, selectedReaction, onReactionSelect, onReactionSuccess }: ReactionsButtonProps) {
+export function ReactionsButton({ contestantId, selectedReaction, onReactionSelect, onReactionSuccess, isAuthor = false }: ReactionsButtonProps) {
   const { t } = useLanguage()
   const [showPopover, setShowPopover] = useState(false)
   const [showDetailsPopover, setShowDetailsPopover] = useState(false)
@@ -55,6 +56,7 @@ export function ReactionsButton({ contestantId, selectedReaction, onReactionSele
   }
 
   const handleMouseEnter = () => {
+    if (!isAuthor) return // Afficher le popover uniquement si l'utilisateur est l'auteur
     if (timeoutRef.current) clearTimeout(timeoutRef.current)
     setShowDetailsPopover(true)
     loadReactionDetails()
@@ -89,7 +91,7 @@ export function ReactionsButton({ contestantId, selectedReaction, onReactionSele
       </button>
       
       {/* Popover avec détails des réactions au survol */}
-      {showDetailsPopover && (
+      {showDetailsPopover && isAuthor && (
         <div
           className="absolute bottom-full left-0 mb-2 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden z-50 min-w-[280px] max-w-[320px] max-h-[400px] overflow-y-auto"
           onMouseEnter={() => { if (timeoutRef.current) clearTimeout(timeoutRef.current) }}

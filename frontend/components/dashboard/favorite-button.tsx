@@ -10,9 +10,10 @@ interface FavoriteButtonProps {
   contestantId: number
   isFavorite: boolean
   onToggle: () => void
+  isAuthor?: boolean
 }
 
-export function FavoriteButton({ contestantId, isFavorite, onToggle }: FavoriteButtonProps) {
+export function FavoriteButton({ contestantId, isFavorite, onToggle, isAuthor = false }: FavoriteButtonProps) {
   const { t } = useLanguage()
   const [showDetailsPopover, setShowDetailsPopover] = useState(false)
   const [favoriteDetails, setFavoriteDetails] = useState<any>(null)
@@ -34,6 +35,7 @@ export function FavoriteButton({ contestantId, isFavorite, onToggle }: FavoriteB
   }
 
   const handleMouseEnter = () => {
+    if (!isAuthor) return // Afficher le popover uniquement si l'utilisateur est l'auteur
     if (timeoutRef.current) clearTimeout(timeoutRef.current)
     setShowDetailsPopover(true)
     loadFavoriteDetails()
@@ -68,7 +70,7 @@ export function FavoriteButton({ contestantId, isFavorite, onToggle }: FavoriteB
       </button>
       
       {/* Popover avec détails des favoris au survol */}
-      {showDetailsPopover && (
+      {showDetailsPopover && isAuthor && (
         <div
           className="absolute bottom-full left-0 mb-2 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden z-50 min-w-[280px] max-w-[320px] max-h-[400px] overflow-y-auto"
           onMouseEnter={() => { if (timeoutRef.current) clearTimeout(timeoutRef.current) }}

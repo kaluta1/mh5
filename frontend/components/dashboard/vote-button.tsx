@@ -12,9 +12,10 @@ interface VoteButtonProps {
   hasVoted: boolean
   isVoting: boolean
   onVote: () => void
+  isAuthor?: boolean
 }
 
-export function VoteButton({ contestantId, canVote, hasVoted, isVoting, onVote }: VoteButtonProps) {
+export function VoteButton({ contestantId, canVote, hasVoted, isVoting, onVote, isAuthor = false }: VoteButtonProps) {
   const { t } = useLanguage()
   const [showDetailsPopover, setShowDetailsPopover] = useState(false)
   const [voteDetails, setVoteDetails] = useState<any>(null)
@@ -36,6 +37,7 @@ export function VoteButton({ contestantId, canVote, hasVoted, isVoting, onVote }
   }
 
   const handleMouseEnter = () => {
+    if (!isAuthor) return // Afficher le popover uniquement si l'utilisateur est l'auteur
     if (timeoutRef.current) clearTimeout(timeoutRef.current)
     setShowDetailsPopover(true)
     loadVoteDetails()
@@ -72,7 +74,7 @@ export function VoteButton({ contestantId, canVote, hasVoted, isVoting, onVote }
       </button>
       
       {/* Popover avec détails des votes au survol */}
-      {showDetailsPopover && (
+      {showDetailsPopover && isAuthor && (
         <div
           className="absolute bottom-full left-0 mb-2 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden z-50 min-w-[280px] max-w-[320px] max-h-[400px] overflow-y-auto"
           onMouseEnter={() => { if (timeoutRef.current) clearTimeout(timeoutRef.current) }}

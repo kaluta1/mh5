@@ -5,9 +5,10 @@ import { useLanguage } from '@/contexts/language-context'
 
 interface CommentsButtonProps {
   onClick: () => void
+  commentsCount?: number
 }
 
-export function CommentsButton({ onClick }: CommentsButtonProps) {
+export function CommentsButton({ onClick, commentsCount }: CommentsButtonProps) {
   const { t } = useLanguage()
 
   return (
@@ -20,6 +21,11 @@ export function CommentsButton({ onClick }: CommentsButtonProps) {
     >
       <MessageCircle className="w-5 h-5" />
       <span className="hidden sm:inline">{t('dashboard.contests.comments')}</span>
+      {commentsCount !== undefined && commentsCount > 0 && (
+        <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+          ({commentsCount})
+        </span>
+      )}
     </button>
   )
 }

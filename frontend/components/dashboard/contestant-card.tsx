@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import * as React from 'react'
 import { Play, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useLanguage } from '@/contexts/language-context'
 import { VideoPreviewDialog } from '@/components/ui/video-preview-dialog'
@@ -20,6 +21,78 @@ import { CommentsSection } from './comments-section'
 import { AuthorPopover } from './author-popover'
 import { ShareDialog } from './share-dialog'
 import { ContestantActionsMenu } from './contestant-actions-menu'
+
+// Composant pour afficher une description tronquée avec popover au hover
+function DescriptionWithPopover({ description, maxLength = 150 }: { description: string; maxLength?: number }) {
+  const [isOpen, setIsOpen] = useState(false)
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  const shouldTruncate = description && description.length > maxLength
+  const truncatedDescription = shouldTruncate ? description.substring(0, maxLength) + '...' : description
+
+  const handleMouseEnter = () => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current)
+    }
+    setIsOpen(true)
+  }
+
+  const handleMouseLeave = () => {
+    timeoutRef.current = setTimeout(() => {
+      setIsOpen(false)
+    }, 200)
+  }
+
+  React.useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+      }
+    }
+  }, [])
+
+  if (!description || description.trim() === '') {
+    return null
+  }
+
+  if (!shouldTruncate) {
+    return (
+      <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words">
+        {description}
+      </p>
+    )
+  }
+
+  return (
+    <div 
+      ref={containerRef}
+      className="relative"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words cursor-pointer hover:text-myfav-primary dark:hover:text-myfav-secondary transition-colors">
+        {truncatedDescription}
+      </p>
+      
+      {/* Popover */}
+      {isOpen && (
+        <div
+          className="absolute z-50 w-80 max-w-[90vw] max-h-[400px] overflow-y-auto bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 p-4 bottom-full left-0 mb-2"
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+        >
+          <div className="space-y-2">
+            <h4 className="font-semibold text-sm text-gray-900 dark:text-white">Description complète</h4>
+            <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap break-words">
+              {description}
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 interface Media {
   id: string
@@ -356,9 +429,10 @@ export function ContestantCard({
               {participationTitle}
             </h4>
           )}
-          <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words">
-            {description}
-          </p>
+          <DescriptionWithPopover 
+            description={description}
+            maxLength={150}
+          />
         </div>
                 
         {/* Media - Video or Image Carousel */}
@@ -476,12 +550,17 @@ export function ContestantCard({
               hasVoted={isLiked}
               isVoting={isVoting}
               onVote={handleVote}
+              isAuthor={currentUserId === userId}
             />
-            <CommentsButton onClick={handleOpenComments} />
+            <CommentsButton 
+              onClick={handleOpenComments}
+              commentsCount={currentComments}
+            />
             <ReactionsButton
               contestantId={Number(id)}
               selectedReaction={selectedReaction}
               onReactionSelect={handleReaction}
+              isAuthor={currentUserId === userId}
               onReactionSuccess={() => {
                 // Les stats sont déjà rechargées dans handleReaction
               }}
@@ -490,6 +569,7 @@ export function ContestantCard({
               contestantId={Number(id)}
               isFavorite={isFavorite}
               onToggle={onToggleFavorite}
+              isAuthor={currentUserId === userId}
             />
           </div>
         </div>
