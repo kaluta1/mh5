@@ -149,8 +149,8 @@ export default function SettingsPage() {
   ]
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 p-4 md:p-6 transition-colors">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen  p-4 md:p-6 transition-colors">
+      <div className="">
         
         {/* Profile Header Card */}
         <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl border border-gray-200 dark:border-gray-700/50 p-6 mb-6 shadow-xl">
