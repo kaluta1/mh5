@@ -65,8 +65,8 @@ class ContestantWithAuthorAndStats(BaseModel):
     description: Optional[str] = None
     image_media_ids: Optional[str] = None
     video_media_ids: Optional[str] = None
-    registration_date: datetime
-    is_qualified: bool
+    registration_date: Optional[datetime] = None
+    is_qualified: bool = False
     
     # Infos auteur
     author_name: Optional[str] = None

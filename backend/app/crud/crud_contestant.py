@@ -30,7 +30,6 @@ class CRUDContestant:
         self, db: Session, id: int, current_user_id: Optional[int] = None
     ) -> Optional[Dict[str, Any]]:
         """Récupère une candidature avec stats enrichies (votes, rang, infos auteur, infos contest)"""
-        from app.models.voting import MyFavorites
         
         contestant = db.query(Contestant)\
             .filter(
@@ -113,6 +112,21 @@ class CRUDContestant:
             .filter(Contestant.season_id == contestant.season_id)\
             .scalar() or 0
         
+        # Compter les favoris
+        favorites_count = db.query(func.count(MyFavorites.id))\
+            .filter(MyFavorites.contestant_id == id)\
+            .scalar() or 0
+        
+        # Compter les réactions (likes)
+        reactions_count = db.query(func.count(ContestLike.id))\
+            .filter(ContestLike.contestant_id == id)\
+            .scalar() or 0
+        
+        # Compter les commentaires
+        comments_count = db.query(func.count(ContestComment.id))\
+            .filter(ContestComment.contestant_id == id)\
+            .scalar() or 0
+        
         # Récupérer le continent de l'utilisateur
         author_continent = None
         if contestant.user and contestant.user.country:
@@ -136,7 +150,7 @@ class CRUDContestant:
             "image_media_ids": contestant.image_media_ids,
             "video_media_ids": contestant.video_media_ids,
             "registration_date": contestant.registration_date,
-            "is_qualified": contestant.is_qualified,
+            "is_qualified": contestant.is_qualified or False,
             # Infos auteur
             "author_name": contestant.user.full_name or f"{contestant.user.first_name or ''} {contestant.user.last_name or ''}".strip() if contestant.user else None,
             "author_country": contestant.user.country if contestant.user else None,
@@ -148,6 +162,9 @@ class CRUDContestant:
             "votes_count": votes_count,
             "images_count": images_count,
             "videos_count": videos_count,
+            "favorites_count": favorites_count,
+            "reactions_count": reactions_count,
+            "comments_count": comments_count,
             # Infos du contest
             "contest_title": contest_title,
             "contest_id": contestant.season_id,

@@ -53,6 +53,76 @@ interface ContestDetail {
   contestants: Contestant[]
 }
 
+// Composant pour afficher une description tronquée avec popover au hover
+function DescriptionWithPopover({ description, maxLength = 150 }: { description: string; maxLength?: number }) {
+  const [isOpen, setIsOpen] = useState(false)
+  const timeoutRef = React.useRef<NodeJS.Timeout | null>(null)
+  const containerRef = React.useRef<HTMLDivElement>(null)
+  const popoverRef = React.useRef<HTMLDivElement>(null)
+
+  const shouldTruncate = description.length > maxLength
+  const truncatedDescription = shouldTruncate ? description.substring(0, maxLength) + '...' : description
+
+  const handleMouseEnter = () => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current)
+    }
+    setIsOpen(true)
+  }
+
+  const handleMouseLeave = () => {
+    timeoutRef.current = setTimeout(() => {
+      setIsOpen(false)
+    }, 200)
+  }
+
+  React.useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+      }
+    }
+  }, [])
+
+  if (!shouldTruncate) {
+    return (
+      <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+        {description}
+      </p>
+    )
+  }
+
+  return (
+    <div 
+      ref={containerRef}
+      className="relative"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed cursor-pointer hover:text-myfav-primary dark:hover:text-myfav-secondary transition-colors">
+        {truncatedDescription}
+      </p>
+      
+      {/* Popover */}
+      {isOpen && (
+        <div
+          ref={popoverRef}
+          className="absolute z-50 w-80 max-w-[90vw] max-h-[400px] overflow-y-auto bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 p-4 bottom-full left-0 mb-2"
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+        >
+          <div className="space-y-2">
+            <h4 className="font-semibold text-sm text-gray-900 dark:text-white">Description complète</h4>
+            <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
+              {description}
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function ContestDetailPage() {
   const { t } = useLanguage()
   const { user, isAuthenticated, isLoading } = useAuth()
@@ -399,9 +469,10 @@ export default function ContestDetailPage() {
                     <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-3 flex items-center gap-2">
                       <span className="text-lg">📖</span> Description
                   </h3>
-                    <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
-                      {contest.contest.description || t('dashboard.contests.no_description')}
-                  </p>
+                    <DescriptionWithPopover 
+                      description={contest.contest.description || t('dashboard.contests.no_description')}
+                      maxLength={200}
+                    />
                 </div>
 
                   {/* Badges */}
@@ -585,9 +656,10 @@ export default function ContestDetailPage() {
                     <h4 className="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-2">
                       Description
                     </h4>
-                    <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
-                      {contest.contest.description || t('dashboard.contests.no_description')}
-                    </p>
+                    <DescriptionWithPopover 
+                      description={contest.contest.description || t('dashboard.contests.no_description')}
+                      maxLength={150}
+                    />
                   </div>
 
                   {/* Stats */}
