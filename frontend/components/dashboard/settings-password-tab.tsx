@@ -21,38 +21,83 @@ export function SettingsPasswordTab({ user }: SettingsPasswordTabProps) {
   const [showNewPassword, setShowNewPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [passwordErrors, setPasswordErrors] = useState({
+    hasMinLength: false,
+    hasUpperCase: false,
+    hasLowerCase: false,
+    hasNumber: false,
+    hasSpecialChar: false
+  })
+  const [errors, setErrors] = useState<{
+    currentPassword?: string
+    newPassword?: string
+    confirmPassword?: string
+  }>({})
 
-  // Validation du mot de passe
-  const passwordValidation = {
-    minLength: newPassword.length >= 6,
-    hasUppercase: /[A-Z]/.test(newPassword),
-    hasLowercase: /[a-z]/.test(newPassword),
-    hasNumber: /[0-9]/.test(newPassword),
-    matches: newPassword === confirmPassword && confirmPassword.length > 0
+  // Validation du mot de passe en temps réel
+  const validatePassword = (value: string) => {
+    const errors = {
+      hasMinLength: value.length >= 8,
+      hasUpperCase: /[A-Z]/.test(value),
+      hasLowerCase: /[a-z]/.test(value),
+      hasNumber: /[0-9]/.test(value),
+      hasSpecialChar: /[*_/@=]/.test(value)
+    }
+    setPasswordErrors(errors)
   }
 
-  const isPasswordValid = passwordValidation.minLength && passwordValidation.matches
+  // Vérifier si toutes les exigences du mot de passe sont remplies
+  const isPasswordValid = () => {
+    if (!newPassword) return false
+    return newPassword.length >= 8 &&
+           passwordErrors.hasUpperCase &&
+           passwordErrors.hasLowerCase &&
+           passwordErrors.hasNumber &&
+           passwordErrors.hasSpecialChar
+  }
+
+  const validateForm = () => {
+    const newErrors: typeof errors = {}
+    
+    if (!currentPassword.trim()) {
+      newErrors.currentPassword = t('settings.password.current_required') || 'Le mot de passe actuel est requis'
+    }
+    
+    if (!newPassword.trim()) {
+      newErrors.newPassword = t('settings.password.new_required') || 'Le nouveau mot de passe est requis'
+    } else if (!isPasswordValid()) {
+      newErrors.newPassword = t('auth.register.errors.password_requirements') || 'Le mot de passe doit contenir une majuscule, une minuscule, un chiffre et un caractère spécial (*_/@=)'
+    }
+    
+    if (!confirmPassword.trim()) {
+      newErrors.confirmPassword = t('settings.password.confirm_required') || 'La confirmation du mot de passe est requise'
+    } else if (newPassword !== confirmPassword) {
+      newErrors.confirmPassword = t('settings.password.mismatch') || 'Les mots de passe ne correspondent pas'
+    }
+    
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
+
+  const handleFieldChange = (field: 'currentPassword' | 'newPassword' | 'confirmPassword', value: string) => {
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: undefined }))
+    }
+    
+    if (field === 'currentPassword') {
+      setCurrentPassword(value)
+    } else if (field === 'newPassword') {
+      setNewPassword(value)
+      validatePassword(value)
+    } else if (field === 'confirmPassword') {
+      setConfirmPassword(value)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!currentPassword) {
-      addToast(t('settings.password.current_required') || 'Le mot de passe actuel est requis', 'error')
-      return
-    }
-
-    if (!newPassword) {
-      addToast(t('settings.password.new_required') || 'Le nouveau mot de passe est requis', 'error')
-      return
-    }
-
-    if (newPassword.length < 6) {
-      addToast(t('settings.password.min_length') || 'Le mot de passe doit contenir au moins 6 caractères', 'error')
-      return
-    }
-
-    if (newPassword !== confirmPassword) {
-      addToast(t('settings.password.mismatch') || 'Les mots de passe ne correspondent pas', 'error')
+    if (!validateForm()) {
       return
     }
 
@@ -89,6 +134,14 @@ export function SettingsPasswordTab({ user }: SettingsPasswordTabProps) {
         setCurrentPassword('')
         setNewPassword('')
         setConfirmPassword('')
+        setErrors({})
+        setPasswordErrors({
+          hasMinLength: false,
+          hasUpperCase: false,
+          hasLowerCase: false,
+          hasNumber: false,
+          hasSpecialChar: false
+        })
       } else {
         const data = await response.json()
         addToast(data.detail || t('settings.password.error') || 'Erreur lors du changement de mot de passe', 'error')
@@ -120,16 +173,20 @@ export function SettingsPasswordTab({ user }: SettingsPasswordTabProps) {
 
       {/* Current Password */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-          {t('settings.password.current') || 'Mot de passe actuel'}
+        <label className={`block text-sm font-medium mb-2 ${errors.currentPassword ? 'text-red-500 dark:text-red-400' : 'text-gray-700 dark:text-gray-300'}`}>
+          {t('settings.password.current') || 'Mot de passe actuel'} *
         </label>
         <div className="relative">
-          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <Lock className={`absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 ${errors.currentPassword ? 'text-red-400' : 'text-gray-400'}`} />
           <input
             type={showCurrentPassword ? 'text' : 'password'}
             value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
-            className="w-full pl-10 pr-12 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-myfav-primary focus:border-transparent transition-all"
+            onChange={(e) => handleFieldChange('currentPassword', e.target.value)}
+            className={`w-full pl-10 pr-12 py-3 rounded-xl border bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 transition-all ${
+              errors.currentPassword
+                ? 'border-red-500 dark:border-red-500 focus:ring-red-500 focus:border-red-500 bg-red-50 dark:bg-red-900/10'
+                : 'border-gray-300 dark:border-gray-600 focus:ring-myfav-primary focus:border-transparent'
+            }`}
             placeholder="••••••••"
           />
           <button
@@ -140,20 +197,29 @@ export function SettingsPasswordTab({ user }: SettingsPasswordTabProps) {
             {showCurrentPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
           </button>
         </div>
+        {errors.currentPassword && (
+          <p className="text-sm text-red-600 dark:text-red-400 mt-2">
+            {errors.currentPassword}
+          </p>
+        )}
       </div>
 
       {/* New Password */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-          {t('settings.password.new') || 'Nouveau mot de passe'}
+        <label className={`block text-sm font-medium mb-2 ${errors.newPassword ? 'text-red-500 dark:text-red-400' : 'text-gray-700 dark:text-gray-300'}`}>
+          {t('settings.password.new') || 'Nouveau mot de passe'} *
         </label>
         <div className="relative">
-          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <Lock className={`absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 ${errors.newPassword || (newPassword && !isPasswordValid()) ? 'text-red-400' : 'text-gray-400'}`} />
           <input
             type={showNewPassword ? 'text' : 'password'}
             value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            className="w-full pl-10 pr-12 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-myfav-primary focus:border-transparent transition-all"
+            onChange={(e) => handleFieldChange('newPassword', e.target.value)}
+            className={`w-full pl-10 pr-12 py-3 rounded-xl border bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 transition-all ${
+              errors.newPassword || (newPassword && !isPasswordValid())
+                ? 'border-red-500 dark:border-red-500 focus:ring-red-500 focus:border-red-500 bg-red-50 dark:bg-red-900/10'
+                : 'border-gray-300 dark:border-gray-600 focus:ring-myfav-primary focus:border-transparent'
+            }`}
             placeholder="••••••••"
           />
           <button
@@ -164,26 +230,48 @@ export function SettingsPasswordTab({ user }: SettingsPasswordTabProps) {
             {showNewPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
           </button>
         </div>
+        {errors.newPassword && (
+          <p className="text-sm text-red-600 dark:text-red-400 mt-2">
+            {errors.newPassword}
+          </p>
+        )}
 
         {/* Password Strength Indicators */}
-        {newPassword.length > 0 && (
-          <div className="mt-3 space-y-2">
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className={`flex items-center gap-1.5 ${passwordValidation.minLength ? 'text-green-600 dark:text-green-400' : 'text-gray-400'}`}>
-                <CheckCircle2 className={`w-3.5 h-3.5 ${passwordValidation.minLength ? 'opacity-100' : 'opacity-40'}`} />
-                {t('settings.password.min_6_chars') || '6 caractères minimum'}
+        {newPassword && (
+          <div className="mt-2 space-y-1">
+            <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+              {t('auth.register.password_requirements_title') || 'Le mot de passe doit contenir :'}
+            </p>
+            <div className="space-y-0.5">
+              <div className={`text-xs flex items-center gap-2 ${passwordErrors.hasMinLength ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                <span>{passwordErrors.hasMinLength ? '✓' : '○'}</span>
+                <span>
+                  {t('auth.register.password_requirement_min_length') || 'Au moins 8 caractères'}
+                </span>
               </div>
-              <div className={`flex items-center gap-1.5 ${passwordValidation.hasUppercase ? 'text-green-600 dark:text-green-400' : 'text-gray-400'}`}>
-                <CheckCircle2 className={`w-3.5 h-3.5 ${passwordValidation.hasUppercase ? 'opacity-100' : 'opacity-40'}`} />
-                {t('settings.password.uppercase') || 'Une majuscule'}
+              <div className={`text-xs flex items-center gap-2 ${passwordErrors.hasUpperCase ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                <span>{passwordErrors.hasUpperCase ? '✓' : '○'}</span>
+                <span>
+                  {t('auth.register.password_requirement_uppercase') || 'Une majuscule (A-Z)'}
+                </span>
               </div>
-              <div className={`flex items-center gap-1.5 ${passwordValidation.hasLowercase ? 'text-green-600 dark:text-green-400' : 'text-gray-400'}`}>
-                <CheckCircle2 className={`w-3.5 h-3.5 ${passwordValidation.hasLowercase ? 'opacity-100' : 'opacity-40'}`} />
-                {t('settings.password.lowercase') || 'Une minuscule'}
+              <div className={`text-xs flex items-center gap-2 ${passwordErrors.hasLowerCase ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                <span>{passwordErrors.hasLowerCase ? '✓' : '○'}</span>
+                <span>
+                  {t('auth.register.password_requirement_lowercase') || 'Une minuscule (a-z)'}
+                </span>
               </div>
-              <div className={`flex items-center gap-1.5 ${passwordValidation.hasNumber ? 'text-green-600 dark:text-green-400' : 'text-gray-400'}`}>
-                <CheckCircle2 className={`w-3.5 h-3.5 ${passwordValidation.hasNumber ? 'opacity-100' : 'opacity-40'}`} />
-                {t('settings.password.number') || 'Un chiffre'}
+              <div className={`text-xs flex items-center gap-2 ${passwordErrors.hasNumber ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                <span>{passwordErrors.hasNumber ? '✓' : '○'}</span>
+                <span>
+                  {t('auth.register.password_requirement_number') || 'Un chiffre (0-9)'}
+                </span>
+              </div>
+              <div className={`text-xs flex items-center gap-2 ${passwordErrors.hasSpecialChar ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                <span>{passwordErrors.hasSpecialChar ? '✓' : '○'}</span>
+                <span>
+                  {t('auth.register.password_requirement_special') || 'Un caractère spécial (*_/@=)'}
+                </span>
               </div>
             </div>
           </div>
@@ -192,21 +280,21 @@ export function SettingsPasswordTab({ user }: SettingsPasswordTabProps) {
 
       {/* Confirm Password */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-          {t('settings.password.confirm') || 'Confirmer le nouveau mot de passe'}
+        <label className={`block text-sm font-medium mb-2 ${errors.confirmPassword ? 'text-red-500 dark:text-red-400' : 'text-gray-700 dark:text-gray-300'}`}>
+          {t('settings.password.confirm') || 'Confirmer le nouveau mot de passe'} *
         </label>
         <div className="relative">
-          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <Lock className={`absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 ${errors.confirmPassword || (confirmPassword.length > 0 && newPassword !== confirmPassword) ? 'text-red-400' : confirmPassword.length > 0 && newPassword === confirmPassword ? 'text-green-400' : 'text-gray-400'}`} />
           <input
             type={showConfirmPassword ? 'text' : 'password'}
             value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            className={`w-full pl-10 pr-12 py-3 rounded-xl border bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-myfav-primary focus:border-transparent transition-all ${
-              confirmPassword.length > 0 
-                ? passwordValidation.matches 
-                  ? 'border-green-500 dark:border-green-500' 
-                  : 'border-red-500 dark:border-red-500'
-                : 'border-gray-300 dark:border-gray-600'
+            onChange={(e) => handleFieldChange('confirmPassword', e.target.value)}
+            className={`w-full pl-10 pr-12 py-3 rounded-xl border bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 transition-all ${
+              errors.confirmPassword || (confirmPassword.length > 0 && newPassword !== confirmPassword)
+                ? 'border-red-500 dark:border-red-500 focus:ring-red-500 focus:border-red-500 bg-red-50 dark:bg-red-900/10'
+                : confirmPassword.length > 0 && newPassword === confirmPassword
+                ? 'border-green-500 dark:border-green-500 focus:ring-green-500 focus:border-green-500'
+                : 'border-gray-300 dark:border-gray-600 focus:ring-myfav-primary focus:border-transparent'
             }`}
             placeholder="••••••••"
           />
@@ -218,8 +306,13 @@ export function SettingsPasswordTab({ user }: SettingsPasswordTabProps) {
             {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
           </button>
         </div>
-        {confirmPassword.length > 0 && !passwordValidation.matches && (
-          <p className="mt-1 text-xs text-red-500">
+        {errors.confirmPassword && (
+          <p className="text-sm text-red-600 dark:text-red-400 mt-2">
+            {errors.confirmPassword}
+          </p>
+        )}
+        {confirmPassword.length > 0 && !errors.confirmPassword && newPassword !== confirmPassword && (
+          <p className="text-sm text-red-600 dark:text-red-400 mt-2">
             {t('settings.password.mismatch') || 'Les mots de passe ne correspondent pas'}
           </p>
         )}
@@ -229,7 +322,7 @@ export function SettingsPasswordTab({ user }: SettingsPasswordTabProps) {
       <div className="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
         <Button
           type="submit"
-          disabled={isLoading || !isPasswordValid || !currentPassword}
+          disabled={isLoading}
           className="bg-myfav-primary hover:bg-myfav-primary/90 text-white px-8 py-3 rounded-xl font-medium shadow-lg shadow-myfav-primary/25 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isLoading ? (

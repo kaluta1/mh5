@@ -31,18 +31,18 @@ import {
 type Tab = 'profile' | 'location' | 'demographics' | 'password'
 
 // Calcul du pourcentage de complétion du profil
-function calculateProfileCompletion(user: any): { percentage: number; missing: string[] } {
+function calculateProfileCompletion(user: any, t: any): { percentage: number; missing: string[] } {
   if (!user) return { percentage: 0, missing: [] }
   
   const fields = [
-    { key: 'first_name', label: 'Prénom' },
-    { key: 'last_name', label: 'Nom' },
-    { key: 'avatar_url', label: 'Photo de profil' },
-    { key: 'bio', label: 'Biographie' },
-    { key: 'gender', label: 'Genre' },
-    { key: 'date_of_birth', label: 'Date de naissance' },
-    { key: 'country', label: 'Pays' },
-    { key: 'city', label: 'Ville' },
+    { key: 'first_name', label: t('profile_setup.first_name') || 'Prénom' },
+    { key: 'last_name', label: t('profile_setup.last_name') || 'Nom' },
+    { key: 'avatar_url', label: t('settings.profile_photo') || 'Photo de profil' },
+    { key: 'bio', label: t('settings.biography') || 'Biographie' },
+    { key: 'gender', label: t('profile_setup.gender') || 'Genre' },
+    { key: 'date_of_birth', label: t('profile_setup.date_of_birth') || 'Date de naissance' },
+    { key: 'country', label: t('settings.country') || 'Pays' },
+    { key: 'city', label: t('settings.city') || 'Ville' },
   ]
   
   const missing: string[] = []
@@ -106,7 +106,7 @@ export default function SettingsPage() {
   const [currentTab, setCurrentTab] = useState<Tab>('profile')
   const [pageLoading, setPageLoading] = useState(true)
 
-  const profileCompletion = useMemo(() => calculateProfileCompletion(user), [user])
+  const profileCompletion = useMemo(() => calculateProfileCompletion(user, t), [user, t])
   const userAge = useMemo(() => user?.date_of_birth ? calculateAge(user.date_of_birth) : null, [user?.date_of_birth])
 
   useEffect(() => {
@@ -186,7 +186,7 @@ export default function SettingsPage() {
                   <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-1">
                     {user?.first_name && user?.last_name 
                       ? `${user.first_name} ${user.last_name}` 
-                      : user?.username || user?.email?.split('@')[0] || 'Utilisateur'}
+                      : user?.username || user?.email?.split('@')[0] || t('settings.user') || 'Utilisateur'}
                   </h1>
                   {user?.username && (
                     <p className="text-myfav-primary font-medium">@{user.username}</p>
@@ -201,13 +201,13 @@ export default function SettingsPage() {
                   {user?.is_admin && (
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/30">
                       <Shield className="w-3.5 h-3.5" />
-                      Admin
+                      {t('settings.admin') || 'Admin'}
                     </span>
                   )}
                   {user?.identity_verified ? (
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-green-500/20 text-green-400 border border-green-500/30">
                       <CheckCircle2 className="w-3.5 h-3.5" />
-                      Vérifié
+                      {t('settings.verified') || 'Vérifié'}
                     </span>
                   ) : (
                     <Link 
@@ -215,7 +215,7 @@ export default function SettingsPage() {
                       className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:bg-amber-500/30 transition-colors"
                     >
                       <Fingerprint className="w-3.5 h-3.5" />
-                      Vérifier mon identité
+                      {t('settings.verify_identity') || 'Vérifier mon identité'}
                       <ChevronRight className="w-3 h-3" />
                     </Link>
                   )}
@@ -237,7 +237,7 @@ export default function SettingsPage() {
                 <div className="flex items-center gap-2 text-sm">
                   <Calendar className="w-4 h-4 text-gray-400 dark:text-gray-500" />
                   <span className="text-gray-600 dark:text-gray-400">
-                    {userAge ? `${userAge} ans` : '-'}
+                    {userAge ? `${userAge} ${t('settings.years') || 'ans'}` : '-'}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
@@ -253,7 +253,7 @@ export default function SettingsPage() {
             <div className="flex-shrink-0 md:w-48">
               <div className="bg-gray-100 dark:bg-gray-700/50 rounded-xl p-4 border border-gray-200 dark:border-gray-600/50">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">Profil complété</span>
+                  <span className="text-sm text-gray-600 dark:text-gray-400">{t('settings.profile_completion') || 'Profil complété'}</span>
                   <span className={`text-lg font-bold ${
                     profileCompletion.percentage === 100 ? 'text-green-400' : 
                     profileCompletion.percentage >= 70 ? 'text-yellow-400' : 'text-red-400'
@@ -272,7 +272,7 @@ export default function SettingsPage() {
                 </div>
                 {profileCompletion.missing.length > 0 && (
                   <p className="text-xs text-gray-500 dark:text-gray-500 mt-2">
-                    Manque: {profileCompletion.missing.slice(0, 2).join(', ')}
+                    {t('settings.missing') || 'Manque'}: {profileCompletion.missing.slice(0, 2).join(', ')}
                     {profileCompletion.missing.length > 2 && ` +${profileCompletion.missing.length - 2}`}
                   </p>
                 )}
@@ -283,7 +283,7 @@ export default function SettingsPage() {
                 <div className="mt-3 bg-myfav-primary/10 rounded-xl p-3 border border-myfav-primary/30">
                   <div className="flex items-center gap-2 mb-1">
                     <Share2 className="w-4 h-4 text-myfav-primary" />
-                    <span className="text-xs text-gray-500 dark:text-gray-400">Code parrainage</span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">{t('settings.referral_code_label') || 'Code parrainage'}</span>
                   </div>
                   <p className="text-myfav-primary font-mono font-bold text-sm">
                     {user.personal_referral_code}

@@ -22,6 +22,12 @@ export function SettingsLocationTab({ user }: SettingsLocationTabProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [hasParticipation, setHasParticipation] = useState(false)
   const [isCheckingParticipation, setIsCheckingParticipation] = useState(true)
+  const [errors, setErrors] = useState<{
+    continent?: string
+    region?: string
+    country?: string
+    city?: string
+  }>({})
 
   // Charger les données de l'utilisateur et vérifier la participation
   useEffect(() => {
@@ -32,7 +38,33 @@ export function SettingsLocationTab({ user }: SettingsLocationTabProps) {
       setCity(user.city || '')
       checkUserParticipation()
     }
-  }, [user])
+  }, [user, t])
+
+  // Valider et afficher les erreurs par défaut après vérification de participation
+  useEffect(() => {
+    if (!isCheckingParticipation && !hasParticipation) {
+      // Valider directement avec les valeurs actuelles des états
+      const newErrors: typeof errors = {}
+      
+      if (!continent.trim()) {
+        newErrors.continent = t('profile_setup.continent_required') || 'Le continent est requis'
+      }
+      
+      if (!region.trim()) {
+        newErrors.region = t('profile_setup.region_required') || 'La région est requise'
+      }
+      
+      if (!country.trim()) {
+        newErrors.country = t('profile_setup.country_required') || 'Le pays est requis'
+      }
+      
+      if (!city.trim()) {
+        newErrors.city = t('profile_setup.city_required') || 'La ville est requise'
+      }
+      
+      setErrors(newErrors)
+    }
+  }, [isCheckingParticipation, hasParticipation, continent, region, country, city, t])
 
   const checkUserParticipation = async () => {
     try {
@@ -52,7 +84,8 @@ export function SettingsLocationTab({ user }: SettingsLocationTabProps) {
 
       if (response.ok) {
         const data = await response.json()
-        setHasParticipation(Array.isArray(data) && data.length > 0)
+        const hasPart = Array.isArray(data) && data.length > 0
+        setHasParticipation(hasPart)
       }
     } catch (err) {
       console.error('Erreur lors de la vérification de la participation:', err)
@@ -61,11 +94,33 @@ export function SettingsLocationTab({ user }: SettingsLocationTabProps) {
     }
   }
 
+  const validateForm = () => {
+    const newErrors: typeof errors = {}
+    
+    if (!continent.trim()) {
+      newErrors.continent = t('profile_setup.continent_required') || 'Le continent est requis'
+    }
+    
+    if (!region.trim()) {
+      newErrors.region = t('profile_setup.region_required') || 'La région est requise'
+    }
+    
+    if (!country.trim()) {
+      newErrors.country = t('profile_setup.country_required') || 'Le pays est requis'
+    }
+    
+    if (!city.trim()) {
+      newErrors.city = t('profile_setup.city_required') || 'La ville est requise'
+    }
+    
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!city) {
-      addToast(t('profile_setup.city_required') || 'La ville est requise', 'error')
+    if (!validateForm()) {
       return
     }
 
@@ -99,11 +154,28 @@ export function SettingsLocationTab({ user }: SettingsLocationTabProps) {
       }
 
       addToast(t('profile_setup.success') || 'Localisation mise à jour avec succès!', 'success')
+      setErrors({})
     } catch (err: any) {
       console.error('Erreur:', err)
       addToast(err.message || 'Erreur lors de la mise à jour de la localisation', 'error')
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleLocationChange = (field: 'continent' | 'region' | 'country' | 'city', value: string) => {
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: undefined }))
+    }
+    
+    if (field === 'continent') {
+      setContinent(value)
+    } else if (field === 'region') {
+      setRegion(value)
+    } else if (field === 'country') {
+      setCountry(value)
+    } else if (field === 'city') {
+      setCity(value)
     }
   }
 
@@ -171,14 +243,42 @@ export function SettingsLocationTab({ user }: SettingsLocationTabProps) {
           </div>
         ) : (
           // Use SimpleLocationSelector if no participation
-          <SimpleLocationSelector
-            onCountryChange={setCountry}
-            onCityChange={setCity}
-            onRegionChange={setRegion}
-            onContinentChange={setContinent}
-            selectedCountry={country}
-            selectedCity={city}
-          />
+          <div className="space-y-4">
+            <SimpleLocationSelector
+              onCountryChange={(value) => handleLocationChange('country', value)}
+              onCityChange={(value) => handleLocationChange('city', value)}
+              onRegionChange={(value) => handleLocationChange('region', value)}
+              onContinentChange={(value) => handleLocationChange('continent', value)}
+              selectedCountry={country}
+              selectedCity={city}
+            />
+            
+            {/* Error Messages */}
+            {(errors.continent || errors.region || errors.country || errors.city) && (
+              <div className="space-y-2">
+                {errors.continent && (
+                  <p className="text-sm text-red-600 dark:text-red-400">
+                    {errors.continent}
+                  </p>
+                )}
+                {errors.region && (
+                  <p className="text-sm text-red-600 dark:text-red-400">
+                    {errors.region}
+                  </p>
+                )}
+                {errors.country && (
+                  <p className="text-sm text-red-600 dark:text-red-400">
+                    {errors.country}
+                  </p>
+                )}
+                {errors.city && (
+                  <p className="text-sm text-red-600 dark:text-red-400">
+                    {errors.city}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
         )}
 
         {/* Current Location Summary */}
@@ -203,8 +303,8 @@ export function SettingsLocationTab({ user }: SettingsLocationTabProps) {
           <div className="flex justify-end gap-3 pt-6 border-t border-gray-200 dark:border-gray-700">
             <Button
               type="submit"
-              disabled={isLoading || !city}
-              className="bg-myfav-primary hover:bg-myfav-primary/90 text-white font-bold px-6 py-2.5 rounded-xl transition-all disabled:opacity-50"
+              disabled={isLoading}
+              className="bg-myfav-primary hover:bg-myfav-primary/90 text-white font-bold px-6 py-2.5 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? t('common.submitting') || 'Enregistrement...' : t('settings.save') || 'Enregistrer'}
             </Button>

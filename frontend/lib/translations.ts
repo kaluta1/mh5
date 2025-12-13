@@ -169,6 +169,41 @@ export interface TranslationKeys {
     location_locked_message: string
     save: string
     remove: string
+    profile_completion: string
+    missing: string
+    referral_code_label: string
+    admin: string
+    verified: string
+    verify_identity: string
+    years: string
+    user: string
+    profile_photo: string
+    biography: string
+    password: {
+      title: string
+      description: string
+      current: string
+      new: string
+      confirm: string
+      current_required: string
+      new_required: string
+      confirm_required: string
+      min_length: string
+      mismatch: string
+      same_password: string
+      session_expired: string
+      success: string
+      error: string
+      saving: string
+      save: string
+      security_info: string
+      security_description: string
+      min_6_chars: string
+      uppercase: string
+      lowercase: string
+      number: string
+    }
+    password_short: string
   }
   profile_setup: {
     location: string
@@ -191,6 +226,9 @@ export interface TranslationKeys {
     bio_required: string
     characters: string
     city_required: string
+    continent_required: string
+    region_required: string
+    country_required: string
     gender_required: string
     dob_required: string
     session_expired: string
@@ -2161,6 +2199,9 @@ export const translations: Record<Language, TranslationKeys> = {
       bio_required: "La bio est requise",
       characters: "caractères",
       city_required: "La ville est requise",
+      continent_required: "Le continent est requis",
+      region_required: "La région est requise",
+      country_required: "Le pays est requis",
       gender_required: "Le genre est requis",
       dob_required: "La date de naissance est requise",
       session_expired: "Session expirée",
@@ -2196,6 +2237,16 @@ export const translations: Record<Language, TranslationKeys> = {
       location_locked_message: "Vous avez déjà participé à un concours. Votre localisation ne peut pas être modifiée.",
       save: "Enregistrer",
       remove: "Supprimer",
+      profile_completion: "Profil complété",
+      missing: "Manque",
+      referral_code_label: "Code parrainage",
+      admin: "Admin",
+      verified: "Vérifié",
+      verify_identity: "Vérifier mon identité",
+      years: "ans",
+      user: "Utilisateur",
+      profile_photo: "Photo de profil",
+      biography: "Biographie",
       password: {
         title: "Mot de passe",
         description: "Modifiez votre mot de passe pour sécuriser votre compte",
@@ -2204,6 +2255,7 @@ export const translations: Record<Language, TranslationKeys> = {
         confirm: "Confirmer le nouveau mot de passe",
         current_required: "Le mot de passe actuel est requis",
         new_required: "Le nouveau mot de passe est requis",
+        confirm_required: "La confirmation du mot de passe est requise",
         min_length: "Le mot de passe doit contenir au moins 6 caractères",
         mismatch: "Les mots de passe ne correspondent pas",
         same_password: "Le nouveau mot de passe doit être différent de l'ancien",
@@ -4001,6 +4053,9 @@ export const translations: Record<Language, TranslationKeys> = {
       bio_required: "Bio is required",
       characters: "characters",
       city_required: "City is required",
+      continent_required: "Continent is required",
+      region_required: "Region is required",
+      country_required: "Country is required",
       gender_required: "Gender is required",
       dob_required: "Date of birth is required",
       session_expired: "Session expired",
@@ -4036,6 +4091,16 @@ export const translations: Record<Language, TranslationKeys> = {
       location_locked_message: "You have already participated in a contest. Your location cannot be modified.",
       save: "Save",
       remove: "Remove",
+      profile_completion: "Profile completed",
+      missing: "Missing",
+      referral_code_label: "Referral code",
+      admin: "Admin",
+      verified: "Verified",
+      verify_identity: "Verify my identity",
+      years: "years",
+      user: "User",
+      profile_photo: "Profile photo",
+      biography: "Biography",
       password: {
         title: "Password",
         description: "Change your password to secure your account",
@@ -4044,6 +4109,7 @@ export const translations: Record<Language, TranslationKeys> = {
         confirm: "Confirm new password",
         current_required: "Current password is required",
         new_required: "New password is required",
+        confirm_required: "Password confirmation is required",
         min_length: "Password must be at least 6 characters",
         mismatch: "Passwords do not match",
         same_password: "New password must be different from the old one",
@@ -5871,6 +5937,9 @@ export const translations: Record<Language, TranslationKeys> = {
       bio_required: "La bio es requerida",
       characters: "caracteres",
       city_required: "La ciudad es requerida",
+      continent_required: "El continente es requerido",
+      region_required: "La región es requerida",
+      country_required: "El país es requerido",
       gender_required: "El género es requerido",
       dob_required: "La fecha de nacimiento es requerida",
       session_expired: "Sesión expirada",
@@ -5906,6 +5975,16 @@ export const translations: Record<Language, TranslationKeys> = {
       location_locked_message: "Ya has participado en un concurso. Tu ubicación no puede ser modificada.",
       save: "Guardar",
       remove: "Eliminar",
+      profile_completion: "Perfil completado",
+      missing: "Falta",
+      referral_code_label: "Código de referido",
+      admin: "Admin",
+      verified: "Verificado",
+      verify_identity: "Verificar mi identidad",
+      years: "años",
+      user: "Usuario",
+      profile_photo: "Foto de perfil",
+      biography: "Biografía",
       password: {
         title: "Contraseña",
         description: "Cambia tu contraseña para proteger tu cuenta",
@@ -5914,6 +5993,7 @@ export const translations: Record<Language, TranslationKeys> = {
         confirm: "Confirmar nueva contraseña",
         current_required: "La contraseña actual es requerida",
         new_required: "La nueva contraseña es requerida",
+        confirm_required: "La confirmación de la contraseña es requerida",
         min_length: "La contraseña debe tener al menos 6 caracteres",
         mismatch: "Las contraseñas no coinciden",
         same_password: "La nueva contraseña debe ser diferente a la anterior",
@@ -7661,6 +7741,9 @@ export const translations: Record<Language, TranslationKeys> = {
       bio_required: "Bio ist erforderlich",
       characters: "Zeichen",
       city_required: "Stadt ist erforderlich",
+      continent_required: "Kontinent ist erforderlich",
+      region_required: "Region ist erforderlich",
+      country_required: "Land ist erforderlich",
       gender_required: "Geschlecht ist erforderlich",
       dob_required: "Geburtsdatum ist erforderlich",
       session_expired: "Sitzung abgelaufen",
@@ -7696,6 +7779,16 @@ export const translations: Record<Language, TranslationKeys> = {
       location_locked_message: "Sie haben bereits an einem Wettbewerb teilgenommen. Ihr Standort kann nicht geändert werden.",
       save: "Speichern",
       remove: "Löschen",
+      profile_completion: "Profil abgeschlossen",
+      missing: "Fehlt",
+      referral_code_label: "Empfehlungscode",
+      admin: "Admin",
+      verified: "Verifiziert",
+      verify_identity: "Meine Identität verifizieren",
+      years: "Jahre",
+      user: "Benutzer",
+      profile_photo: "Profilfoto",
+      biography: "Biografie",
       password: {
         title: "Passwort",
         description: "Ändern Sie Ihr Passwort, um Ihr Konto zu sichern",
@@ -7704,6 +7797,7 @@ export const translations: Record<Language, TranslationKeys> = {
         confirm: "Neues Passwort bestätigen",
         current_required: "Aktuelles Passwort ist erforderlich",
         new_required: "Neues Passwort ist erforderlich",
+        confirm_required: "Passwortbestätigung ist erforderlich",
         min_length: "Passwort muss mindestens 6 Zeichen haben",
         mismatch: "Passwörter stimmen nicht überein",
         same_password: "Neues Passwort muss sich vom alten unterscheiden",
