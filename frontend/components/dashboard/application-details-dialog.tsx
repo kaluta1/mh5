@@ -201,9 +201,8 @@ export function ApplicationDetailsDialog({
                               />
                             ) : (
                               <VideoEmbed
-                                videoUrl={media.url}
+                                url={media.url}
                                 className="w-full h-full object-cover"
-                                title={t('dashboard.contests.my_applications.video_alt') || 'Vidéo'}
                               />
                             )}
                           </div>
