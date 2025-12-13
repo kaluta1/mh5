@@ -2,6 +2,8 @@
 
 import React from 'react'
 import { X } from 'lucide-react'
+import { VideoEmbed } from './video-embed'
+import { detectVideoPlatform } from '@/lib/utils/video-platforms'
 
 interface VideoPreviewDialogProps {
   isOpen: boolean
@@ -34,13 +36,22 @@ export function VideoPreviewDialog({
 
         {/* Video Container */}
         <div className="relative w-screen h-screen max-w-4xl max-h-[90vh] sm:w-[800px] sm:h-[600px] bg-black flex items-center justify-center">
-          <video
-            src={videoUrl}
-            title={videoTitle}
-            controls
-            className="w-full h-full object-contain"
-            autoPlay
-          />
+          {detectVideoPlatform(videoUrl) === 'direct' ? (
+            <video
+              src={videoUrl}
+              title={videoTitle}
+              controls
+              className="w-full h-full object-contain"
+              autoPlay
+            />
+          ) : (
+            <VideoEmbed
+              url={videoUrl}
+              className="w-full h-full"
+              autoplay={true}
+              allowFullscreen={true}
+            />
+          )}
         </div>
 
         {/* Click to close hint */}

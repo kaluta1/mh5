@@ -5,6 +5,8 @@ import { Play, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useLanguage } from '@/contexts/language-context'
 import { VideoPreviewDialog } from '@/components/ui/video-preview-dialog'
 import { MediaViewerModal } from '@/components/media/media-viewer-modal'
+import { VideoEmbed } from '@/components/ui/video-embed'
+import { detectVideoPlatform } from '@/lib/utils/video-platforms'
 import { contestService } from '@/services/contest-service'
 import { reactionsService } from '@/services/reactions-service'
 import { sharesService } from '@/services/shares-service'
@@ -368,16 +370,26 @@ export function ContestantCard({
             >
               {/* Video Container - Larger size */}
               <div className="relative w-full aspect-video">
-                <video
-                  src={firstVideo.url}
-                  className="w-full h-full object-cover"
-                  poster={firstVideo.thumbnail}
-                />
-                <div className="absolute inset-0 bg-black/20 group-hover:bg-black/30 transition-all flex items-center justify-center">
-                  <div className="w-20 h-20 rounded-full bg-white/90 dark:bg-gray-800/90 flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg">
-                    <Play className="w-10 h-10 text-myfav-primary ml-1" fill="currentColor" />
-                  </div>
-                </div>
+                {detectVideoPlatform(firstVideo.url) === 'direct' ? (
+                  <>
+                    <video
+                      src={firstVideo.url}
+                      className="w-full h-full object-cover"
+                      poster={firstVideo.thumbnail}
+                    />
+                    <div className="absolute inset-0 bg-black/20 group-hover:bg-black/30 transition-all flex items-center justify-center">
+                      <div className="w-20 h-20 rounded-full bg-white/90 dark:bg-gray-800/90 flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg">
+                        <Play className="w-10 h-10 text-myfav-primary ml-1" fill="currentColor" />
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <VideoEmbed
+                    url={firstVideo.url}
+                    className="w-full h-full"
+                    allowFullscreen={true}
+                  />
+                )}
               </div>
             </div>
           </div>

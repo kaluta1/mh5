@@ -3,6 +3,8 @@
 import { X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useLanguage } from '@/contexts/language-context'
 import { MediaComments } from '@/components/comments'
+import { VideoEmbed } from '@/components/ui/video-embed'
+import { detectVideoPlatform } from '@/lib/utils/video-platforms'
 
 export interface MediaItem {
   id: string
@@ -80,12 +82,20 @@ export function MediaViewerModal({
                 alt="Photo"
                 className="max-w-full max-h-full w-auto h-auto object-contain"
               />
-            ) : (
+            ) : detectVideoPlatform(media.url) === 'direct' ? (
               <video
                 src={media.url}
                 controls
                 className="max-w-full max-h-full w-auto h-auto object-contain"
               />
+            ) : (
+              <div className="w-full h-full max-w-4xl max-h-[80vh]">
+                <VideoEmbed
+                  url={media.url}
+                  className="w-full h-full"
+                  allowFullscreen={true}
+                />
+              </div>
             )}
 
             {/* Navigation Arrows */}

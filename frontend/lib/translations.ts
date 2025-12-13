@@ -233,6 +233,22 @@ export interface TranslationKeys {
     profile_incomplete_message: string
     complete_profile_button: string
     kyc_notification: string
+    or: string
+    add_by_url: string
+    add_video_by_url: string
+    add: string
+    image_url_placeholder: string
+    video_url_placeholder: string
+    invalid_video_url: string
+    url_required: string
+    invalid_url: string
+    max_images_reached: string
+    image_added: string
+    video_added: string
+    media_requirements: string
+    images_required: string
+    video_required: string
+    video_required_title: string
   }
   features: {
     title: string
@@ -937,6 +953,8 @@ export interface TranslationKeys {
         file_info: string
         submit: string
         success: string
+        success_title: string
+        success_edit: string
         already_participating: string
         edit_participation: string
         click_add_images: string
@@ -1888,7 +1906,9 @@ export const translations: Record<Language, TranslationKeys> = {
           drag_drop: "Glissez-déposez votre fichier ici",
           file_info: "ou cliquez pour sélectionner (Images: JPG, PNG, GIF | Vidéos: MP4, WebM | Max: 100MB)",
           submit: "Soumettre ma candidature",
-          success: "Candidature soumise avec succès! Redirection en cours...",
+          success: "Votre candidature a été soumise avec succès. Elle sera examinée par notre équipe.",
+          success_title: "✅ Candidature soumise avec succès !",
+          success_edit: "Votre candidature a été mise à jour avec succès.",
           already_participating: "ℹ️ Vous avez déjà une candidature pour ce concours. Vous ne pouvez soumettre qu'une seule candidature par concours.",
           edit_participation: "Modifier ma candidature",
           click_add_images: "Cliquez pour ajouter des images",
@@ -2201,7 +2221,8 @@ export const translations: Record<Language, TranslationKeys> = {
       add_video_by_url: "Ajouter par URL",
       add: "Ajouter",
       image_url_placeholder: "https://exemple.com/image.jpg",
-      video_url_placeholder: "https://exemple.com/video.mp4",
+      video_url_placeholder: "https://youtube.com/watch?v=... ou https://exemple.com/video.mp4",
+      invalid_video_url: "URL vidéo invalide. Formats supportés: YouTube, Vimeo, TikTok, Facebook ou fichiers vidéo (MP4, WebM, etc.)",
       url_required: "URL requise",
       invalid_url: "URL invalide",
       max_images_reached: "Nombre maximum d'images atteint",
@@ -2916,7 +2937,9 @@ export const translations: Record<Language, TranslationKeys> = {
           drag_drop: "Glissez-déposez votre fichier ici",
           file_info: "ou cliquez pour sélectionner (Images: JPG, PNG, GIF | Vidéos: MP4, WebM | Max: 100MB)",
           submit: "Soumettre ma candidature",
-          success: "Candidature soumise avec succès! Redirection en cours...",
+          success: "Votre candidature a été soumise avec succès. Elle sera examinée par notre équipe.",
+          success_title: "✅ Candidature soumise avec succès !",
+          success_edit: "Votre candidature a été mise à jour avec succès.",
           already_participating: "ℹ️ Vous avez déjà une candidature pour ce concours. Vous ne pouvez soumettre qu'une seule candidature par concours.",
           edit_participation: "Modifier ma candidature",
           click_add_images: "Cliquez pour ajouter des images",
@@ -4021,7 +4044,8 @@ export const translations: Record<Language, TranslationKeys> = {
       add_video_by_url: "Add by URL",
       add: "Add",
       image_url_placeholder: "https://example.com/image.jpg",
-      video_url_placeholder: "https://example.com/video.mp4",
+      video_url_placeholder: "https://youtube.com/watch?v=... or https://example.com/video.mp4",
+      invalid_video_url: "Invalid video URL. Supported formats: YouTube, Vimeo, TikTok, Facebook or video files (MP4, WebM, etc.)",
       url_required: "URL required",
       invalid_url: "Invalid URL",
       max_images_reached: "Maximum number of images reached",
@@ -4766,7 +4790,9 @@ export const translations: Record<Language, TranslationKeys> = {
           drag_drop: "Drag and drop your file here",
           file_info: "or click to select (Images: JPG, PNG, GIF | Videos: MP4, WebM | Max: 100MB)",
           submit: "Submit my entry",
-          success: "Entry submitted successfully! Redirecting...",
+          success: "Your application has been submitted successfully. It will be reviewed by our team.",
+          success_title: "✅ Application submitted successfully!",
+          success_edit: "Your application has been updated successfully.",
           already_participating: "ℹ️ You already have an application for this contest. You can only submit one application per contest.",
           edit_participation: "Edit my application",
           click_add_images: "Click to add images",
@@ -5871,7 +5897,8 @@ export const translations: Record<Language, TranslationKeys> = {
       add_video_by_url: "Agregar por URL",
       add: "Agregar",
       image_url_placeholder: "https://ejemplo.com/imagen.jpg",
-      video_url_placeholder: "https://ejemplo.com/video.mp4",
+      video_url_placeholder: "https://youtube.com/watch?v=... o https://ejemplo.com/video.mp4",
+      invalid_video_url: "URL de video inválida. Formatos soportados: YouTube, Vimeo, TikTok, Facebook o archivos de video (MP4, WebM, etc.)",
       url_required: "URL requerida",
       invalid_url: "URL inválida",
       max_images_reached: "Número máximo de imágenes alcanzado",
@@ -6485,7 +6512,9 @@ export const translations: Record<Language, TranslationKeys> = {
           drag_drop: "Arrastra y suelta tu archivo aquí",
           file_info: "o haz clic para seleccionar (Imágenes: JPG, PNG, GIF | Videos: MP4, WebM | Máx: 100MB)",
           submit: "Enviar mi candidatura",
-          success: "¡Candidatura enviada exitosamente! Redirigiendo...",
+          success: "Tu candidatura ha sido enviada exitosamente. Será revisada por nuestro equipo.",
+          success_title: "✅ ¡Candidatura enviada exitosamente!",
+          success_edit: "Tu candidatura ha sido actualizada exitosamente.",
           already_participating: "ℹ️ Ya tienes una solicitud para este concurso. Solo puedes enviar una solicitud por concurso.",
           edit_participation: "Editar mi solicitud",
           click_add_images: "Haz clic para agregar imágenes",
@@ -7641,7 +7670,8 @@ export const translations: Record<Language, TranslationKeys> = {
       add_video_by_url: "Per URL hinzufügen",
       add: "Hinzufügen",
       image_url_placeholder: "https://beispiel.com/bild.jpg",
-      video_url_placeholder: "https://beispiel.com/video.mp4",
+      video_url_placeholder: "https://youtube.com/watch?v=... oder https://beispiel.com/video.mp4",
+      invalid_video_url: "Ungültige Video-URL. Unterstützte Formate: YouTube, Vimeo, TikTok, Facebook oder Videodateien (MP4, WebM, etc.)",
       url_required: "URL erforderlich",
       invalid_url: "Ungültige URL",
       max_images_reached: "Maximale Anzahl an Bildern erreicht",
@@ -8252,7 +8282,9 @@ export const translations: Record<Language, TranslationKeys> = {
           drag_drop: "Ziehen Sie Ihre Datei hierher",
           file_info: "oder klicken Sie zum Auswählen (Bilder: JPG, PNG, GIF | Videos: MP4, WebM | Max: 100MB)",
           submit: "Meine Bewerbung einreichen",
-          success: "Bewerbung erfolgreich eingereicht! Wird weitergeleitet...",
+          success: "Ihre Bewerbung wurde erfolgreich eingereicht. Sie wird von unserem Team überprüft.",
+          success_title: "✅ Bewerbung erfolgreich eingereicht!",
+          success_edit: "Ihre Bewerbung wurde erfolgreich aktualisiert.",
           already_participating: "ℹ️ Sie haben bereits eine Bewerbung für diesen Wettbewerb eingereicht. Sie können nur eine Bewerbung pro Wettbewerb einreichen.",
           edit_participation: "Meine Bewerbung bearbeiten",
           click_add_images: "Klicken Sie, um Bilder hinzuzufügen",

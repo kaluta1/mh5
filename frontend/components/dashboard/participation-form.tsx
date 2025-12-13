@@ -6,10 +6,12 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ImagePreviewDialog } from '@/components/ui/image-preview-dialog'
 import { VideoPreviewDialog } from '@/components/ui/video-preview-dialog'
+import { VideoEmbed } from '@/components/ui/video-embed'
 import { useLanguage } from '@/contexts/language-context'
 import { useRouter } from 'next/navigation'
 import { useModeratedUpload } from '@/hooks/use-moderated-upload'
 import { useToast } from '@/components/ui/toast'
+import { isValidVideoUrl, detectVideoPlatform } from '@/lib/utils/video-platforms'
 
 interface MediaRequirements {
   requiresVideo?: boolean
@@ -163,6 +165,11 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
   }
 
   const isVideoUrl = (url: string) => {
+    // Vérifier si c'est une URL de plateforme vidéo supportée
+    if (isValidVideoUrl(url)) {
+      return true
+    }
+    // Vérifier si c'est une extension de fichier vidéo
     const videoExtensions = ['.mp4', '.webm', '.mov', '.avi', '.mkv', '.m4v']
     const lowerUrl = url.toLowerCase()
     return videoExtensions.some(ext => lowerUrl.includes(ext)) || lowerUrl.includes('video')
@@ -194,6 +201,10 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
     }
     if (!isValidUrl(videoUrlInput)) {
       addToast(t('participation.invalid_url') || 'URL invalide', 'error')
+      return
+    }
+    if (!isVideoUrl(videoUrlInput)) {
+      addToast(t('participation.invalid_video_url') || 'URL vidéo invalide. Formats supportés: YouTube, Vimeo, TikTok, Facebook ou fichiers vidéo (MP4, WebM, etc.)', 'error')
       return
     }
     setVideoUrl(videoUrlInput.trim())
@@ -481,7 +492,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
                       {t('dashboard.contests.participation_form.click_add_video') || 'Cliquez pour ajouter une vidéo'}
                     </p>
                     <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                      {t('dashboard.contests.participation_form.video_format') || 'MP4, WebM, MOV'}
+                      {t('dashboard.contests.participation_form.video_format') || 'MP4, WebM, MOV, YouTube, Vimeo, TikTok, Facebook'}
                     </p>
                   </>
                 )}
@@ -525,7 +536,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
                   type="url"
                   value={videoUrlInput}
                   onChange={(e) => setVideoUrlInput(e.target.value)}
-                  placeholder={t('participation.video_url_placeholder') || 'https://exemple.com/video.mp4'}
+                  placeholder={t('participation.video_url_placeholder') || 'https://youtube.com/watch?v=... ou https://exemple.com/video.mp4'}
                   className="flex-1"
                 />
                 <Button type="button" onClick={handleAddVideoByUrl} className="gap-1">
@@ -540,28 +551,28 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
         {/* Uploaded Video */}
         {videoUrl && (
           <div className="relative group">
-            <video
-              src={videoUrl}
-              controls
-              className="w-full h-48 rounded-lg border border-gray-200 dark:border-gray-600 bg-black cursor-pointer hover:opacity-75 transition"
-              onClick={() => {
-                setPreviewVideoUrl(videoUrl)
-                setShowVideoPreview(true)
-              }}
-            />
-            <div className="absolute inset-0 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setPreviewVideoUrl(videoUrl)
-                  setShowVideoPreview(true)
-                }}
-                className="bg-blue-500 hover:bg-blue-600 text-white p-2 rounded-lg"
-                title="Prévisualiser"
-              >
-                <Eye className="w-4 h-4" />
-              </button>
+            <div className="w-full aspect-video rounded-lg border border-gray-200 dark:border-gray-600 bg-black overflow-hidden">
+              <VideoEmbed
+                url={videoUrl}
+                className="w-full h-full"
+                allowFullscreen={true}
+              />
+            </div>
+            <div className="absolute top-2 right-2 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition">
+              {detectVideoPlatform(videoUrl) === 'direct' && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setPreviewVideoUrl(videoUrl)
+                    setShowVideoPreview(true)
+                  }}
+                  className="bg-blue-500 hover:bg-blue-600 text-white p-2 rounded-lg"
+                  title="Prévisualiser"
+                >
+                  <Eye className="w-4 h-4" />
+                </button>
+              )}
               <button
                 type="button"
                 onClick={handleRemoveVideo}

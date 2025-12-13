@@ -2,6 +2,8 @@
 
 import { Play, Image as ImageIcon } from 'lucide-react'
 import { useLanguage } from '@/contexts/language-context'
+import { VideoEmbed } from '@/components/ui/video-embed'
+import { detectVideoPlatform } from '@/lib/utils/video-platforms'
 
 export interface MediaItem {
   id: string
@@ -64,27 +66,46 @@ export function MediaGallery({ images, videos, onMediaSelect }: MediaGalleryProp
                 onClick={() => onMediaSelect(media)}
                 className="aspect-square rounded-xl overflow-hidden cursor-pointer hover:scale-105 transition-transform shadow-md hover:shadow-xl relative group bg-gray-900"
               >
-                {/* Video Thumbnail */}
-                <video
-                  src={media.url}
-                  className="w-full h-full object-cover"
-                  onLoadedMetadata={(e) => {
-                    const video = e.currentTarget
-                    const canvas = document.createElement('canvas')
-                    canvas.width = video.videoWidth
-                    canvas.height = video.videoHeight
-                    const ctx = canvas.getContext('2d')
-                    if (ctx) {
-                      ctx.drawImage(video, 0, 0)
-                    }
-                  }}
-                />
-                {/* Overlay with Play Button */}
-                <div className="absolute inset-0 bg-black/40 group-hover:bg-black/60 transition-all flex items-center justify-center">
-                  <div className="flex items-center justify-center w-12 h-12 rounded-full bg-white/20 group-hover:bg-white/30 transition-all">
-                    <Play className="w-6 h-6 text-white fill-white" />
-                  </div>
-                </div>
+                {detectVideoPlatform(media.url) === 'direct' ? (
+                  <>
+                    {/* Video Thumbnail */}
+                    <video
+                      src={media.url}
+                      className="w-full h-full object-cover"
+                      onLoadedMetadata={(e) => {
+                        const video = e.currentTarget
+                        const canvas = document.createElement('canvas')
+                        canvas.width = video.videoWidth
+                        canvas.height = video.videoHeight
+                        const ctx = canvas.getContext('2d')
+                        if (ctx) {
+                          ctx.drawImage(video, 0, 0)
+                        }
+                      }}
+                    />
+                    {/* Overlay with Play Button */}
+                    <div className="absolute inset-0 bg-black/40 group-hover:bg-black/60 transition-all flex items-center justify-center">
+                      <div className="flex items-center justify-center w-12 h-12 rounded-full bg-white/20 group-hover:bg-white/30 transition-all">
+                        <Play className="w-6 h-6 text-white fill-white" />
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {/* Video Embed Preview */}
+                    <VideoEmbed
+                      url={media.url}
+                      className="w-full h-full pointer-events-none"
+                      allowFullscreen={false}
+                    />
+                    {/* Overlay with Play Button */}
+                    <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-all flex items-center justify-center">
+                      <div className="flex items-center justify-center w-12 h-12 rounded-full bg-white/20 group-hover:bg-white/30 transition-all">
+                        <Play className="w-6 h-6 text-white fill-white" />
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             ))}
           </div>
