@@ -374,7 +374,7 @@ def create_contestant(
     contest_type = None
     
     if contest:
-        contest_title = contest.title or ""
+        contest_title = contest.name or ""
         contest_description = contest.description or ""
         contest_type = getattr(contest, 'contest_type', None)
         if contest_type and hasattr(contest_type, 'value'):
