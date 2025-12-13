@@ -42,14 +42,14 @@ export function CTA() {
               </div>
 
               {/* Title and Description */}
-              <div className="space-y-4">
+          <div className="space-y-4">
                 <h2 className="text-4xl sm:text-5xl md:text-6xl font-black tracking-tight text-gray-900 dark:text-white">
-                  {t('cta.title')}
-                </h2>
+              {t('cta.title')}
+            </h2>
                 <p className="text-lg md:text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto leading-relaxed">
-                  {t('cta.subtitle')}
-                </p>
-              </div>
+              {t('cta.subtitle')}
+            </p>
+          </div>
 
               {/* Features highlights */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-3xl mx-auto">
@@ -61,7 +61,7 @@ export function CTA() {
                     {t('cta.features.free_contests')}
                   </span>
                 </div>
-                
+
                 <div className="group flex flex-col items-center space-y-3 p-6 rounded-2xl bg-gradient-to-br from-purple-50 to-purple-100/50 dark:from-purple-900/20 dark:to-purple-800/20 border border-purple-200/50 dark:border-purple-700/50 hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
                   <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
                     <Users className="w-7 h-7 text-white" />
@@ -76,34 +76,34 @@ export function CTA() {
                     <Gift className="w-7 h-7 text-white" />
                   </div>
                   <span className="text-sm font-bold text-gray-900 dark:text-white text-center">
-                    {t('cta.features.real_rewards')}
-                  </span>
+                        {t('cta.features.real_rewards')}
+                      </span>
+                  </div>
                 </div>
-              </div>
 
-              {/* CTA Buttons */}
+                {/* CTA Buttons */}
               <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
-                <Button 
-                  size="lg"
+                  <Button 
+                    size="lg" 
                   onClick={() => router.push('/register')}
                   className="group text-lg px-10 py-7 bg-gradient-to-r from-myfav-primary to-myfav-secondary hover:from-myfav-primary-dark hover:to-myfav-secondary-dark text-white font-bold rounded-xl shadow-xl hover:shadow-2xl hover:shadow-myfav-primary/50 transition-all duration-300 hover:-translate-y-1 hover:scale-105"
-                >
+                  >
                   <Sparkles className="mr-2 h-5 w-5" />
-                  {t('cta.button')}
+                    {t('cta.button')}
                   <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="lg"
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="lg" 
                   onClick={() => router.push('/contests')}
                   className="text-lg px-10 py-7 border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white font-semibold rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-myfav-primary dark:hover:border-myfav-primary transition-all duration-300 hover:-translate-y-1"
                 >
                   <Trophy className="mr-2 h-5 w-5" />
-                  {t('navigation.contests')}
-                </Button>
-              </div>
+                    {t('navigation.contests')}
+                  </Button>
+                </div>
 
-              {/* Trust indicators */}
+                {/* Trust indicators */}
               <div className="flex flex-wrap items-center justify-center gap-6 pt-6">
                 <div className="flex items-center gap-2 bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm rounded-full px-4 py-2 border border-gray-200/50 dark:border-gray-700/50">
                   <Zap className="w-5 h-5 text-amber-500" />

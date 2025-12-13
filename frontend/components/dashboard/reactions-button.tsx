@@ -12,9 +12,10 @@ interface ReactionsButtonProps {
   onReactionSelect: (reactionType: string) => void
   onReactionSuccess?: () => void
   isAuthor?: boolean
+  reactionsCount?: number
 }
 
-export function ReactionsButton({ contestantId, selectedReaction, onReactionSelect, onReactionSuccess, isAuthor = false }: ReactionsButtonProps) {
+export function ReactionsButton({ contestantId, selectedReaction, onReactionSelect, onReactionSuccess, isAuthor = false, reactionsCount = 0 }: ReactionsButtonProps) {
   const { t } = useLanguage()
   const [showPopover, setShowPopover] = useState(false)
   const [showDetailsPopover, setShowDetailsPopover] = useState(false)
@@ -88,6 +89,11 @@ export function ReactionsButton({ contestantId, selectedReaction, onReactionSele
       >
         <IconComponent className={`w-5 h-5 ${selectedReaction ? 'fill-current' : ''}`} />
         <span className="hidden sm:inline">{t('dashboard.contests.reaction') || 'Réaction'}</span>
+        {reactionsCount > 0 && (
+          <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+            {reactionsCount}
+          </span>
+        )}
       </button>
       
       {/* Popover avec détails des réactions au survol */}

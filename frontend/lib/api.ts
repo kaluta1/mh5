@@ -36,9 +36,9 @@ api.interceptors.response.use(
       
       // Si ce n'est pas une tentative de connexion/inscription, c'est un token expiré
       if (!isLoginAttempt && !isRegisterAttempt) {
-        // Token expiré, supprimer le token et rediriger vers login
-        localStorage.removeItem('access_token')
-        localStorage.removeItem('refresh_token')
+      // Token expiré, supprimer le token et rediriger vers login
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('refresh_token')
         // Utiliser router.push au lieu de window.location.href pour éviter le rechargement
         // Note: On ne peut pas utiliser useRouter ici, donc on laisse le composant gérer la redirection
         // window.location.href = '/login'

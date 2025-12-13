@@ -52,11 +52,11 @@ export function Features() {
             <span>Fonctionnalités</span>
           </div>
           <h2 className="text-4xl sm:text-5xl md:text-6xl font-black tracking-tight mb-6 bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">
-            {t('features.title')}
-          </h2>
+              {t('features.title')}
+            </h2>
           <p className="text-lg md:text-xl text-gray-600 dark:text-gray-400 leading-relaxed">
-            {t('features.subtitle')}
-          </p>
+              {t('features.subtitle')}
+            </p>
         </div>
         
         {/* Features Grid */}
@@ -64,8 +64,8 @@ export function Features() {
           {features.map((feature, index) => {
             const Icon = feature.icon
             return (
-              <Card 
-                key={index} 
+            <Card 
+              key={index} 
                 className="group relative overflow-hidden border-0 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm shadow-lg hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 rounded-2xl"
               >
                 {/* Gradient overlay on hover */}
@@ -78,25 +78,25 @@ export function Features() {
                   <div className="flex items-start gap-4">
                     <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br from-myfav-primary to-myfav-secondary shadow-lg group-hover:scale-110 group-hover:rotate-3 transition-all duration-300 flex-shrink-0">
                       <Icon className="h-7 w-7 text-white" />
-                    </div>
+                  </div>
                     <div className="flex-1 pt-1">
                       <CardTitle className="text-xl font-bold text-gray-900 dark:text-white group-hover:text-myfav-primary dark:group-hover:text-myfav-blue-400 transition-colors">
-                        {t(`features.items.${feature.key}.title`)}
-                      </CardTitle>
-                    </div>
+                      {t(`features.items.${feature.key}.title`)}
+                    </CardTitle>
                   </div>
-                </CardHeader>
+                </div>
+              </CardHeader>
                 <CardContent className="relative z-10">
                   <CardDescription className="text-base text-gray-600 dark:text-gray-400 leading-relaxed">
-                    {t(`features.items.${feature.key}.description`)}
-                  </CardDescription>
+                  {t(`features.items.${feature.key}.description`)}
+                </CardDescription>
                   
                   {/* Arrow indicator */}
                   <div className="mt-6 flex items-center text-myfav-primary opacity-0 group-hover:opacity-100 translate-x-0 group-hover:translate-x-2 transition-all duration-300">
                     <ArrowRight className="h-5 w-5" />
                   </div>
-                </CardContent>
-              </Card>
+              </CardContent>
+            </Card>
             )
           })}
         </div>

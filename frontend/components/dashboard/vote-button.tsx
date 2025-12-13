@@ -13,9 +13,10 @@ interface VoteButtonProps {
   isVoting: boolean
   onVote: () => void
   isAuthor?: boolean
+  votesCount?: number
 }
 
-export function VoteButton({ contestantId, canVote, hasVoted, isVoting, onVote, isAuthor = false }: VoteButtonProps) {
+export function VoteButton({ contestantId, canVote, hasVoted, isVoting, onVote, isAuthor = false, votesCount = 0 }: VoteButtonProps) {
   const { t } = useLanguage()
   const [showDetailsPopover, setShowDetailsPopover] = useState(false)
   const [voteDetails, setVoteDetails] = useState<any>(null)
@@ -71,6 +72,11 @@ export function VoteButton({ contestantId, canVote, hasVoted, isVoting, onVote, 
       >
         <ThumbsUp className={`w-5 h-5 ${hasVoted ? 'fill-current' : ''}`} />
         <span className="hidden sm:inline">{t('dashboard.contests.vote')}</span>
+        {votesCount > 0 && (
+          <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+            {votesCount}
+          </span>
+        )}
       </button>
       
       {/* Popover avec détails des votes au survol */}

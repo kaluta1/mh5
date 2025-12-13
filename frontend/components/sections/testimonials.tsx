@@ -24,11 +24,11 @@ export function Testimonials() {
             <span>Témoignages</span>
           </div>
           <h2 className="text-4xl sm:text-5xl md:text-6xl font-black tracking-tight mb-6 bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">
-            {t('testimonials.title')}
-          </h2>
+              {t('testimonials.title')}
+            </h2>
           <p className="text-lg md:text-xl text-gray-600 dark:text-gray-400 leading-relaxed">
-            {t('testimonials.subtitle')}
-          </p>
+              {t('testimonials.subtitle')}
+            </p>
         </div>
 
         {/* Testimonials Grid */}
@@ -38,8 +38,8 @@ export function Testimonials() {
             const numRating = typeof rating === 'string' ? parseInt(rating) || 5 : rating || 5
             
             return (
-              <Card 
-                key={index} 
+            <Card 
+              key={index} 
                 className="group relative overflow-hidden border-0 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm shadow-lg hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 rounded-2xl"
               >
                 {/* Quote icon decoration */}
@@ -48,28 +48,28 @@ export function Testimonials() {
                 </div>
                 
                 <CardContent className="p-6 md:p-8 relative z-10">
-                  {/* Rating */}
+                {/* Rating */}
                   <div className="flex items-center gap-1 mb-6">
                     {[...Array(numRating)].map((_, i) => (
                       <Star key={i} className="h-5 w-5 fill-amber-400 text-amber-400" />
-                    ))}
-                  </div>
+                  ))}
+                </div>
 
-                  {/* Content */}
+                {/* Content */}
                   <blockquote className="text-base leading-relaxed mb-8 text-gray-700 dark:text-gray-300 font-medium relative">
                     <Quote className="absolute -top-2 -left-2 w-8 h-8 text-myfav-primary/20" />
                     <span className="relative z-10">"{t(`testimonials.items.${key}.text`)}"</span>
-                  </blockquote>
+                </blockquote>
 
-                  {/* Author */}
+                {/* Author */}
                   <div className="flex items-center gap-4 pt-6 border-t border-gray-200 dark:border-gray-700">
                     <div className="w-14 h-14 rounded-full flex items-center justify-center bg-gradient-to-br from-myfav-primary to-myfav-secondary text-white font-bold text-lg shadow-lg">
-                      {t(`testimonials.items.${key}.name`).split(' ').map(n => n[0]).join('')}
-                    </div>
-                    <div className="flex-1 min-w-0">
+                    {t(`testimonials.items.${key}.name`).split(' ').map(n => n[0]).join('')}
+                  </div>
+                  <div className="flex-1 min-w-0">
                       <p className="text-base font-bold text-gray-900 dark:text-white">
-                        {t(`testimonials.items.${key}.name`)}
-                      </p>
+                      {t(`testimonials.items.${key}.name`)}
+                    </p>
                       <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1">
                         <span>{t(`testimonials.items.${key}.location`)}</span>
                         {t(`testimonials.items.${key}.role`) && (
@@ -78,11 +78,11 @@ export function Testimonials() {
                             <span>{t(`testimonials.items.${key}.role`)}</span>
                           </>
                         )}
-                      </p>
-                    </div>
+                    </p>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </CardContent>
+            </Card>
             )
           })}
         </div>

@@ -894,6 +894,7 @@ export interface TranslationKeys {
       rank: string
       reaction: string
       search_contestant: string
+      no_contestants: string
       no_contestants_found: string
       like: string
       love: string
@@ -924,6 +925,8 @@ export interface TranslationKeys {
       send: string
       no_comments: string
       gender: string
+      edit: string
+      delete: string
       age: string
       years: string
       country: string
@@ -1864,6 +1867,7 @@ export const translations: Record<Language, TranslationKeys> = {
         rank: "Classement",
         reaction: "Réaction",
         search_contestant: "Rechercher un participant...",
+        no_contestants: "Aucun participant pour le moment",
         no_contestants_found: "Aucun participant trouvé",
         like: "J'aime",
         love: "J'adore",
@@ -1877,6 +1881,8 @@ export const translations: Record<Language, TranslationKeys> = {
         no_comments: "Aucun commentaire pour le moment",
         cancel: "Annuler",
         mention_hint: "Tapez @ pour mentionner quelqu'un",
+        edit: "Modifier",
+        delete: "Supprimer",
         vote_error: "Erreur lors du vote. Veuillez réessayer.",
         voting_not_open: "Le vote n'est pas encore ouvert pour ce concours.",
         already_voted_error: "Vous avez déjà voté pour ce participant.",
@@ -2895,6 +2901,7 @@ export const translations: Record<Language, TranslationKeys> = {
         rank: "Classement",
         reaction: "Réaction",
         search_contestant: "Rechercher un participant...",
+        no_contestants: "Aucun participant pour le moment",
         no_contestants_found: "Aucun participant trouvé",
         like: "J'aime",
         love: "J'adore",
@@ -2908,6 +2915,8 @@ export const translations: Record<Language, TranslationKeys> = {
         no_comments: "Aucun commentaire pour le moment",
         cancel: "Annuler",
         mention_hint: "Tapez @ pour mentionner quelqu'un",
+        edit: "Modifier",
+        delete: "Supprimer",
         vote_error: "Erreur lors du vote. Veuillez réessayer.",
         voting_not_open: "Le vote n'est pas encore ouvert pour ce concours.",
         already_voted_error: "Vous avez déjà voté pour ce participant.",
@@ -4738,6 +4747,7 @@ export const translations: Record<Language, TranslationKeys> = {
         rank: "Rank",
         reaction: "Reaction",
         search_contestant: "Search for a contestant...",
+        no_contestants: "No participants yet",
         no_contestants_found: "No contestants found",
         like: "Like",
         love: "Love",
@@ -4751,6 +4761,8 @@ export const translations: Record<Language, TranslationKeys> = {
         no_comments: "No comments yet",
         cancel: "Cancel",
         mention_hint: "Type @ to mention someone",
+        edit: "Edit",
+        delete: "Delete",
         vote_error: "Error voting. Please try again.",
         voting_not_open: "Voting is not yet open for this contest.",
         already_voted_error: "You have already voted for this participant.",
@@ -6460,6 +6472,7 @@ export const translations: Record<Language, TranslationKeys> = {
         rank: "Clasificación",
         reaction: "Reacción",
         search_contestant: "Buscar un participante...",
+        no_contestants: "Aún no hay participantes",
         no_contestants_found: "No se encontraron participantes",
         like: "Me gusta",
         love: "Me encanta",
@@ -6473,6 +6486,8 @@ export const translations: Record<Language, TranslationKeys> = {
         no_comments: "No hay comentarios aún",
         cancel: "Cancelar",
         mention_hint: "Escribe @ para mencionar a alguien",
+        edit: "Editar",
+        delete: "Eliminar",
         vote_error: "Error al votar. Por favor, inténtalo de nuevo.",
         voting_not_open: "La votación aún no está abierta para este concurso.",
         already_voted_error: "Ya has votado por este participante.",
@@ -8221,6 +8236,7 @@ export const translations: Record<Language, TranslationKeys> = {
         copied: "Kopiert",
         share_natively: "Nativ teilen",
         search_contestant: "Nach einem Teilnehmer suchen...",
+        no_contestants: "Noch keine Teilnehmer",
         no_contestants_found: "Keine Teilnehmer gefunden",
         like: "Gefällt mir",
         love: "Ich liebe es",
@@ -8234,6 +8250,8 @@ export const translations: Record<Language, TranslationKeys> = {
         no_comments: "Noch keine Kommentare",
         cancel: "Abbrechen",
         mention_hint: "Tippen Sie @, um jemanden zu erwähnen",
+        edit: "Bearbeiten",
+        delete: "Löschen",
         vote_error: "Fehler beim Abstimmen. Bitte versuchen Sie es erneut.",
         voting_not_open: "Die Abstimmung ist für diesen Wettbewerb noch nicht geöffnet.",
         already_voted_error: "Sie haben bereits für diesen Teilnehmer abgestimmt.",

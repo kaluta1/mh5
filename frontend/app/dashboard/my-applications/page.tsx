@@ -87,8 +87,8 @@ export default function MyApplicationsPage() {
                 registrationDate: userParticipation.registration_date,
                 status: userParticipation.is_qualified ? 'approved' : 'pending',
                 totalVotes: userParticipation.votes_count || 0,
-                totalComments: 0,
-                totalLikes: 0,
+                totalComments: userParticipation.comments_count || 0,
+                totalLikes: userParticipation.reactions_count || 0,
                 coverImage: coverImage
               })
             }
@@ -171,7 +171,7 @@ export default function MyApplicationsPage() {
   }
 
   return (
-    <div className="min-h-[calc(100vh-10rem)] p-4 py-8">
+    <div className="min-h-[calc(100vh-10rem)] px-0 md:px-4 py-8">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">

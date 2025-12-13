@@ -11,9 +11,10 @@ interface FavoriteButtonProps {
   isFavorite: boolean
   onToggle: () => void
   isAuthor?: boolean
+  favoritesCount?: number
 }
 
-export function FavoriteButton({ contestantId, isFavorite, onToggle, isAuthor = false }: FavoriteButtonProps) {
+export function FavoriteButton({ contestantId, isFavorite, onToggle, isAuthor = false, favoritesCount = 0 }: FavoriteButtonProps) {
   const { t } = useLanguage()
   const [showDetailsPopover, setShowDetailsPopover] = useState(false)
   const [favoriteDetails, setFavoriteDetails] = useState<any>(null)
@@ -67,6 +68,11 @@ export function FavoriteButton({ contestantId, isFavorite, onToggle, isAuthor = 
       >
         <Heart className={`w-5 h-5 ${isFavorite ? 'fill-current' : ''}`} />
         <span className="hidden sm:inline">{t('dashboard.contests.favorite') || 'Favori'}</span>
+        {favoritesCount > 0 && (
+          <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+            {favoritesCount}
+          </span>
+        )}
       </button>
       
       {/* Popover avec détails des favoris au survol */}

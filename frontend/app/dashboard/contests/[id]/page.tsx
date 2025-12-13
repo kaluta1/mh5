@@ -286,6 +286,119 @@ export default function ContestDetailPage() {
     }
   }, [isLoading, isAuthenticated, user, contestId])
 
+  const handleDeleteContestant = async (contestantId: string) => {
+    try {
+      await contestService.deleteContestant(Number(contestantId))
+      
+      // Recharger la liste des contestants
+      const contestantsResponse = await contestService.getContestantsByContest(contestId, 0, 100)
+      
+      // Fonction pour parser les médias
+      const parseMediaIds = (mediaIds: string | undefined, type: 'image' | 'video'): Media[] => {
+        if (!mediaIds) {
+          return []
+        }
+        
+        if (Array.isArray(mediaIds)) {
+          const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+          return mediaIds
+            .filter((url: string) => url && url.trim() !== '')
+            .map((url: string, index: number) => {
+              let fullUrl = url
+              if (url && !url.startsWith('http') && !url.startsWith('data:')) {
+                if (url.startsWith('/')) {
+                  fullUrl = `${API_BASE_URL}${url}`
+                } else {
+                  fullUrl = `${API_BASE_URL}/${url}`
+                }
+              }
+              return {
+                id: `${type}-${index}`,
+                type,
+                url: fullUrl,
+                thumbnail: type === 'video' ? fullUrl : undefined
+              }
+            })
+        }
+        
+        try {
+          const parsed = typeof mediaIds === 'string' ? JSON.parse(mediaIds) : mediaIds
+          if (!Array.isArray(parsed)) {
+            return []
+          }
+          
+          const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+          
+          return parsed
+            .filter((url: string) => url && url.trim() !== '')
+            .map((url: string, index: number) => {
+              let fullUrl = url
+              if (url && !url.startsWith('http') && !url.startsWith('data:')) {
+                if (url.startsWith('/')) {
+                  fullUrl = `${API_BASE_URL}${url}`
+                } else {
+                  fullUrl = `${API_BASE_URL}/${url}`
+                }
+              }
+              return {
+                id: `${type}-${index}`,
+                type,
+                url: fullUrl,
+                thumbnail: type === 'video' ? fullUrl : undefined
+              }
+            })
+        } catch (error) {
+          console.error(`Error parsing ${type} media IDs:`, error)
+          return []
+        }
+      }
+
+      const mappedContestants: Contestant[] = contestantsResponse.map((c: any) => {
+        const images = parseMediaIds(c.image_media_ids, 'image')
+        const videos = parseMediaIds(c.video_media_ids, 'video')
+        const allMedia = [...images, ...videos]
+
+        return {
+          id: String(c.id),
+          userId: c.user_id,
+          name: c.author_name || 'Utilisateur inconnu',
+          country: c.author_country,
+          city: c.author_city,
+          avatar: c.author_avatar_url || '',
+          participationTitle: c.title || '',
+          votes: c.votes_count || 0,
+          rank: c.rank,
+          imagesCount: c.images_count || 0,
+          videosCount: c.videos_count || 0,
+          canVote: c.can_vote || false,
+          hasVoted: c.has_voted || false,
+          isFavorite: favorites.includes(String(c.id)),
+          media: allMedia,
+          description: c.description || '',
+          comments: c.comments_count || 0,
+          reactions: c.reactions_count || 0,
+          favorites: c.favorites_count || 0
+        }
+      })
+
+      // Mettre à jour l'état avec les nouveaux contestants
+      setContest((prev) => {
+        if (!prev) return null
+        return {
+          ...prev,
+          contestants: mappedContestants
+        }
+      })
+
+      showToast(t('common.deleted_successfully') || 'Candidature supprimée avec succès', 'success')
+    } catch (err: any) {
+      console.error('Erreur lors de la suppression:', err)
+      const errorMessage = err?.response?.data?.detail || err?.message || t('common.delete_error') || 'Erreur lors de la suppression'
+      showToast(errorMessage, 'error')
+      throw err // Re-throw pour que le dialog puisse gérer l'erreur
+    }
+  }
+
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type })
     setTimeout(() => setToast(null), 3000)
@@ -620,24 +733,28 @@ export default function ContestDetailPage() {
                       showToast('Fonctionnalité de signalement à venir', 'success')
                     }}
                     onEdit={() => {
-                      // TODO: Implement edit functionality
-                      router.push(`/dashboard/contests/${contestId}/contestant/${contestant.id}/edit`)
+                      router.push(`/dashboard/contests/${contestId}/participate?edit=true`)
                     }}
-                    onDelete={() => {
-                      // TODO: Implement delete functionality
-                      if (confirm('Êtes-vous sûr de vouloir supprimer cette candidature ?')) {
-                        showToast('Fonctionnalité de suppression à venir', 'success')
-                      }
+                    onDelete={async () => {
+                      await handleDeleteContestant(contestant.id)
                     }}
                   />
                   ))
                 ) : (
                   <div className="text-center py-12">
-                    <p className="text-gray-500 dark:text-gray-400">
-                      {searchQuery 
-                        ? t('dashboard.contests.no_contestants_found') || 'Aucun participant trouvé'
-                        : t('dashboard.contests.no_contestants') || 'Aucun participant'}
-                    </p>
+                    <div className="flex flex-col items-center gap-3">
+                      <p className="text-5xl mb-2">🏆</p>
+                      <p className="text-lg font-semibold text-gray-700 dark:text-gray-300">
+                        {searchQuery 
+                          ? t('dashboard.contests.no_contestants_found') || 'Aucun participant trouvé'
+                          : t('dashboard.contests.no_contestants') || 'Aucun participant pour le moment'}
+                      </p>
+                      {!searchQuery && (
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          {t('dashboard.contests.participate') || 'Soyez le premier à participer !'}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

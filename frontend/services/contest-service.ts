@@ -126,6 +126,9 @@ export interface ContestantWithAuthorAndStats {
   votes_count: number
   images_count: number
   videos_count: number
+  favorites_count?: number
+  reactions_count?: number
+  comments_count?: number
   
   // Infos du contest
   contest_title?: string

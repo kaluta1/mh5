@@ -12,7 +12,6 @@ import { contestService } from '@/services/contest-service'
 import { reactionsService } from '@/services/reactions-service'
 import { sharesService } from '@/services/shares-service'
 import { useToast } from '@/components/ui/toast'
-import { StatsBar } from './stats-bar'
 import { VoteButton } from './vote-button'
 import { FavoriteButton } from './favorite-button'
 import { ReactionsButton } from './reactions-button'
@@ -21,6 +20,7 @@ import { CommentsSection } from './comments-section'
 import { AuthorPopover } from './author-popover'
 import { ShareDialog } from './share-dialog'
 import { ContestantActionsMenu } from './contestant-actions-menu'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 
 // Composant pour afficher une description tronquée avec popover au hover
 function DescriptionWithPopover({ description, maxLength = 150 }: { description: string; maxLength?: number }) {
@@ -130,7 +130,7 @@ interface ContestantCardProps {
   onShare?: () => void
   onReport?: () => void
   onEdit?: () => void
-  onDelete?: () => void
+  onDelete?: () => void | Promise<void>
 }
 
 export function ContestantCard({
@@ -180,6 +180,8 @@ export function ContestantCard({
   const [currentComments, setCurrentComments] = useState(comments)
   const [selectedReaction, setSelectedReaction] = useState<string | null>(null)
   const [reactionsCount, setReactionsCount] = useState(reactions || 0)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   // Charger les stats de réactions au montage
   useEffect(() => {
@@ -310,6 +312,10 @@ export function ContestantCard({
     setShowCommentsDialog(true)
   }
 
+  const handleDelete = () => {
+    setShowDeleteDialog(true)
+  }
+
   const handleShare = async () => {
     // Construire le lien de partage avec l'id du contestant et l'id de l'utilisateur qui partage
     const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
@@ -358,81 +364,29 @@ export function ContestantCard({
         {/* Header */}
         <div className="p-4 pb-3">
           <div className="flex items-start justify-between">
-            <div className="flex items-start gap-3 flex-1">
-              {/* Avatar */}
-            <div className="flex-shrink-0">
-              {avatar && (avatar.startsWith('http') || avatar.startsWith('/')) ? (
-                  <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700">
-                  <img src={avatar} alt={name} className="w-full h-full object-cover" />
-                </div>
-              ) : (
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-myfav-primary to-myfav-primary-dark flex items-center justify-center text-xl">
-                  {avatar || '👤'}
-                </div>
-              )}
-            </div>
-
-              {/* Name and Location */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <AuthorPopover
-                    userId={userId}
-                    name={name}
-                    avatar={avatar}
-                    country={country}
-                    city={city}
-                    rank={rank}
-                    votes={votes}
-                  >
-                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white hover:underline cursor-pointer">
-                  {name}
-                </h3>
-                  </AuthorPopover>
-                  {rank && (
-                    <span className="text-xs font-bold bg-myfav-primary text-white px-2 py-0.5 rounded">
-                      #{rank}
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
-                  {[country, city].filter(Boolean).join(' · ') || t('dashboard.contests.participant') || 'Participant'}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                  {votes} {t('dashboard.contests.votes')}
-                </p>
-              </div>
-            </div>
+            {participationTitle && (
+              <h4 
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onViewDetails()
+                }}
+                className="text-base font-semibold text-gray-900 dark:text-white hover:underline cursor-pointer flex-1"
+              >
+                {participationTitle}
+              </h4>
+            )}
 
             {/* Actions Menu */}
             <ContestantActionsMenu
               isAuthor={isAuthor}
               isFavorite={isFavorite}
               onEdit={onEdit}
-              onDelete={onDelete}
+              onDelete={handleDelete}
               onToggleFavorite={onToggleFavorite}
               onShare={handleShare}
               onReport={onReport}
             />
           </div>
-        </div>
-
-        {/* Content */}
-        <div className="px-4 pb-3">
-          {participationTitle && (
-            <h4 
-                  onClick={(e) => {
-                    e.stopPropagation()
-                onViewDetails()
-                  }}
-              className="text-base font-semibold text-gray-900 dark:text-white mb-2 hover:underline cursor-pointer"
-                >
-              {participationTitle}
-            </h4>
-          )}
-          <DescriptionWithPopover 
-            description={description}
-            maxLength={150}
-          />
         </div>
                 
         {/* Media - Video or Image Carousel */}
@@ -533,15 +487,63 @@ export function ContestantCard({
           </div>
         )}
 
-        {/* Stats Bar */}
-        <StatsBar
-          votes={currentVotes}
-          reactions={reactionsCount}
-          comments={currentComments}
-          favorites={favoritesCount}
-        />
+        {/* Author and Description - Moved to bottom */}
+        <div className="px-4 pt-3 pb-2 border-t border-gray-200 dark:border-gray-700">
+          <div className="flex items-start gap-3 mb-3">
+            {/* Avatar */}
+            <div className="flex-shrink-0">
+              {avatar && (avatar.startsWith('http') || avatar.startsWith('/')) ? (
+                <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700">
+                  <img src={avatar} alt={name} className="w-full h-full object-cover" />
+                </div>
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-myfav-primary to-myfav-primary-dark flex items-center justify-center text-lg">
+                  {avatar || '👤'}
+                </div>
+              )}
+            </div>
 
-        {/* Action Buttons - LinkedIn Style */}
+            {/* Name and Location */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <AuthorPopover
+                  userId={userId}
+                  name={name}
+                  avatar={avatar}
+                  country={country}
+                  city={city}
+                  rank={rank}
+                  votes={votes}
+                >
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white hover:underline cursor-pointer">
+                    {name}
+                  </h3>
+                </AuthorPopover>
+                {rank && (
+                  <span className="text-xs font-bold bg-myfav-primary text-white px-2 py-0.5 rounded">
+                    #{rank}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
+                {[country, city].filter(Boolean).join(' · ') || t('dashboard.contests.participant') || 'Participant'}
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                {currentVotes} {t('dashboard.contests.votes')}
+              </p>
+            </div>
+          </div>
+          
+          {/* Description */}
+          <div className="ml-[52px]">
+            <DescriptionWithPopover 
+              description={description}
+              maxLength={150}
+            />
+          </div>
+        </div>
+
+        {/* Action Buttons - Facebook Style with Counts */}
         <div className="px-2 border-t border-gray-200 dark:border-gray-700">
           <div className="grid grid-cols-4 divide-x divide-gray-200 dark:divide-gray-700">
             <VoteButton
@@ -551,6 +553,7 @@ export function ContestantCard({
               isVoting={isVoting}
               onVote={handleVote}
               isAuthor={currentUserId === userId}
+              votesCount={currentVotes}
             />
             <CommentsButton 
               onClick={handleOpenComments}
@@ -561,6 +564,7 @@ export function ContestantCard({
               selectedReaction={selectedReaction}
               onReactionSelect={handleReaction}
               isAuthor={currentUserId === userId}
+              reactionsCount={reactionsCount}
               onReactionSuccess={() => {
                 // Les stats sont déjà rechargées dans handleReaction
               }}
@@ -570,6 +574,7 @@ export function ContestantCard({
               isFavorite={isFavorite}
               onToggle={onToggleFavorite}
               isAuthor={currentUserId === userId}
+              favoritesCount={favoritesCount}
             />
           </div>
         </div>
@@ -628,6 +633,34 @@ export function ContestantCard({
         shareLink={shareLink}
         title={participationTitle || name}
         description={description}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        title={t('dashboard.contests.delete') || 'Supprimer'}
+        message={t('dashboard.contests.my_applications.delete_confirm_message') || 'Êtes-vous sûr de vouloir supprimer cette candidature ? Cette action ne peut pas être annulée.'}
+        confirmText={t('dashboard.contests.delete') || 'Supprimer'}
+        cancelText={t('common.cancel') || 'Annuler'}
+        onConfirm={async () => {
+          if (onDelete) {
+            setIsDeleting(true)
+            try {
+              await onDelete()
+              setShowDeleteDialog(false)
+              addToast(t('common.deleted_successfully') || 'Candidature supprimée avec succès', 'success')
+            } catch (error: any) {
+              console.error('Error deleting:', error)
+              const errorMessage = error?.response?.data?.detail || error?.message || t('common.delete_error') || 'Erreur lors de la suppression'
+              addToast(errorMessage, 'error')
+            } finally {
+              setIsDeleting(false)
+            }
+          }
+        }}
+        isLoading={isDeleting}
+        isDangerous={true}
       />
     </>
   )

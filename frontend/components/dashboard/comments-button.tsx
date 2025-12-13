@@ -23,7 +23,7 @@ export function CommentsButton({ onClick, commentsCount }: CommentsButtonProps) 
       <span className="hidden sm:inline">{t('dashboard.contests.comments')}</span>
       {commentsCount !== undefined && commentsCount > 0 && (
         <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
-          ({commentsCount})
+          {commentsCount}
         </span>
       )}
     </button>
