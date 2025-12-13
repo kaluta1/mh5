@@ -170,13 +170,19 @@ def create_contestant(
     from app.services.contest_status import contest_status_service
     
     # Essayer d'abord de trouver une ContestSeason avec cet ID
-    season = db.query(ContestSeason).filter(ContestSeason.id == contest_id).first()
+    season = db.query(ContestSeason).filter(
+        ContestSeason.id == contest_id,
+        ContestSeason.is_deleted == False
+    ).first()
     
     # Si pas trouvé, chercher dans la table Contest
     contest = None
     if not season:
         from app.models.contest import Contest as MyfavContest
-        contest = db.query(MyfavContest).filter(MyfavContest.id == contest_id).first()
+        contest = db.query(MyfavContest).filter(
+            MyfavContest.id == contest_id,
+            MyfavContest.is_deleted == False
+        ).first()
         if not contest:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -202,7 +208,10 @@ def create_contestant(
         ).first()
         if contest_link:
             from app.models.contest import Contest as MyfavContest
-            contest = db.query(MyfavContest).filter(MyfavContest.id == contest_link.contest_id).first()
+            contest = db.query(MyfavContest).filter(
+                MyfavContest.id == contest_link.contest_id,
+                MyfavContest.is_deleted == False
+            ).first()
             if contest:
                 is_allowed, error_message = contest_status_service.check_submission_allowed(db, contest.id)
                 if not is_allowed:
