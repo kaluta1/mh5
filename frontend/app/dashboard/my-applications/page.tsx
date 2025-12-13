@@ -7,11 +7,12 @@ import { useToast } from '@/components/ui/toast'
 import { ApplicationsSkeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Card } from '@/components/ui/card'
+import { DataTable, Column } from '@/components/ui/data-table'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { contestService } from '@/services/contest-service'
-import { AlertCircle } from 'lucide-react'
+import { AlertCircle, Eye, Edit, Trash2, Radio, ExternalLink } from 'lucide-react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 
 interface Application {
   id: number
@@ -26,13 +27,17 @@ interface Application {
   totalVotes?: number
   totalComments?: number
   totalLikes?: number
+  totalFavorites?: number
+  totalShares?: number
   coverImage?: string
+  isLive?: boolean
 }
 
 export default function MyApplicationsPage() {
   const { t } = useLanguage()
   const { user, isAuthenticated, isLoading } = useAuth()
   const { addToast } = useToast()
+  const router = useRouter()
   
   const [applications, setApplications] = useState<Application[]>([])
   const [pageLoading, setPageLoading] = useState(true)
@@ -89,7 +94,10 @@ export default function MyApplicationsPage() {
                 totalVotes: userParticipation.votes_count || 0,
                 totalComments: userParticipation.comments_count || 0,
                 totalLikes: userParticipation.reactions_count || 0,
-                coverImage: coverImage
+                totalFavorites: userParticipation.favorites_count || 0,
+                totalShares: 0, // Will be loaded separately if needed
+                coverImage: coverImage,
+                isLive: false // TODO: Implement live status
               })
             }
           } catch (err) {
@@ -123,13 +131,13 @@ export default function MyApplicationsPage() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending':
-        return 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800 text-yellow-900 dark:text-yellow-200'
+        return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 border-yellow-200 dark:border-yellow-800'
       case 'approved':
-        return 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-900 dark:text-green-200'
+        return 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 border-green-200 dark:border-green-800'
       case 'rejected':
-        return 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-900 dark:text-red-200'
+        return 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200 border-red-200 dark:border-red-800'
       default:
-        return 'bg-gray-50 dark:bg-gray-900/20 border-gray-200 dark:border-gray-800 text-gray-900 dark:text-gray-200'
+        return 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 border-gray-200 dark:border-gray-600'
     }
   }
 
@@ -146,18 +154,35 @@ export default function MyApplicationsPage() {
     }
   }
 
-  const canEditOrDelete = (app: Application): boolean => {
-    // Vérifier si le contest est encore en phase de candidature
-    // Pour l'instant, on suppose que si le statut est 'pending', on peut éditer/supprimer
-    return app.status === 'pending'
+  const getLevelLabel = (level?: string) => {
+    if (!level) return ''
+    switch (level) {
+      case 'country':
+        return '🌍 ' + (t('dashboard.contests.country') || 'Country')
+      case 'continental':
+        return '🌎 ' + (t('dashboard.contests.continental') || 'Continental')
+      case 'regional':
+        return '🗺️ ' + (t('dashboard.contests.regional') || 'Regional')
+      case 'global':
+        return '🌐 ' + (t('dashboard.contests.global') || 'Global')
+      default:
+        return level
+    }
+  }
+
+  const formatDate = (dateString: string) => {
+    if (!dateString) return '-'
+    return new Date(dateString).toLocaleDateString('fr-FR', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
+    })
   }
 
   const handleDeleteApplication = async (appId: number) => {
     setIsDeleting(true)
     try {
       await contestService.deleteContestant(appId)
-      
-      // Mettre à jour la liste locale après suppression réussie
       setApplications(applications.filter(app => app.id !== appId))
       addToast(t('common.deleted_successfully') || 'Candidature supprimée', 'success')
       setDeleteConfirmId(null)
@@ -169,6 +194,158 @@ export default function MyApplicationsPage() {
       setIsDeleting(false)
     }
   }
+
+  const handleViewDetails = (app: Application) => {
+    if (router) {
+      router.push(`/dashboard/my-applications/${app.id}`)
+    }
+  }
+
+  const columns: Column<Application>[] = [
+    {
+      key: 'contest',
+      header: t('dashboard.contests.my_applications.contest') || 'Concours',
+      render: (app) => (
+        <div className="flex items-center gap-3">
+          {app.coverImage && (
+            <img
+              src={app.coverImage}
+              alt={app.contestName}
+              className="w-12 h-12 rounded-lg object-cover"
+            />
+          )}
+          <div>
+            <p className="font-semibold text-gray-900 dark:text-white">{app.contestName}</p>
+            {app.contestLevel && (
+              <p className="text-xs text-gray-500 dark:text-gray-400">{getLevelLabel(app.contestLevel)}</p>
+            )}
+          </div>
+        </div>
+      )
+    },
+    {
+      key: 'title',
+      header: t('dashboard.contests.my_applications.title') || 'Titre',
+      render: (app) => (
+        <div>
+          <p className="font-medium text-gray-900 dark:text-white line-clamp-1">
+            {app.title || t('dashboard.contests.my_applications.no_title')}
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1 mt-1">
+            {app.description}
+          </p>
+        </div>
+      ),
+      className: 'max-w-xs'
+    },
+    {
+      key: 'status',
+      header: t('dashboard.contests.my_applications.status') || 'Statut',
+      render: (app) => (
+        <Badge className={getStatusColor(app.status)}>
+          {getStatusLabel(app.status)}
+        </Badge>
+      )
+    },
+    {
+      key: 'rank',
+      header: t('dashboard.contests.rank') || 'Rang',
+      render: (app) => (
+        app.rank ? (
+          <Badge className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+            🏆 #{app.rank}
+          </Badge>
+        ) : (
+          <span className="text-gray-400">-</span>
+        )
+      )
+    },
+    {
+      key: 'stats',
+      header: t('dashboard.contests.my_applications.statistics') || 'Statistiques',
+      render: (app) => (
+        <div className="flex gap-2 text-xs">
+          <div className="flex items-center gap-1 text-blue-600 dark:text-blue-400">
+            <span>⚡</span>
+            <span>{app.totalVotes || 0}</span>
+          </div>
+          <div className="flex items-center gap-1 text-purple-600 dark:text-purple-400">
+            <span>❤️</span>
+            <span>{app.totalLikes || 0}</span>
+          </div>
+          <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
+            <span>💬</span>
+            <span>{app.totalComments || 0}</span>
+          </div>
+          <div className="flex items-center gap-1 text-orange-600 dark:text-orange-400">
+            <span>⭐</span>
+            <span>{app.totalFavorites || 0}</span>
+          </div>
+        </div>
+      )
+    },
+    {
+      key: 'date',
+      header: t('dashboard.contests.my_applications.date') || 'Date',
+      render: (app) => (
+        <span className="text-sm text-gray-600 dark:text-gray-400">
+          {formatDate(app.registrationDate)}
+        </span>
+      )
+    },
+    {
+      key: 'actions',
+      header: t('common.actions') || 'Actions',
+      render: (app) => (
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation()
+              handleViewDetails(app)
+            }}
+            className="h-8"
+            title={t('dashboard.contests.my_applications.view_details') || 'Voir les détails'}
+          >
+            <Eye className="w-4 h-4" />
+          </Button>
+          <Link href={`/dashboard/contests/${app.contestId}/participate?edit=true`}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8"
+              title={t('common.edit') || 'Éditer'}
+            >
+              <Edit className="w-4 h-4" />
+            </Button>
+          </Link>
+          <Link href={`/dashboard/contests/${app.contestId}/contestant/${app.id}`}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8"
+              title={t('dashboard.contests.my_applications.view_page') || t('dashboard.contests.view_details') || 'Voir la page'}
+            >
+              <ExternalLink className="w-4 h-4" />
+            </Button>
+          </Link>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation()
+              setDeleteConfirmId(app.id)
+            }}
+            className="h-8 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20"
+            title={t('common.delete') || 'Supprimer'}
+          >
+            <Trash2 className="w-4 h-4" />
+          </Button>
+        </div>
+      )
+    }
+  ]
 
   return (
     <div className="min-h-[calc(100vh-10rem)] px-0 md:px-4 py-8">
@@ -185,124 +362,34 @@ export default function MyApplicationsPage() {
 
         {/* Error Message */}
         {error && (
-          <Card className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800">
+          <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
             <div className="flex items-start gap-3">
               <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
               <p className="text-red-900 dark:text-red-200">{error}</p>
             </div>
-          </Card>
-        )}
-
-        {/* Empty State */}
-        {applications.length === 0 ? (
-          <Card className="text-center py-12">
-            <p className="text-5xl mb-4">🏆</p>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">
-              {t('dashboard.contests.my_applications.no_applications')}
-            </p>
-            <Link href="/dashboard/contests">
-              <Button className="bg-myfav-primary hover:bg-myfav-primary-dark text-white">
-                {t('dashboard.contests.my_applications.browse_contests')} →
-              </Button>
-            </Link>
-          </Card>
-        ) : (
-          <div className="grid gap-4">
-            {applications.map((app) => (
-              <Card key={app.id} className="overflow-hidden hover:shadow-xl transition-shadow duration-200 border-l-4 border-l-myfav-primary">
-                <div className="p-5">
-                  <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-                    {/* Left Content */}
-                    <div className="flex-1">
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <div>
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">
-                          {app.contestName}
-                        </h3>
-                        {app.contestLevel && (
-                          <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">
-                            {app.contestLevel === 'country' ? '🌍 Country' : 
-                             app.contestLevel === 'continental' ? '🌎 Continental' :
-                             app.contestLevel === 'regional' ? '🗺️ Regional' :
-                             app.contestLevel}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    <p className="text-gray-600 dark:text-gray-400 text-sm mb-3 line-clamp-2">
-                      {app.title}
-                    </p>
-
-                    {/* Status and Details */}
-                    <div className="flex flex-wrap gap-2 mb-3">
-                      {/* Status Badge */}
-                      <Badge className={getStatusColor(app.status)}>
-                        {getStatusLabel(app.status)}
-                      </Badge>
-
-                      {/* Rank */}
-                      {app.rank && (
-                        <Badge className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
-                          🏆 #{app.rank}
-                        </Badge>
-                      )}
-
-                      {/* Registration Date */}
-                      <Badge className="bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
-                        📅 {new Date(app.registrationDate).toLocaleDateString()}
-                      </Badge>
-                    </div>
-
-                    {/* Stats Row */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                      <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-2.5 text-center border border-blue-100 dark:border-blue-900/30">
-                        <p className="text-sm font-bold text-blue-600 dark:text-blue-400">{app.totalVotes || 0}</p>
-                        <p className="text-xs text-gray-600 dark:text-gray-400">⚡ {t('dashboard.contests.received') || 'Votes'}</p>
-                      </div>
-                      <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-2.5 text-center border border-purple-100 dark:border-purple-900/30">
-                        <p className="text-sm font-bold text-purple-600 dark:text-purple-400">{app.totalLikes || 0}</p>
-                        <p className="text-xs text-gray-600 dark:text-gray-400">❤️ {t('common.likes') || 'Likes'}</p>
-                      </div>
-                      <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-2.5 text-center border border-green-100 dark:border-green-900/30">
-                        <p className="text-sm font-bold text-green-600 dark:text-green-400">{app.totalComments || 0}</p>
-                        <p className="text-xs text-gray-600 dark:text-gray-400">💬 {t('common.comments') || 'Comments'}</p>
-                      </div>
-                      <div className="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-2.5 text-center border border-orange-100 dark:border-orange-900/30">
-                        <p className="text-sm font-bold text-orange-600 dark:text-orange-400">{app.rank ? `#${app.rank}` : '-'}</p>
-                        <p className="text-xs text-gray-600 dark:text-gray-400">🏆 {t('dashboard.contests.my_applications.rank') || 'Rank'}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Right Actions */}
-                  <div className="flex gap-2 flex-col md:flex-row">
-                    <Link href={`/dashboard/contests/${app.contestId}/participate?edit=true`}>
-                      <Button
-                        className="bg-myfav-primary hover:bg-myfav-primary-dark text-white w-full md:w-auto"
-                        disabled={!canEditOrDelete(app)}
-                        title={!canEditOrDelete(app) ? t('dashboard.contests.my_applications.edit_not_available') || 'Édition non disponible' : ''}
-                      >
-                        ✏️ {t('common.edit') || 'Éditer'}
-                      </Button>
-                    </Link>
-                    <Button
-                      variant="outline"
-                      className="text-red-600 dark:text-red-400 border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 w-full md:w-auto"
-                      onClick={() => setDeleteConfirmId(app.id)}
-                      disabled={!canEditOrDelete(app)}
-                      title={!canEditOrDelete(app) ? t('dashboard.contests.my_applications.delete_not_available') || 'Suppression non disponible' : ''}
-                    >
-                      🗑️ {t('common.delete') || 'Supprimer'}
-                    </Button>
-                  </div>
-                </div>
-                </div>
-              </Card>
-            ))}
           </div>
         )}
 
-        {/* Delete Confirmation Dialog - Outside the loop */}
+        {/* Data Table */}
+        <DataTable
+          data={applications}
+          columns={columns}
+          emptyIcon={<span className="text-5xl">🏆</span>}
+          emptyTitle={t('dashboard.contests.my_applications.no_applications')}
+          emptyDescription={
+            <div className="mt-4">
+              <Link href="/dashboard/contests">
+                <Button className="bg-myfav-primary hover:bg-myfav-primary-dark text-white">
+                  {t('dashboard.contests.my_applications.browse_contests')} →
+                </Button>
+              </Link>
+            </div>
+          }
+          onRowClick={(app) => handleViewDetails(app)}
+          rowClassName="cursor-pointer"
+        />
+
+        {/* Delete Confirmation Dialog */}
         {deleteConfirmId !== null && (
           <ConfirmDialog
             open={deleteConfirmId !== null}
@@ -316,6 +403,7 @@ export default function MyApplicationsPage() {
             isDangerous={true}
           />
         )}
+
       </div>
     </div>
   )

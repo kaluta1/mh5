@@ -14,8 +14,8 @@ export interface VideoInfo {
 /**
  * Détecte si une URL est une URL de plateforme vidéo supportée
  */
-export function detectVideoPlatform(url: string): VideoPlatform {
-  if (!url) return 'unknown'
+export function detectVideoPlatform(url: string | null | undefined): VideoPlatform {
+  if (!url || typeof url !== 'string') return 'unknown'
   
   const lowerUrl = url.toLowerCase().trim()
   
@@ -51,7 +51,9 @@ export function detectVideoPlatform(url: string): VideoPlatform {
 /**
  * Extrait l'ID vidéo d'une URL YouTube
  */
-function extractYouTubeId(url: string): string | null {
+function extractYouTubeId(url: string | null | undefined): string | null {
+  if (!url || typeof url !== 'string') return null
+  
   const patterns = [
     /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
     /youtube\.com\/watch\?.*v=([^&\n?#]+)/
@@ -70,7 +72,9 @@ function extractYouTubeId(url: string): string | null {
 /**
  * Extrait l'ID vidéo d'une URL Vimeo
  */
-function extractVimeoId(url: string): string | null {
+function extractVimeoId(url: string | null | undefined): string | null {
+  if (!url || typeof url !== 'string') return null
+  
   const patterns = [
     /vimeo\.com\/(\d+)/,
     /vimeo\.com\/video\/(\d+)/,
@@ -90,7 +94,9 @@ function extractVimeoId(url: string): string | null {
 /**
  * Extrait l'ID vidéo d'une URL TikTok
  */
-function extractTikTokId(url: string): string | null {
+function extractTikTokId(url: string | null | undefined): string | null {
+  if (!url || typeof url !== 'string') return null
+  
   // TikTok URLs: https://www.tiktok.com/@username/video/1234567890
   const pattern = /tiktok\.com\/.*\/video\/(\d+)/
   const match = url.match(pattern)
@@ -100,7 +106,9 @@ function extractTikTokId(url: string): string | null {
 /**
  * Extrait l'ID vidéo d'une URL Facebook
  */
-function extractFacebookId(url: string): string | null {
+function extractFacebookId(url: string | null | undefined): string | null {
+  if (!url || typeof url !== 'string') return null
+  
   // Facebook URLs peuvent être complexes
   // Format: https://www.facebook.com/watch/?v=1234567890
   // ou: https://www.facebook.com/username/videos/1234567890/
@@ -124,7 +132,15 @@ function extractFacebookId(url: string): string | null {
 /**
  * Convertit une URL de plateforme vidéo en URL embed
  */
-export function convertToEmbedUrl(url: string): VideoInfo {
+export function convertToEmbedUrl(url: string | null | undefined): VideoInfo {
+  if (!url) {
+    return {
+      platform: 'unknown',
+      embedUrl: '',
+      originalUrl: ''
+    }
+  }
+  
   const platform = detectVideoPlatform(url)
   const originalUrl = url.trim()
   
@@ -205,7 +221,8 @@ export function convertToEmbedUrl(url: string): VideoInfo {
 /**
  * Vérifie si une URL est une URL de plateforme vidéo valide
  */
-export function isValidVideoUrl(url: string): boolean {
+export function isValidVideoUrl(url: string | null | undefined): boolean {
+  if (!url || typeof url !== 'string') return false
   const platform = detectVideoPlatform(url)
   return platform !== 'unknown'
 }

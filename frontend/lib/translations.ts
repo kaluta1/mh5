@@ -939,14 +939,28 @@ export interface TranslationKeys {
         description: string
         no_applications: string
         browse_contests: string
+        status: string
         status_pending: string
         status_approved: string
         status_rejected: string
         rank: string
         view_details: string
+        view_page: string
         edit_not_available: string
         delete_not_available: string
         delete_confirm_message: string
+        details: string
+        statistics: string
+        total_shares: string
+        shares_by_platform: string
+        no_shares: string
+        contest: string
+        date: string
+        media: string
+        no_title: string
+        user: string
+        media_alt: string
+        video_alt: string
       }
       participation_form: {
         title: string
@@ -1896,14 +1910,28 @@ export const translations: Record<Language, TranslationKeys> = {
           description: "Consultez vos candidatures et votre classement",
           no_applications: "Vous n'avez pas encore de candidatures",
           browse_contests: "Parcourir les concours",
+          status: "Statut",
           status_pending: "En attente",
           status_approved: "Approuvée",
           status_rejected: "Rejetée",
           rank: "Rang",
           view_details: "Voir les détails",
+          view_page: "Voir la page",
           edit_not_available: "Édition non disponible pour ce contest",
           delete_not_available: "Suppression non disponible pour ce contest",
-          delete_confirm_message: "Êtes-vous sûr de vouloir supprimer cette candidature ? Cette action ne peut pas être annulée."
+          delete_confirm_message: "Êtes-vous sûr de vouloir supprimer cette candidature ? Cette action ne peut pas être annulée.",
+          details: "Détails",
+          statistics: "Statistiques",
+          total_shares: "Total de partages",
+          shares_by_platform: "Partages par plateforme",
+          no_shares: "Aucun partage pour le moment",
+          contest: "Concours",
+          date: "Date",
+          media: "Médias",
+          no_title: "Sans titre",
+          user: "Utilisateur",
+          media_alt: "Média",
+          video_alt: "Vidéo"
         },
         participation_form: {
           title: "Participer au concours",
@@ -2930,14 +2958,28 @@ export const translations: Record<Language, TranslationKeys> = {
           description: "Consultez vos candidatures et votre classement",
           no_applications: "Vous n'avez pas encore de candidatures",
           browse_contests: "Parcourir les concours",
+          status: "Statut",
           status_pending: "En attente",
           status_approved: "Approuvée",
           status_rejected: "Rejetée",
           rank: "Rang",
           view_details: "Voir les détails",
+          view_page: "Voir la page",
           edit_not_available: "Édition non disponible pour ce contest",
           delete_not_available: "Suppression non disponible pour ce contest",
-          delete_confirm_message: "Êtes-vous sûr de vouloir supprimer cette candidature ? Cette action ne peut pas être annulée."
+          delete_confirm_message: "Êtes-vous sûr de vouloir supprimer cette candidature ? Cette action ne peut pas être annulée.",
+          details: "Détails",
+          statistics: "Statistiques",
+          total_shares: "Total de partages",
+          shares_by_platform: "Partages par plateforme",
+          no_shares: "Aucun partage pour le moment",
+          contest: "Concours",
+          date: "Date",
+          media: "Médias",
+          no_title: "Sans titre",
+          user: "Utilisateur",
+          media_alt: "Média",
+          video_alt: "Vidéo"
         },
         participation_form: {
           title: "Participer au concours",
@@ -4786,14 +4828,28 @@ export const translations: Record<Language, TranslationKeys> = {
           description: "View your applications and ranking",
           no_applications: "You don't have any applications yet",
           browse_contests: "Browse contests",
+          status: "Status",
           status_pending: "Pending",
           status_approved: "Approved",
           status_rejected: "Rejected",
           rank: "Rank",
           view_details: "View Details",
+          view_page: "View Page",
           edit_not_available: "Editing not available for this contest",
           delete_not_available: "Deletion not available for this contest",
-          delete_confirm_message: "Are you sure you want to delete this application? This action cannot be undone."
+          delete_confirm_message: "Are you sure you want to delete this application? This action cannot be undone.",
+          details: "Details",
+          statistics: "Statistics",
+          total_shares: "Total shares",
+          shares_by_platform: "Shares by platform",
+          no_shares: "No shares yet",
+          contest: "Contest",
+          date: "Date",
+          media: "Media",
+          no_title: "No title",
+          user: "User",
+          media_alt: "Media",
+          video_alt: "Video"
         },
         participation_form: {
           title: "Participate in Contest",
@@ -6511,14 +6567,28 @@ export const translations: Record<Language, TranslationKeys> = {
           description: "Ver tus candidaturas y clasificación",
           no_applications: "Aún no tienes candidaturas",
           browse_contests: "Explorar concursos",
+          status: "Estado",
           status_pending: "Pendiente",
           status_approved: "Aprobada",
           status_rejected: "Rechazada",
           rank: "Clasificación",
           view_details: "Ver Detalles",
+          view_page: "Ver Página",
           edit_not_available: "La edición no está disponible para este concurso",
           delete_not_available: "La eliminación no está disponible para este concurso",
-          delete_confirm_message: "¿Estás seguro de que deseas eliminar esta candidatura? Esta acción no se puede deshacer."
+          delete_confirm_message: "¿Estás seguro de que deseas eliminar esta candidatura? Esta acción no se puede deshacer.",
+          details: "Detalles",
+          statistics: "Estadísticas",
+          total_shares: "Total de compartidos",
+          shares_by_platform: "Compartidos por plataforma",
+          no_shares: "Aún no hay compartidos",
+          contest: "Concurso",
+          date: "Fecha",
+          media: "Medios",
+          no_title: "Sin título",
+          user: "Usuario",
+          media_alt: "Medio",
+          video_alt: "Vídeo"
         },
         participation_form: {
           title: "Participar en el Concurso",
@@ -8284,14 +8354,28 @@ export const translations: Record<Language, TranslationKeys> = {
           description: "Sehen Sie Ihre Bewerbungen und Ihre Platzierung",
           no_applications: "Sie haben noch keine Bewerbungen",
           browse_contests: "Wettbewerbe durchsuchen",
+          status: "Status",
           status_pending: "Ausstehend",
           status_approved: "Genehmigt",
           status_rejected: "Abgelehnt",
           rank: "Platzierung",
           view_details: "Details Anzeigen",
+          view_page: "Seite Anzeigen",
           edit_not_available: "Bearbeitung für diesen Wettbewerb nicht verfügbar",
           delete_not_available: "Löschung für diesen Wettbewerb nicht verfügbar",
-          delete_confirm_message: "Sind Sie sicher, dass Sie diese Bewerbung löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden."
+          delete_confirm_message: "Sind Sie sicher, dass Sie diese Bewerbung löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
+          details: "Details",
+          statistics: "Statistiken",
+          total_shares: "Gesamtanteile",
+          shares_by_platform: "Anteile nach Plattform",
+          no_shares: "Noch keine Anteile",
+          contest: "Wettbewerb",
+          date: "Datum",
+          media: "Medien",
+          no_title: "Kein Titel",
+          user: "Benutzer",
+          media_alt: "Medium",
+          video_alt: "Video"
         },
         participation_form: {
           title: "Am Wettbewerb teilnehmen",

@@ -4,7 +4,7 @@ import React from 'react'
 import { convertToEmbedUrl, VideoInfo } from '@/lib/utils/video-platforms'
 
 interface VideoEmbedProps {
-  url: string
+  url: string | null | undefined
   className?: string
   autoplay?: boolean
   allowFullscreen?: boolean
@@ -20,6 +20,16 @@ export function VideoEmbed({
   width = '100%',
   height = '100%'
 }: VideoEmbedProps) {
+  if (!url) {
+    return (
+      <div className={`flex items-center justify-center bg-gray-100 dark:bg-gray-800 ${className}`} style={{ width, height }}>
+        <p className="text-gray-500 dark:text-gray-400 text-sm">
+          URL vidéo non valide
+        </p>
+      </div>
+    )
+  }
+
   const videoInfo: VideoInfo = convertToEmbedUrl(url)
   
   // Si c'est une vidéo directe, utiliser la balise <video>
