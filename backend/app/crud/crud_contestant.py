@@ -105,7 +105,29 @@ class CRUDContestant:
         
         # Récupérer les infos du contest (saison)
         season = db.query(ContestSeason).filter(ContestSeason.id == contestant.season_id).first()
-        contest_title = season.name if season else None
+        contest_title = None
+        
+        if season:
+            # Essayer d'abord de récupérer le titre du contest lié via ContestSeasonLink
+            from app.models.contests import ContestSeasonLink
+            contest_link = db.query(ContestSeasonLink).filter(
+                ContestSeasonLink.season_id == season.id,
+                ContestSeasonLink.is_active == True
+            ).first()
+            
+            if contest_link:
+                from app.models.contest import Contest as MyfavContest
+                contest = db.query(MyfavContest).filter(
+                    MyfavContest.id == contest_link.contest_id,
+                    MyfavContest.is_deleted == False
+                ).first()
+                if contest:
+                    contest_title = contest.name
+                else:
+                    contest_title = season.title
+            else:
+                # Si pas de contest lié, utiliser le titre de la saison
+                contest_title = season.title
         
         # Compter le nombre total de participants pour cette saison
         total_participants = db.query(func.count(Contestant.id))\

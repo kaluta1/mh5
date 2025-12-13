@@ -16,6 +16,7 @@ import api from '@/lib/api'
 import { commentsService, Comment as ServiceComment } from '@/lib/services/comments-service'
 import { reactionsService, ReactionDetails } from '@/services/reactions-service'
 import Image from 'next/image'
+import * as React from 'react'
 
 interface Media {
   id: string
@@ -54,6 +55,82 @@ interface ContestantDetail {
   contest_title?: string
   contest_id?: number
   total_participants?: number
+}
+
+// Composant pour afficher une description tronquée avec popover au hover
+function DescriptionWithPopover({ description, maxLength = 200 }: { description: string; maxLength?: number }) {
+  const [isOpen, setIsOpen] = React.useState(false)
+  const timeoutRef = React.useRef<NodeJS.Timeout | null>(null)
+  const containerRef = React.useRef<HTMLDivElement>(null)
+
+  const shouldTruncate = description.length > maxLength
+  const truncatedDescription = shouldTruncate ? description.substring(0, maxLength) + '...' : description
+
+  const handleMouseEnter = () => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current)
+    }
+    setIsOpen(true)
+  }
+
+  const handleMouseLeave = () => {
+    timeoutRef.current = setTimeout(() => {
+      setIsOpen(false)
+    }, 200)
+  }
+
+  React.useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+      }
+    }
+  }, [])
+
+  if (!description || description.trim() === '') {
+    return (
+      <p className="text-sm text-gray-500 dark:text-gray-400 italic">
+        Aucune description disponible
+      </p>
+    )
+  }
+
+  if (!shouldTruncate) {
+    return (
+      <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+        {description}
+      </p>
+    )
+  }
+
+  return (
+    <div 
+      ref={containerRef}
+      className="relative"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed cursor-pointer hover:text-myfav-primary dark:hover:text-myfav-secondary transition-colors">
+        {truncatedDescription}
+      </p>
+      
+      {/* Popover */}
+      {isOpen && (
+        <div
+          className="absolute z-50 w-80 max-w-[90vw] max-h-[400px] overflow-y-auto bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 p-4 bottom-full left-0 mb-2"
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+        >
+          <div className="space-y-2">
+            <h4 className="font-semibold text-sm text-gray-900 dark:text-white">Description complète</h4>
+            <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
+              {description}
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default function ContestantDetailPage() {
@@ -752,9 +829,10 @@ export default function ContestantDetailPage() {
                   )}
                 </div>
               </div>
-              <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed line-clamp-3">
-                {contestant.description}
-              </p>
+              <DescriptionWithPopover 
+                description={contestant.description || ''}
+                maxLength={200}
+              />
             </div>
 
             {/* Media Gallery */}
