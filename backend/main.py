@@ -7,6 +7,7 @@ import os
 from app.core.config import settings
 from app.api.api_v1.api import api_router
 from app.services.payment_scheduler import payment_scheduler
+from app.services.contest_status import contest_status_scheduler
 
 
 @asynccontextmanager
@@ -16,9 +17,15 @@ async def lifespan(app: FastAPI):
     print("Starting payment scheduler...")
     await payment_scheduler.start()
     
+    print("Starting contest status scheduler...")
+    await contest_status_scheduler.start()
+    
     yield
     
     # Shutdown
+    print("Stopping contest status scheduler...")
+    await contest_status_scheduler.stop()
+    
     print("Stopping payment scheduler...")
     await payment_scheduler.stop()
 

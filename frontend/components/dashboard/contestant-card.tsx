@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import * as React from 'react'
 import { Play, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useLanguage } from '@/contexts/language-context'
+import { useAuth } from '@/hooks/use-auth'
 import { VideoPreviewDialog } from '@/components/ui/video-preview-dialog'
 import { MediaViewerModal } from '@/components/media/media-viewer-modal'
 import { VideoEmbed } from '@/components/ui/video-embed'
@@ -122,6 +123,9 @@ interface ContestantCardProps {
   comments: number
   reactions?: number
   favorites?: number
+  votesList?: Array<any>
+  reactionsList?: { [key: string]: Array<any> }
+  favoritesList?: Array<any>
   contestId?: string
   onToggleFavorite: () => void
   onViewDetails: () => void
@@ -131,6 +135,12 @@ interface ContestantCardProps {
   onReport?: () => void
   onEdit?: () => void
   onDelete?: () => void | Promise<void>
+  onHoverAuthor?: () => void
+  onHoverEnd?: () => void
+  onHoverDescription?: () => void
+  onHoverVotes?: () => void
+  onHoverReactions?: () => void
+  onHoverFavorites?: () => void
 }
 
 export function ContestantCard({
@@ -154,6 +164,9 @@ export function ContestantCard({
   comments,
   reactions = 0,
   favorites: favoritesCount = 0,
+  votesList = [],
+  reactionsList = {},
+  favoritesList = [],
   contestId,
   onToggleFavorite,
   onViewDetails,
@@ -162,10 +175,17 @@ export function ContestantCard({
   onShare,
   onReport,
   onEdit,
-  onDelete
+  onDelete,
+  onHoverAuthor,
+  onHoverEnd,
+  onHoverDescription,
+  onHoverVotes,
+  onHoverReactions,
+  onHoverFavorites
 }: ContestantCardProps) {
   const { t } = useLanguage()
   const { addToast } = useToast()
+  const { user } = useAuth()
   const [showVideoDialog, setShowVideoDialog] = useState(false)
   const [selectedVideo, setSelectedVideo] = useState<Media | null>(null)
   const [isLiked, setIsLiked] = useState(hasVoted)
@@ -317,23 +337,28 @@ export function ContestantCard({
   }
 
   const handleShare = async () => {
-    // Construire le lien de partage avec l'id du contestant et l'id de l'utilisateur qui partage
+    // Construire le lien de partage avec l'id du contestant
     const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
-    const shareUrl = new URL(`${baseUrl}/dashboard/contests/${contestId}/contestant/${id}`)
-    if (currentUserId) {
-      shareUrl.searchParams.set('ref', String(currentUserId))
+    const shareUrl = new URL(`${baseUrl}/contestants/${id}`)
+    
+    // Ajouter uniquement le referral code (pas de fallback sur l'ID utilisateur)
+    const referralCode = user?.personal_referral_code
+    if (referralCode) {
+      shareUrl.searchParams.set('ref', referralCode)
     }
+    
     const shareLinkStr = shareUrl.toString()
     setShareLink(shareLinkStr)
     setShowShareDialog(true)
     
-    // Enregistrer le partage dans la base de données
+    // Enregistrer le partage dans la base de données avec le referral code
     try {
       await sharesService.shareContestant(
         Number(id),
         shareLinkStr,
         undefined, // platform sera détecté automatiquement si possible
-        currentUserId
+        currentUserId,
+        referralCode || undefined
       )
     } catch (error: any) {
       console.error('Error recording share:', error)
@@ -370,7 +395,7 @@ export function ContestantCard({
                   e.stopPropagation()
                   onViewDetails()
                 }}
-                className="text-base font-semibold text-gray-900 dark:text-white hover:underline cursor-pointer flex-1"
+                className="text-lg font-bold text-gray-900 dark:text-white hover:underline cursor-pointer flex-1"
               >
                 {participationTitle}
               </h4>
@@ -506,19 +531,13 @@ export function ContestantCard({
             {/* Name and Location */}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
-                <AuthorPopover
-                  userId={userId}
-                  name={name}
-                  avatar={avatar}
-                  country={country}
-                  city={city}
-                  rank={rank}
-                  votes={votes}
+                <h3 
+                  className="text-base font-bold text-gray-900 dark:text-white hover:underline cursor-pointer"
+                  onMouseEnter={onHoverAuthor}
+                  onMouseLeave={onHoverEnd}
                 >
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white hover:underline cursor-pointer">
-                    {name}
-                  </h3>
-                </AuthorPopover>
+                  {name}
+                </h3>
                 {rank && (
                   <span className="text-xs font-bold bg-myfav-primary text-white px-2 py-0.5 rounded">
                     #{rank}
@@ -528,7 +547,11 @@ export function ContestantCard({
               <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
                 {[country, city].filter(Boolean).join(' · ') || t('dashboard.contests.participant') || 'Participant'}
               </p>
-              <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+              <p 
+                className="text-xs text-gray-500 dark:text-gray-500 mt-1 cursor-pointer hover:text-myfav-primary"
+                onMouseEnter={onHoverVotes}
+                onMouseLeave={onHoverEnd}
+              >
                 {currentVotes} {t('dashboard.contests.votes')}
               </p>
             </div>
@@ -536,46 +559,70 @@ export function ContestantCard({
           
           {/* Description */}
           <div className="ml-[52px]">
-            <DescriptionWithPopover 
-              description={description}
-              maxLength={150}
-            />
+            {description && description.length > 150 ? (
+              <p 
+                className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words cursor-pointer hover:text-myfav-primary dark:hover:text-myfav-secondary transition-colors"
+                onMouseEnter={onHoverDescription}
+                onMouseLeave={onHoverEnd}
+              >
+                {description.substring(0, 150)}...
+              </p>
+            ) : (
+              <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words">
+                {description}
+              </p>
+            )}
           </div>
         </div>
 
         {/* Action Buttons - Facebook Style with Counts */}
         <div className="px-2 border-t border-gray-200 dark:border-gray-700">
           <div className="grid grid-cols-4 divide-x divide-gray-200 dark:divide-gray-700">
-            <VoteButton
-              contestantId={Number(id)}
-              canVote={canVote}
-              hasVoted={isLiked}
-              isVoting={isVoting}
-              onVote={handleVote}
-              isAuthor={currentUserId === userId}
-              votesCount={currentVotes}
-            />
+            <div
+              onMouseEnter={onHoverVotes}
+              onMouseLeave={onHoverEnd}
+            >
+              <VoteButton
+                contestantId={Number(id)}
+                canVote={canVote}
+                hasVoted={isLiked}
+                isVoting={isVoting}
+                onVote={handleVote}
+                isAuthor={currentUserId === userId}
+                votesCount={currentVotes}
+              />
+            </div>
             <CommentsButton 
               onClick={handleOpenComments}
               commentsCount={currentComments}
             />
-            <ReactionsButton
-              contestantId={Number(id)}
-              selectedReaction={selectedReaction}
-              onReactionSelect={handleReaction}
-              isAuthor={currentUserId === userId}
-              reactionsCount={reactionsCount}
-              onReactionSuccess={() => {
-                // Les stats sont déjà rechargées dans handleReaction
-              }}
-            />
-            <FavoriteButton
-              contestantId={Number(id)}
-              isFavorite={isFavorite}
-              onToggle={onToggleFavorite}
-              isAuthor={currentUserId === userId}
-              favoritesCount={favoritesCount}
-            />
+            <div
+              onMouseEnter={currentUserId === userId ? onHoverReactions : undefined}
+              onMouseLeave={currentUserId === userId ? onHoverEnd : undefined}
+            >
+              <ReactionsButton
+                contestantId={Number(id)}
+                selectedReaction={selectedReaction}
+                onReactionSelect={handleReaction}
+                isAuthor={currentUserId === userId}
+                reactionsCount={reactionsCount}
+                onReactionSuccess={() => {
+                  // Les stats sont déjà rechargées dans handleReaction
+                }}
+              />
+            </div>
+            <div
+              onMouseEnter={onHoverFavorites}
+              onMouseLeave={onHoverEnd}
+            >
+              <FavoriteButton
+                contestantId={Number(id)}
+                isFavorite={isFavorite}
+                onToggle={onToggleFavorite}
+                isAuthor={currentUserId === userId}
+                favoritesCount={favoritesCount}
+              />
+            </div>
           </div>
         </div>
       </div>

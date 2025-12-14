@@ -37,7 +37,7 @@ from app.models.contests import (
 )
 from app.models.voting import (
     Vote as VoteModel, VoteSession, MyFavorites, ContestComment, 
-    ContestLike, PageView
+    ContestLike, PageView, ContestantVoting
 )
 from app.models.affiliate import (
     AffiliateTree, AffiliateCommission, CommissionRate, ReferralLink,

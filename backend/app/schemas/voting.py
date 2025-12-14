@@ -264,6 +264,7 @@ class ReactionStats(BaseModel):
 
 class ReactionUserDetail(BaseModel):
     """Détails d'un utilisateur qui a réagi"""
+    id: Optional[int] = None  # ID de la réaction
     user_id: int
     username: Optional[str] = None
     full_name: Optional[str] = None
@@ -279,12 +280,15 @@ class ReactionDetails(BaseModel):
 
 class VoteUserDetail(BaseModel):
     """Détails d'un utilisateur qui a voté"""
+    id: Optional[int] = None  # ID du vote dans contestant_voting
     user_id: int
     username: Optional[str] = None
     full_name: Optional[str] = None
     avatar_url: Optional[str] = None
     points: int
     vote_date: datetime
+    contest_id: Optional[int] = None  # ID du contest
+    season_id: Optional[int] = None  # ID de la saison
 
 
 class VoteDetails(BaseModel):
@@ -295,6 +299,7 @@ class VoteDetails(BaseModel):
 
 class FavoriteUserDetail(BaseModel):
     """Détails d'un utilisateur qui a ajouté en favoris"""
+    id: Optional[int] = None  # ID du favori
     user_id: int
     username: Optional[str] = None
     full_name: Optional[str] = None
@@ -314,6 +319,7 @@ class ShareBase(BaseModel):
     contestant_id: int
     share_link: str
     platform: Optional[str] = None  # facebook, twitter, whatsapp, etc.
+    referral_code: Optional[str] = None  # Code de parrainage de celui qui partage
 
 
 class ShareCreate(ShareBase):
@@ -324,7 +330,8 @@ class Share(ShareBase):
     model_config = ConfigDict(from_attributes=True)
     
     id: int
-    user_id: Optional[int] = None
+    author_id: Optional[int] = None
+    user_id: Optional[int] = None  # Déprécié, utiliser author_id
     shared_by_user_id: Optional[int] = None
     created_at: Optional[datetime] = None  # Utilise created_at de Base au lieu de shared_at
 

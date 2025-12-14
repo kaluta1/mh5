@@ -1,11 +1,11 @@
-from typing import Any, List
+from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_active_user
+from app.api.deps import get_current_active_user, get_current_active_user_optional
 from app.crud import contest
 from app.db.session import get_db
-from app.schemas.contest import Contest, ContestCreate, ContestUpdate, ContestWithEntries
+from app.schemas.contest import Contest, ContestCreate, ContestUpdate, ContestWithEntries, ContestWithEnrichedContestants
 
 router = APIRouter()
 
@@ -89,44 +89,40 @@ def read_contests(
     
     return enriched_contests
 
-@router.get("/{contest_id}", response_model=ContestWithEntries)
+
+@router.get("/{contest_id}", response_model=ContestWithEnrichedContestants)
 def read_contest(
     *,
     db: Session = Depends(get_db),
     contest_id: int,
+    current_user: Optional[Any] = Depends(get_current_active_user_optional),
 ) -> Any:
     """
-    Récupérer un concours par ID avec ses participants.
+    Récupérer un concours par ID avec tous ses contestants enrichis de toutes les informations :
+    - Commentaires avec utilisateurs
+    - Votes avec utilisateurs
+    - Réactions avec utilisateurs
+    - Favoris avec utilisateurs
+    - Partages avec utilisateurs
+    - Saison
     Endpoint public - accessible sans authentification.
     """
-    contest_obj = contest.get_with_entries(db=db, id=contest_id)
-    if not contest_obj:
+    current_user_id = current_user.id if current_user else None
+    
+    # Récupérer le contest avec tous les contestants enrichis
+    enriched_data = contest.get_contest_with_enriched_contestants(
+        db=db, 
+        contest_id=contest_id,
+        current_user_id=current_user_id
+    )
+    
+    if not enriched_data:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Concours non trouvé"
+            detail="Contest not found"
         )
     
-    # Récupérer directement voting_restriction depuis le modèle Contest
-    voting_restriction_value = 'none'
-    if contest_obj.voting_restriction:
-        if hasattr(contest_obj.voting_restriction, 'value'):
-            voting_restriction_value = contest_obj.voting_restriction.value
-        elif isinstance(contest_obj.voting_restriction, str):
-            voting_restriction_value = contest_obj.voting_restriction
-        else:
-            voting_restriction_value = str(contest_obj.voting_restriction)
-    
-    # Enrichir avec les stats
-    enriched = contest.enrich_contest_with_stats(db=db, contest=contest_obj)
-    
-    # FORCER voting_restriction à être présent avec la valeur du modèle
-    enriched['voting_restriction'] = str(voting_restriction_value) if voting_restriction_value else 'none'
-    
-    # S'assurer que tous les champs requis sont présents
-    if 'gender_restriction' not in enriched:
-        enriched['gender_restriction'] = None
-    
-    return enriched
+    return enriched_data
 
 @router.put("/{contest_id}", response_model=Contest)
 def update_contest(

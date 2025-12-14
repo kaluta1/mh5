@@ -1,9 +1,10 @@
 from typing import List, Optional, Any, Literal
-from datetime import date
+from datetime import date, datetime
 from pydantic import BaseModel, Field
 from enum import Enum
 
 from app.schemas.media import Media
+from app.schemas.voting import VoteUserDetail, ReactionUserDetail, FavoriteUserDetail
 
 
 # Enums pour les schémas
@@ -147,6 +148,87 @@ class Contest(ContestBase):
 # Schéma pour afficher un concours avec ses participations
 class ContestWithEntries(Contest):
     entries: List[ContestEntry] = []
+
+
+# Schémas enrichis pour les contestants avec toutes les informations
+class CommentUserDetail(BaseModel):
+    """Détails d'un utilisateur qui a commenté"""
+    id: int  # ID du commentaire
+    user_id: int
+    username: Optional[str] = None
+    full_name: Optional[str] = None
+    avatar_url: Optional[str] = None
+    content: str
+    created_at: datetime
+    parent_id: Optional[int] = None
+
+
+class ShareUserDetail(BaseModel):
+    """Détails d'un utilisateur qui a partagé"""
+    id: int  # ID du partage
+    user_id: Optional[int] = None
+    username: Optional[str] = None
+    full_name: Optional[str] = None
+    avatar_url: Optional[str] = None
+    platform: Optional[str] = None
+    share_link: str
+    created_at: datetime
+
+
+class SeasonInfo(BaseModel):
+    """Informations sur la saison"""
+    id: int
+    title: str
+    level: str
+
+
+class ContestantEnriched(BaseModel):
+    """Contestant avec toutes les informations enrichies"""
+    id: int
+    user_id: int
+    season_id: int
+    title: Optional[str] = None
+    description: Optional[str] = None
+    image_media_ids: Optional[str] = None
+    video_media_ids: Optional[str] = None
+    registration_date: Optional[datetime] = None
+    is_qualified: bool = False
+    
+    # Infos auteur
+    author_name: Optional[str] = None
+    author_country: Optional[str] = None
+    author_city: Optional[str] = None
+    author_avatar_url: Optional[str] = None
+    
+    # Stats
+    rank: Optional[int] = None
+    votes_count: int = 0
+    images_count: int = 0
+    videos_count: int = 0
+    favorites_count: int = 0
+    reactions_count: int = 0
+    comments_count: int = 0
+    shares_count: int = 0
+    
+    # Détails enrichis
+    comments: List[CommentUserDetail] = []  # Liste des commentaires avec utilisateurs
+    votes: List[VoteUserDetail] = []  # Liste des votes avec utilisateurs (depuis voting.py)
+    reactions: dict[str, List[ReactionUserDetail]] = {}  # Réactions groupées par type (depuis voting.py)
+    favorites: List[FavoriteUserDetail] = []  # Liste des favoris avec utilisateurs (depuis voting.py)
+    shares: List[ShareUserDetail] = []  # Liste des partages avec utilisateurs
+    is_in_favorites: bool = False  # Si l'auteur a ajouté ce contestant en favoris
+    
+    # Saison
+    season: Optional[SeasonInfo] = None
+    
+    # État du vote pour l'utilisateur courant
+    has_voted: bool = False
+    can_vote: bool = False
+
+
+class ContestWithEnrichedContestants(Contest):
+    """Contest avec ses contestants enrichis de toutes les informations"""
+    contestants: List[ContestantEnriched] = []
 
 
 # Schéma pour un vote de concours

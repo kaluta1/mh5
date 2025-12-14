@@ -8,7 +8,7 @@ from app.api import deps
 from app.crud import contestant as crud_contestant
 from app.models.user import User
 from app.models.contests import Contestant, ContestSubmission, ContestSeason, ContestStage, ContestantSeason, SeasonLevel
-from app.models.voting import MyFavorites, Vote, ContestantReaction, ContestantShare, ReactionType
+from app.models.voting import MyFavorites, Vote, ContestantReaction, ContestantShare, ReactionType, ContestantVoting
 from app.schemas.voting import (
     ReactionCreate, Reaction, ReactionStats, ReactionDetails, ReactionUserDetail,
     VoteDetails, VoteUserDetail,
@@ -86,7 +86,7 @@ def get_contest_leaderboard(
     if not season:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Concours non trouvé"
+            detail="Contest not found"
         )
     
     contestants = crud_contestant.get_leaderboard(
@@ -128,7 +128,7 @@ def get_contest_contestants(
         if not contest:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Concours non trouvé"
+                detail="Contest not found"
             )
     
     # Utiliser la nouvelle méthode avec stats enrichies
@@ -186,7 +186,7 @@ def create_contestant(
         if not contest:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Concours non trouvé"
+                detail="Contest not found"
             )
         # Vérifier que les soumissions sont autorisées
         is_allowed, error_message = contest_status_service.check_submission_allowed(db, contest_id)
@@ -243,7 +243,7 @@ def create_contestant(
             if not current_user.gender:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Votre profil ne contient pas d'information de genre. Veuillez compléter votre profil pour participer à ce concours."
+                    detail="Your profile does not contain gender information. Please complete your profile to participate in this contest."
                 )
             
             # Récupérer le genre de l'utilisateur de manière sécurisée
@@ -255,12 +255,12 @@ def create_contestant(
             if gender_restriction_lower == 'male' and user_gender != 'male':
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Ce concours est réservé aux participants masculins uniquement."
+                    detail="This contest is reserved for male participants only."
                 )
             elif gender_restriction_lower == 'female' and user_gender != 'female':
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Ce concours est réservé aux participantes féminines uniquement."
+                    detail="This contest is reserved for female participants only."
                 )
     
     # Vérifier que l'utilisateur n'a pas déjà une candidature
@@ -270,7 +270,7 @@ def create_contestant(
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Vous avez déjà une candidature pour ce concours"
+            detail="You already have a submission for this contest"
         )
     
     # ============================================
@@ -293,7 +293,7 @@ def create_contestant(
         flags_desc = ", ".join([f.description for f in text_moderation.flags])
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Contenu textuel rejeté: {flags_desc}"
+            detail=f"Text content rejected: {flags_desc}"
         )
     
     # Helper pour extraire l'URL d'un média (ID ou URL directe)
@@ -331,7 +331,7 @@ def create_contestant(
                             flags_desc = ", ".join([f.description for f in moderation_result.flags])
                             raise HTTPException(
                                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                                detail=f"Image rejetée par la modération: {flags_desc}"
+                                detail=f"Image rejected by moderation: {flags_desc}"
                             )
         except json.JSONDecodeError as e:
             logger.warning(f"JSON decode error for image_media_ids: {e}")
@@ -354,7 +354,7 @@ def create_contestant(
                             flags_desc = ", ".join([f.description for f in moderation_result.flags])
                             raise HTTPException(
                                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                                detail=f"Vidéo rejetée par la modération: {flags_desc}"
+                                detail=f"Video rejected by moderation: {flags_desc}"
                             )
         except json.JSONDecodeError as e:
             logger.warning(f"JSON decode error for video_media_ids: {e}")
@@ -398,7 +398,7 @@ def create_contestant(
         suggestions_text = " ".join(relevance_result.suggestions[:2])
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Candidature non pertinente pour ce concours. {suggestions_text}"
+            detail=f"Submission not relevant for this contest. {suggestions_text}"
         )
     
     # ============================================
@@ -456,7 +456,7 @@ def create_contestant(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la création de la candidature: {str(e)}"
+            detail=f"Error creating submission: {str(e)}"
         )
     
     return ContestantSubmissionResponse(
@@ -466,7 +466,7 @@ def create_contestant(
         title=contestant.title,
         description=contestant.description,
         registration_date=contestant.registration_date,
-        message="Candidature créée avec succès."
+        message="Submission created successfully."
     )
 
 
@@ -484,7 +484,7 @@ def get_contestant(
     if not contestant_data:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Candidature non trouvée"
+            detail="Submission not found"
         )
     
     return ContestantWithAuthorAndStats(**contestant_data)
@@ -508,14 +508,14 @@ def add_submission(
     if not contestant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Candidature non trouvée"
+            detail="Submission not found"
         )
     
     # Vérifier que c'est le propriétaire
     if contestant.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Vous ne pouvez ajouter une soumission que pour votre propre candidature"
+            detail="You can only add a submission for your own submission"
         )
     
     # Ajouter la soumission
@@ -529,7 +529,7 @@ def add_submission(
         description=description
     )
     
-    return {"message": "Soumission ajoutée avec succès", "submission_id": submission.id}
+    return {"message": "Submission added successfully", "submission_id": submission.id}
 
 
 # Routes spécifiques pour les favoris (DOIVENT venir AVANT les routes génériques avec {id})
@@ -546,7 +546,7 @@ def add_to_favorites(
     if not contestant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Contestant non trouvé"
+            detail="Contestant not found"
         )
     
     # Vérifier que l'utilisateur n'a pas déjà ce contestant en favoris
@@ -560,7 +560,7 @@ def add_to_favorites(
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Ce contestant est déjà dans vos favoris"
+            detail="This contestant is already in your favorites"
         )
     
     # Vérifier la limite de 5 favoris
@@ -571,7 +571,7 @@ def add_to_favorites(
     if favorites_count >= 5:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Vous avez atteint la limite de 5 favoris"
+            detail="You have reached the limit of 5 favorites"
         )
     
     # Ajouter aux favoris
@@ -582,7 +582,7 @@ def add_to_favorites(
     db.add(favorite)
     db.commit()
     
-    return {"message": f"Contestant ajouté aux favoris"}
+    return {"message": f"Contestant added to favorites"}
 
 
 @router.delete("/{contestant_id}/favorite")
@@ -598,7 +598,7 @@ def remove_from_favorites(
     if not contestant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Contestant non trouvé"
+            detail="Contestant not found"
         )
     
     # Trouver et supprimer le favori
@@ -612,13 +612,13 @@ def remove_from_favorites(
     if not favorite:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Ce contestant n'est pas dans vos favoris"
+            detail="This contestant is not in your favorites"
         )
     
     db.delete(favorite)
     db.commit()
     
-    return {"message": "Contestant retiré des favoris"}
+    return {"message": "Contestant removed from favorites"}
 
 
 # Routes génériques (DOIVENT venir APRÈS les routes spécifiques)
@@ -636,14 +636,14 @@ def update_contestant(
     if not contestant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Candidature non trouvée"
+            detail="Submission not found"
         )
     
     # Vérifier que c'est le propriétaire
     if contestant.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Vous ne pouvez mettre à jour que votre propre candidature"
+            detail="You can only update your own submission"
         )
     
     # ============================================
@@ -666,7 +666,7 @@ def update_contestant(
         flags_desc = ", ".join([f.description for f in text_moderation.flags])
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Contenu textuel rejeté: {flags_desc}"
+            detail=f"Text content rejected: {flags_desc}"
         )
     
     # Helper pour extraire l'URL d'un média (ID ou URL directe)
@@ -701,7 +701,7 @@ def update_contestant(
                             flags_desc = ", ".join([f.description for f in moderation_result.flags])
                             raise HTTPException(
                                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                                detail=f"Image rejetée par la modération: {flags_desc}"
+                                detail=f"Image rejected by moderation: {flags_desc}"
                             )
         except json.JSONDecodeError as e:
             logger.warning(f"JSON decode error for image_media_ids: {e}")
@@ -724,7 +724,7 @@ def update_contestant(
                             flags_desc = ", ".join([f.description for f in moderation_result.flags])
                             raise HTTPException(
                                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                                detail=f"Vidéo rejetée par la modération: {flags_desc}"
+                                detail=f"Video rejected by moderation: {flags_desc}"
                             )
         except json.JSONDecodeError as e:
             logger.warning(f"JSON decode error for video_media_ids: {e}")
@@ -778,7 +778,7 @@ def update_contestant(
         suggestions_text = " ".join(relevance_result.suggestions[:2])
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Candidature non pertinente pour ce concours. {suggestions_text}"
+            detail=f"Submission not relevant for this contest. {suggestions_text}"
         )
     
     # Mettre à jour la candidature
@@ -806,21 +806,21 @@ def delete_contestant(
     if not contestant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Candidature non trouvée"
+            detail="Submission not found"
         )
     
     # Vérifier que la candidature n'est pas déjà supprimée
     if contestant.is_deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Candidature déjà supprimée"
+            detail="Submission already deleted"
         )
     
     # Vérifier que c'est le propriétaire ou un admin
     if contestant.user_id != current_user.id and not current_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Vous ne pouvez supprimer que votre propre candidature"
+            detail="You can only delete your own submission"
         )
     
     # Vérifier que les soumissions sont encore ouvertes (optionnel, mais recommandé)
@@ -830,10 +830,10 @@ def delete_contestant(
     if not success:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Erreur lors de la suppression de la candidature"
+            detail="Error deleting submission"
         )
     
-    return {"message": "Candidature supprimée avec succès"}
+    return {"message": "Submission deleted successfully"}
 
 
 @router.post("/{contestant_id}/vote", status_code=status.HTTP_201_CREATED)
@@ -851,14 +851,14 @@ def vote_for_contestant(
     if not contestant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Candidature non trouvée"
+            detail="Submission not found"
         )
     
     # Vérifier que l'utilisateur ne vote pas pour sa propre candidature
     if contestant.user_id == current_user.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Vous ne pouvez pas voter pour votre propre candidature"
+            detail="You cannot vote for your own submission"
         )
     
     # Vérifier si le vote est autorisé
@@ -884,7 +884,7 @@ def vote_for_contestant(
         ).first()
         
         if season:
-            # Trouver le contest via ContestSeasonLink
+            # Trouver le contest via ContestSeasonLink (saison active)
             contest_link = db.query(ContestSeasonLink).filter(
                 ContestSeasonLink.season_id == season.id,
                 ContestSeasonLink.is_active == True
@@ -918,7 +918,27 @@ def vote_for_contestant(
     if not contest:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Aucun concours trouvé pour cette candidature"
+            detail="No contest found for this submission"
+        )
+    
+    # Récupérer la saison active pour ce contest si on ne l'a pas encore
+    if not season:
+        contest_season_link = db.query(ContestSeasonLink).filter(
+            ContestSeasonLink.contest_id == contest.id,
+            ContestSeasonLink.is_active == True
+        ).first()
+        
+        if contest_season_link:
+            season = db.query(ContestSeason).filter(
+                ContestSeason.id == contest_season_link.season_id,
+                ContestSeason.is_deleted == False
+            ).first()
+    
+    # Vérifier que la saison existe
+    if not season:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No active season found for this contest"
         )
     
     # Vérifier que le vote est ouvert pour ce contest
@@ -947,7 +967,7 @@ def vote_for_contestant(
         if not current_user.gender:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Votre profil ne contient pas d'information de genre. Veuillez compléter votre profil pour voter dans ce concours."
+                detail="Your profile does not contain gender information. Please complete your profile to vote in this contest."
             )
         
         user_gender = current_user.gender.value.lower() if hasattr(current_user.gender, 'value') else str(current_user.gender).lower()
@@ -960,71 +980,49 @@ def vote_for_contestant(
             if user_gender != 'female':
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Ce concours est réservé aux participants masculins. Seules les participantes féminines peuvent voter."
+                    detail="This contest is reserved for male participants. Only female participants can vote."
                 )
         elif gender_restriction_lower == 'female':
             # Contest réservé aux femmes pour participer, donc seuls les hommes peuvent voter
             if user_gender != 'male':
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Ce concours est réservé aux participantes féminines. Seuls les participants masculins peuvent voter."
+                    detail="This contest is reserved for female participants. Only male participants can vote."
                 )
     
-    # Vérifier si l'utilisateur a déjà voté pour ce contestant
-    existing_vote = db.query(Vote).filter(
-        Vote.voter_id == current_user.id,
-        Vote.contestant_id == contestant_id
+    # Vérifier si l'utilisateur a déjà voté pour ce contestant dans ce contest
+    existing_vote = db.query(ContestantVoting).filter(
+        ContestantVoting.user_id == current_user.id,
+        ContestantVoting.contestant_id == contestant_id,
+        ContestantVoting.contest_id == contest.id
     ).first()
     
     if existing_vote:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Vous avez déjà voté pour ce contestant"
+            detail="You have already voted for this contestant"
         )
     
-    # Récupérer le stage_id approprié pour cette saison
-    # Le stage est nécessaire pour créer le vote
-    # On récupère le stage via la saison du contestant
-    stage = None
-    
-    # Si on a déjà la saison, l'utiliser
-    if not season:
-        # Sinon, récupérer la saison via ContestSeasonLink
-        contest_season_link = db.query(ContestSeasonLink).filter(
-            ContestSeasonLink.contest_id == contest.id,
-            ContestSeasonLink.is_active == True
-        ).first()
-        
-        if contest_season_link:
-            season = db.query(ContestSeason).filter(
-                ContestSeason.id == contest_season_link.season_id,
-                ContestSeason.is_deleted == False
-            ).first()
-    
-    # Récupérer le stage de la saison
-    if season:
-        stage = db.query(ContestStage).filter(
-            ContestStage.season_id == season.id
-        ).first()
-    
-    if not stage:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Aucune étape de concours trouvée pour cette saison"
-        )
-    
-    # Créer un nouveau vote
-    new_vote = Vote(
-        voter_id=current_user.id,
+    # Créer un nouvel enregistrement dans ContestantVoting
+    new_voting = ContestantVoting(
+        user_id=current_user.id,
         contestant_id=contestant_id,
-        stage_id=stage.id,  # Utiliser le stage_id du stage trouvé
-        rank_position=1,  # Position par défaut
-        points=5  # Points par défaut
+        contest_id=contest.id,
+        season_id=season.id
     )
     
-    db.add(new_vote)
+    db.add(new_voting)
     db.commit()
-    db.refresh(new_vote)
+    db.refresh(new_voting)
+    
+    # Mettre à jour les rangs de tous les contestants du contest pour cette saison
+    from app.crud.crud_contest import contest as crud_contest
+    try:
+        crud_contest.update_contestant_rankings(db, contest.id, season.id)
+    except Exception as e:
+        # Log l'erreur mais ne bloque pas le vote
+        import logging
+        logging.error(f"Error updating rankings after vote: {e}")
     
     # Créer une notification pour le propriétaire du contestant
     from app.crud.crud_notification import crud_notification
@@ -1042,7 +1040,7 @@ def vote_for_contestant(
     )
     db.commit()
     
-    return {"message": "Vote enregistré avec succès", "vote_id": new_vote.id}
+    return {"message": "Vote recorded successfully", "voting_id": new_voting.id}
 
 
 @router.post("/{contestant_id}/reaction", response_model=Reaction, status_code=status.HTTP_201_CREATED)
@@ -1059,7 +1057,7 @@ def add_reaction(
     if not contestant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Candidature non trouvée"
+            detail="Submission not found"
         )
     
     # Vérifier que le type de réaction est valide et le convertir en minuscules
@@ -1069,7 +1067,7 @@ def add_reaction(
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Type de réaction invalide. Types valides: {[e.value for e in ReactionType]}"
+            detail=f"Invalid reaction type. Valid types: {[e.value for e in ReactionType]}"
         )
     
     # S'assurer que nous utilisons la valeur de l'enum (string) et non l'enum lui-même
@@ -1138,7 +1136,7 @@ def remove_reaction(
     if not contestant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Candidature non trouvée"
+            detail="Submission not found"
         )
     
     # Trouver et supprimer la réaction
@@ -1150,13 +1148,13 @@ def remove_reaction(
     if not reaction:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Réaction non trouvée"
+            detail="Reaction not found"
         )
     
     db.delete(reaction)
     db.commit()
     
-    return {"message": "Réaction supprimée avec succès"}
+    return {"message": "Reaction removed successfully"}
 
 
 @router.get("/{contestant_id}/reactions", response_model=ReactionStats)
@@ -1172,7 +1170,7 @@ def get_reaction_stats(
     if not contestant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Candidature non trouvée"
+            detail="Submission not found"
         )
     
     # Compter les réactions par type
@@ -1210,22 +1208,45 @@ def share_contestant(
     contestant_id: int,
     share_in: ShareCreate
 ) -> Share:
-    """Enregistrer un partage de contestant"""
+    """Enregistrer un partage de contestant avec referral code et métadonnées"""
     # Vérifier que le contestant existe
     contestant = crud_contestant.get(db, contestant_id)
     if not contestant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Candidature non trouvée"
+            detail="Submission not found"
         )
     
-    # Créer un nouveau partage
+    # Déterminer qui partage
+    shared_by_user_id = share_in.shared_by_user_id or (current_user.id if current_user else None)
+    
+    # Récupérer le referral code de celui qui partage
+    referral_code = share_in.referral_code
+    if not referral_code and shared_by_user_id:
+        sharing_user = db.query(User).filter(User.id == shared_by_user_id).first()
+        if sharing_user and sharing_user.personal_referral_code:
+            referral_code = sharing_user.personal_referral_code
+    
+    # Construire le lien de partage avec le referral code si disponible
+    share_link = share_in.share_link
+    if referral_code:
+        from urllib.parse import urlparse, urlencode, parse_qs, urlunparse
+        parsed = urlparse(share_link)
+        query_params = parse_qs(parsed.query)
+        query_params['ref'] = [referral_code]
+        new_query = urlencode(query_params, doseq=True)
+        share_link = urlunparse(parsed._replace(query=new_query))
+    
+    # Créer un nouveau partage avec toutes les informations
     new_share = ContestantShare(
-        user_id=current_user.id if current_user else None,
+        author_id=contestant.user_id,  # L'auteur du contestant
+        shared_by_user_id=shared_by_user_id,  # Celui qui partage
         contestant_id=contestant_id,
-        shared_by_user_id=share_in.shared_by_user_id or (current_user.id if current_user else None),
-        share_link=share_in.share_link,
-        platform=share_in.platform
+        referral_code=referral_code,  # Code de parrainage
+        share_link=share_link,  # Lien avec referral code
+        platform=share_in.platform,
+        # Conserver user_id pour compatibilité
+        user_id=contestant.user_id
     )
     
     db.add(new_share)
@@ -1247,7 +1268,7 @@ def get_share_stats(
     if not contestant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Candidature non trouvée"
+            detail="Submission not found"
         )
     
     # Compter les partages
@@ -1280,7 +1301,7 @@ def get_reaction_details(
     if not contestant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Candidature non trouvée"
+            detail="Submission not found"
         )
     
     # Récupérer toutes les réactions avec les utilisateurs
@@ -1323,7 +1344,7 @@ def get_vote_details(
     if not contestant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Candidature non trouvée"
+            detail="Submission not found"
         )
     
     # Récupérer tous les votes avec les utilisateurs
@@ -1361,7 +1382,7 @@ def get_favorite_details(
     if not contestant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Candidature non trouvée"
+            detail="Submission not found"
         )
     
     # Récupérer tous les favoris avec les utilisateurs

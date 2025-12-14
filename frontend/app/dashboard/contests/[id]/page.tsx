@@ -7,7 +7,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { useRouter, useParams } from 'next/navigation'
 import { ContestDetailSkeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
-import { Heart, ArrowLeft, HelpCircle, X, Search } from 'lucide-react'
+import { Heart, ArrowLeft, HelpCircle, X, Search, UserPlus, MessageCircle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { ContestantCard } from '@/components/dashboard/contestant-card'
 import { contestService, ContestResponse } from '@/services/contest-service'
@@ -45,7 +45,64 @@ interface Contestant {
   comments: number
   reactions?: number
   favorites?: number
+  shares?: number
   isFavorite: boolean
+  // Données enrichies
+  votesList?: Array<{
+    id?: number
+    user_id: number
+    username?: string
+    full_name?: string
+    avatar_url?: string
+    points: number
+    vote_date: string
+    contest_id?: number
+    season_id?: number
+  }>
+  commentsList?: Array<{
+    id: number
+    user_id: number
+    username?: string
+    full_name?: string
+    avatar_url?: string
+    content: string
+    created_at: string
+    parent_id?: number | null
+  }>
+  reactionsList?: {
+    [key: string]: Array<{
+      id?: number
+      user_id: number
+      username?: string
+      full_name?: string
+      avatar_url?: string
+      reaction_type: string
+    }>
+  }
+  favoritesList?: Array<{
+    id?: number
+    user_id: number
+    username?: string
+    full_name?: string
+    avatar_url?: string
+    position?: number
+    added_date: string
+  }>
+  sharesList?: Array<{
+    id: number
+    user_id?: number
+    username?: string
+    full_name?: string
+    avatar_url?: string
+    platform?: string
+    share_link: string
+    created_at: string
+  }>
+  season?: {
+    id: number
+    title: string
+    level: string
+  }
 }
 
 interface ContestDetail {
@@ -124,7 +181,7 @@ function DescriptionWithPopover({ description, maxLength = 150 }: { description:
 }
 
 export default function ContestDetailPage() {
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
   const { user, isAuthenticated, isLoading } = useAuth()
   const router = useRouter()
   const params = useParams()
@@ -136,6 +193,8 @@ export default function ContestDetailPage() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
   const [showInfoDialog, setShowInfoDialog] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [hoveredElement, setHoveredElement] = useState<{ type: string; id: string; data?: any } | null>(null)
+  const [hoverTimeout, setHoverTimeout] = useState<NodeJS.Timeout | null>(null)
 
   // Redirection si non authentifié
   useEffect(() => {
@@ -148,11 +207,11 @@ export default function ContestDetailPage() {
   useEffect(() => {
     const loadContest = async () => {
       try {
-        // Détails du contest
+        // Détails du contest avec contestants enrichis
         const contestResponse = await contestService.getContestById(contestId)
 
-        // Participants du contest
-        const contestantsResponse = await contestService.getContestantsByContest(contestId, 0, 100)
+        // Les contestants sont maintenant dans contestResponse.contestants
+        const contestantsResponse = (contestResponse as any).contestants || []
 
         // Fonction pour parser les médias depuis image_media_ids et video_media_ids
         const parseMediaIds = (mediaIds: string | undefined, type: 'image' | 'video'): Media[] => {
@@ -222,20 +281,6 @@ export default function ContestDetailPage() {
           const videos = parseMediaIds(c.video_media_ids, 'video')
           const allMedia = [...images, ...videos]
 
-          // Log pour déboguer
-          if (index === 0) {
-            console.log('First contestant data:', {
-              id: c.id,
-              image_media_ids: c.image_media_ids,
-              video_media_ids: c.video_media_ids,
-              images_count: c.images_count,
-              videos_count: c.videos_count,
-              parsed_images: images,
-              parsed_videos: videos,
-              all_media: allMedia
-            })
-          }
-
           return {
             id: String(c.id ?? index),
             userId: c.user_id,
@@ -247,16 +292,40 @@ export default function ContestDetailPage() {
             description: c.description ?? '',
             votes: c.votes_count ?? 0,
             rank: c.rank,
-            imagesCount: images.length,
-            videosCount: videos.length,
+            imagesCount: c.images_count ?? images.length,
+            videosCount: c.videos_count ?? videos.length,
             canVote: c.can_vote ?? false,
             hasVoted: c.has_voted ?? false,
             media: allMedia,
             comments: c.comments_count ?? 0,
             reactions: c.reactions_count ?? 0,
             favorites: c.favorites_count ?? 0,
-            isFavorite: false,
+            shares: c.shares_count ?? 0,
+            isFavorite: c.is_in_favorites ?? false,
+            // Données enrichies
+            votesList: c.votes || [],
+            commentsList: c.comments || [],
+            reactionsList: c.reactions || {},
+            favoritesList: c.favorites || [],
+            sharesList: c.shares || [],
+            season: c.season,
           }
+        })
+
+        // Trier les contestants par rank (croissant) si disponible, sinon par votes décroissants
+        mappedContestants.sort((a, b) => {
+          // D'abord par rank si disponible (croissant - le rang 1 est le meilleur)
+          if (a.rank && b.rank) {
+            return a.rank - b.rank
+          }
+          if (a.rank && !b.rank) return -1
+          if (!a.rank && b.rank) return 1
+          // Ensuite par votes (décroissant)
+          if (b.votes !== a.votes) {
+            return b.votes - a.votes
+          }
+          // Enfin par ID (croissant) pour un ordre stable
+          return Number(a.id) - Number(b.id)
         })
 
         setContest({
@@ -264,16 +333,11 @@ export default function ContestDetailPage() {
           contestants: mappedContestants,
         })
 
-        // Charger les favoris depuis l'API
-        try {
-          const favoritesResponse = await contestService.getUserFavorites()
-          const favoriteIds = favoritesResponse
-            .filter((fav: any) => fav.season_id === contestResponse.id)
-            .map((fav: any) => String(fav.id))
-          setFavorites(favoriteIds)
-        } catch (error) {
-          console.error('Error loading favorites:', error)
-        }
+        // Extraire les IDs des favoris depuis les données enrichies
+        const favoriteIds = mappedContestants
+          .filter(c => c.isFavorite)
+          .map(c => c.id)
+        setFavorites(favoriteIds)
       } catch (error) {
         console.error('Error loading contest:', error)
       } finally {
@@ -290,8 +354,9 @@ export default function ContestDetailPage() {
     try {
       await contestService.deleteContestant(Number(contestantId))
       
-      // Recharger la liste des contestants
-      const contestantsResponse = await contestService.getContestantsByContest(contestId, 0, 100)
+      // Recharger le contest avec les données enrichies
+      const contestResponse = await contestService.getContestById(contestId)
+      const contestantsResponse = (contestResponse as any).contestants || []
       
       // Fonction pour parser les médias
       const parseMediaIds = (mediaIds: string | undefined, type: 'image' | 'video'): Media[] => {
@@ -368,17 +433,41 @@ export default function ContestDetailPage() {
           participationTitle: c.title || '',
           votes: c.votes_count || 0,
           rank: c.rank,
-          imagesCount: c.images_count || 0,
-          videosCount: c.videos_count || 0,
+          imagesCount: c.images_count ?? images.length,
+          videosCount: c.videos_count ?? videos.length,
           canVote: c.can_vote || false,
           hasVoted: c.has_voted || false,
-          isFavorite: favorites.includes(String(c.id)),
+          isFavorite: c.is_in_favorites ?? false,
           media: allMedia,
           description: c.description || '',
           comments: c.comments_count || 0,
           reactions: c.reactions_count || 0,
-          favorites: c.favorites_count || 0
+          favorites: c.favorites_count || 0,
+          shares: c.shares_count || 0,
+          // Données enrichies
+          votesList: c.votes || [],
+          commentsList: c.comments || [],
+          reactionsList: c.reactions || {},
+          favoritesList: c.favorites || [],
+          sharesList: c.shares || [],
+          season: c.season,
         }
+      })
+
+      // Trier les contestants par rank (croissant) si disponible, sinon par votes décroissants
+      mappedContestants.sort((a, b) => {
+        // D'abord par rank si disponible (croissant - le rang 1 est le meilleur)
+        if (a.rank && b.rank) {
+          return a.rank - b.rank
+        }
+        if (a.rank && !b.rank) return -1
+        if (!a.rank && b.rank) return 1
+        // Ensuite par votes (décroissant)
+        if (b.votes !== a.votes) {
+          return b.votes - a.votes
+        }
+        // Enfin par ID (croissant) pour un ordre stable
+        return Number(a.id) - Number(b.id)
       })
 
       // Mettre à jour l'état avec les nouveaux contestants
@@ -404,6 +493,30 @@ export default function ContestDetailPage() {
     setTimeout(() => setToast(null), 3000)
   }
 
+  // Fonction pour gérer le survol avec délai de 2 secondes
+  const handleHoverStart = (type: string, id: string, data?: any) => {
+    // Annuler le timeout précédent s'il existe
+    if (hoverTimeout) {
+      clearTimeout(hoverTimeout)
+    }
+    
+    // Créer un nouveau timeout de 2 secondes
+    const timeout = setTimeout(() => {
+      setHoveredElement({ type, id, data })
+    }, 2000)
+    
+    setHoverTimeout(timeout)
+  }
+
+  const handleHoverEnd = () => {
+    // Annuler le timeout si l'utilisateur quitte avant 2 secondes
+    if (hoverTimeout) {
+      clearTimeout(hoverTimeout)
+      setHoverTimeout(null)
+    }
+    // Ne pas fermer automatiquement - le dialog reste ouvert jusqu'à ce que l'utilisateur le ferme
+  }
+
   const handleToggleFavorite = async (contestantId: string) => {
     const isFavorite = favorites.includes(contestantId)
     
@@ -412,6 +525,16 @@ export default function ContestDetailPage() {
         // Retirer des favoris
         await contestService.removeFromFavorites(parseInt(contestantId))
         setFavorites(prevFavorites => prevFavorites.filter(id => id !== contestantId))
+        // Mettre à jour l'état local du contestant
+        setContest((prev) => {
+          if (!prev) return null
+          return {
+            ...prev,
+            contestants: prev.contestants.map(c => 
+              c.id === contestantId ? { ...c, isFavorite: false } : c
+            )
+          }
+        })
         showToast('Contestant retiré des favoris', 'success')
       } else {
         // Ajouter aux favoris
@@ -422,6 +545,16 @@ export default function ContestDetailPage() {
         
         await contestService.addToFavorites(parseInt(contestantId))
         setFavorites(prevFavorites => [...prevFavorites, contestantId])
+        // Mettre à jour l'état local du contestant
+        setContest((prev) => {
+          if (!prev) return null
+          return {
+            ...prev,
+            contestants: prev.contestants.map(c => 
+              c.id === contestantId ? { ...c, isFavorite: true } : c
+            )
+          }
+        })
         showToast('Contestant ajouté aux favoris', 'success')
       }
     } catch (error: any) {
@@ -481,12 +614,9 @@ export default function ContestDetailPage() {
   }) : []
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-purple-50/20 dark:from-slate-950 dark:via-blue-950/20 dark:to-purple-950/10 relative overflow-hidden">
-      {/* Background Pattern */}
-      <div className="absolute inset-0 bg-grid-slate-900/[0.04] dark:bg-grid-slate-400/[0.05] bg-[size:20px_20px] [mask-image:radial-gradient(ellipse_at_center,white,transparent)]" />
-      
-      <div className="relative z-10 px-4 py-6 sm:px-6 lg:px-8">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-white dark:bg-gray-900">
+      <div className="px-2 py-6 sm:px-2 lg:px-8">
+        <div className="max-w-7xl mx-auto">
           {/* Header with Back Button and Info Button */}
           <div className="mb-6 flex items-center justify-between">
           <Button
@@ -510,43 +640,193 @@ export default function ContestDetailPage() {
         </div>
 
           {/* Contest Title - Sticky on Scroll */}
-          <div className="sticky top-0 z-40 bg-gradient-to-br from-slate-50 via-blue-50/30 to-purple-50/20 dark:from-slate-950 dark:via-blue-950/20 dark:to-purple-950/10 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800 mb-8 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-4">
-            <div className="flex items-start justify-between gap-4 mb-4">
-              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-gray-900 dark:text-white">
-            {contest.contest.name}
-          </h1>
-            </div>
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge className={`${getStatusColor(contest.contest.level)} border-0 text-xs font-semibold px-3 py-1`}>
-              {getStatusLabel(contest.contest.level)}
-            </Badge>
-            <Badge
-              className={`${
-                contest.contest.is_submission_open
-                  ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
-                  : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
-                  } border-0 text-xs font-semibold px-3 py-1`}
-            >
-              {contest.contest.is_submission_open ? t('dashboard.contests.open') : t('dashboard.contests.closed')}
-            </Badge>
-          </div>
+          <div className="sticky top-0 z-40 bg-white dark:bg-gray-900 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800 mb-8 -mx-4 sm:-mx-2 lg:-mx-8 px-4 sm:px-2 lg:px-8 py-6">
+            <div className="flex flex-col gap-4 mb-4">
+              {/* Title Section */}
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-gray-900 dark:text-white mb-2">
+                    {contest.contest.name}
+                  </h1>
+                  {contest.contest.contest_type && (
+                    <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 font-medium">
+                      {contest.contest.contest_type}
+                    </p>
+                  )}
+                </div>
+              </div>
+              
+              {/* Stats and Badges Section */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="flex flex-wrap items-center gap-3">
+                  <Badge className={`${getStatusColor(contest.contest.level)} border-0 text-xs font-semibold px-3 py-1.5`}>
+                    {getStatusLabel(contest.contest.level)}
+                  </Badge>
+                  <Badge
+                    className={`${
+                      contest.contest.is_submission_open
+                        ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                        : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+                    } border-0 text-xs font-semibold px-3 py-1.5`}
+                  >
+                    {contest.contest.is_submission_open ? t('dashboard.contests.open') : t('dashboard.contests.closed')}
+                  </Badge>
+                  {contest.contest.is_voting_open && (
+                    <Badge className="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-0 text-xs font-semibold px-3 py-1.5">
+                      🗳️ {t('dashboard.contests.voting')} {t('dashboard.contests.open')}
+                    </Badge>
+                  )}
+                  <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                    <span className="font-semibold">{participantsCount}</span>
+                    <span>{t('dashboard.contests.contestants')}</span>
+                  </div>
+                </div>
           
-              {/* Search Bar */}
-              <div className="relative w-full sm:w-auto sm:min-w-[300px]">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder={t('dashboard.contests.search_contestant') || 'Rechercher un participant...'}
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myfav-primary focus:border-transparent"
-                />
+                {/* Search Bar */}
+                <div className="relative w-full sm:w-auto sm:min-w-[300px]">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder={t('dashboard.contests.search_contestant') || 'Rechercher un participant...'}
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myfav-primary focus:border-transparent"
+                  />
+                </div>
               </div>
             </div>
-        </div>
 
-        {/* Toast Notification */}
+          {/* Hover Dialog for Details */}
+          {hoveredElement && (
+            <Dialog 
+              open={!!hoveredElement} 
+              onOpenChange={() => {
+                setHoveredElement(null)
+                if (hoverTimeout) {
+                  clearTimeout(hoverTimeout)
+                  setHoverTimeout(null)
+                }
+              }}
+            >
+              <DialogContent 
+                className="max-w-md max-h-[80vh] overflow-y-auto"
+              >
+                <DialogHeader>
+                  <DialogTitle>
+                    {hoveredElement.type === 'author' && (language === 'fr' ? 'Détails de l\'auteur' : language === 'es' ? 'Detalles del autor' : language === 'de' ? 'Autorendetails' : 'Author Details')}
+                    {hoveredElement.type === 'description' && (language === 'fr' ? 'Description' : language === 'es' ? 'Descripción' : language === 'de' ? 'Beschreibung' : 'Description')}
+                    {hoveredElement.type === 'votes' && (t('dashboard.contests.votes') || (language === 'fr' ? 'Votes' : language === 'es' ? 'Votos' : language === 'de' ? 'Stimmen' : 'Votes'))}
+                    {hoveredElement.type === 'reactions' && (language === 'fr' ? 'Réactions' : language === 'es' ? 'Reacciones' : language === 'de' ? 'Reaktionen' : 'Reactions')}
+                    {hoveredElement.type === 'favorites' && (language === 'fr' ? 'Favoris' : language === 'es' ? 'Favoritos' : language === 'de' ? 'Favoriten' : 'Favorites')}
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="mt-4">
+                  {hoveredElement.type === 'author' && hoveredElement.data && (
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={hoveredElement.data.avatar || '/default-avatar.png'}
+                          alt={hoveredElement.data.name}
+                          className="w-16 h-16 rounded-full object-cover"
+                        />
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                            {hoveredElement.data.name}
+                          </h3>
+                          {hoveredElement.data.country && (
+                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                              {hoveredElement.data.country}{hoveredElement.data.city ? `, ${hoveredElement.data.city}` : ''}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      {hoveredElement.data.rank && (
+                        <div>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            {t('dashboard.contests.rank') || 'Rank'}: {hoveredElement.data.rank}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {hoveredElement.type === 'description' && hoveredElement.data && (
+                    <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                      {hoveredElement.data}
+                    </p>
+                  )}
+                  {hoveredElement.type === 'votes' && hoveredElement.data && (
+                    <div className="space-y-2">
+                      {hoveredElement.data.map((vote: any, index: number) => (
+                        <div key={index} className="flex items-center gap-2 p-2 rounded hover:bg-gray-50 dark:hover:bg-gray-700">
+                          <img
+                            src={vote.avatar_url || '/default-avatar.png'}
+                            alt={vote.username || 'User'}
+                            className="w-8 h-8 rounded-full object-cover"
+                          />
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-900 dark:text-white">
+                              {vote.full_name || vote.username || 'User'}
+                            </p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              {new Date(vote.vote_date).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {hoveredElement.type === 'reactions' && hoveredElement.data && (
+                    <div className="space-y-4">
+                      {Object.entries(hoveredElement.data).map(([type, reactions]: [string, any]) => (
+                        <div key={type}>
+                          <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 capitalize">
+                            {type}
+                          </h4>
+                          <div className="space-y-2">
+                            {reactions.map((reaction: any, index: number) => (
+                              <div key={index} className="flex items-center gap-2 p-2 rounded hover:bg-gray-50 dark:hover:bg-gray-700">
+                                <img
+                                  src={reaction.avatar_url || '/default-avatar.png'}
+                                  alt={reaction.username || 'User'}
+                                  className="w-8 h-8 rounded-full object-cover"
+                                />
+                                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                                  {reaction.full_name || reaction.username || 'User'}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {hoveredElement.type === 'favorites' && hoveredElement.data && (
+                    <div className="space-y-2">
+                      {hoveredElement.data.map((favorite: any, index: number) => (
+                        <div key={index} className="flex items-center gap-2 p-2 rounded hover:bg-gray-50 dark:hover:bg-gray-700">
+                          <img
+                            src={favorite.avatar_url || '/default-avatar.png'}
+                            alt={favorite.username || 'User'}
+                            className="w-8 h-8 rounded-full object-cover"
+                          />
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-900 dark:text-white">
+                              {favorite.full_name || favorite.username || 'User'}
+                            </p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              {new Date(favorite.added_date).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
+          )}
+
+          {/* Toast Notification */}
         {toast && (
           <div className={`fixed bottom-4 right-4 rounded-lg shadow-lg p-4 z-50 animate-in fade-in slide-in-from-bottom-2 ${
             toast.type === 'success'
@@ -691,55 +971,139 @@ export default function ContestDetailPage() {
             </DialogContent>
           </Dialog>
 
-          {/* Main Content Layout: Cards on Left, Sidebar on Right */}
+          {/* Main Content Layout: Contestants with Sidebar */}
           <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Contestants Cards - Left Side (2/3 width on large screens) */}
             <div className="lg:col-span-2">
-              <div className="space-y-4 max-w-2xl">
+              <div className="space-y-4 max-w-2xl mx-auto lg:mx-0">
                 {filteredContestants.length > 0 ? (
-                  filteredContestants.map(contestant => (
-                  <ContestantCard
-                    key={contestant.id}
-                    id={contestant.id}
-                    userId={contestant.userId}
-                    currentUserId={user?.id}
-                    contestId={contestId}
-                    name={contestant.name}
-                    country={contestant.country}
-                    city={contestant.city}
-                    avatar={contestant.avatar}
-                    participationTitle={contestant.participationTitle}
-                    votes={contestant.votes}
-                    rank={contestant.rank}
-                    imagesCount={contestant.imagesCount}
-                    videosCount={contestant.videosCount}
-                    canVote={contestant.canVote}
-                    hasVoted={contestant.hasVoted}
-                    isFavorite={favorites.includes(contestant.id)}
-                    media={contestant.media}
-                    description={contestant.description}
-                    comments={contestant.comments}
-                    onToggleFavorite={() => handleToggleFavorite(contestant.id)}
-                    onViewDetails={() => router.push(`/dashboard/contests/${contestId}/contestant/${contestant.id}`)}
-                    onVote={() => router.push(`/dashboard/contests/${contestId}/contestant/${contestant.id}`)}
-                    onComment={() => {
-                      // Le dialog des commentaires est géré dans ContestantCard
-                    }}
-                    onShare={() => {
-                      // Le dialog de partage est géré dans ContestantCard
-                    }}
-                    onReport={() => {
-                      // TODO: Implement report functionality
-                      showToast('Fonctionnalité de signalement à venir', 'success')
-                    }}
-                    onEdit={() => {
-                      router.push(`/dashboard/contests/${contestId}/participate?edit=true`)
-                    }}
-                    onDelete={async () => {
-                      await handleDeleteContestant(contestant.id)
-                    }}
-                  />
-                  ))
+                  filteredContestants.map((contestant, index) => {
+                    // Déterminer la couleur du badge de rang selon la position
+                    const getRankBadgeColor = (rank?: number) => {
+                      if (!rank) return 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                      if (rank === 1) return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700'
+                      if (rank === 2) return 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600'
+                      if (rank === 3) return 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700'
+                      return 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
+                    }
+                    
+                    // Fonction pour obtenir le texte du rang traduit
+                    const getRankText = (rank?: number) => {
+                      if (!rank) return ''
+                      // Format selon la langue actuelle
+                      if (language === 'fr') {
+                        if (rank === 1) return '1er'
+                        if (rank === 2) return '2ème'
+                        if (rank === 3) return '3ème'
+                        return `${rank}ème`
+                      } else if (language === 'es') {
+                        if (rank === 1) return '1º'
+                        if (rank === 2) return '2º'
+                        if (rank === 3) return '3º'
+                        return `${rank}º`
+                      } else if (language === 'de') {
+                        if (rank === 1) return '1.'
+                        if (rank === 2) return '2.'
+                        if (rank === 3) return '3.'
+                        return `${rank}.`
+                      } else {
+                        // English default
+                        if (rank === 1) return '1st'
+                        if (rank === 2) return '2nd'
+                        if (rank === 3) return '3rd'
+                        return `${rank}th`
+                      }
+                    }
+                    
+                    const getRankIcon = (rank?: number) => {
+                      if (!rank) return null
+                      if (rank === 1) return '🥇'
+                      if (rank === 2) return '🥈'
+                      if (rank === 3) return '🥉'
+                      return `#${rank}`
+                    }
+                    
+                    return (
+                      <div key={contestant.id} className="relative">
+                        {/* Rank Badge - Position absolue en haut à gauche */}
+                        {contestant.rank && (
+                          <div className="absolute -top-2 -left-2 z-10">
+                            <Badge 
+                              className={`${getRankBadgeColor(contestant.rank)} border-2 font-bold text-sm px-3 py-1.5 shadow-lg flex items-center gap-1`}
+                            >
+                              <span>{getRankIcon(contestant.rank)}</span>
+                              <span className="hidden sm:inline">
+                                {getRankText(contestant.rank)}
+                              </span>
+                            </Badge>
+                          </div>
+                        )}
+                        
+                        <ContestantCard
+                          id={contestant.id}
+                          userId={contestant.userId}
+                          currentUserId={user?.id}
+                          contestId={contestId}
+                          name={contestant.name}
+                          country={contestant.country}
+                          city={contestant.city}
+                          avatar={contestant.avatar}
+                          participationTitle={contestant.participationTitle}
+                          votes={contestant.votes}
+                          rank={contestant.rank}
+                          imagesCount={contestant.imagesCount}
+                          videosCount={contestant.videosCount}
+                          canVote={contestant.canVote}
+                          hasVoted={contestant.hasVoted}
+                          isFavorite={favorites.includes(contestant.id)}
+                          media={contestant.media}
+                          description={contestant.description}
+                          comments={contestant.comments}
+                          reactions={contestant.reactions}
+                          favorites={contestant.favorites}
+                          votesList={contestant.votesList}
+                          reactionsList={contestant.reactionsList}
+                          favoritesList={contestant.favoritesList}
+                          onToggleFavorite={() => handleToggleFavorite(contestant.id)}
+                          onViewDetails={() => router.push(`/dashboard/contests/${contestId}/contestant/${contestant.id}`)}
+                          onVote={() => router.push(`/dashboard/contests/${contestId}/contestant/${contestant.id}`)}
+                          onComment={() => {
+                            // Le dialog des commentaires est géré dans ContestantCard
+                          }}
+                          onShare={() => {
+                            // Le dialog de partage est géré dans ContestantCard
+                          }}
+                          onReport={() => {
+                            // TODO: Implement report functionality
+                            showToast('Fonctionnalité de signalement à venir', 'success')
+                          }}
+                          onEdit={() => {
+                            router.push(`/dashboard/contests/${contestId}/participate?edit=true`)
+                          }}
+                          onDelete={async () => {
+                            await handleDeleteContestant(contestant.id)
+                          }}
+                          onHoverAuthor={() => handleHoverStart('author', contestant.id, {
+                            name: contestant.name,
+                            avatar: contestant.avatar,
+                            country: contestant.country,
+                            city: contestant.city,
+                            rank: contestant.rank
+                          })}
+                          onHoverEnd={handleHoverEnd}
+                          onHoverDescription={() => handleHoverStart('description', contestant.id, contestant.description)}
+                          onHoverVotes={() => handleHoverStart('votes', contestant.id, contestant.votesList || [])}
+                          onHoverReactions={() => {
+                            // Seul l'auteur peut voir la liste des réactions
+                            if (user?.id === contestant.userId) {
+                              handleHoverStart('reactions', contestant.id, contestant.reactionsList || {})
+                            }
+                          }}
+                          onHoverFavorites={() => handleHoverStart('favorites', contestant.id, contestant.favoritesList || [])}
+                        />
+                      </div>
+                    )
+                  })
                 ) : (
                   <div className="text-center py-12">
                     <div className="flex flex-col items-center gap-3">
@@ -760,124 +1124,84 @@ export default function ContestDetailPage() {
               </div>
             </div>
 
-            {/* Contest Info Sidebar - Right Side (1/3 width on large screens, hidden on mobile) */}
+            {/* Contestants Sidebar - Right Side (1/3 width on large screens) */}
             <div className="hidden lg:block lg:col-span-1">
               <div className="sticky top-6">
-                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-6">
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-                    {contest.contest.name}
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                    {t('dashboard.contests.contestants') || 'Participants'}
                   </h3>
-                  
-                  {/* Contest Description */}
-                  <div className="mb-6">
-                    <h4 className="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-2">
-                      Description
-                    </h4>
-                    <DescriptionWithPopover 
-                      description={contest.contest.description || t('dashboard.contests.no_description')}
-                      maxLength={150}
-                    />
-                  </div>
-
-                  {/* Stats */}
-                  <div className="mb-6">
-                    <h4 className="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-3">
-                      Statistiques
-                    </h4>
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-600 dark:text-gray-400">{t('dashboard.contests.contestants')}</span>
-                        <span className="text-lg font-bold text-gray-900 dark:text-white">{participantsCount}</span>
+                  {contest.contestants.length > 5 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-xs"
+                      onClick={() => router.push(`/dashboard/contests/${contestId}/contestants`)}
+                    >
+                      {language === 'fr' ? 'Voir tout' : language === 'es' ? 'Ver todo' : language === 'de' ? 'Alle anzeigen' : 'View all'}
+                    </Button>
+                  )}
+                </div>
+                
+                <div className="space-y-3">
+                  {contest.contestants.slice(0, 5).map((contestant) => (
+                    <div
+                      key={contestant.id}
+                      className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                    >
+                      <img
+                        src={contestant.avatar || '/default-avatar.png'}
+                        alt={contestant.name}
+                        className="w-12 h-12 rounded-full object-cover"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                          {contestant.name}
+                        </p>
+                        {contestant.country && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                            {contestant.country}{contestant.city ? `, ${contestant.city}` : ''}
+                          </p>
+                        )}
+                        {contestant.rank && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            {language === 'fr' ? 'Rang' : language === 'es' ? 'Rango' : language === 'de' ? 'Rang' : 'Rank'}: {contestant.rank}
+                          </p>
+                        )}
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-600 dark:text-gray-400">{t('dashboard.contests.likes')}</span>
-                        <span className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-1">
-                          <Heart className="w-4 h-4 text-red-500" />
-                          0
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Badges */}
-                  <div className="mb-6">
-                    <div className="flex flex-wrap gap-2">
-                      <Badge className={`${getStatusColor(contest.contest.level)} border-0 text-xs font-semibold px-3 py-1`}>
-                        {getStatusLabel(contest.contest.level)}
-                      </Badge>
-                      <Badge
-                        className={`${
-                          contest.contest.is_submission_open
-                            ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
-                            : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
-                        } border-0 text-xs font-semibold px-3 py-1`}
-                      >
-                        {contest.contest.is_submission_open ? t('dashboard.contests.open') : t('dashboard.contests.closed')}
-                      </Badge>
-                    </div>
-                  </div>
-
-                  {/* Submission Period */}
-                  <div className="mb-6">
-                    <h4 className="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-3">
-                      {t('dashboard.contests.submission')}
-                    </h4>
-                    <div className="space-y-2 text-sm">
-                      <div>
-                        <span className="text-gray-500 dark:text-gray-400">{t('dashboard.contests.start')}: </span>
-                        <span className="font-semibold text-gray-900 dark:text-white">
-                          {new Date(contest.contest.submission_start_date).toLocaleDateString('fr-FR', {
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric'
-                          })}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500 dark:text-gray-400">{t('dashboard.contests.end')}: </span>
-                        <span className="font-semibold text-gray-900 dark:text-white">
-                          {new Date(contest.contest.submission_end_date).toLocaleDateString('fr-FR', {
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric'
-                          })}
-                        </span>
+                      <div className="flex flex-col gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-xs px-2 py-1 h-auto"
+                          onClick={() => {
+                            // TODO: Implement follow functionality
+                            showToast(t('common.follow') || 'Follow functionality coming soon', 'success')
+                          }}
+                        >
+                          <UserPlus className="w-3 h-3 mr-1" />
+                          {language === 'fr' ? 'Suivre' : language === 'es' ? 'Seguir' : language === 'de' ? 'Folgen' : 'Follow'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-xs px-2 py-1 h-auto"
+                          onClick={() => {
+                            // TODO: Implement message functionality
+                            router.push(`/dashboard/messages?user=${contestant.userId}`)
+                          }}
+                        >
+                          <MessageCircle className="w-3 h-3 mr-1" />
+                          {language === 'fr' ? 'Message' : language === 'es' ? 'Mensaje' : language === 'de' ? 'Nachricht' : 'Message'}
+                        </Button>
                       </div>
                     </div>
-                  </div>
-
-                  {/* Voting Period */}
-                  <div>
-                    <h4 className="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-3">
-                      {t('dashboard.contests.voting')}
-                    </h4>
-                    <div className="space-y-2 text-sm">
-                      <div>
-                        <span className="text-gray-500 dark:text-gray-400">{t('dashboard.contests.start')}: </span>
-                        <span className="font-semibold text-gray-900 dark:text-white">
-                          {new Date(contest.contest.voting_start_date).toLocaleDateString('fr-FR', {
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric'
-                          })}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500 dark:text-gray-400">{t('dashboard.contests.end')}: </span>
-                        <span className="font-semibold text-gray-900 dark:text-white">
-                          {new Date(contest.contest.voting_end_date).toLocaleDateString('fr-FR', {
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric'
-                          })}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+                  ))}
                 </div>
               </div>
-              </div>
             </div>
+          </div>
+        </div>
         </div>
       </div>
     </div>

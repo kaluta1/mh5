@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 
 from app.models.contest import Contest, ContestEntry, ContestVote
-from app.models.contests import Contestant
+from app.models.contests import Contestant, ContestantRanking
 from app.schemas.contest import ContestCreate, ContestUpdate
 
 
@@ -477,6 +477,374 @@ class CRUDContest:
         }
         
         return result
+
+
+    def get_contest_with_enriched_contestants(
+        self, db: Session, contest_id: int, current_user_id: Optional[int] = None
+    ) -> Dict[str, Any]:
+        """
+        Récupère un contest avec tous ses contestants enrichis de toutes les informations :
+        - Commentaires avec utilisateurs
+        - Votes avec utilisateurs
+        - Réactions avec utilisateurs
+        - Favoris avec utilisateurs
+        - Partages avec utilisateurs
+        - Saison
+        """
+        from app.models.contests import ContestSeasonLink, ContestSeason
+        from app.models.user import User
+        from app.models.voting import (
+            ContestComment, ContestantReaction, ContestantShare, 
+            MyFavorites, ContestantVoting
+        )
+        from app.models.comment import Comment
+        from sqlalchemy.orm import joinedload
+        import json
+        
+        # Récupérer le contest
+        contest_obj = self.get(db, id=contest_id)
+        if not contest_obj:
+            return None
+        
+        # Enrichir le contest avec les stats
+        contest_data = self.enrich_contest_with_stats(db, contest_obj)
+        
+        # Récupérer tous les contestants du contest
+        contestants = db.query(Contestant)\
+            .filter(
+                Contestant.season_id == contest_id,
+                Contestant.is_deleted == False
+            )\
+            .options(
+                joinedload(Contestant.user)
+            )\
+            .all()
+        
+        # Récupérer la saison active
+        season = None
+        season_link = db.query(ContestSeasonLink).filter(
+            ContestSeasonLink.contest_id == contest_id,
+            ContestSeasonLink.is_active == True
+        ).first()
+        
+        if season_link:
+            season = db.query(ContestSeason).filter(
+                ContestSeason.id == season_link.season_id
+            ).first()
+        
+        # Récupérer tous les IDs des contestants
+        contestant_ids = [c.id for c in contestants]
+        
+        # Récupérer tous les votes avec utilisateurs (depuis ContestantVoting)
+        # Filtrer par contest_id pour ne récupérer que les votes de ce contest
+        votes_data = db.query(ContestantVoting, User)\
+            .join(User, ContestantVoting.user_id == User.id)\
+            .filter(
+                ContestantVoting.contestant_id.in_(contestant_ids),
+                ContestantVoting.contest_id == contest_id
+            )\
+            .all()
+        
+        # Grouper les votes par contestant_id
+        votes_by_contestant = {}
+        for voting, user in votes_data:
+            if voting.contestant_id not in votes_by_contestant:
+                votes_by_contestant[voting.contestant_id] = []
+            votes_by_contestant[voting.contestant_id].append({
+                "id": voting.id,  # ID du vote dans contestant_voting
+                "user_id": user.id,
+                "username": user.username,
+                "full_name": user.full_name,
+                "avatar_url": user.avatar_url,
+                "points": 5,  # Par défaut, on peut ajuster si nécessaire
+                "vote_date": voting.vote_date,
+                "contest_id": voting.contest_id,  # ID du contest
+                "season_id": voting.season_id  # ID de la saison
+            })
+        
+        # Récupérer tous les commentaires avec utilisateurs
+        comments_data = db.query(Comment, User)\
+            .join(User, Comment.user_id == User.id)\
+            .filter(
+                Comment.contestant_id.in_(contestant_ids),
+                Comment.is_hidden == False,
+                Comment.is_deleted == False
+            )\
+            .order_by(Comment.created_at.desc())\
+            .all()
+        
+        # Grouper les commentaires par contestant_id
+        comments_by_contestant = {}
+        for comment, user in comments_data:
+            if comment.contestant_id not in comments_by_contestant:
+                comments_by_contestant[comment.contestant_id] = []
+            comments_by_contestant[comment.contestant_id].append({
+                "id": comment.id,  # ID du commentaire
+                "user_id": user.id,
+                "username": user.username,
+                "full_name": user.full_name,
+                "avatar_url": user.avatar_url,
+                "content": comment.content,
+                "created_at": comment.created_at,
+                "parent_id": comment.parent_id
+            })
+        
+        # Récupérer toutes les réactions avec utilisateurs
+        reactions_data = db.query(ContestantReaction, User)\
+            .join(User, ContestantReaction.user_id == User.id)\
+            .filter(ContestantReaction.contestant_id.in_(contestant_ids))\
+            .all()
+        
+        # Grouper les réactions par contestant_id et type
+        reactions_by_contestant = {}
+        for reaction, user in reactions_data:
+            if reaction.contestant_id not in reactions_by_contestant:
+                reactions_by_contestant[reaction.contestant_id] = {}
+            reaction_type = reaction.reaction_type
+            if reaction_type not in reactions_by_contestant[reaction.contestant_id]:
+                reactions_by_contestant[reaction.contestant_id][reaction_type] = []
+            reactions_by_contestant[reaction.contestant_id][reaction_type].append({
+                "id": reaction.id,  # ID de la réaction
+                "user_id": user.id,
+                "username": user.username,
+                "full_name": user.full_name,
+                "avatar_url": user.avatar_url,
+                "reaction_type": reaction_type
+            })
+        
+        # Récupérer tous les favoris avec utilisateurs
+        favorites_data = db.query(MyFavorites, User)\
+            .join(User, MyFavorites.user_id == User.id)\
+            .filter(MyFavorites.contestant_id.in_(contestant_ids))\
+            .all()
+        
+        # Grouper les favoris par contestant_id
+        favorites_by_contestant = {}
+        for favorite, user in favorites_data:
+            if favorite.contestant_id not in favorites_by_contestant:
+                favorites_by_contestant[favorite.contestant_id] = []
+            favorites_by_contestant[favorite.contestant_id].append({
+                "id": favorite.id,  # ID du favori
+                "user_id": user.id,
+                "username": user.username,
+                "full_name": user.full_name,
+                "avatar_url": user.avatar_url,
+                "position": favorite.position,
+                "added_date": favorite.added_date
+            })
+        
+        # Récupérer tous les partages avec utilisateurs
+        shares_data = db.query(ContestantShare, User)\
+            .outerjoin(User, ContestantShare.user_id == User.id)\
+            .filter(ContestantShare.contestant_id.in_(contestant_ids))\
+            .all()
+        
+        # Grouper les partages par contestant_id
+        shares_by_contestant = {}
+        for share, user in shares_data:
+            if share.contestant_id not in shares_by_contestant:
+                shares_by_contestant[share.contestant_id] = []
+            shares_by_contestant[share.contestant_id].append({
+                "id": share.id,  # ID du partage
+                "user_id": user.id if user else None,
+                "username": user.username if user else None,
+                "full_name": user.full_name if user else None,
+                "avatar_url": user.avatar_url if user else None,
+                "platform": share.platform,
+                "share_link": share.share_link,
+                "created_at": share.created_at
+            })
+        
+        # Vérifier si l'auteur a ajouté chaque contestant en favoris
+        author_favorites = {}
+        if current_user_id:
+            author_favs = db.query(MyFavorites.contestant_id)\
+                .filter(
+                    MyFavorites.user_id == current_user_id,
+                    MyFavorites.contestant_id.in_(contestant_ids)
+                )\
+                .all()
+            author_favorites = {fav[0] for fav in author_favs}
+        
+        # Vérifier les votes de l'utilisateur courant
+        user_votes = {}
+        if current_user_id:
+            user_votes_list = db.query(ContestantVoting.contestant_id)\
+                .filter(
+                    ContestantVoting.user_id == current_user_id,
+                    ContestantVoting.contestant_id.in_(contestant_ids)
+                )\
+                .all()
+            user_votes = {vote[0] for vote in user_votes_list}
+        
+        # Compter les votes pour chaque contestant
+        votes_count_by_contestant = {}
+        for contestant_id in contestant_ids:
+            votes_count_by_contestant[contestant_id] = len(votes_by_contestant.get(contestant_id, []))
+        
+        # Récupérer les rangs depuis contestant_rankings si disponibles, sinon calculer
+        from app.models.contests import ContestantRanking
+        
+        # Récupérer les rangs depuis la base de données pour cette saison
+        rankings_from_db = db.query(ContestantRanking)\
+            .filter(
+                ContestantRanking.contestant_id.in_(contestant_ids),
+                ContestantRanking.stage_id == season.id
+            )\
+            .all()
+        
+        ranks = {}
+        if rankings_from_db:
+            # Utiliser les rangs de la base de données
+            for ranking in rankings_from_db:
+                if ranking.final_rank:
+                    ranks[ranking.contestant_id] = ranking.final_rank
+        else:
+            # Calculer les rangs si pas disponibles en base
+            ranked_contestants = sorted(
+                [(cid, votes_count_by_contestant.get(cid, 0)) for cid in contestant_ids],
+                key=lambda x: x[1],
+                reverse=True
+            )
+            ranks = {cid: rank + 1 for rank, (cid, _) in enumerate(ranked_contestants)}
+        
+        # Construire la liste des contestants enrichis
+        enriched_contestants = []
+        for contestant in contestants:
+            # Compter les images et vidéos
+            images_count = 0
+            videos_count = 0
+            if contestant.image_media_ids:
+                try:
+                    images_count = len(json.loads(contestant.image_media_ids))
+                except (json.JSONDecodeError, TypeError):
+                    images_count = 0
+            if contestant.video_media_ids:
+                try:
+                    videos_count = len(json.loads(contestant.video_media_ids))
+                except (json.JSONDecodeError, TypeError):
+                    videos_count = 0
+            
+            # Déterminer si l'utilisateur peut voter
+            can_vote = False
+            if current_user_id and current_user_id != contestant.user_id:
+                can_vote = contestant.id not in user_votes
+            
+            enriched_contestants.append({
+                "id": contestant.id,
+                "user_id": contestant.user_id,
+                "season_id": contestant.season_id,
+                "title": contestant.title,
+                "description": contestant.description,
+                "image_media_ids": contestant.image_media_ids,
+                "video_media_ids": contestant.video_media_ids,
+                "registration_date": contestant.registration_date,
+                "is_qualified": contestant.is_qualified,
+                # Infos auteur
+                "author_name": contestant.user.full_name or f"{contestant.user.first_name or ''} {contestant.user.last_name or ''}".strip() if contestant.user else None,
+                "author_country": contestant.user.country if contestant.user else None,
+                "author_city": contestant.user.city if contestant.user else None,
+                "author_avatar_url": contestant.user.avatar_url if contestant.user else None,
+                # Stats
+                "rank": ranks.get(contestant.id),
+                "votes_count": votes_count_by_contestant.get(contestant.id, 0),
+                "images_count": images_count,
+                "videos_count": videos_count,
+                "favorites_count": len(favorites_by_contestant.get(contestant.id, [])),
+                "reactions_count": sum(len(reactions) for reactions in reactions_by_contestant.get(contestant.id, {}).values()),
+                "comments_count": len(comments_by_contestant.get(contestant.id, [])),
+                "shares_count": len(shares_by_contestant.get(contestant.id, [])),
+                # Détails enrichis
+                "comments": comments_by_contestant.get(contestant.id, []),
+                "votes": votes_by_contestant.get(contestant.id, []),
+                "reactions": reactions_by_contestant.get(contestant.id, {}),
+                "favorites": favorites_by_contestant.get(contestant.id, []),
+                "shares": shares_by_contestant.get(contestant.id, []),
+                "is_in_favorites": contestant.id in author_favorites,
+                # Saison
+                "season": {
+                    "id": season.id,
+                    "title": season.title,
+                    "level": season.level.value if hasattr(season.level, 'value') else str(season.level)
+                } if season else None,
+                # État du vote
+                "has_voted": contestant.id in user_votes,
+                "can_vote": can_vote,
+            })
+        
+        # Trier par rangs (final_rank) si disponibles, sinon par votes décroissants
+        # Les contestants avec le même rang sont triés par votes décroissants
+        enriched_contestants.sort(key=lambda x: (
+            x.get("rank", float('inf')),  # Utiliser le rang si disponible, sinon mettre à la fin
+            -x["votes_count"]  # Ensuite par votes décroissants
+        ))
+        
+        # Ajouter les contestants enrichis au résultat
+        contest_data["contestants"] = enriched_contestants
+        
+        return contest_data
+
+    def update_contestant_rankings(
+        self, db: Session, contest_id: int, season_id: int
+    ) -> None:
+        """
+        Met à jour les rangs de tous les contestants d'un contest pour une saison donnée.
+        Le stage_id dans contestant_rankings sera l'id de la saison.
+        """
+        from app.models.voting import ContestantVoting
+        
+        # Récupérer tous les contestants du contest pour cette saison
+        contestants = db.query(Contestant).filter(
+            Contestant.season_id == season_id,
+            Contestant.is_deleted == False
+        ).all()
+        
+        # Compter les votes pour chaque contestant
+        votes_by_contestant = {}
+        for contestant in contestants:
+            votes_count = db.query(func.count(ContestantVoting.id))\
+                .filter(
+                    ContestantVoting.contestant_id == contestant.id,
+                    ContestantVoting.contest_id == contest_id
+                )\
+                .scalar() or 0
+            votes_by_contestant[contestant.id] = votes_count
+        
+        # Trier les contestants par votes décroissants
+        ranked_contestants = sorted(
+            [(c.id, votes_by_contestant.get(c.id, 0)) for c in contestants],
+            key=lambda x: x[1],
+            reverse=True
+        )
+        
+        # Créer ou mettre à jour les rangs
+        for rank, (contestant_id, votes_count) in enumerate(ranked_contestants, start=1):
+            # Chercher un rang existant pour ce contestant et cette saison
+            ranking = db.query(ContestantRanking).filter(
+                ContestantRanking.contestant_id == contestant_id,
+                ContestantRanking.stage_id == season_id  # Utiliser season_id comme stage_id
+            ).first()
+            
+            if ranking:
+                # Mettre à jour le rang existant
+                ranking.total_votes = votes_count
+                ranking.final_rank = rank
+                ranking.last_updated = datetime.utcnow()
+            else:
+                # Créer un nouveau rang
+                ranking = ContestantRanking(
+                    contestant_id=contestant_id,
+                    stage_id=season_id,  # Utiliser season_id comme stage_id
+                    total_votes=votes_count,
+                    total_points=0,  # Pour l'instant, on ne gère que les votes
+                    page_views=0,
+                    likes=0,
+                    final_rank=rank,
+                    last_updated=datetime.utcnow()
+                )
+                db.add(ranking)
+        
+        db.commit()
 
 
 contest = CRUDContest()

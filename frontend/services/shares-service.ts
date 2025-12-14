@@ -24,14 +24,16 @@ class SharesService {
     contestantId: number,
     shareLink: string,
     platform?: string,
-    sharedByUserId?: number
+    sharedByUserId?: number,
+    referralCode?: string
   ): Promise<Share> {
     try {
       const response = await api.post(`/api/v1/contestants/${contestantId}/share`, {
         contestant_id: contestantId,
         share_link: shareLink,
         platform: platform,
-        shared_by_user_id: sharedByUserId
+        shared_by_user_id: sharedByUserId,
+        referral_code: referralCode
       })
       return response.data
     } catch (error: any) {

@@ -1,5 +1,5 @@
 from typing import Optional, List
-from sqlalchemy import Column, Integer, String, ForeignKey, Float, Text, DateTime, Boolean, Enum as SQLEnum
+from sqlalchemy import Column, Integer, String, ForeignKey, Float, Text, DateTime, Boolean, Enum as SQLEnum, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime
 import enum
@@ -129,15 +129,68 @@ class ContestantReaction(Base):
 
 
 class ContestantShare(Base):
+    """
+    Table pour enregistrer les partages de contestants.
+    - author_id: L'auteur du contestant (celui qui a créé le contestant)
+    - shared_by_user_id: L'utilisateur qui partage le contestant
+    - contestant_id: Le contestant partagé
+    - referral_code: Le code de parrainage de celui qui partage
+    """
     __tablename__ = "contestant_shares"
-    user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    
+    # ID de l'auteur du contestant (celui qui a créé le contestant)
+    author_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    
+    # ID de celui qui partage
+    shared_by_user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    
+    # ID du contestant partagé
     contestant_id: Mapped[int] = mapped_column(Integer, ForeignKey("contestants.id"), nullable=False)
     
-    shared_by_user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    # Code de parrainage de celui qui partage
+    referral_code: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    
+    # Lien de partage
     share_link: Mapped[str] = mapped_column(String(500), nullable=False)
-    platform: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # facebook, twitter, whatsapp, etc.
+    
+    # Plateforme de partage (facebook, twitter, whatsapp, etc.)
+    platform: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    
+    # Date de création
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     
     # Relations
-    user: Mapped[Optional["User"]] = relationship("User", foreign_keys=[user_id])
+    author: Mapped[Optional["User"]] = relationship("User", foreign_keys=[author_id])
     shared_by: Mapped[Optional["User"]] = relationship("User", foreign_keys=[shared_by_user_id])
     contestant: Mapped["Contestant"] = relationship("Contestant")
+    
+    # Conserver user_id pour compatibilité (déprécié, utiliser author_id)
+    user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    user: Mapped[Optional["User"]] = relationship("User", foreign_keys=[user_id], overlaps="author")
+
+
+class ContestantVoting(Base):
+    """
+    Table pour enregistrer les votes des utilisateurs pour les contestants.
+    Stocke l'utilisateur qui vote, le contestant, le contest et la saison active.
+    """
+    __tablename__ = "contestant_voting"
+    
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    contestant_id: Mapped[int] = mapped_column(Integer, ForeignKey("contestants.id"), nullable=False)
+    contest_id: Mapped[int] = mapped_column(Integer, ForeignKey("contest.id"), nullable=False)
+    season_id: Mapped[int] = mapped_column(Integer, ForeignKey("contest_seasons.id"), nullable=False)
+    
+    vote_date: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    
+    # Relations
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
+    contestant: Mapped["Contestant"] = relationship("Contestant")
+    contest: Mapped["Contest"] = relationship("Contest")
+    season: Mapped["ContestSeason"] = relationship("ContestSeason")
+    
+    # Contrainte unique pour éviter les doublons : un utilisateur ne peut voter qu'une fois pour un contestant dans un contest
+    __table_args__ = (
+        UniqueConstraint('user_id', 'contestant_id', 'contest_id', name='uq_contestant_voting'),
+        {'extend_existing': True},
+    )
