@@ -257,7 +257,12 @@ export function ContestantsList({
             onHoverDescription={() => onHoverDescription(contestant.id, contestant.description)}
             onHoverVotes={() => onHoverVotes(contestant.id, contestant.votesList || [])}
             onHoverReactions={() => onHoverReactions(contestant.id, contestant.reactionsList || {})}
-            onHoverFavorites={() => onHoverFavorites(contestant.id, contestant.favoritesList || [])}
+            onHoverFavorites={() => {
+              // Seul l'auteur peut voir la liste des favoris
+              if (currentUserId === contestant.userId) {
+                onHoverFavorites(contestant.id, contestant.favoritesList || [])
+              }
+            }}
           />
         </div>
       ))}

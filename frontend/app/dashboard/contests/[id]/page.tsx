@@ -573,7 +573,13 @@ export default function ContestDetailPage() {
                     handleHoverStart('reactions', contestantId, reactions)
                   }
                 }}
-                onHoverFavorites={(contestantId, favorites) => handleHoverStart('favorites', contestantId, favorites)}
+                onHoverFavorites={(contestantId, favorites) => {
+                  const contestant = contest.contestants.find(c => c.id === contestantId)
+                  // Seul l'auteur peut voir la liste des favoris
+                  if (user?.id === contestant?.userId) {
+                    handleHoverStart('favorites', contestantId, favorites)
+                  }
+                }}
               />
             </div>
 

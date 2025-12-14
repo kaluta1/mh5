@@ -612,8 +612,8 @@ export function ContestantCard({
               />
             </div>
             <div
-              onMouseEnter={onHoverFavorites}
-              onMouseLeave={onHoverEnd}
+              onMouseEnter={currentUserId === userId ? onHoverFavorites : undefined}
+              onMouseLeave={currentUserId === userId ? onHoverEnd : undefined}
             >
               <FavoriteButton
                 contestantId={Number(id)}

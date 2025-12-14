@@ -392,7 +392,12 @@ export default function ContestantsListPage() {
                     onHoverDescription={() => {}}
                     onHoverVotes={() => {}}
                     onHoverReactions={() => {}}
-                    onHoverFavorites={() => {}}
+                    onHoverFavorites={() => {
+                      // Seul l'auteur peut voir la liste des favoris
+                      if (user?.id === contestant.userId) {
+                        // TODO: Implémenter l'affichage de la liste des favoris
+                      }
+                    }}
                   />
                 </div>
               ))
