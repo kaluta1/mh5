@@ -685,13 +685,21 @@ class CRUDContest:
         # Récupérer les rangs depuis contestant_rankings si disponibles, sinon calculer
         from app.models.contests import ContestantRanking
         
-        # Récupérer les rangs depuis la base de données pour cette saison
-        rankings_from_db = db.query(ContestantRanking)\
-            .filter(
-                ContestantRanking.contestant_id.in_(contestant_ids),
-                ContestantRanking.stage_id == season.id
-            )\
-            .all()
+        # Récupérer le stage correspondant à la saison
+        from app.models.contests import ContestStage
+        stage = db.query(ContestStage).filter(
+            ContestStage.season_id == season.id
+        ).first()
+        
+        # Récupérer les rangs depuis la base de données pour ce stage
+        rankings_from_db = []
+        if stage:
+            rankings_from_db = db.query(ContestantRanking)\
+                .filter(
+                    ContestantRanking.contestant_id.in_(contestant_ids),
+                    ContestantRanking.stage_id == stage.id
+                )\
+                .all()
         
         ranks = {}
         if rankings_from_db:
@@ -789,9 +797,51 @@ class CRUDContest:
     ) -> None:
         """
         Met à jour les rangs de tous les contestants d'un contest pour une saison donnée.
-        Le stage_id dans contestant_rankings sera l'id de la saison.
+        Trouve ou crée le ContestStage correspondant à la saison.
         """
         from app.models.voting import ContestantVoting
+        from app.models.contests import ContestStage, ContestStatus, ContestStageLevel
+        from datetime import datetime, timedelta
+        
+        # Récupérer ou créer le ContestStage pour cette saison
+        # Chercher d'abord un stage actif (voting_active) pour cette saison
+        stage = db.query(ContestStage).filter(
+            ContestStage.season_id == season_id,
+            ContestStage.status == ContestStatus.VOTING_ACTIVE
+        ).first()
+        
+        # Si aucun stage actif, chercher n'importe quel stage pour cette saison
+        if not stage:
+            stage = db.query(ContestStage).filter(
+                ContestStage.season_id == season_id
+            ).first()
+        
+        # Si aucun stage n'existe, créer un stage par défaut pour cette saison
+        if not stage:
+            # Récupérer la saison pour obtenir ses informations
+            from app.models.contests import ContestSeason
+            season = db.query(ContestSeason).filter(ContestSeason.id == season_id).first()
+            if not season:
+                # Si la saison n'existe pas, on ne peut pas créer de stage
+                import logging
+                logging.warning(f"Season {season_id} not found, cannot create rankings")
+                return
+            
+            # Créer un stage par défaut
+            now = datetime.utcnow()
+            stage = ContestStage(
+                season_id=season_id,
+                stage_level=ContestStageLevel.REGIONAL,  # Valeur par défaut
+                status=ContestStatus.VOTING_ACTIVE,
+                start_date=now - timedelta(days=1),
+                end_date=now + timedelta(days=30),
+                max_qualifiers=5,
+                min_participants=2
+            )
+            db.add(stage)
+            db.flush()  # Pour obtenir l'ID du stage
+        
+        stage_id = stage.id
         
         # Récupérer tous les contestants du contest pour cette saison
         contestants = db.query(Contestant).filter(
@@ -819,10 +869,10 @@ class CRUDContest:
         
         # Créer ou mettre à jour les rangs
         for rank, (contestant_id, votes_count) in enumerate(ranked_contestants, start=1):
-            # Chercher un rang existant pour ce contestant et cette saison
+            # Chercher un rang existant pour ce contestant et ce stage
             ranking = db.query(ContestantRanking).filter(
                 ContestantRanking.contestant_id == contestant_id,
-                ContestantRanking.stage_id == season_id  # Utiliser season_id comme stage_id
+                ContestantRanking.stage_id == stage_id
             ).first()
             
             if ranking:
@@ -834,7 +884,7 @@ class CRUDContest:
                 # Créer un nouveau rang
                 ranking = ContestantRanking(
                     contestant_id=contestant_id,
-                    stage_id=season_id,  # Utiliser season_id comme stage_id
+                    stage_id=stage_id,
                     total_votes=votes_count,
                     total_points=0,  # Pour l'instant, on ne gère que les votes
                     page_views=0,
