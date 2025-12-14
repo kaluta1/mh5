@@ -118,7 +118,7 @@ export default function ContestantsListPage() {
     try {
       setLoading(true)
       const response = await contestService.getContestById(contestId)
-      setContest(response.contest)
+      setContest(response)
       
       const parseMediaIds = (mediaIds: string | null | undefined, type: 'image' | 'video'): Media[] => {
         if (!mediaIds) return []
@@ -160,7 +160,9 @@ export default function ContestantsListPage() {
         }
       }
 
-      const mappedContestants: Contestant[] = response.contestants.map((c: any) => {
+      // Les contestants sont dans la réponse enrichie
+      const contestantsResponse = (response as any).contestants || []
+      const mappedContestants: Contestant[] = contestantsResponse.map((c: any) => {
         const images = parseMediaIds(c.image_media_ids, 'image')
         const videos = parseMediaIds(c.video_media_ids, 'video')
         const allMedia = [...images, ...videos]
