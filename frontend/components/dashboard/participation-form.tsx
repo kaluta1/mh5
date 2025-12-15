@@ -221,8 +221,8 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
       return
     }
 
-    if (title.trim().length < 100) {
-      addToast(t('participation.errors.content_title_min_length') || 'Le titre du contenu doit contenir au moins 100 caractères', 'error')
+    if (title.trim().length < 10) {
+      addToast(t('participation.errors.content_title_min_length') || 'Le titre du contenu doit contenir au moins 10 caractères', 'error')
       return
     }
 
@@ -266,58 +266,13 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
   }
 
   // Calculate errors
-  const hasTitleError = title.trim().length > 0 && title.trim().length < 100
+  const hasTitleError = title.trim().length > 0 && title.trim().length < 10
   const hasDescriptionError = description.trim().length > 0 && description.trim().length < 100
   const hasImageError = imageUrls.length === 0
   const hasVideoError = requiresVideo && !videoUrl
-  const hasAnyError = hasTitleError || hasDescriptionError || hasImageError || hasVideoError || !title.trim() || !description.trim()
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Important Errors Display */}
-      {hasAnyError && (
-        <div className="mb-4 space-y-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-          <h4 className="text-sm font-semibold text-red-900 dark:text-red-200 mb-2 flex items-center gap-2">
-            <AlertCircle className="w-4 h-4" />
-            {t('participation.important_errors') || 'Important Errors to Fix:'}
-          </h4>
-          <div className="space-y-1">
-            {(!title.trim() || hasTitleError) && (
-              <div className="flex items-center gap-2 text-sm">
-                <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
-                <span className="text-red-700 dark:text-red-300">
-                  {t('participation.errors.content_title_required') || 'Content Title'} - {t('participation.errors.content_title_min_length') || 'Minimum 100 characters required'} ({title.length}/100)
-                </span>
-              </div>
-            )}
-            {(!description.trim() || hasDescriptionError) && (
-              <div className="flex items-center gap-2 text-sm">
-                <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
-                <span className="text-red-700 dark:text-red-300">
-                  {t('participation.errors.content_description_required') || 'Content Description'} - {t('participation.errors.content_description_min_length') || 'Minimum 100 characters required'} ({description.length}/100)
-                </span>
-              </div>
-            )}
-            {hasImageError && (
-              <div className="flex items-center gap-2 text-sm">
-                <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
-                <span className="text-red-700 dark:text-red-300">
-                  {t('participation.errors.content_image_required') || 'Content Image'} - {t('participation.errors.at_least_one_image') || 'At least one image is required'}
-                </span>
-              </div>
-            )}
-            {hasVideoError && (
-              <div className="flex items-center gap-2 text-sm">
-                <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
-                <span className="text-red-700 dark:text-red-300">
-                  {t('participation.errors.content_video_required') || 'Content Video'} - {t('participation.errors.video_required_for_contest') || 'A video is required for this contest'}
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* Section 1: Content Title */}
       <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
         <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
@@ -327,23 +282,35 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder={t('participation.content_title_placeholder') || 'Enter content title (minimum 100 characters)'}
+          placeholder={t('participation.content_title_placeholder') || 'Enter content title (minimum 10 characters)'}
           maxLength={200}
           className={`w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 ${
-            title.length > 0 && title.length < 100 
+            (!title.trim() || (title.length > 0 && title.length < 10))
               ? 'border-red-500 focus:ring-red-500' 
               : 'border-gray-300 dark:border-gray-600 focus:ring-myfav-primary'
           }`}
           disabled={isSubmitting}
         />
         <div className="flex items-center justify-between mt-2">
-          <p className={`text-xs ${title.length > 0 && title.length < 100 ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'}`}>
-            {title.length < 100 
-              ? `${t('participation.min_characters') || 'Minimum'} 100 ${t('participation.characters') || 'characters'} (${title.length}/100)`
+          <p className={`text-xs ${title.length > 0 && title.length < 10 ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'}`}>
+            {title.length < 10 
+              ? `${t('participation.min_characters') || 'Minimum'} 10 ${t('participation.characters') || 'characters'} (${title.length}/10)`
               : `${title.length}/200`
             }
           </p>
         </div>
+        {/* Error message for title */}
+        {(!title.trim() || hasTitleError) && (
+          <div className="mt-2 flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span>
+              {!title.trim() 
+                ? t('participation.errors.content_title_required') || 'Content Title is required'
+                : t('participation.errors.content_title_min_length') || 'Content title must contain at least 10 characters'
+              }
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Section 2: Content Description */}
@@ -359,7 +326,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
           maxLength={1000}
           rows={4}
           className={`w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 resize-none ${
-            description.length > 0 && description.length < 100 
+            (!description.trim() || (description.length > 0 && description.length < 100))
               ? 'border-red-500 focus:ring-red-500' 
               : 'border-gray-300 dark:border-gray-600 focus:ring-myfav-primary'
           }`}
@@ -373,6 +340,18 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
             }
           </p>
         </div>
+        {/* Error message for description */}
+        {(!description.trim() || hasDescriptionError) && (
+          <div className="mt-2 flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span>
+              {!description.trim() 
+                ? t('participation.errors.content_description_required') || 'Content Description is required'
+                : t('participation.errors.content_description_min_length') || 'Content description must contain at least 100 characters'
+              }
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Media Requirements Info */}
@@ -398,7 +377,11 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
       )}
 
       {/* Section 3: Content Images */}
-      <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+      <div className={`bg-gray-50 dark:bg-gray-800 rounded-lg p-6 border ${
+        hasImageError 
+          ? 'border-red-500 dark:border-red-500' 
+          : 'border-gray-200 dark:border-gray-700'
+      }`}>
         <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
           <ImageIcon className="w-5 h-5" />
           {t('participation.content_image') || 'Content Image'} {minImages > 0 && '*'} ({imageUrls.length}/{maxImages})
@@ -533,10 +516,23 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
             ))}
           </div>
         )}
+        {/* Error message for images */}
+        {hasImageError && (
+          <div className="mt-4 flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span>
+              {t('participation.errors.content_image_required') || 'Content Image'} - {t('participation.errors.at_least_one_image') || 'At least one image is required'}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Section 4: Content Video */}
-      <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+      <div className={`bg-gray-50 dark:bg-gray-800 rounded-lg p-6 border ${
+        hasVideoError 
+          ? 'border-red-500 dark:border-red-500' 
+          : 'border-gray-200 dark:border-gray-700'
+      }`}>
         <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
           <Video className="w-5 h-5" />
           {requiresVideo 
@@ -668,6 +664,15 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
             </div>
           </div>
         )}
+        {/* Error message for video */}
+        {hasVideoError && (
+          <div className="mt-4 flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span>
+              {t('participation.errors.content_video_required') || 'Content Video'} - {t('participation.errors.video_required_for_contest') || 'A video is required for this contest'}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Submit Buttons */}
@@ -685,7 +690,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
           type="submit"
           disabled={
             !title.trim() || 
-            title.trim().length < 100 || 
+            title.trim().length < 10 || 
             !description.trim() || 
             description.trim().length < 100 || 
             imageUrls.length === 0 || 

@@ -368,49 +368,6 @@ export default function ParticipateInContestPage() {
                   {t('dashboard.contests.participation_form.description')}
                 </p>
 
-                {/* Important Errors Display */}
-                {existingParticipationData && (
-                  <div className="mb-4 space-y-2">
-                    <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
-                      {t('participation.important_errors') || 'Important Errors to Fix:'}
-                    </h4>
-                    <div className="space-y-1">
-                      {(!existingParticipationData.title || existingParticipationData.title.length < 100) && (
-                        <div className="flex items-center gap-2 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-sm">
-                          <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
-                          <span className="text-red-700 dark:text-red-300">
-                            {t('participation.errors.content_title_required') || 'Content Title'} - {t('participation.errors.content_title_min_length') || 'Minimum 100 characters required'}
-                          </span>
-                        </div>
-                      )}
-                      {(!existingParticipationData.description || existingParticipationData.description.length < 100) && (
-                        <div className="flex items-center gap-2 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-sm">
-                          <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
-                          <span className="text-red-700 dark:text-red-300">
-                            {t('participation.errors.content_description_required') || 'Content Description'} - {t('participation.errors.content_description_min_length') || 'Minimum 100 characters required'}
-                          </span>
-                        </div>
-                      )}
-                      {(!existingParticipationData.imageUrls || existingParticipationData.imageUrls.length === 0) && (
-                        <div className="flex items-center gap-2 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-sm">
-                          <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
-                          <span className="text-red-700 dark:text-red-300">
-                            {t('participation.errors.content_image_required') || 'Content Image'} - {t('participation.errors.at_least_one_image') || 'At least one image is required'}
-                          </span>
-                        </div>
-                      )}
-                      {contest?.requires_video && !existingParticipationData.videoUrl && (
-                        <div className="flex items-center gap-2 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-sm">
-                          <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
-                          <span className="text-red-700 dark:text-red-300">
-                            {t('participation.errors.content_video_required') || 'Content Video'} - {t('participation.errors.video_required_for_contest') || 'A video is required for this contest'}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
                 {/* Profile Setup Alert */}
                 {needsProfileSetup && (
                   <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg mb-4">

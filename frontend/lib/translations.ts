@@ -2344,7 +2344,7 @@ export const translations: Record<Language, TranslationKeys> = {
       video_required_title: "Vidéo *",
       // New labels
       content_title: "Titre du contenu",
-      content_title_placeholder: "Entrez le titre du contenu (minimum 100 caractères)",
+      content_title_placeholder: "Entrez le titre du contenu (minimum 10 caractères)",
       content_description: "Description du contenu",
       content_description_placeholder: "Entrez la description du contenu (minimum 100 caractères)",
       content_image: "Image du contenu",
@@ -2355,7 +2355,7 @@ export const translations: Record<Language, TranslationKeys> = {
       // Errors
       errors: {
         content_title_required: "Titre du contenu",
-        content_title_min_length: "Le titre du contenu doit contenir au moins 100 caractères",
+        content_title_min_length: "Le titre du contenu doit contenir au moins 10 caractères",
         content_description_required: "Description du contenu",
         content_description_min_length: "La description du contenu doit contenir au moins 100 caractères",
         content_image_required: "Image du contenu",
@@ -4224,7 +4224,7 @@ export const translations: Record<Language, TranslationKeys> = {
       video_required_title: "Video *",
       // New labels
       content_title: "Content Title",
-      content_title_placeholder: "Enter content title (minimum 100 characters)",
+      content_title_placeholder: "Enter content title (minimum 10 characters)",
       content_description: "Content Description",
       content_description_placeholder: "Enter content description (minimum 100 characters)",
       content_image: "Content Image",
@@ -4235,7 +4235,7 @@ export const translations: Record<Language, TranslationKeys> = {
       // Errors
       errors: {
         content_title_required: "Content Title",
-        content_title_min_length: "Content title must contain at least 100 characters",
+        content_title_min_length: "Content title must contain at least 10 characters",
         content_description_required: "Content Description",
         content_description_min_length: "Content description must contain at least 100 characters",
         content_image_required: "Content Image",
@@ -6135,7 +6135,7 @@ export const translations: Record<Language, TranslationKeys> = {
       video_required_title: "Video *",
       // New labels
       content_title: "Título del Contenido",
-      content_title_placeholder: "Ingrese el título del contenido (mínimo 100 caracteres)",
+      content_title_placeholder: "Ingrese el título del contenido (mínimo 10 caracteres)",
       content_description: "Descripción del Contenido",
       content_description_placeholder: "Ingrese la descripción del contenido (mínimo 100 caracteres)",
       content_image: "Imagen del Contenido",
@@ -6146,7 +6146,7 @@ export const translations: Record<Language, TranslationKeys> = {
       // Errors
       errors: {
         content_title_required: "Título del Contenido",
-        content_title_min_length: "El título del contenido debe contener al menos 100 caracteres",
+        content_title_min_length: "El título del contenido debe contener al menos 10 caracteres",
         content_description_required: "Descripción del Contenido",
         content_description_min_length: "La descripción del contenido debe contener al menos 100 caracteres",
         content_image_required: "Imagen del Contenido",
@@ -7966,7 +7966,7 @@ export const translations: Record<Language, TranslationKeys> = {
       video_required_title: "Video *",
       // New labels
       content_title: "Inhaltstitel",
-      content_title_placeholder: "Geben Sie den Inhaltstitel ein (mindestens 100 Zeichen)",
+      content_title_placeholder: "Geben Sie den Inhaltstitel ein (mindestens 10 Zeichen)",
       content_description: "Inhaltsbeschreibung",
       content_description_placeholder: "Geben Sie die Inhaltsbeschreibung ein (mindestens 100 Zeichen)",
       content_image: "Inhaltsbild",
@@ -7977,7 +7977,7 @@ export const translations: Record<Language, TranslationKeys> = {
       // Errors
       errors: {
         content_title_required: "Inhaltstitel",
-        content_title_min_length: "Der Inhaltstitel muss mindestens 100 Zeichen enthalten",
+        content_title_min_length: "Der Inhaltstitel muss mindestens 10 Zeichen enthalten",
         content_description_required: "Inhaltsbeschreibung",
         content_description_min_length: "Die Inhaltsbeschreibung muss mindestens 100 Zeichen enthalten",
         content_image_required: "Inhaltsbild",
