@@ -1,5 +1,5 @@
 from typing import Any, Dict, List, Optional, Union
-from datetime import datetime
+from datetime import datetime, date, timedelta
 
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
@@ -7,6 +7,87 @@ from sqlalchemy import func
 from app.models.contest import Contest, ContestEntry, ContestVote
 from app.models.contests import Contestant, ContestantRanking
 from app.schemas.contest import ContestCreate, ContestUpdate
+
+
+def calculate_season_dates(voting_start_date: date) -> Dict[str, Optional[date]]:
+    """
+    Calcule les dates des différentes saisons à partir de voting_start_date.
+    
+    Logique:
+    - city_season_start_date = voting_start_date
+    - city_season_end_date = 1 mois après voting_start_date
+    - country_season_start_date = city_season_end_date
+    - country_season_end_date = 1 mois après country_season_start_date
+    - regional_start_date = country_season_end_date
+    - regional_end_date = 1 mois après regional_start_date
+    - continental_start_date = regional_end_date
+    - continental_end_date = 1 mois après continental_start_date
+    - global_start_date = continental_end_date
+    - global_end_date = 1 mois après global_start_date
+    """
+    if not voting_start_date:
+        return {
+            'city_season_start_date': None,
+            'city_season_end_date': None,
+            'country_season_start_date': None,
+            'country_season_end_date': None,
+            'regional_start_date': None,
+            'regional_end_date': None,
+            'continental_start_date': None,
+            'continental_end_date': None,
+            'global_start_date': None,
+            'global_end_date': None,
+        }
+    
+    # Helper pour ajouter 1 mois à une date
+    def add_month(d: date) -> date:
+        """Ajoute 1 mois à une date en gérant les cas limites (ex: 31 janvier -> 28/29 février)"""
+        if d.month == 12:
+            # Décembre -> Janvier de l'année suivante
+            try:
+                return d.replace(year=d.year + 1, month=1)
+            except ValueError:
+                # Si le jour n'existe pas (ex: 31), utiliser le dernier jour du mois
+                return d.replace(year=d.year + 1, month=1, day=31)
+        else:
+            # Autres mois
+            try:
+                return d.replace(month=d.month + 1)
+            except ValueError:
+                # Si le jour n'existe pas dans le mois suivant (ex: 31 janvier -> 31 février),
+                # utiliser le dernier jour du mois suivant
+                from calendar import monthrange
+                next_month = d.month + 1
+                last_day = monthrange(d.year, next_month)[1]
+                return d.replace(month=next_month, day=last_day)
+    
+    city_season_start_date = voting_start_date
+    city_season_end_date = add_month(city_season_start_date)
+    
+    country_season_start_date = city_season_end_date
+    country_season_end_date = add_month(country_season_start_date)
+    
+    regional_start_date = country_season_end_date
+    regional_end_date = add_month(regional_start_date)
+    
+    continental_start_date = regional_end_date
+    continental_end_date = add_month(continental_start_date)
+    
+    global_start_date = continental_end_date
+    global_end_date = add_month(global_start_date)
+    
+    return {
+        'city_season_start_date': city_season_start_date,
+        'city_season_end_date': city_season_end_date,
+        'country_season_start_date': country_season_start_date,
+        'country_season_end_date': country_season_end_date,
+        'regional_start_date': regional_start_date,
+        'regional_end_date': regional_end_date,
+        'continental_start_date': continental_start_date,
+        'continental_end_date': continental_end_date,
+        'global_start_date': global_start_date,
+        'global_end_date': global_end_date,
+    }
 
 
 class CRUDContest:
@@ -60,6 +141,9 @@ class CRUDContest:
             except ValueError:
                 participant_type = ParticipantType.INDIVIDUAL
         
+        # Calculer les dates des saisons à partir de voting_start_date
+        season_dates = calculate_season_dates(obj_in.voting_start_date)
+        
         db_obj = Contest(
             name=obj_in.name,
             description=obj_in.description,
@@ -86,7 +170,9 @@ class CRUDContest:
             requires_brand_verification=obj_in.requires_brand_verification,
             requires_content_verification=obj_in.requires_content_verification,
             min_age=obj_in.min_age,
-            max_age=obj_in.max_age
+            max_age=obj_in.max_age,
+            # Dates des saisons
+            **season_dates
         )
         db.add(db_obj)
         db.commit()
@@ -97,17 +183,86 @@ class CRUDContest:
     def update(self, db: Session, *, db_obj: Contest, obj_in: Union[ContestUpdate, Dict[str, Any]]) -> Contest:
         """Met à jour un concours existant"""
         from app.models.contest import VerificationType, ParticipantType
+        from datetime import datetime, date
         
         if isinstance(obj_in, dict):
             update_data = obj_in
         else:
-            update_data = obj_in.dict(exclude_unset=True)
+            # Gérer Pydantic v1 et v2
+            if hasattr(obj_in, 'model_dump'):
+                # Pydantic v2
+                update_data = obj_in.model_dump(exclude_unset=True)
+            else:
+                # Pydantic v1
+                update_data = obj_in.dict(exclude_unset=True)
+        
+        # Liste des champs de dates à convertir
+        date_fields = [
+            'submission_start_date', 'submission_end_date', 
+            'voting_start_date', 'voting_end_date',
+            'city_season_start_date', 'city_season_end_date',
+            'country_season_start_date', 'country_season_end_date',
+            'regional_start_date', 'regional_end_date',
+            'continental_start_date', 'continental_end_date',
+            'global_start_date', 'global_end_date'
+        ]
+        
+        # Vérifier si voting_start_date est modifié pour recalculer les dates des saisons
+        voting_start_date_updated = False
+        new_voting_start_date = None
+        
+        if 'voting_start_date' in update_data:
+            value = update_data['voting_start_date']
+            # Convertir la date si c'est une string
+            if isinstance(value, str):
+                try:
+                    new_voting_start_date = datetime.strptime(value, '%Y-%m-%d').date()
+                except (ValueError, TypeError):
+                    try:
+                        if 'T' in value:
+                            new_voting_start_date = datetime.fromisoformat(value.replace('Z', '+00:00')).date()
+                        else:
+                            new_voting_start_date = datetime.fromisoformat(value).date()
+                    except (ValueError, TypeError):
+                        pass
+            elif isinstance(value, datetime):
+                new_voting_start_date = value.date()
+            elif isinstance(value, date):
+                new_voting_start_date = value
+            
+            # Vérifier si la date a changé
+            if new_voting_start_date and new_voting_start_date != db_obj.voting_start_date:
+                voting_start_date_updated = True
         
         for field in update_data:
             if field in update_data:
                 value = update_data[field]
+                
+                # Convertir les dates depuis les strings si nécessaire
+                if field in date_fields and value is not None:
+                    if isinstance(value, str):
+                        try:
+                            # Essayer de parser la date depuis le format ISO (YYYY-MM-DD)
+                            value = datetime.strptime(value, '%Y-%m-%d').date()
+                        except (ValueError, TypeError) as e:
+                            # Si le parsing échoue, essayer avec datetime.fromisoformat
+                            try:
+                                if 'T' in value:
+                                    value = datetime.fromisoformat(value.replace('Z', '+00:00')).date()
+                                else:
+                                    value = datetime.fromisoformat(value).date()
+                            except (ValueError, TypeError):
+                                # Si tout échoue, logger l'erreur et ignorer la valeur
+                                import logging
+                                logger = logging.getLogger(__name__)
+                                logger.warning(f"Impossible de convertir la date pour {field}: {value}")
+                                continue
+                    elif isinstance(value, datetime):
+                        # Si c'est un datetime, extraire la date
+                        value = value.date()
+                
                 # Convertir les IDs 0 en None pour éviter les violations de FK
-                if field in ('location_id', 'template_id') and value == 0:
+                elif field in ('location_id', 'template_id') and value == 0:
                     value = None
                 # Convertir les strings en enums pour verification_type
                 elif field == 'verification_type' and value is not None:
@@ -123,7 +278,14 @@ class CRUDContest:
                             value = ParticipantType(value)
                         except ValueError:
                             value = ParticipantType.INDIVIDUAL
+                
                 setattr(db_obj, field, value)
+        
+        # Si voting_start_date a été modifié, recalculer toutes les dates des saisons
+        if voting_start_date_updated and new_voting_start_date:
+            season_dates = calculate_season_dates(new_voting_start_date)
+            for field, date_value in season_dates.items():
+                setattr(db_obj, field, date_value)
         
         db.add(db_obj)
         db.commit()
@@ -462,6 +624,17 @@ class CRUDContest:
             "updated_at": contest.updated_at,
             "entries_count": entries_count,
             "total_votes": total_votes,
+            # Season dates
+            "city_season_start_date": getattr(contest, 'city_season_start_date', None),
+            "city_season_end_date": getattr(contest, 'city_season_end_date', None),
+            "country_season_start_date": getattr(contest, 'country_season_start_date', None),
+            "country_season_end_date": getattr(contest, 'country_season_end_date', None),
+            "regional_start_date": getattr(contest, 'regional_start_date', None),
+            "regional_end_date": getattr(contest, 'regional_end_date', None),
+            "continental_start_date": getattr(contest, 'continental_start_date', None),
+            "continental_end_date": getattr(contest, 'continental_end_date', None),
+            "global_start_date": getattr(contest, 'global_start_date', None),
+            "global_end_date": getattr(contest, 'global_end_date', None),
             # Verification requirements
             "requires_kyc": getattr(contest, 'requires_kyc', True),
             "verification_type": verification_type_value,

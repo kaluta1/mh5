@@ -71,6 +71,18 @@ class Contest(Base):
     voting_start_date: Mapped[date] = mapped_column(Date, nullable=False)
     voting_end_date: Mapped[date] = mapped_column(Date, nullable=False)
     
+    # Dates des saisons
+    city_season_start_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    city_season_end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    country_season_start_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    country_season_end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    regional_start_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    regional_end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    continental_start_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    continental_end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    global_start_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    global_end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    
     # État
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_submission_open: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

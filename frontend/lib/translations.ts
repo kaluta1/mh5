@@ -1600,7 +1600,18 @@ export const translations: Record<Language, TranslationKeys> = {
         min_age_placeholder: "Ex: 18",
         max_age_placeholder: "Ex: 35",
         search_input_placeholder: "Nom, type, description...",
-        sort: "Trier par"
+        sort: "Trier par",
+        // Season dates
+        season_dates: "Dates des saisons",
+        season_dates_description_edit: "Ces dates sont calculées automatiquement à partir de la date de début de vote. Vous pouvez les modifier manuellement si nécessaire.",
+        season_dates_description_create: "Ces dates seront calculées automatiquement à partir de la date de début de vote lors de la création. Vous pouvez les pré-remplir si nécessaire.",
+        city_season: "Saison Ville",
+        country_season: "Saison Pays",
+        regional_season: "Saison Régionale",
+        continental_season: "Saison Continentale",
+        global_season: "Saison Globale",
+        start_date: "Date de début",
+        end_date: "Date de fin"
       },
       contestants: {
         title: "Gestion des Candidats",
@@ -3712,7 +3723,18 @@ export const translations: Record<Language, TranslationKeys> = {
         min_age_placeholder: "Ex: 18",
         max_age_placeholder: "Ex: 35",
         search_input_placeholder: "Name, type, description...",
-        sort: "Sort by"
+        sort: "Sort by",
+        // Season dates
+        season_dates: "Season Dates",
+        season_dates_description_edit: "These dates are automatically calculated from the voting start date. You can modify them manually if necessary.",
+        season_dates_description_create: "These dates will be automatically calculated from the voting start date when creating. You can pre-fill them if necessary.",
+        city_season: "City Season",
+        country_season: "Country Season",
+        regional_season: "Regional Season",
+        continental_season: "Continental Season",
+        global_season: "Global Season",
+        start_date: "Start Date",
+        end_date: "End Date"
       },
       contestants: {
         title: "Manage Contestants",
@@ -5623,7 +5645,18 @@ export const translations: Record<Language, TranslationKeys> = {
         min_age_placeholder: "Ej: 18",
         max_age_placeholder: "Ej: 35",
         search_input_placeholder: "Nombre, tipo, descripción...",
-        sort: "Ordenar por"
+        sort: "Ordenar por",
+        // Season dates
+        season_dates: "Fechas de Temporadas",
+        season_dates_description_edit: "Estas fechas se calculan automáticamente a partir de la fecha de inicio de votación. Puede modificarlas manualmente si es necesario.",
+        season_dates_description_create: "Estas fechas se calcularán automáticamente a partir de la fecha de inicio de votación al crear. Puede prellenarlas si es necesario.",
+        city_season: "Temporada Ciudad",
+        country_season: "Temporada País",
+        regional_season: "Temporada Regional",
+        continental_season: "Temporada Continental",
+        global_season: "Temporada Global",
+        start_date: "Fecha de Inicio",
+        end_date: "Fecha de Fin"
       },
       contestants: {
         title: "Gestionar Participantes",
@@ -7454,7 +7487,18 @@ export const translations: Record<Language, TranslationKeys> = {
         min_age_placeholder: "Z.B.: 18",
         max_age_placeholder: "Z.B.: 35",
         search_input_placeholder: "Name, Typ, Beschreibung...",
-        sort: "Sortieren nach"
+        sort: "Sortieren nach",
+        // Season dates
+        season_dates: "Saisondaten",
+        season_dates_description_edit: "Diese Daten werden automatisch aus dem Abstimmungsstartdatum berechnet. Sie können sie bei Bedarf manuell ändern.",
+        season_dates_description_create: "Diese Daten werden beim Erstellen automatisch aus dem Abstimmungsstartdatum berechnet. Sie können sie bei Bedarf vorausfüllen.",
+        city_season: "Stadt-Saison",
+        country_season: "Land-Saison",
+        regional_season: "Regionale Saison",
+        continental_season: "Kontinentale Saison",
+        global_season: "Globale Saison",
+        start_date: "Startdatum",
+        end_date: "Enddatum"
       },
       contestants: {
         title: "Teilnehmer verwalten",

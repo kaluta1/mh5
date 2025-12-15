@@ -249,7 +249,7 @@ export default function ContestDetailPage() {
         const favoriteIds = mappedContestants
           .filter(c => c.isFavorite)
           .map(c => c.id)
-        setFavorites(favoriteIds)
+          setFavorites(favoriteIds)
       } catch (error) {
         console.error('Error loading contest:', error)
       } finally {
@@ -482,19 +482,19 @@ export default function ContestDetailPage() {
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900">
       <div className="px-2 py-6 sm:px-2 lg:px-8">
-        <div className="max-w-7xl mx-auto">
+      <div className="max-w-7xl mx-auto">
           {/* Header with Back Button */}
           <div className="mb-6 flex items-center justify-between">
-            <Button
-              onClick={() => router.back()}
-              variant="outline"
-              className="text-sm sm:text-base text-myfav-primary border-myfav-primary hover:bg-myfav-blue-50 dark:hover:bg-myfav-blue-900/20"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              {t('common.back')}
-            </Button>
+          <Button
+            onClick={() => router.back()}
+            variant="outline"
+            className="text-sm sm:text-base text-myfav-primary border-myfav-primary hover:bg-myfav-blue-50 dark:hover:bg-myfav-blue-900/20"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            {t('common.back')}
+          </Button>
           </div>
-
+          
           {/* Contest Details Header */}
           <ContestDetailsHeader
             contest={contest.contest}
@@ -504,22 +504,22 @@ export default function ContestDetailPage() {
             onInfoClick={() => setShowInfoDialog(true)}
           />
 
-          {/* Toast Notification */}
-          {toast && (
-            <div className={`fixed bottom-4 right-4 rounded-lg shadow-lg p-4 z-50 animate-in fade-in slide-in-from-bottom-2 ${
+        {/* Toast Notification */}
+        {toast && (
+          <div className={`fixed bottom-4 right-4 rounded-lg shadow-lg p-4 z-50 animate-in fade-in slide-in-from-bottom-2 ${
+            toast.type === 'success'
+              ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
+              : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+          }`}>
+            <p className={`text-sm font-medium ${
               toast.type === 'success'
-                ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
-                : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+                ? 'text-green-700 dark:text-green-300'
+                : 'text-red-700 dark:text-red-300'
             }`}>
-              <p className={`text-sm font-medium ${
-                toast.type === 'success'
-                  ? 'text-green-700 dark:text-green-300'
-                  : 'text-red-700 dark:text-red-300'
-              }`}>
-                {toast.type === 'success' ? '✅' : '❌'} {toast.message}
-              </p>
-            </div>
-          )}
+              {toast.type === 'success' ? '✅' : '❌'} {toast.message}
+            </p>
+          </div>
+        )}
 
           {/* Contest Info Dialog */}
           <ContestInfoDialog
@@ -527,7 +527,7 @@ export default function ContestDetailPage() {
             onOpenChange={setShowInfoDialog}
             contest={contest.contest}
             participantsCount={participantsCount}
-          />
+                    />
 
           {/* Hover Info Dialog */}
           {hoveredElement && (
@@ -543,7 +543,7 @@ export default function ContestDetailPage() {
               type={hoveredElement.type}
               data={hoveredElement.data}
             />
-          )}
+              )}
 
           {/* Main Content Layout: Contestants with Sidebar */}
           <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -552,7 +552,7 @@ export default function ContestDetailPage() {
               <ContestantsList
                 contestants={filteredContestants}
                 contestId={contestId}
-                currentUserId={user?.id}
+                    currentUserId={user?.id}
                 favorites={favorites}
                 searchQuery={searchQuery}
                 onToggleFavorite={handleToggleFavorite}
@@ -597,7 +597,7 @@ export default function ContestDetailPage() {
               contestId={contestId}
               onShowToast={showToast}
             />
-          </div>
+            </div>
         </div>
       </div>
     </div>

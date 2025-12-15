@@ -298,11 +298,11 @@ export default function ParticipateInContestPage() {
   }
 
   return (
-    <div className="min-h-[calc(100vh-10rem)] flex items-start justify-center p-4 py-8 overflow-hidden">
-      <div className="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-3 gap-6 relative">
+    <div className="min-h-[calc(100vh-10rem)] flex items-start justify-center py-8 overflow-hidden">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 relative">
         {/* Left Column - Participation Form */}
         <div className="lg:col-span-2">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 md:p-8 sticky top-4 space-y-6">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-1 md:p-1 sticky top-4 space-y-6">
             {/* Success Message */}
             {submitSuccess && (
               <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg space-y-3">

@@ -70,6 +70,17 @@ class ContestUpdate(BaseModel):
     submission_end_date: Optional[date] = None
     voting_start_date: Optional[date] = None
     voting_end_date: Optional[date] = None
+    # Dates des saisons (calculées automatiquement si voting_start_date est modifié)
+    city_season_start_date: Optional[date] = None
+    city_season_end_date: Optional[date] = None
+    country_season_start_date: Optional[date] = None
+    country_season_end_date: Optional[date] = None
+    regional_start_date: Optional[date] = None
+    regional_end_date: Optional[date] = None
+    continental_start_date: Optional[date] = None
+    continental_end_date: Optional[date] = None
+    global_start_date: Optional[date] = None
+    global_end_date: Optional[date] = None
     is_active: Optional[bool] = None
     is_submission_open: Optional[bool] = None
     is_voting_open: Optional[bool] = None
@@ -138,6 +149,17 @@ class Contest(ContestBase):
     season_level: Optional[str] = None  # Niveau depuis la season
     image_url: Optional[str] = None  # URL de l'image principale
     top_contestants: List[TopContestantPreview] = []  # Top contestants preview
+    # Dates des saisons (calculées automatiquement)
+    city_season_start_date: Optional[date] = None
+    city_season_end_date: Optional[date] = None
+    country_season_start_date: Optional[date] = None
+    country_season_end_date: Optional[date] = None
+    regional_start_date: Optional[date] = None
+    regional_end_date: Optional[date] = None
+    continental_start_date: Optional[date] = None
+    continental_end_date: Optional[date] = None
+    global_start_date: Optional[date] = None
+    global_end_date: Optional[date] = None
     
     class Config:
         from_attributes = True

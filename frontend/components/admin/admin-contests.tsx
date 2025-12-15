@@ -34,6 +34,17 @@ interface Contest {
   participant_count?: number
   approved_count?: number
   pending_count?: number
+  // Season dates
+  city_season_start_date?: string
+  city_season_end_date?: string
+  country_season_start_date?: string
+  country_season_end_date?: string
+  regional_start_date?: string
+  regional_end_date?: string
+  continental_start_date?: string
+  continental_end_date?: string
+  global_start_date?: string
+  global_end_date?: string
   // Verification requirements
   requires_kyc?: boolean
   verification_type?: string
@@ -86,6 +97,17 @@ export default function AdminContests() {
     cover_image_url: '',
     voting_restriction: 'none',
     participant_count: 0,
+    // Season dates
+    city_season_start_date: '',
+    city_season_end_date: '',
+    country_season_start_date: '',
+    country_season_end_date: '',
+    regional_start_date: '',
+    regional_end_date: '',
+    continental_start_date: '',
+    continental_end_date: '',
+    global_start_date: '',
+    global_end_date: '',
     // Verification requirements
     requires_kyc: false,
     verification_type: 'none',
@@ -168,8 +190,8 @@ export default function AdminContests() {
     e.preventDefault()
     setIsSubmitting(true)
     try {
-      // Prepare data - remove dates as they are auto-generated on backend
-      const dataToSend = {
+      // Prepare data
+      const dataToSend: any = {
         name: formData.name,
         description: formData.description,
         contest_type: formData.contest_type,
@@ -198,6 +220,32 @@ export default function AdminContests() {
         max_images: formData.max_images,
         verification_video_max_duration: formData.verification_video_max_duration,
         verification_max_size_mb: formData.verification_max_size_mb
+      }
+
+      // Pour la création, inclure les dates principales (les dates de saisons seront calculées automatiquement)
+      if (!editingId) {
+        dataToSend.submission_start_date = formData.submission_start_date
+        dataToSend.submission_end_date = formData.submission_end_date
+        dataToSend.voting_start_date = formData.voting_start_date
+        dataToSend.voting_end_date = formData.voting_end_date
+      } else {
+        // Pour l'édition, inclure toutes les dates si elles sont modifiées
+        if (formData.submission_start_date) dataToSend.submission_start_date = formData.submission_start_date
+        if (formData.submission_end_date) dataToSend.submission_end_date = formData.submission_end_date
+        if (formData.voting_start_date) dataToSend.voting_start_date = formData.voting_start_date
+        if (formData.voting_end_date) dataToSend.voting_end_date = formData.voting_end_date
+        
+        // Dates des saisons (si modifiées)
+        if (formData.city_season_start_date) dataToSend.city_season_start_date = formData.city_season_start_date
+        if (formData.city_season_end_date) dataToSend.city_season_end_date = formData.city_season_end_date
+        if (formData.country_season_start_date) dataToSend.country_season_start_date = formData.country_season_start_date
+        if (formData.country_season_end_date) dataToSend.country_season_end_date = formData.country_season_end_date
+        if (formData.regional_start_date) dataToSend.regional_start_date = formData.regional_start_date
+        if (formData.regional_end_date) dataToSend.regional_end_date = formData.regional_end_date
+        if (formData.continental_start_date) dataToSend.continental_start_date = formData.continental_start_date
+        if (formData.continental_end_date) dataToSend.continental_end_date = formData.continental_end_date
+        if (formData.global_start_date) dataToSend.global_start_date = formData.global_start_date
+        if (formData.global_end_date) dataToSend.global_end_date = formData.global_end_date
       }
 
       if (editingId) {
@@ -237,6 +285,17 @@ export default function AdminContests() {
       cover_image_url: '',
       voting_restriction: 'none',
       participant_count: 0,
+      // Season dates
+      city_season_start_date: '',
+      city_season_end_date: '',
+      country_season_start_date: '',
+      country_season_end_date: '',
+      regional_start_date: '',
+      regional_end_date: '',
+      continental_start_date: '',
+      continental_end_date: '',
+      global_start_date: '',
+      global_end_date: '',
       requires_kyc: false,
       verification_type: 'none',
       participant_type: 'individual',
@@ -260,6 +319,13 @@ export default function AdminContests() {
   }
 
   const handleEdit = (contest: Contest) => {
+    // Helper function to format date for input field
+    const formatDateForInput = (dateStr?: string) => {
+      if (!dateStr) return ''
+      // If date includes time, extract just the date part
+      return dateStr.split('T')[0]
+    }
+
     setFormData({
       name: contest.name,
       description: contest.description || '',
@@ -268,14 +334,25 @@ export default function AdminContests() {
       is_active: contest.is_active,
       is_submission_open: contest.is_submission_open,
       is_voting_open: contest.is_voting_open,
-      submission_start_date: contest.submission_start_date,
-      submission_end_date: contest.submission_end_date,
-      voting_start_date: contest.voting_start_date,
-      voting_end_date: contest.voting_end_date,
+      submission_start_date: formatDateForInput(contest.submission_start_date),
+      submission_end_date: formatDateForInput(contest.submission_end_date),
+      voting_start_date: formatDateForInput(contest.voting_start_date),
+      voting_end_date: formatDateForInput(contest.voting_end_date),
       image_url: contest.image_url || '',
       cover_image_url: contest.cover_image_url || '',
       voting_restriction: contest.voting_restriction || 'none',
       participant_count: contest.participant_count || 0,
+      // Season dates
+      city_season_start_date: formatDateForInput(contest.city_season_start_date),
+      city_season_end_date: formatDateForInput(contest.city_season_end_date),
+      country_season_start_date: formatDateForInput(contest.country_season_start_date),
+      country_season_end_date: formatDateForInput(contest.country_season_end_date),
+      regional_start_date: formatDateForInput(contest.regional_start_date),
+      regional_end_date: formatDateForInput(contest.regional_end_date),
+      continental_start_date: formatDateForInput(contest.continental_start_date),
+      continental_end_date: formatDateForInput(contest.continental_end_date),
+      global_start_date: formatDateForInput(contest.global_start_date),
+      global_end_date: formatDateForInput(contest.global_end_date),
       requires_kyc: contest.requires_kyc ?? false,
       verification_type: contest.verification_type || 'none',
       participant_type: contest.participant_type || 'individual',
@@ -423,58 +500,188 @@ export default function AdminContests() {
                   />
                 </div>
 
-                {/* Dates (Editable) */}
-                {editingId && (
-                  <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
-                    <h4 className="font-semibold text-sm text-blue-900 dark:text-blue-200 mb-4">📅 {t('admin.contests.contest_dates') || 'Dates du concours'}</h4>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-medium text-blue-700 dark:text-blue-300 mb-2">
-                          {t('admin.contests.submission_start') || 'Début des uploads'}
-                        </label>
-                        <Input
-                          type="date"
-                          value={formData.submission_start_date.split('T')[0]}
-                          onChange={(e) => setFormData({ ...formData, submission_start_date: e.target.value })}
-                          className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-blue-700 dark:text-blue-300 mb-2">
-                          {t('admin.contests.submission_end') || 'Fin des uploads'}
-                        </label>
-                        <Input
-                          type="date"
-                          value={formData.submission_end_date.split('T')[0]}
-                          onChange={(e) => setFormData({ ...formData, submission_end_date: e.target.value })}
-                          className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-blue-700 dark:text-blue-300 mb-2">
-                          {t('admin.contests.voting_start') || 'Début du vote'}
-                        </label>
-                        <Input
-                          type="date"
-                          value={formData.voting_start_date.split('T')[0]}
-                          onChange={(e) => setFormData({ ...formData, voting_start_date: e.target.value })}
-                          className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-blue-700 dark:text-blue-300 mb-2">
-                          {t('admin.contests.voting_end') || 'Fin du vote'}
-                        </label>
-                        <Input
-                          type="date"
-                          value={formData.voting_end_date.split('T')[0]}
-                          onChange={(e) => setFormData({ ...formData, voting_end_date: e.target.value })}
-                          className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                        />
-                      </div>
+                {/* Dates principales */}
+                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
+                  <h4 className="font-semibold text-sm text-blue-900 dark:text-blue-200 mb-4">📅 {t('admin.contests.contest_dates') || 'Dates du concours'}</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-blue-700 dark:text-blue-300 mb-2">
+                        {t('admin.contests.submission_start') || 'Début des uploads'}
+                      </label>
+                      <Input
+                        type="date"
+                        value={formData.submission_start_date && formData.submission_start_date.includes('T') ? formData.submission_start_date.split('T')[0] : (formData.submission_start_date || '')}
+                        onChange={(e) => setFormData({ ...formData, submission_start_date: e.target.value })}
+                        className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-blue-700 dark:text-blue-300 mb-2">
+                        {t('admin.contests.submission_end') || 'Fin des uploads'}
+                      </label>
+                      <Input
+                        type="date"
+                        value={formData.submission_end_date && formData.submission_end_date.includes('T') ? formData.submission_end_date.split('T')[0] : (formData.submission_end_date || '')}
+                        onChange={(e) => setFormData({ ...formData, submission_end_date: e.target.value })}
+                        className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-blue-700 dark:text-blue-300 mb-2">
+                        {t('admin.contests.voting_start') || 'Début du vote'}
+                      </label>
+                      <Input
+                        type="date"
+                        value={formData.voting_start_date && formData.voting_start_date.includes('T') ? formData.voting_start_date.split('T')[0] : (formData.voting_start_date || '')}
+                        onChange={(e) => setFormData({ ...formData, voting_start_date: e.target.value })}
+                        className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-blue-700 dark:text-blue-300 mb-2">
+                        {t('admin.contests.voting_end') || 'Fin du vote'}
+                      </label>
+                      <Input
+                        type="date"
+                        value={formData.voting_end_date && formData.voting_end_date.includes('T') ? formData.voting_end_date.split('T')[0] : (formData.voting_end_date || '')}
+                        onChange={(e) => setFormData({ ...formData, voting_end_date: e.target.value })}
+                        className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      />
                     </div>
                   </div>
-                )}
+                  
+                  {/* Dates des saisons - Affichées lors de l'édition */}
+                  {editingId && (
+                    <>
+                      <div className="mt-6 pt-4 border-t border-blue-300 dark:border-blue-700">
+                        <h5 className="font-semibold text-xs text-blue-900 dark:text-blue-200 mb-4 uppercase">
+                          {t('admin.contests.season_dates') || 'Dates des saisons'}
+                        </h5>
+                        <div className="grid grid-cols-2 gap-4">
+                          {/* City Season */}
+                          <div>
+                            <label className="block text-xs font-medium text-blue-700 dark:text-blue-300 mb-2">
+                              🏙️ {t('admin.contests.city_season') || 'Saison Ville'} - {t('admin.contests.start_date') || 'Début'}
+                            </label>
+                            <Input
+                              type="date"
+                              value={formData.city_season_start_date || ''}
+                              onChange={(e) => setFormData({ ...formData, city_season_start_date: e.target.value })}
+                              className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-blue-700 dark:text-blue-300 mb-2">
+                              🏙️ {t('admin.contests.city_season') || 'Saison Ville'} - {t('admin.contests.end_date') || 'Fin'}
+                            </label>
+                            <Input
+                              type="date"
+                              value={formData.city_season_end_date || ''}
+                              onChange={(e) => setFormData({ ...formData, city_season_end_date: e.target.value })}
+                              className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                            />
+                          </div>
+                          
+                          {/* Country Season */}
+                          <div>
+                            <label className="block text-xs font-medium text-blue-700 dark:text-blue-300 mb-2">
+                              🌍 {t('admin.contests.country_season') || 'Saison Pays'} - {t('admin.contests.start_date') || 'Début'}
+                            </label>
+                            <Input
+                              type="date"
+                              value={formData.country_season_start_date || ''}
+                              onChange={(e) => setFormData({ ...formData, country_season_start_date: e.target.value })}
+                              className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-blue-700 dark:text-blue-300 mb-2">
+                              🌍 {t('admin.contests.country_season') || 'Saison Pays'} - {t('admin.contests.end_date') || 'Fin'}
+                            </label>
+                            <Input
+                              type="date"
+                              value={formData.country_season_end_date || ''}
+                              onChange={(e) => setFormData({ ...formData, country_season_end_date: e.target.value })}
+                              className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                            />
+                          </div>
+                          
+                          {/* Regional Season */}
+                          <div>
+                            <label className="block text-xs font-medium text-blue-700 dark:text-blue-300 mb-2">
+                              🗺️ {t('admin.contests.regional_season') || 'Saison Régionale'} - {t('admin.contests.start_date') || 'Début'}
+                            </label>
+                            <Input
+                              type="date"
+                              value={formData.regional_start_date || ''}
+                              onChange={(e) => setFormData({ ...formData, regional_start_date: e.target.value })}
+                              className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-blue-700 dark:text-blue-300 mb-2">
+                              🗺️ {t('admin.contests.regional_season') || 'Saison Régionale'} - {t('admin.contests.end_date') || 'Fin'}
+                            </label>
+                            <Input
+                              type="date"
+                              value={formData.regional_end_date || ''}
+                              onChange={(e) => setFormData({ ...formData, regional_end_date: e.target.value })}
+                              className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                            />
+                          </div>
+                          
+                          {/* Continental Season */}
+                          <div>
+                            <label className="block text-xs font-medium text-blue-700 dark:text-blue-300 mb-2">
+                              🌎 {t('admin.contests.continental_season') || 'Saison Continentale'} - {t('admin.contests.start_date') || 'Début'}
+                            </label>
+                            <Input
+                              type="date"
+                              value={formData.continental_start_date || ''}
+                              onChange={(e) => setFormData({ ...formData, continental_start_date: e.target.value })}
+                              className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-blue-700 dark:text-blue-300 mb-2">
+                              🌎 {t('admin.contests.continental_season') || 'Saison Continentale'} - {t('admin.contests.end_date') || 'Fin'}
+                            </label>
+                            <Input
+                              type="date"
+                              value={formData.continental_end_date || ''}
+                              onChange={(e) => setFormData({ ...formData, continental_end_date: e.target.value })}
+                              className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                            />
+                          </div>
+                          
+                          {/* Global Season */}
+                          <div>
+                            <label className="block text-xs font-medium text-blue-700 dark:text-blue-300 mb-2">
+                              🌐 {t('admin.contests.global_season') || 'Saison Globale'} - {t('admin.contests.start_date') || 'Début'}
+                            </label>
+                            <Input
+                              type="date"
+                              value={formData.global_start_date || ''}
+                              onChange={(e) => setFormData({ ...formData, global_start_date: e.target.value })}
+                              className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-blue-700 dark:text-blue-300 mb-2">
+                              🌐 {t('admin.contests.global_season') || 'Saison Globale'} - {t('admin.contests.end_date') || 'Fin'}
+                            </label>
+                            <Input
+                              type="date"
+                              value={formData.global_end_date || ''}
+                              onChange={(e) => setFormData({ ...formData, global_end_date: e.target.value })}
+                              className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
 
                 {/* Nom du concours */}
                 <div>
