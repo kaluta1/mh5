@@ -384,13 +384,20 @@ export default function ContestantsListPage() {
                     favoritesList={contestant.favoritesList}
                     onToggleFavorite={() => handleToggleFavorite(contestant.id)}
                     onViewDetails={() => router.push(`/dashboard/contests/${contestId}/contestant/${contestant.id}`)}
-                    onVote={() => router.push(`/dashboard/contests/${contestId}/contestant/${contestant.id}`)}
+                    onVote={() => {
+                      // Le vote est géré dans ContestantCard, pas de redirection nécessaire
+                    }}
                     onComment={() => {}}
                     onShare={() => {}}
                     onHoverAuthor={() => {}}
                     onHoverEnd={() => {}}
                     onHoverDescription={() => {}}
-                    onHoverVotes={() => {}}
+                    onHoverVotes={() => {
+                      // Seul l'auteur peut voir la liste des votes
+                      if (user?.id === contestant.userId) {
+                        // TODO: Implémenter l'affichage de la liste des votes
+                      }
+                    }}
                     onHoverReactions={() => {}}
                     onHoverFavorites={() => {
                       // Seul l'auteur peut voir la liste des favoris

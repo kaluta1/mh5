@@ -5,9 +5,9 @@ import json
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, and_
 
-from app.models.contests import Contestant, ContestSubmission, ContestSeason
+from app.models.contests import Contestant, ContestSubmission, ContestSeason, ContestantRanking, ContestStage
 from app.models.contest import Contest
-from app.models.voting import Vote, MyFavorites, ContestLike, ContestComment
+from app.models.voting import Vote, MyFavorites, ContestLike, ContestComment, ContestantVoting, ContestantReaction, ContestantShare
 
 
 class CRUDContestant:
@@ -45,10 +45,27 @@ class CRUDContestant:
         if not contestant:
             return None
         
-        # Compter les votes
-        votes_count = db.query(func.count(Vote.id))\
-            .filter(Vote.contestant_id == id)\
-            .scalar() or 0
+        # Récupérer le contest_id depuis la saison
+        contest_id = None
+        from app.models.contests import ContestSeasonLink
+        contest_link = db.query(ContestSeasonLink).filter(
+            ContestSeasonLink.season_id == contestant.season_id,
+            ContestSeasonLink.is_active == True
+        ).first()
+        if contest_link:
+            contest_id = contest_link.contest_id
+        
+        # Compter les votes avec ContestantVoting
+        votes_count = 0
+        if contest_id:
+            votes_count = db.query(func.count(ContestantVoting.id))\
+                .filter(ContestantVoting.contestant_id == id)\
+                .scalar() or 0
+        else:
+            # Fallback sur l'ancien système si pas de contest_id
+            votes_count = db.query(func.count(ContestantVoting.id))\
+                .filter(ContestantVoting.contestant_id == id)\
+                .scalar() or 0
         
         # Compter les images et vidéos
         images_count = 0
@@ -64,33 +81,57 @@ class CRUDContestant:
             except (json.JSONDecodeError, TypeError):
                 videos_count = 0
         
-        # Calculer le rang en fonction des votes
-        # Créer une sous-requête pour compter les votes par contestant de la même saison
-        # Exclure les contestants supprimés du calcul du rang
-        votes_per_contestant = db.query(
-            Vote.contestant_id,
-            func.count(Vote.id).label('vote_count')
-        ).join(Contestant, Vote.contestant_id == Contestant.id)\
-         .filter(
-             Contestant.season_id == contestant.season_id,
-             Contestant.is_deleted == False
-         )\
-         .group_by(Vote.contestant_id).subquery()
+        # Récupérer le rang depuis ContestantRanking
+        rank = None
+        if contest_id:
+            # Récupérer le stage correspondant à la saison
+            stage = db.query(ContestStage).filter(
+                ContestStage.season_id == contestant.season_id
+            ).first()
+            
+            if stage:
+                ranking = db.query(ContestantRanking).filter(
+                    ContestantRanking.contestant_id == id,
+                    ContestantRanking.stage_id == stage.id
+                ).first()
+                
+                if ranking and ranking.final_rank:
+                    rank = ranking.final_rank
         
-        # Compter combien de contestants ont plus de votes que le contestant actuel
-        rank_count = db.query(func.count(votes_per_contestant.c.contestant_id))\
-            .filter(votes_per_contestant.c.vote_count > votes_count)\
-            .scalar() or 0
+        # Si pas de rang dans ContestantRanking, calculer le rang en fonction des votes
+        if rank is None:
+            # Créer une sous-requête pour compter les votes par contestant de la même saison
+            votes_per_contestant = db.query(
+                ContestantVoting.contestant_id,
+                func.count(ContestantVoting.id).label('vote_count')
+            ).join(Contestant, ContestantVoting.contestant_id == Contestant.id)\
+             .filter(
+                 Contestant.season_id == contestant.season_id,
+                 Contestant.is_deleted == False
+             )
+            if contest_id:
+                votes_per_contestant = votes_per_contestant.filter(
+                    ContestantVoting.contest_id == contest_id
+                )
+            votes_per_contestant = votes_per_contestant.group_by(ContestantVoting.contestant_id).subquery()
+            
+            # Compter combien de contestants ont plus de votes que le contestant actuel
+            rank_count = db.query(func.count(votes_per_contestant.c.contestant_id))\
+                .filter(votes_per_contestant.c.vote_count > votes_count)\
+                .scalar() or 0
+            
+            rank = rank_count + 1
         
-        rank = rank_count + 1
-        
-        # Vérifier si l'utilisateur a voté
+        # Vérifier si l'utilisateur a voté avec ContestantVoting
         has_voted = False
         can_vote = False
         if current_user_id:
-            has_voted = db.query(Vote).filter(
-                and_(Vote.voter_id == current_user_id, Vote.contestant_id == id)
-            ).first() is not None
+            vote_query = db.query(ContestantVoting).filter(
+                ContestantVoting.user_id == current_user_id,
+                ContestantVoting.contestant_id == id
+            )
+           
+            has_voted = vote_query.first() is not None
             can_vote = current_user_id != contestant.user_id and not has_voted
         
         # Récupérer la position si c'est un favori de l'utilisateur courant
@@ -139,9 +180,14 @@ class CRUDContestant:
             .filter(MyFavorites.contestant_id == id)\
             .scalar() or 0
         
-        # Compter les réactions (likes)
-        reactions_count = db.query(func.count(ContestLike.id))\
-            .filter(ContestLike.contestant_id == id)\
+        # Compter les réactions avec ContestantReaction
+        reactions_count = db.query(func.count(ContestantReaction.id))\
+            .filter(ContestantReaction.contestant_id == id)\
+            .scalar() or 0
+
+        # Compter les partages
+        shares_count = db.query(func.count(ContestantShare.id))\
+            .filter(ContestantShare.contestant_id == id)\
             .scalar() or 0
         
         # Compter les commentaires
@@ -187,6 +233,7 @@ class CRUDContestant:
             "favorites_count": favorites_count,
             "reactions_count": reactions_count,
             "comments_count": comments_count,
+            "shares_count": shares_count,
             # Infos du contest
             "contest_title": contest_title,
             "contest_id": contestant.season_id,

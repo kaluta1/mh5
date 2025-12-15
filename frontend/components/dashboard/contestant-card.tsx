@@ -549,8 +549,8 @@ export function ContestantCard({
               </p>
               <p 
                 className="text-xs text-gray-500 dark:text-gray-500 mt-1 cursor-pointer hover:text-myfav-primary"
-                onMouseEnter={onHoverVotes}
-                onMouseLeave={onHoverEnd}
+                onMouseEnter={currentUserId === userId ? onHoverVotes : undefined}
+                onMouseLeave={currentUserId === userId ? onHoverEnd : undefined}
               >
                 {currentVotes} {t('dashboard.contests.votes')}
               </p>
@@ -579,8 +579,8 @@ export function ContestantCard({
         <div className="px-2 border-t border-gray-200 dark:border-gray-700">
           <div className="grid grid-cols-4 divide-x divide-gray-200 dark:divide-gray-700">
             <div
-              onMouseEnter={onHoverVotes}
-              onMouseLeave={onHoverEnd}
+              onMouseEnter={currentUserId === userId ? onHoverVotes : undefined}
+              onMouseLeave={currentUserId === userId ? onHoverEnd : undefined}
             >
               <VoteButton
                 contestantId={Number(id)}

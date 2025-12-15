@@ -396,6 +396,7 @@ export interface TranslationKeys {
     are_you_sure: string
     cancel: string
     vote: string
+    voted: string
     voting: string
     cover_image: string
     vote_error: string
@@ -1216,6 +1217,7 @@ export interface TranslationKeys {
     kyc: string
     subscription: string
     logout: string
+    view_more: string
   }
   notifications: {
     title: string
@@ -1896,6 +1898,7 @@ export const translations: Record<Language, TranslationKeys> = {
         already_voted: "Vous avez déjà voté pour ce participant",
         cannot_vote: "Vous ne pouvez pas voter pour ce participant",
         votes: "votes",
+        shares: "Partages",
         submission: "Soumission",
         voting: "Vote",
         start: "Début",
@@ -2162,7 +2165,8 @@ export const translations: Record<Language, TranslationKeys> = {
       welcome: "Bienvenue",
       access_denied: "Accès refusé",
       no_permission: "Vous n'avez pas les permissions pour accéder à cette page.",
-      refresh: "Actualiser"
+      refresh: "Actualiser",
+      view_more: "Voir plus"
     },
     affiliates: {
       grow_network: "Développez Votre Réseau",
@@ -2549,7 +2553,10 @@ export const translations: Record<Language, TranslationKeys> = {
       about: "À propos",
       gallery: "Galerie",
       photos: "Photos",
+      images: "Images",
       videos: "Vidéos",
+      votes: "Votes",
+      rank: "Rang",
       contest_info: "Concours",
       candidate_info: "Candidature",
       title: "Titre",
@@ -2563,6 +2570,7 @@ export const translations: Record<Language, TranslationKeys> = {
       are_you_sure: "?",
       cancel: "Annuler",
       vote: "Voter",
+      voted: "Voté",
       voting: "Votage...",
       cover_image: "Image de couverture",
       vote_error: "Erreur lors du vote. Veuillez réessayer.",
@@ -4217,7 +4225,10 @@ export const translations: Record<Language, TranslationKeys> = {
       about: "About",
       gallery: "Gallery",
       photos: "Photos",
+      images: "Images",
       videos: "Videos",
+      votes: "Votes",
+      rank: "Rank",
       contest_info: "Contest",
       candidate_info: "Entry",
       title: "Title",
@@ -4231,6 +4242,7 @@ export const translations: Record<Language, TranslationKeys> = {
       are_you_sure: "?",
       cancel: "Cancel",
       vote: "Vote",
+      voted: "Voted",
       voting: "Voting...",
       cover_image: "Cover image",
       vote_error: "Error voting. Please try again.",
@@ -4814,6 +4826,7 @@ export const translations: Record<Language, TranslationKeys> = {
         already_voted: "You have already voted for this contestant",
         cannot_vote: "You cannot vote for this contestant",
         votes: "votes",
+        shares: "Shares",
         submission: "Submission",
         voting: "Voting",
         start: "Start",
@@ -5900,7 +5913,8 @@ export const translations: Record<Language, TranslationKeys> = {
       welcome: "Bienvenido",
       access_denied: "Acceso Denegado",
       no_permission: "No tienes permiso para acceder a esta página.",
-      refresh: "Actualizar"
+      refresh: "Actualizar",
+      view_more: "Ver más"
     },
     affiliates: {
       grow_network: "Haz Crecer Tu Red",
@@ -6567,6 +6581,7 @@ export const translations: Record<Language, TranslationKeys> = {
         already_voted: "Ya has votado por este participante",
         cannot_vote: "No puedes votar por este participante",
         votes: "votos",
+        shares: "Compartidos",
         submission: "Envío",
         voting: "Votación",
         start: "Inicio",
@@ -6715,7 +6730,10 @@ export const translations: Record<Language, TranslationKeys> = {
       about: "Acerca de",
       gallery: "Galería",
       photos: "Fotos",
+      images: "Imágenes",
       videos: "Vídeos",
+      votes: "Votos",
+      rank: "Rango",
       contest_info: "Concurso",
       candidate_info: "Entrada",
       title: "Título",
@@ -6729,6 +6747,7 @@ export const translations: Record<Language, TranslationKeys> = {
       are_you_sure: "?",
       cancel: "Cancelar",
       vote: "Votar",
+      voted: "Votado",
       voting: "Votando...",
       cover_image: "Imagen de portada",
       vote_error: "Error al votar. Por favor, inténtalo de nuevo.",
@@ -8376,6 +8395,7 @@ export const translations: Record<Language, TranslationKeys> = {
         already_voted: "Sie haben bereits für diesen Teilnehmer abgestimmt",
         cannot_vote: "Sie können nicht für diesen Teilnehmer abstimmen",
         votes: "Stimmen",
+        shares: "Geteilt",
         submission: "Einreichung",
         voting: "Abstimmung",
         start: "Start",
@@ -8516,7 +8536,10 @@ export const translations: Record<Language, TranslationKeys> = {
       about: "Über",
       gallery: "Galerie",
       photos: "Fotos",
+      images: "Bilder",
       videos: "Videos",
+      votes: "Stimmen",
+      rank: "Rang",
       contest_info: "Wettbewerb",
       candidate_info: "Eintrag",
       title: "Titel",
@@ -8530,6 +8553,7 @@ export const translations: Record<Language, TranslationKeys> = {
       are_you_sure: "?",
       cancel: "Abbrechen",
       vote: "Abstimmen",
+      voted: "Abgestimmt",
       voting: "Abstimmung...",
       cover_image: "Titelbild",
       vote_error: "Fehler beim Abstimmen. Bitte versuchen Sie es erneut.",

@@ -83,6 +83,7 @@ class ContestantWithAuthorAndStats(BaseModel):
     favorites_count: int = 0
     reactions_count: int = 0
     comments_count: int = 0
+    shares_count: int = 0
     
     # Infos du contest
     contest_title: Optional[str] = None

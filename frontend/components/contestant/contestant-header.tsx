@@ -52,7 +52,7 @@ export function ContestantHeader({
         <Button
           onClick={onBack}
           variant="ghost"
-          className="bg-white/20 hover:bg-white/30 text-white"
+          className="bg-white/10 hover:bg-white/20 backdrop-blur-md text-white border border-white/20 rounded-xl transition-all duration-200"
         >
           <ArrowLeft className="w-5 h-5 mr-2" />
           {t('common.back')}
@@ -61,9 +61,9 @@ export function ContestantHeader({
         <Button
           onClick={onFavoriteToggle}
           variant="ghost"
-          className="bg-white/20 hover:bg-white/30 text-white"
+          className="bg-white/10 hover:bg-white/20 backdrop-blur-md text-white border border-white/20 rounded-xl transition-all duration-200"
         >
-          <Heart className={`w-5 h-5 ${isFavorite ? 'fill-current text-red-500' : ''}`} />
+          <Heart className={`w-5 h-5 transition-all duration-200 ${isFavorite ? 'fill-current text-red-400 scale-110' : ''}`} />
         </Button>
       </div>
 

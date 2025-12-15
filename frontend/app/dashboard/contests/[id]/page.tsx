@@ -557,7 +557,9 @@ export default function ContestDetailPage() {
                 searchQuery={searchQuery}
                 onToggleFavorite={handleToggleFavorite}
                 onViewDetails={(contestantId) => router.push(`/dashboard/contests/${contestId}/contestant/${contestantId}`)}
-                onVote={(contestantId) => router.push(`/dashboard/contests/${contestId}/contestant/${contestantId}`)}
+                onVote={() => {
+                  // Le vote est géré dans ContestantCard, pas de redirection nécessaire
+                }}
                 onComment={() => {}}
                 onShare={() => {}}
                 onReport={() => showToast('Fonctionnalité de signalement à venir', 'success')}
@@ -566,7 +568,13 @@ export default function ContestDetailPage() {
                 onHoverAuthor={(contestantId, data) => handleHoverStart('author', contestantId, data)}
                 onHoverEnd={handleHoverEnd}
                 onHoverDescription={(contestantId, description) => handleHoverStart('description', contestantId, description)}
-                onHoverVotes={(contestantId, votes) => handleHoverStart('votes', contestantId, votes)}
+                onHoverVotes={(contestantId, votes) => {
+                  const contestant = contest.contestants.find(c => c.id === contestantId)
+                  // Seul l'auteur peut voir la liste des votes
+                  if (user?.id === contestant?.userId) {
+                    handleHoverStart('votes', contestantId, votes)
+                  }
+                }}
                 onHoverReactions={(contestantId, reactions) => {
                   const contestant = contest.contestants.find(c => c.id === contestantId)
                   if (user?.id === contestant?.userId) {

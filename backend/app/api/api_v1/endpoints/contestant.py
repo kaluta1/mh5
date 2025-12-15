@@ -1347,19 +1347,22 @@ def get_vote_details(
             detail="Submission not found"
         )
     
-    # Récupérer tous les votes avec les utilisateurs
-    votes = db.query(Vote).join(User, Vote.voter_id == User.id).filter(
-        Vote.contestant_id == contestant_id
-    ).order_by(Vote.vote_date.desc()).all()
+    # Récupérer tous les votes avec les utilisateurs depuis ContestantVoting
+    votes = db.query(ContestantVoting).join(User, ContestantVoting.user_id == User.id).filter(
+        ContestantVoting.contestant_id == contestant_id
+    ).order_by(ContestantVoting.vote_date.desc()).all()
     
     voters = [
         VoteUserDetail(
-            user_id=vote.voter.id,
-            username=vote.voter.username,
-            full_name=vote.voter.full_name,
-            avatar_url=vote.voter.avatar_url,
-            points=vote.points,
-            vote_date=vote.vote_date
+            id=vote.id,
+            user_id=vote.user.id,
+            username=vote.user.username,
+            full_name=vote.user.full_name,
+            avatar_url=vote.user.avatar_url,
+            points=1,  # Chaque vote vaut 1 point dans le nouveau système
+            vote_date=vote.vote_date,
+            contest_id=vote.contest_id,
+            season_id=vote.season_id
         )
         for vote in votes
     ]
