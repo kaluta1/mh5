@@ -948,6 +948,52 @@ def vote_for_contestant(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=error_message
         )
+
+    # Règles de vote basées sur la localisation et le niveau de la saison
+    # city      -> seuls les utilisateurs de la même ville (et même pays) peuvent voter
+    # country   -> mêmes pays et continent
+    # regional  -> mêmes région et continent
+    # continent -> même continent
+    # global    -> tout le monde peut voter
+    season_level = None
+    if hasattr(season, "level") and season.level is not None:
+        season_level = season.level.value if hasattr(season.level, "value") else str(season.level)
+        if isinstance(season_level, str):
+            season_level = season_level.lower()
+
+    from app.models.user import User as MyfavUser
+
+    def locations_match() -> bool:
+        if not season_level:
+            return True
+
+        lvl = str(season_level).lower()
+        voter: MyfavUser = current_user
+        author: MyfavUser = contestant.user  # chargé par crud_contestant.get avec joinedload
+
+        if not author:
+            return True
+
+        def eq(a: Optional[str], b: Optional[str]) -> bool:
+            return bool(a and b and a.lower() == b.lower())
+
+        if lvl == "city":
+            return eq(voter.country, author.country) and eq(voter.city, author.city)
+        if lvl == "country":
+            return eq(voter.continent, author.continent) and eq(voter.country, author.country)
+        if lvl in ("regional", "region"):
+            v_region = getattr(voter, "region", None)
+            a_region = getattr(author, "region", None)
+            return eq(voter.continent, author.continent) and eq(v_region, a_region)
+        if lvl == "continent":
+            return eq(voter.continent, author.continent)
+        return True
+
+    if not locations_match():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot vote for this contestant because you are not in the allowed location for this season"
+        )
     
     # Vérifier les restrictions de genre pour le vote
     # Si le contest est MALE_ONLY (réservé aux hommes pour participer), seules les femmes peuvent voter

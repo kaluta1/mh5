@@ -4024,7 +4024,8 @@ export const translations: Record<Language, TranslationKeys> = {
       welcome: "Welcome",
       access_denied: "Access Denied",
       no_permission: "You do not have permission to access this page.",
-      refresh: "Refresh"
+      refresh: "Refresh",
+      view_more: "View more"
     },
     affiliates: {
       grow_network: "Grow Your Network",
@@ -7723,7 +7724,8 @@ export const translations: Record<Language, TranslationKeys> = {
       welcome: "Willkommen",
       access_denied: "Zugriff verweigert",
       no_permission: "Sie haben keine Berechtigung, auf diese Seite zuzugreifen.",
-      refresh: "Aktualisieren"
+      refresh: "Aktualisieren",
+      view_more: "Mehr anzeigen"
     },
     affiliates: {
       grow_network: "Bauen Sie Ihr Netzwerk aus",

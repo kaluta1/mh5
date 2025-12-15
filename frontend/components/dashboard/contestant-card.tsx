@@ -17,6 +17,7 @@ import { VoteButton } from './vote-button'
 import { FavoriteButton } from './favorite-button'
 import { ReactionsButton } from './reactions-button'
 import { CommentsButton } from './comments-button'
+import { ContestantDescription } from './contestant-description'
 import { CommentsSection } from './comments-section'
 import { AuthorPopover } from './author-popover'
 import { ShareDialog } from './share-dialog'
@@ -557,22 +558,10 @@ export function ContestantCard({
             </div>
           </div>
           
-          {/* Description */}
-          <div className="ml-[52px]">
-            {description && description.length > 150 ? (
-              <p 
-                className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words cursor-pointer hover:text-myfav-primary dark:hover:text-myfav-secondary transition-colors"
-                onMouseEnter={onHoverDescription}
-                onMouseLeave={onHoverEnd}
-              >
-                {description.substring(0, 150)}...
-              </p>
-            ) : (
-              <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words">
-                {description}
-              </p>
-            )}
-          </div>
+        {/* Description */}
+        <div className="ml-[52px]">
+          <ContestantDescription description={description} maxLength={150} />
+        </div>
         </div>
 
         {/* Action Buttons - Facebook Style with Counts */}

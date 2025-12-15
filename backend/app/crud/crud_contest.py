@@ -535,6 +535,11 @@ class CRUDContest:
         # Récupérer tous les IDs des contestants
         contestant_ids = [c.id for c in contestants]
         
+        # Récupérer l'utilisateur courant (pour les règles de vote basées sur la localisation)
+        current_user = None
+        if current_user_id:
+            current_user = db.query(User).filter(User.id == current_user_id).first()
+        
         # Récupérer tous les votes avec utilisateurs (depuis ContestantVoting)
         # Filtrer par contest_id pour ne récupérer que les votes de ce contest
         votes_data = db.query(ContestantVoting, User)\
@@ -677,45 +682,90 @@ class CRUDContest:
                 .all()
             user_votes = {vote[0] for vote in user_votes_list}
         
+        # Déterminer le niveau de la saison (city, country, regional, continent, global, etc.)
+        season_level = None
+        if season and hasattr(season, "level") and season.level is not None:
+            season_level = season.level.value if hasattr(season.level, "value") else str(season.level)
+            if isinstance(season_level, str):
+                season_level = season_level.lower()
+        
         # Compter les votes pour chaque contestant
         votes_count_by_contestant = {}
         for contestant_id in contestant_ids:
             votes_count_by_contestant[contestant_id] = len(votes_by_contestant.get(contestant_id, []))
         
-        # Récupérer les rangs depuis contestant_rankings si disponibles, sinon calculer
-        from app.models.contests import ContestantRanking
-        
-        # Récupérer le stage correspondant à la saison
-        from app.models.contests import ContestStage
-        stage = db.query(ContestStage).filter(
-            ContestStage.season_id == season.id
-        ).first()
-        
-        # Récupérer les rangs depuis la base de données pour ce stage
-        rankings_from_db = []
-        if stage:
-            rankings_from_db = db.query(ContestantRanking)\
-                .filter(
-                    ContestantRanking.contestant_id.in_(contestant_ids),
-                    ContestantRanking.stage_id == stage.id
-                )\
-                .all()
-        
-        ranks = {}
-        if rankings_from_db:
-            # Utiliser les rangs de la base de données
-            for ranking in rankings_from_db:
-                if ranking.final_rank:
-                    ranks[ranking.contestant_id] = ranking.final_rank
-        else:
-            # Calculer les rangs si pas disponibles en base
+        ranks: Dict[int, int] = {}
+        # Calculer les rangs (on ignore les rangs éventuellement stockés en base
+        # pour appliquer les nouvelles règles dynamiques basées sur la localisation)
+        # Règles :
+        # - city    -> classement par ville + pays
+        # - country -> classement par pays + continent
+        # - regional-> classement par région + continent
+        # - continent -> classement par continent
+        # - global  -> classement global (tous ensemble)
+        def get_group_key(c: Contestant) -> str:
+            if not c.user:
+                return "global"
+            lvl = (season_level or "global") if isinstance(season_level, str) else "global"
+            lvl = lvl.lower()
+            country = (c.user.country or "").lower() if getattr(c.user, "country", None) else ""
+            city = (c.user.city or "").lower() if getattr(c.user, "city", None) else ""
+            continent = (c.user.continent or "").lower() if getattr(c.user, "continent", None) else ""
+            region = (getattr(c.user, "region", "") or "").lower()
+            
+            if lvl == "city":
+                return f"city:{country}:{city}"
+            if lvl == "country":
+                return f"country:{continent}:{country}"
+            if lvl in ("regional", "region"):
+                return f"regional:{continent}:{region}"
+            if lvl == "continent":
+                return f"continent:{continent}"
+            return "global"
+
+        groups: Dict[str, list[int]] = {}
+        for c in contestants:
+            key = get_group_key(c)
+            groups.setdefault(key, []).append(c.id)
+
+        for group_ids in groups.values():
             ranked_contestants = sorted(
-                [(cid, votes_count_by_contestant.get(cid, 0)) for cid in contestant_ids],
-                key=lambda x: x[1],
-                reverse=True
+                group_ids,
+                key=lambda cid: votes_count_by_contestant.get(cid, 0),
+                reverse=True,
             )
-            ranks = {cid: rank + 1 for rank, (cid, _) in enumerate(ranked_contestants)}
+            for position, cid in enumerate(ranked_contestants, start=1):
+                ranks[cid] = position
         
+        # Fonction utilitaire pour vérifier si un utilisateur peut voter pour un contestant
+        def is_geographically_allowed(voter: Optional[User], candidate: Contestant) -> bool:
+            if not voter or not candidate.user or not season_level:
+                return True
+            
+            lvl = str(season_level).lower()
+            v = voter
+            u = candidate.user
+            
+            def eq(a: Optional[str], b: Optional[str]) -> bool:
+                return bool(a and b and a.lower() == b.lower())
+            
+            if lvl == "city":
+                # Même ville ET même pays
+                return eq(v.country, u.country) and eq(v.city, u.city)
+            if lvl == "country":
+                # Même pays ET même continent
+                return eq(v.continent, u.continent) and eq(v.country, u.country)
+            if lvl in ("regional", "region"):
+                # Même région ET même continent
+                v_region = getattr(v, "region", None)
+                u_region = getattr(u, "region", None)
+                return eq(v.continent, u.continent) and eq(v_region, u_region)
+            if lvl == "continent":
+                # Même continent
+                return eq(v.continent, u.continent)
+            # Global ou niveau inconnu -> pas de restriction géographique
+            return True
+
         # Construire la liste des contestants enrichis
         enriched_contestants = []
         for contestant in contestants:
@@ -736,7 +786,8 @@ class CRUDContest:
             # Déterminer si l'utilisateur peut voter
             can_vote = False
             if current_user_id and current_user_id != contestant.user_id:
-                can_vote = contestant.id not in user_votes
+                geo_ok = is_geographically_allowed(current_user, contestant)
+                can_vote = (contestant.id not in user_votes) and geo_ok
             
             enriched_contestants.append({
                 "id": contestant.id,

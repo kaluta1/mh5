@@ -8,6 +8,7 @@ from sqlalchemy import func, and_
 from app.models.contests import Contestant, ContestSubmission, ContestSeason, ContestantRanking, ContestStage
 from app.models.contest import Contest
 from app.models.voting import Vote, MyFavorites, ContestLike, ContestComment, ContestantVoting, ContestantReaction, ContestantShare
+from app.models.user import User
 
 
 class CRUDContestant:
@@ -45,6 +46,14 @@ class CRUDContestant:
         if not contestant:
             return None
         
+        # Récupérer la saison associée
+        season = db.query(ContestSeason).filter(ContestSeason.id == contestant.season_id).first()
+        season_level: Optional[str] = None
+        if season and hasattr(season, "level") and season.level is not None:
+            raw_level = season.level.value if hasattr(season.level, "value") else str(season.level)
+            if isinstance(raw_level, str):
+                season_level = raw_level.lower()
+        
         # Récupérer le contest_id depuis la saison
         contest_id = None
         from app.models.contests import ContestSeasonLink
@@ -57,15 +66,12 @@ class CRUDContestant:
         
         # Compter les votes avec ContestantVoting
         votes_count = 0
+        vote_count_query = db.query(func.count(ContestantVoting.id)).filter(
+            ContestantVoting.contestant_id == id
+        )
         if contest_id:
-            votes_count = db.query(func.count(ContestantVoting.id))\
-                .filter(ContestantVoting.contestant_id == id)\
-                .scalar() or 0
-        else:
-            # Fallback sur l'ancien système si pas de contest_id
-            votes_count = db.query(func.count(ContestantVoting.id))\
-                .filter(ContestantVoting.contestant_id == id)\
-                .scalar() or 0
+            vote_count_query = vote_count_query.filter(ContestantVoting.contest_id == contest_id)
+        votes_count = vote_count_query.scalar() or 0
         
         # Compter les images et vidéos
         images_count = 0
@@ -81,58 +87,115 @@ class CRUDContestant:
             except (json.JSONDecodeError, TypeError):
                 videos_count = 0
         
-        # Récupérer le rang depuis ContestantRanking
-        rank = None
-        if contest_id:
-            # Récupérer le stage correspondant à la saison
-            stage = db.query(ContestStage).filter(
-                ContestStage.season_id == contestant.season_id
-            ).first()
-            
-            if stage:
-                ranking = db.query(ContestantRanking).filter(
-                    ContestantRanking.contestant_id == id,
-                    ContestantRanking.stage_id == stage.id
-                ).first()
-                
-                if ranking and ranking.final_rank:
-                    rank = ranking.final_rank
-        
-        # Si pas de rang dans ContestantRanking, calculer le rang en fonction des votes
-        if rank is None:
-            # Créer une sous-requête pour compter les votes par contestant de la même saison
-            votes_per_contestant = db.query(
+        # Calculer le rang dynamiquement en fonction des votes et du niveau de la saison
+        # On applique les mêmes règles que pour get_contest_with_enriched_contestants :
+        # - city    -> classement par ville + pays
+        # - country -> classement par pays + continent
+        # - regional-> classement par région + continent
+        # - continent -> classement par continent
+        # - global  -> classement global (tous ensemble)
+        rank: Optional[int] = None
+        contestants_same_season = db.query(Contestant)\
+            .filter(
+                Contestant.season_id == contestant.season_id,
+                Contestant.is_deleted == False
+            )\
+            .options(joinedload(Contestant.user))\
+            .all()
+
+        contestant_ids = [c.id for c in contestants_same_season]
+
+        # Compter les votes pour tous les contestants de la saison
+        votes_counts = (
+            db.query(
                 ContestantVoting.contestant_id,
-                func.count(ContestantVoting.id).label('vote_count')
-            ).join(Contestant, ContestantVoting.contestant_id == Contestant.id)\
-             .filter(
-                 Contestant.season_id == contestant.season_id,
-                 Contestant.is_deleted == False
-             )
-            if contest_id:
-                votes_per_contestant = votes_per_contestant.filter(
-                    ContestantVoting.contest_id == contest_id
-                )
-            votes_per_contestant = votes_per_contestant.group_by(ContestantVoting.contestant_id).subquery()
-            
-            # Compter combien de contestants ont plus de votes que le contestant actuel
-            rank_count = db.query(func.count(votes_per_contestant.c.contestant_id))\
-                .filter(votes_per_contestant.c.vote_count > votes_count)\
-                .scalar() or 0
-            
-            rank = rank_count + 1
+                func.count(ContestantVoting.id).label("vote_count"),
+            )
+            .filter(ContestantVoting.contestant_id.in_(contestant_ids))
+        )
+        if contest_id:
+            votes_counts = votes_counts.filter(ContestantVoting.contest_id == contest_id)
+        votes_counts = votes_counts.group_by(ContestantVoting.contestant_id).all()
+
+        votes_count_by_contestant: Dict[int, int] = {
+            cid: count for cid, count in votes_counts
+        }
+        for cid in contestant_ids:
+            votes_count_by_contestant.setdefault(cid, 0)
+
+        def get_group_key(c: Contestant) -> str:
+            if not c.user:
+                return "global"
+            lvl = (season_level or "global") if isinstance(season_level, str) else "global"
+            lvl = lvl.lower()
+            country = (c.user.country or "").lower() if getattr(c.user, "country", None) else ""
+            city = (c.user.city or "").lower() if getattr(c.user, "city", None) else ""
+            continent = (c.user.continent or "").lower() if getattr(c.user, "continent", None) else ""
+            region = (getattr(c.user, "region", "") or "").lower()
+
+            if lvl == "city":
+                return f"city:{country}:{city}"
+            if lvl == "country":
+                return f"country:{continent}:{country}"
+            if lvl in ("regional", "region"):
+                return f"regional:{continent}:{region}"
+            if lvl == "continent":
+                return f"continent:{continent}"
+            return "global"
+
+        groups: Dict[str, list[int]] = {}
+        for c in contestants_same_season:
+            key = get_group_key(c)
+            groups.setdefault(key, []).append(c.id)
+
+        current_group_key = get_group_key(contestant)
+        group_ids = groups.get(current_group_key, contestant_ids)
+        ranked_ids = sorted(
+            group_ids,
+            key=lambda cid: votes_count_by_contestant.get(cid, 0),
+            reverse=True,
+        )
+        for position, cid in enumerate(ranked_ids, start=1):
+            if cid == contestant.id:
+                rank = position
+                break
         
         # Vérifier si l'utilisateur a voté avec ContestantVoting
         has_voted = False
         can_vote = False
+        current_user: Optional[User] = None
         if current_user_id:
+            current_user = db.query(User).filter(User.id == current_user_id).first()
             vote_query = db.query(ContestantVoting).filter(
                 ContestantVoting.user_id == current_user_id,
                 ContestantVoting.contestant_id == id
             )
-           
+            if contest_id:
+                vote_query = vote_query.filter(ContestantVoting.contest_id == contest_id)
             has_voted = vote_query.first() is not None
-            can_vote = current_user_id != contestant.user_id and not has_voted
+
+            # Appliquer les mêmes règles géographiques que dans get_contest_with_enriched_contestants
+            def eq(a: Optional[str], b: Optional[str]) -> bool:
+                return bool(a and b and a.lower() == b.lower())
+
+            geo_ok = True
+            if current_user and season_level:
+                lvl = str(season_level).lower()
+                v = current_user
+                u = contestant.user
+                if u:
+                    if lvl == "city":
+                        geo_ok = eq(v.country, u.country) and eq(v.city, u.city)
+                    elif lvl == "country":
+                        geo_ok = eq(v.continent, u.continent) and eq(v.country, u.country)
+                    elif lvl in ("regional", "region"):
+                        v_region = getattr(v, "region", None)
+                        u_region = getattr(u, "region", None)
+                        geo_ok = eq(v.continent, u.continent) and eq(v_region, u_region)
+                    elif lvl == "continent":
+                        geo_ok = eq(v.continent, u.continent)
+
+            can_vote = current_user_id != contestant.user_id and not has_voted and geo_ok
         
         # Récupérer la position si c'est un favori de l'utilisateur courant
         position = None
@@ -145,7 +208,6 @@ class CRUDContestant:
                 position = favorite.position
         
         # Récupérer les infos du contest (saison)
-        season = db.query(ContestSeason).filter(ContestSeason.id == contestant.season_id).first()
         contest_title = None
         
         if season:
