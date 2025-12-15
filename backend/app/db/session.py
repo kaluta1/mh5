@@ -1,6 +1,5 @@
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import NullPool
 import logging
 
 from app.core.config import settings
@@ -13,12 +12,14 @@ if database_url.startswith("postgresql://"):
     database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
 
 # Configuration du moteur avec gestion améliorée des connexions SSL
+# Augmentation du pool pour éviter les timeouts
 engine = create_engine(
     database_url,
     pool_pre_ping=True,  # Vérifie la connexion avant utilisation
-    pool_recycle=3600,   # Recycle les connexions après 1 heure
-    pool_size=5,         # Taille du pool de connexions
-    max_overflow=10,     # Nombre maximum de connexions supplémentaires
+    pool_recycle=1800,   # Recycle les connexions après 30 minutes (réduit pour éviter les connexions mortes)
+    pool_size=10,        # Taille du pool de connexions (augmenté de 5 à 10)
+    max_overflow=20,     # Nombre maximum de connexions supplémentaires (augmenté de 10 à 20)
+    pool_timeout=60,     # Timeout pour obtenir une connexion du pool (augmenté de 30 à 60 secondes)
     echo=False
 )
 
@@ -36,12 +37,22 @@ def set_ssl_mode(dbapi_conn, connection_record):
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def get_db():
+    """
+    Dependency pour obtenir une session de base de données.
+    S'assure que la session est toujours fermée, même en cas d'erreur.
+    Les commits doivent être gérés explicitement dans les endpoints/CRUD.
+    """
     db = SessionLocal()
     try:
         yield db
     except Exception as e:
-        logger.error(f"Erreur de base de données: {e}")
+        logger.error(f"Erreur de base de données: {e}", exc_info=True)
         db.rollback()
         raise
     finally:
-        db.close() 
+        # Toujours fermer la session pour libérer la connexion du pool
+        # C'est crucial pour éviter l'épuisement du pool de connexions
+        try:
+            db.close()
+        except Exception as close_error:
+            logger.error(f"Erreur lors de la fermeture de la session: {close_error}", exc_info=True) 
