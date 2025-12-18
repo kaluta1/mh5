@@ -861,84 +861,56 @@ def vote_for_contestant(
             detail="You cannot vote for your own submission"
         )
     
-    # Vérifier si le vote est autorisé
-    # Récupérer le contest associé via la saison
-    from app.models.contests import ContestSeasonLink, ContestSeason
+    # Récupérer la saison active du contestant via ContestantSeason
+    from app.models.contests import ContestSeasonLink, ContestSeason, ContestantSeason
     from app.models.contest import Contest as MyfavContest
     
-    contest = None
-    season = None
+    # Récupérer la saison active pour ce contestant
+    contestant_season_link = db.query(ContestantSeason).filter(
+        ContestantSeason.contestant_id == contestant_id,
+        ContestantSeason.is_active == True
+    ).first()
     
-    # Vérifier si season_id est directement un Contest.id
+    if not contestant_season_link:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This contestant is not active in any season"
+        )
+    
+    # Récupérer la saison
+    season = db.query(ContestSeason).filter(
+        ContestSeason.id == contestant_season_link.season_id,
+        ContestSeason.is_deleted == False
+    ).first()
+    
+    if not season:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Season not found for this contestant"
+        )
+    
+    # Récupérer le contest associé à cette saison via ContestSeasonLink
+    contest_season_link = db.query(ContestSeasonLink).filter(
+        ContestSeasonLink.season_id == season.id,
+        ContestSeasonLink.is_active == True
+    ).first()
+    
+    if not contest_season_link:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No active contest found for this season"
+        )
+    
+    # Récupérer le contest
     contest = db.query(MyfavContest).filter(
-        MyfavContest.id == contestant.season_id,
+        MyfavContest.id == contest_season_link.contest_id,
         MyfavContest.is_deleted == False
     ).first()
     
-    # Si pas trouvé, chercher via ContestSeasonLink
-    if not contest:
-        # Vérifier si season_id est une ContestSeason
-        season = db.query(ContestSeason).filter(
-            ContestSeason.id == contestant.season_id,
-            ContestSeason.is_deleted == False
-        ).first()
-        
-        if season:
-            # Trouver le contest via ContestSeasonLink (saison active)
-            contest_link = db.query(ContestSeasonLink).filter(
-                ContestSeasonLink.season_id == season.id,
-                ContestSeasonLink.is_active == True
-            ).first()
-            
-            if contest_link:
-                contest = db.query(MyfavContest).filter(
-                    MyfavContest.id == contest_link.contest_id,
-                    MyfavContest.is_deleted == False
-                ).first()
-        else:
-            # Si season_id n'est ni un Contest ni une ContestSeason, chercher via ContestSeasonLink inverse
-            contest_season_link = db.query(ContestSeasonLink).filter(
-                ContestSeasonLink.contest_id == contestant.season_id,
-                ContestSeasonLink.is_active == True
-            ).first()
-            
-            if contest_season_link:
-                season = db.query(ContestSeason).filter(
-                    ContestSeason.id == contest_season_link.season_id,
-                    ContestSeason.is_deleted == False
-                ).first()
-                
-                if season:
-                    contest = db.query(MyfavContest).filter(
-                        MyfavContest.id == contest_season_link.contest_id,
-                        MyfavContest.is_deleted == False
-                    ).first()
-    
-    # Vérifier que le contest existe et que le vote est autorisé
     if not contest:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No contest found for this submission"
-        )
-    
-    # Récupérer la saison active pour ce contest si on ne l'a pas encore
-    if not season:
-        contest_season_link = db.query(ContestSeasonLink).filter(
-            ContestSeasonLink.contest_id == contest.id,
-            ContestSeasonLink.is_active == True
-        ).first()
-        
-        if contest_season_link:
-            season = db.query(ContestSeason).filter(
-                ContestSeason.id == contest_season_link.season_id,
-                ContestSeason.is_deleted == False
-            ).first()
-    
-    # Vérifier que la saison existe
-    if not season:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No active season found for this contest"
+            detail="Contest not found for this season"
         )
     
     # Vérifier que le vote est ouvert pour ce contest
@@ -976,18 +948,38 @@ def vote_for_contestant(
 
         def eq(a: Optional[str], b: Optional[str]) -> bool:
             return bool(a and b and a.lower() == b.lower())
+        
+        def is_valid_location(value: Optional[str]) -> bool:
+            if not value:
+                return False
+            val_lower = str(value).lower().strip()
+            return val_lower not in ("unknown", "none", "", "null")
+        
+        def compare_with_unknown(val1: Optional[str], val2: Optional[str]) -> bool:
+            """Compare deux valeurs géographiques en ignorant 'Unknown'"""
+            valid1 = is_valid_location(val1)
+            valid2 = is_valid_location(val2)
+            if valid1 and valid2:
+                return eq(val1, val2)
+            # Si au moins une est "Unknown", on accepte (pas de restriction)
+            return True
 
         if lvl == "city":
-            return eq(voter.country, author.country) and eq(voter.city, author.city)
-        if lvl == "country":
-            return eq(voter.continent, author.continent) and eq(voter.country, author.country)
-        if lvl in ("regional", "region"):
+            country_match = compare_with_unknown(voter.country, author.country)
+            return country_match and compare_with_unknown(voter.city, author.city) if country_match else False
+        elif lvl == "country":
+            continent_match = compare_with_unknown(voter.continent, author.continent)
+            return continent_match and compare_with_unknown(voter.country, author.country) if continent_match else False
+        elif lvl in ("regional", "region"):
             v_region = getattr(voter, "region", None)
             a_region = getattr(author, "region", None)
-            return eq(voter.continent, author.continent) and eq(v_region, a_region)
-        if lvl == "continent":
-            return eq(voter.continent, author.continent)
-        return True
+            continent_match = compare_with_unknown(voter.continent, author.continent)
+            return continent_match and compare_with_unknown(v_region, a_region) if continent_match else False
+        elif lvl == "continent":
+            return compare_with_unknown(voter.continent, author.continent)
+        else:
+            # Pour "global" ou niveau inconnu, on accepte
+            return True
 
     if not locations_match():
         raise HTTPException(
@@ -1036,18 +1028,44 @@ def vote_for_contestant(
                     detail="This contest is reserved for female participants. Only male participants can vote."
                 )
     
-    # Vérifier si l'utilisateur a déjà voté pour ce contestant dans ce contest
+    # Vérifier si l'utilisateur a déjà voté pour ce contestant dans cette saison active
+    # IMPORTANT: Un utilisateur peut voter pour plusieurs contestants différents dans la même saison
+    # Mais il ne peut pas voter deux fois pour le même contestant dans la même saison
+    # Un utilisateur peut voter à nouveau dans une nouvelle saison, même pour le même contestant
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # Log pour déboguer la saison récupérée
+    logger.info(
+        f"[VOTE CHECK] Checking vote for user {current_user.id}, contestant {contestant_id}, "
+        f"season_id: {season.id}, season_level: {season_level}"
+    )
+    
+    # Vérifier si l'utilisateur a déjà voté pour ce contestant dans cette saison
+    # IMPORTANT: La vérification se fait par (user_id, contestant_id, season_id)
+    # Un utilisateur peut voter pour plusieurs contestants dans la même saison
+    # Mais il ne peut pas voter deux fois pour le même contestant dans la même saison
     existing_vote = db.query(ContestantVoting).filter(
         ContestantVoting.user_id == current_user.id,
         ContestantVoting.contestant_id == contestant_id,
-        ContestantVoting.contest_id == contest.id
+        ContestantVoting.season_id == season.id  # Vérification par (user_id, contestant_id, season_id)
     ).first()
     
     if existing_vote:
+        logger.warning(
+            f"[VOTE CHECK] User {current_user.id} already voted for contestant {contestant_id} "
+            f"in season {season.id} (level: {season_level}). "
+            f"Existing vote ID: {existing_vote.id}, vote_date: {existing_vote.vote_date}"
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="You have already voted for this contestant"
+            detail=f"You have already voted for this contestant in this {season_level or 'season'} season. You can vote for other contestants in the same season, but not twice for the same contestant."
         )
+    
+    logger.info(
+        f"[VOTE CHECK] User {current_user.id} can vote in season {season.id} "
+        f"(no existing vote found for this season)"
+    )
     
     # Créer un nouvel enregistrement dans ContestantVoting
     new_voting = ContestantVoting(
@@ -1057,9 +1075,68 @@ def vote_for_contestant(
         season_id=season.id
     )
     
-    db.add(new_voting)
-    db.commit()
-    db.refresh(new_voting)
+    try:
+        db.add(new_voting)
+        db.commit()
+        db.refresh(new_voting)
+        logger.info(
+            f"[VOTE SUCCESS] Vote created: user {current_user.id}, contestant {contestant_id}, "
+            f"season {season.id}, voting_id: {new_voting.id}"
+        )
+    except Exception as e:
+        db.rollback()
+        error_str = str(e).lower()
+        logger.error(
+            f"[VOTE ERROR] Error creating vote: {e}. "
+            f"User {current_user.id}, contestant {contestant_id}, season {season.id}"
+        )
+        
+        # Si c'est une erreur de contrainte unique, c'est qu'un vote existe déjà
+        if "uq_contestant_voting" in str(e) or "unique constraint" in error_str or "duplicate key" in error_str:
+            # Vérifier si c'est l'ancienne contrainte (user_id, contestant_id, contest_id) ou la nouvelle (user_id, season_id)
+            error_message = str(e)
+            if "(user_id, contestant_id, contest_id)" in error_message:
+                # L'ancienne contrainte est encore active - la migration n'a pas été exécutée
+                logger.error(
+                    f"[VOTE ERROR] Old unique constraint still active. "
+                    f"Database migration needs to be run. "
+                    f"User {current_user.id}, contestant {contestant_id}, contest {contest.id}, season {season.id}. "
+                    f"Error: {error_message}"
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Database migration required. The voting system needs to be updated. Please run: alembic upgrade head OR execute the SQL script in backend/migrations/fix_contestant_voting_constraint.sql"
+                )
+            
+            # Si c'est la nouvelle contrainte (user_id, season_id), vérifier à nouveau
+            existing_vote_check = db.query(ContestantVoting).filter(
+                ContestantVoting.user_id == current_user.id,
+                ContestantVoting.season_id == season.id
+            ).first()
+            
+            if existing_vote_check:
+                logger.warning(
+                    f"[VOTE ERROR] Duplicate vote detected: user {current_user.id}, "
+                    f"season {season.id}, existing vote ID: {existing_vote_check.id}, "
+                    f"existing_contestant_id: {existing_vote_check.contestant_id}"
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"You have already voted in this {season_level or 'season'} season. You can only vote once per season (regardless of which contestant you vote for)."
+                )
+            else:
+                # Contrainte unique mais pas de vote trouvé - peut-être que la migration n'a pas été exécutée complètement
+                logger.error(
+                    f"[VOTE ERROR] Unique constraint violation but no vote found. "
+                    f"This might indicate the database migration hasn't been run or completed. "
+                    f"User {current_user.id}, season {season.id}, error: {error_message}"
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Database migration may be incomplete. Please run: alembic upgrade head OR execute the SQL script in backend/migrations/fix_contestant_voting_constraint.sql"
+                )
+        # Sinon, propager l'erreur
+        raise
     
     # Mettre à jour les rangs de tous les contestants du contest pour cette saison
     from app.crud.crud_contest import contest as crud_contest
@@ -1086,7 +1163,12 @@ def vote_for_contestant(
     )
     db.commit()
     
-    return {"message": "Vote recorded successfully", "voting_id": new_voting.id}
+    return {
+        "message": f"Vote recorded successfully for {season_level or 'season'} season",
+        "voting_id": new_voting.id,
+        "season_id": season.id,
+        "season_level": season_level
+    }
 
 
 @router.post("/{contestant_id}/reaction", response_model=Reaction, status_code=status.HTTP_201_CREATED)
@@ -1309,8 +1391,14 @@ def get_share_stats(
     contestant_id: int
 ) -> ShareStats:
     """Récupérer les statistiques de partage pour un contestant"""
-    # Vérifier que le contestant existe
-    contestant = crud_contestant.get(db, contestant_id)
+    from sqlalchemy.orm import joinedload
+    
+    # Vérifier que le contestant existe et charger l'utilisateur (auteur)
+    contestant = db.query(Contestant)\
+        .options(joinedload(Contestant.user))\
+        .filter(Contestant.id == contestant_id)\
+        .first()
+    
     if not contestant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -1328,10 +1416,28 @@ def get_share_stats(
         platform = share.platform or "other"
         shares_by_platform[platform] = shares_by_platform.get(platform, 0) + 1
     
+    # Récupérer les informations de l'auteur
+    author_name = None
+    author_username = None
+    if contestant.user:
+        author_name = contestant.user.full_name or f"{contestant.user.first_name or ''} {contestant.user.last_name or ''}".strip()
+        author_username = contestant.user.username
+    
     return ShareStats(
         contestant_id=contestant_id,
         total_shares=len(shares),
-        shares_by_platform=shares_by_platform
+        shares_by_platform=shares_by_platform,
+        # Informations du contestant
+        contestant_title=contestant.title,
+        contestant_description=contestant.description,
+        contestant_registration_date=contestant.registration_date,
+        # Informations de l'auteur
+        author_id=contestant.user_id,
+        author_name=author_name,
+        author_username=author_username,
+        author_country=contestant.user.country if contestant.user else None,
+        author_city=contestant.user.city if contestant.user else None,
+        author_avatar_url=contestant.user.avatar_url if contestant.user else None
     )
 
 

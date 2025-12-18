@@ -341,3 +341,14 @@ class ShareStats(BaseModel):
     contestant_id: int
     total_shares: int = 0
     shares_by_platform: dict = {}  # {"facebook": count, "twitter": count, ...}
+    # Informations du contestant
+    contestant_title: Optional[str] = None
+    contestant_description: Optional[str] = None
+    contestant_registration_date: Optional[datetime] = None
+    # Informations de l'auteur
+    author_id: Optional[int] = None
+    author_name: Optional[str] = None
+    author_username: Optional[str] = None
+    author_country: Optional[str] = None
+    author_city: Optional[str] = None
+    author_avatar_url: Optional[str] = None

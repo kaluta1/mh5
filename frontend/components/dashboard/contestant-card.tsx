@@ -537,8 +537,8 @@ export function ContestantCard({
                   onMouseEnter={onHoverAuthor}
                   onMouseLeave={onHoverEnd}
                 >
-                  {name}
-                </h3>
+                    {name}
+                  </h3>
                 {rank && (
                   <span className="text-xs font-bold bg-myfav-primary text-white px-2 py-0.5 rounded">
                     #{rank}
@@ -558,10 +558,10 @@ export function ContestantCard({
             </div>
           </div>
           
-        {/* Description */}
-        <div className="ml-[52px]">
+          {/* Description */}
+          <div className="ml-[52px]">
           <ContestantDescription description={description} maxLength={150} />
-        </div>
+          </div>
         </div>
 
         {/* Action Buttons - Facebook Style with Counts */}
@@ -571,15 +571,15 @@ export function ContestantCard({
               onMouseEnter={currentUserId === userId ? onHoverVotes : undefined}
               onMouseLeave={currentUserId === userId ? onHoverEnd : undefined}
             >
-              <VoteButton
-                contestantId={Number(id)}
-                canVote={canVote}
-                hasVoted={isLiked}
-                isVoting={isVoting}
-                onVote={handleVote}
-                isAuthor={currentUserId === userId}
-                votesCount={currentVotes}
-              />
+            <VoteButton
+              contestantId={Number(id)}
+              canVote={canVote}
+              hasVoted={isLiked}
+              isVoting={isVoting}
+              onVote={handleVote}
+              isAuthor={currentUserId === userId}
+              votesCount={currentVotes}
+            />
             </div>
             <CommentsButton 
               onClick={handleOpenComments}
@@ -589,28 +589,28 @@ export function ContestantCard({
               onMouseEnter={currentUserId === userId ? onHoverReactions : undefined}
               onMouseLeave={currentUserId === userId ? onHoverEnd : undefined}
             >
-              <ReactionsButton
-                contestantId={Number(id)}
-                selectedReaction={selectedReaction}
-                onReactionSelect={handleReaction}
-                isAuthor={currentUserId === userId}
-                reactionsCount={reactionsCount}
-                onReactionSuccess={() => {
-                  // Les stats sont déjà rechargées dans handleReaction
-                }}
-              />
+            <ReactionsButton
+              contestantId={Number(id)}
+              selectedReaction={selectedReaction}
+              onReactionSelect={handleReaction}
+              isAuthor={currentUserId === userId}
+              reactionsCount={reactionsCount}
+              onReactionSuccess={() => {
+                // Les stats sont déjà rechargées dans handleReaction
+              }}
+            />
             </div>
             <div
               onMouseEnter={currentUserId === userId ? onHoverFavorites : undefined}
               onMouseLeave={currentUserId === userId ? onHoverEnd : undefined}
             >
-              <FavoriteButton
-                contestantId={Number(id)}
-                isFavorite={isFavorite}
-                onToggle={onToggleFavorite}
-                isAuthor={currentUserId === userId}
-                favoritesCount={favoritesCount}
-              />
+            <FavoriteButton
+              contestantId={Number(id)}
+              isFavorite={isFavorite}
+              onToggle={onToggleFavorite}
+              isAuthor={currentUserId === userId}
+              favoritesCount={favoritesCount}
+            />
             </div>
           </div>
         </div>

@@ -141,8 +141,28 @@ class CRUDContest:
             except ValueError:
                 participant_type = ParticipantType.INDIVIDUAL
         
+        # Convertir voting_start_date en date si c'est une string
+        voting_start_date_for_calc = obj_in.voting_start_date
+        if isinstance(voting_start_date_for_calc, str):
+            from datetime import datetime
+            try:
+                # Essayer de parser la date depuis le format ISO (YYYY-MM-DD)
+                voting_start_date_for_calc = datetime.strptime(voting_start_date_for_calc, '%Y-%m-%d').date()
+            except (ValueError, TypeError):
+                try:
+                    # Si le parsing échoue, essayer avec datetime.fromisoformat
+                    if 'T' in voting_start_date_for_calc:
+                        voting_start_date_for_calc = datetime.fromisoformat(voting_start_date_for_calc.replace('Z', '+00:00')).date()
+                    else:
+                        voting_start_date_for_calc = datetime.fromisoformat(voting_start_date_for_calc).date()
+                except (ValueError, TypeError):
+                    # Si tout échoue, utiliser None
+                    voting_start_date_for_calc = None
+        elif isinstance(voting_start_date_for_calc, datetime):
+            voting_start_date_for_calc = voting_start_date_for_calc.date()
+        
         # Calculer les dates des saisons à partir de voting_start_date
-        season_dates = calculate_season_dates(obj_in.voting_start_date)
+        season_dates = calculate_season_dates(voting_start_date_for_calc)
         
         db_obj = Contest(
             name=obj_in.name,
@@ -682,18 +702,8 @@ class CRUDContest:
         # Enrichir le contest avec les stats
         contest_data = self.enrich_contest_with_stats(db, contest_obj)
         
-        # Récupérer tous les contestants du contest
-        contestants = db.query(Contestant)\
-            .filter(
-                Contestant.season_id == contest_id,
-                Contestant.is_deleted == False
-            )\
-            .options(
-                joinedload(Contestant.user)
-            )\
-            .all()
-        
-        # Récupérer la saison active
+        # Récupérer la saison active d'abord
+        from app.models.contests import ContestantSeason
         season = None
         season_link = db.query(ContestSeasonLink).filter(
             ContestSeasonLink.contest_id == contest_id,
@@ -705,6 +715,34 @@ class CRUDContest:
                 ContestSeason.id == season_link.season_id
             ).first()
         
+        # Récupérer tous les contestants du contest via la saison active
+        # Si une saison active existe, utiliser ContestantSeason, sinon fallback sur l'ancien système
+        contestants = []
+        if season:
+            # Utiliser ContestantSeason pour récupérer les contestants de la saison active
+            contestants = db.query(Contestant)\
+                .join(ContestantSeason)\
+                .filter(
+                    ContestantSeason.season_id == season.id,
+                    ContestantSeason.is_active == True,
+                    Contestant.is_deleted == False
+                )\
+                .options(
+                    joinedload(Contestant.user)
+                )\
+                .all()
+        else:
+            # Fallback : utiliser l'ancien système (season_id = contest_id)
+            contestants = db.query(Contestant)\
+                .filter(
+                    Contestant.season_id == contest_id,
+                    Contestant.is_deleted == False
+                )\
+                .options(
+                    joinedload(Contestant.user)
+                )\
+                .all()
+        
         # Récupérer tous les IDs des contestants
         contestant_ids = [c.id for c in contestants]
         
@@ -714,14 +752,16 @@ class CRUDContest:
             current_user = db.query(User).filter(User.id == current_user_id).first()
         
         # Récupérer tous les votes avec utilisateurs (depuis ContestantVoting)
-        # Filtrer par contest_id pour ne récupérer que les votes de ce contest
-        votes_data = db.query(ContestantVoting, User)\
-            .join(User, ContestantVoting.user_id == User.id)\
-            .filter(
-                ContestantVoting.contestant_id.in_(contestant_ids),
-                ContestantVoting.contest_id == contest_id
-            )\
-            .all()
+        # Filtrer par season_id pour ne récupérer que les votes de cette saison
+        votes_data = []
+        if season:
+            votes_data = db.query(ContestantVoting, User)\
+                .join(User, ContestantVoting.user_id == User.id)\
+                .filter(
+                    ContestantVoting.contestant_id.in_(contestant_ids),
+                    ContestantVoting.season_id == season.id
+                )\
+                .all()
         
         # Grouper les votes par contestant_id
         votes_by_contestant = {}
@@ -844,16 +884,20 @@ class CRUDContest:
                 .all()
             author_favorites = {fav[0] for fav in author_favs}
         
-        # Vérifier les votes de l'utilisateur courant
-        user_votes = {}
-        if current_user_id:
-            user_votes_list = db.query(ContestantVoting.contestant_id)\
+        # Récupérer tous les votes de l'utilisateur pour cette saison (pour tous les contestants)
+        # IMPORTANT: Un utilisateur peut voter pour plusieurs contestants dans la même saison
+        # Mais il ne peut pas voter deux fois pour le même contestant dans la même saison
+        user_votes_in_season = {}
+        if current_user_id and season:
+            user_votes = db.query(ContestantVoting)\
                 .filter(
                     ContestantVoting.user_id == current_user_id,
+                    ContestantVoting.season_id == season.id,
                     ContestantVoting.contestant_id.in_(contestant_ids)
                 )\
                 .all()
-            user_votes = {vote[0] for vote in user_votes_list}
+            # Créer un dictionnaire {contestant_id: vote} pour vérification rapide
+            user_votes_in_season = {vote.contestant_id: vote for vote in user_votes}
         
         # Déterminer le niveau de la saison (city, country, regional, continent, global, etc.)
         season_level = None
@@ -912,7 +956,12 @@ class CRUDContest:
         
         # Fonction utilitaire pour vérifier si un utilisateur peut voter pour un contestant
         def is_geographically_allowed(voter: Optional[User], candidate: Contestant) -> bool:
-            if not voter or not candidate.user or not season_level:
+            # Si pas de voter, pas de candidate.user, ou pas de season_level, permettre le vote
+            if not voter or not candidate.user:
+                return True
+            
+            # Si pas de season_level défini, pas de restriction géographique
+            if not season_level:
                 return True
             
             lvl = str(season_level).lower()
@@ -922,22 +971,24 @@ class CRUDContest:
             def eq(a: Optional[str], b: Optional[str]) -> bool:
                 return bool(a and b and a.lower() == b.lower())
             
+            # Appliquer les restrictions selon le niveau de la saison
             if lvl == "city":
                 # Même ville ET même pays
                 return eq(v.country, u.country) and eq(v.city, u.city)
-            if lvl == "country":
+            elif lvl == "country":
                 # Même pays ET même continent
                 return eq(v.continent, u.continent) and eq(v.country, u.country)
-            if lvl in ("regional", "region"):
+            elif lvl in ("regional", "region"):
                 # Même région ET même continent
                 v_region = getattr(v, "region", None)
                 u_region = getattr(u, "region", None)
                 return eq(v.continent, u.continent) and eq(v_region, u_region)
-            if lvl == "continent":
+            elif lvl == "continent":
                 # Même continent
                 return eq(v.continent, u.continent)
-            # Global ou niveau inconnu -> pas de restriction géographique
-            return True
+            else:
+                # Global ou niveau inconnu -> pas de restriction géographique
+                return True
 
         # Construire la liste des contestants enrichis
         enriched_contestants = []
@@ -956,11 +1007,51 @@ class CRUDContest:
                 except (json.JSONDecodeError, TypeError):
                     videos_count = 0
             
-            # Déterminer si l'utilisateur peut voter
+            # Déterminer si l'utilisateur peut voter pour ce contestant
+            # Un utilisateur peut voter si :
+            # 1. Il est authentifié
+            # 2. Ce n'est pas sa propre candidature
+            # 3. Il n'a pas déjà voté pour ce contestant dans cette saison
+            # 4. Il respecte les restrictions géographiques selon le niveau de la saison
+            # IMPORTANT: Un utilisateur peut voter pour plusieurs contestants différents dans la même saison
+            # Mais il ne peut pas voter deux fois pour le même contestant dans la même saison
+            # Si l'utilisateur a voté pour le contestant X dans la saison CITY, il peut voter pour le contestant Y dans la même saison CITY
+            # Mais il ne peut pas voter deux fois pour X dans la même saison CITY
+            # S'il migre vers COUNTRY, il peut voter à nouveau pour X dans la nouvelle saison COUNTRY
             can_vote = False
-            if current_user_id and current_user_id != contestant.user_id:
-                geo_ok = is_geographically_allowed(current_user, contestant)
-                can_vote = (contestant.id not in user_votes) and geo_ok
+            has_voted = False
+            
+            if current_user_id:
+                if not current_user:
+                    # Si current_user n'est pas chargé, le charger
+                    current_user = db.query(User).filter(User.id == current_user_id).first()
+                
+                if current_user:
+                    if current_user_id == contestant.user_id:
+                        # L'utilisateur ne peut pas voter pour sa propre candidature
+                        can_vote = False
+                        has_voted = False
+                    else:
+                        # Vérifier si l'utilisateur a déjà voté pour ce contestant dans cette saison
+                        # IMPORTANT: Un utilisateur peut voter pour plusieurs contestants différents dans la même saison
+                        # Mais il ne peut pas voter deux fois pour le même contestant dans la même saison
+                        # Si l'utilisateur a voté pour le contestant X dans la saison CITY, il peut voter pour le contestant Y dans la même saison CITY
+                        # Mais il ne peut pas voter deux fois pour X dans la même saison CITY
+                        # S'il migre vers COUNTRY, il peut voter à nouveau pour X dans la nouvelle saison COUNTRY
+                        existing_vote_for_contestant = user_votes_in_season.get(contestant.id)
+                        
+                        if existing_vote_for_contestant:
+                            # L'utilisateur a déjà voté pour ce contestant dans cette saison
+                            has_voted = True
+                            can_vote = False
+                        else:
+                            # L'utilisateur n'a pas encore voté pour ce contestant dans cette saison
+                            has_voted = False
+                            # Vérifier les restrictions géographiques selon le niveau de la saison
+                            # La fonction is_geographically_allowed retourne True si season_level est None
+                            geo_ok = is_geographically_allowed(current_user, contestant)
+                            can_vote = geo_ok
+            # Si current_user_id est None (utilisateur non authentifié), can_vote et has_voted restent False
             
             enriched_contestants.append({
                 "id": contestant.id,
@@ -999,9 +1090,9 @@ class CRUDContest:
                     "title": season.title,
                     "level": season.level.value if hasattr(season.level, 'value') else str(season.level)
                 } if season else None,
-                # État du vote
-                "has_voted": contestant.id in user_votes,
-                "can_vote": can_vote,
+                # État du vote (par saison)
+                "has_voted": has_voted,  # L'utilisateur a déjà voté dans cette saison
+                "can_vote": can_vote,  # L'utilisateur peut voter pour ce contestant dans cette saison
             })
         
         # Trier par rangs (final_rank) si disponibles, sinon par votes décroissants
@@ -1073,13 +1164,13 @@ class CRUDContest:
             Contestant.is_deleted == False
         ).all()
         
-        # Compter les votes pour chaque contestant
+        # Compter les votes pour chaque contestant (par saison)
         votes_by_contestant = {}
         for contestant in contestants:
             votes_count = db.query(func.count(ContestantVoting.id))\
                 .filter(
                     ContestantVoting.contestant_id == contestant.id,
-                    ContestantVoting.contest_id == contest_id
+                    ContestantVoting.season_id == season_id
                 )\
                 .scalar() or 0
             votes_by_contestant[contestant.id] = votes_count

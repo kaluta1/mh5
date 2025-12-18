@@ -42,10 +42,25 @@ def get_db():
     S'assure que la session est toujours fermée, même en cas d'erreur.
     Les commits doivent être gérés explicitement dans les endpoints/CRUD.
     """
+    from fastapi import HTTPException
+    from sqlalchemy.exc import OperationalError
+    
     db = SessionLocal()
     try:
         yield db
+    except HTTPException:
+        # Ne pas logger les erreurs HTTP (401, 403, etc.) comme des erreurs de base de données
+        # Les propager telles quelles
+        raise
+    except OperationalError as e:
+        # Erreur de connexion réseau/DNS - logger avec plus de détails
+        error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
+        logger.error(f"Erreur de connexion à la base de données: {error_msg}")
+        logger.error("Vérifiez votre connexion internet et la configuration DATABASE_URL")
+        db.rollback()
+        raise
     except Exception as e:
+        # Logger uniquement les vraies erreurs de base de données
         logger.error(f"Erreur de base de données: {e}", exc_info=True)
         db.rollback()
         raise

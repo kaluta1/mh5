@@ -457,8 +457,33 @@ def get_comment_replies(
     
     current_user_id = current_user.id if current_user else None
     
+    # Récupérer tous les commentaires du contestant pour construire all_replies_map
+    all_comments = db.query(Comment).options(
+        joinedload(Comment.user)
+    ).filter(
+        Comment.contestant_id == comment.contestant_id,
+        Comment.is_hidden == False
+    ).all()
+    
+    # Créer un dictionnaire de toutes les réponses groupées par parent_id
+    all_replies_map = {}
+    for c in all_comments:
+        if c.parent_id:
+            if c.parent_id not in all_replies_map:
+                all_replies_map[c.parent_id] = []
+            all_replies_map[c.parent_id].append(c)
+    
+    # Récupérer les IDs des commentaires likés par l'utilisateur actuel
+    liked_comment_ids = set()
+    if current_user_id:
+        liked_comments = db.query(Like.comment_id).filter(
+            Like.user_id == current_user_id,
+            Like.comment_id.in_([c.id for c in all_comments])
+        ).all()
+        liked_comment_ids = {like[0] for like in liked_comments}
+    
     return CommentListResponse(
-        comments=[serialize_comment_with_replies(r, db, current_user_id) for r in replies],
+        comments=[serialize_comment_with_replies(r, all_replies_map, liked_comment_ids, current_user_id) for r in replies],
         total=total,
         page=skip // limit + 1 if limit > 0 else 1,
         page_size=limit

@@ -189,8 +189,10 @@ class ContestantVoting(Base):
     contest: Mapped["Contest"] = relationship("Contest")
     season: Mapped["ContestSeason"] = relationship("ContestSeason")
     
-    # Contrainte unique pour éviter les doublons : un utilisateur ne peut voter qu'une fois pour un contestant dans un contest
+    # Contrainte unique pour éviter les doublons : un utilisateur ne peut voter qu'une seule fois 
+    # pour un contestant donné dans une saison donnée
+    # Mais il peut voter pour plusieurs contestants différents dans la même saison
     __table_args__ = (
-        UniqueConstraint('user_id', 'contestant_id', 'contest_id', name='uq_contestant_voting'),
+        UniqueConstraint('user_id', 'contestant_id', 'season_id', name='uq_contestant_voting'),
         {'extend_existing': True},
     )

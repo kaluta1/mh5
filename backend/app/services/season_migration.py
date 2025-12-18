@@ -1,9 +1,10 @@
 """
 Service de gestion des migrations de saisons pour les contests.
 Gère la progression automatique des contestants à travers les différents niveaux.
+S'exécute toutes les 24h pour vérifier les migrations selon les dates des saisons.
 """
 from datetime import datetime, timedelta, date
-from typing import List, Optional
+from typing import List, Optional, Dict
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
 
@@ -19,7 +20,8 @@ from app.models.contests import (
     ContestStageLevel,
     ContestStatus
 )
-from app.models.voting import Vote, VoteStatus
+from app.models.user import User
+from app.models.voting import ContestantVoting
 
 
 class SeasonMigrationService:
@@ -33,7 +35,6 @@ class SeasonMigrationService:
     ) -> ContestSeason:
         """
         Récupère ou crée une saison pour un niveau donné.
-        Une seule saison globale par niveau.
         """
         if title is None:
             title = f"Saison {level.value.capitalize()}"
@@ -59,10 +60,163 @@ class SeasonMigrationService:
         return season
     
     @staticmethod
+    def get_top_contestants_by_location(
+        db: Session,
+        season_id: int,  # ID de la saison, pas du contest
+        location_field: str,  # 'city', 'country', 'region', 'continent'
+        limit: int = 5,
+        stage_id: Optional[int] = None  # Non utilisé maintenant, gardé pour compatibilité
+    ) -> Dict[str, List[Contestant]]:
+        """
+        Récupère les N meilleurs contestants groupés par localisation.
+        Utilise les votes depuis ContestantVoting (par season_id) au lieu des stages.
+        Retourne un dictionnaire {location_value: [contestants]}
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # Vérifier d'abord combien de contestants sont liés à cette saison
+        total_contestants_in_season = db.query(ContestantSeason).filter(
+            and_(
+                ContestantSeason.season_id == season_id,
+                ContestantSeason.is_active == True
+            )
+        ).count()
+        
+        logger.info(f"get_top_contestants_by_location: season_id={season_id}, location_field={location_field}, limit={limit}")
+        logger.info(f"  - Total contestants liés à la saison: {total_contestants_in_season}")
+        print(f"[Migration]   Total contestants liés à la saison {season_id}: {total_contestants_in_season}")
+        
+        # Récupérer tous les contestants actifs et qualifiés de la saison via ContestantSeason
+        contestants_query = db.query(Contestant).join(
+            ContestantSeason
+        ).join(
+            User
+        ).filter(
+            and_(
+                ContestantSeason.season_id == season_id,
+                ContestantSeason.is_active == True,
+                Contestant.is_active == True,
+                Contestant.is_deleted == False,
+                Contestant.is_qualified == True
+            )
+        )
+        
+        # Filtrer par localisation non nulle
+        if location_field == 'city':
+            contestants_query = contestants_query.filter(User.city.isnot(None))
+        elif location_field == 'country':
+            contestants_query = contestants_query.filter(User.country.isnot(None))
+        elif location_field == 'region':
+            contestants_query = contestants_query.filter(User.region.isnot(None))
+        elif location_field == 'continent':
+            contestants_query = contestants_query.filter(User.continent.isnot(None))
+        
+        contestants = contestants_query.all()
+        
+        logger.info(f"  - Contestants qualifiés avec localisation {location_field}: {len(contestants)}")
+        print(f"[Migration]   Contestants qualifiés avec localisation {location_field}: {len(contestants)}")
+        
+        if not contestants:
+            # Vérifier pourquoi aucun contestant n'est trouvé
+            contestants_without_location = db.query(Contestant).join(
+                ContestantSeason
+            ).join(
+                User
+            ).filter(
+                and_(
+                    ContestantSeason.season_id == season_id,
+                    ContestantSeason.is_active == True,
+                    Contestant.is_active == True,
+                    Contestant.is_deleted == False,
+                    Contestant.is_qualified == True
+                )
+            ).count()
+            
+            contestants_not_qualified = db.query(Contestant).join(
+                ContestantSeason
+            ).filter(
+                and_(
+                    ContestantSeason.season_id == season_id,
+                    ContestantSeason.is_active == True,
+                    Contestant.is_active == True,
+                    Contestant.is_deleted == False,
+                    Contestant.is_qualified == False
+                )
+            ).count()
+            
+            logger.warning(f"  - Aucun contestant trouvé pour la saison {season_id}")
+            logger.warning(f"    - Contestants qualifiés sans localisation: {contestants_without_location}")
+            logger.warning(f"    - Contestants non qualifiés: {contestants_not_qualified}")
+            print(f"[Migration]   Aucun contestant trouvé pour la saison {season_id}")
+            print(f"[Migration]     - Contestants qualifiés sans localisation: {contestants_without_location}")
+            print(f"[Migration]     - Contestants non qualifiés: {contestants_not_qualified}")
+            return {}
+        
+        # Récupérer les votes par contestant depuis ContestantVoting (par season_id)
+        vote_counts = db.query(
+            ContestantVoting.contestant_id,
+            func.count(ContestantVoting.id).label('vote_count')
+        ).filter(
+            ContestantVoting.season_id == season_id
+        ).group_by(
+            ContestantVoting.contestant_id
+        ).all()
+        
+        votes_by_contestant = {vc.contestant_id: vc.vote_count for vc in vote_counts}
+        logger.info(f"  - Votes trouvés pour {len(votes_by_contestant)} contestants")
+        print(f"[Migration]   Votes trouvés pour {len(votes_by_contestant)} contestants")
+        
+        # Grouper par localisation
+        grouped = {}
+        for contestant in contestants:
+            location_value = None
+            if location_field == 'city':
+                location_value = contestant.user.city
+            elif location_field == 'country':
+                location_value = contestant.user.country
+            elif location_field == 'region':
+                location_value = contestant.user.region
+            elif location_field == 'continent':
+                location_value = contestant.user.continent
+            
+            if not location_value:
+                continue
+            
+            if location_value not in grouped:
+                grouped[location_value] = []
+            
+            grouped[location_value].append(contestant)
+        
+        # Trier et limiter pour chaque localisation
+        result = {}
+        logger.info(f"  - Groupes par localisation: {len(grouped)}")
+        for location_value, location_contestants in grouped.items():
+            # Trier par nombre de votes décroissant
+            sorted_contestants = sorted(
+                location_contestants,
+                key=lambda c: votes_by_contestant.get(c.id, 0),
+                reverse=True
+            )
+            
+            # Prendre les N premiers (ou tous si moins de N)
+            selected = sorted_contestants[:limit]
+            result[location_value] = selected
+            logger.info(f"    - {location_value}: {len(selected)}/{len(location_contestants)} contestants sélectionnés")
+            print(f"[Migration]     {location_value}: {len(selected)}/{len(location_contestants)} contestants")
+        
+        total_selected = sum(len(contestants) for contestants in result.values())
+        logger.info(f"  - Total sélectionné: {total_selected} contestants")
+        print(f"[Migration]   Total sélectionné: {total_selected} contestants")
+        
+        return result
+    
+    @staticmethod
     def migrate_to_city_season(db: Session, contest_id: int) -> dict:
         """
         Migre tous les contestants d'un contest vers la saison CITY
-        quand submission_end_date arrive.
+        quand city_season_start_date arrive.
+        Tous les contestants sont qualifiés par défaut (is_qualified=True).
         """
         contest = db.query(Contest).filter(Contest.id == contest_id).first()
         if not contest:
@@ -70,8 +224,10 @@ class SeasonMigrationService:
         
         # Vérifier si la migration a déjà été faite
         existing_link = db.query(ContestSeasonLink).filter(
-            ContestSeasonLink.contest_id == contest_id,
-            ContestSeasonLink.is_active == True
+            and_(
+                ContestSeasonLink.contest_id == contest_id,
+                ContestSeasonLink.is_active == True
+            )
         ).first()
         
         if existing_link:
@@ -87,15 +243,20 @@ class SeasonMigrationService:
         # Récupérer tous les contestants actifs du contest
         contestants = db.query(Contestant).filter(
             and_(
-                Contestant.season_id == contest_id,  # Les contestants sont liés au contest initialement
+                Contestant.season_id == contest_id,
                 Contestant.is_active == True,
                 Contestant.is_deleted == False
             )
         ).all()
         
-        migrated_count = 0
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # Tous les contestants sont qualifiés par défaut
+        migrated_contestant_ids = []
         for contestant in contestants:
-            # Vérifier si le lien existe déjà
+            contestant.is_qualified = True
+            # Créer le lien contestant-season
             existing_contestant_season = db.query(ContestantSeason).filter(
                 and_(
                     ContestantSeason.contestant_id == contestant.id,
@@ -104,7 +265,6 @@ class SeasonMigrationService:
             ).first()
             
             if not existing_contestant_season:
-                # Créer le lien contestant-season
                 contestant_season = ContestantSeason(
                     contestant_id=contestant.id,
                     season_id=city_season.id,
@@ -112,17 +272,38 @@ class SeasonMigrationService:
                     is_active=True
                 )
                 db.add(contestant_season)
-                migrated_count += 1
+                logger.info(f"  - Création du lien ContestantSeason pour contestant {contestant.id} dans saison CITY {city_season.id}")
+                migrated_contestant_ids.append(contestant.id)
+            else:
+                existing_contestant_season.is_active = True
+                existing_contestant_season.joined_at = datetime.utcnow()  # Mettre à jour la date de migration
+                logger.info(f"  - Réactivation du lien ContestantSeason existant pour contestant {contestant.id} (date mise à jour)")
+                migrated_contestant_ids.append(contestant.id)
+        
+        logger.info(f"Contestants migrés vers CITY ({len(migrated_contestant_ids)}): {migrated_contestant_ids}")
         
         # Mettre à jour le contest : changer le level et créer le lien
         contest.level = "city"
-        contest_season_link = ContestSeasonLink(
-            contest_id=contest.id,
-            season_id=city_season.id,
-            linked_at=datetime.utcnow(),
-            is_active=True
-        )
-        db.add(contest_season_link)
+        existing_contest_link = db.query(ContestSeasonLink).filter(
+            and_(
+                ContestSeasonLink.contest_id == contest.id,
+                ContestSeasonLink.season_id == city_season.id
+            )
+        ).first()
+        
+        if not existing_contest_link:
+            contest_season_link = ContestSeasonLink(
+                contest_id=contest.id,
+                season_id=city_season.id,
+                linked_at=datetime.utcnow(),
+                is_active=True
+            )
+            db.add(contest_season_link)
+            logger.info(f"  - Création du lien ContestSeasonLink pour contest {contest.id} et saison CITY {city_season.id}")
+        else:
+            existing_contest_link.is_active = True
+            existing_contest_link.linked_at = datetime.utcnow()  # Mettre à jour la date de migration
+            logger.info(f"  - Réactivation du lien ContestSeasonLink existant pour contest {contest.id} (date mise à jour)")
         
         # Créer le stage CITY pour cette saison
         city_stage = db.query(ContestStage).filter(
@@ -133,9 +314,16 @@ class SeasonMigrationService:
         ).first()
         
         if not city_stage:
-            # Calculer les dates : 1 mois de vote pour CITY
-            start_date = contest.voting_start_date
-            end_date = start_date + timedelta(days=30)
+            # Utiliser les dates de la saison city du contest
+            start_date = contest.city_season_start_date
+            end_date = contest.city_season_end_date
+            
+            if not start_date or not end_date:
+                # Fallback : calculer à partir de voting_start_date
+                start_date = contest.voting_start_date
+                if isinstance(start_date, date):
+                    start_date = datetime.combine(start_date, datetime.min.time())
+                end_date = start_date + timedelta(days=30)
             
             city_stage = ContestStage(
                 season_id=city_season.id,
@@ -150,60 +338,31 @@ class SeasonMigrationService:
         
         db.commit()
         
+        logger.info(f"Migration vers CITY réussie: {len(migrated_contestant_ids)} contestants migrés")
+        logger.info(f"  - Contest {contest.id} lié à la saison CITY {city_season.id}")
+        logger.info(f"  - Contestants migrés: {migrated_contestant_ids}")
+        print(f"[Migration] ✓ Migration vers CITY réussie: Contest {contest.id}")
+        print(f"[Migration]   Contestants migrés ({len(migrated_contestant_ids)}): {migrated_contestant_ids}")
+        
         return {
-            "message": f"Migrated {migrated_count} contestants to CITY season",
+            "message": f"Migrated {len(contestants)} contestants to CITY season",
             "season_id": city_season.id,
-            "contestants_migrated": migrated_count
+            "contestants_migrated": len(contestants),
+            "migrated_contestant_ids": migrated_contestant_ids
         }
-    
-    @staticmethod
-    def get_top_contestants_by_votes(
-        db: Session, 
-        season_id: int, 
-        stage_level: ContestStageLevel,
-        limit: int = 5
-    ) -> List[Contestant]:
-        """
-        Récupère les N meilleurs contestants d'une saison basés sur total_votes
-        dans ContestantRanking pour un stage donné.
-        """
-        # Récupérer le stage
-        stage = db.query(ContestStage).filter(
-            and_(
-                ContestStage.season_id == season_id,
-                ContestStage.stage_level == stage_level
-            )
-        ).first()
-        
-        if not stage:
-            return []
-        
-        # Récupérer les rankings triés par total_votes décroissant
-        rankings = db.query(ContestantRanking).filter(
-            ContestantRanking.stage_id == stage.id
-        ).order_by(
-            ContestantRanking.total_votes.desc()
-        ).limit(limit).all()
-        
-        # Récupérer les contestants
-        contestant_ids = [r.contestant_id for r in rankings]
-        contestants = db.query(Contestant).filter(
-            Contestant.id.in_(contestant_ids)
-        ).all()
-        
-        # Trier selon l'ordre des rankings
-        contestant_dict = {c.id: c for c in contestants}
-        return [contestant_dict[r.contestant_id] for r in rankings if r.contestant_id in contestant_dict]
     
     @staticmethod
     def promote_to_next_level(
         db: Session,
         from_level: SeasonLevel,
         to_level: SeasonLevel,
-        contest_id: int
+        contest_id: int,
+        limit: int = 5  # 5 pour tous sauf GLOBAL (3)
     ) -> dict:
         """
-        Promouvoit les 5 meilleurs contestants d'un niveau vers le niveau supérieur.
+        Promouvoit les meilleurs contestants d'un niveau vers le niveau supérieur.
+        Pour CITY/COUNTRY/REGIONAL/CONTINENTAL : 5 premiers par localisation
+        Pour GLOBAL : 3 premiers au total
         """
         # Récupérer la saison source via le lien contest-season
         contest_season_link = db.query(ContestSeasonLink).join(
@@ -217,41 +376,131 @@ class SeasonMigrationService:
             )
         ).first()
         
+        import logging
+        logger = logging.getLogger(__name__)
+        
         if not contest_season_link:
-            return {"error": f"No active season found for level {from_level.value} and contest {contest_id}"}
+            error_msg = f"No active season found for level {from_level.value} and contest {contest_id}"
+            logger.error(error_msg)
+            print(f"[Migration] ERROR: {error_msg}")
+            return {"error": error_msg}
         
         from_season = contest_season_link.season
+        logger.info(f"Promotion de {from_level.value} vers {to_level.value} pour contest {contest_id}")
+        logger.info(f"  - Saison source: {from_season.id} (niveau {from_level.value})")
+        print(f"[Migration] Promotion contest {contest_id} de {from_level.value} vers {to_level.value}")
+        print(f"[Migration]   Saison source: {from_season.id}")
         
-        # Mapper le niveau vers ContestStageLevel
-        stage_level_map = {
-            SeasonLevel.CITY: ContestStageLevel.CITY,
-            SeasonLevel.COUNTRY: ContestStageLevel.COUNTRY,
-            SeasonLevel.REGIONAL: ContestStageLevel.REGIONAL,  # Note: vérifier si REGIONAL existe dans ContestStageLevel
-            SeasonLevel.CONTINENT: ContestStageLevel.CONTINENTAL,
-            SeasonLevel.GLOBAL: ContestStageLevel.GLOBAL
-        }
+        # Sélectionner les contestants selon le niveau (sans dépendre des stages)
+        selected_contestants = []
         
-        from_stage_level = stage_level_map.get(from_level)
-        if not from_stage_level:
-            return {"error": f"Invalid level: {from_level.value}"}
+        if to_level == SeasonLevel.GLOBAL:
+            # Pour GLOBAL : prendre les 3 premiers au total basés sur les votes de la saison
+            # Compter les votes par contestant dans cette saison
+            vote_counts = db.query(
+                ContestantVoting.contestant_id,
+                func.count(ContestantVoting.id).label('vote_count')
+            ).filter(
+                ContestantVoting.season_id == from_season.id
+            ).group_by(
+                ContestantVoting.contestant_id
+            ).order_by(
+                func.count(ContestantVoting.id).desc()
+            ).limit(3).all()
+            
+            contestant_ids = [vc.contestant_id for vc in vote_counts]
+            selected_contestants = db.query(Contestant).join(
+                ContestantSeason
+            ).filter(
+                and_(
+                    Contestant.id.in_(contestant_ids),
+                    ContestantSeason.season_id == from_season.id,
+                    ContestantSeason.is_active == True,
+                    Contestant.is_active == True,
+                    Contestant.is_deleted == False,
+                    Contestant.is_qualified == True
+                )
+            ).all()
+            
+            # Trier selon l'ordre des votes
+            vote_dict = {vc.contestant_id: vc.vote_count for vc in vote_counts}
+            selected_contestants = sorted(
+                selected_contestants,
+                key=lambda c: vote_dict.get(c.id, 0),
+                reverse=True
+            )
+            
+            logger.info(f"  - {len(selected_contestants)} contestants sélectionnés pour GLOBAL")
+        else:
+            # Pour les autres niveaux : prendre les 5 premiers par localisation
+            location_field_map = {
+                SeasonLevel.COUNTRY: 'city',
+                SeasonLevel.REGIONAL: 'country',
+                SeasonLevel.CONTINENT: 'region',
+                SeasonLevel.GLOBAL: 'continent'
+            }
+            
+            location_field = location_field_map.get(to_level)
+            if not location_field:
+                return {"error": f"Invalid target level: {to_level.value}"}
+            
+            # Récupérer les meilleurs par localisation (sans stage_id)
+            logger.info(f"  - Récupération des meilleurs contestants par {location_field} (limit: {limit})")
+            grouped_contestants = SeasonMigrationService.get_top_contestants_by_location(
+                db, from_season.id, location_field, limit=limit, stage_id=None
+            )
+            
+            logger.info(f"  - Groupes trouvés: {len(grouped_contestants)} localisations")
+            for location, contestants in grouped_contestants.items():
+                logger.info(f"    - {location}: {len(contestants)} contestants")
+            
+            # Flatten la liste
+            for location_contestants in grouped_contestants.values():
+                selected_contestants.extend(location_contestants)
         
-        # Récupérer les 5 meilleurs
-        top_contestants = SeasonMigrationService.get_top_contestants_by_votes(
-            db, from_season.id, from_stage_level, limit=5
-        )
+        logger.info(f"  - Total contestants sélectionnés: {len(selected_contestants)}")
+        print(f"[Migration]   Contestants sélectionnés: {len(selected_contestants)}")
         
-        if len(top_contestants) == 0:
-            return {"message": f"No contestants to promote from {from_level.value}"}
+        if len(selected_contestants) == 0:
+            error_msg = f"No contestants to promote from {from_level.value} (season_id: {from_season.id})"
+            logger.warning(error_msg)
+            print(f"[Migration] WARNING: {error_msg}")
+            return {"error": error_msg, "message": error_msg}
+        
+        # Marquer les non sélectionnés comme non qualifiés
+        all_contestants = db.query(Contestant).join(
+            ContestantSeason
+        ).filter(
+            and_(
+                ContestantSeason.season_id == from_season.id,
+                ContestantSeason.is_active == True,
+                Contestant.is_active == True,
+                Contestant.is_deleted == False
+            )
+        ).all()
+        
+        selected_ids = {c.id for c in selected_contestants}
+        for contestant in all_contestants:
+            if contestant.id not in selected_ids:
+                contestant.is_qualified = False
         
         # Récupérer ou créer la saison destination
+        contest = db.query(Contest).filter(Contest.id == contest_id).first()
+        logger.info(f"  - Création/récupération de la saison {to_level.value}")
         to_season = SeasonMigrationService.get_or_create_season(
             db,
             to_level,
-            title=f"Saison {to_level.value.capitalize()} - {db.query(Contest).filter(Contest.id == contest_id).first().name}"
+            title=f"Saison {to_level.value.capitalize()} - {contest.name}"
         )
+        logger.info(f"  - Saison destination: {to_season.id} (niveau {to_level.value})")
+        print(f"[Migration]   Saison destination: {to_season.id}")
         
-        # Désactiver les liens dans l'ancienne saison pour les promus
-        for contestant in top_contestants:
+        # Désactiver les liens dans l'ancienne saison pour les promus et créer les nouveaux liens
+        promoted_contestant_ids = []
+        for contestant in selected_contestants:
+            # Marquer comme qualifié
+            contestant.is_qualified = True
+            
             old_link = db.query(ContestantSeason).filter(
                 and_(
                     ContestantSeason.contestant_id == contestant.id,
@@ -262,8 +511,9 @@ class SeasonMigrationService:
             
             if old_link:
                 old_link.is_active = False
+                logger.info(f"  - Désactivation du lien ContestantSeason pour contestant {contestant.id} dans saison {from_season.id}")
             
-            # Créer le nouveau lien
+            # Créer le nouveau lien ContestantSeason
             existing_new_link = db.query(ContestantSeason).filter(
                 and_(
                     ContestantSeason.contestant_id == contestant.id,
@@ -279,13 +529,19 @@ class SeasonMigrationService:
                     is_active=True
                 )
                 db.add(new_link)
+                logger.info(f"  - Création du lien ContestantSeason pour contestant {contestant.id} dans saison {to_season.id}")
+                promoted_contestant_ids.append(contestant.id)
+            else:
+                # Réactiver le lien s'il existe déjà et mettre à jour la date
+                existing_new_link.is_active = True
+                existing_new_link.joined_at = datetime.utcnow()  # Mettre à jour la date de migration
+                logger.info(f"  - Réactivation du lien ContestantSeason existant pour contestant {contestant.id} dans saison {to_season.id} (date mise à jour)")
+                promoted_contestant_ids.append(contestant.id)
         
-        # Mettre à jour le contest : changer le level
-        contest = db.query(Contest).filter(Contest.id == contest_id).first()
-        if contest:
-            contest.level = to_level.value
+        logger.info(f"Contestants promus ({len(promoted_contestant_ids)}): {promoted_contestant_ids}")
+        print(f"[Migration] Contestants promus ({len(promoted_contestant_ids)}): {promoted_contestant_ids}")
         
-        # Mettre à jour le lien contest-season
+        # Désactiver l'ancien lien contest-season
         old_contest_link = db.query(ContestSeasonLink).filter(
             and_(
                 ContestSeasonLink.contest_id == contest_id,
@@ -297,103 +553,112 @@ class SeasonMigrationService:
         if old_contest_link:
             old_contest_link.is_active = False
         
-        # Créer le nouveau lien
-        new_contest_link = ContestSeasonLink(
-            contest_id=contest_id,
-            season_id=to_season.id,
-            linked_at=datetime.utcnow(),
-            is_active=True
-        )
-        db.add(new_contest_link)
+        # Mettre à jour le level du contest
+        contest.level = to_level.value
         
-        # Créer le stage pour la nouvelle saison
-        to_stage_level = stage_level_map.get(to_level)
-        if to_stage_level:
-            existing_stage = db.query(ContestStage).filter(
-                and_(
-                    ContestStage.season_id == to_season.id,
-                    ContestStage.stage_level == to_stage_level
-                )
-            ).first()
-            
-            if not existing_stage:
-                # Calculer les dates : 1 mois après la fin du stage précédent
-                from_stage = db.query(ContestStage).filter(
-                    and_(
-                        ContestStage.season_id == from_season.id,
-                        ContestStage.stage_level == from_stage_level
-                    )
-                ).first()
-                
-                if from_stage:
-                    start_date = from_stage.end_date
-                else:
-                    start_date = datetime.utcnow()
-                
-                end_date = start_date + timedelta(days=30)
-                
-                new_stage = ContestStage(
-                    season_id=to_season.id,
-                    stage_level=to_stage_level,
-                    status=ContestStatus.VOTING_ACTIVE,
-                    start_date=start_date,
-                    end_date=end_date,
-                    max_qualifiers=5,
-                    min_participants=2
-                )
-                db.add(new_stage)
+        # Créer le nouveau lien ContestSeasonLink
+        existing_contest_link = db.query(ContestSeasonLink).filter(
+            and_(
+                ContestSeasonLink.contest_id == contest_id,
+                ContestSeasonLink.season_id == to_season.id
+            )
+        ).first()
         
-        db.commit()
+        if not existing_contest_link:
+            new_contest_link = ContestSeasonLink(
+                contest_id=contest_id,
+                season_id=to_season.id,
+                linked_at=datetime.utcnow(),
+                is_active=True
+            )
+            db.add(new_contest_link)
+            logger.info(f"  - Création du lien ContestSeasonLink pour contest {contest_id} et saison {to_season.id}")
+        else:
+            existing_contest_link.is_active = True
+            existing_contest_link.linked_at = datetime.utcnow()  # Mettre à jour la date de migration
+            logger.info(f"  - Réactivation du lien ContestSeasonLink existant pour contest {contest_id} et saison {to_season.id} (date mise à jour)")
+        
+        # Pas besoin de créer de stage - on utilise directement les saisons
+        
+        try:
+            db.commit()
+            logger.info(f"  - Commit réussi")
+            print(f"[Migration]   Commit réussi")
+        except Exception as e:
+            logger.error(f"  - Erreur lors du commit: {e}", exc_info=True)
+            print(f"[Migration] ERROR lors du commit: {e}")
+            db.rollback()
+            raise
+        
+        logger.info(f"Migration réussie: {len(selected_contestants)} contestants promus de {from_level.value} vers {to_level.value}")
+        logger.info(f"  - Contest {contest_id} lié à la saison {to_season.id} (niveau {to_level.value})")
+        logger.info(f"  - Contestants promus: {promoted_contestant_ids}")
+        print(f"[Migration] ✓ Migration réussie: Contest {contest_id} promu de {from_level.value} vers {to_level.value}")
+        print(f"[Migration]   Contestants promus ({len(promoted_contestant_ids)}): {promoted_contestant_ids}")
         
         return {
-            "message": f"Promoted {len(top_contestants)} contestants from {from_level.value} to {to_level.value}",
+            "message": f"Promoted {len(selected_contestants)} contestants from {from_level.value} to {to_level.value}",
             "from_season_id": from_season.id,
             "to_season_id": to_season.id,
-            "promoted_count": len(top_contestants),
-            "promoted_contestant_ids": [c.id for c in top_contestants]
+            "promoted_count": len(selected_contestants),
+            "promoted_contestant_ids": promoted_contestant_ids
         }
     
     @staticmethod
     def check_and_process_migrations(db: Session) -> dict:
         """
         Vérifie et traite toutes les migrations nécessaires pour tous les contests actifs.
-        Cette fonction doit être appelée régulièrement (par un scheduler).
-        Met aussi à jour automatiquement les statuts des contests (submission/voting open).
+        Cette fonction doit être appelée toutes les heures par le scheduler.
+        Vérifie les dates des saisons (city_season_start_date, city_season_end_date, etc.)
         """
+        import logging
+        logger = logging.getLogger(__name__)
         from app.services.contest_status import contest_status_service
         
         # Mettre à jour les statuts des contests en premier
         status_update_result = contest_status_service.update_contest_statuses(db)
         
         results = []
-        today = datetime.utcnow().date()
+        today = date.today()
+        logger.info(f"Checking season migrations for date: {today}")
         
-        # 1. Vérifier les contests dont submission_end_date est arrivé
-        contests_to_migrate = db.query(Contest).filter(
+        # 1. Migration vers CITY : vérifier city_season_start_date
+        contests_to_migrate_city = db.query(Contest).filter(
             and_(
-                Contest.submission_end_date <= today,
+                Contest.city_season_start_date <= today,
                 Contest.is_deleted == False,
                 Contest.is_active == True
             )
         ).all()
         
-        for contest in contests_to_migrate:
-            # Vérifier si déjà migré
-            existing_link = db.query(ContestSeasonLink).filter(
-                ContestSeasonLink.contest_id == contest.id,
-                ContestSeasonLink.is_active == True
+        logger.info(f"Found {len(contests_to_migrate_city)} contests ready for CITY migration")
+        
+        for contest in contests_to_migrate_city:
+            # Vérifier si déjà migré vers CITY
+            existing_link = db.query(ContestSeasonLink).join(
+                ContestSeason
+            ).filter(
+                and_(
+                    ContestSeasonLink.contest_id == contest.id,
+                    ContestSeason.level == SeasonLevel.CITY,
+                    ContestSeasonLink.is_active == True
+                )
             ).first()
             
             if not existing_link:
                 result = SeasonMigrationService.migrate_to_city_season(db, contest.id)
+                if "error" not in result:
+                    migrated_ids = result.get("migrated_contestant_ids", [])
+                    logger.info(f"✓ Contest {contest.id} migré vers CITY")
+                    logger.info(f"  - Contestants migrés ({len(migrated_ids)}): {migrated_ids}")
+                    print(f"[Migration] Contest {contest.id}: {len(migrated_ids)} contestants migrés vers CITY: {migrated_ids}")
                 results.append({
                     "contest_id": contest.id,
                     "action": "migrate_to_city",
                     "result": result
                 })
         
-        # 2. Vérifier les promotions entre niveaux
-        # CITY -> COUNTRY (1 mois après la fin de CITY)
+        # 2. Migration CITY -> COUNTRY : vérifier city_season_end_date ou country_season_start_date
         city_seasons = db.query(ContestSeason).join(
             ContestSeasonLink
         ).join(
@@ -407,43 +672,136 @@ class SeasonMigrationService:
             )
         ).all()
         
+        logger.info(f"Found {len(city_seasons)} active CITY seasons to check for COUNTRY migration")
+        
         for city_season in city_seasons:
-            city_stage = db.query(ContestStage).filter(
+            contest_link = db.query(ContestSeasonLink).filter(
                 and_(
-                    ContestStage.season_id == city_season.id,
-                    ContestStage.stage_level == ContestStageLevel.CITY
+                    ContestSeasonLink.season_id == city_season.id,
+                    ContestSeasonLink.is_active == True
                 )
             ).first()
             
-            if city_stage and city_stage.end_date.date() <= today:
-                # Vérifier si déjà promu
-                contest_link = db.query(ContestSeasonLink).filter(
-                    ContestSeasonLink.season_id == city_season.id,
+            if contest_link:
+                contest = db.query(Contest).filter(Contest.id == contest_link.contest_id).first()
+                if contest:
+                    logger.info(f"Checking contest {contest.id} for CITY->COUNTRY migration. "
+                              f"city_season_end_date: {contest.city_season_end_date}, "
+                              f"country_season_start_date: {contest.country_season_start_date}, "
+                              f"today: {today}")
+                    
+                    # Vérifier si la date de fin de CITY est passée
+                    should_migrate = False
+                    if contest.city_season_end_date and contest.city_season_end_date <= today:
+                        should_migrate = True
+                        logger.info(f"Contest {contest.id}: city_season_end_date ({contest.city_season_end_date}) <= today")
+                    elif contest.country_season_start_date and contest.country_season_start_date <= today:
+                        should_migrate = True
+                        logger.info(f"Contest {contest.id}: country_season_start_date ({contest.country_season_start_date}) <= today")
+                    
+                    if should_migrate:
+                        # Vérifier si déjà promu vers COUNTRY
+                        existing_country_link = db.query(ContestSeasonLink).join(
+                            ContestSeason
+                        ).filter(
+                            and_(
+                                ContestSeasonLink.contest_id == contest.id,
+                                ContestSeason.level == SeasonLevel.COUNTRY,
+                                ContestSeasonLink.is_active == True
+                            )
+                        ).first()
+                        
+                        if not existing_country_link:
+                            logger.info(f"Promoting contest {contest.id} from CITY to COUNTRY")
+                            result = SeasonMigrationService.promote_to_next_level(
+                                db, SeasonLevel.CITY, SeasonLevel.COUNTRY, contest.id, limit=5
+                            )
+                            if "error" not in result:
+                                promoted_ids = result.get("promoted_contestant_ids", [])
+                                logger.info(f"✓ Contest {contest.id} promu vers COUNTRY")
+                                logger.info(f"  - Contestants promus ({len(promoted_ids)}): {promoted_ids}")
+                                print(f"[Migration] Contest {contest.id}: {len(promoted_ids)} contestants promus vers COUNTRY: {promoted_ids}")
+                            results.append({
+                                "contest_id": contest.id,
+                                "action": "promote_city_to_country",
+                                "result": result
+                            })
+                        else:
+                            logger.info(f"Contest {contest.id} already has an active COUNTRY season link")
+                    else:
+                        logger.debug(f"Contest {contest.id} not ready for CITY->COUNTRY migration yet")
+        
+        # Vérification supplémentaire : contests qui devraient être migrés vers COUNTRY
+        # même s'ils n'ont pas encore de saison CITY active (cas de migration manquée)
+        contests_ready_for_country = db.query(Contest).filter(
+            and_(
+                Contest.country_season_start_date <= today,
+                Contest.is_deleted == False,
+                Contest.is_active == True
+            )
+        ).all()
+        
+        for contest in contests_ready_for_country:
+            # Vérifier si déjà en COUNTRY
+            existing_country_link = db.query(ContestSeasonLink).join(
+                ContestSeason
+            ).filter(
+                and_(
+                    ContestSeasonLink.contest_id == contest.id,
+                    ContestSeason.level == SeasonLevel.COUNTRY,
                     ContestSeasonLink.is_active == True
+                )
+            ).first()
+            
+            if not existing_country_link:
+                # Vérifier s'il a une saison CITY active
+                existing_city_link = db.query(ContestSeasonLink).join(
+                    ContestSeason
+                ).filter(
+                    and_(
+                        ContestSeasonLink.contest_id == contest.id,
+                        ContestSeason.level == SeasonLevel.CITY,
+                        ContestSeasonLink.is_active == True
+                    )
                 ).first()
                 
-                if contest_link:
-                    existing_country_link = db.query(ContestSeasonLink).join(
-                        ContestSeason
-                    ).filter(
-                        and_(
-                            ContestSeasonLink.contest_id == contest_link.contest_id,
-                            ContestSeason.level == SeasonLevel.COUNTRY,
-                            ContestSeasonLink.is_active == True
+                if existing_city_link:
+                    logger.info(f"Contest {contest.id} found ready for COUNTRY migration (country_season_start_date: {contest.country_season_start_date})")
+                    result = SeasonMigrationService.promote_to_next_level(
+                        db, SeasonLevel.CITY, SeasonLevel.COUNTRY, contest.id, limit=5
+                    )
+                    if "error" not in result:
+                        promoted_ids = result.get("promoted_contestant_ids", [])
+                        logger.info(f"✓ Contest {contest.id} promu vers COUNTRY")
+                        logger.info(f"  - Contestants promus ({len(promoted_ids)}): {promoted_ids}")
+                        print(f"[Migration] Contest {contest.id}: {len(promoted_ids)} contestants promus vers COUNTRY: {promoted_ids}")
+                    results.append({
+                        "contest_id": contest.id,
+                        "action": "promote_city_to_country",
+                        "result": result
+                    })
+                else:
+                    logger.warning(f"Contest {contest.id} should be in COUNTRY but has no CITY season. "
+                                 f"Migrating to CITY first, then COUNTRY.")
+                    # Migrer d'abord vers CITY, puis vers COUNTRY
+                    city_result = SeasonMigrationService.migrate_to_city_season(db, contest.id)
+                    if "error" not in city_result:
+                        country_result = SeasonMigrationService.promote_to_next_level(
+                            db, SeasonLevel.CITY, SeasonLevel.COUNTRY, contest.id, limit=5
                         )
-                    ).first()
-                    
-                    if not existing_country_link:
-                        result = SeasonMigrationService.promote_to_next_level(
-                            db, SeasonLevel.CITY, SeasonLevel.COUNTRY, contest_link.contest_id
-                        )
+                        if "error" not in country_result:
+                            promoted_ids = country_result.get("promoted_contestant_ids", [])
+                            logger.info(f"✓ Contest {contest.id} migré vers CITY puis COUNTRY")
+                            logger.info(f"  - Contestants promus vers COUNTRY ({len(promoted_ids)}): {promoted_ids}")
+                            print(f"[Migration] Contest {contest.id}: {len(promoted_ids)} contestants promus vers COUNTRY: {promoted_ids}")
                         results.append({
-                            "contest_id": contest_link.contest_id,
-                            "action": "promote_city_to_country",
-                            "result": result
+                            "contest_id": contest.id,
+                            "action": "migrate_to_city_then_country",
+                            "city_result": city_result,
+                            "country_result": country_result
                         })
         
-        # COUNTRY -> REGIONAL
+        # 3. Migration COUNTRY -> REGIONAL
         country_seasons = db.query(ContestSeason).join(
             ContestSeasonLink
         ).join(
@@ -458,41 +816,49 @@ class SeasonMigrationService:
         ).all()
         
         for country_season in country_seasons:
-            country_stage = db.query(ContestStage).filter(
+            contest_link = db.query(ContestSeasonLink).filter(
                 and_(
-                    ContestStage.season_id == country_season.id,
-                    ContestStage.stage_level == ContestStageLevel.COUNTRY
+                    ContestSeasonLink.season_id == country_season.id,
+                    ContestSeasonLink.is_active == True
                 )
             ).first()
             
-            if country_stage and country_stage.end_date.date() <= today:
-                contest_link = db.query(ContestSeasonLink).filter(
-                    ContestSeasonLink.season_id == country_season.id,
-                    ContestSeasonLink.is_active == True
-                ).first()
-                
-                if contest_link:
-                    existing_regional_link = db.query(ContestSeasonLink).join(
-                        ContestSeason
-                    ).filter(
-                        and_(
-                            ContestSeasonLink.contest_id == contest_link.contest_id,
-                            ContestSeason.level == SeasonLevel.REGIONAL,
-                            ContestSeasonLink.is_active == True
-                        )
-                    ).first()
+            if contest_link:
+                contest = db.query(Contest).filter(Contest.id == contest_link.contest_id).first()
+                if contest:
+                    should_migrate = False
+                    if contest.country_season_end_date and contest.country_season_end_date <= today:
+                        should_migrate = True
+                    elif contest.regional_start_date and contest.regional_start_date <= today:
+                        should_migrate = True
                     
-                    if not existing_regional_link:
-                        result = SeasonMigrationService.promote_to_next_level(
-                            db, SeasonLevel.COUNTRY, SeasonLevel.REGIONAL, contest_link.contest_id
-                        )
-                        results.append({
-                            "contest_id": contest_link.contest_id,
-                            "action": "promote_country_to_regional",
-                            "result": result
-                        })
+                    if should_migrate:
+                        existing_regional_link = db.query(ContestSeasonLink).join(
+                            ContestSeason
+                        ).filter(
+                            and_(
+                                ContestSeasonLink.contest_id == contest.id,
+                                ContestSeason.level == SeasonLevel.REGIONAL,
+                                ContestSeasonLink.is_active == True
+                            )
+                        ).first()
+                        
+                        if not existing_regional_link:
+                            result = SeasonMigrationService.promote_to_next_level(
+                                db, SeasonLevel.COUNTRY, SeasonLevel.REGIONAL, contest.id, limit=5
+                            )
+                            if "error" not in result:
+                                promoted_ids = result.get("promoted_contestant_ids", [])
+                                logger.info(f"✓ Contest {contest.id} promu vers REGIONAL")
+                                logger.info(f"  - Contestants promus ({len(promoted_ids)}): {promoted_ids}")
+                                print(f"[Migration] Contest {contest.id}: {len(promoted_ids)} contestants promus vers REGIONAL: {promoted_ids}")
+                            results.append({
+                                "contest_id": contest.id,
+                                "action": "promote_country_to_regional",
+                                "result": result
+                            })
         
-        # REGIONAL -> CONTINENT
+        # 4. Migration REGIONAL -> CONTINENTAL
         regional_seasons = db.query(ContestSeason).join(
             ContestSeasonLink
         ).join(
@@ -507,41 +873,49 @@ class SeasonMigrationService:
         ).all()
         
         for regional_season in regional_seasons:
-            regional_stage = db.query(ContestStage).filter(
+            contest_link = db.query(ContestSeasonLink).filter(
                 and_(
-                    ContestStage.season_id == regional_season.id,
-                    ContestStage.stage_level == ContestStageLevel.REGIONAL
+                    ContestSeasonLink.season_id == regional_season.id,
+                    ContestSeasonLink.is_active == True
                 )
             ).first()
             
-            if regional_stage and regional_stage.end_date.date() <= today:
-                contest_link = db.query(ContestSeasonLink).filter(
-                    ContestSeasonLink.season_id == regional_season.id,
-                    ContestSeasonLink.is_active == True
-                ).first()
-                
-                if contest_link:
-                    existing_continent_link = db.query(ContestSeasonLink).join(
-                        ContestSeason
-                    ).filter(
-                        and_(
-                            ContestSeasonLink.contest_id == contest_link.contest_id,
-                            ContestSeason.level == SeasonLevel.CONTINENT,
-                            ContestSeasonLink.is_active == True
-                        )
-                    ).first()
+            if contest_link:
+                contest = db.query(Contest).filter(Contest.id == contest_link.contest_id).first()
+                if contest:
+                    should_migrate = False
+                    if contest.regional_end_date and contest.regional_end_date <= today:
+                        should_migrate = True
+                    elif contest.continental_start_date and contest.continental_start_date <= today:
+                        should_migrate = True
                     
-                    if not existing_continent_link:
-                        result = SeasonMigrationService.promote_to_next_level(
-                            db, SeasonLevel.REGIONAL, SeasonLevel.CONTINENT, contest_link.contest_id
-                        )
-                        results.append({
-                            "contest_id": contest_link.contest_id,
-                            "action": "promote_regional_to_continent",
-                            "result": result
-                        })
+                    if should_migrate:
+                        existing_continent_link = db.query(ContestSeasonLink).join(
+                            ContestSeason
+                        ).filter(
+                            and_(
+                                ContestSeasonLink.contest_id == contest.id,
+                                ContestSeason.level == SeasonLevel.CONTINENT,
+                                ContestSeasonLink.is_active == True
+                            )
+                        ).first()
+                        
+                        if not existing_continent_link:
+                            result = SeasonMigrationService.promote_to_next_level(
+                                db, SeasonLevel.REGIONAL, SeasonLevel.CONTINENT, contest.id, limit=5
+                            )
+                            if "error" not in result:
+                                promoted_ids = result.get("promoted_contestant_ids", [])
+                                logger.info(f"✓ Contest {contest.id} promu vers CONTINENT")
+                                logger.info(f"  - Contestants promus ({len(promoted_ids)}): {promoted_ids}")
+                                print(f"[Migration] Contest {contest.id}: {len(promoted_ids)} contestants promus vers CONTINENT: {promoted_ids}")
+                            results.append({
+                                "contest_id": contest.id,
+                                "action": "promote_regional_to_continent",
+                                "result": result
+                            })
         
-        # CONTINENT -> GLOBAL
+        # 5. Migration CONTINENTAL -> GLOBAL
         continent_seasons = db.query(ContestSeason).join(
             ContestSeasonLink
         ).join(
@@ -556,39 +930,47 @@ class SeasonMigrationService:
         ).all()
         
         for continent_season in continent_seasons:
-            continent_stage = db.query(ContestStage).filter(
+            contest_link = db.query(ContestSeasonLink).filter(
                 and_(
-                    ContestStage.season_id == continent_season.id,
-                    ContestStage.stage_level == ContestStageLevel.CONTINENTAL
+                    ContestSeasonLink.season_id == continent_season.id,
+                    ContestSeasonLink.is_active == True
                 )
             ).first()
             
-            if continent_stage and continent_stage.end_date.date() <= today:
-                contest_link = db.query(ContestSeasonLink).filter(
-                    ContestSeasonLink.season_id == continent_season.id,
-                    ContestSeasonLink.is_active == True
-                ).first()
-                
-                if contest_link:
-                    existing_global_link = db.query(ContestSeasonLink).join(
-                        ContestSeason
-                    ).filter(
-                        and_(
-                            ContestSeasonLink.contest_id == contest_link.contest_id,
-                            ContestSeason.level == SeasonLevel.GLOBAL,
-                            ContestSeasonLink.is_active == True
-                        )
-                    ).first()
+            if contest_link:
+                contest = db.query(Contest).filter(Contest.id == contest_link.contest_id).first()
+                if contest:
+                    should_migrate = False
+                    if contest.continental_end_date and contest.continental_end_date <= today:
+                        should_migrate = True
+                    elif contest.global_start_date and contest.global_start_date <= today:
+                        should_migrate = True
                     
-                    if not existing_global_link:
-                        result = SeasonMigrationService.promote_to_next_level(
-                            db, SeasonLevel.CONTINENT, SeasonLevel.GLOBAL, contest_link.contest_id
-                        )
-                        results.append({
-                            "contest_id": contest_link.contest_id,
-                            "action": "promote_continent_to_global",
-                            "result": result
-                        })
+                    if should_migrate:
+                        existing_global_link = db.query(ContestSeasonLink).join(
+                            ContestSeason
+                        ).filter(
+                            and_(
+                                ContestSeasonLink.contest_id == contest.id,
+                                ContestSeason.level == SeasonLevel.GLOBAL,
+                                ContestSeasonLink.is_active == True
+                            )
+                        ).first()
+                        
+                        if not existing_global_link:
+                            result = SeasonMigrationService.promote_to_next_level(
+                                db, SeasonLevel.CONTINENT, SeasonLevel.GLOBAL, contest.id, limit=3
+                            )
+                            if "error" not in result:
+                                promoted_ids = result.get("promoted_contestant_ids", [])
+                                logger.info(f"✓ Contest {contest.id} promu vers GLOBAL")
+                                logger.info(f"  - Contestants promus ({len(promoted_ids)}): {promoted_ids}")
+                                print(f"[Migration] Contest {contest.id}: {len(promoted_ids)} contestants promus vers GLOBAL: {promoted_ids}")
+                            results.append({
+                                "contest_id": contest.id,
+                                "action": "promote_continent_to_global",
+                                "result": result
+                            })
         
         return {
             "processed": len(results),
@@ -599,4 +981,3 @@ class SeasonMigrationService:
 
 # Instance du service
 season_migration_service = SeasonMigrationService()
-

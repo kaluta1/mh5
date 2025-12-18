@@ -11,7 +11,8 @@ from app.models.media import Media
 from app.models.comment import Comment, Report
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
+from app.crud.crud_contest import calculate_season_dates
 
 router = APIRouter()
 
@@ -29,6 +30,17 @@ class ContestCreateRequest(BaseModel):
     submission_end_date: Optional[str] = None  # Will be auto-generated if not provided
     voting_start_date: Optional[str] = None  # Will be auto-generated if not provided
     voting_end_date: Optional[str] = None  # Will be auto-generated if not provided
+    # Season dates
+    city_season_start_date: Optional[str] = None
+    city_season_end_date: Optional[str] = None
+    country_season_start_date: Optional[str] = None
+    country_season_end_date: Optional[str] = None
+    regional_start_date: Optional[str] = None
+    regional_end_date: Optional[str] = None
+    continental_start_date: Optional[str] = None
+    continental_end_date: Optional[str] = None
+    global_start_date: Optional[str] = None
+    global_end_date: Optional[str] = None
     image_url: Optional[str] = None
     voting_restriction: str = "none"
     # Verification requirements
@@ -77,6 +89,17 @@ class ContestResponse(BaseModel):
     pending_count: int
     created_at: datetime
     updated_at: datetime
+    # Season dates
+    city_season_start_date: Optional[date] = None
+    city_season_end_date: Optional[date] = None
+    country_season_start_date: Optional[date] = None
+    country_season_end_date: Optional[date] = None
+    regional_start_date: Optional[date] = None
+    regional_end_date: Optional[date] = None
+    continental_start_date: Optional[date] = None
+    continental_end_date: Optional[date] = None
+    global_start_date: Optional[date] = None
+    global_end_date: Optional[date] = None
     # Verification requirements
     requires_kyc: bool = False
     verification_type: str = "none"
@@ -205,6 +228,17 @@ async def get_all_contests(
         
         contests = query.all()
         
+        # Récupérer tous les season_id en une seule requête pour optimiser
+        contest_ids = [c.id for c in contests]
+        season_links = {}
+        if contest_ids:
+            links = db.query(ContestSeasonLink).filter(
+                ContestSeasonLink.contest_id.in_(contest_ids),
+                ContestSeasonLink.is_active == True
+            ).all()
+            for link in links:
+                season_links[link.contest_id] = link.season_id
+        
         # Ajouter les statistiques pour chaque concours
         result = []
         for contest in contests:
@@ -215,6 +249,7 @@ async def get_all_contests(
                 'description': contest.description,
                 'contest_type': contest.contest_type,
                 'level': contest.level,
+                'season_id': season_links.get(contest.id),
                 'is_active': contest.is_active,
                 'is_submission_open': contest.is_submission_open,
                 'is_voting_open': contest.is_voting_open,
@@ -230,6 +265,17 @@ async def get_all_contests(
                 'pending_count': pending,
                 'created_at': contest.created_at,
                 'updated_at': contest.updated_at,
+                # Season dates
+                'city_season_start_date': contest.city_season_start_date,
+                'city_season_end_date': contest.city_season_end_date,
+                'country_season_start_date': contest.country_season_start_date,
+                'country_season_end_date': contest.country_season_end_date,
+                'regional_start_date': contest.regional_start_date,
+                'regional_end_date': contest.regional_end_date,
+                'continental_start_date': contest.continental_start_date,
+                'continental_end_date': contest.continental_end_date,
+                'global_start_date': contest.global_start_date,
+                'global_end_date': contest.global_end_date,
                 # Verification fields
                 'requires_kyc': contest.requires_kyc,
                 'verification_type': contest.verification_type.value if contest.verification_type else 'none',
@@ -324,6 +370,17 @@ async def get_contest(
         'requires_content_verification': contest.requires_content_verification,
         'min_age': contest.min_age,
         'max_age': contest.max_age,
+        # Season dates
+        'city_season_start_date': contest.city_season_start_date,
+        'city_season_end_date': contest.city_season_end_date,
+        'country_season_start_date': contest.country_season_start_date,
+        'country_season_end_date': contest.country_season_end_date,
+        'regional_start_date': contest.regional_start_date,
+        'regional_end_date': contest.regional_end_date,
+        'continental_start_date': contest.continental_start_date,
+        'continental_end_date': contest.continental_end_date,
+        'global_start_date': contest.global_start_date,
+        'global_end_date': contest.global_end_date,
         # Media requirements
         'requires_video': getattr(contest, 'requires_video', False),
         'max_videos': getattr(contest, 'max_videos', 1),
@@ -716,6 +773,37 @@ async def create_contest(
             contest_data.submission_start_date
         )
         
+        # Convertir voting_start en date pour calculer les dates des saisons
+        voting_start_date_for_calc = voting_start
+        if isinstance(voting_start_date_for_calc, str):
+            try:
+                voting_start_date_for_calc = datetime.strptime(voting_start_date_for_calc, '%Y-%m-%d').date()
+            except (ValueError, TypeError):
+                try:
+                    if 'T' in voting_start_date_for_calc:
+                        voting_start_date_for_calc = datetime.fromisoformat(voting_start_date_for_calc.replace('Z', '+00:00')).date()
+                    else:
+                        voting_start_date_for_calc = datetime.fromisoformat(voting_start_date_for_calc).date()
+                except (ValueError, TypeError):
+                    voting_start_date_for_calc = None
+        elif isinstance(voting_start_date_for_calc, datetime):
+            voting_start_date_for_calc = voting_start_date_for_calc.date()
+        # Si c'est déjà un objet date, on le garde tel quel
+        
+        # Calculer les dates des saisons à partir de voting_start_date
+        # Les dates sont calculées selon les règles :
+        # - city_season_start_date = voting_start_date
+        # - city_season_end_date = 1 mois après voting_start_date
+        # - country_season_start_date = city_season_end_date
+        # - country_season_end_date = 1 mois après country_season_start_date
+        # - regional_start_date = country_season_end_date
+        # - regional_end_date = 1 mois après regional_start_date
+        # - continental_start_date = regional_end_date
+        # - continental_end_date = 1 mois après continental_start_date
+        # - global_start_date = continental_end_date
+        # - global_end_date = 1 mois après global_start_date
+        season_dates = calculate_season_dates(voting_start_date_for_calc) if voting_start_date_for_calc else {}
+        
         # Handle enum conversions for verification_type and participant_type
         from app.models.contest import VerificationType, ParticipantType
         try:
@@ -760,7 +848,9 @@ async def create_contest(
             min_images=contest_data.min_images,
             max_images=contest_data.max_images,
             verification_video_max_duration=contest_data.verification_video_max_duration,
-            verification_max_size_mb=contest_data.verification_max_size_mb
+            verification_max_size_mb=contest_data.verification_max_size_mb,
+            # Season dates
+            **season_dates
         )
         
         db.add(new_contest)
@@ -944,15 +1034,106 @@ async def update_contest(
                 )
                 db.add(new_link)
         
-        # Only update dates if provided
-        if contest_data.submission_start_date:
-            submission_start, submission_end, voting_start, voting_end = generate_contest_dates(
-                contest_data.submission_start_date
-            )
-            contest.submission_start_date = submission_start
-            contest.submission_end_date = submission_end
-            contest.voting_start_date = voting_start
-            contest.voting_end_date = voting_end
+        # Helper function pour parser les dates
+        def parse_date(date_str: Optional[str]):
+            if not date_str:
+                return None
+            try:
+                if 'T' in date_str:
+                    parsed = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                    return parsed.date() if isinstance(parsed, datetime) else parsed
+                else:
+                    return datetime.strptime(date_str, '%Y-%m-%d').date()
+            except (ValueError, TypeError):
+                return None
+        
+        # Update main dates if provided
+        voting_start_changed = False
+        
+        # Mettre à jour les dates individuellement si elles sont fournies
+        if contest_data.submission_start_date is not None:
+            parsed_date = parse_date(contest_data.submission_start_date)
+            if parsed_date:
+                contest.submission_start_date = parsed_date
+                # Si seulement submission_start_date est fourni, générer les autres dates automatiquement
+                if not contest_data.submission_end_date and not contest_data.voting_start_date and not contest_data.voting_end_date:
+                    submission_start, submission_end, voting_start, voting_end = generate_contest_dates(
+                        contest_data.submission_start_date
+                    )
+                    contest.submission_end_date = submission_end
+                    if contest.voting_start_date != voting_start:
+                        voting_start_changed = True
+                    contest.voting_start_date = voting_start
+                    contest.voting_end_date = voting_end
+        
+        if contest_data.submission_end_date is not None:
+            parsed_date = parse_date(contest_data.submission_end_date)
+            if parsed_date:
+                contest.submission_end_date = parsed_date
+        
+        if contest_data.voting_start_date is not None:
+            parsed_date = parse_date(contest_data.voting_start_date)
+            if parsed_date:
+                old_voting_start = contest.voting_start_date
+                if isinstance(old_voting_start, datetime):
+                    old_voting_start = old_voting_start.date()
+                if old_voting_start != parsed_date:
+                    voting_start_changed = True
+                contest.voting_start_date = parsed_date
+        
+        if contest_data.voting_end_date is not None:
+            parsed_date = parse_date(contest_data.voting_end_date)
+            if parsed_date:
+                contest.voting_end_date = parsed_date
+        
+        # Recalculer les dates des saisons si voting_start_date a changé
+        if voting_start_changed:
+            voting_start_for_calc = contest.voting_start_date
+            if isinstance(voting_start_for_calc, datetime):
+                voting_start_for_calc = voting_start_for_calc.date()
+            elif isinstance(voting_start_for_calc, str):
+                try:
+                    if 'T' in voting_start_for_calc:
+                        voting_start_for_calc = datetime.fromisoformat(voting_start_for_calc.replace('Z', '+00:00')).date()
+                    else:
+                        voting_start_for_calc = datetime.strptime(voting_start_for_calc, '%Y-%m-%d').date()
+                except (ValueError, TypeError):
+                    voting_start_for_calc = None
+            
+            if voting_start_for_calc:
+                calculated_dates = calculate_season_dates(voting_start_for_calc)
+                contest.city_season_start_date = calculated_dates.get('city_season_start_date')
+                contest.city_season_end_date = calculated_dates.get('city_season_end_date')
+                contest.country_season_start_date = calculated_dates.get('country_season_start_date')
+                contest.country_season_end_date = calculated_dates.get('country_season_end_date')
+                contest.regional_start_date = calculated_dates.get('regional_start_date')
+                contest.regional_end_date = calculated_dates.get('regional_end_date')
+                contest.continental_start_date = calculated_dates.get('continental_start_date')
+                contest.continental_end_date = calculated_dates.get('continental_end_date')
+                contest.global_start_date = calculated_dates.get('global_start_date')
+                contest.global_end_date = calculated_dates.get('global_end_date')
+        
+        # Mettre à jour les dates des saisons si elles sont fournies explicitement
+        if contest_data.city_season_start_date is not None:
+            contest.city_season_start_date = parse_date(contest_data.city_season_start_date)
+        if contest_data.city_season_end_date is not None:
+            contest.city_season_end_date = parse_date(contest_data.city_season_end_date)
+        if contest_data.country_season_start_date is not None:
+            contest.country_season_start_date = parse_date(contest_data.country_season_start_date)
+        if contest_data.country_season_end_date is not None:
+            contest.country_season_end_date = parse_date(contest_data.country_season_end_date)
+        if contest_data.regional_start_date is not None:
+            contest.regional_start_date = parse_date(contest_data.regional_start_date)
+        if contest_data.regional_end_date is not None:
+            contest.regional_end_date = parse_date(contest_data.regional_end_date)
+        if contest_data.continental_start_date is not None:
+            contest.continental_start_date = parse_date(contest_data.continental_start_date)
+        if contest_data.continental_end_date is not None:
+            contest.continental_end_date = parse_date(contest_data.continental_end_date)
+        if contest_data.global_start_date is not None:
+            contest.global_start_date = parse_date(contest_data.global_start_date)
+        if contest_data.global_end_date is not None:
+            contest.global_end_date = parse_date(contest_data.global_end_date)
         
         db.commit()
         db.refresh(contest)
@@ -1000,6 +1181,17 @@ async def update_contest(
             'requires_content_verification': contest.requires_content_verification,
             'min_age': contest.min_age,
             'max_age': contest.max_age,
+            # Season dates
+            'city_season_start_date': getattr(contest, 'city_season_start_date', None),
+            'city_season_end_date': getattr(contest, 'city_season_end_date', None),
+            'country_season_start_date': getattr(contest, 'country_season_start_date', None),
+            'country_season_end_date': getattr(contest, 'country_season_end_date', None),
+            'regional_start_date': getattr(contest, 'regional_start_date', None),
+            'regional_end_date': getattr(contest, 'regional_end_date', None),
+            'continental_start_date': getattr(contest, 'continental_start_date', None),
+            'continental_end_date': getattr(contest, 'continental_end_date', None),
+            'global_start_date': getattr(contest, 'global_start_date', None),
+            'global_end_date': getattr(contest, 'global_end_date', None),
             # Media requirements
             'requires_video': getattr(contest, 'requires_video', False),
             'max_videos': getattr(contest, 'max_videos', 1),

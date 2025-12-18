@@ -123,7 +123,7 @@ class Contestant(Base):
     registration_date: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     verification_status: Mapped[str] = mapped_column(String(50), default="pending")  # pending, verified, rejected
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    is_qualified: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_qualified: Mapped[bool] = mapped_column(Boolean, default=True)  # Par défaut, tous les contestants sont qualifiés
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     
     # Relations
