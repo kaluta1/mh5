@@ -12,6 +12,7 @@ export interface TopContestant {
 export interface Contest {
   id: string
   title: string
+  description?: string
   coverImage: string
   startDate: Date
   status: 'city' | 'country' | 'regional' | 'continental' | 'global'
@@ -22,6 +23,7 @@ export interface Contest {
   reactions?: number
   favorites?: number
   isOpen: boolean
+  contestType?: string
   genderRestriction?: 'male' | 'female' | null
   participationStartDate?: Date
   participationEndDate?: Date
@@ -587,6 +589,7 @@ class ContestService {
       likes: 0, // À implémenter plus tard
       comments: 0, // À implémenter plus tard
       isOpen: isOpen,
+      contestType: response.contest_type,
       genderRestriction: (() => {
         // Priorité: gender_restriction, puis voting_restriction
         let restriction = response.gender_restriction

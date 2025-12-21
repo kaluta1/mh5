@@ -1059,7 +1059,7 @@ def vote_for_contestant(
         )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"You have already voted for this contestant in this {season_level or 'season'} season. You can vote for other contestants in the same season, but not twice for the same contestant."
+            detail=f"You have already voted for this contestant in this season."
         )
     
     logger.info(

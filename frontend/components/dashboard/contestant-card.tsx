@@ -23,6 +23,7 @@ import { AuthorPopover } from './author-popover'
 import { ShareDialog } from './share-dialog'
 import { ContestantActionsMenu } from './contestant-actions-menu'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 // Composant pour afficher une description tronquée avec popover au hover
 function DescriptionWithPopover({ description, maxLength = 150 }: { description: string; maxLength?: number }) {
@@ -118,6 +119,7 @@ interface ContestantCardProps {
   videosCount?: number
   canVote?: boolean
   hasVoted?: boolean
+  voteRestrictionReason?: string | null
   isFavorite: boolean
   media: Media[]
   description: string
@@ -159,6 +161,7 @@ export function ContestantCard({
   videosCount = 0,
   canVote = false,
   hasVoted = false,
+  voteRestrictionReason,
   isFavorite,
   media,
   description,
@@ -385,10 +388,10 @@ export function ContestantCard({
 
   return (
     <>
-      {/* LinkedIn-style Post Card */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow max-w-2xl mx-auto">
+      {/* Modern Post Card */}
+      <div className="bg-white dark:bg-gray-800/90 rounded-xl border border-gray-200/50 dark:border-gray-700/50 shadow-md hover:shadow-xl transition-all duration-300 max-w-2xl mx-auto backdrop-blur-sm overflow-hidden">
         {/* Header */}
-        <div className="p-4 pb-3">
+        <div className="p-5 pb-4 bg-gradient-to-r from-gray-50/50 to-transparent dark:from-gray-800/50 border-b border-gray-100 dark:border-gray-700/50">
           <div className="flex items-start justify-between">
             {participationTitle && (
               <h4 
@@ -396,7 +399,7 @@ export function ContestantCard({
                   e.stopPropagation()
                   onViewDetails()
                 }}
-                className="text-lg font-bold text-gray-900 dark:text-white hover:underline cursor-pointer flex-1"
+                className="text-lg font-bold text-gray-900 dark:text-white hover:text-myfav-primary dark:hover:text-myfav-blue-400 transition-colors cursor-pointer flex-1 line-clamp-2"
               >
                 {participationTitle}
               </h4>
@@ -514,47 +517,117 @@ export function ContestantCard({
         )}
 
         {/* Author and Description - Moved to bottom */}
-        <div className="px-4 pt-3 pb-2 border-t border-gray-200 dark:border-gray-700">
+        <div className="px-5 pt-4 pb-3 border-t border-gray-100 dark:border-gray-700/50 bg-gradient-to-b from-transparent to-gray-50/30 dark:to-gray-800/30">
           <div className="flex items-start gap-3 mb-3">
             {/* Avatar */}
-            <div className="flex-shrink-0">
+            <div className="flex-shrink-0 relative">
               {avatar && (avatar.startsWith('http') || avatar.startsWith('/')) ? (
-                <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700">
+                <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-myfav-primary/20 to-myfav-secondary/20 ring-2 ring-gray-200 dark:ring-gray-700">
                   <img src={avatar} alt={name} className="w-full h-full object-cover" />
                 </div>
               ) : (
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-myfav-primary to-myfav-primary-dark flex items-center justify-center text-lg">
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-myfav-primary to-myfav-secondary flex items-center justify-center text-lg ring-2 ring-gray-200 dark:ring-gray-700">
                   {avatar || '👤'}
                 </div>
+              )}
+              {rank && rank <= 3 && (
+                <span className="absolute -top-1 -right-1 text-[10px] font-bold bg-gradient-to-br from-yellow-400 to-amber-500 text-white rounded-full w-5 h-5 flex items-center justify-center shadow-lg">
+                  {rank === 1 ? '🥇' : rank === 2 ? '🥈' : '🥉'}
+                </span>
               )}
             </div>
 
             {/* Name and Location */}
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <h3 
-                  className="text-base font-bold text-gray-900 dark:text-white hover:underline cursor-pointer"
-                  onMouseEnter={onHoverAuthor}
-                  onMouseLeave={onHoverEnd}
-                >
-                    {name}
-                  </h3>
+              <div className="flex items-center gap-2 flex-wrap">
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <h3 
+                        className="text-base font-bold text-gray-900 dark:text-white hover:text-myfav-primary dark:hover:text-myfav-blue-400 transition-colors cursor-help"
+                        onMouseEnter={onHoverAuthor}
+                        onMouseLeave={onHoverEnd}
+                      >
+                        {name}
+                      </h3>
+                    </TooltipTrigger>
+                    <TooltipContent className="bg-gray-800 text-white border-gray-700">
+                      <p className="text-xs">{t('dashboard.contests.tooltip_author') || 'Voir le profil du participant'}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
                 {rank && (
-                  <span className="text-xs font-bold bg-myfav-primary text-white px-2 py-0.5 rounded">
-                    #{rank}
-                  </span>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="text-xs font-bold bg-gradient-to-r from-myfav-primary to-myfav-secondary text-white px-2.5 py-1 rounded-full cursor-help shadow-sm">
+                          #{rank}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent className="bg-gray-800 text-white border-gray-700">
+                        <p className="text-xs">
+                          {t('dashboard.contests.tooltip_rank') || `Classement ${rank === 1 ? 'premier' : rank === 2 ? 'deuxième' : rank === 3 ? 'troisième' : `${rank}ème`} dans ce concours`}
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 )}
               </div>
-              <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
+              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 flex items-center gap-1">
+                <span className="w-1 h-1 rounded-full bg-gray-400"></span>
                 {[country, city].filter(Boolean).join(' · ') || t('dashboard.contests.participant') || 'Participant'}
               </p>
-              <p 
-                className="text-xs text-gray-500 dark:text-gray-500 mt-1 cursor-pointer hover:text-myfav-primary"
-                onMouseEnter={currentUserId === userId ? onHoverVotes : undefined}
-                onMouseLeave={currentUserId === userId ? onHoverEnd : undefined}
-              >
-                {currentVotes} {t('dashboard.contests.votes')}
-              </p>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <p 
+                      className="text-xs text-gray-500 dark:text-gray-500 mt-1 cursor-help hover:text-myfav-primary"
+                      onMouseEnter={currentUserId === userId ? onHoverVotes : undefined}
+                      onMouseLeave={currentUserId === userId ? onHoverEnd : undefined}
+                    >
+                      {currentVotes} {t('dashboard.contests.votes')}
+                    </p>
+                  </TooltipTrigger>
+                  <TooltipContent className="bg-gray-800 text-white border-gray-700">
+                    <p className="text-xs">
+                      {currentUserId === userId 
+                        ? (t('dashboard.contests.tooltip_votes_author') || `${currentVotes} vote${currentVotes > 1 ? 's' : ''} reçu${currentVotes > 1 ? 's' : ''}. Survolez pour voir la liste.`)
+                        : (t('dashboard.contests.tooltip_votes') || `${currentVotes} vote${currentVotes > 1 ? 's' : ''} reçu${currentVotes > 1 ? 's' : ''} au total`)}
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              {/* Affichage de la restriction de vote */}
+              {!canVote && voteRestrictionReason && currentUserId && currentUserId !== userId && (
+                <div className="mt-1.5 flex items-center gap-1.5 text-xs">
+                  <span className="text-amber-600 dark:text-amber-400 font-medium">
+                    {(() => {
+                      switch (voteRestrictionReason) {
+                        case 'already_voted':
+                          return t('dashboard.contests.already_voted') || 'Already voted'
+                        case 'different_city':
+                          return t('dashboard.contests.restriction_different_city') || 'Different city'
+                        case 'different_country':
+                          return t('dashboard.contests.restriction_different_country') || 'Different country'
+                        case 'different_region':
+                          return t('dashboard.contests.restriction_different_region') || 'Different region'
+                        case 'different_continent':
+                          return t('dashboard.contests.restriction_different_continent') || 'Different continent'
+                        case 'own_contestant':
+                          return t('dashboard.contests.restriction_own_contestant') || 'Your own contestant'
+                        case 'not_authenticated':
+                          return t('dashboard.contests.restriction_not_authenticated') || 'Login required'
+                        case 'geographic_restriction':
+                          return t('dashboard.contests.restriction_geographic') || 'Geographic restriction'
+                        case 'user_not_found':
+                          return t('dashboard.contests.restriction_user_not_found') || 'User not found'
+                        default:
+                          return t('dashboard.contests.cannot_vote') || 'Cannot vote'
+                      }
+                    })()}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
           
@@ -565,8 +638,8 @@ export function ContestantCard({
         </div>
 
         {/* Action Buttons - Facebook Style with Counts */}
-        <div className="px-2 border-t border-gray-200 dark:border-gray-700">
-          <div className="grid grid-cols-4 divide-x divide-gray-200 dark:divide-gray-700">
+        <div className="px-2 border-t border-gray-100 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-800/30">
+          <div className="grid grid-cols-4 divide-x divide-gray-200/50 dark:divide-gray-700/50">
             <div
               onMouseEnter={currentUserId === userId ? onHoverVotes : undefined}
               onMouseLeave={currentUserId === userId ? onHoverEnd : undefined}
@@ -579,6 +652,7 @@ export function ContestantCard({
               onVote={handleVote}
               isAuthor={currentUserId === userId}
               votesCount={currentVotes}
+              voteRestrictionReason={voteRestrictionReason}
             />
             </div>
             <CommentsButton 

@@ -29,6 +29,9 @@ from app.db.base_class import Base
 # Import updated User model first
 from app.models.user import User
 
+# Import contest models
+from app.models.contest import Contest, ContestTemplate, Location, ContestEntry, ContestVote, ContestFavorite, ContestantVerification, VotingType
+
 # Import all new MyFav models
 from app.models.geography import Continent, Region, Country, City
 from app.models.contests import (

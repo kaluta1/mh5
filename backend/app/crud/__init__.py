@@ -4,6 +4,7 @@ from .crud_contest import contest
 from .crud_user import user  
 from .crud_media import media
 from .crud_voting import vote, voting_stats, voting_session
+from .crud_voting_type import voting_type
 from .crud_geography import continent, region, country, city
 from .crud_kyc import kyc_verification, kyc_document, kyc_audit_log
 from .crud_contestant import crud_contestant as contestant, contest_submission

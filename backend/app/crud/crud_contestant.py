@@ -221,15 +221,21 @@ class CRUDContestant:
         # il peut voter à nouveau dans la nouvelle saison COUNTRY (même pour le même contestant).
         has_voted = False
         can_vote = False
+        vote_restriction_reason = None
         
         # Si pas d'utilisateur authentifié ou pas de saison, can_vote reste False
         if not current_user_id or not season:
             can_vote = False
             has_voted = False
+            if not current_user_id:
+                vote_restriction_reason = "not_authenticated"
+            else:
+                vote_restriction_reason = "no_season"
         elif current_user_id == contestant.user_id:
             # L'utilisateur ne peut pas voter pour sa propre candidature
             can_vote = False
             has_voted = False
+            vote_restriction_reason = "own_contestant"
         else:
             # Vérifier si l'utilisateur a déjà voté pour ce contestant dans cette saison active
             # IMPORTANT: Un utilisateur peut voter pour plusieurs contestants différents dans la même saison
@@ -247,6 +253,7 @@ class CRUDContestant:
                 # L'utilisateur a déjà voté pour ce contestant dans cette saison en cours
                 has_voted = True
                 can_vote = False
+                vote_restriction_reason = "already_voted"
             else:
                 # L'utilisateur n'a pas encore voté dans cette saison
                 has_voted = False
@@ -256,6 +263,7 @@ class CRUDContestant:
                 
                 if not current_user:
                     can_vote = False
+                    vote_restriction_reason = "user_not_found"
                 else:
                     # Vérifier les restrictions géographiques selon le niveau de la saison
                     def eq(a: Optional[str], b: Optional[str]) -> bool:
@@ -284,20 +292,56 @@ class CRUDContestant:
                         
                         if lvl == "city":
                             country_match = compare_with_unknown(v.country, u.country)
-                            geo_ok = country_match and compare_with_unknown(v.city, u.city) if country_match else False
+                            if not country_match:
+                                geo_ok = False
+                                vote_restriction_reason = "different_country"
+                            else:
+                                city_match = compare_with_unknown(v.city, u.city)
+                                if not city_match:
+                                    geo_ok = False
+                                    vote_restriction_reason = "different_city"
+                                else:
+                                    geo_ok = True
                         elif lvl == "country":
                             continent_match = compare_with_unknown(v.continent, u.continent)
-                            geo_ok = continent_match and compare_with_unknown(v.country, u.country) if continent_match else False
+                            if not continent_match:
+                                geo_ok = False
+                                vote_restriction_reason = "different_continent"
+                            else:
+                                country_match = compare_with_unknown(v.country, u.country)
+                                if not country_match:
+                                    geo_ok = False
+                                    vote_restriction_reason = "different_country"
+                                else:
+                                    geo_ok = True
                         elif lvl in ("regional", "region"):
-                            v_region = getattr(v, "region", None)
-                            u_region = getattr(u, "region", None)
                             continent_match = compare_with_unknown(v.continent, u.continent)
-                            geo_ok = continent_match and compare_with_unknown(v_region, u_region) if continent_match else False
+                            if not continent_match:
+                                geo_ok = False
+                                vote_restriction_reason = "different_continent"
+                            else:
+                                v_region = getattr(v, "region", None)
+                                u_region = getattr(u, "region", None)
+                                region_match = compare_with_unknown(v_region, u_region)
+                                if not region_match:
+                                    geo_ok = False
+                                    vote_restriction_reason = "different_region"
+                                else:
+                                    geo_ok = True
                         elif lvl == "continent":
-                            geo_ok = compare_with_unknown(v.continent, u.continent)
+                            continent_match = compare_with_unknown(v.continent, u.continent)
+                            if not continent_match:
+                                geo_ok = False
+                                vote_restriction_reason = "different_continent"
+                            else:
+                                geo_ok = True
                         # Pour "global" ou niveau inconnu, geo_ok reste True
                     
                     can_vote = geo_ok
+                    
+                    # S'assurer que vote_restriction_reason est défini si can_vote est False
+                    if not can_vote and not vote_restriction_reason:
+                        vote_restriction_reason = "geographic_restriction"
         
         # Récupérer la position si c'est un favori de l'utilisateur courant
         position = None
@@ -398,6 +442,7 @@ class CRUDContestant:
             # État du vote
             "has_voted": has_voted,
             "can_vote": can_vote,
+            "vote_restriction_reason": vote_restriction_reason,
         }
     
     def get_by_season_and_user(

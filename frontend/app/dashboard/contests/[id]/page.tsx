@@ -28,6 +28,8 @@ interface Contestant {
   name: string
   country?: string
   city?: string
+  continent?: string
+  region?: string
   avatar: string
   participationTitle?: string
   description: string
@@ -37,6 +39,7 @@ interface Contestant {
   videosCount: number
   canVote: boolean
   hasVoted: boolean
+  voteRestrictionReason?: string | null
   media: Media[]
   comments: number
   reactions?: number
@@ -214,6 +217,7 @@ export default function ContestDetailPage() {
             videosCount: c.videos_count ?? videos.length,
             canVote: c.can_vote ?? false,
             hasVoted: c.has_voted ?? false,
+            voteRestrictionReason: c.vote_restriction_reason ?? null,
             media: allMedia,
             comments: c.comments_count ?? 0,
             reactions: c.reactions_count ?? 0,
@@ -480,19 +484,19 @@ export default function ContestDetailPage() {
   })
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-900">
-      <div className="px-2 py-6 sm:px-2 lg:px-8">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-900 dark:via-gray-900 dark:to-gray-950">
+      <div className="px-4 py-6 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto">
           {/* Header with Back Button */}
-          <div className="mb-6 flex items-center justify-between">
-          <Button
-            onClick={() => router.back()}
-            variant="outline"
-            className="text-sm sm:text-base text-myfav-primary border-myfav-primary hover:bg-myfav-blue-50 dark:hover:bg-myfav-blue-900/20"
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            {t('common.back')}
-          </Button>
+          <div className="mb-6 flex items-center">
+            <Button
+              onClick={() => router.back()}
+              variant="outline"
+              className="text-sm sm:text-base text-myfav-primary border-myfav-primary/30 hover:bg-myfav-primary hover:text-white hover:border-myfav-primary transition-all duration-200 shadow-sm hover:shadow-md"
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              {t('common.back')}
+            </Button>
           </div>
           
           {/* Contest Details Header */}
@@ -506,10 +510,10 @@ export default function ContestDetailPage() {
 
         {/* Toast Notification */}
         {toast && (
-          <div className={`fixed bottom-4 right-4 rounded-lg shadow-lg p-4 z-50 animate-in fade-in slide-in-from-bottom-2 ${
+          <div className={`fixed bottom-4 right-4 rounded-xl shadow-xl p-4 z-50 animate-in fade-in slide-in-from-bottom-2 backdrop-blur-sm ${
             toast.type === 'success'
-              ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
-              : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+              ? 'bg-green-50/95 dark:bg-green-900/30 border border-green-200 dark:border-green-800'
+              : 'bg-red-50/95 dark:bg-red-900/30 border border-red-200 dark:border-red-800'
           }`}>
             <p className={`text-sm font-medium ${
               toast.type === 'success'
@@ -546,9 +550,9 @@ export default function ContestDetailPage() {
               )}
 
           {/* Main Content Layout: Contestants with Sidebar */}
-          <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
             {/* Contestants Cards - Left Side (2/3 width on large screens) */}
-            <div className="lg:col-span-2">
+            <div className="lg:col-span-2 space-y-6">
               <ContestantsList
                 contestants={filteredContestants}
                 contestId={contestId}

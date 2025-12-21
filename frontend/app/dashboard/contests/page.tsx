@@ -14,6 +14,7 @@ import { ContestsLoader } from '@/components/dashboard/contests-loader'
 import { contestService, Contest } from '@/services/contest-service'
 import { AlertCircle, UserCircle, Fingerprint, ChevronRight, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ContestCard } from '@/components/dashboard/contest-card'
 
 export default function ContestsPage() {
   const { t } = useLanguage()
@@ -29,10 +30,48 @@ export default function ContestsPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const [hasMore, setHasMore] = useState(true)
   const [showMobileAlert, setShowMobileAlert] = useState(true)
+  const [activeTab, setActiveTab] = useState<string>('all')
   const ITEMS_PER_PAGE = 9
   const observerTarget = React.useRef(null)
   const isLoadingDataRef = React.useRef(false)
   const isMountedRef = React.useRef(true)
+
+  // Extraire les types de contests disponibles depuis les données du backend
+  const contestTypes = React.useMemo(() => {
+    const types = new Set<string>()
+    
+    // Parcourir tous les contests pour extraire les types uniques
+    allContests.forEach(contest => {
+      if (contest.contestType) {
+        types.add(contest.contestType)
+      }
+    })
+    
+    // Créer la liste des types avec "Tout" en premier
+    const typeList: Array<{ id: string, label: string, value: string | null }> = [
+      { id: 'all', label: t('dashboard.contests.all') || 'Tout', value: null }
+    ]
+    
+    // Ajouter chaque type unique trouvé
+    Array.from(types).sort().forEach(type => {
+      // Normaliser le type en minuscules pour la traduction
+      const normalizedType = type.toLowerCase()
+      // Chercher la traduction avec le type normalisé
+      const translationKey = `dashboard.contests.contest_type.${normalizedType}`
+      let label = t(translationKey)
+      
+      // Si pas de traduction trouvée (la fonction t retourne la clé si non trouvée)
+      // ou si le label contient "dashboard.contests.contest_type" (signe qu'il n'a pas été trouvé)
+      if (!label || label === translationKey || label.includes('dashboard.contests.contest_type')) {
+        // Utiliser le type original formaté
+        label = type.charAt(0).toUpperCase() + type.slice(1).replace(/_/g, ' ')
+      }
+      
+      typeList.push({ id: type, label, value: type })
+    })
+    
+    return typeList
+  }, [allContests, t])
 
   // Redirection si non authentifié
   useEffect(() => {
@@ -229,18 +268,33 @@ export default function ContestsPage() {
     }
   }, [currentPage, allContests, hasMore, isLoadingMore, searchTerm])
 
-  // Filtrer les contests selon la recherche
+
+  // Filtrer les contests selon la recherche et l'onglet actif
   const filteredContests = React.useMemo(() => {
-    if (searchTerm === '') {
-      console.log('[ContestsPage] filteredContests (no search):', displayedContests.length, 'contests')
+    let contests = allContests
+    
+    // Filtrer par type si un onglet est sélectionné
+    if (activeTab !== 'all') {
+      const selectedType = contestTypes.find(t => t.id === activeTab)
+      if (selectedType && selectedType.value) {
+        contests = allContests.filter(contest => contest.contestType === selectedType.value)
+      }
+    }
+    
+    // Filtrer par recherche
+    if (searchTerm !== '') {
+      contests = contests.filter(contest =>
+        contest.title.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    }
+    
+    // Limiter pour l'infinite scroll
+    if (searchTerm === '' && activeTab === 'all') {
       return displayedContests
     }
-    const filtered = allContests.filter(contest =>
-      contest.title.toLowerCase().includes(searchTerm.toLowerCase())
-    ).slice(0, ITEMS_PER_PAGE * currentPage)
-    console.log('[ContestsPage] filteredContests (with search):', filtered.length, 'contests')
-    return filtered
-  }, [searchTerm, displayedContests, allContests, currentPage])
+    
+    return contests.slice(0, ITEMS_PER_PAGE * currentPage)
+  }, [searchTerm, displayedContests, allContests, currentPage, activeTab, contestTypes])
 
   const handleToggleFavorite = async (contestId: string) => {
     try {
@@ -304,20 +358,28 @@ export default function ContestsPage() {
   // Le KYC sera vérifié par concours (certains concours n'exigent pas le KYC)
   const canParticipate = isProfileComplete
 
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+    <div className="min-h-screen bg-gray-900 dark:bg-gray-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
-        <div className="mb-8 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="space-y-2">
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-myfav-primary to-myfav-primary-dark bg-clip-text text-transparent">
-                {t('dashboard.contests.title')}
-              </h1>
-              <p className="text-lg text-gray-600 dark:text-gray-400">
-                {t('dashboard.contests.description')}
-              </p>
-            </div>
+       
+        {/* Barre d'onglets de navigation */}
+        <div className="mb-8 border-b border-gray-800">
+          <div className="flex space-x-1 overflow-x-auto scrollbar-hide">
+            {contestTypes.map((type) => (
+              <button
+                key={type.id}
+                onClick={() => setActiveTab(type.id)}
+                className={`px-4 py-3 text-sm font-medium whitespace-nowrap transition-colors border-b-2 ${
+                  activeTab === type.id
+                    ? 'border-white text-white'
+                    : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-600'
+                }`}
+              >
+                {type.label}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -411,18 +473,47 @@ export default function ContestsPage() {
           </div>
         )}
 
-        {/* Grille de contests */}
-        <ContestsGrid
-          contests={filteredContests}
-          favorites={favorites}
-          onToggleFavorite={handleToggleFavorite}
-          onViewContestants={handleViewContestants}
-          onParticipate={handleParticipate}
-          isLoading={false}
-          userGender={(user as any)?.gender as 'male' | 'female' | 'other' | 'prefer_not_to_say' | null | undefined}
-          canParticipate={canParticipate}
-          isKycVerified={isKycVerified}
-        />
+        {/* Affichage en grille simple */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
+          {filteredContests.map((contest) => (
+            <ContestCard
+              key={contest.id}
+              id={contest.id}
+              title={contest.title}
+              description={contest.description}
+              coverImage={contest.coverImage}
+              startDate={contest.startDate}
+              status={contest.status}
+              received={contest.received}
+              contestants={contest.contestants}
+              likes={contest.likes}
+              comments={contest.comments}
+              isOpen={contest.isOpen}
+              isFavorite={favorites.includes(contest.id)}
+              genderRestriction={contest.genderRestriction}
+              participationStartDate={contest.participationStartDate}
+              participationEndDate={contest.participationEndDate}
+              votingStartDate={contest.votingStartDate}
+              userGender={(user as any)?.gender as 'male' | 'female' | 'other' | 'prefer_not_to_say' | null | undefined}
+              canParticipate={canParticipate}
+              isKycVerified={isKycVerified}
+              topContestants={contest.topContestants}
+              requiresKyc={contest.requiresKyc}
+              verificationType={contest.verificationType}
+              participantType={contest.participantType}
+              requiresVisualVerification={contest.requiresVisualVerification}
+              requiresVoiceVerification={contest.requiresVoiceVerification}
+              requiresBrandVerification={contest.requiresBrandVerification}
+              requiresContentVerification={contest.requiresContentVerification}
+              minAge={contest.minAge}
+              maxAge={contest.maxAge}
+              onToggleFavorite={() => handleToggleFavorite(contest.id)}
+              onViewContestants={() => handleViewContestants(contest.id)}
+              onParticipate={() => handleParticipate(contest.id)}
+              onOpenDetails={() => handleViewContestants(contest.id)}
+            />
+          ))}
+        </div>
 
         {/* Loader pour infinite scroll */}
         <ContestsLoader

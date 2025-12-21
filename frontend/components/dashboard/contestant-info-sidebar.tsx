@@ -20,6 +20,7 @@ interface ContestantInfoSidebarProps {
   canVote: boolean
   isVoting: boolean
   onVote: () => void
+  voteRestrictionReason?: string | null
 }
 
 export function ContestantInfoSidebar({
@@ -34,9 +35,75 @@ export function ContestantInfoSidebar({
   hasVoted,
   canVote,
   isVoting,
-  onVote
+  onVote,
+  voteRestrictionReason
 }: ContestantInfoSidebarProps) {
   const { t } = useLanguage()
+
+  const getVoteButtonText = () => {
+    if (isVoting) {
+      return t('contestant_detail.voting') || 'Voting...'
+    }
+    if (hasVoted) {
+      return t('dashboard.contests.already_voted') || 'Already voted'
+    }
+    if (!canVote && voteRestrictionReason) {
+      switch (voteRestrictionReason) {
+        case 'already_voted':
+          return t('dashboard.contests.already_voted') || 'Already voted'
+        case 'different_city':
+          return t('dashboard.contests.restriction_different_city') || 'Different city'
+        case 'different_country':
+          return t('dashboard.contests.restriction_different_country') || 'Different country'
+        case 'different_region':
+          return t('dashboard.contests.restriction_different_region') || 'Different region'
+        case 'different_continent':
+          return t('dashboard.contests.restriction_different_continent') || 'Different continent'
+        case 'own_contestant':
+          return t('dashboard.contests.restriction_own_contestant') || 'Your own contestant'
+        case 'not_authenticated':
+          return t('dashboard.contests.restriction_not_authenticated') || 'Please login to vote'
+        case 'geographic_restriction':
+          return t('dashboard.contests.restriction_geographic') || 'Geographic restriction'
+        case 'user_not_found':
+          return t('dashboard.contests.restriction_user_not_found') || 'User not found'
+        default:
+          return t('dashboard.contests.cannot_vote') || 'Cannot vote'
+      }
+    }
+    return t('contestant_detail.vote') || 'Vote'
+  }
+
+  const getVoteButtonTitle = () => {
+    if (hasVoted) {
+      return t('dashboard.contests.already_voted') || 'Already voted'
+    }
+    if (!canVote && voteRestrictionReason) {
+      switch (voteRestrictionReason) {
+        case 'already_voted':
+          return t('dashboard.contests.already_voted') || 'Already voted'
+        case 'different_city':
+          return t('dashboard.contests.restriction_different_city_desc') || 'You can only vote for contestants from your city'
+        case 'different_country':
+          return t('dashboard.contests.restriction_different_country_desc') || 'You can only vote for contestants from your country'
+        case 'different_region':
+          return t('dashboard.contests.restriction_different_region_desc') || 'You can only vote for contestants from your region'
+        case 'different_continent':
+          return t('dashboard.contests.restriction_different_continent_desc') || 'You can only vote for contestants from your continent'
+        case 'own_contestant':
+          return t('dashboard.contests.restriction_own_contestant_desc') || 'You cannot vote for your own contestant'
+        case 'not_authenticated':
+          return t('dashboard.contests.restriction_not_authenticated_desc') || 'Please login to vote'
+        case 'geographic_restriction':
+          return t('dashboard.contests.restriction_geographic_desc') || 'You cannot vote due to geographic restrictions'
+        case 'user_not_found':
+          return t('dashboard.contests.restriction_user_not_found_desc') || 'User not found'
+        default:
+          return t('dashboard.contests.cannot_vote') || 'Cannot vote'
+      }
+    }
+    return ''
+  }
 
   return (
     <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-md rounded-3xl p-6 shadow-xl border border-gray-100 dark:border-gray-700/50 sticky top-6 space-y-6 transition-all duration-300 hover:shadow-2xl">

@@ -66,6 +66,7 @@ interface ContestantDetail {
   shares_count?: number
   has_voted?: boolean
   can_vote?: boolean
+  vote_restriction_reason?: string | null
 }
 
 
@@ -482,6 +483,7 @@ export default function ContestantDetailPage() {
         isVoting={isVoting}
         onCommentsClick={() => setShowCommentsDialog(true)}
         onVote={handleVote}
+        voteRestrictionReason={contestant.vote_restriction_reason}
       />
 
       {/* Main Content */}
@@ -503,6 +505,7 @@ export default function ContestantDetailPage() {
               canVote={contestant.can_vote || false}
               isVoting={isVoting}
               onVote={handleVote}
+              voteRestrictionReason={contestant.vote_restriction_reason}
             />
           </div>
 

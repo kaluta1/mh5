@@ -93,7 +93,9 @@ def calculate_season_dates(voting_start_date: date) -> Dict[str, Optional[date]]
 class CRUDContest:
     def get(self, db: Session, id: int) -> Optional[Contest]:
         """Récupère un concours par son ID"""
-        return db.query(Contest).filter(Contest.id == id, Contest.is_deleted == False).first()
+        return db.query(Contest).filter(Contest.id == id, Contest.is_deleted == False).options(
+            joinedload(Contest.voting_type)
+        ).first()
 
     def get_with_entries(self, db: Session, id: int) -> Optional[Contest]:
         """Récupère un concours avec ses participants"""
@@ -125,6 +127,7 @@ class CRUDContest:
         # Convertir location_id=0 en None pour éviter les violations de FK
         location_id = obj_in.location_id if obj_in.location_id and obj_in.location_id > 0 else None
         template_id = obj_in.template_id if obj_in.template_id and obj_in.template_id > 0 else None
+        voting_type_id = obj_in.voting_type_id if obj_in.voting_type_id and obj_in.voting_type_id > 0 else None
         
         # Convertir les strings en enums si nécessaire
         verification_type = obj_in.verification_type
@@ -181,6 +184,7 @@ class CRUDContest:
             gender_restriction=obj_in.gender_restriction,
             max_entries_per_user=obj_in.max_entries_per_user,
             template_id=template_id,
+            voting_type_id=voting_type_id,
             # Verification requirements
             requires_kyc=obj_in.requires_kyc,
             verification_type=verification_type,
@@ -282,7 +286,7 @@ class CRUDContest:
                         value = value.date()
                 
                 # Convertir les IDs 0 en None pour éviter les violations de FK
-                elif field in ('location_id', 'template_id') and value == 0:
+                elif field in ('location_id', 'template_id', 'voting_type_id') and value == 0:
                     value = None
                 # Convertir les strings en enums pour verification_type
                 elif field == 'verification_type' and value is not None:
@@ -640,6 +644,7 @@ class CRUDContest:
             "voting_restriction": voting_restriction_str,  # TOUJOURS retourner, même si 'none'
             "max_entries_per_user": contest.max_entries_per_user,
             "template_id": contest.template_id,
+            "voting_type_id": getattr(contest, 'voting_type_id', None),
             "created_at": contest.created_at,
             "updated_at": contest.updated_at,
             "entries_count": entries_count,
@@ -971,21 +976,45 @@ class CRUDContest:
             def eq(a: Optional[str], b: Optional[str]) -> bool:
                 return bool(a and b and a.lower() == b.lower())
             
+            def is_valid_location(value: Optional[str]) -> bool:
+                if not value:
+                    return False
+                val_lower = str(value).lower().strip()
+                return val_lower not in ("unknown", "none", "", "null")
+            
+            def compare_with_unknown(val1: Optional[str], val2: Optional[str]) -> bool:
+                """Compare deux valeurs géographiques en ignorant 'Unknown'"""
+                valid1 = is_valid_location(val1)
+                valid2 = is_valid_location(val2)
+                if valid1 and valid2:
+                    return eq(val1, val2)
+                # Si au moins une est "Unknown", on accepte (pas de restriction)
+                return True
+            
             # Appliquer les restrictions selon le niveau de la saison
             if lvl == "city":
                 # Même ville ET même pays
-                return eq(v.country, u.country) and eq(v.city, u.city)
+                country_match = compare_with_unknown(v.country, u.country)
+                if not country_match:
+                    return False
+                return compare_with_unknown(v.city, u.city)
             elif lvl == "country":
                 # Même pays ET même continent
-                return eq(v.continent, u.continent) and eq(v.country, u.country)
+                continent_match = compare_with_unknown(v.continent, u.continent)
+                if not continent_match:
+                    return False
+                return compare_with_unknown(v.country, u.country)
             elif lvl in ("regional", "region"):
                 # Même région ET même continent
+                continent_match = compare_with_unknown(v.continent, u.continent)
+                if not continent_match:
+                    return False
                 v_region = getattr(v, "region", None)
                 u_region = getattr(u, "region", None)
-                return eq(v.continent, u.continent) and eq(v_region, u_region)
+                return compare_with_unknown(v_region, u_region)
             elif lvl == "continent":
                 # Même continent
-                return eq(v.continent, u.continent)
+                return compare_with_unknown(v.continent, u.continent)
             else:
                 # Global ou niveau inconnu -> pas de restriction géographique
                 return True
@@ -1020,6 +1049,7 @@ class CRUDContest:
             # S'il migre vers COUNTRY, il peut voter à nouveau pour X dans la nouvelle saison COUNTRY
             can_vote = False
             has_voted = False
+            vote_restriction_reason = None
             
             if current_user_id:
                 if not current_user:
@@ -1031,6 +1061,7 @@ class CRUDContest:
                         # L'utilisateur ne peut pas voter pour sa propre candidature
                         can_vote = False
                         has_voted = False
+                        vote_restriction_reason = "own_contestant"
                     else:
                         # Vérifier si l'utilisateur a déjà voté pour ce contestant dans cette saison
                         # IMPORTANT: Un utilisateur peut voter pour plusieurs contestants différents dans la même saison
@@ -1044,6 +1075,7 @@ class CRUDContest:
                             # L'utilisateur a déjà voté pour ce contestant dans cette saison
                             has_voted = True
                             can_vote = False
+                            vote_restriction_reason = "already_voted"
                         else:
                             # L'utilisateur n'a pas encore voté pour ce contestant dans cette saison
                             has_voted = False
@@ -1051,7 +1083,82 @@ class CRUDContest:
                             # La fonction is_geographically_allowed retourne True si season_level est None
                             geo_ok = is_geographically_allowed(current_user, contestant)
                             can_vote = geo_ok
-            # Si current_user_id est None (utilisateur non authentifié), can_vote et has_voted restent False
+                            
+                            # Déterminer la raison de restriction géographique si nécessaire
+                            if not geo_ok:
+                                if season_level and contestant.user:
+                                    lvl = str(season_level).lower()
+                                    v = current_user
+                                    u = contestant.user
+                                    
+                                    def eq(a: Optional[str], b: Optional[str]) -> bool:
+                                        return bool(a and b and a.lower() == b.lower())
+                                    
+                                    def is_valid_location(value: Optional[str]) -> bool:
+                                        if not value:
+                                            return False
+                                        val_lower = str(value).lower().strip()
+                                        return val_lower not in ("unknown", "none", "", "null")
+                                    
+                                    def compare_with_unknown(val1: Optional[str], val2: Optional[str]) -> bool:
+                                        valid1 = is_valid_location(val1)
+                                        valid2 = is_valid_location(val2)
+                                        if valid1 and valid2:
+                                            return eq(val1, val2)
+                                        return True
+                                    
+                                    if lvl == "city":
+                                        country_match = compare_with_unknown(v.country, u.country)
+                                        if not country_match:
+                                            vote_restriction_reason = "different_country"
+                                        else:
+                                            city_match = compare_with_unknown(v.city, u.city)
+                                            if not city_match:
+                                                vote_restriction_reason = "different_city"
+                                    elif lvl == "country":
+                                        continent_match = compare_with_unknown(v.continent, u.continent)
+                                        if not continent_match:
+                                            vote_restriction_reason = "different_continent"
+                                        else:
+                                            country_match = compare_with_unknown(v.country, u.country)
+                                            if not country_match:
+                                                vote_restriction_reason = "different_country"
+                                    elif lvl in ("regional", "region"):
+                                        continent_match = compare_with_unknown(v.continent, u.continent)
+                                        if not continent_match:
+                                            vote_restriction_reason = "different_continent"
+                                        else:
+                                            v_region = getattr(v, "region", None)
+                                            u_region = getattr(u, "region", None)
+                                            # Log pour déboguer
+                                            import logging
+                                            logger = logging.getLogger(__name__)
+                                            logger.info(f"[REGION CHECK] Contest {contest_id}, Contestant {contestant.id}, User {v.id if v else 'None'}, Season level: {lvl}")
+                                            logger.info(f"[REGION CHECK] Voter region: '{v_region}' (type: {type(v_region)}), Contestant user region: '{u_region}' (type: {type(u_region)})")
+                                            logger.info(f"[REGION CHECK] Voter continent: '{v.continent}', Contestant user continent: '{u.continent}'")
+                                            logger.info(f"[REGION CHECK] is_valid_location(v_region): {is_valid_location(v_region)}, is_valid_location(u_region): {is_valid_location(u_region)}")
+                                            region_match = compare_with_unknown(v_region, u_region)
+                                            logger.info(f"[REGION CHECK] region_match result: {region_match}, geo_ok before: {geo_ok}")
+                                            if not region_match:
+                                                vote_restriction_reason = "different_region"
+                                                logger.info(f"[REGION CHECK] Setting vote_restriction_reason to 'different_region' for contestant {contestant.id}")
+                                            else:
+                                                logger.info(f"[REGION CHECK] Regions match or one is Unknown, no restriction for contestant {contestant.id}")
+                                    elif lvl == "continent":
+                                        continent_match = compare_with_unknown(v.continent, u.continent)
+                                        if not continent_match:
+                                            vote_restriction_reason = "different_continent"
+                                else:
+                                    # Si pas de season_level ou pas de contestant.user, on ne peut pas déterminer la raison exacte
+                                    # Mais on sait que can_vote est False, donc on met une raison générique
+                                    vote_restriction_reason = "geographic_restriction"
+                            
+                            # S'assurer que vote_restriction_reason est défini si can_vote est False
+                            if not can_vote and not vote_restriction_reason:
+                                vote_restriction_reason = "geographic_restriction"
+            else:
+                # Si current_user_id est None (utilisateur non authentifié), can_vote et has_voted restent False
+                vote_restriction_reason = "not_authenticated"
             
             enriched_contestants.append({
                 "id": contestant.id,
@@ -1067,6 +1174,8 @@ class CRUDContest:
                 "author_name": contestant.user.full_name or f"{contestant.user.first_name or ''} {contestant.user.last_name or ''}".strip() if contestant.user else None,
                 "author_country": contestant.user.country if contestant.user else None,
                 "author_city": contestant.user.city if contestant.user else None,
+                "author_continent": contestant.user.continent if contestant.user else None,
+                "author_region": contestant.user.region if contestant.user else None,
                 "author_avatar_url": contestant.user.avatar_url if contestant.user else None,
                 # Stats
                 "rank": ranks.get(contestant.id),
@@ -1093,6 +1202,7 @@ class CRUDContest:
                 # État du vote (par saison)
                 "has_voted": has_voted,  # L'utilisateur a déjà voté dans cette saison
                 "can_vote": can_vote,  # L'utilisateur peut voter pour ce contestant dans cette saison
+                "vote_restriction_reason": vote_restriction_reason,  # Raison de restriction si can_vote est False
             })
         
         # Trier par rangs (final_rank) si disponibles, sinon par votes décroissants

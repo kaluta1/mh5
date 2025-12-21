@@ -1,5 +1,5 @@
 from typing import Optional, List, TYPE_CHECKING
-from sqlalchemy import String, Integer, ForeignKey, Boolean, DateTime, Enum, Text, Date, Float
+from sqlalchemy import String, Integer, ForeignKey, Boolean, DateTime, Enum, Text, Date, Float, JSON
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from datetime import datetime, date
 import enum
@@ -47,6 +47,23 @@ class ContestantVerificationType(str, enum.Enum):
     VIDEO_VERIFICATION = "video_verification"  # Vidéo de vérification
     BRAND_PROOF = "brand_proof"                # Preuve de marque/club
 
+
+class VotingLevel(str, enum.Enum):
+    """Niveau de vote pour un type de vote."""
+    CITY = "city"
+    COUNTRY = "country"
+    REGIONAL = "regional"
+    CONTINENT = "continent"
+    GLOBAL = "global"
+
+
+class CommissionSource(str, enum.Enum):
+    """Source de commission."""
+    ADVERT = "advert"
+    AFFILIATE = "affiliate"
+    KYC = "kyc"
+    MFM = "MFM"
+
 if TYPE_CHECKING:
     from app.models.user import User
     from app.models.media import Media
@@ -92,9 +109,13 @@ class Contest(Base):
     level: Mapped[str] = mapped_column(String(20), nullable=False)  # 'city', 'country', 'region', 'continent', 'global'
     location_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("location.id"), nullable=True)
     
+    # Type de vote (optionnel)
+    voting_type_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("voting_type.id"), nullable=True)
+    
     # Relations
     template: Mapped[Optional["ContestTemplate"]] = relationship("ContestTemplate", back_populates="contests")
     location: Mapped[Optional["Location"]] = relationship("Location", back_populates="contests")
+    voting_type: Mapped[Optional["VotingType"]] = relationship("VotingType")
     entries: Mapped[List["ContestEntry"]] = relationship("ContestEntry", back_populates="contest")
     transactions: Mapped[List["UserTransaction"]] = relationship("UserTransaction", back_populates="contest")
     prizes: Mapped[List["Prize"]] = relationship("Prize", back_populates="contest")
@@ -327,3 +348,29 @@ class ContestantVerification(Base):
     # Relations
     contestant: Mapped["Contestant"] = relationship("Contestant", back_populates="verifications")
     reviewer: Mapped[Optional["User"]] = relationship("User", foreign_keys=[reviewed_by])
+
+
+class VotingType(Base):
+    """
+    Table des types de vote.
+    Table indépendante qui définit les règles de commission et le niveau de vote.
+    """
+    __tablename__ = "voting_type"
+    
+    # Nom du type de vote
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    
+    # Niveau de vote (city, country, regional, continent, global)
+    voting_level: Mapped[VotingLevel] = mapped_column(
+        Enum(VotingLevel, values_callable=lambda x: [e.value for e in x]),
+        nullable=False
+    )
+    
+    # Règles de commission (JSON) - peut contenir plusieurs règles comme L1, L2-10
+    commission_rules: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    
+    # Source de commission (advert, affiliate, kyc, MFM)
+    commission_source: Mapped[CommissionSource] = mapped_column(
+        Enum(CommissionSource, values_callable=lambda x: [e.value for e in x]),
+        nullable=False
+    )

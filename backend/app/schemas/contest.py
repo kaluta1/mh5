@@ -23,6 +23,21 @@ class ParticipantTypeEnum(str, Enum):
     CONTENT = "content"
 
 
+class VotingLevelEnum(str, Enum):
+    CITY = "city"
+    COUNTRY = "country"
+    REGIONAL = "regional"
+    CONTINENT = "continent"
+    GLOBAL = "global"
+
+
+class CommissionSourceEnum(str, Enum):
+    ADVERT = "advert"
+    AFFILIATE = "affiliate"
+    KYC = "kyc"
+    MFM = "MFM"
+
+
 # Schéma de base pour les concours
 class ContestBase(BaseModel):
     name: str
@@ -42,6 +57,7 @@ class ContestBase(BaseModel):
     voting_restriction: Optional[str] = None
     max_entries_per_user: int = 1
     template_id: Optional[int] = None
+    voting_type_id: Optional[int] = None
     
     # ============== VERIFICATION REQUIREMENTS ==============
     requires_kyc: bool = True
@@ -90,6 +106,7 @@ class ContestUpdate(BaseModel):
     voting_restriction: Optional[str] = None
     max_entries_per_user: Optional[int] = None
     template_id: Optional[int] = None
+    voting_type_id: Optional[int] = None
     image_url: Optional[str] = None
     # Verification requirements - accept strings for flexibility
     requires_kyc: Optional[bool] = None
@@ -149,6 +166,7 @@ class Contest(ContestBase):
     season_level: Optional[str] = None  # Niveau depuis la season
     image_url: Optional[str] = None  # URL de l'image principale
     top_contestants: List[TopContestantPreview] = []  # Top contestants preview
+    voting_type: Optional[VotingType] = None  # Type de vote associé
     # Dates des saisons (calculées automatiquement)
     city_season_start_date: Optional[date] = None
     city_season_end_date: Optional[date] = None
@@ -328,6 +346,34 @@ class LocationCreate(LocationBase):
 # Schéma pour afficher une localisation
 class Location(LocationBase):
     id: int
+    
+    class Config:
+        from_attributes = True
+
+
+# Schémas pour VotingType
+class VotingTypeBase(BaseModel):
+    name: str
+    voting_level: VotingLevelEnum
+    commission_rules: Optional[dict] = None  # JSON pour stocker les règles (L1, L2-10, etc.)
+    commission_source: CommissionSourceEnum
+
+
+class VotingTypeCreate(VotingTypeBase):
+    pass
+
+
+class VotingTypeUpdate(BaseModel):
+    name: Optional[str] = None
+    voting_level: Optional[VotingLevelEnum] = None
+    commission_rules: Optional[dict] = None
+    commission_source: Optional[CommissionSourceEnum] = None
+
+
+class VotingType(VotingTypeBase):
+    id: int
+    created_at: Any
+    updated_at: Any
     
     class Config:
         from_attributes = True

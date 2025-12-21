@@ -1,6 +1,7 @@
 'use client'
 
 import { Badge } from '@/components/ui/badge'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { ContestantCard } from './contestant-card'
 import { useLanguage } from '@/contexts/language-context'
 
@@ -26,6 +27,7 @@ interface Contestant {
   videosCount: number
   canVote: boolean
   hasVoted: boolean
+  voteRestrictionReason?: string | null
   media: Media[]
   comments: number
   reactions?: number
@@ -177,9 +179,11 @@ export function ContestantsList({
 
   if (contestants.length === 0) {
     return (
-      <div className="text-center py-12">
-        <div className="flex flex-col items-center gap-3">
-          <p className="text-5xl mb-2">🏆</p>
+      <div className="text-center py-16">
+        <div className="flex flex-col items-center gap-4 bg-white dark:bg-gray-800/50 rounded-xl border border-gray-200/50 dark:border-gray-700/50 p-8 backdrop-blur-sm">
+          <div className="w-20 h-20 rounded-full bg-gradient-to-br from-myfav-primary/20 to-myfav-secondary/20 flex items-center justify-center mb-2">
+            <p className="text-4xl">🏆</p>
+          </div>
           <p className="text-lg font-semibold text-gray-700 dark:text-gray-300">
             {searchQuery 
               ? t('dashboard.contests.no_contestants_found') || 'Aucun participant trouvé'
@@ -187,7 +191,7 @@ export function ContestantsList({
           </p>
           {!searchQuery && (
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              {t('dashboard.contests.participate') || 'Soyez le premier à participer !'}
+              {t('dashboard.contests.participate') || 'Soyez le premier à concourir !'}
             </p>
           )}
         </div>
@@ -196,20 +200,31 @@ export function ContestantsList({
   }
 
   return (
-    <div className="space-y-4 max-w-2xl mx-auto lg:mx-0">
+    <div className="space-y-6 max-w-2xl mx-auto lg:mx-0">
       {contestants.map((contestant) => (
-        <div key={contestant.id} className="relative">
+        <div key={contestant.id} className="relative transform transition-all duration-200 hover:scale-[1.01]">
           {/* Rank Badge */}
           {contestant.rank && (
             <div className="absolute -top-2 -left-2 z-10">
-              <Badge 
-                className={`${getRankBadgeColor(contestant.rank)} border-2 font-bold text-sm px-3 py-1.5 shadow-lg flex items-center gap-1`}
-              >
-                <span>{getRankIcon(contestant.rank)}</span>
-                <span className="hidden sm:inline">
-                  {getRankText(contestant.rank)}
-                </span>
-              </Badge>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge 
+                      className={`${getRankBadgeColor(contestant.rank)} border-2 font-bold text-sm px-3 py-1.5 shadow-lg flex items-center gap-1 cursor-help`}
+                    >
+                      <span>{getRankIcon(contestant.rank)}</span>
+                      <span className="hidden sm:inline">
+                        {getRankText(contestant.rank)}
+                      </span>
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent className="bg-gray-800 text-white border-gray-700">
+                    <p className="text-xs">
+                      {t('dashboard.contests.tooltip_rank') || `Classement ${contestant.rank === 1 ? 'premier' : contestant.rank === 2 ? 'deuxième' : contestant.rank === 3 ? 'troisième' : `${contestant.rank}ème`} dans ce concours`}
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
           )}
           
@@ -229,6 +244,7 @@ export function ContestantsList({
             videosCount={contestant.videosCount}
             canVote={contestant.canVote}
             hasVoted={contestant.hasVoted}
+            voteRestrictionReason={contestant.voteRestrictionReason}
             isFavorite={favorites.includes(contestant.id)}
             media={contestant.media}
             description={contestant.description}
