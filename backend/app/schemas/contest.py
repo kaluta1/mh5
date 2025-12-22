@@ -156,6 +156,34 @@ class TopContestantPreview(BaseModel):
         from_attributes = True
 
 
+# Schémas pour VotingType (définis avant Contest pour éviter les erreurs de référence)
+class VotingTypeBase(BaseModel):
+    name: str
+    voting_level: VotingLevelEnum
+    commission_rules: Optional[dict] = None  # JSON pour stocker les règles (L1, L2-10, etc.)
+    commission_source: CommissionSourceEnum
+
+
+class VotingTypeCreate(VotingTypeBase):
+    pass
+
+
+class VotingTypeUpdate(BaseModel):
+    name: Optional[str] = None
+    voting_level: Optional[VotingLevelEnum] = None
+    commission_rules: Optional[dict] = None
+    commission_source: Optional[CommissionSourceEnum] = None
+
+
+class VotingType(VotingTypeBase):
+    id: int
+    created_at: Any
+    updated_at: Any
+    
+    class Config:
+        from_attributes = True
+
+
 # Schéma pour afficher un concours
 class Contest(ContestBase):
     id: int
@@ -351,29 +379,3 @@ class Location(LocationBase):
         from_attributes = True
 
 
-# Schémas pour VotingType
-class VotingTypeBase(BaseModel):
-    name: str
-    voting_level: VotingLevelEnum
-    commission_rules: Optional[dict] = None  # JSON pour stocker les règles (L1, L2-10, etc.)
-    commission_source: CommissionSourceEnum
-
-
-class VotingTypeCreate(VotingTypeBase):
-    pass
-
-
-class VotingTypeUpdate(BaseModel):
-    name: Optional[str] = None
-    voting_level: Optional[VotingLevelEnum] = None
-    commission_rules: Optional[dict] = None
-    commission_source: Optional[CommissionSourceEnum] = None
-
-
-class VotingType(VotingTypeBase):
-    id: int
-    created_at: Any
-    updated_at: Any
-    
-    class Config:
-        from_attributes = True

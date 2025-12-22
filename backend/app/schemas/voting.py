@@ -336,6 +336,18 @@ class Share(ShareBase):
     created_at: Optional[datetime] = None  # Utilise created_at de Base au lieu de shared_at
 
 
+class ShareUserDetail(BaseModel):
+    """Détails d'un utilisateur qui a partagé"""
+    id: Optional[int] = None  # ID du partage
+    user_id: Optional[int] = None
+    username: Optional[str] = None
+    full_name: Optional[str] = None
+    avatar_url: Optional[str] = None
+    platform: Optional[str] = None
+    share_link: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+
 class ShareStats(BaseModel):
     """Statistiques de partage pour un contestant"""
     contestant_id: int
@@ -352,3 +364,5 @@ class ShareStats(BaseModel):
     author_country: Optional[str] = None
     author_city: Optional[str] = None
     author_avatar_url: Optional[str] = None
+    # Liste des utilisateurs qui ont partagé
+    shares: List[ShareUserDetail] = []

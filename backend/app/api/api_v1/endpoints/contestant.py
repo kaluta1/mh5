@@ -13,7 +13,7 @@ from app.schemas.voting import (
     ReactionCreate, Reaction, ReactionStats, ReactionDetails, ReactionUserDetail,
     VoteDetails, VoteUserDetail,
     FavoriteDetails, FavoriteUserDetail,
-    ShareCreate, Share, ShareStats
+    ShareCreate, Share, ShareStats, ShareUserDetail
 )
 from app.schemas.contestant import (
     ContestantCreate, ContestantResponse, ContestantListResponse, ContestantSubmissionResponse,
@@ -1405,16 +1405,37 @@ def get_share_stats(
             detail="Submission not found"
         )
     
-    # Compter les partages
-    shares = db.query(ContestantShare).filter(
-        ContestantShare.contestant_id == contestant_id
-    ).all()
+    # Récupérer tous les partages avec les utilisateurs
+    shares = db.query(ContestantShare)\
+        .options(joinedload(ContestantShare.shared_by))\
+        .filter(ContestantShare.contestant_id == contestant_id)\
+        .order_by(ContestantShare.created_at.desc())\
+        .all()
     
     # Compter par plateforme
     shares_by_platform = {}
     for share in shares:
         platform = share.platform or "other"
         shares_by_platform[platform] = shares_by_platform.get(platform, 0) + 1
+    
+    # Construire la liste des utilisateurs qui ont partagé
+    shares_list = []
+    for share in shares:
+        user_detail = ShareUserDetail(
+            id=share.id,
+            user_id=share.shared_by_user_id,
+            username=share.shared_by.username if share.shared_by else None,
+            full_name=(
+                share.shared_by.full_name or 
+                f"{share.shared_by.first_name or ''} {share.shared_by.last_name or ''}".strip()
+                if share.shared_by else None
+            ),
+            avatar_url=share.shared_by.avatar_url if share.shared_by else None,
+            platform=share.platform,
+            share_link=share.share_link,
+            created_at=share.created_at
+        )
+        shares_list.append(user_detail)
     
     # Récupérer les informations de l'auteur
     author_name = None
@@ -1437,7 +1458,9 @@ def get_share_stats(
         author_username=author_username,
         author_country=contestant.user.country if contestant.user else None,
         author_city=contestant.user.city if contestant.user else None,
-        author_avatar_url=contestant.user.avatar_url if contestant.user else None
+        author_avatar_url=contestant.user.avatar_url if contestant.user else None,
+        # Liste des utilisateurs qui ont partagé
+        shares=shares_list
     )
 
 
