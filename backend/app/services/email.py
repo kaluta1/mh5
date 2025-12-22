@@ -10,6 +10,7 @@ from app.services.email_templates import (
     get_welcome_email,
     get_verify_email,
     get_password_reset_email,
+    get_password_change_security_email,
     get_invitation_email,
     get_payment_confirmation_email,
     get_kyc_approved_email,
@@ -208,6 +209,20 @@ class EmailService:
         """Send commission notification email"""
         subject, html_content, text_content = get_commission_email(
             lang, amount, commission_type, source_name
+        )
+        return self.send_email(to_email, subject, html_content, text_content)
+    
+    def send_password_change_security_email(
+        self,
+        to_email: str,
+        support_url: Optional[str] = None,
+        lang: str = "en",
+        ip_address: Optional[str] = None,
+        location: Optional[str] = None
+    ) -> bool:
+        """Send password change security notification email"""
+        subject, html_content, text_content = get_password_change_security_email(
+            lang, support_url, ip_address, location
         )
         return self.send_email(to_email, subject, html_content, text_content)
 

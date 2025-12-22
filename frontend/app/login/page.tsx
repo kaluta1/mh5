@@ -286,16 +286,12 @@ export default function LoginPage() {
 
               {/* Forgot Password */}
               <div className="flex justify-end">
-                <button
-                  type="button"
+                <Link
+                  href="/forgot-password"
                   className="text-sm text-myfav-primary hover:text-myfav-primary-dark dark:text-myfav-blue-400 dark:hover:text-myfav-blue-300 transition-colors"
-                  onClick={() => {
-                    // TODO: Implémenter mot de passe oublié
-                    console.log("Mot de passe oublié")
-                  }}
                 >
                   {t('auth.login.forgot_password')}
-                </button>
+                </Link>
               </div>
 
               {/* Submit Button */}

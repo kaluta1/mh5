@@ -165,6 +165,12 @@ export const authService = {
     await api.post('/api/v1/auth/password-reset-confirm', data)
   },
 
+  // Vérifier l'email avec un token
+  async verifyEmail(token: string): Promise<{ message: string; email: string }> {
+    const response = await api.post(`/api/v1/auth/verify-email?token=${encodeURIComponent(token)}`)
+    return response.data
+  },
+
   // Obtenir le token d'accès
   getAccessToken(): string | null {
     return localStorage.getItem('access_token')

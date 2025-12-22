@@ -220,8 +220,8 @@ export function LoginModal({ open, onOpenChange, onSwitchToRegister, onLoginSucc
               variant="link"
               className="p-0 h-auto font-normal text-myfav-primary hover:text-myfav-primary-dark dark:text-myfav-blue-400"
               onClick={() => {
-                // TODO: Implémenter mot de passe oublié
-                console.log("Mot de passe oublié")
+                onOpenChange(false)
+                router.push('/forgot-password')
               }}
             >
               {t('auth.login.forgot_password')}

@@ -64,6 +64,13 @@ class CommissionSource(str, enum.Enum):
     KYC = "kyc"
     MFM = "MFM"
 
+
+class SuggestedContestStatus(str, enum.Enum):
+    """Statut d'une suggestion de concours."""
+    PENDING = "pending"      # En attente de traitement
+    APPROVED = "approved"    # Approuvé
+    REJECTED = "rejected"    # Rejeté
+
 if TYPE_CHECKING:
     from app.models.user import User
     from app.models.media import Media
@@ -372,5 +379,29 @@ class VotingType(Base):
     # Source de commission (advert, affiliate, kyc, MFM)
     commission_source: Mapped[CommissionSource] = mapped_column(
         Enum(CommissionSource, values_callable=lambda x: [e.value for e in x]),
+        nullable=False
+    )
+
+
+class SuggestedContest(Base):
+    """
+    Table des concours suggérés par les utilisateurs.
+    Permet aux utilisateurs de proposer de nouveaux concours.
+    """
+    __tablename__ = "suggested_contest"
+    
+    # Nom du concours suggéré
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    
+    # Description du concours suggéré
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    
+    # Catégorie du concours (beauty, handsome, music, etc.)
+    category: Mapped[str] = mapped_column(String(100), nullable=False)
+    
+    # Statut de la suggestion
+    status: Mapped[SuggestedContestStatus] = mapped_column(
+        Enum(SuggestedContestStatus, values_callable=lambda x: [e.value for e in x]),
+        default=SuggestedContestStatus.PENDING,
         nullable=False
     )

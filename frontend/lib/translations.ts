@@ -120,6 +120,47 @@ export interface TranslationKeys {
       password_requirement_number: string
       password_requirement_special: string
     }
+    verify_email: {
+      no_token: string
+      success: string
+      error: string
+      verifying: string
+      please_wait: string
+      success_title: string
+      redirecting: string
+      error_title: string
+      invalid_token: string
+    }
+    forgot_password: {
+      title: string
+      description: string
+      email_required: string
+      send_reset_link: string
+      success: string
+      success_title: string
+      success_message: string
+      check_spam: string
+      remember_password: string
+      error: string
+    }
+    reset_password: {
+      title: string
+      description: string
+      no_token: string
+      password_required: string
+      password_min_length: string
+      confirm_password_required: string
+      passwords_not_match: string
+      new_password: string
+      confirm_password: string
+      submit: string
+      success: string
+      success_title: string
+      success_message: string
+      redirecting: string
+      error: string
+      invalid_token: string
+    }
   }
   common: {
     loading: string
@@ -604,6 +645,24 @@ export interface TranslationKeys {
       face: string
       confidence_score: string
       rejection_reason: string
+      // Voting type translations
+      voting_type: string
+      select_voting_type: string
+      new_voting_type: string
+      voting_types_load_error: string
+      voting_type_created: string
+      voting_type_create_error: string
+      create_voting_type: string
+      voting_type_name_placeholder: string
+      voting_level: string
+      commission_source: string
+      commission_rules: string
+      commission_rules_help: string
+      commission_advert: string
+      commission_affiliate: string
+      commission_kyc: string
+      commission_mfm: string
+      create: string
     }
     contestants: {
       title: string
@@ -1041,6 +1100,29 @@ export interface TranslationKeys {
         user: string
         media_alt: string
         video_alt: string
+      }
+      suggest_contest: {
+        title: string
+        description: string
+        button: string
+        name_label: string
+        name_placeholder: string
+        description_label: string
+        description_placeholder: string
+        category_label: string
+        category_placeholder: string
+        submit: string
+        submitting: string
+        success: string
+        success_message: string
+        cancel: string
+        error: {
+          name_required: string
+          category_required: string
+          submit_error: string
+          network_error: string
+          server_error: string
+        }
       }
       participation_form: {
         title: string
@@ -1633,7 +1715,25 @@ export const translations: Record<Language, TranslationKeys> = {
         continental_season: "Saison Continentale",
         global_season: "Saison Globale",
         start_date: "Date de début",
-        end_date: "Date de fin"
+        end_date: "Date de fin",
+        // Voting type translations
+        voting_type: "Type de vote",
+        select_voting_type: "Sélectionner un type de vote",
+        new_voting_type: "Nouveau type de vote",
+        voting_types_load_error: "Erreur lors du chargement des types de vote",
+        voting_type_created: "Type de vote créé avec succès",
+        voting_type_create_error: "Erreur lors de la création du type de vote",
+        create_voting_type: "Créer un type de vote",
+        voting_type_name_placeholder: "Ex: Vote City - Commission Advert",
+        voting_level: "Niveau de vote",
+        commission_source: "Source de commission",
+        commission_rules: "Règles de commission (JSON)",
+        commission_rules_help: "Les règles de commission sont optionnelles. Format: L1 pour le niveau 1, L2-10 pour les niveaux 2 à 10.",
+        commission_advert: "Publicité",
+        commission_affiliate: "Affiliation",
+        commission_kyc: "KYC",
+        commission_mfm: "MFM",
+        create: "Créer"
       },
       contestants: {
         title: "Gestion des Candidats",
@@ -2080,6 +2180,29 @@ export const translations: Record<Language, TranslationKeys> = {
           media_alt: "Média",
           video_alt: "Vidéo"
         },
+        suggest_contest: {
+          title: "Suggérer un concours",
+          description: "Proposez une idée de concours à notre équipe",
+          button: "Suggérer un concours",
+          name_label: "Nom du concours",
+          name_placeholder: "Ex: Concours de beauté 2024",
+          description_label: "Description",
+          description_placeholder: "Décrivez votre idée de concours...",
+          category_label: "Catégorie",
+          category_placeholder: "Sélectionnez une catégorie",
+          submit: "Envoyer la suggestion",
+          submitting: "Envoi en cours...",
+          success: "Votre suggestion a été envoyée avec succès !",
+          success_message: "Merci pour votre suggestion. Notre équipe l'examinera et vous tiendra informé.",
+          cancel: "Annuler",
+          error: {
+            name_required: "Le nom du concours est requis",
+            category_required: "La catégorie est requise",
+            submit_error: "Erreur lors de l'envoi de la suggestion",
+            network_error: "Erreur de connexion. Vérifiez votre connexion internet.",
+            server_error: "Erreur serveur. Veuillez réessayer plus tard."
+          }
+        },
         participation_form: {
           title: "Participer au concours",
           description: "Sélectionnez votre meilleure photo ou vidéo pour participer à ce concours",
@@ -2236,6 +2359,47 @@ export const translations: Record<Language, TranslationKeys> = {
           password_requirements: "Le mot de passe doit contenir une majuscule, une minuscule, un chiffre et un caractère spécial (*_/@=)",
           location_required: "Veuillez sélectionner votre pays et votre ville"
         }
+      },
+      verify_email: {
+        no_token: "Token de vérification manquant",
+        success: "Email vérifié avec succès",
+        error: "Erreur lors de la vérification de l'email",
+        verifying: "Vérification en cours...",
+        please_wait: "Veuillez patienter pendant que nous vérifions votre email.",
+        success_title: "Email vérifié !",
+        redirecting: "Redirection vers la page de connexion...",
+        error_title: "Erreur de vérification",
+        invalid_token: "Token invalide ou expiré"
+      },
+      forgot_password: {
+        title: "Mot de passe oublié ?",
+        description: "Entrez votre adresse email et nous vous enverrons un lien pour réinitialiser votre mot de passe.",
+        email_required: "L'email est requis",
+        send_reset_link: "Envoyer le lien de réinitialisation",
+        success: "Un email de réinitialisation a été envoyé",
+        success_title: "Email envoyé !",
+        success_message: "Si cet email existe dans notre système, vous recevrez un lien de réinitialisation de mot de passe.",
+        check_spam: "Vérifiez votre dossier spam si vous ne recevez pas l'email.",
+        remember_password: "Vous vous souvenez de votre mot de passe ?",
+        error: "Erreur lors de l'envoi de l'email"
+      },
+      reset_password: {
+        title: "Réinitialiser le mot de passe",
+        description: "Entrez votre nouveau mot de passe ci-dessous.",
+        no_token: "Token de réinitialisation manquant",
+        password_required: "Le mot de passe est requis",
+        password_min_length: "Le mot de passe doit contenir au moins 6 caractères",
+        confirm_password_required: "La confirmation du mot de passe est requise",
+        passwords_not_match: "Les mots de passe ne correspondent pas",
+        new_password: "Nouveau mot de passe",
+        confirm_password: "Confirmer le mot de passe",
+        submit: "Réinitialiser le mot de passe",
+        success: "Mot de passe réinitialisé avec succès",
+        success_title: "Mot de passe réinitialisé !",
+        success_message: "Votre mot de passe a été réinitialisé avec succès. Vous pouvez maintenant vous connecter.",
+        redirecting: "Redirection vers la page de connexion...",
+        error: "Erreur lors de la réinitialisation du mot de passe",
+        invalid_token: "Token invalide ou expiré"
       }
     },
     common: {
@@ -3184,6 +3348,29 @@ export const translations: Record<Language, TranslationKeys> = {
           media_alt: "Média",
           video_alt: "Vidéo"
         },
+        suggest_contest: {
+          title: "Suggérer un concours",
+          description: "Proposez une idée de concours à notre équipe",
+          button: "Suggérer un concours",
+          name_label: "Nom du concours",
+          name_placeholder: "Ex: Concours de beauté 2024",
+          description_label: "Description",
+          description_placeholder: "Décrivez votre idée de concours...",
+          category_label: "Catégorie",
+          category_placeholder: "Sélectionnez une catégorie",
+          submit: "Envoyer la suggestion",
+          submitting: "Envoi en cours...",
+          success: "Votre suggestion a été envoyée avec succès !",
+          success_message: "Merci pour votre suggestion. Notre équipe l'examinera et vous tiendra informé.",
+          cancel: "Annuler",
+          error: {
+            name_required: "Le nom du concours est requis",
+            category_required: "La catégorie est requise",
+            submit_error: "Erreur lors de l'envoi de la suggestion",
+            network_error: "Erreur de connexion. Vérifiez votre connexion internet.",
+            server_error: "Erreur serveur. Veuillez réessayer plus tard."
+          }
+        },
         participation_form: {
           title: "Participer au concours",
           description: "Sélectionnez votre meilleure photo ou vidéo pour participer à ce concours",
@@ -3826,7 +4013,25 @@ export const translations: Record<Language, TranslationKeys> = {
         continental_season: "Continental Season",
         global_season: "Global Season",
         start_date: "Start Date",
-        end_date: "End Date"
+        end_date: "End Date",
+        // Voting type translations
+        voting_type: "Voting Type",
+        select_voting_type: "Select a voting type",
+        new_voting_type: "New voting type",
+        voting_types_load_error: "Error loading voting types",
+        voting_type_created: "Voting type created successfully",
+        voting_type_create_error: "Error creating voting type",
+        create_voting_type: "Create a voting type",
+        voting_type_name_placeholder: "Ex: City Vote - Advert Commission",
+        voting_level: "Voting level",
+        commission_source: "Commission source",
+        commission_rules: "Commission rules (JSON)",
+        commission_rules_help: "Commission rules are optional. Format: L1 for level 1, L2-10 for levels 2 to 10.",
+        commission_advert: "Advertisement",
+        commission_affiliate: "Affiliate",
+        commission_kyc: "KYC",
+        commission_mfm: "MFM",
+        create: "Create"
       },
       contestants: {
         title: "Manage Contestants",
@@ -4143,6 +4348,47 @@ export const translations: Record<Language, TranslationKeys> = {
           password_requirements: "Password must contain an uppercase letter, a lowercase letter, a number, and a special character (*_/@=)",
           location_required: "Please select your country and city"
         }
+      },
+      verify_email: {
+        no_token: "Verification token missing",
+        success: "Email verified successfully",
+        error: "Error verifying email",
+        verifying: "Verifying...",
+        please_wait: "Please wait while we verify your email.",
+        success_title: "Email verified!",
+        redirecting: "Redirecting to login page...",
+        error_title: "Verification error",
+        invalid_token: "Invalid or expired token"
+      },
+      forgot_password: {
+        title: "Forgot password?",
+        description: "Enter your email address and we'll send you a link to reset your password.",
+        email_required: "Email is required",
+        send_reset_link: "Send reset link",
+        success: "A reset email has been sent",
+        success_title: "Email sent!",
+        success_message: "If this email exists in our system, you will receive a password reset link.",
+        check_spam: "Check your spam folder if you don't receive the email.",
+        remember_password: "Remember your password?",
+        error: "Error sending email"
+      },
+      reset_password: {
+        title: "Reset password",
+        description: "Enter your new password below.",
+        no_token: "Reset token missing",
+        password_required: "Password is required",
+        password_min_length: "Password must be at least 6 characters",
+        confirm_password_required: "Password confirmation is required",
+        passwords_not_match: "Passwords do not match",
+        new_password: "New password",
+        confirm_password: "Confirm password",
+        submit: "Reset password",
+        success: "Password reset successfully",
+        success_title: "Password reset!",
+        success_message: "Your password has been reset successfully. You can now sign in.",
+        redirecting: "Redirecting to login page...",
+        error: "Error resetting password",
+        invalid_token: "Invalid or expired token"
       }
     },
     common: {
@@ -5208,6 +5454,29 @@ export const translations: Record<Language, TranslationKeys> = {
             gender_restriction_male: "This contest is reserved for male participants only.",
             gender_restriction_female: "This contest is reserved for female participants only.",
             gender_not_set: "Your profile does not contain gender information. Please complete your profile to participate in this contest."
+          }
+        },
+        suggest_contest: {
+          title: "Suggest a Contest",
+          description: "Propose a contest idea to our team",
+          button: "Suggest a Contest",
+          name_label: "Contest Name",
+          name_placeholder: "Ex: Beauty Contest 2024",
+          description_label: "Description",
+          description_placeholder: "Describe your contest idea...",
+          category_label: "Category",
+          category_placeholder: "Select a category",
+          submit: "Send Suggestion",
+          submitting: "Sending...",
+          success: "Your suggestion has been sent successfully!",
+          success_message: "Thank you for your suggestion. Our team will review it and keep you informed.",
+          cancel: "Cancel",
+          error: {
+            name_required: "Contest name is required",
+            category_required: "Category is required",
+            submit_error: "Error sending suggestion",
+            network_error: "Connection error. Check your internet connection.",
+            server_error: "Server error. Please try again later."
           }
         }
       },

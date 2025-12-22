@@ -596,7 +596,6 @@ export default function ContestDetailPage() {
                     currentUserId={user?.id}
                 favorites={favorites}
                 searchQuery={searchQuery}
-                formatLocation={formatLocation}
                 onToggleFavorite={handleToggleFavorite}
                 onViewDetails={(contestantId) => router.push(`/dashboard/contests/${contestId}/contestant/${contestantId}`)}
                 onVote={() => {

@@ -30,7 +30,7 @@ from app.db.base_class import Base
 from app.models.user import User
 
 # Import contest models
-from app.models.contest import Contest, ContestTemplate, Location, ContestEntry, ContestVote, ContestFavorite, ContestantVerification, VotingType
+from app.models.contest import Contest, ContestTemplate, Location, ContestEntry, ContestVote, ContestFavorite, ContestantVerification, VotingType, SuggestedContest
 
 # Import all new MyFav models
 from app.models.geography import Continent, Region, Country, City

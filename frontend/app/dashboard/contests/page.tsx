@@ -12,9 +12,10 @@ import { ContestsHeader } from '@/components/dashboard/contests-header'
 import { ContestsGrid } from '@/components/dashboard/contests-grid'
 import { ContestsLoader } from '@/components/dashboard/contests-loader'
 import { contestService, Contest } from '@/services/contest-service'
-import { AlertCircle, UserCircle, Fingerprint, ChevronRight, X } from 'lucide-react'
+import { AlertCircle, UserCircle, Fingerprint, ChevronRight, X, Lightbulb } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ContestCard } from '@/components/dashboard/contest-card'
+import { SuggestContestDialog } from '@/components/dashboard/suggest-contest-dialog'
 
 export default function ContestsPage() {
   const { t } = useLanguage()
@@ -31,6 +32,7 @@ export default function ContestsPage() {
   const [hasMore, setHasMore] = useState(true)
   const [showMobileAlert, setShowMobileAlert] = useState(true)
   const [activeTab, setActiveTab] = useState<string>('all')
+  const [showSuggestDialog, setShowSuggestDialog] = useState(false)
   const ITEMS_PER_PAGE = 9
   const observerTarget = React.useRef(null)
   const isLoadingDataRef = React.useRef(false)
@@ -362,7 +364,17 @@ export default function ContestsPage() {
   return (
     <div className="min-h-screen bg-gray-900 dark:bg-gray-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
+        {/* Header avec bouton de suggestion */}
+        <div className="mb-6 flex items-center justify-between">
+          <div className="flex-1" />
+          <Button
+            onClick={() => setShowSuggestDialog(true)}
+            className="bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-white shadow-lg hover:shadow-xl transition-all font-semibold"
+          >
+            <Lightbulb className="w-4 h-4 mr-2" />
+            {t('dashboard.contests.suggest_contest.button') || 'Suggérer un concours'}
+          </Button>
+        </div>
        
         {/* Barre d'onglets de navigation */}
         <div className="mb-8 border-b border-gray-800">
@@ -402,7 +414,7 @@ export default function ContestsPage() {
                   </div>
                 </div>
                 <Link href="/dashboard/settings">
-                  <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white rounded-lg">
+                  <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg">
                     {t('contests.complete_profile') || 'Compléter'}
                     <ChevronRight className="w-4 h-4 ml-1" />
                   </Button>
@@ -464,7 +476,7 @@ export default function ContestsPage() {
                 </button>
               </div>
               <Link href="/dashboard/settings" className="block mt-3">
-                <Button size="sm" className="w-full bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-sm">
+                <Button size="sm" className="w-full bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-sm">
                   {t('contests.complete_profile') || 'Compléter mon profil'}
                   <ChevronRight className="w-4 h-4 ml-1" />
                 </Button>
@@ -520,6 +532,12 @@ export default function ContestsPage() {
           isLoading={isLoadingMore}
           hasMore={hasMore && searchTerm === ''}
           observerTarget={observerTarget}
+        />
+
+        {/* Dialog de suggestion de concours */}
+        <SuggestContestDialog
+          open={showSuggestDialog}
+          onOpenChange={setShowSuggestDialog}
         />
       </div>
     </div>

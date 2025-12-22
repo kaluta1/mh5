@@ -40,6 +40,12 @@ class CommissionSourceEnum(str, Enum):
     MFM = "MFM"
 
 
+class SuggestedContestStatusEnum(str, Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
 # Schéma de base pour les concours
 class ContestBase(BaseModel):
     name: str
@@ -376,6 +382,34 @@ class LocationCreate(LocationBase):
 # Schéma pour afficher une localisation
 class Location(LocationBase):
     id: int
+    
+    class Config:
+        from_attributes = True
+
+
+# Schémas pour SuggestedContest
+class SuggestedContestBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+    category: str
+    status: SuggestedContestStatusEnum = SuggestedContestStatusEnum.PENDING
+
+
+class SuggestedContestCreate(SuggestedContestBase):
+    pass
+
+
+class SuggestedContestUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    category: Optional[str] = None
+    status: Optional[SuggestedContestStatusEnum] = None
+
+
+class SuggestedContest(SuggestedContestBase):
+    id: int
+    created_at: Any
+    updated_at: Any
     
     class Config:
         from_attributes = True

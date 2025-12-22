@@ -1,7 +1,7 @@
 from datetime import timedelta
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
@@ -194,8 +194,10 @@ def request_password_reset(
 @router.post("/password-reset-confirm", response_model=PasswordResetResponse)
 def confirm_password_reset(
     *,
+    request: Request,
     db: Session = Depends(get_db),
-    password_reset: PasswordResetConfirm
+    password_reset: PasswordResetConfirm,
+    background_tasks: BackgroundTasks
 ) -> Any:
     """
     Confirmer la réinitialisation de mot de passe avec le token.
@@ -222,8 +224,36 @@ def confirm_password_reset(
             detail="Utilisateur inactif"
         )
     
+    # Récupérer l'adresse IP du client
+    client_ip = request.client.host if request.client else None
+    # Récupérer l'IP depuis les headers si disponible (pour les proxies)
+    if not client_ip or client_ip == "127.0.0.1":
+        forwarded_for = request.headers.get("X-Forwarded-For")
+        if forwarded_for:
+            client_ip = forwarded_for.split(",")[0].strip()
+        else:
+            real_ip = request.headers.get("X-Real-IP")
+            if real_ip:
+                client_ip = real_ip
+    
+    # Pour la localisation, on peut utiliser l'IP pour une géolocalisation basique
+    # Pour l'instant, on affiche juste l'IP
+    location = None  # Peut être amélioré avec un service de géolocalisation IP
+    
     # Réinitialiser le mot de passe
     crud_user.reset_password(db, user=user, new_password=password_reset.new_password)
+    
+    # Envoyer l'email de notification de sécurité
+    user_lang = getattr(user, 'preferred_language', 'en') or 'en'
+    support_url = f"{settings.FRONTEND_URL}/contact"
+    background_tasks.add_task(
+        email_service.send_password_change_security_email,
+        to_email=user.email,
+        support_url=support_url,
+        lang=user_lang,
+        ip_address=client_ip,
+        location=location
+    )
     
     return PasswordResetResponse(
         message="Mot de passe réinitialisé avec succès"
@@ -242,9 +272,11 @@ def read_user_me(
 @router.post("/change-password", response_model=PasswordResetResponse)
 def change_password(
     *,
+    request: Request,
     db: Session = Depends(get_db),
     password_data: PasswordChange,
-    current_user = Depends(get_current_active_user)
+    current_user = Depends(get_current_active_user),
+    background_tasks: BackgroundTasks
 ) -> Any:
     """
     Changer le mot de passe de l'utilisateur connecté.
@@ -270,9 +302,36 @@ def change_password(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Le mot de passe doit contenir au moins 6 caractères"
         )
-        
     
+    # Récupérer l'adresse IP du client
+    client_ip = request.client.host if request.client else None
+    # Récupérer l'IP depuis les headers si disponible (pour les proxies)
+    if not client_ip or client_ip == "127.0.0.1":
+        forwarded_for = request.headers.get("X-Forwarded-For")
+        if forwarded_for:
+            client_ip = forwarded_for.split(",")[0].strip()
+        else:
+            real_ip = request.headers.get("X-Real-IP")
+            if real_ip:
+                client_ip = real_ip
+    
+    # Pour la localisation, on peut utiliser l'IP pour une géolocalisation basique
+    # Pour l'instant, on affiche juste l'IP
+    location = None  # Peut être amélioré avec un service de géolocalisation IP
+        
     # Mettre à jour le mot de passe
     crud_user.reset_password(db, user=current_user, new_password=password_data.new_password)
+    
+    # Envoyer l'email de sécurité
+    user_lang = getattr(current_user, 'preferred_language', 'en') or 'en'
+    support_url = f"{settings.FRONTEND_URL}/contact"
+    background_tasks.add_task(
+        email_service.send_password_change_security_email,
+        to_email=current_user.email,
+        support_url=support_url,
+        lang=user_lang,
+        ip_address=client_ip,
+        location=location
+    )
     
     return PasswordResetResponse(message="Mot de passe modifié avec succès")

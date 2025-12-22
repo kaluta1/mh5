@@ -11,7 +11,8 @@ from app.models.contest import VotingLevel, CommissionSource
 router = APIRouter()
 
 
-@router.post("/", response_model=VotingType, status_code=status.HTTP_201_CREATED)
+# IMPORTANT: Les routes spécifiques (sans paramètres) doivent être définies AVANT les routes génériques (avec paramètres)
+@router.post("", response_model=VotingType, status_code=status.HTTP_201_CREATED)
 def create_voting_type(
     *,
     db: Session = Depends(get_db),
@@ -38,7 +39,7 @@ def create_voting_type(
         )
 
 
-@router.get("/", response_model=List[VotingType])
+@router.get("", response_model=List[VotingType])
 def read_voting_types(
     *,
     db: Session = Depends(get_db),

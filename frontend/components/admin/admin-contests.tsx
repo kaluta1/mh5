@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
-import { Plus, Edit2, Trash2, Eye, Calendar, Users, Clock, Zap, X, Trophy, MapPin, CheckCircle2, AlertCircle, Upload, Vote, ShieldCheck, Mic, FileCheck, PawPrint, Users2, Music, Award } from 'lucide-react'
+import { Plus, Edit2, Trash2, Eye, Calendar, Users, Clock, Zap, X, Trophy, MapPin, CheckCircle2, AlertCircle, Upload, Vote, ShieldCheck, Mic, FileCheck, PawPrint, Users2, Music, Award, Settings, Globe } from 'lucide-react'
 import { UploadButton } from '@/components/ui/upload-button'
 import { contestService, type ContestResponse } from '@/lib/services/contest-service'
 import api from '@/lib/api'
@@ -64,6 +64,14 @@ interface Contest {
   max_images?: number
   verification_video_max_duration?: number
   verification_max_size_mb?: number
+  voting_type_id?: number | null
+  voting_type?: {
+    id: number
+    name: string
+    voting_level: string
+    commission_source: string
+    commission_rules?: any
+  }
 }
 
 export default function AdminContests() {
@@ -126,15 +134,27 @@ export default function AdminContests() {
     min_images: 0,
     max_images: 10,
     verification_video_max_duration: 30, // 30 seconds
-    verification_max_size_mb: 50
+    verification_max_size_mb: 50,
+    voting_type_id: null as number | null
   })
   const [uploadedImage, setUploadedImage] = useState<string>('')
   const [seasons, setSeasons] = useState<Array<{ id: number; title: string; level: string }>>([])
   const [loadingSeasons, setLoadingSeasons] = useState(false)
+  const [votingTypes, setVotingTypes] = useState<Array<{ id: number; name: string; voting_level: string; commission_source: string; commission_rules?: any }>>([])
+  const [loadingVotingTypes, setLoadingVotingTypes] = useState(false)
+  const [showVotingTypeForm, setShowVotingTypeForm] = useState(false)
+  const [votingTypeFormData, setVotingTypeFormData] = useState({
+    name: '',
+    voting_level: 'city' as 'city' | 'country' | 'regional' | 'continent' | 'global',
+    commission_source: 'advert' as 'advert' | 'affiliate' | 'kyc' | 'MFM',
+    commission_rules: {} as Record<string, any>
+  })
+  const [isCreatingVotingType, setIsCreatingVotingType] = useState(false)
 
   useEffect(() => {
     fetchContests()
     fetchSeasons()
+    fetchVotingTypes()
   }, [])
 
   const fetchSeasons = async () => {
@@ -146,6 +166,96 @@ export default function AdminContests() {
       console.error('Erreur lors du chargement des saisons:', error)
     } finally {
       setLoadingSeasons(false)
+    }
+  }
+
+  const fetchVotingTypes = async () => {
+    try {
+      setLoadingVotingTypes(true)
+      const response = await api.get('/api/v1/voting-types')
+      if (response.data && Array.isArray(response.data)) {
+        setVotingTypes(response.data)
+      } else {
+        console.warn('Réponse inattendue pour voting-types:', response.data)
+        setVotingTypes([])
+      }
+    } catch (error: any) {
+      console.error('Erreur lors du chargement des types de vote:', error)
+      console.error('URL appelée:', error.config?.url || '/api/v1/voting-types')
+      console.error('Status:', error.response?.status)
+      console.error('Response data:', error.response?.data)
+      // Ne pas afficher d'erreur si c'est juste que l'endpoint n'existe pas encore
+      if (error.response?.status !== 404) {
+        addToast(t('admin.contests.voting_types_load_error') || 'Erreur lors du chargement des types de vote', 'error')
+      }
+      setVotingTypes([])
+    } finally {
+      setLoadingVotingTypes(false)
+    }
+  }
+
+  const handleCreateVotingType = async () => {
+    setIsCreatingVotingType(true)
+    try {
+      // Préparer les données en nettoyant commission_rules (enlever les valeurs undefined)
+      const commissionRules: Record<string, any> = {}
+      if (votingTypeFormData.commission_rules.L1 !== undefined && votingTypeFormData.commission_rules.L1 !== null) {
+        commissionRules.L1 = votingTypeFormData.commission_rules.L1
+      }
+      if (votingTypeFormData.commission_rules['L2-10'] !== undefined && votingTypeFormData.commission_rules['L2-10'] !== null) {
+        commissionRules['L2-10'] = votingTypeFormData.commission_rules['L2-10']
+      }
+      
+      const dataToSend = {
+        name: votingTypeFormData.name.trim(),
+        voting_level: votingTypeFormData.voting_level,
+        commission_source: votingTypeFormData.commission_source,
+        commission_rules: Object.keys(commissionRules).length > 0 ? commissionRules : undefined
+      }
+      
+      console.log('Création de voting type avec les données:', dataToSend)
+      console.log('URL complète:', `${api.defaults.baseURL}/api/v1/voting-types`)
+      
+      const response = await api.post('/api/v1/voting-types', dataToSend)
+      addToast(t('admin.contests.voting_type_created') || 'Type de vote créé avec succès', 'success')
+      setVotingTypes([...votingTypes, response.data])
+      setFormData({ ...formData, voting_type_id: response.data.id })
+      setShowVotingTypeForm(false)
+      setVotingTypeFormData({
+        name: '',
+        voting_level: 'city',
+        commission_source: 'advert',
+        commission_rules: {}
+      })
+    } catch (error: any) {
+      console.error('Erreur lors de la création du type de vote:', error)
+      console.error('URL appelée:', error.config?.url || '/api/v1/voting-types')
+      console.error('Status:', error.response?.status)
+      console.error('Response data:', error.response?.data)
+      console.error('Request data:', error.config?.data)
+      
+      let errorMessage = t('admin.contests.voting_type_create_error') || 'Erreur lors de la création'
+      
+      if (error.response) {
+        // Erreur HTTP avec réponse
+        if (error.response.status === 404) {
+          errorMessage = 'Endpoint non trouvé. Veuillez redémarrer le serveur backend.'
+        } else if (error.response.status === 401 || error.response.status === 403) {
+          errorMessage = error.response.data?.detail || 'Permission insuffisante. Vous devez être administrateur.'
+        } else {
+          errorMessage = error.response.data?.detail || error.response.data?.message || errorMessage
+        }
+      } else if (error.request) {
+        // Requête envoyée mais pas de réponse
+        errorMessage = 'Aucune réponse du serveur. Vérifiez que le serveur backend est démarré.'
+      } else {
+        // Erreur lors de la configuration de la requête
+        errorMessage = error.message || errorMessage
+      }
+      
+      addToast(errorMessage, 'error')
+    } finally {
+      setIsCreatingVotingType(false)
     }
   }
 
@@ -219,7 +329,9 @@ export default function AdminContests() {
         min_images: formData.min_images,
         max_images: formData.max_images,
         verification_video_max_duration: formData.verification_video_max_duration,
-        verification_max_size_mb: formData.verification_max_size_mb
+        verification_max_size_mb: formData.verification_max_size_mb,
+        // Voting type
+        voting_type_id: formData.voting_type_id || null
       }
 
       // Pour la création, inclure les dates principales (les dates de saisons seront calculées automatiquement)
@@ -302,18 +414,19 @@ export default function AdminContests() {
       requires_visual_verification: false,
       requires_voice_verification: false,
       requires_brand_verification: false,
-      requires_content_verification: false,
-      min_age: null,
-      max_age: null,
-      // Media requirements
-      requires_video: false,
-      max_videos: 1,
-      video_max_duration: 3000,
-      video_max_size_mb: 500,
-      min_images: 0,
-      max_images: 10,
-      verification_video_max_duration: 30,
-      verification_max_size_mb: 50
+        requires_content_verification: false,
+        min_age: null,
+        max_age: null,
+        // Media requirements
+        requires_video: false,
+        max_videos: 1,
+        video_max_duration: 3000,
+        video_max_size_mb: 500,
+        min_images: 0,
+        max_images: 10,
+        verification_video_max_duration: 30,
+        verification_max_size_mb: 50,
+        voting_type_id: null
     })
     setUploadedImage('')
   }
@@ -370,7 +483,8 @@ export default function AdminContests() {
       min_images: contest.min_images ?? 0,
       max_images: contest.max_images ?? 10,
       verification_video_max_duration: contest.verification_video_max_duration ?? 30,
-      verification_max_size_mb: contest.verification_max_size_mb ?? 50
+      verification_max_size_mb: contest.verification_max_size_mb ?? 50,
+      voting_type_id: contest.voting_type_id ?? null
     })
     if (contest.cover_image_url || contest.image_url) {
       setUploadedImage(contest.cover_image_url || contest.image_url || '')
@@ -751,6 +865,48 @@ export default function AdminContests() {
                         ))}
                       </SelectContent>
                     </Select>
+                  )}
+                </div>
+
+                {/* Type de vote */}
+                <div>
+                  <label className="block text-sm font-medium mb-2 text-gray-900 dark:text-white flex items-center gap-2">
+                    <Vote className="h-4 w-4" />
+                    {t('admin.contests.voting_type') || 'Type de vote'} (optionnel)
+                  </label>
+                  {loadingVotingTypes ? (
+                    <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-myfav-primary"></div>
+                      {t('common.loading') || 'Chargement...'}
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <Select 
+                        value={formData.voting_type_id?.toString() || 'none'} 
+                        onValueChange={(value) => setFormData({ ...formData, voting_type_id: value === 'none' ? null : parseInt(value) })}
+                      >
+                        <SelectTrigger className="flex-1 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                          <SelectValue placeholder={t('admin.contests.select_voting_type') || 'Sélectionner un type de vote'} />
+                        </SelectTrigger>
+                        <SelectContent className="dark:bg-gray-700">
+                          <SelectItem value="none">{t('admin.contests.none') || 'Aucun'}</SelectItem>
+                          {votingTypes.map((vt) => (
+                            <SelectItem key={vt.id} value={vt.id.toString()}>
+                              {vt.name} ({vt.voting_level} - {vt.commission_source})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setShowVotingTypeForm(true)}
+                        className="gap-2"
+                      >
+                        <Plus className="h-4 w-4" />
+                        {t('admin.contests.new_voting_type') || 'Nouveau'}
+                      </Button>
+                    </div>
                   )}
                 </div>
 
@@ -1358,6 +1514,173 @@ export default function AdminContests() {
         isLoading={isDeleting}
         isDangerous={true}
       />
+
+      {/* Modal de création de Voting Type */}
+      {showVotingTypeForm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-lg dark:bg-gray-800">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4 border-b dark:border-gray-700">
+              <CardTitle className="text-xl flex items-center gap-2">
+                <Settings className="h-5 w-5" />
+                {t('admin.contests.create_voting_type') || 'Créer un type de vote'}
+              </CardTitle>
+              <button
+                onClick={() => {
+                  setShowVotingTypeForm(false)
+                  setVotingTypeFormData({
+                    name: '',
+                    voting_level: 'city',
+                    commission_source: 'advert',
+                    commission_rules: {}
+                  })
+                }}
+                className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <div className="space-y-4">
+                {/* Nom */}
+                <div>
+                  <label className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
+                    {t('admin.contests.name') || 'Nom'} <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    value={votingTypeFormData.name}
+                    onChange={(e) => setVotingTypeFormData({ ...votingTypeFormData, name: e.target.value })}
+                    placeholder={t('admin.contests.voting_type_name_placeholder') || 'Ex: Vote City - Commission Advert'}
+                    required
+                    className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  />
+                </div>
+
+                {/* Niveau de vote */}
+                <div>
+                  <label className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
+                    {t('admin.contests.voting_level') || 'Niveau de vote'} <span className="text-red-500">*</span>
+                  </label>
+                  <Select 
+                    value={votingTypeFormData.voting_level} 
+                    onValueChange={(value: any) => setVotingTypeFormData({ ...votingTypeFormData, voting_level: value })}
+                  >
+                    <SelectTrigger className="dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="dark:bg-gray-700">
+                      <SelectItem value="city"><span className="flex items-center gap-2"><MapPin className="h-4 w-4" /> {t('admin.contests.level_city') || 'Ville'}</span></SelectItem>
+                      <SelectItem value="country"><span className="flex items-center gap-2"><Globe className="h-4 w-4" /> {t('admin.contests.level_country') || 'Pays'}</span></SelectItem>
+                      <SelectItem value="regional">{t('admin.contests.level_region') || 'Régional'}</SelectItem>
+                      <SelectItem value="continent">{t('admin.contests.level_continent') || 'Continent'}</SelectItem>
+                      <SelectItem value="global">{t('admin.contests.level_global') || 'Global'}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Source de commission */}
+                <div>
+                  <label className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
+                    {t('admin.contests.commission_source') || 'Source de commission'} <span className="text-red-500">*</span>
+                  </label>
+                  <Select 
+                    value={votingTypeFormData.commission_source} 
+                    onValueChange={(value: any) => setVotingTypeFormData({ ...votingTypeFormData, commission_source: value })}
+                  >
+                    <SelectTrigger className="dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="dark:bg-gray-700">
+                      <SelectItem value="advert">{t('admin.contests.commission_advert') || 'Publicité'}</SelectItem>
+                      <SelectItem value="affiliate">{t('admin.contests.commission_affiliate') || 'Affiliation'}</SelectItem>
+                      <SelectItem value="kyc">{t('admin.contests.commission_kyc') || 'KYC'}</SelectItem>
+                      <SelectItem value="MFM">{t('admin.contests.commission_mfm') || 'MFM'}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Règles de commission (JSON) */}
+                <div>
+                  <label className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
+                    {t('admin.contests.commission_rules') || 'Règles de commission (JSON)'}
+                  </label>
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">L1</label>
+                        <Input
+                          type="number"
+                          placeholder="Ex: 10"
+                          onChange={(e) => {
+                            const value = e.target.value ? parseFloat(e.target.value) : undefined
+                            setVotingTypeFormData({
+                              ...votingTypeFormData,
+                              commission_rules: { ...votingTypeFormData.commission_rules, L1: value }
+                            })
+                          }}
+                          className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">L2-10</label>
+                        <Input
+                          type="number"
+                          placeholder="Ex: 5"
+                          onChange={(e) => {
+                            const value = e.target.value ? parseFloat(e.target.value) : undefined
+                            setVotingTypeFormData({
+                              ...votingTypeFormData,
+                              commission_rules: { ...votingTypeFormData.commission_rules, 'L2-10': value }
+                            })
+                          }}
+                          className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        />
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {t('admin.contests.commission_rules_help') || 'Les règles de commission sont optionnelles. Format: L1 pour le niveau 1, L2-10 pour les niveaux 2 à 10.'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-3 justify-end pt-4 border-t dark:border-gray-700">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setShowVotingTypeForm(false)
+                      setVotingTypeFormData({
+                        name: '',
+                        voting_level: 'city',
+                        commission_source: 'advert',
+                        commission_rules: {}
+                      })
+                    }}
+                    disabled={isCreatingVotingType}
+                  >
+                    {t('admin.contests.cancel') || 'Annuler'}
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handleCreateVotingType}
+                    disabled={isCreatingVotingType || !votingTypeFormData.name}
+                    className="bg-gradient-to-r from-myfav-primary to-myfav-secondary hover:shadow-lg disabled:opacity-70"
+                  >
+                    {isCreatingVotingType ? (
+                      <div className="flex items-center gap-2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        {t('admin.contests.creating') || 'Création...'}
+                      </div>
+                    ) : (
+                      t('admin.contests.create') || 'Créer'
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   )
 }

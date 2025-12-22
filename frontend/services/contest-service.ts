@@ -661,6 +661,30 @@ class ContestService {
     }
     return emojiMap[type] || emojiMap['default']
   }
+
+  /**
+   * Crée une suggestion de concours
+   */
+  async createSuggestedContest(data: {
+    name: string
+    description?: string
+    category: string
+  }): Promise<any> {
+    try {
+      const response = await api.post('/api/v1/suggested-contests', {
+        name: data.name.trim(),
+        description: data.description?.trim() || null,
+        category: data.category.trim(),
+        status: 'pending'
+      })
+      return response.data
+    } catch (error: any) {
+      console.error('Error creating suggested contest:', error)
+      // Propager l'erreur avec plus de détails
+      const errorMessage = error.response?.data?.detail || error.message || 'Erreur lors de la création de la suggestion'
+      throw new Error(errorMessage)
+    }
+  }
 }
 
 export const contestService = new ContestService()

@@ -38,6 +38,17 @@ EMAIL_TRANSLATIONS = {
         "reset_expiry": "Ce lien expire dans 1 heure.",
         "reset_ignore": "Si vous n'avez pas demandé cette réinitialisation, ignorez cet email. Votre mot de passe ne sera pas modifié.",
         
+        # Password Change Security
+        "password_change_security_subject": "Alerte de sécurité - Changement de mot de passe - MYHIGH5",
+        "password_change_security_title": "Changement de mot de passe détecté",
+        "password_change_security_message": "Votre mot de passe a été modifié avec succès. Si vous n'avez pas effectué cette modification, veuillez contacter immédiatement notre support.",
+        "password_change_security_action": "Si vous avez effectué cette modification, vous pouvez ignorer cet email.",
+        "password_change_security_contact": "Contactez le support",
+        "password_change_security_details": "Détails de l'action :",
+        "password_change_security_ip": "Adresse IP",
+        "password_change_security_location": "Localisation",
+        "password_change_security_unknown_location": "Localisation inconnue",
+        
         # Invitation
         "invitation_subject": "{inviter_name} vous invite à rejoindre MYHIGH5 !",
         "invitation_title": "Vous avez reçu une invitation !",
@@ -111,6 +122,17 @@ EMAIL_TRANSLATIONS = {
         "reset_button": "Reset my password",
         "reset_expiry": "This link expires in 1 hour.",
         "reset_ignore": "If you did not request this reset, please ignore this email. Your password will not be changed.",
+        
+        # Password Change Security
+        "password_change_security_subject": "Security Alert - Password Changed - MYHIGH5",
+        "password_change_security_title": "Password Change Detected",
+        "password_change_security_message": "Your password has been successfully changed. If you did not make this change, please contact our support immediately.",
+        "password_change_security_action": "If you made this change, you can safely ignore this email.",
+        "password_change_security_contact": "Contact Support",
+        "password_change_security_details": "Action details:",
+        "password_change_security_ip": "IP Address",
+        "password_change_security_location": "Location",
+        "password_change_security_unknown_location": "Unknown location",
         
         # Invitation
         "invitation_subject": "{inviter_name} invites you to join MYHIGH5!",
@@ -186,6 +208,17 @@ EMAIL_TRANSLATIONS = {
         "reset_expiry": "Este enlace expira en 1 hora.",
         "reset_ignore": "Si no solicitaste este restablecimiento, ignora este correo. Tu contraseña no será modificada.",
         
+        # Password Change Security
+        "password_change_security_subject": "Alerta de seguridad - Contraseña cambiada - MYHIGH5",
+        "password_change_security_title": "Cambio de contraseña detectado",
+        "password_change_security_message": "Tu contraseña ha sido cambiada exitosamente. Si no realizaste este cambio, contacta inmediatamente a nuestro soporte.",
+        "password_change_security_action": "Si realizaste este cambio, puedes ignorar este correo de forma segura.",
+        "password_change_security_contact": "Contactar soporte",
+        "password_change_security_details": "Detalles de la acción:",
+        "password_change_security_ip": "Dirección IP",
+        "password_change_security_location": "Ubicación",
+        "password_change_security_unknown_location": "Ubicación desconocida",
+        
         # Invitation
         "invitation_subject": "¡{inviter_name} te invita a unirte a MYHIGH5!",
         "invitation_title": "¡Has recibido una invitación!",
@@ -259,6 +292,17 @@ EMAIL_TRANSLATIONS = {
         "reset_button": "Passwort zurücksetzen",
         "reset_expiry": "Dieser Link läuft in 1 Stunde ab.",
         "reset_ignore": "Wenn Sie dieses Zurücksetzen nicht angefordert haben, ignorieren Sie bitte diese E-Mail. Ihr Passwort wird nicht geändert.",
+        
+        # Password Change Security
+        "password_change_security_subject": "Sicherheitswarnung - Passwort geändert - MYHIGH5",
+        "password_change_security_title": "Passwortänderung erkannt",
+        "password_change_security_message": "Ihr Passwort wurde erfolgreich geändert. Wenn Sie diese Änderung nicht vorgenommen haben, kontaktieren Sie bitte sofort unseren Support.",
+        "password_change_security_action": "Wenn Sie diese Änderung vorgenommen haben, können Sie diese E-Mail sicher ignorieren.",
+        "password_change_security_contact": "Support kontaktieren",
+        "password_change_security_details": "Aktionsdetails:",
+        "password_change_security_ip": "IP-Adresse",
+        "password_change_security_location": "Standort",
+        "password_change_security_unknown_location": "Unbekannter Standort",
         
         # Invitation
         "invitation_subject": "{inviter_name} lädt Sie ein, MYHIGH5 beizutreten!",
@@ -728,3 +772,84 @@ def get_commission_email(lang: str, amount: str, commission_type: str, source_na
 """
     
     return t('commission_subject'), html, text
+
+
+def get_password_change_security_email(lang: str, support_url: Optional[str] = None, ip_address: Optional[str] = None, location: Optional[str] = None) -> tuple[str, str, str]:
+    """Generate password change security notification email content"""
+    t = lambda key, **kwargs: get_translation(lang, key, **kwargs)
+    
+    support_link = support_url or f"mailto:{t('support_email')}"
+    
+    # Construire les détails de sécurité
+    security_details = ""
+    if ip_address or location:
+        location_display = location or t('password_change_security_unknown_location')
+        security_details = f"""
+        <div style="background-color: #f4f4f5; border-radius: 12px; padding: 20px; margin: 24px 0;">
+            <p style="margin: 0 0 12px 0; color: #52525b; font-weight: 600; font-size: 14px;">
+                {t('password_change_security_details')}
+            </p>
+            {f'<p style="margin: 0 0 8px 0; color: #71717a; font-size: 14px;"><strong>{t("password_change_security_ip")}:</strong> {ip_address}</p>' if ip_address else ''}
+            <p style="margin: 0; color: #71717a; font-size: 14px;">
+                <strong>{t('password_change_security_location')}:</strong> {location_display}
+            </p>
+        </div>
+        """
+    
+    content = f"""
+        <div style="background-color: #fef2f2; border-left: 4px solid #ef4444; border-radius: 8px; padding: 16px; margin: 24px 0;">
+            <p style="margin: 0; color: #991b1b; font-weight: 600;">
+                ⚠️ {t('password_change_security_title')}
+            </p>
+        </div>
+        
+        <p style="margin: 0 0 24px 0;">
+            {t('password_change_security_message')}
+        </p>
+        
+        {security_details}
+        
+        <p style="margin: 0 0 16px 0; color: #a1a1aa; font-size: 14px;">
+            {t('password_change_security_action')}
+        </p>
+        
+        <p style="margin: 0; color: #a1a1aa; font-size: 14px;">
+            {t('ignore_email')}
+        </p>
+    """
+    
+    html = get_base_email_template(
+        lang=lang,
+        title=t('password_change_security_title'),
+        content=content,
+        button_text=t('password_change_security_contact'),
+        button_url=support_link
+    )
+    
+    # Construire le texte des détails de sécurité
+    security_details_text = ""
+    if ip_address or location:
+        location_display = location or t('password_change_security_unknown_location')
+        security_details_text = f"""
+{t('password_change_security_details')}
+{f'{t("password_change_security_ip")}: {ip_address}' if ip_address else ''}
+{t('password_change_security_location')}: {location_display}
+
+"""
+    
+    text = f"""
+{t('password_change_security_title')}
+
+{t('password_change_security_message')}
+
+{security_details_text}
+{t('password_change_security_action')}
+
+{t('password_change_security_contact')}: {support_link}
+
+{t('ignore_email')}
+
+© 2024 {t('company_name')}. {t('all_rights_reserved')}.
+"""
+    
+    return t('password_change_security_subject'), html, text
