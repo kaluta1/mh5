@@ -730,21 +730,82 @@ class CRUDContest:
             ).first()
         
         # Récupérer tous les contestants du contest via la saison active
-        # Si une saison active existe, utiliser ContestantSeason, sinon fallback sur l'ancien système
+        # IMPORTANT: Filtrer par contest_id pour éviter d'afficher des contestants d'autres contests
+        # qui partagent la même saison
         contestants = []
         if season:
-            # Utiliser ContestantSeason pour récupérer les contestants de la saison active
-            contestants = db.query(Contestant)\
-                .join(ContestantSeason)\
+            # Récupérer les IDs des contestants qui appartiennent vraiment à ce contest spécifique
+            from app.models.voting import ContestantVoting
+            
+            # Option 1: Contestants créés directement pour ce contest (ancien système)
+            # où season_id = contest_id dans le modèle Contestant
+            contestants_old_system = db.query(Contestant.id)\
                 .filter(
-                    ContestantSeason.season_id == season.id,
-                    ContestantSeason.is_active == True,
+                    Contestant.season_id == contest_id,
                     Contestant.is_deleted == False
                 )\
-                .options(
-                    joinedload(Contestant.user)
-                )\
                 .all()
+            
+            contestant_ids_old_system = [row[0] for row in contestants_old_system]
+            
+            # Option 2: Contestants qui ont des votes pour ce contest spécifique
+            # Cela garantit qu'ils ont réellement participé à ce contest
+            contestant_ids_with_votes = db.query(ContestantVoting.contestant_id)\
+                .filter(
+                    ContestantVoting.contest_id == contest_id,
+                    ContestantVoting.season_id == season.id
+                )\
+                .distinct()\
+                .all()
+            
+            contestant_ids_from_votes = [row[0] for row in contestant_ids_with_votes]
+            
+            # Option 3: Vérifier les contestants de la saison qui ont été créés pour ce contest
+            # via le champ season_id qui pourrait pointer vers une saison liée uniquement à ce contest
+            # Mais d'abord, vérifions si cette saison est liée uniquement à ce contest
+            other_contest_links = db.query(ContestSeasonLink)\
+                .filter(
+                    ContestSeasonLink.season_id == season.id,
+                    ContestSeasonLink.contest_id != contest_id,
+                    ContestSeasonLink.is_active == True
+                )\
+                .count()
+            
+            # Si la saison n'est liée qu'à ce contest, alors tous les contestants de la saison
+            # appartiennent à ce contest
+            contestant_ids_from_season = []
+            if other_contest_links == 0:
+                # Cette saison est unique à ce contest, donc tous les contestants de la saison
+                # appartiennent à ce contest
+                contestant_season_links = db.query(ContestantSeason.contestant_id)\
+                    .filter(
+                        ContestantSeason.season_id == season.id,
+                        ContestantSeason.is_active == True
+                    )\
+                    .all()
+                
+                contestant_ids_from_season = [link[0] for link in contestant_season_links]
+            
+            # Combiner toutes les listes et supprimer les doublons
+            all_contestant_ids = list(set(
+                contestant_ids_old_system + 
+                contestant_ids_from_votes + 
+                contestant_ids_from_season
+            ))
+            
+            # Récupérer les contestants avec leurs relations
+            if all_contestant_ids:
+                contestants = db.query(Contestant)\
+                    .filter(
+                        Contestant.id.in_(all_contestant_ids),
+                        Contestant.is_deleted == False
+                    )\
+                    .options(
+                        joinedload(Contestant.user)
+                    )\
+                    .all()
+            else:
+                contestants = []
         else:
             # Fallback : utiliser l'ancien système (season_id = contest_id)
             contestants = db.query(Contestant)\
@@ -935,7 +996,8 @@ class CRUDContest:
         # - continent -> classement par continent
         # - global  -> classement global (tous ensemble)
         def get_group_key(c: Contestant) -> str:
-            if not c.user:
+            # S'assurer que l'utilisateur est chargé
+            if not hasattr(c, 'user') or not c.user:
                 return "global"
             lvl = (season_level or "global") if isinstance(season_level, str) else "global"
             lvl = lvl.lower()
@@ -971,7 +1033,7 @@ class CRUDContest:
         # Fonction utilitaire pour vérifier si un utilisateur peut voter pour un contestant
         def is_geographically_allowed(voter: Optional[User], candidate: Contestant) -> bool:
             # Si pas de voter, pas de candidate.user, ou pas de season_level, permettre le vote
-            if not voter or not candidate.user:
+            if not voter or not hasattr(candidate, 'user') or not candidate.user:
                 return True
             
             # Si pas de season_level défini, pas de restriction géographique
@@ -1031,6 +1093,16 @@ class CRUDContest:
         # Construire la liste des contestants enrichis
         enriched_contestants = []
         for contestant in contestants:
+            # S'assurer que la relation user est chargée
+            if not hasattr(contestant, 'user') or contestant.user is None:
+                # Recharger le contestant avec la relation user si nécessaire
+                contestant = db.query(Contestant)\
+                    .options(joinedload(Contestant.user))\
+                    .filter(Contestant.id == contestant.id)\
+                    .first()
+                if not contestant:
+                    continue  # Skip si le contestant n'existe plus
+            
             # Compter les images et vidéos
             images_count = 0
             videos_count = 0
