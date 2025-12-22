@@ -93,9 +93,7 @@ def calculate_season_dates(voting_start_date: date) -> Dict[str, Optional[date]]
 class CRUDContest:
     def get(self, db: Session, id: int) -> Optional[Contest]:
         """Récupère un concours par son ID"""
-        return db.query(Contest).filter(Contest.id == id, Contest.is_deleted == False).options(
-            joinedload(Contest.voting_type)
-        ).first()
+        return db.query(Contest).filter(Contest.id == id, Contest.is_deleted == False).first()
 
     def get_with_entries(self, db: Session, id: int) -> Optional[Contest]:
         """Récupère un concours avec ses participants"""
