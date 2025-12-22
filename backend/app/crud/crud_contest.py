@@ -122,6 +122,11 @@ class CRUDContest:
         """Crée un nouveau concours"""
         from app.models.contest import VerificationType, ParticipantType
         
+        # S'assurer que le nom commence par "High5"
+        contest_name = obj_in.name.strip()
+        if not contest_name.startswith("High5"):
+            contest_name = f"High5 {contest_name}"
+        
         # Convertir location_id=0 en None pour éviter les violations de FK
         location_id = obj_in.location_id if obj_in.location_id and obj_in.location_id > 0 else None
         template_id = obj_in.template_id if obj_in.template_id and obj_in.template_id > 0 else None
@@ -166,7 +171,7 @@ class CRUDContest:
         season_dates = calculate_season_dates(voting_start_date_for_calc)
         
         db_obj = Contest(
-            name=obj_in.name,
+            name=contest_name,
             description=obj_in.description,
             contest_type=obj_in.contest_type,
             cover_image_url=obj_in.cover_image_url,
@@ -260,8 +265,14 @@ class CRUDContest:
             if field in update_data:
                 value = update_data[field]
                 
+                # S'assurer que le nom commence par "High5" si c'est le champ name
+                if field == 'name' and value is not None:
+                    value = str(value).strip()
+                    if not value.startswith("High5"):
+                        value = f"High5 {value}"
+                
                 # Convertir les dates depuis les strings si nécessaire
-                if field in date_fields and value is not None:
+                elif field in date_fields and value is not None:
                     if isinstance(value, str):
                         try:
                             # Essayer de parser la date depuis le format ISO (YYYY-MM-DD)
