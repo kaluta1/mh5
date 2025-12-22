@@ -18,6 +18,8 @@ interface Contestant {
   name: string
   country?: string
   city?: string
+  continent?: string
+  region?: string
   avatar: string
   participationTitle?: string
   description: string
@@ -119,6 +121,7 @@ export function ContestantsList({
   currentUserId,
   favorites,
   searchQuery = '',
+  formatLocation,
   onToggleFavorite,
   onViewDetails,
   onVote,

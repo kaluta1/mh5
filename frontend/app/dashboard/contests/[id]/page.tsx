@@ -208,6 +208,8 @@ export default function ContestDetailPage() {
             name: c.author_name ?? `Contestant #${index + 1}`,
             country: c.author_country,
             city: c.author_city,
+            continent: c.author_continent,
+            region: c.author_region,
             avatar: c.author_avatar_url ?? '👤',
             participationTitle: c.title,
             description: c.description ?? '',
@@ -341,6 +343,8 @@ export default function ContestDetailPage() {
           name: c.author_name || 'Utilisateur inconnu',
           country: c.author_country,
           city: c.author_city,
+          continent: c.author_continent,
+          region: c.author_region,
           avatar: c.author_avatar_url || '',
           participationTitle: c.title || '',
           description: c.description || '',
@@ -471,6 +475,37 @@ export default function ContestDetailPage() {
 
   const participantsCount = contest.contest.entries_count ?? contest.contestants.length
 
+  // Fonction pour formater la localisation selon le niveau de saison
+  const formatLocation = (contestant: Contestant): string => {
+    const level = (contest.contest.season_level || contest.contest.level || '').toLowerCase()
+    const parts: string[] = []
+
+    if (level === 'city') {
+      // Afficher ville + pays
+      if (contestant.city) parts.push(contestant.city)
+      if (contestant.country) parts.push(contestant.country)
+    } else if (level === 'country') {
+      // Afficher pays + continent
+      if (contestant.country) parts.push(contestant.country)
+      if (contestant.continent) parts.push(contestant.continent)
+    } else if (level === 'regional' || level === 'region') {
+      // Afficher région + continent
+      if (contestant.region) parts.push(contestant.region)
+      if (contestant.continent) parts.push(contestant.continent)
+    } else if (level === 'continent' || level === 'continental') {
+      // Afficher continent uniquement
+      if (contestant.continent) parts.push(contestant.continent)
+    } else {
+      // Global ou niveau inconnu -> afficher toutes les infos disponibles
+      if (contestant.city) parts.push(contestant.city)
+      if (contestant.country) parts.push(contestant.country)
+      if (contestant.region) parts.push(contestant.region)
+      if (contestant.continent) parts.push(contestant.continent)
+    }
+
+    return parts.length > 0 ? parts.join(' · ') : t('dashboard.contests.participant') || 'Participant'
+  }
+
   const filteredContestants = contest.contestants.filter(contestant => {
     if (!searchQuery.trim()) return true
     const query = searchQuery.toLowerCase()
@@ -479,7 +514,9 @@ export default function ContestDetailPage() {
       contestant.participationTitle?.toLowerCase().includes(query) ||
       contestant.description.toLowerCase().includes(query) ||
       contestant.country?.toLowerCase().includes(query) ||
-      contestant.city?.toLowerCase().includes(query)
+      contestant.city?.toLowerCase().includes(query) ||
+      contestant.continent?.toLowerCase().includes(query) ||
+      contestant.region?.toLowerCase().includes(query)
     )
   })
 
@@ -559,6 +596,7 @@ export default function ContestDetailPage() {
                     currentUserId={user?.id}
                 favorites={favorites}
                 searchQuery={searchQuery}
+                formatLocation={formatLocation}
                 onToggleFavorite={handleToggleFavorite}
                 onViewDetails={(contestantId) => router.push(`/dashboard/contests/${contestId}/contestant/${contestantId}`)}
                 onVote={() => {

@@ -111,6 +111,9 @@ interface ContestantCardProps {
   name: string
   country?: string
   city?: string
+  continent?: string
+  region?: string
+  locationDisplay?: string
   avatar: string
   participationTitle?: string
   votes: number
@@ -153,6 +156,9 @@ export function ContestantCard({
   name,
   country,
   city,
+  continent,
+  region,
+  locationDisplay,
   avatar,
   participationTitle,
   votes,
@@ -543,13 +549,13 @@ export function ContestantCard({
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <h3 
+                <h3 
                         className="text-base font-bold text-gray-900 dark:text-white hover:text-myfav-primary dark:hover:text-myfav-blue-400 transition-colors cursor-help"
-                        onMouseEnter={onHoverAuthor}
-                        onMouseLeave={onHoverEnd}
-                      >
-                        {name}
-                      </h3>
+                  onMouseEnter={onHoverAuthor}
+                  onMouseLeave={onHoverEnd}
+                >
+                    {name}
+                  </h3>
                     </TooltipTrigger>
                     <TooltipContent className="bg-gray-800 text-white border-gray-700">
                       <p className="text-xs">{t('dashboard.contests.tooltip_author') || 'Voir le profil du participant'}</p>
@@ -561,8 +567,8 @@ export function ContestantCard({
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span className="text-xs font-bold bg-gradient-to-r from-myfav-primary to-myfav-secondary text-white px-2.5 py-1 rounded-full cursor-help shadow-sm">
-                          #{rank}
-                        </span>
+                    #{rank}
+                  </span>
                       </TooltipTrigger>
                       <TooltipContent className="bg-gray-800 text-white border-gray-700">
                         <p className="text-xs">
@@ -575,18 +581,18 @@ export function ContestantCard({
               </div>
               <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 flex items-center gap-1">
                 <span className="w-1 h-1 rounded-full bg-gray-400"></span>
-                {[country, city].filter(Boolean).join(' · ') || t('dashboard.contests.participant') || 'Participant'}
+                {locationDisplay || [country, city].filter(Boolean).join(' · ') || t('dashboard.contests.participant') || 'Participant'}
               </p>
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <p 
+              <p 
                       className="text-xs text-gray-500 dark:text-gray-500 mt-1 cursor-help hover:text-myfav-primary"
-                      onMouseEnter={currentUserId === userId ? onHoverVotes : undefined}
-                      onMouseLeave={currentUserId === userId ? onHoverEnd : undefined}
-                    >
-                      {currentVotes} {t('dashboard.contests.votes')}
-                    </p>
+                onMouseEnter={currentUserId === userId ? onHoverVotes : undefined}
+                onMouseLeave={currentUserId === userId ? onHoverEnd : undefined}
+              >
+                {currentVotes} {t('dashboard.contests.votes')}
+              </p>
                   </TooltipTrigger>
                   <TooltipContent className="bg-gray-800 text-white border-gray-700">
                     <p className="text-xs">

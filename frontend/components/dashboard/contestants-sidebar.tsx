@@ -11,6 +11,8 @@ interface Contestant {
   name: string
   country?: string
   city?: string
+  continent?: string
+  region?: string
   avatar: string
   rank?: number
 }
@@ -18,12 +20,14 @@ interface Contestant {
 interface ContestantsSidebarProps {
   contestants: Contestant[]
   contestId: string
+  formatLocation?: (contestant: Contestant) => string
   onShowToast: (message: string, type: 'success' | 'error') => void
 }
 
 export function ContestantsSidebar({
   contestants,
   contestId,
+  formatLocation,
   onShowToast
 }: ContestantsSidebarProps) {
   const { t, language } = useLanguage()
@@ -77,10 +81,18 @@ export function ContestantsSidebar({
                   <p className="text-sm font-semibold text-gray-900 dark:text-white truncate group-hover:text-myfav-primary dark:group-hover:text-myfav-blue-400 transition-colors">
                     {contestant.name}
                   </p>
-                  {contestant.country && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                      {contestant.country}{contestant.city ? `, ${contestant.city}` : ''}
-                    </p>
+                  {formatLocation ? (
+                    formatLocation(contestant) && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                        {formatLocation(contestant)}
+                      </p>
+                    )
+                  ) : (
+                    contestant.country && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                        {contestant.country}{contestant.city ? `, ${contestant.city}` : ''}
+                      </p>
+                    )
                   )}
                   {contestant.rank && (
                     <p className="text-xs text-gray-500 dark:text-gray-400">
