@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import List, Optional, Any, Literal
 from datetime import date, datetime
 from pydantic import BaseModel, Field
@@ -194,7 +196,7 @@ class Contest(ContestBase):
     season_level: Optional[str] = None  # Niveau depuis la season
     image_url: Optional[str] = None  # URL de l'image principale
     top_contestants: List[TopContestantPreview] = []  # Top contestants preview
-    voting_type: Optional[VotingType] = None  # Type de vote associé
+    voting_type: Optional["VotingType"] = None  # Type de vote associé
     # Dates des saisons (calculées automatiquement)
     city_season_start_date: Optional[date] = None
     city_season_end_date: Optional[date] = None
