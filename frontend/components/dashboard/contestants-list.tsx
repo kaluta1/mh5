@@ -121,7 +121,6 @@ export function ContestantsList({
   currentUserId,
   favorites,
   searchQuery = '',
-  formatLocation,
   onToggleFavorite,
   onViewDetails,
   onVote,
