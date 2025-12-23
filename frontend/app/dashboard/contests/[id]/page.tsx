@@ -14,6 +14,7 @@ import { ContestInfoDialog } from '@/components/dashboard/contest-info-dialog'
 import { ContestantsList } from '@/components/dashboard/contestants-list'
 import { ContestantsSidebar } from '@/components/dashboard/contestants-sidebar'
 import { HoverInfoDialog } from '@/components/dashboard/hover-info-dialog'
+import { ReportContestantDialog } from '@/components/dashboard/report-contestant-dialog'
 
 interface Media {
   id: string
@@ -123,6 +124,9 @@ export default function ContestDetailPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [hoveredElement, setHoveredElement] = useState<{ type: 'author' | 'description' | 'votes' | 'reactions' | 'favorites'; id: string; data?: any } | null>(null)
   const [hoverTimeout, setHoverTimeout] = useState<NodeJS.Timeout | null>(null)
+  const [reportDialogOpen, setReportDialogOpen] = useState(false)
+  const [selectedContestantId, setSelectedContestantId] = useState<number | null>(null)
+  const [selectedContestantTitle, setSelectedContestantTitle] = useState<string>('')
 
   // Redirection si non authentifié
   useEffect(() => {
@@ -267,6 +271,15 @@ export default function ContestDetailPage() {
       loadContest()
     }
   }, [isLoading, isAuthenticated, user, contestId])
+
+  const handleReportClick = (contestantId: string) => {
+    const contestant = contest?.contestants.find(c => c.id === contestantId)
+    if (contestant) {
+      setSelectedContestantId(parseInt(contestantId))
+      setSelectedContestantTitle(contestant.participationTitle || contestant.name)
+      setReportDialogOpen(true)
+    }
+  }
 
   const handleDeleteContestant = async (contestantId: string) => {
     try {
@@ -603,7 +616,7 @@ export default function ContestDetailPage() {
                 }}
                 onComment={() => {}}
                 onShare={() => {}}
-                onReport={() => showToast('Fonctionnalité de signalement à venir', 'success')}
+                onReport={handleReportClick}
                 onEdit={() => router.push(`/dashboard/contests/${contestId}/participate?edit=true`)}
                 onDelete={handleDeleteContestant}
                 onHoverAuthor={(contestantId, data) => handleHoverStart('author', contestantId, data)}
@@ -631,6 +644,17 @@ export default function ContestDetailPage() {
                 }}
               />
             </div>
+
+            {/* Dialog de signalement */}
+            {selectedContestantId !== null && (
+              <ReportContestantDialog
+                open={reportDialogOpen}
+                onOpenChange={setReportDialogOpen}
+                contestantId={selectedContestantId}
+                contestId={parseInt(contestId)}
+                contestantTitle={selectedContestantTitle}
+              />
+            )}
 
             {/* Contestants Sidebar - Right Side */}
             <ContestantsSidebar

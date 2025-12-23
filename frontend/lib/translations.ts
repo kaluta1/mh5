@@ -1124,6 +1124,36 @@ export interface TranslationKeys {
           server_error: string
         }
       }
+      report_contestant: {
+        title: string
+        description: string
+        contestant: string
+        reason_label: string
+        reason_placeholder: string
+        description_label: string
+        description_placeholder: string
+        characters: string
+        submit: string
+        submitting: string
+        success: string
+        cancel: string
+        reasons: {
+          spam: string
+          inappropriate: string
+          harassment: string
+          fake: string
+          copyright: string
+          other: string
+        }
+        error: {
+          reason_required: string
+          description_required: string
+          description_min_length: string
+          submit_error: string
+          network_error: string
+          server_error: string
+        }
+      }
       participation_form: {
         title: string
         description: string
@@ -2178,7 +2208,9 @@ export const translations: Record<Language, TranslationKeys> = {
           no_title: "Sans titre",
           user: "Utilisateur",
           media_alt: "Média",
-          video_alt: "Vidéo"
+          video_alt: "Vidéo",
+          report: "Signaler",
+          already_reported: "Déjà signalé"
         },
         suggest_contest: {
           title: "Suggérer un concours",
@@ -2199,6 +2231,36 @@ export const translations: Record<Language, TranslationKeys> = {
             name_required: "Le nom du concours est requis",
             category_required: "La catégorie est requise",
             submit_error: "Erreur lors de l'envoi de la suggestion",
+            network_error: "Erreur de connexion. Vérifiez votre connexion internet.",
+            server_error: "Erreur serveur. Veuillez réessayer plus tard."
+          }
+        },
+        report_contestant: {
+          title: "Signaler un participant",
+          description: "Décrivez la raison de votre signalement. Notre équipe examinera votre demande.",
+          contestant: "Participant",
+          reason_label: "Raison du signalement",
+          reason_placeholder: "Sélectionnez une raison",
+          description_label: "Description détaillée",
+          description_placeholder: "Décrivez en détail la raison de votre signalement (minimum 10 caractères)...",
+          characters: "caractères",
+          submit: "Envoyer le signalement",
+          submitting: "Envoi en cours...",
+          success: "Votre signalement a été envoyé avec succès !",
+          cancel: "Annuler",
+          reasons: {
+            spam: "Spam",
+            inappropriate: "Contenu inapproprié",
+            harassment: "Harcèlement",
+            fake: "Faux compte",
+            copyright: "Violation de droits d'auteur",
+            other: "Autre"
+          },
+          error: {
+            reason_required: "La raison est requise",
+            description_required: "La description est requise",
+            description_min_length: "La description doit contenir au moins 10 caractères",
+            submit_error: "Erreur lors de l'envoi du signalement",
             network_error: "Erreur de connexion. Vérifiez votre connexion internet.",
             server_error: "Erreur serveur. Veuillez réessayer plus tard."
           }
@@ -3346,7 +3408,9 @@ export const translations: Record<Language, TranslationKeys> = {
           no_title: "Sans titre",
           user: "Utilisateur",
           media_alt: "Média",
-          video_alt: "Vidéo"
+          video_alt: "Vidéo",
+          report: "Signaler",
+          already_reported: "Déjà signalé"
         },
         suggest_contest: {
           title: "Suggérer un concours",
@@ -3367,6 +3431,36 @@ export const translations: Record<Language, TranslationKeys> = {
             name_required: "Le nom du concours est requis",
             category_required: "La catégorie est requise",
             submit_error: "Erreur lors de l'envoi de la suggestion",
+            network_error: "Erreur de connexion. Vérifiez votre connexion internet.",
+            server_error: "Erreur serveur. Veuillez réessayer plus tard."
+          }
+        },
+        report_contestant: {
+          title: "Signaler un participant",
+          description: "Décrivez la raison de votre signalement. Notre équipe examinera votre demande.",
+          contestant: "Participant",
+          reason_label: "Raison du signalement",
+          reason_placeholder: "Sélectionnez une raison",
+          description_label: "Description détaillée",
+          description_placeholder: "Décrivez en détail la raison de votre signalement (minimum 10 caractères)...",
+          characters: "caractères",
+          submit: "Envoyer le signalement",
+          submitting: "Envoi en cours...",
+          success: "Votre signalement a été envoyé avec succès !",
+          cancel: "Annuler",
+          reasons: {
+            spam: "Spam",
+            inappropriate: "Contenu inapproprié",
+            harassment: "Harcèlement",
+            fake: "Faux compte",
+            copyright: "Violation de droits d'auteur",
+            other: "Autre"
+          },
+          error: {
+            reason_required: "La raison est requise",
+            description_required: "La description est requise",
+            description_min_length: "La description doit contenir au moins 10 caractères",
+            submit_error: "Erreur lors de l'envoi du signalement",
             network_error: "Erreur de connexion. Vérifiez votre connexion internet.",
             server_error: "Erreur serveur. Veuillez réessayer plus tard."
           }
@@ -5475,6 +5569,36 @@ export const translations: Record<Language, TranslationKeys> = {
             name_required: "Contest name is required",
             category_required: "Category is required",
             submit_error: "Error sending suggestion",
+            network_error: "Connection error. Check your internet connection.",
+            server_error: "Server error. Please try again later."
+          }
+        },
+        report_contestant: {
+          title: "Report Contestant",
+          description: "Describe the reason for your report. Our team will review your request.",
+          contestant: "Contestant",
+          reason_label: "Reason for report",
+          reason_placeholder: "Select a reason",
+          description_label: "Detailed description",
+          description_placeholder: "Describe in detail the reason for your report (minimum 10 characters)...",
+          characters: "characters",
+          submit: "Submit Report",
+          submitting: "Submitting...",
+          success: "Your report has been sent successfully!",
+          cancel: "Cancel",
+          reasons: {
+            spam: "Spam",
+            inappropriate: "Inappropriate content",
+            harassment: "Harassment",
+            fake: "Fake account",
+            copyright: "Copyright violation",
+            other: "Other"
+          },
+          error: {
+            reason_required: "Reason is required",
+            description_required: "Description is required",
+            description_min_length: "Description must contain at least 10 characters",
+            submit_error: "Error sending report",
             network_error: "Connection error. Check your internet connection.",
             server_error: "Server error. Please try again later."
           }

@@ -89,6 +89,18 @@ EMAIL_TRANSLATIONS = {
         "contest_rejected_subject": "Candidature refusée - MYHIGH5",
         "contest_rejected_title": "Candidature non approuvée",
         "contest_rejected_message": "Votre candidature au concours <strong>{contest_name}</strong> n'a pas été approuvée.",
+        
+        # Contestant Report
+        "contestant_report_subject": "Nouveau signalement de contestant - MYHIGH5",
+        "contestant_report_title": "Signalement de contestant",
+        "contestant_report_message": "Un nouveau signalement a été soumis pour un contestant.",
+        "contestant_report_contestant": "Contestant signalé :",
+        "contestant_report_author": "Auteur du contestant :",
+        "contestant_report_contest": "Concours :",
+        "contestant_report_reporter": "Signalé par :",
+        "contestant_report_reason": "Raison :",
+        "contestant_report_description": "Description :",
+        "contestant_report_view_button": "Voir le signalement",
     },
     "en": {
         # Common
@@ -174,6 +186,18 @@ EMAIL_TRANSLATIONS = {
         "contest_rejected_subject": "Application Rejected - MYHIGH5",
         "contest_rejected_title": "Application Not Approved",
         "contest_rejected_message": "Your application for the contest <strong>{contest_name}</strong> was not approved.",
+        
+        # Contestant Report
+        "contestant_report_subject": "New Contestant Report - MYHIGH5",
+        "contestant_report_title": "Contestant Report",
+        "contestant_report_message": "A new report has been submitted for a contestant.",
+        "contestant_report_contestant": "Reported Contestant:",
+        "contestant_report_author": "Contestant Author:",
+        "contestant_report_contest": "Contest:",
+        "contestant_report_reporter": "Reported by:",
+        "contestant_report_reason": "Reason:",
+        "contestant_report_description": "Description:",
+        "contestant_report_view_button": "View Report",
     },
     "es": {
         # Common
@@ -259,6 +283,18 @@ EMAIL_TRANSLATIONS = {
         "contest_rejected_subject": "Candidatura rechazada - MYHIGH5",
         "contest_rejected_title": "Candidatura no aprobada",
         "contest_rejected_message": "Tu candidatura al concurso <strong>{contest_name}</strong> no fue aprobada.",
+        
+        # Contestant Report
+        "contestant_report_subject": "Nuevo reporte de concursante - MYHIGH5",
+        "contestant_report_title": "Reporte de concursante",
+        "contestant_report_message": "Se ha enviado un nuevo reporte para un concursante.",
+        "contestant_report_contestant": "Concursante reportado:",
+        "contestant_report_author": "Autor del concursante:",
+        "contestant_report_contest": "Concurso:",
+        "contestant_report_reporter": "Reportado por:",
+        "contestant_report_reason": "Razón:",
+        "contestant_report_description": "Descripción:",
+        "contestant_report_view_button": "Ver reporte",
     },
     "de": {
         # Common
@@ -344,6 +380,18 @@ EMAIL_TRANSLATIONS = {
         "contest_rejected_subject": "Bewerbung abgelehnt - MYHIGH5",
         "contest_rejected_title": "Bewerbung nicht genehmigt",
         "contest_rejected_message": "Ihre Bewerbung für den Wettbewerb <strong>{contest_name}</strong> wurde nicht genehmigt.",
+        
+        # Contestant Report
+        "contestant_report_subject": "Neuer Teilnehmerbericht - MYHIGH5",
+        "contestant_report_title": "Teilnehmerbericht",
+        "contestant_report_message": "Ein neuer Bericht wurde für einen Teilnehmer eingereicht.",
+        "contestant_report_contestant": "Gemeldeter Teilnehmer:",
+        "contestant_report_author": "Autor des Teilnehmers:",
+        "contestant_report_contest": "Wettbewerb:",
+        "contestant_report_reporter": "Gemeldet von:",
+        "contestant_report_reason": "Grund:",
+        "contestant_report_description": "Beschreibung:",
+        "contestant_report_view_button": "Bericht anzeigen",
     }
 }
 
@@ -853,3 +901,85 @@ def get_password_change_security_email(lang: str, support_url: Optional[str] = N
 """
     
     return t('password_change_security_subject'), html, text
+
+
+def get_contestant_report_email(
+    lang: str,
+    contestant_title: str,
+    contestant_author_name: str,
+    contest_name: str,
+    reporter_name: str,
+    reason: str,
+    description: str,
+    report_id: int,
+    admin_url: Optional[str] = None
+) -> tuple[str, str, str]:
+    """Generate contestant report notification email for admin"""
+    t = lambda key, **kwargs: get_translation(lang, key, **kwargs)
+    
+    content = f"""
+        <div style="background-color: #fef2f2; border-left: 4px solid #ef4444; border-radius: 8px; padding: 16px; margin: 24px 0;">
+            <p style="margin: 0; color: #991b1b; font-weight: 600;">
+                ⚠️ {t('contestant_report_title')}
+            </p>
+        </div>
+        
+        <p style="margin: 0 0 24px 0;">
+            {t('contestant_report_message')}
+        </p>
+        
+        <div style="background-color: #f4f4f5; border-radius: 8px; padding: 16px; margin: 24px 0;">
+            <p style="margin: 0 0 8px 0; color: #52525b;">
+                <strong>{t('contestant_report_contestant')}</strong> {contestant_title}
+            </p>
+            <p style="margin: 0 0 8px 0; color: #52525b;">
+                <strong>{t('contestant_report_author')}</strong> {contestant_author_name}
+            </p>
+            <p style="margin: 0 0 8px 0; color: #52525b;">
+                <strong>{t('contestant_report_contest')}</strong> {contest_name}
+            </p>
+            <p style="margin: 0 0 8px 0; color: #52525b;">
+                <strong>{t('contestant_report_reporter')}</strong> {reporter_name}
+            </p>
+            <p style="margin: 0 0 8px 0; color: #52525b;">
+                <strong>{t('contestant_report_reason')}</strong> {reason}
+            </p>
+            <p style="margin: 0; color: #52525b;">
+                <strong>{t('contestant_report_description')}</strong><br/>
+                {description}
+            </p>
+        </div>
+        
+        <p style="margin: 0; color: #a1a1aa; font-size: 14px;">
+            Report ID: #{report_id}
+        </p>
+    """
+    
+    html = get_base_email_template(
+        lang=lang,
+        title=t('contestant_report_title'),
+        content=content,
+        button_text=t('contestant_report_view_button') if admin_url else None,
+        button_url=admin_url
+    )
+    
+    text = f"""
+{t('contestant_report_title')}
+
+{t('contestant_report_message')}
+
+{t('contestant_report_contestant')} {contestant_title}
+{t('contestant_report_author')} {contestant_author_name}
+{t('contestant_report_contest')} {contest_name}
+{t('contestant_report_reporter')} {reporter_name}
+{t('contestant_report_reason')} {reason}
+{t('contestant_report_description')} {description}
+
+Report ID: #{report_id}
+
+{admin_url if admin_url else ''}
+
+© 2024 {t('company_name')}. {t('all_rights_reserved')}.
+"""
+    
+    return t('contestant_report_subject'), html, text

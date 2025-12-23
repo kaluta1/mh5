@@ -778,8 +778,8 @@ class CRUDContest:
                 # Cette saison est unique à ce contest, donc tous les contestants de la saison
                 # appartiennent à ce contest
                 contestant_season_links = db.query(ContestantSeason.contestant_id)\
-                    .filter(
-                        ContestantSeason.season_id == season.id,
+                .filter(
+                    ContestantSeason.season_id == season.id,
                         ContestantSeason.is_active == True
                     )\
                     .all()
@@ -798,12 +798,12 @@ class CRUDContest:
                 contestants = db.query(Contestant)\
                     .filter(
                         Contestant.id.in_(all_contestant_ids),
-                        Contestant.is_deleted == False
-                    )\
-                    .options(
-                        joinedload(Contestant.user)
-                    )\
-                    .all()
+                    Contestant.is_deleted == False
+                )\
+                .options(
+                    joinedload(Contestant.user)
+                )\
+                .all()
             else:
                 contestants = []
         else:
@@ -950,6 +950,17 @@ class CRUDContest:
         
         # Vérifier si l'auteur a ajouté chaque contestant en favoris
         author_favorites = {}
+        # Récupérer les signalements de l'utilisateur courant pour les contestants
+        reported_contestants = set()
+        if current_user_id:
+            from app.models.comment import Report
+            user_reports = db.query(Report.contestant_id).filter(
+                Report.reporter_id == current_user_id,
+                Report.status == "pending",
+                Report.contestant_id.isnot(None)
+            ).all()
+            reported_contestants = {report[0] for report in user_reports if report[0] is not None}
+        
         if current_user_id:
             author_favs = db.query(MyFavorites.contestant_id)\
                 .filter(
@@ -1284,6 +1295,8 @@ class CRUDContest:
                 "has_voted": has_voted,  # L'utilisateur a déjà voté dans cette saison
                 "can_vote": can_vote,  # L'utilisateur peut voter pour ce contestant dans cette saison
                 "vote_restriction_reason": vote_restriction_reason,  # Raison de restriction si can_vote est False
+                # État du signalement
+                "has_reported": contestant.id in reported_contestants,  # L'utilisateur a déjà signalé ce contestant
             })
         
         # Trier par rangs (final_rank) si disponibles, sinon par votes décroissants

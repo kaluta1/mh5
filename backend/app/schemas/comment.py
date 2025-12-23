@@ -67,3 +67,37 @@ class LikeResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# Report schemas
+class ReportBase(BaseModel):
+    reason: str = Field(..., min_length=1, max_length=100, description="Raison du signalement")
+    description: Optional[str] = Field(None, max_length=2000, description="Description détaillée du signalement")
+
+
+class ContestantReportCreate(ReportBase):
+    """Schéma pour signaler un contestant"""
+    contestant_id: int = Field(..., description="ID du contestant signalé")
+    contest_id: int = Field(..., description="ID du contest concerné")
+    reason: str = Field(..., min_length=1, max_length=100)
+    description: str = Field(..., min_length=10, max_length=2000, description="Description obligatoire de la raison du signalement")
+
+
+class ReportResponse(BaseModel):
+    id: int
+    reporter_id: int
+    contestant_id: Optional[int] = None
+    contest_id: Optional[int] = None
+    reason: str
+    description: Optional[str] = None
+    status: str
+    created_at: datetime
+    updated_at: datetime
+    
+    # Informations sur le contestant signalé
+    contestant_title: Optional[str] = None
+    contestant_author_name: Optional[str] = None
+    contest_name: Optional[str] = None
+    
+    class Config:
+        from_attributes = True

@@ -302,7 +302,7 @@ def change_password(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Le mot de passe doit contenir au moins 6 caractères"
         )
-    
+        
     # Récupérer l'adresse IP du client
     client_ip = request.client.host if request.client else None
     # Récupérer l'IP depuis les headers si disponible (pour les proxies)
@@ -318,7 +318,7 @@ def change_password(
     # Pour la localisation, on peut utiliser l'IP pour une géolocalisation basique
     # Pour l'instant, on affiche juste l'IP
     location = None  # Peut être amélioré avec un service de géolocalisation IP
-        
+    
     # Mettre à jour le mot de passe
     crud_user.reset_password(db, user=current_user, new_password=password_data.new_password)
     

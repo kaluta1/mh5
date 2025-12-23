@@ -685,6 +685,28 @@ class ContestService {
       throw new Error(errorMessage)
     }
   }
+
+  /**
+   * Signale un contestant
+   */
+  async reportContestant(contestantId: number, contestId: number, data: {
+    reason: string
+    description: string
+  }): Promise<any> {
+    try {
+      const response = await api.post(`/api/v1/contestants/${contestantId}/report`, {
+        contestant_id: contestantId,
+        contest_id: contestId,
+        reason: data.reason.trim(),
+        description: data.description.trim()
+      })
+      return response.data
+    } catch (error: any) {
+      console.error('Error reporting contestant:', error)
+      const errorMessage = error.response?.data?.detail || error.message || 'Erreur lors du signalement'
+      throw new Error(errorMessage)
+    }
+  }
 }
 
 export const contestService = new ContestService()

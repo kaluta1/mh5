@@ -1,8 +1,10 @@
 'use client'
 
+import { useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { ContestantCard } from './contestant-card'
+import { ReportContestantDialog } from './report-contestant-dialog'
 import { useLanguage } from '@/contexts/language-context'
 
 interface Media {
@@ -29,6 +31,7 @@ interface Contestant {
   videosCount: number
   canVote: boolean
   hasVoted: boolean
+  hasReported?: boolean
   voteRestrictionReason?: string | null
   media: Media[]
   comments: number
@@ -137,6 +140,20 @@ export function ContestantsList({
   onHoverFavorites
 }: ContestantsListProps) {
   const { t, language } = useLanguage()
+  const [reportDialogOpen, setReportDialogOpen] = useState(false)
+  const [selectedContestantId, setSelectedContestantId] = useState<number | null>(null)
+  const [selectedContestantTitle, setSelectedContestantTitle] = useState<string>('')
+
+  const handleReportClick = (contestantId: string) => {
+    const contestant = contestants.find(c => c.id === contestantId)
+    if (contestant) {
+      setSelectedContestantId(parseInt(contestantId))
+      setSelectedContestantTitle(contestant.participationTitle || contestant.name)
+      setReportDialogOpen(true)
+    }
+    // Appeler aussi le callback original si nécessaire
+    onReport(contestantId)
+  }
 
   const getRankBadgeColor = (rank?: number) => {
     if (!rank) return 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
@@ -246,6 +263,7 @@ export function ContestantsList({
             videosCount={contestant.videosCount}
             canVote={contestant.canVote}
             hasVoted={contestant.hasVoted}
+            hasReported={contestant.hasReported}
             voteRestrictionReason={contestant.voteRestrictionReason}
             isFavorite={favorites.includes(contestant.id)}
             media={contestant.media}
@@ -261,7 +279,7 @@ export function ContestantsList({
             onVote={() => onVote(contestant.id)}
             onComment={() => onComment(contestant.id)}
             onShare={() => onShare(contestant.id)}
-            onReport={() => onReport(contestant.id)}
+            onReport={() => handleReportClick(contestant.id)}
             onEdit={() => onEdit(contestant.id)}
             onDelete={() => onDelete(contestant.id)}
             onHoverAuthor={() => onHoverAuthor(contestant.id, {
@@ -289,6 +307,17 @@ export function ContestantsList({
           />
         </div>
       ))}
+      
+      {/* Dialog de signalement */}
+      {selectedContestantId !== null && (
+        <ReportContestantDialog
+          open={reportDialogOpen}
+          onOpenChange={setReportDialogOpen}
+          contestantId={selectedContestantId}
+          contestId={parseInt(contestId)}
+          contestantTitle={selectedContestantTitle}
+        />
+      )}
     </div>
   )
 }

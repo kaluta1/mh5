@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from app.models.user import User
     from app.models.media import Media
     from app.models.contests import Contestant
+    from app.models.contest import Contest
 
 class Comment(Base):
     __tablename__ = "comment"
@@ -66,6 +67,8 @@ class Report(Base):
     contest_entry_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("contest_entry.id"), nullable=True)
     comment_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("comment.id"), nullable=True)
     user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    contestant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("contestants.id"), nullable=True)
+    contest_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("contest.id"), nullable=True)
     
     reason: Mapped[str] = mapped_column(String(100), nullable=False)  # spam, inappropriate, harassment, etc.
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -82,3 +85,5 @@ class Report(Base):
     reporter: Mapped["User"] = relationship("User", foreign_keys=[reporter_id])
     reported_user: Mapped[Optional["User"]] = relationship("User", foreign_keys=[user_id])
     moderator: Mapped[Optional["User"]] = relationship("User", foreign_keys=[reviewed_by])
+    contestant: Mapped[Optional["Contestant"]] = relationship("Contestant")
+    contest: Mapped[Optional["Contest"]] = relationship("Contest")

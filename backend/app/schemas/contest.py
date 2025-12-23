@@ -300,6 +300,9 @@ class ContestantEnriched(BaseModel):
     # État du vote pour l'utilisateur courant
     has_voted: bool = False
     can_vote: bool = False
+    
+    # État du signalement pour l'utilisateur courant
+    has_reported: bool = False  # Si l'utilisateur courant a déjà signalé ce contestant
 
 
 class ContestWithEnrichedContestants(Contest):

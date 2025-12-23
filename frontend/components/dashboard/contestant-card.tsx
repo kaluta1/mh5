@@ -122,6 +122,7 @@ interface ContestantCardProps {
   videosCount?: number
   canVote?: boolean
   hasVoted?: boolean
+  hasReported?: boolean
   voteRestrictionReason?: string | null
   isFavorite: boolean
   media: Media[]
@@ -167,6 +168,7 @@ export function ContestantCard({
   videosCount = 0,
   canVote = false,
   hasVoted = false,
+  hasReported = false,
   voteRestrictionReason,
   isFavorite,
   media,
@@ -415,11 +417,12 @@ export function ContestantCard({
             <ContestantActionsMenu
               isAuthor={isAuthor}
               isFavorite={isFavorite}
+              hasReported={hasReported}
               onEdit={onEdit}
               onDelete={handleDelete}
               onToggleFavorite={onToggleFavorite}
               onShare={handleShare}
-              onReport={onReport}
+              onReport={!hasReported && !isAuthor ? onReport : undefined}
             />
           </div>
         </div>

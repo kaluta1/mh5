@@ -1,14 +1,16 @@
 from typing import List, Optional, Any
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
 
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
 from app.api import deps
-from app.crud import contestant as crud_contestant
+from app.crud import contestant as crud_contestant, report
 from app.models.user import User
 from app.models.contests import Contestant, ContestSubmission, ContestSeason, ContestStage, ContestantSeason, SeasonLevel
 from app.models.voting import MyFavorites, Vote, ContestantReaction, ContestantShare, ReactionType, ContestantVoting
+from app.models.contest import Contest
+from app.schemas.comment import ContestantReportCreate, ReportResponse
 from app.schemas.voting import (
     ReactionCreate, Reaction, ReactionStats, ReactionDetails, ReactionUserDetail,
     VoteDetails, VoteUserDetail,
@@ -1583,4 +1585,129 @@ def get_favorite_details(
     return FavoriteDetails(
         contestant_id=contestant_id,
         users=users
+    )
+
+
+@router.post("/{contestant_id}/report", response_model=ReportResponse, status_code=status.HTTP_201_CREATED)
+def report_contestant(
+    *,
+    db: Session = Depends(deps.get_db),
+    contestant_id: int,
+    report_data: ContestantReportCreate,
+    current_user: User = Depends(deps.get_current_active_user),
+    background_tasks: BackgroundTasks
+) -> ReportResponse:
+    """
+    Signaler un contestant.
+    Enregistre le signalement et envoie une notification à l'admin.
+    """
+    from fastapi import BackgroundTasks
+    from app.services.email import email_service
+    from app.crud import user as crud_user
+    
+    # Vérifier que le contestant existe
+    contestant = crud_contestant.get(db, contestant_id)
+    if not contestant:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Contestant not found"
+        )
+    
+    # Vérifier que le contest existe
+    contest = db.query(Contest).filter(Contest.id == report_data.contest_id).first()
+    if not contest:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Contest not found"
+        )
+    
+    # Vérifier que le contestant appartient bien au contest
+    # (vérification basique, peut être améliorée selon votre logique)
+    
+    # Vérifier que l'utilisateur ne signale pas son propre contestant
+    if contestant.user_id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot report your own contestant"
+        )
+    
+    # Vérifier qu'il n'y a pas déjà un signalement en attente du même utilisateur pour ce contestant
+    from app.models.comment import Report as ReportModel
+    existing_report = db.query(ReportModel).filter(
+        ReportModel.reporter_id == current_user.id,
+        ReportModel.contestant_id == contestant_id,
+        ReportModel.status == "pending"
+    ).first()
+    
+    if existing_report:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You have already reported this contestant. Please wait for admin review."
+        )
+    
+    # Créer le signalement
+    try:
+        new_report = report.create_contestant_report(
+            db=db,
+            obj_in=report_data,
+            reporter_id=current_user.id
+        )
+        
+        # Récupérer l'auteur du contestant
+        contestant_author = crud_user.get(db, contestant.user_id)
+        author_name = contestant_author.full_name if contestant_author else "Unknown"
+        
+        # Envoyer une notification email à l'admin en arrière-plan
+        # Récupérer tous les admins
+        admin_users = db.query(User).filter(User.is_admin == True, User.is_active == True).all()
+        
+        if admin_users:
+            from app.services.email_templates import get_contestant_report_email
+            from app.core.config import settings
+            
+            for admin in admin_users:
+                admin_lang = getattr(admin, 'preferred_language', 'en') or 'en'
+                
+                # Générer l'email
+                subject, html_content, text_content = get_contestant_report_email(
+                    lang=admin_lang,
+                    contestant_title=contestant.title or "Untitled",
+                    contestant_author_name=author_name,
+                    contest_name=contest.name,
+                    reporter_name=current_user.full_name or current_user.username,
+                    reason=report_data.reason,
+                    description=report_data.description,
+                    report_id=new_report.id,
+                    admin_url=f"{settings.FRONTEND_URL}/admin/reports/{new_report.id}"
+                )
+                
+                background_tasks.add_task(
+                    email_service.send_email,
+                    to_email=admin.email,
+                    subject=subject,
+                    html_content=html_content,
+                    text_content=text_content
+                )
+        
+        # Construire la réponse
+        return ReportResponse(
+            id=new_report.id,
+            reporter_id=new_report.reporter_id,
+            contestant_id=new_report.contestant_id,
+            contest_id=new_report.contest_id,
+            reason=new_report.reason,
+            description=new_report.description,
+            status=new_report.status,
+            created_at=new_report.created_at,
+            updated_at=new_report.updated_at,
+            contestant_title=contestant.title,
+            contestant_author_name=author_name,
+            contest_name=contest.name
+        )
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error creating report: {str(e)}"
     )
