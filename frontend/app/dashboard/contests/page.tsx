@@ -12,8 +12,10 @@ import { ContestsHeader } from '@/components/dashboard/contests-header'
 import { ContestsGrid } from '@/components/dashboard/contests-grid'
 import { ContestsLoader } from '@/components/dashboard/contests-loader'
 import { contestService, Contest } from '@/services/contest-service'
-import { AlertCircle, UserCircle, Fingerprint, ChevronRight, X, Lightbulb } from 'lucide-react'
+import { AlertCircle, UserCircle, Fingerprint, ChevronRight, X, Lightbulb, Search, ArrowUpDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ContestCard } from '@/components/dashboard/contest-card'
 import { SuggestContestDialog } from '@/components/dashboard/suggest-contest-dialog'
 
@@ -25,7 +27,8 @@ export default function ContestsPage() {
   const [allContests, setAllContests] = useState<Contest[]>([])
   const [displayedContests, setDisplayedContests] = useState<Contest[]>([])
   const [favorites, setFavorites] = useState<string[]>([])
-  const [searchTerm, setSearchTerm] = useState('')
+  const [searchTerm, setSearchTerm] = useState('') // Terme de recherche dans l'input
+  const [activeSearchTerm, setActiveSearchTerm] = useState('') // Terme de recherche actif (utilisé pour l'API)
   const [pageLoading, setPageLoading] = useState(true)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
@@ -33,6 +36,8 @@ export default function ContestsPage() {
   const [showMobileAlert, setShowMobileAlert] = useState(true)
   const [activeTab, setActiveTab] = useState<string>('all')
   const [showSuggestDialog, setShowSuggestDialog] = useState(false)
+  const [categoryTab, setCategoryTab] = useState<'nomination' | 'participations'>('participations')
+  const [sortBy, setSortBy] = useState<string>('participants') // participants, votes, date, name
   const ITEMS_PER_PAGE = 9
   const observerTarget = React.useRef(null)
   const isLoadingDataRef = React.useRef(false)
@@ -107,30 +112,34 @@ export default function ContestsPage() {
       return
     }
     
-    // Si on a déjà des données, arrêter le loading
-    if (allContests.length > 0) {
-      console.log('[ContestsPage] Already have contests, stopping loading')
-      setPageLoading(false)
-      return
-    }
-    
     // Éviter les appels multiples simultanés
     if (isLoadingDataRef.current) {
-      console.log('[ContestsPage] Already loading data, skipping...')
       return
     }
     
-    console.log('[ContestsPage] Starting to load contests...')
+    // Réinitialiser les données quand searchTerm ou categoryTab change
+    // (mais seulement si on a déjà des données, pour éviter de réinitialiser au premier chargement)
+    if (allContests.length > 0) {
+      setAllContests([])
+      setDisplayedContests([])
+      setCurrentPage(1)
+    }
     
     const loadData = async () => {
       isLoadingDataRef.current = true
       
       try {
         setPageLoading(true)
-        console.log('[ContestsPage] Calling getContests API...')
         
-        // Récupérer les contests du backend (jusqu'à 100)
-        const apiContests = await contestService.getContests(0, 100)
+        // Récupérer les contests du backend avec filtres
+        // Déterminer le voting_level selon l'onglet actif
+        const votingLevel = categoryTab === 'nomination' ? 'country' : undefined
+        const apiContests = await contestService.getContests(
+          0, 
+          100,
+          activeSearchTerm || undefined,
+          votingLevel
+        )
         console.log('[ContestsPage] API response received:', apiContests?.length || 0, 'contests')
         // Debug: Log first contest's top_contestants
         if (apiContests?.length > 0) {
@@ -161,25 +170,46 @@ export default function ContestsPage() {
           )
           console.log('[ContestsPage] Converted to Contest objects:', contests.length)
           
-          // Trier les contests par nombre de participants (le plus suivi en premier)
+          // Trier les contests selon l'option de tri sélectionnée
           const sortedContests = [...contests].sort((a, b) => {
-            // Priorité: nombre de participants, puis votes reçus
+            switch (sortBy) {
+              case 'participants':
+                if (b.contestants !== a.contestants) {
+                  return b.contestants - a.contestants
+                }
+                return b.received - a.received
+              case 'votes':
+                if (b.received !== a.received) {
+                  return b.received - a.received
+                }
+                return b.contestants - a.contestants
+              case 'date':
+                return new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
+              case 'name':
+                return a.title.localeCompare(b.title)
+              default:
+                // Par défaut : participants puis votes
             if (b.contestants !== a.contestants) {
               return b.contestants - a.contestants
             }
             return b.received - a.received
+            }
           })
           
           console.log('[ContestsPage] Setting state with', sortedContests.length, 'contests')
           if (isMountedRef.current) {
             setAllContests(sortedContests)
-            setDisplayedContests(sortedContests.slice(0, ITEMS_PER_PAGE))
-            setHasMore(sortedContests.length > ITEMS_PER_PAGE)
+            // Filtrer selon la catégorie active pour displayedContests
+            const categoryFiltered = sortedContests.filter(contest => {
+              if (categoryTab === 'nomination') {
+                return contest.votingType != null && contest.votingType.voting_level?.toLowerCase() === 'country'
+              } else {
+                return !(contest.votingType != null && contest.votingType.voting_level?.toLowerCase() === 'country')
+              }
+            })
+            setDisplayedContests(categoryFiltered.slice(0, ITEMS_PER_PAGE))
+            setHasMore(categoryFiltered.length > ITEMS_PER_PAGE)
             setCurrentPage(1) // Réinitialiser la page
-            
-            console.log(`[ContestsPage] Chargé ${contests.length} contests du backend`)
-            console.log(`[ContestsPage] displayedContests: ${sortedContests.slice(0, ITEMS_PER_PAGE).length} contests`)
-            console.log(`[ContestsPage] First contest:`, sortedContests[0])
           }
         }
         
@@ -219,15 +249,57 @@ export default function ContestsPage() {
     }
 
     loadData()
-  }, [isLoading, isAuthenticated])
+  }, [isLoading, isAuthenticated, activeSearchTerm, categoryTab])
+
+  // Mettre à jour displayedContests quand categoryTab ou sortBy change
+  useEffect(() => {
+    if (allContests.length === 0) return
+    
+    let categoryFiltered = allContests.filter(contest => {
+      if (categoryTab === 'nomination') {
+        return contest.votingType != null && contest.votingType.voting_level?.toLowerCase() === 'country'
+      } else {
+        return !(contest.votingType != null && contest.votingType.voting_level?.toLowerCase() === 'country')
+      }
+    })
+    
+    // Appliquer le tri
+    const sorted = [...categoryFiltered].sort((a, b) => {
+      switch (sortBy) {
+        case 'participants':
+          if (b.contestants !== a.contestants) {
+            return b.contestants - a.contestants
+          }
+          return b.received - a.received
+        case 'votes':
+          if (b.received !== a.received) {
+            return b.received - a.received
+          }
+          return b.contestants - a.contestants
+        case 'date':
+          return new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
+        case 'name':
+          return a.title.localeCompare(b.title)
+        default:
+          if (b.contestants !== a.contestants) {
+            return b.contestants - a.contestants
+          }
+          return b.received - a.received
+      }
+    })
+    
+    setDisplayedContests(sorted.slice(0, ITEMS_PER_PAGE))
+    setHasMore(sorted.length > ITEMS_PER_PAGE)
+    setCurrentPage(1)
+  }, [categoryTab, allContests, sortBy])
 
   // Infinite scroll avec Intersection Observer
   useEffect(() => {
-    if (searchTerm !== '') return // Ne pas observer si on est en mode recherche
+    if (activeSearchTerm !== '' || activeTab !== 'all') return // Ne pas observer si on est en mode recherche ou filtre par type
     
     const observer = new IntersectionObserver(
       entries => {
-        if (entries[0].isIntersecting && hasMore && !isLoadingMore && searchTerm === '') {
+        if (entries[0].isIntersecting && hasMore && !isLoadingMore && activeSearchTerm === '' && activeTab === 'all') {
           loadMore()
         }
       },
@@ -244,22 +316,56 @@ export default function ContestsPage() {
         observer.unobserve(currentTarget)
       }
     }
-  }, [hasMore, isLoadingMore, searchTerm, allContests.length])
+  }, [hasMore, isLoadingMore, searchTerm, activeTab, allContests.length])
 
   const loadMore = React.useCallback(() => {
-    if (isLoadingMore || !hasMore || searchTerm !== '') return
+    if (isLoadingMore || !hasMore || activeSearchTerm !== '' || activeTab !== 'all') return
     
     setIsLoadingMore(true)
     try {
+      // Filtrer selon la catégorie active
+      let categoryFiltered = allContests.filter(contest => {
+        if (categoryTab === 'nomination') {
+          return contest.votingType != null && contest.votingType.voting_level?.toLowerCase() === 'country'
+        } else {
+          return !(contest.votingType != null && contest.votingType.voting_level?.toLowerCase() === 'country')
+        }
+      })
+      
+      // Appliquer le tri
+      const sorted = [...categoryFiltered].sort((a, b) => {
+        switch (sortBy) {
+          case 'participants':
+            if (b.contestants !== a.contestants) {
+              return b.contestants - a.contestants
+            }
+            return b.received - a.received
+          case 'votes':
+            if (b.received !== a.received) {
+              return b.received - a.received
+            }
+            return b.contestants - a.contestants
+          case 'date':
+            return new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
+          case 'name':
+            return a.title.localeCompare(b.title)
+          default:
+            if (b.contestants !== a.contestants) {
+              return b.contestants - a.contestants
+            }
+            return b.received - a.received
+        }
+      })
+      
       const nextPage = currentPage + 1
       const startIndex = currentPage * ITEMS_PER_PAGE
       const endIndex = startIndex + ITEMS_PER_PAGE
-      const newContests = allContests.slice(startIndex, endIndex)
+      const newContests = sorted.slice(startIndex, endIndex)
       
       if (newContests.length > 0) {
         setDisplayedContests(prev => [...prev, ...newContests])
         setCurrentPage(nextPage)
-        setHasMore(endIndex < allContests.length)
+        setHasMore(endIndex < sorted.length)
       } else {
         setHasMore(false)
       }
@@ -268,35 +374,74 @@ export default function ContestsPage() {
     } finally {
       setIsLoadingMore(false)
     }
-  }, [currentPage, allContests, hasMore, isLoadingMore, searchTerm])
+  }, [currentPage, allContests, hasMore, isLoadingMore, searchTerm, activeTab, categoryTab, sortBy])
 
 
-  // Filtrer les contests selon la recherche et l'onglet actif
+  // Filtrer et trier les contests selon la catégorie (Nomination/Participations), la recherche et l'onglet actif
   const filteredContests = React.useMemo(() => {
     let contests = allContests
+    
+    // Filtrer par catégorie (Nomination ou Participations)
+    if (categoryTab === 'nomination') {
+      // Nomination : contests avec voting_type défini ET voting_level = "country"
+      contests = contests.filter(contest => 
+        contest.votingType != null && 
+        contest.votingType.voting_level?.toLowerCase() === 'country'
+      )
+    } else {
+      // Participations : tous les autres contests (sans voting_type OU voting_level != "country")
+      contests = contests.filter(contest => 
+        !(contest.votingType != null && contest.votingType.voting_level?.toLowerCase() === 'country')
+      )
+    }
     
     // Filtrer par type si un onglet est sélectionné
     if (activeTab !== 'all') {
       const selectedType = contestTypes.find(t => t.id === activeTab)
       if (selectedType && selectedType.value) {
-        contests = allContests.filter(contest => contest.contestType === selectedType.value)
+        contests = contests.filter(contest => contest.contestType === selectedType.value)
       }
     }
     
-    // Filtrer par recherche
-    if (searchTerm !== '') {
-      contests = contests.filter(contest =>
-        contest.title.toLowerCase().includes(searchTerm.toLowerCase())
-      )
-    }
+    // La recherche est maintenant gérée côté backend, pas besoin de filtrer ici
     
-    // Limiter pour l'infinite scroll
-    if (searchTerm === '' && activeTab === 'all') {
+    // Trier les contests selon l'option sélectionnée
+    const sortedContests = [...contests].sort((a, b) => {
+      switch (sortBy) {
+        case 'participants':
+          // Trier par nombre de participants (décroissant)
+          if (b.contestants !== a.contestants) {
+            return b.contestants - a.contestants
+          }
+          return b.received - a.received
+        case 'votes':
+          // Trier par nombre de votes (décroissant)
+          if (b.received !== a.received) {
+            return b.received - a.received
+          }
+          return b.contestants - a.contestants
+        case 'date':
+          // Trier par date de début (décroissant - plus récent en premier)
+          return new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
+        case 'name':
+          // Trier par nom (alphabétique)
+          return a.title.localeCompare(b.title)
+        default:
+          // Par défaut : participants puis votes
+          if (b.contestants !== a.contestants) {
+            return b.contestants - a.contestants
+          }
+          return b.received - a.received
+      }
+    })
+    
+    // Limiter pour l'infinite scroll (seulement si pas de recherche et pas de filtre par type)
+    if (activeSearchTerm === '' && activeTab === 'all') {
       return displayedContests
     }
     
-    return contests.slice(0, ITEMS_PER_PAGE * currentPage)
-  }, [searchTerm, displayedContests, allContests, currentPage, activeTab, contestTypes])
+    return sortedContests.slice(0, ITEMS_PER_PAGE * currentPage)
+  }, [searchTerm, displayedContests, allContests, currentPage, activeTab, contestTypes, categoryTab, sortBy])
 
   const handleToggleFavorite = async (contestId: string) => {
     try {
@@ -328,6 +473,35 @@ export default function ContestsPage() {
   const handleParticipate = (contestId: string) => {
     router.push(`/dashboard/contests/${contestId}/participate`)
   }
+
+  // Fonction pour déclencher la recherche
+  const handleSearch = () => {
+    // Si la recherche est vide, réinitialiser pour afficher toute la liste
+    if (searchTerm.trim() === '') {
+      setActiveSearchTerm('')
+    } else {
+      setActiveSearchTerm(searchTerm)
+    }
+    setCurrentPage(1)
+    setDisplayedContests([])
+  }
+
+  // Gérer l'appui sur Entrée dans l'input de recherche
+  const handleSearchKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handleSearch()
+    }
+  }
+
+  // Détecter quand la barre de recherche est vidée
+  useEffect(() => {
+    if (searchTerm === '' && activeSearchTerm !== '') {
+      // La barre de recherche a été vidée, réinitialiser la recherche active
+      setActiveSearchTerm('')
+      setCurrentPage(1)
+      setDisplayedContests([])
+    }
+  }, [searchTerm, activeSearchTerm])
 
   // Debug log pour vérifier l'état
   React.useEffect(() => {
@@ -376,13 +550,105 @@ export default function ContestsPage() {
           </Button>
         </div>
        
-        {/* Barre d'onglets de navigation */}
+        {/* Barre d'onglets principaux (Nomination / Participations) */}
+        <div className="mb-6 border-b border-gray-800">
+          <div className="flex space-x-1">
+            <button
+              onClick={() => {
+                setCategoryTab('nomination')
+                setActiveTab('all')
+                setCurrentPage(1)
+                setDisplayedContests([])
+              }}
+              className={`px-6 py-3 text-base font-semibold transition-colors border-b-2 ${
+                categoryTab === 'nomination'
+                  ? 'border-blue-500 text-blue-500'
+                  : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-600'
+              }`}
+            >
+              {t('dashboard.contests.nomination') || 'Nomination'}
+            </button>
+            <button
+              onClick={() => {
+                setCategoryTab('participations')
+                setActiveTab('all')
+                setCurrentPage(1)
+                setDisplayedContests([])
+              }}
+              className={`px-6 py-3 text-base font-semibold transition-colors border-b-2 ${
+                categoryTab === 'participations'
+                  ? 'border-blue-500 text-blue-500'
+                  : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-600'
+              }`}
+            >
+              {t('dashboard.contests.participations') || 'Participations'}
+            </button>
+          </div>
+        </div>
+
+        {/* Barre de recherche et tri */}
+        <div className="mb-6 flex flex-col sm:flex-row gap-4">
+          {/* Barre de recherche */}
+          <div className="flex-1 flex gap-2">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <Input
+                type="text"
+                placeholder={t('dashboard.contests.search_placeholder') || 'Rechercher un concours...'}
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value)
+                }}
+                onKeyPress={handleSearchKeyPress}
+                className="pl-10 bg-gray-800 border-gray-700 text-white placeholder-gray-400 focus:border-blue-500"
+              />
+            </div>
+            <Button
+              onClick={handleSearch}
+              className="bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-white px-6"
+            >
+              <Search className="w-4 h-4 mr-2" />
+              {t('dashboard.contests.search_button') || 'Rechercher'}
+            </Button>
+          </div>
+          
+          {/* Sélecteur de tri */}
+          <div className="w-full sm:w-48">
+            <Select value={sortBy} onValueChange={(value) => {
+              setSortBy(value)
+              setCurrentPage(1)
+              setDisplayedContests([])
+            }}>
+              <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
+                <ArrowUpDown className="w-4 h-4 mr-2" />
+                <SelectValue placeholder={t('dashboard.contests.sort') || 'Trier par'} />
+              </SelectTrigger>
+              <SelectContent className="bg-gray-800 border-gray-700">
+                <SelectItem value="participants">
+                  {t('dashboard.contests.sort_participants') || 'Plus de participants'}
+                </SelectItem>
+                <SelectItem value="date">
+                  {t('dashboard.contests.sort_date') || 'Plus récent'}
+                </SelectItem>
+                <SelectItem value="name">
+                  {t('dashboard.contests.sort_name') || 'Nom (A-Z)'}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {/* Barre d'onglets de navigation par type */}
         <div className="mb-8 border-b border-gray-800">
           <div className="flex space-x-1 overflow-x-auto scrollbar-hide">
             {contestTypes.map((type) => (
               <button
                 key={type.id}
-                onClick={() => setActiveTab(type.id)}
+                onClick={() => {
+                  setActiveTab(type.id)
+                  setCurrentPage(1)
+                  setDisplayedContests([])
+                }}
                 className={`px-4 py-3 text-sm font-medium whitespace-nowrap transition-colors border-b-2 ${
                   activeTab === type.id
                     ? 'border-white text-white'
@@ -519,6 +785,8 @@ export default function ContestsPage() {
               requiresContentVerification={contest.requiresContentVerification}
               minAge={contest.minAge}
               maxAge={contest.maxAge}
+              isNomination={categoryTab === 'nomination'}
+              votingType={contest.votingType}
               onToggleFavorite={() => handleToggleFavorite(contest.id)}
               onViewContestants={() => handleViewContestants(contest.id)}
               onParticipate={() => handleParticipate(contest.id)}
@@ -530,7 +798,7 @@ export default function ContestsPage() {
         {/* Loader pour infinite scroll */}
         <ContestsLoader
           isLoading={isLoadingMore}
-          hasMore={hasMore && searchTerm === ''}
+          hasMore={hasMore && activeSearchTerm === ''}
           observerTarget={observerTarget}
         />
 

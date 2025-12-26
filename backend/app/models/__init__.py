@@ -19,6 +19,11 @@ from .search_history import SearchHistory
 from .notification import Notification, NotificationType
 from .invitation import Invitation, InvitationStatus
 from .payment import PaymentMethod, ProductType, Deposit, PaymentMethodCategory, CryptoNetwork, DepositStatus
+from .post import Post, PostMedia, PostComment, PostReaction, PostCommentReaction, PostShare, PostType, PostVisibility, ReactionType
+from .social_group import SocialGroup, GroupMember, GroupJoinRequest, GroupMessage, MessageReadReceipt, GroupType, GroupMemberRole, MessageType, MessageStatus
+from .feed import Feed
+from .private_message import PrivateConversation, ConversationParticipant, PrivateMessage, PrivateMessageReadReceipt, GroupInvitation, ConversationType, PrivateMessageStatus
+from .contact_message import ContactMessage
 
 __all__ = [
     "User", "Role", "Permission", "role_permissions", "UserTransaction", "Wallet",
@@ -39,4 +44,9 @@ __all__ = [
     "Notification", "NotificationType",
     "Invitation", "InvitationStatus",
     "PaymentMethod", "ProductType", "Deposit", "PaymentMethodCategory", "CryptoNetwork", "DepositStatus",
+    "Post", "PostMedia", "PostComment", "PostReaction", "PostCommentReaction", "PostShare", "PostType", "PostVisibility", "ReactionType",
+    "SocialGroup", "GroupMember", "GroupJoinRequest", "GroupMessage", "MessageReadReceipt", "GroupType", "GroupMemberRole", "MessageType", "MessageStatus",
+    "Feed",
+    "PrivateConversation", "ConversationParticipant", "PrivateMessage", "PrivateMessageReadReceipt", "GroupInvitation", "ConversationType", "PrivateMessageStatus",
+    "ContactMessage",
 ]

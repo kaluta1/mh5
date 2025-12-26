@@ -265,6 +265,50 @@ export const ourFileRouter = {
         type: file.type,
         purpose: 'verification'
       };
+    }),
+
+  /**
+   * Route pour uploader les images pour les posts sociaux
+   */
+  imageUploader: f({
+    image: { maxFileSize: "8MB", maxFileCount: 10 }
+  })
+    .middleware(async ({ req }) => {
+      const user = await auth(req);
+      return user;
+    })
+    .onUploadComplete(async ({ metadata, file }) => {
+      console.log("Social image uploaded:", file);
+      
+      return {
+        uploadedBy: metadata.userId,
+        url: file.ufsUrl,
+        name: file.name,
+        size: file.size,
+        type: file.type
+      };
+    }),
+
+  /**
+   * Route pour uploader les vidéos pour les posts sociaux
+   */
+  videoUploader: f({
+    video: { maxFileSize: "32MB", maxFileCount: 1 }
+  })
+    .middleware(async ({ req }) => {
+      const user = await auth(req);
+      return user;
+    })
+    .onUploadComplete(async ({ metadata, file }) => {
+      console.log("Social video uploaded:", file);
+      
+      return {
+        uploadedBy: metadata.userId,
+        url: file.ufsUrl,
+        name: file.name,
+        size: file.size,
+        type: file.type
+      };
     })
 } satisfies FileRouter;
 

@@ -2,7 +2,7 @@ from typing import Any, Dict, List, Optional, Union
 from datetime import datetime, date, timedelta
 
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func
+from sqlalchemy import func, or_
 
 from app.models.contest import Contest, ContestEntry, ContestVote
 from app.models.contests import Contestant, ContestantRanking
@@ -110,10 +110,45 @@ class CRUDContest:
         db: Session, *, skip: int = 0, limit: int = 100, filters: Dict[str, Any] = {}
     ) -> List[Contest]:
         """Récupère une liste de concours avec filtres"""
-        query = db.query(Contest).filter(Contest.is_deleted == False)
+        from sqlalchemy.orm import joinedload
         
+        query = db.query(Contest).filter(Contest.is_deleted == False)\
+            .options(joinedload(Contest.voting_type))
+        
+        # Gérer la recherche textuelle sur plusieurs champs
+        if "search" in filters and filters["search"]:
+            search_term = f"%{filters['search']}%"
+            query = query.filter(
+                or_(
+                    Contest.name.ilike(search_term),
+                    Contest.description.ilike(search_term),
+                    Contest.level.ilike(search_term),
+                    Contest.contest_type.ilike(search_term)
+                )
+            )
+        
+        # Gérer le filtre par voting_level
+        if "voting_level" in filters and filters["voting_level"]:
+            from app.models.contest import VotingType
+            # Pour "country", on veut seulement les contests avec voting_type et voting_level = "country"
+            if filters["voting_level"].lower() == "country":
+                query = query.join(VotingType, Contest.voting_type_id == VotingType.id)\
+                    .filter(VotingType.voting_level == filters["voting_level"])
+            else:
+                # Pour les autres cas, utiliser outerjoin
+                query = query.outerjoin(VotingType, Contest.voting_type_id == VotingType.id)\
+                    .filter(
+                        or_(
+                            VotingType.voting_level == filters["voting_level"],
+                            Contest.voting_type_id.is_(None)
+                        )
+                    )
+        
+        # Gérer les autres filtres
         for field, value in filters.items():
-            if hasattr(Contest, field):
+            if field in ["search", "voting_level"]:
+                continue  # Déjà traité ci-dessus
+            if hasattr(Contest, field) and value is not None:
                 query = query.filter(getattr(Contest, field) == value)
         
         return query.offset(skip).limit(limit).all()
@@ -587,6 +622,22 @@ class CRUDContest:
             else:
                 participant_type_value = str(contest.participant_type)
         
+        # Charger l'objet voting_type si voting_type_id existe
+        voting_type_data = None
+        if contest.voting_type_id:
+            from app.models.contest import VotingType
+            voting_type = db.query(VotingType).filter(VotingType.id == contest.voting_type_id).first()
+            if voting_type:
+                voting_type_data = {
+                    "id": voting_type.id,
+                    "name": voting_type.name,
+                    "voting_level": voting_type.voting_level.value if hasattr(voting_type.voting_level, 'value') else str(voting_type.voting_level),
+                    "commission_source": voting_type.commission_source.value if hasattr(voting_type.commission_source, 'value') else str(voting_type.commission_source),
+                    "commission_rules": voting_type.commission_rules,
+                    "created_at": voting_type.created_at,
+                    "updated_at": voting_type.updated_at
+                }
+        
         # Calculer dynamiquement is_submission_open basé sur les dates
         from datetime import date
         today = date.today()
@@ -654,6 +705,7 @@ class CRUDContest:
             "max_entries_per_user": contest.max_entries_per_user,
             "template_id": contest.template_id,
             "voting_type_id": getattr(contest, 'voting_type_id', None),
+            "voting_type": voting_type_data,  # Objet voting_type complet
             "created_at": contest.created_at,
             "updated_at": contest.updated_at,
             "entries_count": entries_count,

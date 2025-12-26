@@ -43,6 +43,7 @@ class ContestCreateRequest(BaseModel):
     global_end_date: Optional[str] = None
     image_url: Optional[str] = None
     voting_restriction: str = "none"
+    voting_type_id: Optional[int] = None
     # Verification requirements
     requires_kyc: bool = False
     verification_type: str = "none"
@@ -815,6 +816,9 @@ async def create_contest(
         except (ValueError, TypeError):
             participant_type = ParticipantType.INDIVIDUAL
         
+        # Convertir voting_type_id=0 en None pour éviter les violations de FK
+        voting_type_id = contest_data.voting_type_id if contest_data.voting_type_id and contest_data.voting_type_id > 0 else None
+        
         # Create contest with auto-generated values
         new_contest = Contest(
             name=contest_data.name,
@@ -830,6 +834,7 @@ async def create_contest(
             voting_end_date=voting_end,
             image_url=contest_data.image_url,
             voting_restriction=contest_data.voting_restriction,
+            voting_type_id=voting_type_id,
             # Verification fields
             requires_kyc=contest_data.requires_kyc,
             verification_type=verification_type,
@@ -966,6 +971,8 @@ async def update_contest(
         contest.is_voting_open = contest_data.is_voting_open
         contest.image_url = contest_data.image_url
         contest.voting_restriction = contest_data.voting_restriction
+        # Convertir voting_type_id=0 en None pour éviter les violations de FK
+        contest.voting_type_id = contest_data.voting_type_id if contest_data.voting_type_id and contest_data.voting_type_id > 0 else None
         
         # Update verification fields
         contest.requires_kyc = contest_data.requires_kyc

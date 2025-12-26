@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { apiCache } from './cache'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -11,12 +12,17 @@ const api = axios.create({
   },
 })
 
-// Intercepteur pour ajouter le token d'authentification
+// Intercepteur pour ajouter le token d'authentification et la langue
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('access_token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
+    }
+    // Ajouter la langue depuis localStorage si disponible
+    const savedLanguage = localStorage.getItem('myfav-language')
+    if (savedLanguage && ['en', 'fr', 'es', 'de'].includes(savedLanguage)) {
+      config.headers['Accept-Language'] = savedLanguage
     }
     return config
   },
@@ -177,30 +183,69 @@ export const authService = {
   }
 }
 
-// Service générique pour les autres appels API
+// Service générique pour les autres appels API avec cache
 export const apiService = {
-  // GET request
-  async get<T>(endpoint: string): Promise<T> {
-    const response = await api.get(endpoint)
-    return response.data
+  // GET request avec cache
+  async get<T>(endpoint: string, params?: any, useCache: boolean = true): Promise<T> {
+    // Vérifier le cache d'abord
+    if (useCache) {
+      const cached = apiCache.get<T>(endpoint, params)
+      if (cached !== null) {
+        return cached
+      }
+    }
+
+    // Faire l'appel API
+    const response = await api.get(endpoint, { params })
+    const data = response.data
+
+    // Stocker dans le cache
+    if (useCache) {
+      // Utiliser le timestamp comme version pour détecter les nouvelles entrées
+      const version = Date.now().toString()
+      apiCache.set(endpoint, data, params, version)
+    }
+
+    return data
   },
 
-  // POST request
-  async post<T>(endpoint: string, data?: any): Promise<T> {
-    const response = await api.post(endpoint, data)
-    return response.data
+  // POST request (pas de cache par défaut pour les POST)
+  async post<T>(endpoint: string, data?: any, invalidateCache?: string, config?: any): Promise<T> {
+    const response = await api.post(endpoint, data, config)
+    const result = response.data
+
+    // Invalider le cache si spécifié
+    if (invalidateCache) {
+      apiCache.invalidate(invalidateCache)
+    }
+
+    return result
   },
 
-  // PUT request
-  async put<T>(endpoint: string, data?: any): Promise<T> {
+  // PUT request (invalide le cache)
+  async put<T>(endpoint: string, data?: any, invalidateCache?: string): Promise<T> {
     const response = await api.put(endpoint, data)
-    return response.data
+    const result = response.data
+
+    // Invalider le cache si spécifié
+    if (invalidateCache) {
+      apiCache.invalidate(invalidateCache)
+    }
+
+    return result
   },
 
-  // DELETE request
-  async delete<T>(endpoint: string): Promise<T> {
+  // DELETE request (invalide le cache)
+  async delete<T>(endpoint: string, invalidateCache?: string): Promise<T> {
     const response = await api.delete(endpoint)
-    return response.data
+    const result = response.data
+
+    // Invalider le cache si spécifié
+    if (invalidateCache) {
+      apiCache.invalidate(invalidateCache)
+    }
+
+    return result
   }
 }
 

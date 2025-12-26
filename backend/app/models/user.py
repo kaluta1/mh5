@@ -164,6 +164,24 @@ class User(Base):
     affiliations_made: Mapped[List["Affiliation"]] = relationship("Affiliation", foreign_keys="Affiliation.affiliate_id", back_populates="affiliate")
     referred_by: Mapped[List["Affiliation"]] = relationship("Affiliation", foreign_keys="Affiliation.referred_user_id", back_populates="referred_user")
     referral_codes: Mapped[List["ReferralCode"]] = relationship("ReferralCode", back_populates="user")
+    
+    # Relations service social
+    posts: Mapped[List["Post"]] = relationship("Post", foreign_keys="Post.author_id", back_populates="author")
+    post_comments: Mapped[List["PostComment"]] = relationship("PostComment", foreign_keys="PostComment.author_id", back_populates="author")
+    post_reactions: Mapped[List["PostReaction"]] = relationship("PostReaction", foreign_keys="PostReaction.user_id", back_populates="user")
+    post_shares: Mapped[List["PostShare"]] = relationship("PostShare", foreign_keys="PostShare.user_id", back_populates="user")
+    created_groups: Mapped[List["SocialGroup"]] = relationship("SocialGroup", foreign_keys="SocialGroup.creator_id", back_populates="creator")
+    group_memberships: Mapped[List["GroupMember"]] = relationship("GroupMember", foreign_keys="GroupMember.user_id", back_populates="user")
+    group_messages: Mapped[List["GroupMessage"]] = relationship("GroupMessage", foreign_keys="GroupMessage.sender_id", back_populates="sender")
+    feed_entries: Mapped[List["Feed"]] = relationship("Feed", foreign_keys="Feed.user_id", back_populates="user")
+    
+    # Relations messagerie privée
+    conversations_as_user1: Mapped[List["PrivateConversation"]] = relationship("PrivateConversation", foreign_keys="PrivateConversation.user1_id", back_populates="user1")
+    conversations_as_user2: Mapped[List["PrivateConversation"]] = relationship("PrivateConversation", foreign_keys="PrivateConversation.user2_id", back_populates="user2")
+    conversation_participations: Mapped[List["ConversationParticipant"]] = relationship("ConversationParticipant", foreign_keys="ConversationParticipant.user_id", back_populates="user")
+    sent_private_messages: Mapped[List["PrivateMessage"]] = relationship("PrivateMessage", foreign_keys="PrivateMessage.sender_id", back_populates="sender")
+    sent_group_invitations: Mapped[List["GroupInvitation"]] = relationship("GroupInvitation", foreign_keys="GroupInvitation.inviter_id", back_populates="inviter")
+    received_group_invitations: Mapped[List["GroupInvitation"]] = relationship("GroupInvitation", foreign_keys="GroupInvitation.invitee_id", back_populates="invitee")
 
 class Role(Base):
     """Modèle pour les rôles utilisateurs."""

@@ -81,3 +81,11 @@ def verify_email_verification_token(token: str) -> str:
         return decoded_token.get("sub")
     except jwt.JWTError:
         return None
+
+def decode_access_token(token: str) -> dict:
+    """Décode un token d'accès JWT"""
+    try:
+        decoded_token = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        return decoded_token
+    except jwt.JWTError:
+        return {}

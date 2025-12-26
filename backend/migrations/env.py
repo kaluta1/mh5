@@ -62,6 +62,7 @@ from app.models.accounting import (
     ChartOfAccounts, JournalEntry, JournalLine, FinancialReport,
     RevenueTransaction, TaxConfiguration, AuditTrail
 )
+from app.models.contact_message import ContactMessage
 
 target_metadata = Base.metadata
 

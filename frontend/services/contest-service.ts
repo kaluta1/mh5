@@ -1,4 +1,4 @@
-import api from '@/lib/api'
+import api, { apiService } from '@/lib/api'
 
 export interface TopContestant {
   id: number
@@ -48,6 +48,16 @@ export interface Contest {
   maxImages?: number
   verificationVideoMaxDuration?: number
   verificationMaxSizeMb?: number
+  // Voting type and level for categorization
+  votingTypeId?: number | null
+  level?: string
+  votingType?: {
+    id: number
+    name: string
+    voting_level: string
+    commission_source: string
+    commission_rules?: any
+  } | null
 }
 
 export interface ContestResponse {
@@ -94,6 +104,14 @@ export interface ContestResponse {
   max_images?: number
   verification_video_max_duration?: number
   verification_max_size_mb?: number
+  voting_type_id?: number | null
+  voting_type?: {
+    id: number
+    name: string
+    voting_level: string
+    commission_source: string
+    commission_rules?: any
+  } | null
   // Top contestants preview
   top_contestants?: Array<{
     id: number
@@ -147,14 +165,28 @@ export interface ContestantWithAuthorAndStats {
 
 class ContestService {
   /**
-   * Récupère tous les contests avec pagination
+   * Récupère tous les contests avec pagination et recherche (avec cache)
    */
-  async getContests(skip: number = 0, limit: number = 100): Promise<ContestResponse[]> {
+  async getContests(
+    skip: number = 0, 
+    limit: number = 100,
+    search?: string,
+    votingLevel?: string
+  ): Promise<ContestResponse[]> {
     try {
-      const response = await api.get('/api/v1/contests/', {
-        params: { skip, limit }
-      })
-      return response.data
+      const params: any = { skip, limit }
+      if (search) {
+        params.search = search
+      }
+      if (votingLevel) {
+        params.voting_level = votingLevel
+      }
+      
+      // Utiliser le cache pour les requêtes GET
+      // Ne pas utiliser le cache si on fait une recherche (pour avoir les résultats à jour)
+      const useCache = !search
+      
+      return await apiService.get<ContestResponse[]>('/api/v1/contests/', params, useCache)
     } catch (error) {
       console.error('Error fetching contests:', error)
       throw error
@@ -179,8 +211,8 @@ class ContestService {
    */
   async createContest(contestData: Partial<ContestResponse>): Promise<ContestResponse> {
     try {
-      const response = await api.post('/api/v1/contests/', contestData)
-      return response.data
+      const result = await apiService.post<ContestResponse>('/api/v1/contests/', contestData, '/api/v1/contests/')
+      return result
     } catch (error) {
       console.error('Error creating contest:', error)
       throw error
@@ -192,8 +224,8 @@ class ContestService {
    */
   async updateContest(contestId: string, contestData: Partial<ContestResponse>): Promise<ContestResponse> {
     try {
-      const response = await api.put(`/api/v1/contests/${contestId}`, contestData)
-      return response.data
+      const result = await apiService.put<ContestResponse>(`/api/v1/contests/${contestId}`, contestData, '/api/v1/contests/')
+      return result
     } catch (error) {
       console.error(`Error updating contest ${contestId}:`, error)
       throw error
@@ -205,7 +237,7 @@ class ContestService {
    */
   async deleteContest(contestId: string): Promise<void> {
     try {
-      await api.delete(`/api/v1/contests/${contestId}`)
+      await apiService.delete<void>(`/api/v1/contests/${contestId}`, '/api/v1/contests/')
     } catch (error) {
       console.error(`Error deleting contest ${contestId}:`, error)
       throw error
@@ -635,6 +667,10 @@ class ContestService {
       maxImages: response.max_images ?? 10,
       verificationVideoMaxDuration: response.verification_video_max_duration ?? 30,
       verificationMaxSizeMb: response.verification_max_size_mb ?? 50,
+      // Voting type and level for categorization
+      votingTypeId: response.voting_type_id ?? null,
+      level: response.season_level || response.level || 'country',
+      votingType: response.voting_type ?? null,
       // Top contestants preview
       topContestants: response.top_contestants?.map((c, index) => ({
         id: c.id,

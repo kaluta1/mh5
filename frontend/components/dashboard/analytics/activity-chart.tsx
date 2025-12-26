@@ -6,6 +6,7 @@ import {
   Tooltip, ResponsiveContainer, Legend
 } from 'recharts'
 import { useLanguage } from '@/contexts/language-context'
+import { translateDay } from '@/lib/date-utils'
 
 interface ActivityData {
   day: string
@@ -24,12 +25,18 @@ export function ActivityChart({
   title,
   subtitle
 }: ActivityChartProps) {
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
   
   const chartTitle = title || t('dashboard.analytics.weekly_activity') || 'Weekly Activity'
   const chartSubtitle = subtitle || t('dashboard.analytics.weekly_activity_desc') || 'Votes and views this week'
   const votesLabel = t('dashboard.analytics.total_votes') || 'Votes'
   const viewsLabel = t('dashboard.analytics.total_views') || 'Views'
+  
+  // Traduire les jours dans les données
+  const translatedData = data.map(item => ({
+    ...item,
+    day: translateDay(item.day, language)
+  }))
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl p-6 border border-gray-100 dark:border-gray-800">
@@ -41,7 +48,7 @@ export function ActivityChart({
       </div>
       <div className="h-64">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data}>
+          <AreaChart data={translatedData}>
             <defs>
               <linearGradient id="colorVotes" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>

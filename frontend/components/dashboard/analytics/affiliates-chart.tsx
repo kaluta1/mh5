@@ -6,6 +6,7 @@ import {
   CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts'
 import { useLanguage } from '@/contexts/language-context'
+import { translateMonth } from '@/lib/date-utils'
 
 interface AffiliatesData {
   month: string
@@ -25,12 +26,18 @@ export function AffiliatesGrowthChart({
   title,
   subtitle
 }: AffiliatesGrowthChartProps) {
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
   
   const chartTitle = title || t('dashboard.analytics.network_growth') || 'Network Growth'
   const chartSubtitle = subtitle || t('dashboard.analytics.network_growth_desc') || 'Evolution of your affiliates'
   const directsLabel = t('dashboard.analytics.direct_affiliates') || 'Direct Affiliates'
   const totalLabel = t('dashboard.analytics.total_network') || 'Total Network'
+  
+  // Traduire les mois dans les données
+  const translatedData = data.map(item => ({
+    ...item,
+    month: translateMonth(item.month, language)
+  }))
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl p-6 border border-gray-100 dark:border-gray-800">
@@ -42,7 +49,7 @@ export function AffiliatesGrowthChart({
       </div>
       <div className="h-80">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data}>
+          <AreaChart data={translatedData}>
             <defs>
               <linearGradient id="colorDirects" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
@@ -101,11 +108,17 @@ export function CommissionsChart({
   title,
   subtitle
 }: CommissionsChartProps) {
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
   
   const chartTitle = title || t('dashboard.analytics.monthly_commissions') || 'Monthly Commissions'
   const chartSubtitle = subtitle || t('dashboard.analytics.monthly_commissions_desc') || 'Revenue from your network'
   const commissionsLabel = t('dashboard.analytics.commissions') || 'Commissions'
+  
+  // Traduire les mois dans les données
+  const translatedData = data.map(item => ({
+    ...item,
+    month: translateMonth(item.month, language)
+  }))
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl p-6 border border-gray-100 dark:border-gray-800">
@@ -117,7 +130,7 @@ export function CommissionsChart({
       </div>
       <div className="h-64">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data}>
+          <BarChart data={translatedData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
             <XAxis dataKey="month" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
             <YAxis 

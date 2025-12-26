@@ -82,52 +82,29 @@ export default function AboutPage() {
     de: ["Aufstieg von Stadt- zu Globalebene", "Faires MyHigh5-Abstimmungssystem (5-4-3-2-1)", "10-stufiges Partnerprogramm", "KI-Moderation für eine sichere Umgebung"],
   }
 
-  const timeline = [
-    { year: "2024", titleKey: "timeline.launch", descKey: "timeline.launch_desc" },
-    { year: "2024", titleKey: "timeline.expansion", descKey: "timeline.expansion_desc" },
-    { year: "2025", titleKey: "timeline.innovation", descKey: "timeline.innovation_desc" },
-    { year: "2025", titleKey: "timeline.growth", descKey: "timeline.growth_desc" },
-  ]
-
-  const timelineLabels: Record<string, Record<string, string>> = {
-    en: {
-      "timeline.launch": "Launch", "timeline.launch_desc": "Creation of MyHigh5 with a global vision",
-      "timeline.expansion": "Expansion", "timeline.expansion_desc": "Opening in 50 countries simultaneously",
-      "timeline.innovation": "Innovation", "timeline.innovation_desc": "Launch of unique MyHigh5 voting system",
-      "timeline.growth": "Growth", "timeline.growth_desc": "1 million users reached"
-    },
-    fr: {
-      "timeline.launch": "Lancement", "timeline.launch_desc": "Création de MyHigh5 avec une vision globale",
-      "timeline.expansion": "Expansion", "timeline.expansion_desc": "Ouverture dans 50 pays simultanément",
-      "timeline.innovation": "Innovation", "timeline.innovation_desc": "Lancement du système de vote MyHigh5 unique",
-      "timeline.growth": "Croissance", "timeline.growth_desc": "1 million d'utilisateurs atteints"
-    },
-    es: {
-      "timeline.launch": "Lanzamiento", "timeline.launch_desc": "Creación de MyHigh5 con una visión global",
-      "timeline.expansion": "Expansión", "timeline.expansion_desc": "Apertura en 50 países simultáneamente",
-      "timeline.innovation": "Innovación", "timeline.innovation_desc": "Lanzamiento del sistema de votación MyHigh5 único",
-      "timeline.growth": "Crecimiento", "timeline.growth_desc": "1 millón de usuarios alcanzados"
-    },
-    de: {
-      "timeline.launch": "Start", "timeline.launch_desc": "Gründung von MyHigh5 mit globaler Vision",
-      "timeline.expansion": "Expansion", "timeline.expansion_desc": "Eröffnung in 50 Ländern gleichzeitig",
-      "timeline.innovation": "Innovation", "timeline.innovation_desc": "Start des einzigartigen MyHigh5-Abstimmungssystems",
-      "timeline.growth": "Wachstum", "timeline.growth_desc": "1 Million Nutzer erreicht"
-    },
-  }
 
   const team = [
-    { name: "Alexandre Martin", roleKey: "team.ceo", emoji: "👨‍💼" },
-    { name: "Sophie Dubois", roleKey: "team.cto", emoji: "👩‍💻" },
-    { name: "Marc Laurent", roleKey: "team.product", emoji: "👨‍🎨" },
-    { name: "Julie Chen", roleKey: "team.marketing", emoji: "👩‍💼" },
+    { name: "Shafi Kaluta Abedi", roleKey: "team.founder_president", emoji: "👨‍💼" },
+    { name: "Ferdinand Kouagou", roleKey: "team.director_ict", emoji: "👨‍💻" },
   ]
 
   const teamLabels: Record<string, Record<string, string>> = {
-    en: { "team.ceo": "CEO & Founder", "team.cto": "CTO", "team.product": "Head of Product", "team.marketing": "Head of Marketing" },
-    fr: { "team.ceo": "CEO & Fondateur", "team.cto": "CTO", "team.product": "Head of Product", "team.marketing": "Head of Marketing" },
-    es: { "team.ceo": "CEO y Fundador", "team.cto": "CTO", "team.product": "Jefe de Producto", "team.marketing": "Jefe de Marketing" },
-    de: { "team.ceo": "CEO & Gründer", "team.cto": "CTO", "team.product": "Produktleiter", "team.marketing": "Marketingleiter" },
+    en: { 
+      "team.founder_president": "Founder and President", 
+      "team.director_ict": "Director of ICT" 
+    },
+    fr: { 
+      "team.founder_president": "Fondateur et Président", 
+      "team.director_ict": "Directeur des TIC" 
+    },
+    es: { 
+      "team.founder_president": "Fundador y Presidente", 
+      "team.director_ict": "Director de TIC" 
+    },
+    de: { 
+      "team.founder_president": "Gründer und Präsident", 
+      "team.director_ict": "Direktor für IKT" 
+    },
   }
 
   return (
@@ -153,7 +130,7 @@ export default function AboutPage() {
         </section>
 
         {/* Stats Section */}
-        <section className="container px-4 md:px-6 -mt-12 relative z-20">
+        {/* <section className="container px-4 md:px-6 -mt-12 relative z-20">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
             {stats.map((stat, index) => (
               <div 
@@ -170,7 +147,7 @@ export default function AboutPage() {
               </div>
             ))}
           </div>
-        </section>
+        </section> */}
 
         {/* Mission Section */}
         <section className="container px-4 md:px-6 py-20">
@@ -241,37 +218,6 @@ export default function AboutPage() {
           </div>
         </section>
 
-        {/* Timeline Section */}
-        <section className="container px-4 md:px-6 py-20">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
-              {t('pages.about.timeline.title') || "Notre Parcours"}
-            </h2>
-          </div>
-          <div className="max-w-3xl mx-auto">
-            <div className="relative">
-              {/* Line */}
-              <div className="absolute left-8 top-0 bottom-0 w-0.5 bg-gradient-to-b from-myfav-primary to-myfav-secondary" />
-              
-              {/* Timeline items */}
-              {timeline.map((item, index) => (
-                <div key={index} className="relative pl-20 pb-12 last:pb-0">
-                  <div className="absolute left-6 w-5 h-5 rounded-full bg-myfav-primary border-4 border-white dark:border-gray-900 shadow-lg" />
-                  <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-700">
-                    <span className="text-sm font-bold text-myfav-primary">{item.year}</span>
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-1 mb-2">
-                      {getLabel(timelineLabels, item.titleKey)}
-                    </h3>
-                    <p className="text-gray-600 dark:text-gray-400">
-                      {getLabel(timelineLabels, item.descKey)}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
         {/* Team Section */}
         <section className="py-20 bg-gray-50 dark:bg-gray-800/50">
           <div className="container px-4 md:px-6">
@@ -283,7 +229,7 @@ export default function AboutPage() {
                 {t('pages.about.team.subtitle') || "Des passionnés dédiés à votre succès"}
               </p>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-4xl mx-auto">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
               {team.map((member, index) => (
                 <div 
                   key={index}

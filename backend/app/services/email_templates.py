@@ -101,6 +101,18 @@ EMAIL_TRANSLATIONS = {
         "contestant_report_reason": "Raison :",
         "contestant_report_description": "Description :",
         "contestant_report_view_button": "Voir le signalement",
+        
+        # Contact Confirmation
+        "contact_confirmation_subject": "Nous avons bien reçu votre message - MYHIGH5",
+        "contact_confirmation_title": "Message reçu !",
+        "contact_confirmation_greeting": "Bonjour {name},",
+        "contact_confirmation_message": "Nous avons bien reçu votre message et nous vous remercions de nous avoir contactés.",
+        "contact_confirmation_analysis": "Notre équipe va analyser votre demande et vous répondre dans un délai de <strong>72 heures</strong>.",
+        "contact_confirmation_details": "Détails de votre message :",
+        "contact_confirmation_subject_label": "Sujet :",
+        "contact_confirmation_category_label": "Catégorie :",
+        "contact_confirmation_message_label": "Message :",
+        "contact_confirmation_thank_you": "Merci pour votre patience !",
     },
     "en": {
         # Common
@@ -198,6 +210,18 @@ EMAIL_TRANSLATIONS = {
         "contestant_report_reason": "Reason:",
         "contestant_report_description": "Description:",
         "contestant_report_view_button": "View Report",
+        
+        # Contact Confirmation
+        "contact_confirmation_subject": "We have received your message - MYHIGH5",
+        "contact_confirmation_title": "Message received!",
+        "contact_confirmation_greeting": "Hello {name},",
+        "contact_confirmation_message": "We have received your message and thank you for contacting us.",
+        "contact_confirmation_analysis": "Our team will analyze your request and respond within <strong>72 hours</strong>.",
+        "contact_confirmation_details": "Details of your message:",
+        "contact_confirmation_subject_label": "Subject:",
+        "contact_confirmation_category_label": "Category:",
+        "contact_confirmation_message_label": "Message:",
+        "contact_confirmation_thank_you": "Thank you for your patience!",
     },
     "es": {
         # Common
@@ -295,6 +319,18 @@ EMAIL_TRANSLATIONS = {
         "contestant_report_reason": "Razón:",
         "contestant_report_description": "Descripción:",
         "contestant_report_view_button": "Ver reporte",
+        
+        # Contact Confirmation
+        "contact_confirmation_subject": "Hemos recibido su mensaje - MYHIGH5",
+        "contact_confirmation_title": "¡Mensaje recibido!",
+        "contact_confirmation_greeting": "Hola {name},",
+        "contact_confirmation_message": "Hemos recibido su mensaje y le agradecemos por contactarnos.",
+        "contact_confirmation_analysis": "Nuestro equipo analizará su solicitud y responderá en un plazo de <strong>72 horas</strong>.",
+        "contact_confirmation_details": "Detalles de su mensaje:",
+        "contact_confirmation_subject_label": "Asunto:",
+        "contact_confirmation_category_label": "Categoría:",
+        "contact_confirmation_message_label": "Mensaje:",
+        "contact_confirmation_thank_you": "¡Gracias por su paciencia!",
     },
     "de": {
         # Common
@@ -392,6 +428,18 @@ EMAIL_TRANSLATIONS = {
         "contestant_report_reason": "Grund:",
         "contestant_report_description": "Beschreibung:",
         "contestant_report_view_button": "Bericht anzeigen",
+        
+        # Contact Confirmation
+        "contact_confirmation_subject": "Wir haben Ihre Nachricht erhalten - MYHIGH5",
+        "contact_confirmation_title": "Nachricht erhalten!",
+        "contact_confirmation_greeting": "Hallo {name},",
+        "contact_confirmation_message": "Wir haben Ihre Nachricht erhalten und danken Ihnen für Ihre Kontaktaufnahme.",
+        "contact_confirmation_analysis": "Unser Team wird Ihre Anfrage analysieren und innerhalb von <strong>72 Stunden</strong> antworten.",
+        "contact_confirmation_details": "Details Ihrer Nachricht:",
+        "contact_confirmation_subject_label": "Betreff:",
+        "contact_confirmation_category_label": "Kategorie:",
+        "contact_confirmation_message_label": "Nachricht:",
+        "contact_confirmation_thank_you": "Vielen Dank für Ihre Geduld!",
     }
 }
 
@@ -983,3 +1031,121 @@ Report ID: #{report_id}
 """
     
     return t('contestant_report_subject'), html, text
+
+
+def get_contact_confirmation_email(
+    lang: str,
+    name: str,
+    subject: str,
+    category: str,
+    message: str
+) -> tuple[str, str, str]:
+    """Generate contact confirmation email for the sender"""
+    t = lambda key, **kwargs: get_translation(lang, key, **kwargs)
+    
+    # Traduire la catégorie
+    category_translations = {
+        "fr": {
+            "general": "Aide générale",
+            "billing": "Facturation",
+            "account": "Compte",
+            "technical": "Support technique",
+            "partnership": "Partenariat",
+            "other": "Autre"
+        },
+        "en": {
+            "general": "General help",
+            "billing": "Billing",
+            "account": "Account",
+            "technical": "Technical support",
+            "partnership": "Partnership",
+            "other": "Other"
+        },
+        "es": {
+            "general": "Ayuda general",
+            "billing": "Facturación",
+            "account": "Cuenta",
+            "technical": "Soporte técnico",
+            "partnership": "Asociación",
+            "other": "Otro"
+        },
+        "de": {
+            "general": "Allgemeine Hilfe",
+            "billing": "Abrechnung",
+            "account": "Konto",
+            "technical": "Technischer Support",
+            "partnership": "Partnerschaft",
+            "other": "Andere"
+        }
+    }
+    
+    category_display = category_translations.get(lang, category_translations["en"]).get(category, category)
+    
+    content = f"""
+        <p style="margin: 0 0 24px 0;">
+            {t('contact_confirmation_greeting', name=name)}
+        </p>
+        
+        <p style="margin: 0 0 24px 0;">
+            {t('contact_confirmation_message')}
+        </p>
+        
+        <p style="margin: 0 0 24px 0; color: #52525b;">
+            ℹ️ {t('contact_confirmation_analysis')}
+        </p>
+        
+        <div style="background-color: #f4f4f5; border-radius: 8px; padding: 16px; margin: 24px 0;">
+            <p style="margin: 0 0 12px 0; color: #52525b; font-weight: 600;">
+                {t('contact_confirmation_details')}
+            </p>
+            <p style="margin: 0 0 8px 0; color: #52525b;">
+                <strong>{t('contact_confirmation_subject_label')}</strong> {subject}
+            </p>
+            <p style="margin: 0 0 8px 0; color: #52525b;">
+                <strong>{t('contact_confirmation_category_label')}</strong> {category_display}
+            </p>
+            <p style="margin: 0; color: #52525b;">
+                <strong>{t('contact_confirmation_message_label')}</strong><br/>
+                <span style="white-space: pre-wrap;">{message.replace(chr(10), '<br>')}</span>
+            </p>
+        </div>
+        
+        <p style="margin: 24px 0 0 0; color: #52525b;">
+            {t('contact_confirmation_thank_you')}
+        </p>
+        
+        <p style="margin: 16px 0 0 0; color: #a1a1aa; font-size: 14px;">
+            {t('support_email')}
+        </p>
+    """
+    
+    html = get_base_email_template(
+        lang=lang,
+        title=t('contact_confirmation_title'),
+        content=content
+    )
+    
+    text = f"""
+{t('contact_confirmation_title')}
+
+{t('contact_confirmation_greeting', name=name)}
+
+{t('contact_confirmation_message')}
+
+{t('contact_confirmation_analysis')}
+
+{t('contact_confirmation_analysis')}
+
+{t('contact_confirmation_details')}
+{t('contact_confirmation_subject_label')} {subject}
+{t('contact_confirmation_category_label')} {category_display}
+{t('contact_confirmation_message_label')} {message}
+
+{t('contact_confirmation_thank_you')}
+
+{t('support_email')}
+
+© 2024 {t('company_name')}. {t('all_rights_reserved')}.
+"""
+    
+    return t('contact_confirmation_subject'), html, text

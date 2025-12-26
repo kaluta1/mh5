@@ -947,6 +947,23 @@ export interface TranslationKeys {
       no_contests: string
       no_description: string
       all: string
+      nomination: string
+      participations: string
+      nominate: string
+      tooltip_nominate: string
+      time_remaining_to_nominate: string
+      search_placeholder: string
+      sort: string
+      sort_participants: string
+      sort_votes: string
+      sort_date: string
+      sort_name: string
+      voting_type: string
+      voting_level_country: string
+      voting_level_city: string
+      voting_level_regional: string
+      voting_level_continent: string
+      voting_level_global: string
       status: string
       level: string
       city: string
@@ -959,6 +976,9 @@ export interface TranslationKeys {
       comments: string
       received: string
       participate: string
+      nominate: string
+      tooltip_nominate: string
+      time_remaining_to_nominate: string
       contest_type: {
         [key: string]: string
       }
@@ -1981,9 +2001,12 @@ export const translations: Record<Language, TranslationKeys> = {
         recent_searches: "Recherches récentes",
         no_history: "Aucune recherche récente."
       },
-      nav: {
+        nav: {
         home: "Accueil",
+        overview: "Vue d'ensemble",
+        feed: "Feed",
         contests: "Concours",
+        groups: "Groupes",
         my_applications: "Mes Candidatures",
         clubs: "Clubs",
         favorites: "Favoris",
@@ -2038,6 +2061,24 @@ export const translations: Record<Language, TranslationKeys> = {
         no_contests: "Aucun concours disponible",
         no_description: "Aucune description disponible",
         all: "Tout",
+        nomination: "Nominations",
+        participations: "Participations",
+        nominate: "Nommer",
+        tooltip_nominate: "Cliquez pour nommer à ce concours et soumettre votre candidature",
+        time_remaining_to_nominate: "Temps restant pour nommer",
+        search_placeholder: "Rechercher un concours...",
+        search_button: "Rechercher",
+        sort: "Trier par",
+        sort_participants: "Plus de participants",
+        sort_votes: "Plus de votes",
+        sort_date: "Plus récent",
+        sort_name: "Nom (A-Z)",
+        voting_type: "Type de vote",
+        voting_level_country: "National",
+        voting_level_city: "Ville",
+        voting_level_regional: "Régional",
+        voting_level_continent: "Continental",
+        voting_level_global: "Global",
         status: "Statut",
         level: "Niveau",
         city: "Ville",
@@ -2311,7 +2352,7 @@ export const translations: Record<Language, TranslationKeys> = {
       title_line1: "Rejoignez la plus",
       title_line2: "grande communauté",
       title_line3: "de concours",
-      subtitle: "Participez en tant que candidat, ajoutez votre candidat préféré, ou votez dans n'importe quel concours, et soyez récompensé tout en vous amusant.",
+      subtitle: "Participez en tant que candidat, nommez votre candidat préféré dans votre pays, ou votez dans n'importe quel concours, et soyez récompensé tout en vous amusant.",
       cta: "Commencer maintenant",
       demo: "Voir la démo",
       stats: {
@@ -3037,7 +3078,51 @@ export const translations: Record<Language, TranslationKeys> = {
         engagement: "Engagement",
         this_month: "Ce mois",
         total: "Total",
-        last_7_days: "7 jours"
+        last_7_days: "7 jours",
+        view_stats: "Voir les statistiques",
+        statistics: "Statistiques",
+        days: {
+          monday: "Lundi",
+          tuesday: "Mardi",
+          wednesday: "Mercredi",
+          thursday: "Jeudi",
+          friday: "Vendredi",
+          saturday: "Samedi",
+          sunday: "Dimanche",
+          mon: "Lun",
+          tue: "Mar",
+          wed: "Mer",
+          thu: "Jeu",
+          fri: "Ven",
+          sat: "Sam",
+          sun: "Dim"
+        },
+        months: {
+          january: "Janvier",
+          february: "Février",
+          march: "Mars",
+          april: "Avril",
+          may: "Mai",
+          june: "Juin",
+          july: "Juillet",
+          august: "Août",
+          september: "Septembre",
+          october: "Octobre",
+          november: "Novembre",
+          december: "Décembre",
+          jan: "Jan",
+          feb: "Fév",
+          mar: "Mar",
+          apr: "Avr",
+          may_short: "Mai",
+          jun: "Juin",
+          jul: "Juil",
+          aug: "Août",
+          sep: "Sep",
+          oct: "Oct",
+          nov: "Nov",
+          dec: "Déc"
+        }
       },
       wallet: {
         title: "Mon Portefeuille",
@@ -3277,6 +3362,24 @@ export const translations: Record<Language, TranslationKeys> = {
         no_contests: "Aucun concours disponible",
         no_description: "Aucune description disponible",
         all: "Tout",
+        nomination: "Nominations",
+        participations: "Participations",
+        nominate: "Nommer",
+        tooltip_nominate: "Cliquez pour nommer à ce concours et soumettre votre candidature",
+        time_remaining_to_nominate: "Temps restant pour nommer",
+        search_placeholder: "Rechercher un concours...",
+        search_button: "Rechercher",
+        sort: "Trier par",
+        sort_participants: "Plus de participants",
+        sort_votes: "Plus de votes",
+        sort_date: "Plus récent",
+        sort_name: "Nom (A-Z)",
+        voting_type: "Type de vote",
+        voting_level_country: "National",
+        voting_level_city: "Ville",
+        voting_level_regional: "Régional",
+        voting_level_continent: "Continental",
+        voting_level_global: "Global",
         status: "Statut",
         level: "Niveau",
         city: "Ville",
@@ -3789,7 +3892,7 @@ export const translations: Record<Language, TranslationKeys> = {
       },
       about: {
         title: "À Propos de MyHigh5",
-        subtitle: "La première plateforme mondiale de concours qui connecte les talents du monde entier.",
+        subtitle: "La première plateforme holistique de concours en ligne qui découvre et met en valeur les talents du niveau local à la scène mondiale.",
         mission: {
           title: "Notre Mission",
           description: "Démocratiser l'accès aux concours et permettre à chaque talent de briller sur la scène mondiale."
@@ -4336,7 +4439,7 @@ export const translations: Record<Language, TranslationKeys> = {
       title_line1: "Join the largest",
       title_line2: "contest community",
       title_line3: "in the world",
-      subtitle: "Participate as a contestant, add your favorite contestant, or vote in any contest you like, and get rewarded while having fun.",
+      subtitle: "Participate as a contestant, nominate your favorite contestant in your country, or vote in any contest you like, and get rewarded while having fun.",
       cta: "Get Started Now",
       demo: "Watch Demo",
       stats: {
@@ -4994,10 +5097,12 @@ export const translations: Record<Language, TranslationKeys> = {
         recent_searches: "Recent searches",
         no_history: "No recent searches."
       },
-      nav: {
+        nav: {
         home: "Home",
         overview: "Overview",
+        feed: "Feed",
         contests: "Contests",
+        groups: "Groups",
         my_applications: "My Applications",
         clubs: "Clubs",
         favorites: "Favorites",
@@ -5058,7 +5163,51 @@ export const translations: Record<Language, TranslationKeys> = {
         engagement: "Engagement",
         this_month: "This month",
         total: "Total",
-        last_7_days: "7 days"
+        last_7_days: "7 days",
+        view_stats: "View statistics",
+        statistics: "Statistics",
+        days: {
+          monday: "Monday",
+          tuesday: "Tuesday",
+          wednesday: "Wednesday",
+          thursday: "Thursday",
+          friday: "Friday",
+          saturday: "Saturday",
+          sunday: "Sunday",
+          mon: "Mon",
+          tue: "Tue",
+          wed: "Wed",
+          thu: "Thu",
+          fri: "Fri",
+          sat: "Sat",
+          sun: "Sun"
+        },
+        months: {
+          january: "January",
+          february: "February",
+          march: "March",
+          april: "April",
+          may: "May",
+          june: "June",
+          july: "July",
+          august: "August",
+          september: "September",
+          october: "October",
+          november: "November",
+          december: "December",
+          jan: "Jan",
+          feb: "Feb",
+          mar: "Mar",
+          apr: "Apr",
+          may_short: "May",
+          jun: "Jun",
+          jul: "Jul",
+          aug: "Aug",
+          sep: "Sep",
+          oct: "Oct",
+          nov: "Nov",
+          dec: "Dec"
+        }
       },
       wallet: {
         title: "My Wallet",
@@ -5298,6 +5447,24 @@ export const translations: Record<Language, TranslationKeys> = {
         no_contests: "No contests available",
         no_description: "No description available",
         all: "All",
+        nomination: "Nominations",
+        participations: "Participations",
+        nominate: "Nominate",
+        tooltip_nominate: "Click to nominate in this contest and submit your entry",
+        time_remaining_to_nominate: "Time remaining to nominate",
+        search_placeholder: "Search for a contest...",
+        search_button: "Search",
+        sort: "Sort by",
+        sort_participants: "Most participants",
+        sort_votes: "Most votes",
+        sort_date: "Most recent",
+        sort_name: "Name (A-Z)",
+        voting_type: "Voting type",
+        voting_level_country: "National",
+        voting_level_city: "City",
+        voting_level_regional: "Regional",
+        voting_level_continent: "Continental",
+        voting_level_global: "Global",
         status: "Status",
         level: "Level",
         city: "City",
@@ -5896,7 +6063,7 @@ export const translations: Record<Language, TranslationKeys> = {
       },
       about: {
         title: "About MyHigh5",
-        subtitle: "The first global contest platform connecting talents worldwide.",
+        subtitle: "The first holistic online contest platform that discovers and showcases talent from the city level to the global stage.",
         mission: {
           title: "Our Mission",
           description: "Democratize access to contests and allow every talent to shine on the world stage."
@@ -6425,7 +6592,7 @@ export const translations: Record<Language, TranslationKeys> = {
       title_line1: "Únete a la mayor",
       title_line2: "comunidad de concursos",
       title_line3: "del mundo",
-      subtitle: "Participa como concursante, agrega tu concursante favorito, o vota en cualquier concurso que te guste, y obtén recompensas mientras te diviertes.",
+      subtitle: "Participa como concursante, nomina tu concursante favorito en tu país, o vota en cualquier concurso que te guste, y obtén recompensas mientras te diviertes.",
       cta: "Comenzar ahora",
       demo: "Ver Demo",
       stats: {
@@ -7051,7 +7218,51 @@ export const translations: Record<Language, TranslationKeys> = {
         engagement: "Engagement",
         this_month: "Este mes",
         total: "Total",
-        last_7_days: "7 días"
+        last_7_days: "7 días",
+        view_stats: "Ver estadísticas",
+        statistics: "Estadísticas",
+        days: {
+          monday: "Lunes",
+          tuesday: "Martes",
+          wednesday: "Miércoles",
+          thursday: "Jueves",
+          friday: "Viernes",
+          saturday: "Sábado",
+          sunday: "Domingo",
+          mon: "Lun",
+          tue: "Mar",
+          wed: "Mié",
+          thu: "Jue",
+          fri: "Vie",
+          sat: "Sáb",
+          sun: "Dom"
+        },
+        months: {
+          january: "Enero",
+          february: "Febrero",
+          march: "Marzo",
+          april: "Abril",
+          may: "Mayo",
+          june: "Junio",
+          july: "Julio",
+          august: "Agosto",
+          september: "Septiembre",
+          october: "Octubre",
+          november: "Noviembre",
+          december: "Diciembre",
+          jan: "Ene",
+          feb: "Feb",
+          mar: "Mar",
+          apr: "Abr",
+          may_short: "May",
+          jun: "Jun",
+          jul: "Jul",
+          aug: "Ago",
+          sep: "Sep",
+          oct: "Oct",
+          nov: "Nov",
+          dec: "Dic"
+        }
       },
       wallet: {
         title: "Mi Billetera",
@@ -7186,7 +7397,10 @@ export const translations: Record<Language, TranslationKeys> = {
         try_different_filters: "Prueba con filtros diferentes",
         showing: "Mostrando",
         of: "de"
-      },
+      }
+    },
+    dashboard: {
+      welcome: "Bienvenido",
       subtitle: "Sigue tu progreso, gestiona tus concursos y haz crecer tu red",
       quick_actions: "Acciones Rápidas",
       recent_activity: "Actividad Reciente",
@@ -7211,6 +7425,24 @@ export const translations: Record<Language, TranslationKeys> = {
         no_contests: "No hay concursos disponibles",
         no_description: "No hay descripción disponible",
         all: "Todos",
+        nomination: "Nominaciones",
+        participations: "Participaciones",
+        nominate: "Nominar",
+        tooltip_nominate: "Haz clic para nominar en este concurso y enviar tu candidatura",
+        time_remaining_to_nominate: "Tiempo restante para nominar",
+        search_placeholder: "Buscar un concurso...",
+        search_button: "Buscar",
+        sort: "Ordenar por",
+        sort_participants: "Más participantes",
+        sort_votes: "Más votos",
+        sort_date: "Más reciente",
+        sort_name: "Nombre (A-Z)",
+        voting_type: "Tipo de voto",
+        voting_level_country: "Nacional",
+        voting_level_city: "Ciudad",
+        voting_level_regional: "Regional",
+        voting_level_continent: "Continental",
+        voting_level_global: "Global",
         status: "Estado",
         level: "Nivel",
         city: "Ciudad",
@@ -7794,7 +8026,7 @@ export const translations: Record<Language, TranslationKeys> = {
       },
       about: {
         title: "Sobre MyHigh5",
-        subtitle: "La primera plataforma global de concursos que conecta talentos de todo el mundo.",
+        subtitle: "La primera plataforma holística de concursos en línea que descubre y muestra talento desde el nivel de ciudad hasta el escenario global.",
         mission: {
           title: "Nuestra Misión",
           description: "Democratizar el acceso a los concursos y permitir que cada talento brille en el escenario mundial."
@@ -8323,7 +8555,7 @@ export const translations: Record<Language, TranslationKeys> = {
       title_line1: "Treten Sie der größten",
       title_line2: "Wettbewerbs-Community",
       title_line3: "der Welt bei",
-      subtitle: "Nehmen Sie als Teilnehmer teil, fügen Sie Ihren Lieblingsteilnehmer hinzu, oder stimmen Sie bei jedem Wettbewerb ab, und werden Sie belohnt, während Sie Spaß haben.",
+      subtitle: "Nehmen Sie als Teilnehmer teil, nominieren Sie Ihren Lieblingsteilnehmer in Ihrem Land, oder stimmen Sie bei jedem Wettbewerb ab, und werden Sie belohnt, während Sie Spaß haben.",
       cta: "Jetzt Loslegen",
       demo: "Demo Ansehen",
       stats: {
@@ -8888,7 +9120,9 @@ export const translations: Record<Language, TranslationKeys> = {
       nav: {
         home: "Startseite",
         overview: "Übersicht",
+        feed: "Feed",
         contests: "Wettbewerbe",
+        groups: "Gruppen",
         my_applications: "Meine Bewerbungen",
         clubs: "Clubs",
         favorites: "Favoriten",
@@ -8946,7 +9180,51 @@ export const translations: Record<Language, TranslationKeys> = {
         engagement: "Engagement",
         this_month: "Diesen Monat",
         total: "Gesamt",
-        last_7_days: "7 Tage"
+        last_7_days: "7 Tage",
+        view_stats: "Statistiken anzeigen",
+        statistics: "Statistiken",
+        days: {
+          monday: "Montag",
+          tuesday: "Dienstag",
+          wednesday: "Mittwoch",
+          thursday: "Donnerstag",
+          friday: "Freitag",
+          saturday: "Samstag",
+          sunday: "Sonntag",
+          mon: "Mo",
+          tue: "Di",
+          wed: "Mi",
+          thu: "Do",
+          fri: "Fr",
+          sat: "Sa",
+          sun: "So"
+        },
+        months: {
+          january: "Januar",
+          february: "Februar",
+          march: "März",
+          april: "April",
+          may: "Mai",
+          june: "Juni",
+          july: "Juli",
+          august: "August",
+          september: "September",
+          october: "Oktober",
+          november: "November",
+          december: "Dezember",
+          jan: "Jan",
+          feb: "Feb",
+          mar: "Mär",
+          apr: "Apr",
+          may_short: "Mai",
+          jun: "Jun",
+          jul: "Jul",
+          aug: "Aug",
+          sep: "Sep",
+          oct: "Okt",
+          nov: "Nov",
+          dec: "Dez"
+        }
       },
       wallet: {
         title: "Meine Brieftasche",
@@ -9106,6 +9384,24 @@ export const translations: Record<Language, TranslationKeys> = {
         no_contests: "Keine Wettbewerbe verfügbar",
         no_description: "Keine Beschreibung verfügbar",
         all: "Alle",
+        nomination: "Nominierung",
+        participations: "Teilnahmen",
+        nominate: "Nominieren",
+        tooltip_nominate: "Klicken Sie, um an diesem Wettbewerb zu nominieren und Ihren Beitrag einzureichen",
+        time_remaining_to_nominate: "Verbleibende Zeit zur Nominierung",
+        search_placeholder: "Nach einem Wettbewerb suchen...",
+        search_button: "Suchen",
+        sort: "Sortieren nach",
+        sort_participants: "Meiste Teilnehmer",
+        sort_votes: "Meiste Stimmen",
+        sort_date: "Neueste",
+        sort_name: "Name (A-Z)",
+        voting_type: "Abstimmungstyp",
+        voting_level_country: "National",
+        voting_level_city: "Stadt",
+        voting_level_regional: "Regional",
+        voting_level_continent: "Kontinental",
+        voting_level_global: "Global",
         status: "Status",
         level: "Stufe",
         city: "Stadt",
@@ -9687,7 +9983,7 @@ export const translations: Record<Language, TranslationKeys> = {
       },
       about: {
         title: "Über MyHigh5",
-        subtitle: "Die erste globale Wettbewerbsplattform, die Talente weltweit verbindet.",
+        subtitle: "Die erste ganzheitliche Online-Wettbewerbsplattform, die Talente von der Stadtebene bis zur globalen Bühne entdeckt und präsentiert.",
         mission: {
           title: "Unsere Mission",
           description: "Den Zugang zu Wettbewerben demokratisieren und jedem Talent ermöglichen, auf der Weltbühne zu glänzen."

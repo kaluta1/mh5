@@ -51,6 +51,14 @@ interface ContestCardProps {
   requiresContentVerification?: boolean
   minAge?: number | null
   maxAge?: number | null
+  isNomination?: boolean  // Indique si on est dans l'onglet Nomination
+  votingType?: {
+    id: number
+    name: string
+    voting_level: string
+    commission_source: string
+    commission_rules?: any
+  } | null
   onViewContestants: () => void
   onToggleFavorite: () => void
   onParticipate?: () => void
@@ -89,6 +97,8 @@ export function ContestCard({
   requiresContentVerification = false,
   minAge = null,
   maxAge = null,
+  isNomination = false,
+  votingType = null,
   onViewContestants,
   onToggleFavorite,
   onParticipate,
@@ -269,7 +279,12 @@ export function ContestCard({
                   <div className="bg-black/80 backdrop-blur-md rounded-lg px-2.5 py-1.5 border border-white/20 cursor-help">
                     <div className="flex items-center gap-1.5">
                       <Clock className="w-3 h-3 text-myfav-secondary animate-pulse flex-shrink-0" />
-                      <span className="text-white text-[10px] font-medium truncate flex-1">{t('dashboard.contests.time_remaining_to_participate') || 'Temps restant pour concourir'}</span>
+                      <span className="text-white text-[10px] font-medium truncate flex-1">
+                        {isNomination
+                          ? (t('dashboard.contests.time_remaining_to_nominate') || 'Temps restant pour nommer')
+                          : (t('dashboard.contests.time_remaining_to_participate') || 'Temps restant pour concourir')
+                        }
+                      </span>
                       <span className="text-white font-bold font-mono text-[10px] flex-shrink-0">{getCountdownText()}</span>
                     </div>
                   </div>
@@ -320,6 +335,28 @@ export function ContestCard({
                         <p className="text-white font-medium text-sm">{getStatusLabel(status)}</p>
                       </div>
                     </div>
+                    {/* Voting Type */}
+                    {votingType && (
+                      <div className="flex items-center gap-2 bg-gray-800/50 border border-gray-700 rounded-lg p-3">
+                        <Trophy className="w-5 h-5 text-yellow-400" />
+                        <div>
+                          <p className="text-gray-400 text-xs mb-1">{t('dashboard.contests.voting_type') || 'Type de vote'}</p>
+                          <p className="text-white font-medium text-sm">{votingType.name}</p>
+                          <p className="text-gray-500 text-xs mt-0.5">
+                            {votingType.voting_level === 'country' 
+                              ? (t('dashboard.contests.voting_level_country') || 'National')
+                              : votingType.voting_level === 'city'
+                              ? (t('dashboard.contests.voting_level_city') || 'Ville')
+                              : votingType.voting_level === 'regional'
+                              ? (t('dashboard.contests.voting_level_regional') || 'Régional')
+                              : votingType.voting_level === 'continent'
+                              ? (t('dashboard.contests.voting_level_continent') || 'Continental')
+                              : (t('dashboard.contests.voting_level_global') || 'Global')
+                            }
+                          </p>
+                        </div>
+                      </div>
+                    )}
                     {/* Participant Type */}
                     {participantType && (
                       <div className="flex items-center gap-2 bg-gray-800/50 border border-gray-700 rounded-lg p-3">
@@ -612,13 +649,19 @@ export function ContestCard({
                   >
                     <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover/btn:translate-x-full transition-transform duration-700" />
                     <Sparkles className="w-3.5 h-3.5 mr-1.5" />
-                    {t('dashboard.contests.participate') || 'Participer'}
+                    {isNomination 
+                      ? (t('dashboard.contests.nominate') || 'Nommer')
+                      : (t('dashboard.contests.participate') || 'Participer')
+                    }
                     <ArrowRight className="w-3.5 h-3.5 ml-1.5 group-hover/btn:translate-x-1 transition-transform" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent className="bg-gray-800 text-white border-gray-700">
                   <p className="text-xs">
-                    {t('dashboard.contests.tooltip_participate') || 'Cliquez pour participer à ce concours et soumettre votre candidature'}
+                    {isNomination
+                      ? (t('dashboard.contests.tooltip_nominate') || 'Cliquez pour nommer à ce concours et soumettre votre candidature')
+                      : (t('dashboard.contests.tooltip_participate') || 'Cliquez pour participer à ce concours et soumettre votre candidature')
+                    }
                   </p>
                 </TooltipContent>
               </Tooltip>

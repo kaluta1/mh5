@@ -15,7 +15,8 @@ from app.services.email_templates import (
     get_payment_confirmation_email,
     get_kyc_approved_email,
     get_kyc_rejected_email,
-    get_commission_email
+    get_commission_email,
+    get_contact_confirmation_email
 )
 
 logger = logging.getLogger(__name__)
@@ -225,6 +226,21 @@ class EmailService:
             lang, support_url, ip_address, location
         )
         return self.send_email(to_email, subject, html_content, text_content)
+    
+    def send_contact_confirmation_email(
+        self,
+        to_email: str,
+        name: str,
+        subject: str,
+        category: str,
+        message: str,
+        lang: str = "en"
+    ) -> bool:
+        """Send contact confirmation email to the sender"""
+        subject_email, html_content, text_content = get_contact_confirmation_email(
+            lang, name, subject, category, message
+        )
+        return self.send_email(to_email, subject_email, html_content, text_content)
 
 
 # Instance singleton

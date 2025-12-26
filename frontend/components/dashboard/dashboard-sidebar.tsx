@@ -17,7 +17,8 @@ import {
   Trophy,
   Star,
   BookOpen,
-  Network
+  Network,
+  Users
 } from "lucide-react"
 
 const baseMenuSections = [
@@ -26,6 +27,7 @@ const baseMenuSections = [
     items: [
       { name: "dashboard.nav.overview", href: "/dashboard", icon: Home },
       { name: "dashboard.nav.contests", href: "/dashboard/contests", icon: Trophy },
+      { name: "dashboard.nav.groups", href: "/dashboard/groups", icon: Users },
       { name: "dashboard.nav.favorites", href: "/dashboard/favorites", icon: Star },
        { name: "dashboard.nav.my_applications", href: "/dashboard/my-applications", icon: FileText },
     ]

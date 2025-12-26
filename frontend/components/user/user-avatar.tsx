@@ -7,6 +7,12 @@ import { cn } from "@/lib/utils"
 interface UserAvatarProps {
   src?: string
   alt?: string
+  user?: {
+    id?: number
+    username?: string
+    full_name?: string
+    avatar_url?: string
+  }
   size?: "sm" | "md" | "lg" | "xl"
   className?: string
   fallback?: string
@@ -14,11 +20,15 @@ interface UserAvatarProps {
 
 export function UserAvatar({ 
   src, 
-  alt = "User avatar", 
+  alt, 
+  user,
   size = "md", 
   className,
   fallback 
 }: UserAvatarProps) {
+  const avatarSrc = src || user?.avatar_url
+  const avatarAlt = alt || user?.full_name || user?.username || "User avatar"
+  const avatarFallback = fallback || user?.username?.[0]?.toUpperCase() || user?.full_name?.[0]?.toUpperCase() || "U"
   const sizeClasses = {
     sm: "h-8 w-8",
     md: "h-10 w-10",
@@ -41,15 +51,15 @@ export function UserAvatar({
         className
       )}
     >
-      {src ? (
+      {avatarSrc ? (
         <img
-          src={src}
-          alt={alt}
+          src={avatarSrc}
+          alt={avatarAlt}
           className="h-full w-full object-cover"
         />
-      ) : fallback ? (
+      ) : avatarFallback ? (
         <span className="text-sm font-medium text-muted-foreground">
-          {fallback}
+          {avatarFallback}
         </span>
       ) : (
         <User className={cn("text-muted-foreground", iconSizes[size])} />

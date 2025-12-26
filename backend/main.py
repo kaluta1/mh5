@@ -9,6 +9,7 @@ from app.api.api_v1.api import api_router
 from app.services.payment_scheduler import payment_scheduler
 from app.services.contest_status import contest_status_scheduler
 from app.services.season_migration_scheduler import season_migration_scheduler
+from app.services.socketio_app import create_socketio_app
 
 
 @asynccontextmanager
@@ -86,6 +87,13 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 # Servir les fichiers statiques (médias)
 if os.path.exists(settings.LOCAL_STORAGE_PATH):
     app.mount("/media", StaticFiles(directory=settings.LOCAL_STORAGE_PATH), name="media")
+
+# Intégration Socket.IO (optionnel)
+socketio_app = create_socketio_app(app)
+if socketio_app:
+    # Si Socket.IO est disponible, utiliser l'app Socket.IO qui encapsule FastAPI
+    # Sinon, utiliser directement l'app FastAPI
+    pass  # L'app sera montée dans le serveur ASGI
 
 # Route racine
 @app.get("/", tags=["Status"])

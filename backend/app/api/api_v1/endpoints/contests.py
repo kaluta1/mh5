@@ -38,6 +38,8 @@ def read_contests(
     location_id: int = None,
     contest_type: str = None,
     active: bool = Query(None),
+    search: str = Query(None, description="Recherche par nom de concours"),
+    voting_level: str = Query(None, description="Filtrer par niveau de vote (country pour Nomination)"),
 ) -> Any:
     """
     Récupérer tous les concours avec filtrage optionnel et statistiques.
@@ -50,6 +52,10 @@ def read_contests(
         filters["contest_type"] = contest_type
     if active is not None:
         filters["is_active"] = active
+    if search:
+        filters["search"] = search
+    if voting_level:
+        filters["voting_level"] = voting_level
     
     contests = contest.get_multi_with_filters(
         db=db, skip=skip, limit=limit, filters=filters

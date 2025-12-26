@@ -220,14 +220,14 @@ async def shufti_redirect(
     return RedirectResponse(url=redirect_target)
 
 
-@router.get("/status")
-async def get_kyc_status(
+@router.get("/status-detailed")
+async def get_kyc_status_detailed(
     *,
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user)
 ):
     """
-    Récupérer le statut KYC de l'utilisateur actuel.
+    Récupérer le statut KYC détaillé de l'utilisateur actuel.
     Synchronise avec Shufti Pro si une vérification est en cours.
     """
     verification = crud_kyc.kyc_verification.get_by_user(db, user_id=current_user.id)

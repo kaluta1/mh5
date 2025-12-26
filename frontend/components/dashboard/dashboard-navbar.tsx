@@ -1,9 +1,9 @@
 "use client"
 
 import * as React from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import { 
-  Search, Menu, ShoppingBag, Command
+  Search, Menu, ShoppingBag, Command, MessageSquare
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { UserDropdown } from "@/components/user/user-dropdown"
@@ -12,6 +12,7 @@ import { LanguageSelector } from "@/components/ui/language-selector"
 import { NotificationDropdown } from "@/components/dashboard/notification-dropdown"
 import { useLanguage } from "@/contexts/language-context"
 import { useAuth } from "@/hooks/use-auth"
+import { cn } from "@/lib/utils"
 
 interface DashboardNavbarProps {
   onMenuToggle?: () => void
@@ -21,6 +22,7 @@ interface DashboardNavbarProps {
 export function DashboardNavbar({ onMenuToggle, onSidebarToggle }: DashboardNavbarProps) {
   const { t } = useLanguage()
   const router = useRouter()
+  const pathname = usePathname()
   const { user, logout } = useAuth()
 
   return (
@@ -53,11 +55,11 @@ export function DashboardNavbar({ onMenuToggle, onSidebarToggle }: DashboardNavb
 
         </div>
 
-        {/* Center - Search */}
-        <div className="hidden md:flex flex-1 max-w-md mx-4">
+        {/* Center - Search & Feed */}
+        <div className="hidden md:flex flex-1 items-center gap-3 max-w-md mx-4">
           <button
             onClick={() => router.push('/dashboard/search')}
-            className="w-full group flex items-center gap-3 px-4 py-2.5 bg-gray-100/80 dark:bg-gray-800/80 hover:bg-white dark:hover:bg-gray-700 border border-transparent hover:border-gray-200 dark:hover:border-gray-600 rounded-xl transition-all duration-200 hover:shadow-lg"
+            className="flex-1 group flex items-center gap-3 px-4 py-2.5 bg-gray-100/80 dark:bg-gray-800/80 hover:bg-white dark:hover:bg-gray-700 border border-transparent hover:border-gray-200 dark:hover:border-gray-600 rounded-xl transition-all duration-200 hover:shadow-lg"
           >
             <Search className="h-4 w-4 text-gray-400 group-hover:text-myfav-primary transition-colors" />
             <span className="flex-1 text-left text-sm text-gray-500 dark:text-gray-400">
@@ -67,6 +69,22 @@ export function DashboardNavbar({ onMenuToggle, onSidebarToggle }: DashboardNavb
               <Command className="w-3 h-3" />K
             </kbd>
           </button>
+          
+          {/* Feed Button */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.push('/dashboard/feed')}
+            className={cn(
+              "h-10 px-3 rounded-xl transition-all",
+              "bg-gray-100/80 dark:bg-gray-800/80 hover:bg-white dark:hover:bg-gray-700",
+              "border border-transparent hover:border-gray-200 dark:hover:border-gray-600",
+              pathname === '/dashboard/feed' && "bg-myfav-primary/10 border-myfav-primary/20 text-myfav-primary"
+            )}
+            title={t('dashboard.nav.feed') || 'Feed'}
+          >
+            <MessageSquare className="h-5 w-5" />
+          </Button>
         </div>
 
         {/* Right side - Actions */}
