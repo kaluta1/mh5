@@ -1,7 +1,7 @@
 """Add missing tables and fix relationships
 
 Revision ID: 9b4a6c5f98a7
-Revises: 002_add_myhigh5_models
+Revises: 002_add_myfav_models
 Create Date: 2025-08-28 10:16:45.851209
 
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = '9b4a6c5f98a7'
-down_revision = '002_add_myhigh5_models'
+down_revision = '002_add_myfav_models'
 branch_labels = None
 depends_on = None
 
