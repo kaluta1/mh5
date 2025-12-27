@@ -63,7 +63,7 @@ export function CommentItem({
               className="w-10 h-10 rounded-full object-cover"
             />
           ) : (
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-myfav-primary to-myfav-primary-dark flex items-center justify-center text-white font-bold text-sm">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-myhigh5-primary to-myhigh5-primary-dark flex items-center justify-center text-white font-bold text-sm">
               {author_name.charAt(0).toUpperCase()}
             </div>
           )}
@@ -105,7 +105,7 @@ export function CommentItem({
                 onClick={() => setShowReplyForm(!showReplyForm)}
                 variant="ghost"
                 size="sm"
-                className="text-xs text-myfav-primary hover:bg-myfav-primary/10"
+                className="text-xs text-myhigh5-primary hover:bg-myhigh5-primary/10"
               >
                 <Reply className="w-3 h-3 mr-1" />
                 {t('contestant_detail.reply')}
@@ -120,7 +120,7 @@ export function CommentItem({
                 value={replyText}
                 onChange={(e) => setReplyText(e.target.value)}
                 placeholder={t('contestant_detail.reply_placeholder')}
-                className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myfav-primary text-sm"
+                className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myhigh5-primary text-sm"
                 rows={2}
               />
               <div className="flex gap-2 justify-end">
@@ -138,7 +138,7 @@ export function CommentItem({
                   onClick={handleSubmitReply}
                   disabled={!replyText.trim() || isSubmitting}
                   size="sm"
-                  className="bg-gradient-to-r from-myfav-primary to-myfav-primary-dark text-white"
+                  className="bg-gradient-to-r from-myhigh5-primary to-myhigh5-primary-dark text-white"
                 >
                   {isSubmitting ? t('contestant_detail.voting') : t('contestant_detail.reply')}
                 </Button>

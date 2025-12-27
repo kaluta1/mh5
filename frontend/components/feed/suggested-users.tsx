@@ -93,7 +93,7 @@ export function SuggestedUsers({ currentUserId }: SuggestedUsersProps) {
       </div>
       <Button
         variant="ghost"
-        className="w-full mt-4 text-myfav-primary hover:text-myfav-primary/80"
+        className="w-full mt-4 text-myhigh5-primary hover:text-myhigh5-primary/80"
       >
         Voir plus
       </Button>

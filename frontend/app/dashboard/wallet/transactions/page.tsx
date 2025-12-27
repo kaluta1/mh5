@@ -141,7 +141,7 @@ export default function TransactionsPage() {
           </Link>
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-myfav-primary flex items-center justify-center shadow-lg shadow-myfav-primary/25">
+              <div className="w-10 h-10 rounded-xl bg-myhigh5-primary flex items-center justify-center shadow-lg shadow-myhigh5-primary/25">
                 <History className="w-5 h-5 text-white" />
               </div>
               {t('dashboard.wallet.all_transactions') || 'Toutes les transactions'}

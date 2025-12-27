@@ -1,13 +1,13 @@
-# MyFav - Plateforme de Concours Modernes
+# MyHigh5 - Plateforme de Concours Modernes
 
-MyFav est une plateforme multilingue de concours permettant aux utilisateurs de participer à différents types de concours (beauté, talents, etc.) avec un système de vote unique appelé "MyFav".
+MyHigh5 est une plateforme multilingue de concours permettant aux utilisateurs de participer à différents types de concours (beauté, talents, etc.) avec un système de vote unique appelé "MyHigh5".
 
 ## Fonctionnalités
 
 - **Gestion des utilisateurs**: Inscription, connexion, profils
 - **Système de médias**: Upload et gestion de photos et vidéos
 - **Concours**: Création, participation et vote dans divers types de concours
-- **Système de vote MyFav**: Notation de 1 à 5 pour plusieurs participants
+- **Système de vote MyHigh5**: Notation de 1 à 5 pour plusieurs participants
 - **Hiérarchie géographique**: Concours du niveau local à international
 - **Modération de contenu**: Système de signalement et modération
 

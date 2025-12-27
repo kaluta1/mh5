@@ -108,12 +108,12 @@ export default function AboutPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-myfav-blue-50 via-white to-myfav-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+    <div className="min-h-screen bg-gradient-to-br from-myhigh5-blue-50 via-white to-myhigh5-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
       <Header />
       
       <main className="pt-24 pb-16">
         {/* Hero Section */}
-        <section className="relative py-20 bg-gradient-to-r from-myfav-primary to-myfav-secondary overflow-hidden">
+        <section className="relative py-20 bg-gradient-to-r from-myhigh5-primary to-myhigh5-secondary overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,rgba(255,255,255,0.15),transparent_50%)]" />
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(255,255,255,0.1),transparent_40%)]" />
           <div className="container px-4 md:px-6 relative z-10">
@@ -137,7 +137,7 @@ export default function AboutPage() {
                 key={index}
                 className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-xl border border-gray-200 dark:border-gray-700 text-center hover:shadow-2xl transition-all duration-300 hover:-translate-y-1"
               >
-                <stat.icon className="w-10 h-10 mx-auto mb-3 text-myfav-primary" />
+                <stat.icon className="w-10 h-10 mx-auto mb-3 text-myhigh5-primary" />
                 <div className="text-3xl md:text-4xl font-black text-gray-900 dark:text-white mb-1">
                   {stat.value}
                 </div>
@@ -153,7 +153,7 @@ export default function AboutPage() {
         <section className="container px-4 md:px-6 py-20">
           <div className="grid md:grid-cols-2 gap-12 items-center">
             <div>
-              <Target className="w-12 h-12 text-myfav-primary mb-6" />
+              <Target className="w-12 h-12 text-myhigh5-primary mb-6" />
               <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-6">
                 {t('pages.about.mission.title') || "Notre Mission"}
               </h2>
@@ -170,8 +170,8 @@ export default function AboutPage() {
               </ul>
             </div>
             <div className="relative">
-              <div className="aspect-square rounded-3xl bg-gradient-to-br from-myfav-primary/20 to-myfav-secondary/20 flex items-center justify-center">
-                <div className="w-3/4 h-3/4 rounded-2xl bg-gradient-to-br from-myfav-primary to-myfav-secondary flex items-center justify-center shadow-2xl">
+              <div className="aspect-square rounded-3xl bg-gradient-to-br from-myhigh5-primary/20 to-myhigh5-secondary/20 flex items-center justify-center">
+                <div className="w-3/4 h-3/4 rounded-2xl bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary flex items-center justify-center shadow-2xl">
                   <Globe className="w-32 h-32 text-white/80" />
                 </div>
               </div>
@@ -179,7 +179,7 @@ export default function AboutPage() {
               <div className="absolute -top-4 -right-4 w-20 h-20 bg-amber-400 rounded-2xl flex items-center justify-center shadow-lg animate-bounce">
                 <Trophy className="w-10 h-10 text-white" />
               </div>
-              <div className="absolute -bottom-4 -left-4 w-16 h-16 bg-myfav-secondary rounded-xl flex items-center justify-center shadow-lg animate-pulse">
+              <div className="absolute -bottom-4 -left-4 w-16 h-16 bg-myhigh5-secondary rounded-xl flex items-center justify-center shadow-lg animate-pulse">
                 <Heart className="w-8 h-8 text-white" />
               </div>
             </div>
@@ -203,7 +203,7 @@ export default function AboutPage() {
                   key={index}
                   className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
                 >
-                  <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-myfav-primary to-myfav-secondary flex items-center justify-center mb-4">
+                  <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary flex items-center justify-center mb-4">
                     <value.icon className="w-7 h-7 text-white" />
                   </div>
                   <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
@@ -235,7 +235,7 @@ export default function AboutPage() {
                   key={index}
                   className="text-center group"
                 >
-                  <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-gradient-to-br from-myfav-primary to-myfav-secondary flex items-center justify-center text-4xl shadow-lg group-hover:scale-110 transition-transform duration-300">
+                  <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary flex items-center justify-center text-4xl shadow-lg group-hover:scale-110 transition-transform duration-300">
                     {member.emoji}
                   </div>
                   <h3 className="font-bold text-gray-900 dark:text-white">
@@ -252,7 +252,7 @@ export default function AboutPage() {
 
         {/* CTA Section */}
         <section className="container px-4 md:px-6 py-20">
-          <div className="bg-gradient-to-r from-myfav-primary to-myfav-secondary rounded-3xl p-8 md:p-12 text-center text-white">
+          <div className="bg-gradient-to-r from-myhigh5-primary to-myhigh5-secondary rounded-3xl p-8 md:p-12 text-center text-white">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">
               {t('pages.about.cta.title') || "Rejoignez l'Aventure MyHigh5"}
             </h2>
@@ -261,7 +261,7 @@ export default function AboutPage() {
             </p>
             <Button 
               size="lg"
-              className="bg-white text-myfav-primary hover:bg-gray-100 font-bold px-8 py-6 text-lg"
+              className="bg-white text-myhigh5-primary hover:bg-gray-100 font-bold px-8 py-6 text-lg"
             >
               <Users className="w-5 h-5 mr-2" />
               {t('pages.about.cta.button') || "Commencer Maintenant"}

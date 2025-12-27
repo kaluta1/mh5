@@ -616,7 +616,7 @@ export default function CommissionsPage() {
             </p>
             <Button 
               onClick={() => router.push('/dashboard/affiliates')}
-              className="rounded-xl bg-myfav-primary hover:bg-myfav-primary/90"
+              className="rounded-xl bg-myhigh5-primary hover:bg-myhigh5-primary/90"
             >
               <Users className="w-4 h-4 mr-2" />
               {t('dashboard.commissions.go_to_affiliates') || 'Voir mes affiliés'}

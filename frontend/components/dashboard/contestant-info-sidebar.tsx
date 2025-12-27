@@ -236,11 +236,11 @@ export function ContestantInfoSidebar({
                         alt={voter.full_name || voter.username || ''}
                         width={32}
                         height={32}
-                        className="rounded-lg border-2 border-myfav-primary cursor-pointer hover:scale-110 transition-transform object-cover"
+                        className="rounded-lg border-2 border-myhigh5-primary cursor-pointer hover:scale-110 transition-transform object-cover"
                         title={voter.full_name || voter.username || ''}
                       />
                     ) : (
-                      <div className="w-8 h-8 rounded-lg bg-myfav-primary/10 dark:bg-myfav-primary/20 flex items-center justify-center text-xs font-semibold border-2 border-myfav-primary cursor-pointer hover:scale-110 transition-transform text-myfav-primary dark:text-myfav-secondary">
+                      <div className="w-8 h-8 rounded-lg bg-myhigh5-primary/10 dark:bg-myhigh5-primary/20 flex items-center justify-center text-xs font-semibold border-2 border-myhigh5-primary cursor-pointer hover:scale-110 transition-transform text-myhigh5-primary dark:text-myhigh5-secondary">
                         {(voter.full_name || voter.username || 'V')[0].toUpperCase()}
                       </div>
                     )}
@@ -266,7 +266,7 @@ export function ContestantInfoSidebar({
         className={`w-full hidden md:block font-semibold py-3 text-sm rounded-xl hover:shadow-xl transition-all duration-300 ${
           hasVoted
             ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-            : 'bg-gradient-to-r from-myfav-primary via-myfav-primary-dark to-indigo-600 text-white hover:scale-[1.02] active:scale-[0.98]'
+            : 'bg-gradient-to-r from-myhigh5-primary via-myhigh5-primary-dark to-indigo-600 text-white hover:scale-[1.02] active:scale-[0.98]'
         }`}
       >
         {isVoting ? t('contestant_detail.voting') : hasVoted ? (t('contestant_detail.voted') || 'Voted') : t('contestant_detail.vote')}

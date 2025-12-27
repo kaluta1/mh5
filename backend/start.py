@@ -123,7 +123,7 @@ def start_redis():
 def main():
     """Fonction principale"""
     logger.info("=== Démarrage du script principal ===")
-    parser = argparse.ArgumentParser(description="Script de démarrage pour l'application MyFav")
+    parser = argparse.ArgumentParser(description="Script de démarrage pour l'application MyHigh5")
     
     parser.add_argument("--no-migrations", action="store_true", help="Ne pas exécuter les migrations de base de données")
     parser.add_argument("--no-init-data", action="store_true", help="Ne pas initialiser les données")
@@ -175,14 +175,14 @@ def main():
     if args.host == "0.0.0.0":
         localhost_url = f"http://localhost:{args.port}"
         local_ip_url = f"http://127.0.0.1:{args.port}"
-        logger.info(f"🚀 API MyFav sera disponible sur:")
+        logger.info(f"🚀 API MyHigh5 sera disponible sur:")
         logger.info(f"   - {localhost_url}")
         logger.info(f"   - {local_ip_url}")
         logger.info(f"📚 Documentation API: {localhost_url}/docs")
         logger.info(f"🔧 Interface Redoc: {localhost_url}/redoc")
     else:
         api_url = f"http://{args.host}:{args.port}"
-        logger.info(f"🚀 API MyFav sera disponible sur: {api_url}")
+        logger.info(f"🚀 API MyHigh5 sera disponible sur: {api_url}")
         logger.info(f"📚 Documentation API: {api_url}/docs")
         logger.info(f"🔧 Interface Redoc: {api_url}/redoc")
     
@@ -197,7 +197,7 @@ def main():
 
 if __name__ == "__main__":
     try:
-        print("Démarrage de l'application MyFav")
+        print("Démarrage de l'application MyHigh5")
         sys.stdout.flush()
         main()
     except Exception as e:

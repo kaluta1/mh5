@@ -136,7 +136,7 @@ export function ContentVerificationDialog({
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <FileCheck className="w-5 h-5 text-myfav-primary" />
+            <FileCheck className="w-5 h-5 text-myhigh5-primary" />
             {t('verification.content_ownership') || 'Vérification de propriété du contenu'}
           </DialogTitle>
           <DialogDescription>
@@ -195,7 +195,7 @@ export function ContentVerificationDialog({
               placeholder={t('verification.content_description_placeholder') || 
                 'Expliquez comment ce contenu vous appartient...'}
               rows={3}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-myfav-primary resize-none"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-myhigh5-primary resize-none"
             />
           </div>
 
@@ -223,7 +223,7 @@ export function ContentVerificationDialog({
             ) : (
               <div 
                 onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center cursor-pointer hover:border-myfav-primary transition"
+                className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center cursor-pointer hover:border-myhigh5-primary transition"
               >
                 <ImageIcon className="w-8 h-8 mx-auto text-gray-400 mb-2" />
                 <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -261,7 +261,7 @@ export function ContentVerificationDialog({
           <Button 
             onClick={handleSubmit}
             disabled={isUploading || !description.trim()}
-            className="flex-1 bg-myfav-primary hover:bg-myfav-primary-dark"
+            className="flex-1 bg-myhigh5-primary hover:bg-myhigh5-primary-dark"
           >
             {isUploading ? (
               <Loader2 className="w-4 h-4 animate-spin mr-2" />

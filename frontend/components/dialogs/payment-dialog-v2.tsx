@@ -488,8 +488,8 @@ export function PaymentDialog({
                     <CheckCircle2 className="w-5 h-5 text-green-600" />
                   </div>
                 ) : (
-                  <div className="w-9 h-9 rounded-lg bg-myfav-primary/10 flex items-center justify-center">
-                    <CreditCard className="w-5 h-5 text-myfav-primary" />
+                  <div className="w-9 h-9 rounded-lg bg-myhigh5-primary/10 flex items-center justify-center">
+                    <CreditCard className="w-5 h-5 text-myhigh5-primary" />
                   </div>
                 )}
                 {step === 'recipients' && (t('payment.buy_services') || 'Acheter des services')}
@@ -513,9 +513,9 @@ export function PaymentDialog({
                   <div key={s} className="flex items-center">
                     <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold transition-all ${
                       step === s 
-                        ? 'bg-myfav-primary text-white' 
+                        ? 'bg-myhigh5-primary text-white' 
                         : ['recipients', 'method', 'payment'].indexOf(step) > i
-                          ? 'bg-myfav-secondary text-white'
+                          ? 'bg-myhigh5-secondary text-white'
                           : 'bg-gray-100 dark:bg-gray-800 text-gray-400'
                     }`}>
                       {['recipients', 'method', 'payment'].indexOf(step) > i ? (
@@ -527,7 +527,7 @@ export function PaymentDialog({
                     {i < 2 && (
                       <div className={`w-10 h-0.5 mx-1 ${
                         ['recipients', 'method', 'payment'].indexOf(step) > i
-                          ? 'bg-myfav-secondary'
+                          ? 'bg-myhigh5-secondary'
                           : 'bg-gray-200 dark:bg-gray-700'
                       }`} />
                     )}
@@ -572,22 +572,22 @@ export function PaymentDialog({
                   }}
                   className={`relative w-full p-3 rounded-lg border transition-all text-left ${
                     includeMyself && myselfProduct === 'kyc'
-                      ? 'border-myfav-primary bg-myfav-primary/5'
-                      : 'border-gray-200 dark:border-gray-700 hover:border-myfav-primary/50'
+                      ? 'border-myhigh5-primary bg-myhigh5-primary/5'
+                      : 'border-gray-200 dark:border-gray-700 hover:border-myhigh5-primary/50'
                   }`}
                 >
                   <div className="flex items-center gap-3">
                     <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
                       includeMyself && myselfProduct === 'kyc'
-                        ? 'border-myfav-primary bg-myfav-primary'
+                        ? 'border-myhigh5-primary bg-myhigh5-primary'
                         : 'border-gray-300 dark:border-gray-600'
                     }`}>
                       {includeMyself && myselfProduct === 'kyc' && (
                         <Check className="w-3 h-3 text-white" />
                       )}
                     </div>
-                    <div className="w-8 h-8 rounded-lg bg-myfav-primary/10 flex items-center justify-center">
-                      <Shield className="w-4 h-4 text-myfav-primary" />
+                    <div className="w-8 h-8 rounded-lg bg-myhigh5-primary/10 flex items-center justify-center">
+                      <Shield className="w-4 h-4 text-myhigh5-primary" />
                     </div>
                     <div className="flex-1">
                       <h4 className="text-sm font-medium text-gray-900 dark:text-white">KYC Service</h4>
@@ -595,7 +595,7 @@ export function PaymentDialog({
                         {t('payment.kyc_description') || 'Vérification d\'identité'}
                       </p>
                     </div>
-                    <span className="text-sm font-bold text-myfav-primary">$10</span>
+                    <span className="text-sm font-bold text-myhigh5-primary">$10</span>
                   </div>
                 </button>
 
@@ -612,27 +612,27 @@ export function PaymentDialog({
                   }}
                   className={`relative w-full p-3 rounded-lg border transition-all text-left ${
                     includeMyself && myselfProduct === 'mfm_membership'
-                      ? 'border-myfav-secondary bg-myfav-secondary/5'
-                      : 'border-gray-200 dark:border-gray-700 hover:border-myfav-secondary/50'
+                      ? 'border-myhigh5-secondary bg-myhigh5-secondary/5'
+                      : 'border-gray-200 dark:border-gray-700 hover:border-myhigh5-secondary/50'
                   }`}
                 >
                   <div className="absolute -top-1.5 right-2">
-                    <span className="bg-myfav-accent text-gray-900 text-[10px] font-bold px-1.5 py-0.5 rounded">
+                    <span className="bg-myhigh5-accent text-gray-900 text-[10px] font-bold px-1.5 py-0.5 rounded">
                       PREMIUM
                     </span>
                   </div>
                   <div className="flex items-center gap-3">
                     <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
                       includeMyself && myselfProduct === 'mfm_membership'
-                        ? 'border-myfav-secondary bg-myfav-secondary'
+                        ? 'border-myhigh5-secondary bg-myhigh5-secondary'
                         : 'border-gray-300 dark:border-gray-600'
                     }`}>
                       {includeMyself && myselfProduct === 'mfm_membership' && (
                         <Check className="w-3 h-3 text-white" />
                       )}
                     </div>
-                    <div className="w-8 h-8 rounded-lg bg-myfav-secondary/10 flex items-center justify-center">
-                      <Crown className="w-4 h-4 text-myfav-secondary" />
+                    <div className="w-8 h-8 rounded-lg bg-myhigh5-secondary/10 flex items-center justify-center">
+                      <Crown className="w-4 h-4 text-myhigh5-secondary" />
                     </div>
                     <div className="flex-1">
                       <h4 className="text-sm font-medium text-gray-900 dark:text-white">{t('payment.mfm_membership') || 'MFM'}</h4>
@@ -640,7 +640,7 @@ export function PaymentDialog({
                         {t('payment.mfm_description') || 'Pool 10% mensuel + 20% annuel'}
                       </p>
                     </div>
-                    <span className="text-sm font-bold text-myfav-secondary">$100</span>
+                    <span className="text-sm font-bold text-myhigh5-secondary">$100</span>
                   </div>
                 </button>
 
@@ -657,22 +657,22 @@ export function PaymentDialog({
                   }}
                   className={`relative w-full p-3 rounded-lg border transition-all text-left ${
                     includeMyself && myselfProduct === 'annual_membership'
-                      ? 'border-myfav-primary bg-myfav-primary/5'
-                      : 'border-gray-200 dark:border-gray-700 hover:border-myfav-primary/50'
+                      ? 'border-myhigh5-primary bg-myhigh5-primary/5'
+                      : 'border-gray-200 dark:border-gray-700 hover:border-myhigh5-primary/50'
                   }`}
                 >
                   <div className="flex items-center gap-3">
                     <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
                       includeMyself && myselfProduct === 'annual_membership'
-                        ? 'border-myfav-primary bg-myfav-primary'
+                        ? 'border-myhigh5-primary bg-myhigh5-primary'
                         : 'border-gray-300 dark:border-gray-600'
                     }`}>
                       {includeMyself && myselfProduct === 'annual_membership' && (
                         <Check className="w-3 h-3 text-white" />
                       )}
                     </div>
-                    <div className="w-8 h-8 rounded-lg bg-myfav-primary/10 flex items-center justify-center">
-                      <Calendar className="w-4 h-4 text-myfav-primary" />
+                    <div className="w-8 h-8 rounded-lg bg-myhigh5-primary/10 flex items-center justify-center">
+                      <Calendar className="w-4 h-4 text-myhigh5-primary" />
                     </div>
                     <div className="flex-1">
                       <h4 className="text-sm font-medium text-gray-900 dark:text-white">Annual Membership</h4>
@@ -680,7 +680,7 @@ export function PaymentDialog({
                         {t('payment.annual_description') || 'Renouvellement FM'}
                       </p>
                     </div>
-                    <span className="text-sm font-bold text-myfav-primary">$50</span>
+                    <span className="text-sm font-bold text-myhigh5-primary">$50</span>
                   </div>
                 </button>
               </div>
@@ -781,7 +781,7 @@ export function PaymentDialog({
               <Button
                 variant="outline"
                 onClick={addRecipient}
-                className="w-full border-dashed border-2 h-12 hover:border-myfav-primary hover:text-myfav-primary"
+                className="w-full border-dashed border-2 h-12 hover:border-myhigh5-primary hover:text-myhigh5-primary"
               >
                 <Plus className="w-5 h-5 mr-2" />
                 {t('payment.add_other_user') || 'Ajouter un autre utilisateur'}
@@ -789,14 +789,14 @@ export function PaymentDialog({
 
               {/* Total */}
               {totalAmount > 0 && (
-                <div className="flex items-center justify-between p-4 bg-gradient-to-r from-myfav-primary/10 to-myfav-primary/5 dark:from-myfav-primary/20 dark:to-myfav-primary/10 rounded-xl">
+                <div className="flex items-center justify-between p-4 bg-gradient-to-r from-myhigh5-primary/10 to-myhigh5-primary/5 dark:from-myhigh5-primary/20 dark:to-myhigh5-primary/10 rounded-xl">
                   <div>
                     <p className="text-sm text-gray-600 dark:text-gray-400">{t('payment.total') || 'Total'}</p>
                     <p className="text-xs text-gray-500">
                       {(includeMyself ? 1 : 0) + recipients.length} {t('payment.recipients_count') || 'bénéficiaire(s)'}
                     </p>
                   </div>
-                  <span className="text-3xl font-bold text-myfav-primary">
+                  <span className="text-3xl font-bold text-myhigh5-primary">
                     ${totalAmount.toFixed(2)}
                   </span>
                 </div>
@@ -810,7 +810,7 @@ export function PaymentDialog({
                 <Button
                   onClick={() => setStep('method')}
                   disabled={!allRecipientsValid}
-                  className="flex-1 bg-myfav-primary hover:bg-myfav-primary/90 gap-2"
+                  className="flex-1 bg-myhigh5-primary hover:bg-myhigh5-primary/90 gap-2"
                 >
                   {t('common.continue') || 'Continuer'}
                   <ChevronRight className="w-4 h-4" />
@@ -823,7 +823,7 @@ export function PaymentDialog({
           {step === 'method' && (
             <div className="space-y-4">
               {/* Summary Card */}
-              <div className="bg-myfav-primary/5 dark:bg-myfav-primary/10 rounded-xl p-4 border border-myfav-primary/20">
+              <div className="bg-myhigh5-primary/5 dark:bg-myhigh5-primary/10 rounded-xl p-4 border border-myhigh5-primary/20">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -834,7 +834,7 @@ export function PaymentDialog({
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-2xl font-bold text-myfav-primary">
+                    <p className="text-2xl font-bold text-myhigh5-primary">
                       ${totalAmount.toFixed(2)} USD
                     </p>
                   </div>
@@ -844,7 +844,7 @@ export function PaymentDialog({
               {/* Loading */}
               {isLoading && (
                 <div className="flex items-center justify-center py-8">
-                  <Loader2 className="w-8 h-8 animate-spin text-myfav-primary" />
+                  <Loader2 className="w-8 h-8 animate-spin text-myhigh5-primary" />
                   <span className="ml-3 text-gray-600 dark:text-gray-400">
                     {t('payment.creating_payment') || 'Création du paiement...'}
                   </span>
@@ -872,7 +872,7 @@ export function PaymentDialog({
                           key={method.id}
                           onClick={() => handleMethodSelect(method.id)}
                           disabled={isLoading}
-                          className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-myfav-primary hover:bg-myfav-primary/5 transition-all text-left disabled:opacity-50"
+                          className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-myhigh5-primary hover:bg-myhigh5-primary/5 transition-all text-left disabled:opacity-50"
                         >
                           <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
                             {method.icon}
@@ -934,11 +934,11 @@ export function PaymentDialog({
               </div>
 
               {/* Amount */}
-              <div className="bg-myfav-primary/5 dark:bg-myfav-primary/10 rounded-xl p-4 text-center border border-myfav-primary/20">
+              <div className="bg-myhigh5-primary/5 dark:bg-myhigh5-primary/10 rounded-xl p-4 text-center border border-myhigh5-primary/20">
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
                   {t('payment.amount_to_send') || 'Montant à envoyer'}
                 </p>
-                <p className="text-2xl font-bold text-myfav-primary">
+                <p className="text-2xl font-bold text-myhigh5-primary">
                   {cryptoPayment.pay_amount} {cryptoPayment.pay_currency.toUpperCase()}
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -1026,7 +1026,7 @@ export function PaymentDialog({
                 <Button
                   onClick={checkPaymentStatus}
                   disabled={isCheckingPayment}
-                  className="flex-1 bg-myfav-primary hover:bg-myfav-primary/90"
+                  className="flex-1 bg-myhigh5-primary hover:bg-myhigh5-primary/90"
                 >
                   {isCheckingPayment ? (
                     <>
@@ -1077,7 +1077,7 @@ export function PaymentDialog({
                   onPaymentInitiated?.()
                   resetAndClose()
                 }}
-                className="w-full bg-myfav-primary hover:bg-myfav-primary/90"
+                className="w-full bg-myhigh5-primary hover:bg-myhigh5-primary/90"
               >
                 {t('common.continue') || 'Continuer'}
               </Button>

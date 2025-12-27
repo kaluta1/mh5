@@ -132,7 +132,7 @@ export function VerificationRequirementsDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Shield className="w-5 h-5 text-myfav-primary" />
+            <Shield className="w-5 h-5 text-myhigh5-primary" />
             {t('verification.requirements_title') || 'Vérifications requises'}
           </DialogTitle>
           <DialogDescription>
@@ -155,13 +155,13 @@ export function VerificationRequirementsDialog({
               <span className="text-sm text-gray-600 dark:text-gray-400">
                 {t('verification.progress') || 'Progression'}
               </span>
-              <span className="text-sm font-medium text-myfav-primary">
+              <span className="text-sm font-medium text-myhigh5-primary">
                 {completedCount}/{verificationItems.length}
               </span>
             </div>
             <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
               <div 
-                className="bg-myfav-primary h-2 rounded-full transition-all duration-300"
+                className="bg-myhigh5-primary h-2 rounded-full transition-all duration-300"
                 style={{ width: `${(completedCount / verificationItems.length) * 100}%` }}
               />
             </div>
@@ -234,7 +234,7 @@ export function VerificationRequirementsDialog({
           <Button 
             onClick={onProceed}
             disabled={!allCompleted}
-            className="flex-1 bg-myfav-primary hover:bg-myfav-primary-dark"
+            className="flex-1 bg-myhigh5-primary hover:bg-myhigh5-primary-dark"
           >
             {isChecking ? (
               <Loader2 className="w-4 h-4 animate-spin mr-2" />

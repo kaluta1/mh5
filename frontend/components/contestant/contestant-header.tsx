@@ -36,7 +36,7 @@ export function ContestantHeader({
   const { t } = useLanguage()
 
   return (
-    <div className="relative h-64 md:h-80 lg:h-96 bg-gradient-to-br from-myfav-primary via-myfav-primary-dark to-indigo-600 overflow-hidden">
+    <div className="relative h-64 md:h-80 lg:h-96 bg-gradient-to-br from-myhigh5-primary via-myhigh5-primary-dark to-indigo-600 overflow-hidden">
       {/* Cover Image */}
       {coverImage ? (
         <img
@@ -78,7 +78,7 @@ export function ContestantHeader({
               className="w-20 h-20 md:w-24 md:h-24 rounded-full border-4 border-white object-cover"
             />
           ) : (
-            <div className="w-20 h-20 md:w-24 md:h-24 rounded-full border-4 border-white bg-gradient-to-br from-myfav-primary to-myfav-primary-dark flex items-center justify-center text-white font-bold text-2xl">
+            <div className="w-20 h-20 md:w-24 md:h-24 rounded-full border-4 border-white bg-gradient-to-br from-myhigh5-primary to-myhigh5-primary-dark flex items-center justify-center text-white font-bold text-2xl">
               {author_name?.charAt(0).toUpperCase() || '?'}
             </div>
           )}

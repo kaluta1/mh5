@@ -174,7 +174,7 @@ export default function SearchPage() {
                     handleSearchClick()
                   }
                 }}
-                className="flex-1 px-4 py-3 sm:px-6 sm:py-4 bg-white/90 dark:bg-gray-900/60 border border-gray-200/80 dark:border-gray-800 rounded-2xl text-base sm:text-lg outline-none focus-visible:ring-2 focus-visible:ring-myfav-primary/80 dark:focus-visible:ring-myfav-blue-400 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 shadow-sm"
+                className="flex-1 px-4 py-3 sm:px-6 sm:py-4 bg-white/90 dark:bg-gray-900/60 border border-gray-200/80 dark:border-gray-800 rounded-2xl text-base sm:text-lg outline-none focus-visible:ring-2 focus-visible:ring-myhigh5-primary/80 dark:focus-visible:ring-myhigh5-blue-400 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 shadow-sm"
               />
               <Button
                 type="button"

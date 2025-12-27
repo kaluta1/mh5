@@ -47,10 +47,7 @@ export function Features() {
       <div className="container px-4 md:px-6 relative z-10">
         {/* Section Header */}
         <div className="text-center max-w-3xl mx-auto mb-16 md:mb-20">
-          <div className="inline-flex items-center gap-2 bg-myfav-primary/10 text-myfav-primary rounded-full px-4 py-2 text-sm font-semibold mb-6">
-            <Trophy className="w-4 h-4" />
-            <span>Fonctionnalités</span>
-          </div>
+         
           <h2 className="text-4xl sm:text-5xl md:text-6xl font-black tracking-tight mb-6 bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">
               {t('features.title')}
             </h2>
@@ -69,18 +66,18 @@ export function Features() {
                 className="group relative overflow-hidden border-0 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm shadow-lg hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 rounded-2xl"
               >
                 {/* Gradient overlay on hover */}
-                <div className="absolute inset-0 bg-gradient-to-br from-myfav-primary/0 to-myfav-secondary/0 group-hover:from-myfav-primary/5 group-hover:to-myfav-secondary/5 transition-all duration-500" />
+                <div className="absolute inset-0 bg-gradient-to-br from-myhigh5-primary/0 to-myhigh5-secondary/0 group-hover:from-myhigh5-primary/5 group-hover:to-myhigh5-secondary/5 transition-all duration-500" />
                 
                 {/* Decorative corner */}
-                <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-myfav-primary/10 to-transparent rounded-bl-full opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-myhigh5-primary/10 to-transparent rounded-bl-full opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                 
                 <CardHeader className="relative z-10 pb-4">
                   <div className="flex items-start gap-4">
-                    <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br from-myfav-primary to-myfav-secondary shadow-lg group-hover:scale-110 group-hover:rotate-3 transition-all duration-300 flex-shrink-0">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary shadow-lg group-hover:scale-110 group-hover:rotate-3 transition-all duration-300 flex-shrink-0">
                       <Icon className="h-7 w-7 text-white" />
                   </div>
                     <div className="flex-1 pt-1">
-                      <CardTitle className="text-xl font-bold text-gray-900 dark:text-white group-hover:text-myfav-primary dark:group-hover:text-myfav-blue-400 transition-colors">
+                      <CardTitle className="text-xl font-bold text-gray-900 dark:text-white group-hover:text-myhigh5-primary dark:group-hover:text-myhigh5-blue-400 transition-colors">
                       {t(`features.items.${feature.key}.title`)}
                     </CardTitle>
                   </div>
@@ -92,7 +89,7 @@ export function Features() {
                 </CardDescription>
                   
                   {/* Arrow indicator */}
-                  <div className="mt-6 flex items-center text-myfav-primary opacity-0 group-hover:opacity-100 translate-x-0 group-hover:translate-x-2 transition-all duration-300">
+                  <div className="mt-6 flex items-center text-myhigh5-primary opacity-0 group-hover:opacity-100 translate-x-0 group-hover:translate-x-2 transition-all duration-300">
                     <ArrowRight className="h-5 w-5" />
                   </div>
               </CardContent>

@@ -20,7 +20,7 @@ export function ContestsLoader({ isLoading, hasMore, observerTarget }: ContestsL
           {[0, 1, 2].map((i) => (
             <div
               key={i}
-              className="w-3 h-3 bg-myfav-primary rounded-full animate-bounce"
+              className="w-3 h-3 bg-myhigh5-primary rounded-full animate-bounce"
               style={{
                 animationDelay: `${i * 0.2}s`,
                 animationDuration: '1.4s'

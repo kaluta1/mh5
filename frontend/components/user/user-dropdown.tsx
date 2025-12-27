@@ -53,9 +53,9 @@ export function UserDropdown({ user, onLogout, onSettings, onProfile, onKYC }: U
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="flex items-center rounded-full focus:outline-none focus:ring-2 focus:ring-myfav-primary/50 transition-all hover:opacity-80">
+        <button className="flex items-center rounded-full focus:outline-none focus:ring-2 focus:ring-myhigh5-primary/50 transition-all hover:opacity-80">
           {avatarUrl ? (
-            <div className="relative w-10 h-10 rounded-full overflow-hidden ring-2 ring-myfav-primary/30 shadow-lg">
+            <div className="relative w-10 h-10 rounded-full overflow-hidden ring-2 ring-myhigh5-primary/30 shadow-lg">
               <Image
                 src={avatarUrl}
                 alt={displayName}
@@ -64,7 +64,7 @@ export function UserDropdown({ user, onLogout, onSettings, onProfile, onKYC }: U
               />
             </div>
           ) : (
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-myfav-primary to-purple-600 flex items-center justify-center text-white font-semibold text-sm ring-2 ring-myfav-primary/30 shadow-lg">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-myhigh5-primary to-purple-600 flex items-center justify-center text-white font-semibold text-sm ring-2 ring-myhigh5-primary/30 shadow-lg">
               {initials}
             </div>
           )}

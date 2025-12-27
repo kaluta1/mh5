@@ -652,7 +652,7 @@ async def get_invoice(
                     <h3>{t["issuer"]}</h3>
                     <p><strong>MYHIGH5</strong></p>
                     <p>{t["online_services"]}</p>
-                    <p>support@myhigh5.com</p>
+                    <p>infos@myhigh5.com</p>
                 </div>
             </div>
             

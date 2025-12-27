@@ -82,13 +82,13 @@ export function Header({ user, onLoginClick, onLogout }: HeaderProps) {
             {/* Logo */}
             <Link href="/" className="flex items-center space-x-2.5 group">
               <div className="relative">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-myfav-primary to-myfav-secondary shadow-lg group-hover:shadow-xl transition-all duration-300 group-hover:scale-105">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary shadow-lg group-hover:shadow-xl transition-all duration-300 group-hover:scale-105">
                   <Heart className="w-5 h-5 text-white fill-current" />
                 </div>
                 <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white dark:border-gray-900 animate-pulse" />
               </div>
               <div className="flex flex-col">
-                <span className="text-xl font-black bg-gradient-to-r from-myfav-primary to-myfav-secondary bg-clip-text text-transparent">
+                <span className="text-xl font-black bg-gradient-to-r from-myhigh5-primary to-myhigh5-secondary bg-clip-text text-transparent">
                   MyHigh5
                 </span>
                 <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 -mt-1 hidden sm:block">
@@ -109,14 +109,14 @@ export function Header({ user, onLoginClick, onLogout }: HeaderProps) {
                       href={item.href}
                       className={`relative flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 ${
                         isActive 
-                          ? 'bg-white dark:bg-gray-700 text-myfav-primary dark:text-white shadow-md' 
-                          : 'text-gray-600 dark:text-gray-300 hover:text-myfav-primary dark:hover:text-white hover:bg-white/50 dark:hover:bg-gray-700/50'
+                          ? 'bg-white dark:bg-gray-700 text-myhigh5-primary dark:text-white shadow-md' 
+                          : 'text-gray-600 dark:text-gray-300 hover:text-myhigh5-primary dark:hover:text-white hover:bg-white/50 dark:hover:bg-gray-700/50'
                       }`}
                     >
-                      <Icon className={`w-4 h-4 ${isActive ? 'text-myfav-primary dark:text-myfav-cyan-400' : ''}`} />
+                      <Icon className={`w-4 h-4 ${isActive ? 'text-myhigh5-primary dark:text-myhigh5-cyan-400' : ''}`} />
                       <span>{item.name}</span>
                       {isActive && (
-                        <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-myfav-primary" />
+                        <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-myhigh5-primary" />
                       )}
                     </Link>
                   )
@@ -137,7 +137,7 @@ export function Header({ user, onLoginClick, onLogout }: HeaderProps) {
                     downloadSection.scrollIntoView({ behavior: 'smooth' })
                   }
                 }}
-                className="hidden lg:flex items-center gap-2 font-semibold text-sm text-gray-700 dark:text-gray-300 hover:text-myfav-primary dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full px-4"
+                className="hidden lg:flex items-center gap-2 font-semibold text-sm text-gray-700 dark:text-gray-300 hover:text-myhigh5-primary dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full px-4"
               >
                 <Smartphone className="w-4 h-4" />
                 <span>{t('navigation.download_app') || 'Télécharger l\'app'}</span>
@@ -162,13 +162,13 @@ export function Header({ user, onLoginClick, onLogout }: HeaderProps) {
                   <Button 
                     variant="ghost" 
                     onClick={() => setIsLoginModalOpen(true)}
-                    className="font-semibold text-sm text-gray-700 dark:text-gray-300 hover:text-myfav-primary dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full px-5"
+                    className="font-semibold text-sm text-gray-700 dark:text-gray-300 hover:text-myhigh5-primary dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full px-5"
                   >
                     {t('navigation.login')}
                   </Button>
                   <Button
                     onClick={() => router.push('/register')}
-                    className="font-semibold text-sm text-white rounded-full px-5 bg-gradient-to-r from-myfav-primary to-myfav-secondary hover:shadow-xl hover:shadow-myfav-primary/25 transition-all duration-300 hover:-translate-y-0.5"
+                    className="font-semibold text-sm text-white rounded-full px-5 bg-gradient-to-r from-myhigh5-primary to-myhigh5-secondary hover:shadow-xl hover:shadow-myhigh5-primary/25 transition-all duration-300 hover:-translate-y-0.5"
                   >
                     <Sparkles className="w-4 h-4 mr-1.5" />
                     {t('navigation.register')}
@@ -213,7 +213,7 @@ export function Header({ user, onLoginClick, onLogout }: HeaderProps) {
                     onClick={() => setMobileMenuOpen(false)}
                     className={`flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 ${
                       isActive 
-                        ? 'bg-gradient-to-r from-myfav-primary/10 to-myfav-secondary/10 text-myfav-primary dark:text-myfav-cyan-400' 
+                        ? 'bg-gradient-to-r from-myhigh5-primary/10 to-myhigh5-secondary/10 text-myhigh5-primary dark:text-myhigh5-cyan-400' 
                         : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
                     }`}
                     style={{ animationDelay: `${index * 50}ms` }}
@@ -221,14 +221,14 @@ export function Header({ user, onLoginClick, onLogout }: HeaderProps) {
                     <div className="flex items-center gap-3">
                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
                         isActive 
-                          ? 'bg-myfav-primary text-white' 
+                          ? 'bg-myhigh5-primary text-white' 
                           : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
                       }`}>
                         <Icon className="w-5 h-5" />
                       </div>
                       <span className="font-medium">{item.name}</span>
                     </div>
-                    <ChevronRight className={`w-5 h-5 transition-transform ${isActive ? 'text-myfav-primary' : 'text-gray-400'}`} />
+                    <ChevronRight className={`w-5 h-5 transition-transform ${isActive ? 'text-myhigh5-primary' : 'text-gray-400'}`} />
                   </Link>
                 )
               })}
@@ -282,7 +282,7 @@ export function Header({ user, onLoginClick, onLogout }: HeaderProps) {
                     router.push('/register')
                     setMobileMenuOpen(false)
                   }}
-                  className="h-12 rounded-xl font-semibold text-white bg-gradient-to-r from-myfav-primary to-myfav-secondary"
+                  className="h-12 rounded-xl font-semibold text-white bg-gradient-to-r from-myhigh5-primary to-myhigh5-secondary"
                 >
                   <Sparkles className="w-4 h-4 mr-1.5" />
                   {t('navigation.register')}

@@ -19,7 +19,7 @@ api.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`
     }
     // Ajouter la langue depuis localStorage si disponible
-    const savedLanguage = localStorage.getItem('myfav-language')
+    const savedLanguage = localStorage.getItem('myhigh5-language')
     if (savedLanguage && ['en', 'fr', 'es', 'de'].includes(savedLanguage)) {
       config.headers['Accept-Language'] = savedLanguage
     }

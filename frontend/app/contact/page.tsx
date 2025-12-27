@@ -27,29 +27,29 @@ export default function ContactPage() {
 
   const contactMethodsData: Record<string, { title: string; description: string; value: string }[]> = {
     en: [
-      { title: "Email", description: "Send us an email", value: "support@myhigh5.com" },
+      { title: "Email", description: "Send us an email", value: "infos@myhigh5.com" },
       { title: "Live Chat", description: "Instant response", value: "Available 24/7" },
       { title: "Headquarters", description: "In progress", value: "British Columbia" }
     ],
     fr: [
-      { title: "Email", description: "Envoyez-nous un email", value: "support@myhigh5.com" },
+      { title: "Email", description: "Envoyez-nous un email", value: "infos@myhigh5.com" },
       { title: "Chat en direct", description: "Réponse instantanée", value: "Disponible 24/7" },
       { title: "Siège social", description: "En cours", value: "Colombie-Britannique" }
     ],
     es: [
-      { title: "Email", description: "Envíanos un email", value: "support@myhigh5.com" },
+      { title: "Email", description: "Envíanos un email", value: "infos@myhigh5.com" },
       { title: "Chat en vivo", description: "Respuesta instantánea", value: "Disponible 24/7" },
       { title: "Sede central", description: "En progreso", value: "Columbia Británica" }
     ],
     de: [
-      { title: "E-Mail", description: "Senden Sie uns eine E-Mail", value: "support@myhigh5.com" },
+      { title: "E-Mail", description: "Senden Sie uns eine E-Mail", value: "infos@myhigh5.com" },
       { title: "Live-Chat", description: "Sofortige Antwort", value: "24/7 verfügbar" },
       { title: "Hauptsitz", description: "In Bearbeitung", value: "British Columbia" }
     ]
   }
 
   const contactMethods = [
-    { icon: Mail, action: "mailto:support@myhigh5.com", ...contactMethodsData[language]?.[0] || contactMethodsData.en[0] },
+    { icon: Mail, action: "mailto:infos@myhigh5.com", ...contactMethodsData[language]?.[0] || contactMethodsData.en[0] },
     { icon: MessageSquare, action: "#chat", ...contactMethodsData[language]?.[1] || contactMethodsData.en[1] },
     { icon: MapPin, action: "#", ...contactMethodsData[language]?.[2] || contactMethodsData.en[2] }
   ]
@@ -447,12 +447,12 @@ export default function ContactPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-myfav-blue-50 via-white to-myfav-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+    <div className="min-h-screen bg-gradient-to-br from-myhigh5-blue-50 via-white to-myhigh5-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
       <Header />
       
       <main className="pt-24 pb-16">
         {/* Hero Section */}
-        <section className="relative py-16 bg-gradient-to-r from-myfav-primary to-myfav-secondary overflow-hidden">
+        <section className="relative py-16 bg-gradient-to-r from-myhigh5-primary to-myhigh5-secondary overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_80%,rgba(255,255,255,0.1),transparent_40%)]" />
           <div className="container px-4 md:px-6 relative z-10">
             <div className="max-w-3xl mx-auto text-center text-white">
@@ -476,14 +476,14 @@ export default function ContactPage() {
                 href={method.action}
                 className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-xl border border-gray-200 dark:border-gray-700 hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 group"
               >
-                <method.icon className="w-10 h-10 text-myfav-primary mb-4 group-hover:scale-110 transition-transform" />
+                <method.icon className="w-10 h-10 text-myhigh5-primary mb-4 group-hover:scale-110 transition-transform" />
                 <h3 className="font-bold text-gray-900 dark:text-white mb-1">
                   {method.title}
                 </h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
                   {method.description}
                 </p>
-                <p className="text-myfav-primary font-semibold">
+                <p className="text-myhigh5-primary font-semibold">
                   {method.value}
                 </p>
               </a>
@@ -570,7 +570,7 @@ export default function ContactPage() {
                       onChange={handleChange}
                       onBlur={handleBlur}
                       required
-                      className={`w-full h-12 px-4 rounded-lg border bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-myfav-primary focus:border-transparent ${
+                      className={`w-full h-12 px-4 rounded-lg border bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-myhigh5-primary focus:border-transparent ${
                         touched.category && errors.category 
                           ? 'border-red-500 focus:border-red-500 focus:ring-red-500' 
                           : 'border-gray-300 dark:border-gray-600'
@@ -621,7 +621,7 @@ export default function ContactPage() {
                       placeholder="Décrivez votre demande en détail..."
                       required
                       rows={5}
-                      className={`w-full px-4 py-3 rounded-lg border bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-myfav-primary focus:border-transparent resize-none ${
+                      className={`w-full px-4 py-3 rounded-lg border bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-myhigh5-primary focus:border-transparent resize-none ${
                         touched.message && errors.message 
                           ? 'border-red-500 focus:border-red-500 focus:ring-red-500' 
                           : 'border-gray-300 dark:border-gray-600'
@@ -635,7 +635,7 @@ export default function ContactPage() {
                   <Button 
                     type="submit"
                     disabled={isSubmitting}
-                    className="w-full h-12 bg-myfav-primary hover:bg-myfav-primary-dark text-white font-bold"
+                    className="w-full h-12 bg-myhigh5-primary hover:bg-myhigh5-primary-dark text-white font-bold"
                   >
                     {isSubmitting ? (
                       <>
@@ -668,7 +668,7 @@ export default function ContactPage() {
                       <span className="font-semibold text-gray-900 dark:text-white pr-4">
                         {item.question}
                       </span>
-                      <span className="text-myfav-primary group-open:rotate-180 transition-transform">
+                      <span className="text-myhigh5-primary group-open:rotate-180 transition-transform">
                         ▼
                       </span>
                     </summary>
@@ -680,9 +680,9 @@ export default function ContactPage() {
               </div>
 
               {/* Support Hours */}
-              <div className="mt-8 bg-gradient-to-br from-myfav-primary/10 to-myfav-secondary/10 rounded-2xl p-6 border border-myfav-primary/20">
+              <div className="mt-8 bg-gradient-to-br from-myhigh5-primary/10 to-myhigh5-secondary/10 rounded-2xl p-6 border border-myhigh5-primary/20">
                 <div className="flex items-center gap-3 mb-4">
-                  <Clock className="w-6 h-6 text-myfav-primary" />
+                  <Clock className="w-6 h-6 text-myhigh5-primary" />
                   <h3 className="font-bold text-gray-900 dark:text-white">
                     {t('pages.contact.hours.title') || "Heures de support"}
                   </h3>
@@ -701,8 +701,8 @@ export default function ContactPage() {
                     <span className="font-semibold text-gray-900 dark:text-white">{fl.closed}</span>
                   </div>
                 </div>
-                <div className="mt-4 pt-4 border-t border-myfav-primary/20 flex items-center gap-2">
-                  <Globe className="w-4 h-4 text-myfav-primary" />
+                <div className="mt-4 pt-4 border-t border-myhigh5-primary/20 flex items-center gap-2">
+                  <Globe className="w-4 h-4 text-myhigh5-primary" />
                   <span className="text-sm text-gray-600 dark:text-gray-400">
                     {fl.live_chat}
                   </span>
@@ -726,7 +726,7 @@ export default function ContactPage() {
                   key={index}
                   className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-300 hover:-translate-y-1 cursor-pointer group"
                 >
-                  <category.icon className="w-10 h-10 text-myfav-primary mb-4 group-hover:scale-110 transition-transform" />
+                  <category.icon className="w-10 h-10 text-myhigh5-primary mb-4 group-hover:scale-110 transition-transform" />
                   <h3 className="font-bold text-gray-900 dark:text-white mb-2">
                     {category.title}
                   </h3>

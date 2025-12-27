@@ -119,7 +119,7 @@ export default function GroupsPage() {
       {/* Groups Grid */}
       {isLoading ? (
         <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-myfav-primary" />
+          <Loader2 className="h-8 w-8 animate-spin text-myhigh5-primary" />
         </div>
       ) : filteredGroups.length === 0 ? (
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-12 border border-gray-100 dark:border-gray-700 shadow-sm text-center">
@@ -136,7 +136,7 @@ export default function GroupsPage() {
           {!searchQuery && (
             <Button
               onClick={() => setIsCreateDialogOpen(true)}
-              className="rounded-full bg-myfav-primary hover:bg-myfav-primary/90 text-white"
+              className="rounded-full bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white"
             >
               <Plus className="h-4 w-4 mr-2" />
               Créer un groupe
@@ -153,7 +153,7 @@ export default function GroupsPage() {
               {/* Group Header */}
               <div className="p-6">
                 <div className="flex items-start justify-between mb-4">
-                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-myfav-primary to-myfav-secondary flex items-center justify-center flex-shrink-0">
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary flex items-center justify-center flex-shrink-0">
                     {group.avatar_url ? (
                       <img src={group.avatar_url} alt={group.name} className="w-full h-full rounded-full object-cover" />
                     ) : (
@@ -170,7 +170,7 @@ export default function GroupsPage() {
                 </div>
 
                 <Link href={`/dashboard/groups/${group.id}`}>
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2 hover:text-myfav-primary transition-colors">
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2 hover:text-myhigh5-primary transition-colors">
                     {group.name}
                   </h3>
                 </Link>
@@ -205,7 +205,7 @@ export default function GroupsPage() {
                     "w-full rounded-full",
                     group.is_member 
                       ? "border-gray-300 dark:border-gray-600" 
-                      : "bg-myfav-primary hover:bg-myfav-primary/90 text-white"
+                      : "bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white"
                   )}
                 >
                   {group.is_member ? 'Quitter' : 'Rejoindre'}
@@ -266,7 +266,7 @@ export default function GroupsPage() {
                   className={cn(
                     "flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors",
                     !newGroup.is_private
-                      ? "border-myfav-primary bg-myfav-primary/10 text-myfav-primary"
+                      ? "border-myhigh5-primary bg-myhigh5-primary/10 text-myhigh5-primary"
                       : "border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300"
                   )}
                 >
@@ -278,7 +278,7 @@ export default function GroupsPage() {
                   className={cn(
                     "flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors",
                     newGroup.is_private
-                      ? "border-myfav-primary bg-myfav-primary/10 text-myfav-primary"
+                      ? "border-myhigh5-primary bg-myhigh5-primary/10 text-myhigh5-primary"
                       : "border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300"
                   )}
                 >
@@ -299,7 +299,7 @@ export default function GroupsPage() {
             <Button
               onClick={handleCreateGroup}
               disabled={!newGroup.name.trim() || isCreating}
-              className="bg-myfav-primary hover:bg-myfav-primary/90 text-white"
+              className="bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white"
             >
               {isCreating ? 'Création...' : 'Créer le groupe'}
             </Button>

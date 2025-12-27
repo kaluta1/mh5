@@ -22,7 +22,7 @@ export function KYCDocumentInfoStep({ data, onChange }: KYCDocumentInfoStepProps
     <div className="space-y-4">
       <div>
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-          <FileText className="w-6 h-6 text-myfav-primary" />
+          <FileText className="w-6 h-6 text-myhigh5-primary" />
           {t('kyc.document_info')}
         </h2>
       </div>
@@ -36,7 +36,7 @@ export function KYCDocumentInfoStep({ data, onChange }: KYCDocumentInfoStepProps
           <select
             value={data.documentType}
             onChange={(e) => onChange('documentType', e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myfav-primary"
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myhigh5-primary"
           >
             <option value="passport">{t('kyc.passport')}</option>
             <option value="national_id">{t('kyc.national_id')}</option>
@@ -54,7 +54,7 @@ export function KYCDocumentInfoStep({ data, onChange }: KYCDocumentInfoStepProps
             value={data.documentNumber}
             onChange={(e) => onChange('documentNumber', e.target.value)}
             placeholder={t('kyc.document_number_placeholder')}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myfav-primary"
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myhigh5-primary"
             required
           />
         </div>
@@ -67,7 +67,7 @@ export function KYCDocumentInfoStep({ data, onChange }: KYCDocumentInfoStepProps
           <select
             value={data.issuingCountry}
             onChange={(e) => onChange('issuingCountry', e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myfav-primary"
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myhigh5-primary"
             required
           >
             <option value="">{t('kyc.issuing_country_placeholder')}</option>

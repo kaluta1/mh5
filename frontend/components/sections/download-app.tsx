@@ -11,7 +11,7 @@ export function DownloadApp() {
   return (
     <section id="download-app" className="py-20 md:py-24 lg:py-32 relative overflow-hidden">
       {/* Background gradient */}
-      <div className="absolute inset-0 bg-gradient-to-br from-myfav-primary via-myfav-secondary to-myfav-primary/80" />
+      <div className="absolute inset-0 bg-gradient-to-br from-myhigh5-primary via-myhigh5-secondary to-myhigh5-primary/80" />
       
       {/* Animated background elements */}
       <div className="absolute inset-0 overflow-hidden">
@@ -45,7 +45,7 @@ export function DownloadApp() {
               <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start mb-8">
                 <Button
                   size="lg"
-                  className="group bg-white text-myfav-primary hover:bg-gray-100 font-bold px-8 py-6 rounded-xl shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 hover:scale-105"
+                  className="group bg-white text-myhigh5-primary hover:bg-gray-100 font-bold px-8 py-6 rounded-xl shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 hover:scale-105"
                   onClick={() => {
                     // TODO: Add App Store link
                     window.open('https://apps.apple.com', '_blank')

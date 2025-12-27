@@ -79,7 +79,7 @@ export function SimpleLocationSelector({
         <select
           value={selectedCountryCode}
           onChange={(e) => handleCountryChange(e.target.value)}
-          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myfav-primary"
+          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myhigh5-primary"
           required
         >
           <option value="">{t('auth.register.country_placeholder') || 'Sélectionner un pays'}</option>
@@ -103,7 +103,7 @@ export function SimpleLocationSelector({
             value={city}
             onChange={(e) => handleCityChange(e.target.value)}
             placeholder={t('auth.register.city_placeholder') || 'Entrez votre ville'}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myfav-primary"
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myhigh5-primary"
             required
           />
         </div>

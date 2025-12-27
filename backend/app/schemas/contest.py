@@ -314,7 +314,7 @@ class ContestWithEnrichedContestants(Contest):
 class ContestVoteBase(BaseModel):
     entry_id: int
     user_id: int
-    score: int  # 1-5 pour MyFav
+    score: int  # 1-5 pour MyHigh5
 
 
 # Schéma pour créer un vote de concours

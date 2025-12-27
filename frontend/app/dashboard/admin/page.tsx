@@ -230,16 +230,16 @@ export default function AdminDashboard() {
     <div className="min-h-screen flex flex-col space-y-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-4xl font-bold text-myfav-primary dark:text-myfav-blue-400">{t('admin.title')}</h1>
+        <h1 className="text-4xl font-bold text-myhigh5-primary dark:text-myhigh5-blue-400">{t('admin.title')}</h1>
         <p className="text-gray-600 dark:text-gray-400 mt-3 text-lg">
-          {t('common.welcome')} <span className="font-semibold text-myfav-primary dark:text-myfav-blue-400">{user?.full_name || user?.username}</span>! {t('admin.subtitle')}
+          {t('common.welcome')} <span className="font-semibold text-myhigh5-primary dark:text-myhigh5-blue-400">{user?.full_name || user?.username}</span>! {t('admin.subtitle')}
         </p>
       </div>
 
       {/* Statistics Cards */}
       {loadingStats ? (
         <div className="flex justify-center py-12">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-myfav-primary"></div>
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-myhigh5-primary"></div>
         </div>
       ) : stats && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

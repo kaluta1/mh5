@@ -96,7 +96,7 @@ export default function DashboardPage() {
           <div className="flex flex-wrap gap-2">
             <Link
               href="/dashboard/contests"
-              className="inline-flex items-center gap-2 bg-myfav-primary hover:bg-myfav-primary/90 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors"
+              className="inline-flex items-center gap-2 bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors"
             >
               <Trophy className="h-4 w-4" />
               {t('dashboard.nav.contests') || 'Concours'}
@@ -237,8 +237,8 @@ export default function DashboardPage() {
         className="md:hidden w-full bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-100 dark:border-gray-700 flex items-center justify-between"
       >
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-myfav-primary/10 flex items-center justify-center">
-            <BarChart3 className="h-5 w-5 text-myfav-primary" />
+          <div className="w-10 h-10 rounded-xl bg-myhigh5-primary/10 flex items-center justify-center">
+            <BarChart3 className="h-5 w-5 text-myhigh5-primary" />
           </div>
           <div className="text-left">
             <p className="text-sm font-medium text-gray-900 dark:text-white">
@@ -362,8 +362,8 @@ export default function DashboardPage() {
             <div className="mt-4 space-y-3">
               <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-myfav-primary/10 flex items-center justify-center">
-                    <Trophy className="h-5 w-5 text-myfav-primary" />
+                  <div className="w-10 h-10 rounded-xl bg-myhigh5-primary/10 flex items-center justify-center">
+                    <Trophy className="h-5 w-5 text-myhigh5-primary" />
                   </div>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
                     {t('dashboard.analytics.active_contests') || 'Concours actifs'}
@@ -506,8 +506,8 @@ export default function DashboardPage() {
           <div className="hidden md:grid md:grid-cols-3 gap-4">
             <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-100 dark:border-gray-700">
               <div className="flex items-center justify-between mb-4">
-                <div className="w-12 h-12 rounded-xl bg-myfav-primary/10 flex items-center justify-center">
-                  <Trophy className="h-6 w-6 text-myfav-primary" />
+                <div className="w-12 h-12 rounded-xl bg-myhigh5-primary/10 flex items-center justify-center">
+                  <Trophy className="h-6 w-6 text-myhigh5-primary" />
                 </div>
                 <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-md">
                   {t('dashboard.analytics.this_month') || 'Ce mois'}
@@ -610,7 +610,7 @@ export default function DashboardPage() {
           </div>
 
           {/* CTA for Affiliates */}
-          <div className="bg-gradient-to-r from-myfav-primary to-myfav-primary/80 rounded-2xl p-6 md:p-8">
+          <div className="bg-gradient-to-r from-myhigh5-primary to-myhigh5-primary/80 rounded-2xl p-6 md:p-8">
             <div className="flex flex-col md:flex-row items-center justify-between gap-4">
               <div className="text-center md:text-left">
                 <h3 className="text-xl font-bold text-white mb-2">
@@ -622,7 +622,7 @@ export default function DashboardPage() {
               </div>
               <Link
                 href="/dashboard/affiliates"
-                className="inline-flex items-center gap-2 bg-white text-myfav-primary px-5 py-2.5 rounded-xl text-sm font-semibold transition-all hover:shadow-lg whitespace-nowrap"
+                className="inline-flex items-center gap-2 bg-white text-myhigh5-primary px-5 py-2.5 rounded-xl text-sm font-semibold transition-all hover:shadow-lg whitespace-nowrap"
               >
                 <UserPlus className="h-4 w-4" />
                 {t('affiliates.invite_now') || 'Inviter maintenant'}

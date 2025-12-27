@@ -132,7 +132,7 @@ export function SettingsDemographicsTab({ user }: SettingsDemographicsTabProps) 
               key={option.value}
               className={`flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all ${
                 gender === option.value
-                  ? 'border-myfav-primary bg-myfav-primary/10'
+                  ? 'border-myhigh5-primary bg-myhigh5-primary/10'
                   : errors.gender
                   ? 'border-red-500 dark:border-red-500 bg-red-50 dark:bg-red-900/10'
                   : 'border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50 hover:border-gray-300 dark:hover:border-gray-500'
@@ -145,7 +145,7 @@ export function SettingsDemographicsTab({ user }: SettingsDemographicsTabProps) 
                 checked={gender === option.value}
                 onChange={(e) => handleFieldChange('gender', e.target.value)}
                 disabled={isLoading}
-                className="w-4 h-4 text-myfav-primary"
+                className="w-4 h-4 text-myhigh5-primary"
               />
               <span className="text-gray-900 dark:text-white font-medium">{option.label}</span>
             </label>
@@ -172,7 +172,7 @@ export function SettingsDemographicsTab({ user }: SettingsDemographicsTabProps) 
           className={`w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-700 border text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 transition-all ${
             errors.dateOfBirth
               ? 'border-red-500 dark:border-red-500 focus:ring-red-500 focus:border-red-500'
-              : 'border-gray-300 dark:border-gray-600 focus:ring-myfav-primary focus:border-transparent'
+              : 'border-gray-300 dark:border-gray-600 focus:ring-myhigh5-primary focus:border-transparent'
           }`}
         />
         {errors.dateOfBirth && (
@@ -187,7 +187,7 @@ export function SettingsDemographicsTab({ user }: SettingsDemographicsTabProps) 
         <Button
           type="submit"
           disabled={isLoading}
-          className="bg-myfav-primary hover:bg-myfav-primary/90 text-white font-bold px-6 py-2.5 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          className="bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white font-bold px-6 py-2.5 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isLoading ? t('common.submitting') || 'Enregistrement...' : t('settings.save') || 'Enregistrer'}
         </Button>

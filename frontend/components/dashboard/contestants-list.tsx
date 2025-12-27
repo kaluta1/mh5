@@ -200,7 +200,7 @@ export function ContestantsList({
     return (
       <div className="text-center py-16">
         <div className="flex flex-col items-center gap-4 bg-white dark:bg-gray-800/50 rounded-xl border border-gray-200/50 dark:border-gray-700/50 p-8 backdrop-blur-sm">
-          <div className="w-20 h-20 rounded-full bg-gradient-to-br from-myfav-primary/20 to-myfav-secondary/20 flex items-center justify-center mb-2">
+          <div className="w-20 h-20 rounded-full bg-gradient-to-br from-myhigh5-primary/20 to-myhigh5-secondary/20 flex items-center justify-center mb-2">
             <p className="text-4xl">🏆</p>
           </div>
           <p className="text-lg font-semibold text-gray-700 dark:text-gray-300">

@@ -260,14 +260,14 @@ export default function AdminUsers() {
               placeholder="Rechercher par email, nom ou pseudo..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="dark:bg-gray-700 dark:border-gray-600 dark:text-white border-gray-300 focus:border-myfav-primary focus:ring-myfav-primary"
+              className="dark:bg-gray-700 dark:border-gray-600 dark:text-white border-gray-300 focus:border-myhigh5-primary focus:ring-myhigh5-primary"
             />
           </div>
           <div className="flex gap-3 flex-wrap">
             <Button
               variant={filter === 'all' ? 'default' : 'outline'}
               onClick={() => setFilter('all')}
-              className={filter === 'all' ? 'bg-myfav-primary hover:bg-myfav-primary/90' : ''}
+              className={filter === 'all' ? 'bg-myhigh5-primary hover:bg-myhigh5-primary/90' : ''}
             >
               {t('admin.users.all') || 'Tous'}
             </Button>
@@ -299,7 +299,7 @@ export default function AdminUsers() {
       {/* Users Table */}
       {loading ? (
         <div className="flex justify-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-myfav-primary"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-myhigh5-primary"></div>
         </div>
       ) : filteredUsers.length === 0 ? (
         <Card>
@@ -333,10 +333,10 @@ export default function AdminUsers() {
                           <img
                             src={user.avatar_url}
                             alt={user.full_name}
-                            className="h-10 w-10 rounded-full object-cover border border-myfav-primary/30"
+                            className="h-10 w-10 rounded-full object-cover border border-myhigh5-primary/30"
                           />
                         ) : (
-                          <div className="h-10 w-10 rounded-full bg-gradient-to-br from-myfav-primary to-myfav-secondary flex items-center justify-center text-white font-bold text-sm">
+                          <div className="h-10 w-10 rounded-full bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary flex items-center justify-center text-white font-bold text-sm">
                             {user.full_name?.charAt(0) || user.email.charAt(0).toUpperCase()}
                           </div>
                         )}
@@ -525,10 +525,10 @@ export default function AdminUsers() {
                   <img
                     src={selectedUser.avatar_url}
                     alt={selectedUser.full_name}
-                    className="h-20 w-20 rounded-full object-cover border-2 border-myfav-primary/30"
+                    className="h-20 w-20 rounded-full object-cover border-2 border-myhigh5-primary/30"
                   />
                 ) : (
-                  <div className="h-20 w-20 rounded-full bg-gradient-to-br from-myfav-primary to-myfav-secondary flex items-center justify-center text-white font-bold text-2xl">
+                  <div className="h-20 w-20 rounded-full bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary flex items-center justify-center text-white font-bold text-2xl">
                     {selectedUser.full_name?.charAt(0) || selectedUser.email.charAt(0).toUpperCase()}
                   </div>
                 )}

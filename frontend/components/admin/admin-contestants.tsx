@@ -447,9 +447,9 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-gradient-to-br from-myfav-primary via-myfav-primary/80 to-myfav-secondary dark:from-myfav-primary/20 dark:via-myfav-primary/10 dark:to-myfav-secondary/10 rounded-xl p-8 border border-myfav-primary/30 dark:border-myfav-primary/20 shadow-lg">
+      <div className="bg-gradient-to-br from-myhigh5-primary via-myhigh5-primary/80 to-myhigh5-secondary dark:from-myhigh5-primary/20 dark:via-myhigh5-primary/10 dark:to-myhigh5-secondary/10 rounded-xl p-8 border border-myhigh5-primary/30 dark:border-myhigh5-primary/20 shadow-lg">
         <div className="flex items-center gap-3 mb-2">
-          <Trophy className="h-8 w-8 text-white dark:text-myfav-secondary" />
+          <Trophy className="h-8 w-8 text-white dark:text-myhigh5-secondary" />
           <h1 className="text-4xl font-bold text-white dark:text-white">
             {t('admin.contestants.title') || 'Gestion des Candidats'}
           </h1>
@@ -467,14 +467,14 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
               placeholder={t('admin.contestants.search_placeholder') || 'Rechercher par nom ou titre...'}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="dark:bg-gray-700 dark:border-gray-600 dark:text-white border-gray-300 focus:border-myfav-primary focus:ring-myfav-primary"
+              className="dark:bg-gray-700 dark:border-gray-600 dark:text-white border-gray-300 focus:border-myhigh5-primary focus:ring-myhigh5-primary"
             />
           </div>
           <div className="flex gap-2 w-full md:w-auto">
             {!showForm && (
               <Button
                 onClick={() => setShowForm(true)}
-                className="gap-2 bg-myfav-primary hover:bg-myfav-primary/90"
+                className="gap-2 bg-myhigh5-primary hover:bg-myhigh5-primary/90"
               >
                 <Plus className="h-4 w-4" />
                 {t('admin.contestants.new_contestant') || 'Nouveau candidat'}
@@ -483,7 +483,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
             <Button
               variant={filter === 'all' ? 'default' : 'outline'}
               onClick={() => setFilter('all')}
-              className={filter === 'all' ? 'bg-myfav-primary hover:bg-myfav-primary/90' : ''}
+              className={filter === 'all' ? 'bg-myhigh5-primary hover:bg-myhigh5-primary/90' : ''}
             >
               {t('admin.contestants.all') || 'Tous'}
             </Button>
@@ -634,7 +634,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder={t('admin.contestants.description_placeholder') || 'Description du candidat'}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myfav-primary focus:border-transparent resize-none"
+                  className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myhigh5-primary focus:border-transparent resize-none"
                   rows={4}
                 />
               </div>
@@ -671,7 +671,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
                 </Button>
                 <Button
                   type="submit"
-                  className="bg-myfav-primary hover:bg-myfav-primary/90"
+                  className="bg-myhigh5-primary hover:bg-myhigh5-primary/90"
                   disabled={isSubmitting}
                 >
                   {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -685,7 +685,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
 
       {loading ? (
         <div className="flex justify-center py-12">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-myfav-primary"></div>
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-myhigh5-primary"></div>
         </div>
       ) : (
         <Card className="overflow-hidden">
@@ -933,7 +933,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
                           setSelectedMedia(media)
                           setShowMediaViewer(true)
                         }}
-                        className="group relative overflow-hidden rounded-lg bg-gray-200 dark:bg-gray-700 aspect-square hover:ring-2 hover:ring-myfav-primary transition-all"
+                        className="group relative overflow-hidden rounded-lg bg-gray-200 dark:bg-gray-700 aspect-square hover:ring-2 hover:ring-myhigh5-primary transition-all"
                       >
                         {media.type === 'image' ? (
                           <img

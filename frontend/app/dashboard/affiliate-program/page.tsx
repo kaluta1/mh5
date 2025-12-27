@@ -37,7 +37,7 @@ export default function AffiliateProgramPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-myfav-primary flex items-center justify-center shadow-lg shadow-myfav-primary/25">
+            <div className="w-10 h-10 rounded-xl bg-myhigh5-primary flex items-center justify-center shadow-lg shadow-myhigh5-primary/25">
               <Network className="w-5 h-5 text-white" />
             </div>
             MyHigh5 Affiliate Program
@@ -47,7 +47,7 @@ export default function AffiliateProgramPage() {
           </p>
         </div>
         <Link href="/dashboard/affiliates">
-          <button className="px-4 py-2 bg-myfav-primary text-white rounded-xl hover:bg-myfav-primary/90 shadow-lg shadow-myfav-primary/25 transition-colors">
+          <button className="px-4 py-2 bg-myhigh5-primary text-white rounded-xl hover:bg-myhigh5-primary/90 shadow-lg shadow-myhigh5-primary/25 transition-colors">
             View My Affiliates
           </button>
         </Link>
@@ -60,8 +60,8 @@ export default function AffiliateProgramPage() {
           {/* Overview Section */}
           <section>
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-12 h-12 rounded-xl bg-myfav-primary/10 dark:bg-myfav-primary/20 flex items-center justify-center">
-                <Target className="w-6 h-6 text-myfav-primary" />
+              <div className="w-12 h-12 rounded-xl bg-myhigh5-primary/10 dark:bg-myhigh5-primary/20 flex items-center justify-center">
+                <Target className="w-6 h-6 text-myhigh5-primary" />
               </div>
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
                 How It Works
@@ -74,7 +74,7 @@ export default function AffiliateProgramPage() {
 
             <div className="grid md:grid-cols-3 gap-4">
               <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
-                <div className="w-10 h-10 rounded-lg bg-myfav-primary flex items-center justify-center mb-4">
+                <div className="w-10 h-10 rounded-lg bg-myhigh5-primary flex items-center justify-center mb-4">
                   <Link2 className="w-5 h-5 text-white" />
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
@@ -86,7 +86,7 @@ export default function AffiliateProgramPage() {
               </div>
 
               <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
-                <div className="w-10 h-10 rounded-lg bg-myfav-primary flex items-center justify-center mb-4">
+                <div className="w-10 h-10 rounded-lg bg-myhigh5-primary flex items-center justify-center mb-4">
                   <Share2 className="w-5 h-5 text-white" />
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
@@ -98,7 +98,7 @@ export default function AffiliateProgramPage() {
               </div>
 
               <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
-                <div className="w-10 h-10 rounded-lg bg-myfav-primary flex items-center justify-center mb-4">
+                <div className="w-10 h-10 rounded-lg bg-myhigh5-primary flex items-center justify-center mb-4">
                   <DollarSign className="w-5 h-5 text-white" />
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
@@ -114,8 +114,8 @@ export default function AffiliateProgramPage() {
           {/* Commission Structure Section */}
           <section className="pt-8 border-t border-gray-200 dark:border-gray-700">
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-12 h-12 rounded-xl bg-myfav-primary/10 dark:bg-myfav-primary/20 flex items-center justify-center">
-                <Award className="w-6 h-6 text-myfav-primary" />
+              <div className="w-12 h-12 rounded-xl bg-myhigh5-primary/10 dark:bg-myhigh5-primary/20 flex items-center justify-center">
+                <Award className="w-6 h-6 text-myhigh5-primary" />
               </div>
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
                 Commission Structure
@@ -130,7 +130,7 @@ export default function AffiliateProgramPage() {
               <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 rounded-full bg-myfav-primary flex items-center justify-center shadow-lg shadow-myfav-primary/25">
+                    <div className="w-14 h-14 rounded-full bg-myhigh5-primary flex items-center justify-center shadow-lg shadow-myhigh5-primary/25">
                       <span className="text-xl font-bold text-white">1</span>
                     </div>
                     <div>
@@ -143,7 +143,7 @@ export default function AffiliateProgramPage() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-3xl font-bold text-myfav-primary">20%</p>
+                    <p className="text-3xl font-bold text-myhigh5-primary">20%</p>
                     <p className="text-sm text-gray-500 dark:text-gray-400">Commission</p>
                   </div>
                 </div>
@@ -185,8 +185,8 @@ export default function AffiliateProgramPage() {
           {/* What You Can Earn On Section */}
           <section className="pt-8 border-t border-gray-200 dark:border-gray-700">
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-12 h-12 rounded-xl bg-myfav-primary/10 dark:bg-myfav-primary/20 flex items-center justify-center">
-                <TrendingUp className="w-6 h-6 text-myfav-primary" />
+              <div className="w-12 h-12 rounded-xl bg-myhigh5-primary/10 dark:bg-myhigh5-primary/20 flex items-center justify-center">
+                <TrendingUp className="w-6 h-6 text-myhigh5-primary" />
               </div>
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
                 What You Can Earn Commissions On
@@ -197,8 +197,8 @@ export default function AffiliateProgramPage() {
               {/* KYC Payments */}
               <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
                 <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-lg bg-myfav-primary/10 dark:bg-myfav-primary/20 flex items-center justify-center">
-                    <Users className="w-5 h-5 text-myfav-primary" />
+                  <div className="w-10 h-10 rounded-lg bg-myhigh5-primary/10 dark:bg-myhigh5-primary/20 flex items-center justify-center">
+                    <Users className="w-5 h-5 text-myhigh5-primary" />
                   </div>
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                     KYC Payments
@@ -207,7 +207,7 @@ export default function AffiliateProgramPage() {
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
                   Earn commissions when members in your network complete their KYC verification
                 </p>
-                <p className="text-lg font-bold text-myfav-primary">
+                <p className="text-lg font-bold text-myhigh5-primary">
                   20% on Level 1, 2% on Levels 2-10
                 </p>
               </div>
@@ -215,8 +215,8 @@ export default function AffiliateProgramPage() {
               {/* Founding Membership */}
               <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
                 <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-lg bg-myfav-primary/10 dark:bg-myfav-primary/20 flex items-center justify-center">
-                    <BookOpen className="w-5 h-5 text-myfav-primary" />
+                  <div className="w-10 h-10 rounded-lg bg-myhigh5-primary/10 dark:bg-myhigh5-primary/20 flex items-center justify-center">
+                    <BookOpen className="w-5 h-5 text-myhigh5-primary" />
                   </div>
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                     Founding Membership
@@ -225,7 +225,7 @@ export default function AffiliateProgramPage() {
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
                   Earn commissions when network members join as Founding Members ($100 joining fee)
                 </p>
-                <p className="text-lg font-bold text-myfav-primary">
+                <p className="text-lg font-bold text-myhigh5-primary">
                   $20 on Level 1, $2 on Levels 2-10
                 </p>
               </div>
@@ -233,8 +233,8 @@ export default function AffiliateProgramPage() {
               {/* Annual Membership Fee */}
               <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
                 <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-lg bg-myfav-primary/10 dark:bg-myfav-primary/20 flex items-center justify-center">
-                    <Award className="w-5 h-5 text-myfav-primary" />
+                  <div className="w-10 h-10 rounded-lg bg-myhigh5-primary/10 dark:bg-myhigh5-primary/20 flex items-center justify-center">
+                    <Award className="w-5 h-5 text-myhigh5-primary" />
                   </div>
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                     Annual Membership Fee
@@ -243,7 +243,7 @@ export default function AffiliateProgramPage() {
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
                   Earn commissions when Founding Members pay their annual membership fee ($50)
                 </p>
-                <p className="text-lg font-bold text-myfav-primary">
+                <p className="text-lg font-bold text-myhigh5-primary">
                   $10 on Level 1, $1 on Levels 2-10
                 </p>
               </div>
@@ -251,8 +251,8 @@ export default function AffiliateProgramPage() {
               {/* Club Memberships */}
               <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
                 <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-lg bg-myfav-primary/10 dark:bg-myfav-primary/20 flex items-center justify-center">
-                    <Users className="w-5 h-5 text-myfav-primary" />
+                  <div className="w-10 h-10 rounded-lg bg-myhigh5-primary/10 dark:bg-myhigh5-primary/20 flex items-center justify-center">
+                    <Users className="w-5 h-5 text-myhigh5-primary" />
                   </div>
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                     Club Memberships
@@ -261,7 +261,7 @@ export default function AffiliateProgramPage() {
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
                   Earn commissions on paid club membership fees. The website charges 20% of membership fees, and you earn a share of that.
                 </p>
-                <p className="text-lg font-bold text-myfav-primary">
+                <p className="text-lg font-bold text-myhigh5-primary">
                   20% on Level 1, 2% on Levels 2-10
                 </p>
               </div>
@@ -269,8 +269,8 @@ export default function AffiliateProgramPage() {
               {/* Shop Purchases */}
               <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
                 <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-lg bg-myfav-primary/10 dark:bg-myfav-primary/20 flex items-center justify-center">
-                    <ShoppingBag className="w-5 h-5 text-myfav-primary" />
+                  <div className="w-10 h-10 rounded-lg bg-myhigh5-primary/10 dark:bg-myhigh5-primary/20 flex items-center justify-center">
+                    <ShoppingBag className="w-5 h-5 text-myhigh5-primary" />
                   </div>
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                     Shop Purchases
@@ -279,7 +279,7 @@ export default function AffiliateProgramPage() {
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
                   Earn commissions on digital content purchases in the MyHigh5 shop. The website charges 20% platform fees, and you earn a share of that.
                 </p>
-                <p className="text-lg font-bold text-myfav-primary">
+                <p className="text-lg font-bold text-myhigh5-primary">
                   20% on Level 1, 2% on Levels 2-10
                 </p>
               </div>
@@ -287,8 +287,8 @@ export default function AffiliateProgramPage() {
               {/* Ad Revenue Sharing */}
               <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
                 <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-lg bg-myfav-primary/10 dark:bg-myfav-primary/20 flex items-center justify-center">
-                    <Megaphone className="w-5 h-5 text-myfav-primary" />
+                  <div className="w-10 h-10 rounded-lg bg-myhigh5-primary/10 dark:bg-myhigh5-primary/20 flex items-center justify-center">
+                    <Megaphone className="w-5 h-5 text-myhigh5-primary" />
                   </div>
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                     Ad Revenue Sharing
@@ -297,7 +297,7 @@ export default function AffiliateProgramPage() {
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
                   Earn commissions from ad revenues generated on contest pages of members in your network
                 </p>
-                <p className="text-lg font-bold text-myfav-primary">
+                <p className="text-lg font-bold text-myhigh5-primary">
                   10% on Level 1, 1% on Levels 2-10
                 </p>
               </div>
@@ -305,8 +305,8 @@ export default function AffiliateProgramPage() {
               {/* Advertisement */}
               <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
                 <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-lg bg-myfav-primary/10 dark:bg-myfav-primary/20 flex items-center justify-center">
-                    <Megaphone className="w-5 h-5 text-myfav-primary" />
+                  <div className="w-10 h-10 rounded-lg bg-myhigh5-primary/10 dark:bg-myhigh5-primary/20 flex items-center justify-center">
+                    <Megaphone className="w-5 h-5 text-myhigh5-primary" />
                   </div>
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                     Advertisement Campaigns
@@ -315,7 +315,7 @@ export default function AffiliateProgramPage() {
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
                   Earn commissions from advertising campaigns purchased by members in your network through the native ad platform
                 </p>
-                <p className="text-lg font-bold text-myfav-primary">
+                <p className="text-lg font-bold text-myhigh5-primary">
                   Commission structure varies by campaign type
                 </p>
               </div>
@@ -325,8 +325,8 @@ export default function AffiliateProgramPage() {
           {/* Key Features Section */}
           <section className="pt-8 border-t border-gray-200 dark:border-gray-700">
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-12 h-12 rounded-xl bg-myfav-primary/10 dark:bg-myfav-primary/20 flex items-center justify-center">
-                <CheckCircle2 className="w-6 h-6 text-myfav-primary" />
+              <div className="w-12 h-12 rounded-xl bg-myhigh5-primary/10 dark:bg-myhigh5-primary/20 flex items-center justify-center">
+                <CheckCircle2 className="w-6 h-6 text-myhigh5-primary" />
               </div>
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
                 Key Features
@@ -335,7 +335,7 @@ export default function AffiliateProgramPage() {
 
             <div className="grid md:grid-cols-2 gap-4">
               <div className="flex items-start gap-4 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-700">
-                <CheckCircle2 className="w-6 h-6 text-myfav-primary flex-shrink-0 mt-0.5" />
+                <CheckCircle2 className="w-6 h-6 text-myhigh5-primary flex-shrink-0 mt-0.5" />
                 <div>
                   <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
                     Personalized Affiliate Links
@@ -347,7 +347,7 @@ export default function AffiliateProgramPage() {
               </div>
 
               <div className="flex items-start gap-4 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-700">
-                <CheckCircle2 className="w-6 h-6 text-myfav-primary flex-shrink-0 mt-0.5" />
+                <CheckCircle2 className="w-6 h-6 text-myhigh5-primary flex-shrink-0 mt-0.5" />
                 <div>
                   <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
                     30-Day Cookie Tracking
@@ -359,7 +359,7 @@ export default function AffiliateProgramPage() {
               </div>
 
               <div className="flex items-start gap-4 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-700">
-                <CheckCircle2 className="w-6 h-6 text-myfav-primary flex-shrink-0 mt-0.5" />
+                <CheckCircle2 className="w-6 h-6 text-myhigh5-primary flex-shrink-0 mt-0.5" />
                 <div>
                   <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
                     Real-Time Tracking
@@ -371,7 +371,7 @@ export default function AffiliateProgramPage() {
               </div>
 
               <div className="flex items-start gap-4 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-700">
-                <CheckCircle2 className="w-6 h-6 text-myfav-primary flex-shrink-0 mt-0.5" />
+                <CheckCircle2 className="w-6 h-6 text-myhigh5-primary flex-shrink-0 mt-0.5" />
                 <div>
                   <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
                     Automatic Commission Distribution
@@ -383,7 +383,7 @@ export default function AffiliateProgramPage() {
               </div>
 
               <div className="flex items-start gap-4 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-700">
-                <CheckCircle2 className="w-6 h-6 text-myfav-primary flex-shrink-0 mt-0.5" />
+                <CheckCircle2 className="w-6 h-6 text-myhigh5-primary flex-shrink-0 mt-0.5" />
                 <div>
                   <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
                     Random Referral Assignment
@@ -395,7 +395,7 @@ export default function AffiliateProgramPage() {
               </div>
 
               <div className="flex items-start gap-4 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-700">
-                <CheckCircle2 className="w-6 h-6 text-myfav-primary flex-shrink-0 mt-0.5" />
+                <CheckCircle2 className="w-6 h-6 text-myhigh5-primary flex-shrink-0 mt-0.5" />
                 <div>
                   <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
                     Network Visibility
@@ -410,7 +410,7 @@ export default function AffiliateProgramPage() {
 
           {/* Getting Started Section */}
           <section className="pt-8 border-t border-gray-200 dark:border-gray-700">
-            <div className="bg-gradient-to-r from-myfav-primary/10 to-myfav-secondary/10 dark:from-myfav-primary/20 dark:to-myfav-secondary/20 rounded-xl p-6 border border-myfav-primary/20">
+            <div className="bg-gradient-to-r from-myhigh5-primary/10 to-myhigh5-secondary/10 dark:from-myhigh5-primary/20 dark:to-myhigh5-secondary/20 rounded-xl p-6 border border-myhigh5-primary/20">
               <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
                 Ready to Start Earning?
               </h2>
@@ -419,7 +419,7 @@ export default function AffiliateProgramPage() {
                 Visit your Affiliates dashboard to get your referral links and start sharing.
               </p>
               <Link href="/dashboard/affiliates">
-                <button className="px-6 py-3 bg-myfav-primary text-white rounded-xl hover:bg-myfav-primary/90 shadow-lg shadow-myfav-primary/25 transition-colors font-semibold">
+                <button className="px-6 py-3 bg-myhigh5-primary text-white rounded-xl hover:bg-myhigh5-primary/90 shadow-lg shadow-myhigh5-primary/25 transition-colors font-semibold">
                   Go to My Affiliates Dashboard
                 </button>
               </Link>

@@ -16,7 +16,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
 
   // Load saved language from localStorage on mount
   useEffect(() => {
-    const savedLanguage = localStorage.getItem('myfav-language') as Language
+    const savedLanguage = localStorage.getItem('myhigh5-language') as Language
     if (savedLanguage && ['en', 'fr', 'es', 'de'].includes(savedLanguage)) {
       setLanguage(savedLanguage)
     }
@@ -24,7 +24,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
 
   // Save language to localStorage when it changes
   useEffect(() => {
-    localStorage.setItem('myfav-language', language)
+    localStorage.setItem('myhigh5-language', language)
   }, [language])
 
   // Translation function with nested key support (e.g., "hero.title")

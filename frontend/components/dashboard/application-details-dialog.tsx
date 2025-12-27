@@ -100,7 +100,7 @@ export function ApplicationDetailsDialog({
         <CardContent className="pt-6 space-y-4 overflow-y-auto flex-1">
           {loading ? (
             <div className="flex justify-center py-12">
-              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-myfav-primary"></div>
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-myhigh5-primary"></div>
             </div>
           ) : contestant ? (
             <>
@@ -110,7 +110,7 @@ export function ApplicationDetailsDialog({
                   onClick={() => setActiveTab('details')}
                   className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
                     activeTab === 'details'
-                      ? 'border-myfav-primary text-myfav-primary'
+                      ? 'border-myhigh5-primary text-myhigh5-primary'
                       : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
                   }`}
                 >
@@ -121,14 +121,14 @@ export function ApplicationDetailsDialog({
                   onClick={() => setActiveTab('reactions')}
                   className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
                     activeTab === 'reactions'
-                      ? 'border-myfav-primary text-myfav-primary'
+                      ? 'border-myhigh5-primary text-myhigh5-primary'
                       : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
                   }`}
                 >
                   <Users className="w-4 h-4 inline mr-2" />
                   {t('dashboard.contests.reactions') || 'Réactions'}
                   {reactionDetails && (
-                    <Badge className="ml-2 bg-myfav-primary text-white">
+                    <Badge className="ml-2 bg-myhigh5-primary text-white">
                       {Object.values(reactionDetails.reactions_by_type).reduce((acc, arr) => acc + arr.length, 0)}
                     </Badge>
                   )}
@@ -137,7 +137,7 @@ export function ApplicationDetailsDialog({
                   onClick={() => setActiveTab('stats')}
                   className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
                     activeTab === 'stats'
-                      ? 'border-myfav-primary text-myfav-primary'
+                      ? 'border-myhigh5-primary text-myhigh5-primary'
                       : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
                   }`}
                 >
@@ -148,14 +148,14 @@ export function ApplicationDetailsDialog({
                   onClick={() => setActiveTab('shares')}
                   className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
                     activeTab === 'shares'
-                      ? 'border-myfav-primary text-myfav-primary'
+                      ? 'border-myhigh5-primary text-myhigh5-primary'
                       : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
                   }`}
                 >
                   <Share2 className="w-4 h-4 inline mr-2" />
                   {t('dashboard.contests.share') || 'Partages'}
                   {shareStats && (
-                    <Badge className="ml-2 bg-myfav-primary text-white">
+                    <Badge className="ml-2 bg-myhigh5-primary text-white">
                       {shareStats.total_shares}
                     </Badge>
                   )}
@@ -271,7 +271,7 @@ export function ApplicationDetailsDialog({
                                   className="w-8 h-8 rounded-full"
                                 />
                               ) : (
-                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-myfav-primary to-myfav-primary-dark flex items-center justify-center text-white text-xs">
+                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-myhigh5-primary to-myhigh5-primary-dark flex items-center justify-center text-white text-xs">
                                   {(user.full_name || user.username || 'U')[0].toUpperCase()}
                                 </div>
                               )}

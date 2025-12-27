@@ -75,7 +75,7 @@ export function LinkPreview({ url }: LinkPreviewProps) {
             {metadata.description}
           </p>
         )}
-        <div className="flex items-center gap-2 mt-2 text-xs text-myfav-primary">
+        <div className="flex items-center gap-2 mt-2 text-xs text-myhigh5-primary">
           <span>{url}</span>
           <ExternalLink className="h-3 w-3" />
         </div>

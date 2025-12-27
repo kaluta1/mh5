@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Import MyFav color palette */
+/* Import MyHigh5 color palette */
 @import '../styles/colors.css';
 
 @layer base {

@@ -139,12 +139,12 @@ export default function ContestsPage() {
   }
 
   const filters = [
-    { id: "all", label: t('pages.contests.filters.all') || "Tous", icon: Trophy, color: "bg-myfav-blue-600" },
-    { id: "city", label: t('pages.contests.filters.city') || "Ville", icon: Building2, color: "bg-myfav-cyan-500" },
-    { id: "country", label: t('pages.contests.filters.country') || "Pays", icon: Flag, color: "bg-myfav-blue-500" },
-    { id: "regional", label: t('pages.contests.filters.regional') || "Régional", icon: MapPin, color: "bg-myfav-cyan-600" },
-    { id: "continental", label: t('pages.contests.filters.continental') || "Continental", icon: Globe, color: "bg-myfav-primary" },
-    { id: "global", label: t('pages.contests.filters.global') || "Global", icon: Globe2, color: "bg-myfav-blue-800" },
+    { id: "all", label: t('pages.contests.filters.all') || "Tous", icon: Trophy, color: "bg-myhigh5-blue-600" },
+    { id: "city", label: t('pages.contests.filters.city') || "Ville", icon: Building2, color: "bg-myhigh5-cyan-500" },
+    { id: "country", label: t('pages.contests.filters.country') || "Pays", icon: Flag, color: "bg-myhigh5-blue-500" },
+    { id: "regional", label: t('pages.contests.filters.regional') || "Régional", icon: MapPin, color: "bg-myhigh5-cyan-600" },
+    { id: "continental", label: t('pages.contests.filters.continental') || "Continental", icon: Globe, color: "bg-myhigh5-primary" },
+    { id: "global", label: t('pages.contests.filters.global') || "Global", icon: Globe2, color: "bg-myhigh5-blue-800" },
   ]
 
   const getFilterCount = (filterId: string) => {
@@ -153,20 +153,20 @@ export default function ContestsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-myfav-blue-50 via-white to-myfav-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+    <div className="min-h-screen bg-gradient-to-br from-myhigh5-blue-50 via-white to-myhigh5-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
       <Header />
       
       <main className="pt-24 pb-16">
         {/* Hero Section */}
         <section className="relative py-20 overflow-hidden">
           {/* Background gradient */}
-          <div className="absolute inset-0 bg-gradient-to-br from-myfav-primary to-myfav-secondary" />
+          <div className="absolute inset-0 bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary" />
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.15),transparent_50%)]" />
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_80%,rgba(8,145,178,0.3),transparent_50%)]" />
           
           {/* Decorative elements */}
           <div className="absolute top-10 left-10 w-20 h-20 bg-white/10 rounded-full blur-xl animate-pulse" />
-          <div className="absolute bottom-10 right-10 w-32 h-32 bg-myfav-cyan-400/20 rounded-full blur-2xl animate-pulse delay-700" />
+          <div className="absolute bottom-10 right-10 w-32 h-32 bg-myhigh5-cyan-400/20 rounded-full blur-2xl animate-pulse delay-700" />
           
           <div className="container px-4 md:px-6 relative z-10">
             <div className="max-w-4xl mx-auto text-center text-white">
@@ -191,14 +191,14 @@ export default function ContestsPage() {
                   <div className="text-xs md:text-sm opacity-80 mt-1">{t('pages.contests.stats.active') || "Concours actifs"}</div>
                 </div>
                 <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-4 md:p-6 hover:bg-white/15 transition-all">
-                  <Users className="w-8 h-8 mx-auto mb-2 text-myfav-cyan-400" />
+                  <Users className="w-8 h-8 mx-auto mb-2 text-myhigh5-cyan-400" />
                   <div className="text-3xl md:text-4xl font-black">
                     {contests.reduce((acc, c) => acc + c.contestants, 0).toLocaleString()}
                   </div>
                   <div className="text-xs md:text-sm opacity-80 mt-1">{t('pages.contests.stats.participants') || "Participants"}</div>
                 </div>
                 <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-4 md:p-6 hover:bg-white/15 transition-all">
-                  <Globe className="w-8 h-8 mx-auto mb-2 text-myfav-cyan-300" />
+                  <Globe className="w-8 h-8 mx-auto mb-2 text-myhigh5-cyan-300" />
                   <div className="text-3xl md:text-4xl font-black">5</div>
                   <div className="text-xs md:text-sm opacity-80 mt-1">{t('pages.contests.stats.levels') || "Niveaux"}</div>
                 </div>
@@ -218,7 +218,7 @@ export default function ContestsPage() {
                   placeholder={t('pages.contests.search_placeholder') || "Rechercher un concours..."}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-12 h-14 text-lg rounded-xl border-gray-200 dark:border-gray-600 focus:ring-2 focus:ring-myfav-primary/20"
+                  className="pl-12 h-14 text-lg rounded-xl border-gray-200 dark:border-gray-600 focus:ring-2 focus:ring-myhigh5-primary/20"
                 />
               </div>
               
@@ -327,12 +327,12 @@ export default function ContestsPage() {
 
         {/* CTA Section */}
         <section className="container px-4 md:px-6 py-12">
-          <div className="relative overflow-hidden bg-gradient-to-br from-myfav-primary to-myfav-secondary rounded-3xl p-8 md:p-16">
+          <div className="relative overflow-hidden bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary rounded-3xl p-8 md:p-16">
             {/* Decorative background */}
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_50%,rgba(255,255,255,0.1),transparent_40%)]" />
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(8,145,178,0.3),transparent_40%)]" />
             <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl" />
-            <div className="absolute bottom-0 left-0 w-48 h-48 bg-myfav-cyan-400/10 rounded-full blur-2xl" />
+            <div className="absolute bottom-0 left-0 w-48 h-48 bg-myhigh5-cyan-400/10 rounded-full blur-2xl" />
             
             <div className="relative z-10 text-center text-white">
               <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-2 mb-6">
@@ -351,7 +351,7 @@ export default function ContestsPage() {
                 <Button 
                   size="lg"
                   onClick={() => router.push('/register')}
-                  className="bg-white text-myfav-primary hover:bg-gray-100 font-bold px-10 py-7 text-lg rounded-xl shadow-2xl hover:shadow-white/20 transition-all hover:-translate-y-1"
+                  className="bg-white text-myhigh5-primary hover:bg-gray-100 font-bold px-10 py-7 text-lg rounded-xl shadow-2xl hover:shadow-white/20 transition-all hover:-translate-y-1"
                 >
                   <Users className="w-5 h-5 mr-2" />
                   {t('pages.contests.cta.button') || "Créer mon compte"}
@@ -376,8 +376,8 @@ export default function ContestsPage() {
       <Dialog open={showAuthDialog} onOpenChange={setShowAuthDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-myfav-primary/10 flex items-center justify-center">
-              <Lock className="w-8 h-8 text-myfav-primary" />
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-myhigh5-primary/10 flex items-center justify-center">
+              <Lock className="w-8 h-8 text-myhigh5-primary" />
             </div>
             <DialogTitle className="text-2xl font-bold text-center">
               {t('pages.contests.auth_required_title') || "Connexion requise"}
@@ -408,7 +408,7 @@ export default function ContestsPage() {
             <div className="flex flex-col gap-3">
               <Button
                 onClick={handleLoginClick}
-                className="w-full bg-myfav-primary hover:bg-myfav-primary-dark text-white font-semibold h-12"
+                className="w-full bg-myhigh5-primary hover:bg-myhigh5-primary-dark text-white font-semibold h-12"
               >
                 <LogIn className="w-5 h-5 mr-2" />
                 {t('pages.contests.auth_required_login') || "Se connecter"}
@@ -417,7 +417,7 @@ export default function ContestsPage() {
               <Button
                 onClick={handleRegisterClick}
                 variant="outline"
-                className="w-full border-2 border-myfav-primary text-myfav-primary hover:bg-myfav-primary/10 font-semibold h-12"
+                className="w-full border-2 border-myhigh5-primary text-myhigh5-primary hover:bg-myhigh5-primary/10 font-semibold h-12"
               >
                 <UserPlus className="w-5 h-5 mr-2" />
                 {t('pages.contests.auth_required_register') || "Créer un compte"}

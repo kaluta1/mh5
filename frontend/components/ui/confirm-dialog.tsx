@@ -51,7 +51,7 @@ export function ConfirmDialog({
             className={`flex-1 text-white ${
               isDangerous
                 ? 'bg-red-600 hover:bg-red-700'
-                : 'bg-myfav-primary hover:bg-myfav-primary-dark'
+                : 'bg-myhigh5-primary hover:bg-myhigh5-primary-dark'
             }`}
             onClick={onConfirm}
             disabled={isLoading}

@@ -271,7 +271,7 @@ export function PaymentDialog({
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Shield className="w-5 h-5 text-myfav-primary" />
+            <Shield className="w-5 h-5 text-myhigh5-primary" />
             {step === 'product' && (t('payment.choose_product') || 'Choisir un produit')}
             {step === 'select' && (t('payment.payment_method') || 'Méthode de paiement')}
             {step === 'instructions' && (t('payment.payment_instructions') || 'Instructions de paiement')}
@@ -297,8 +297,8 @@ export function PaymentDialog({
                   onClick={() => handleProductSelect(product.code)}
                   className={`w-full flex items-center justify-between p-4 rounded-lg border transition-all text-left ${
                     selectedProductCode === product.code
-                      ? 'border-myfav-primary bg-myfav-primary/10'
-                      : 'border-gray-200 dark:border-gray-700 hover:border-myfav-primary/50'
+                      ? 'border-myhigh5-primary bg-myhigh5-primary/10'
+                      : 'border-gray-200 dark:border-gray-700 hover:border-myhigh5-primary/50'
                   }`}
                 >
                   <div>
@@ -312,7 +312,7 @@ export function PaymentDialog({
                   </div>
                   <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
                     selectedProductCode === product.code
-                      ? 'border-myfav-primary bg-myfav-primary'
+                      ? 'border-myhigh5-primary bg-myhigh5-primary'
                       : 'border-gray-300 dark:border-gray-600'
                   }`}>
                     {selectedProductCode === product.code && (
@@ -364,7 +364,7 @@ export function PaymentDialog({
                       setAmountError(null)
                     }}
                     min={selectedProduct.minAmount || 1}
-                    className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-lg font-bold text-center focus:outline-none focus:ring-2 focus:ring-myfav-primary"
+                    className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-lg font-bold text-center focus:outline-none focus:ring-2 focus:ring-myhigh5-primary"
                   />
                   {amountError && (
                     <p className="text-sm text-red-500 mt-2 flex items-center gap-1">
@@ -383,14 +383,14 @@ export function PaymentDialog({
               {/* Total */}
               <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                 <span className="font-medium text-gray-700 dark:text-gray-300">{t('payment.total') || 'Total'}:</span>
-                <span className="text-2xl font-bold text-myfav-primary">{totalAmount} {currency}</span>
+                <span className="text-2xl font-bold text-myhigh5-primary">{totalAmount} {currency}</span>
               </div>
             </div>
 
             {/* Continue button */}
             <Button 
               onClick={validateAndContinue}
-              className="w-full bg-myfav-primary hover:bg-myfav-primary/90"
+              className="w-full bg-myhigh5-primary hover:bg-myhigh5-primary/90"
             >
               {t('common.continue') || 'Continuer'}
             </Button>
@@ -400,7 +400,7 @@ export function PaymentDialog({
         {step === 'select' && (
           <div className="space-y-4 mt-4">
             {/* Order summary */}
-            <div className="bg-myfav-primary/10 dark:bg-myfav-primary/20 rounded-lg p-4">
+            <div className="bg-myhigh5-primary/10 dark:bg-myhigh5-primary/20 rounded-lg p-4">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="font-medium text-gray-900 dark:text-white">{getProductName(selectedProduct)}</p>
@@ -413,12 +413,12 @@ export function PaymentDialog({
                 </div>
                 <div className="text-right">
                   <p className="text-sm text-gray-500 dark:text-gray-400">{t('payment.total') || 'Total'}</p>
-                  <p className="text-2xl font-bold text-myfav-primary">{totalAmount} {currency}</p>
+                  <p className="text-2xl font-bold text-myhigh5-primary">{totalAmount} {currency}</p>
                 </div>
               </div>
               <button 
                 onClick={() => setStep('product')}
-                className="text-sm text-myfav-primary hover:underline mt-2"
+                className="text-sm text-myhigh5-primary hover:underline mt-2"
               >
                 {t('common.modify') || 'Modifier'}
               </button>
@@ -427,7 +427,7 @@ export function PaymentDialog({
             {/* Loading state */}
             {isLoading && (
               <div className="flex items-center justify-center py-8">
-                <Loader2 className="w-8 h-8 animate-spin text-myfav-primary" />
+                <Loader2 className="w-8 h-8 animate-spin text-myhigh5-primary" />
                 <span className="ml-3 text-gray-600 dark:text-gray-400">
                   {t('payment.creating_payment') || 'Création du paiement...'}
                 </span>
@@ -460,7 +460,7 @@ export function PaymentDialog({
                       key={method.id}
                       onClick={() => handleMethodSelect(method.id)}
                       disabled={isLoading}
-                      className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-myfav-primary hover:bg-myfav-primary/5 transition-all text-left disabled:opacity-50"
+                      className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-myhigh5-primary hover:bg-myhigh5-primary/5 transition-all text-left disabled:opacity-50"
                     >
                       {method.icon}
                       <span className="text-sm font-medium text-gray-900 dark:text-white">{getMethodName(method)}</span>
@@ -479,7 +479,7 @@ export function PaymentDialog({
                     <button
                       key={method.id}
                       onClick={() => handleMethodSelect(method.id)}
-                      className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-myfav-primary hover:bg-myfav-primary/5 transition-all text-left"
+                      className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-myhigh5-primary hover:bg-myhigh5-primary/5 transition-all text-left"
                     >
                       {method.icon}
                       <span className="text-sm font-medium text-gray-900 dark:text-white">{getMethodName(method)}</span>
@@ -519,9 +519,9 @@ export function PaymentDialog({
             {selectedPaymentMethod.category === 'crypto' && cryptoPayment && (
               <>
                 {/* Amount in crypto */}
-                <div className="bg-myfav-primary/10 dark:bg-myfav-primary/20 rounded-lg p-4 text-center">
+                <div className="bg-myhigh5-primary/10 dark:bg-myhigh5-primary/20 rounded-lg p-4 text-center">
                   <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">{t('payment.amount_to_send') || 'Montant à envoyer'}</p>
-                  <p className="text-3xl font-bold text-myfav-primary">
+                  <p className="text-3xl font-bold text-myhigh5-primary">
                     {cryptoPayment.pay_amount} {cryptoPayment.pay_currency.toUpperCase()}
                   </p>
                   <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
@@ -560,9 +560,9 @@ export function PaymentDialog({
             {selectedPaymentMethod.category === 'crypto' && !cryptoPayment && selectedPaymentMethod.address && (
               <>
                 {/* Amount */}
-                <div className="bg-myfav-primary/10 dark:bg-myfav-primary/20 rounded-lg p-4 text-center">
+                <div className="bg-myhigh5-primary/10 dark:bg-myhigh5-primary/20 rounded-lg p-4 text-center">
                   <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">{t('payment.amount_to_send') || 'Montant à envoyer'}</p>
-                  <p className="text-3xl font-bold text-myfav-primary">{totalAmount} {currency}</p>
+                  <p className="text-3xl font-bold text-myhigh5-primary">{totalAmount} {currency}</p>
                 </div>
 
                 {/* Address */}
@@ -623,7 +623,7 @@ export function PaymentDialog({
                   onPaymentInitiated?.()
                   handleClose()
                 }}
-                className="flex-1 bg-myfav-primary hover:bg-myfav-primary/90"
+                className="flex-1 bg-myhigh5-primary hover:bg-myhigh5-primary/90"
               >
                 {t('payment.payment_done') || "J'ai effectué le paiement"}
               </Button>

@@ -27,7 +27,7 @@ export function MediaGallery({ images, videos, onMediaSelect }: MediaGalleryProp
       {images.length > 0 && (
         <div>
           <div className="flex items-center gap-2 mb-4">
-            <ImageIcon className="w-5 h-5 text-myfav-primary" />
+            <ImageIcon className="w-5 h-5 text-myhigh5-primary" />
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
               {t('contestant_detail.photos')} ({images.length})
             </h3>
@@ -54,7 +54,7 @@ export function MediaGallery({ images, videos, onMediaSelect }: MediaGalleryProp
       {videos.length > 0 && (
         <div>
           <div className="flex items-center gap-2 mb-4">
-            <Play className="w-5 h-5 text-myfav-primary" />
+            <Play className="w-5 h-5 text-myhigh5-primary" />
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
               {t('contestant_detail.videos')} ({videos.length})
             </h3>

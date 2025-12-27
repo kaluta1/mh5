@@ -530,16 +530,16 @@ export default function AdminContests() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-gradient-to-br from-myfav-primary via-myfav-primary/80 to-myfav-secondary dark:from-myfav-primary/20 dark:via-myfav-primary/10 dark:to-myfav-secondary/10 rounded-xl p-8 border border-myfav-primary/30 dark:border-myfav-primary/20 shadow-lg">
+      <div className="bg-gradient-to-br from-myhigh5-primary via-myhigh5-primary/80 to-myhigh5-secondary dark:from-myhigh5-primary/20 dark:via-myhigh5-primary/10 dark:to-myhigh5-secondary/10 rounded-xl p-8 border border-myhigh5-primary/30 dark:border-myhigh5-primary/20 shadow-lg">
         <div className="flex justify-between items-start gap-6">
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-3">
-              <Trophy className="h-8 w-8 text-white dark:text-myfav-secondary" />
+              <Trophy className="h-8 w-8 text-white dark:text-myhigh5-secondary" />
               <h1 className="text-4xl font-bold text-white dark:text-white">
                 {t('admin.contests.title') || 'Gestion des Concours'}
               </h1>
             </div>
-            <p className="text-myfav-primary/90 dark:text-myfav-secondary/80 font-medium">
+            <p className="text-myhigh5-primary/90 dark:text-myhigh5-secondary/80 font-medium">
               {t('admin.contests.description') || 'Créez et gérez vos concours'}
             </p>
             <div className="flex gap-6 mt-4 text-sm">
@@ -559,7 +559,7 @@ export default function AdminContests() {
               setEditingId(null)
               resetForm()
             }}
-            className="gap-2 bg-white text-myfav-primary hover:bg-gray-100 dark:bg-myfav-secondary dark:text-gray-900 dark:hover:bg-myfav-secondary/90 shadow-lg hover:shadow-xl transition-all font-semibold"
+            className="gap-2 bg-white text-myhigh5-primary hover:bg-gray-100 dark:bg-myhigh5-secondary dark:text-gray-900 dark:hover:bg-myhigh5-secondary/90 shadow-lg hover:shadow-xl transition-all font-semibold"
           >
             <Plus className="h-5 w-5" />
             {t('admin.contests.new_contest') || 'Nouveau concours'}
@@ -594,7 +594,7 @@ export default function AdminContests() {
                   </label>
                   {uploadedImage && (
                     <div className="mb-3 relative">
-                      <img src={uploadedImage} alt="Preview" className="h-40 w-40 object-cover rounded-lg border-2 border-myfav-primary/20" />
+                      <img src={uploadedImage} alt="Preview" className="h-40 w-40 object-cover rounded-lg border-2 border-myhigh5-primary/20" />
                       {editingId && (
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">{t('admin.contests.current_image') || 'Image actuelle'}</p>
                       )}
@@ -845,7 +845,7 @@ export default function AdminContests() {
                   </label>
                   {loadingSeasons ? (
                     <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-myfav-primary"></div>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-myhigh5-primary"></div>
                       {t('common.loading') || 'Chargement...'}
                     </div>
                   ) : (
@@ -876,7 +876,7 @@ export default function AdminContests() {
                   </label>
                   {loadingVotingTypes ? (
                     <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-myfav-primary"></div>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-myhigh5-primary"></div>
                       {t('common.loading') || 'Chargement...'}
                     </div>
                   ) : (
@@ -1237,7 +1237,7 @@ export default function AdminContests() {
                   <Button
                     type="submit"
                     disabled={isSubmitting}
-                    className="bg-gradient-to-r from-myfav-primary to-myfav-secondary hover:shadow-lg disabled:opacity-70 disabled:cursor-not-allowed"
+                    className="bg-gradient-to-r from-myhigh5-primary to-myhigh5-secondary hover:shadow-lg disabled:opacity-70 disabled:cursor-not-allowed"
                   >
                     {isSubmitting ? (
                       <div className="flex items-center gap-2">
@@ -1262,7 +1262,7 @@ export default function AdminContests() {
             {/* Recherche */}
             <div className="md:col-span-2">
               <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
-                <Eye className="h-4 w-4 text-myfav-primary" />
+                <Eye className="h-4 w-4 text-myhigh5-primary" />
                 {t('admin.contests.search_placeholder') || 'Rechercher'}
               </label>
               <Input
@@ -1270,18 +1270,18 @@ export default function AdminContests() {
                 placeholder={t('admin.contests.search_input_placeholder') || 'Nom, type, description...'}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="dark:bg-gray-700 dark:border-gray-600 dark:text-white border-gray-300 focus:border-myfav-primary focus:ring-myfav-primary"
+                className="dark:bg-gray-700 dark:border-gray-600 dark:text-white border-gray-300 focus:border-myhigh5-primary focus:ring-myhigh5-primary"
               />
             </div>
 
             {/* Tri */}
             <div>
               <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
-                <Clock className="h-4 w-4 text-myfav-primary" />
+                <Clock className="h-4 w-4 text-myhigh5-primary" />
                 {t('admin.contests.sort') || 'Trier par'}
               </label>
               <Select value={sortBy} onValueChange={(value: any) => setSortBy(value)}>
-                <SelectTrigger className="dark:bg-gray-700 dark:border-gray-600 dark:text-white border-gray-300 focus:border-myfav-primary focus:ring-myfav-primary">
+                <SelectTrigger className="dark:bg-gray-700 dark:border-gray-600 dark:text-white border-gray-300 focus:border-myhigh5-primary focus:ring-myhigh5-primary">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="dark:bg-gray-700">
@@ -1313,7 +1313,7 @@ export default function AdminContests() {
 
       {loading ? (
         <div className="flex justify-center py-12">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-myfav-primary"></div>
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-myhigh5-primary"></div>
         </div>
       ) : contests.length === 0 ? (
         <Card className="border-2 border-dashed border-gray-300 dark:border-gray-600">
@@ -1344,7 +1344,7 @@ export default function AdminContests() {
                         className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                       />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-myfav-primary via-myfav-primary-dark to-purple-600">
+                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-myhigh5-primary via-myhigh5-primary-dark to-purple-600">
                         <Trophy className="h-12 w-12 text-white/80" />
                       </div>
                     )}
@@ -1375,7 +1375,7 @@ export default function AdminContests() {
                     <div className="flex items-start justify-between gap-4 mb-4">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="px-2 py-0.5 bg-myfav-primary/10 text-myfav-primary dark:bg-myfav-primary/20 dark:text-myfav-secondary rounded text-xs font-bold uppercase tracking-wide">
+                          <span className="px-2 py-0.5 bg-myhigh5-primary/10 text-myhigh5-primary dark:bg-myhigh5-primary/20 dark:text-myhigh5-secondary rounded text-xs font-bold uppercase tracking-wide">
                             {contest.contest_type}
                           </span>
                           <span className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded text-xs font-medium flex items-center gap-1">
@@ -1471,7 +1471,7 @@ export default function AdminContests() {
                       <Button
                         size="sm"
                         onClick={() => handleEdit(contest)}
-                        className="gap-1.5 bg-myfav-primary hover:bg-myfav-primary-dark text-white shadow-md hover:shadow-lg transition-all"
+                        className="gap-1.5 bg-myhigh5-primary hover:bg-myhigh5-primary-dark text-white shadow-md hover:shadow-lg transition-all"
                       >
                         <Edit2 className="h-4 w-4" />
                         {t('admin.contests.edit') || 'Modifier'}
@@ -1664,7 +1664,7 @@ export default function AdminContests() {
                     type="button"
                     onClick={handleCreateVotingType}
                     disabled={isCreatingVotingType || !votingTypeFormData.name}
-                    className="bg-gradient-to-r from-myfav-primary to-myfav-secondary hover:shadow-lg disabled:opacity-70"
+                    className="bg-gradient-to-r from-myhigh5-primary to-myhigh5-secondary hover:shadow-lg disabled:opacity-70"
                   >
                     {isCreatingVotingType ? (
                       <div className="flex items-center gap-2">

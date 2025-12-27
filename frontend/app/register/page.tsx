@@ -397,7 +397,7 @@ export default function RegisterPage() {
       <div className="relative z-10 flex justify-between items-center p-6">
         <Link 
           href="/"
-          className="inline-flex items-center text-sm font-medium text-gray-700 hover:text-myfav-primary dark:text-gray-200 dark:hover:text-myfav-blue-400 transition-colors"
+          className="inline-flex items-center text-sm font-medium text-gray-700 hover:text-myhigh5-primary dark:text-gray-200 dark:hover:text-myhigh5-blue-400 transition-colors"
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
           {t('navigation.home')}
@@ -424,17 +424,17 @@ export default function RegisterPage() {
 
           {/* Bannière code de parrainage */}
           {referralCode && (
-            <div className="mb-4 p-4 bg-gradient-to-r from-myfav-primary/10 to-purple-500/10 dark:from-myfav-primary/20 dark:to-purple-500/20 rounded-xl border border-myfav-primary/20 dark:border-myfav-primary/30">
+            <div className="mb-4 p-4 bg-gradient-to-r from-myhigh5-primary/10 to-purple-500/10 dark:from-myhigh5-primary/20 dark:to-purple-500/20 rounded-xl border border-myhigh5-primary/20 dark:border-myhigh5-primary/30">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-myfav-primary/20 flex items-center justify-center">
-                  <Gift className="w-5 h-5 text-myfav-primary" />
+                <div className="w-10 h-10 rounded-full bg-myhigh5-primary/20 flex items-center justify-center">
+                  <Gift className="w-5 h-5 text-myhigh5-primary" />
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-900 dark:text-white">
                     {t('auth.referral_bonus') || 'Vous avez été parrainé !'}
                   </p>
                   <p className="text-xs text-gray-600 dark:text-gray-400">
-                    {t('auth.referral_code') || 'Code'}: <span className="font-mono font-bold text-myfav-primary">{referralCode}</span>
+                    {t('auth.referral_code') || 'Code'}: <span className="font-mono font-bold text-myhigh5-primary">{referralCode}</span>
                   </p>
                 </div>
               </div>
@@ -458,7 +458,7 @@ export default function RegisterPage() {
                 </p>
                 <Button
                   onClick={() => router.push('/login')}
-                  className="w-full h-12 text-lg font-semibold bg-gradient-to-r from-myfav-primary to-purple-600 hover:from-myfav-primary-dark hover:to-purple-700 text-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+                  className="w-full h-12 text-lg font-semibold bg-gradient-to-r from-myhigh5-primary to-purple-600 hover:from-myhigh5-primary-dark hover:to-purple-700 text-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
                 >
                   <Heart className="mr-2 h-5 w-5" />
                   {t('auth.register.continue_button') || 'Se connecter'}
@@ -479,7 +479,7 @@ export default function RegisterPage() {
                       placeholder={t('auth.register.email_placeholder')}
                       value={formData.email}
                       onChange={(e) => handleInputChange('email', e.target.value)}
-                      className={`pl-10 h-12 rounded-xl dsm-input ${fieldErrors.email ? 'border-red-500 focus:border-red-500 focus:ring-red-500 bg-red-50 dark:bg-red-900/10' : 'border-gray-200 dark:border-gray-600 focus:border-myfav-primary focus:ring-myfav-primary'}`}
+                      className={`pl-10 h-12 rounded-xl dsm-input ${fieldErrors.email ? 'border-red-500 focus:border-red-500 focus:ring-red-500 bg-red-50 dark:bg-red-900/10' : 'border-gray-200 dark:border-gray-600 focus:border-myhigh5-primary focus:ring-myhigh5-primary'}`}
                       required
                     />
                   </div>
@@ -541,7 +541,7 @@ export default function RegisterPage() {
                           }, 3000)
                         }
                       }}
-                      className={`pl-10 h-12 rounded-xl dsm-input ${fieldErrors.username ? 'border-red-500 focus:border-red-500 focus:ring-red-500 bg-red-50 dark:bg-red-900/10' : 'border-gray-200 dark:border-gray-600 focus:border-myfav-primary focus:ring-myfav-primary'}`}
+                      className={`pl-10 h-12 rounded-xl dsm-input ${fieldErrors.username ? 'border-red-500 focus:border-red-500 focus:ring-red-500 bg-red-50 dark:bg-red-900/10' : 'border-gray-200 dark:border-gray-600 focus:border-myhigh5-primary focus:ring-myhigh5-primary'}`}
                       required
                     />
                   </div>
@@ -577,7 +577,7 @@ export default function RegisterPage() {
                       placeholder={t('auth.register.password_placeholder')}
                       value={formData.password}
                       onChange={(e) => handleInputChange('password', e.target.value)}
-                      className={`pl-10 pr-10 h-12 rounded-xl dsm-input ${fieldErrors.password || (formData.password && !isPasswordValid()) ? 'border-red-500 focus:border-red-500 focus:ring-red-500 bg-red-50 dark:bg-red-900/10' : 'border-gray-200 dark:border-gray-600 focus:border-myfav-primary focus:ring-myfav-primary'}`}
+                      className={`pl-10 pr-10 h-12 rounded-xl dsm-input ${fieldErrors.password || (formData.password && !isPasswordValid()) ? 'border-red-500 focus:border-red-500 focus:ring-red-500 bg-red-50 dark:bg-red-900/10' : 'border-gray-200 dark:border-gray-600 focus:border-myhigh5-primary focus:ring-myhigh5-primary'}`}
                       required
                     />
                     <button
@@ -632,7 +632,7 @@ export default function RegisterPage() {
                       placeholder={t('auth.register.confirm_password_placeholder')}
                       value={formData.confirmPassword}
                       onChange={(e) => handleInputChange('confirmPassword', e.target.value)}
-                      className={`pl-10 pr-10 h-12 rounded-xl dsm-input ${fieldErrors.confirmPassword ? 'border-red-500 focus:border-red-500 focus:ring-red-500 bg-red-50 dark:bg-red-900/10' : 'border-gray-200 dark:border-gray-600 focus:border-myfav-primary focus:ring-myfav-primary'}`}
+                      className={`pl-10 pr-10 h-12 rounded-xl dsm-input ${fieldErrors.confirmPassword ? 'border-red-500 focus:border-red-500 focus:ring-red-500 bg-red-50 dark:bg-red-900/10' : 'border-gray-200 dark:border-gray-600 focus:border-myhigh5-primary focus:ring-myhigh5-primary'}`}
                       required
                     />
                     <button
@@ -659,7 +659,7 @@ export default function RegisterPage() {
               </div>
 
               {/* Terms */}
-              <div className="flex items-start space-x-3 p-4 bg-myfav-blue-50 dark:bg-myfav-blue-900/20 rounded-xl">
+              <div className="flex items-start space-x-3 p-4 bg-myhigh5-blue-50 dark:bg-myhigh5-blue-900/20 rounded-xl">
                 <Checkbox
                   id="terms"
                   checked={acceptTerms}
@@ -677,7 +677,7 @@ export default function RegisterPage() {
               {/* Submit Button */}
               <Button
                 type="submit"
-                className="w-full h-12 bg-myfav-primary hover:bg-myfav-primary-dark text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-200"
+                className="w-full h-12 bg-myhigh5-primary hover:bg-myhigh5-primary-dark text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-200"
                 disabled={isLoading}
               >
                 {isLoading ? (
@@ -700,7 +700,7 @@ export default function RegisterPage() {
                 </span>
                 <Link
                   href="/login"
-                  className="text-sm font-semibold text-myfav-primary hover:text-myfav-primary-dark dark:text-myfav-blue-400 dark:hover:text-myfav-blue-300 transition-colors"
+                  className="text-sm font-semibold text-myhigh5-primary hover:text-myhigh5-primary-dark dark:text-myhigh5-blue-400 dark:hover:text-myhigh5-blue-300 transition-colors"
                 >
                   {t('auth.register.login_link')}
                 </Link>

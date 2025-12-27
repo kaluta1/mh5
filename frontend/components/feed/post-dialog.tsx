@@ -114,7 +114,7 @@ export function PostDialog({ open, onOpenChange, onPostCreated }: PostDialogProp
           <Button
             onClick={handleSubmit}
             disabled={!canPost || isLoading}
-            className="rounded-full bg-myfav-primary hover:bg-myfav-primary/90 text-white font-semibold px-6 h-9 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="rounded-full bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white font-semibold px-6 h-9 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isLoading ? 'Publication...' : 'Publier'}
           </Button>
@@ -229,7 +229,7 @@ export function PostDialog({ open, onOpenChange, onPostCreated }: PostDialogProp
                           className={cn(
                             "h-8 rounded-full text-xs px-3",
                             visibility === 'public' 
-                              ? "bg-white dark:bg-gray-700 text-myfav-primary shadow-sm" 
+                              ? "bg-white dark:bg-gray-700 text-myhigh5-primary shadow-sm" 
                               : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                           )}
                           title="Public"
@@ -244,7 +244,7 @@ export function PostDialog({ open, onOpenChange, onPostCreated }: PostDialogProp
                           className={cn(
                             "h-8 rounded-full text-xs px-3",
                             visibility === 'followers' 
-                              ? "bg-white dark:bg-gray-700 text-myfav-primary shadow-sm" 
+                              ? "bg-white dark:bg-gray-700 text-myhigh5-primary shadow-sm" 
                               : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                           )}
                           title="Abonnés"
@@ -259,7 +259,7 @@ export function PostDialog({ open, onOpenChange, onPostCreated }: PostDialogProp
                           className={cn(
                             "h-8 rounded-full text-xs px-3",
                             visibility === 'private' 
-                              ? "bg-white dark:bg-gray-700 text-myfav-primary shadow-sm" 
+                              ? "bg-white dark:bg-gray-700 text-myhigh5-primary shadow-sm" 
                               : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                           )}
                           title="Privé"
@@ -300,7 +300,7 @@ export function PostDialog({ open, onOpenChange, onPostCreated }: PostDialogProp
                             placeholder={`Option ${index + 1}`}
                             value={option}
                             onChange={(e) => updatePollOption(index, e.target.value)}
-                            className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myfav-primary focus:border-transparent"
+                            className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myhigh5-primary focus:border-transparent"
                           />
                           {poll.options.length > 2 && (
                             <Button
@@ -317,7 +317,7 @@ export function PostDialog({ open, onOpenChange, onPostCreated }: PostDialogProp
                       <Button
                         variant="outline"
                         onClick={addPollOption}
-                        className="w-full rounded-full border-dashed hover:border-myfav-primary hover:text-myfav-primary"
+                        className="w-full rounded-full border-dashed hover:border-myhigh5-primary hover:text-myhigh5-primary"
                       >
                         <Plus className="h-4 w-4 mr-2" />
                         Ajouter une option

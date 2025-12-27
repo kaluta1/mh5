@@ -299,7 +299,7 @@ export default function AffiliatesPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-myfav-primary flex items-center justify-center shadow-lg shadow-myfav-primary/25">
+            <div className="w-10 h-10 rounded-xl bg-myhigh5-primary flex items-center justify-center shadow-lg shadow-myhigh5-primary/25">
               <Users className="w-5 h-5 text-white" />
             </div>
             {t('dashboard.affiliates.title')}
@@ -330,7 +330,7 @@ export default function AffiliatesPage() {
           <Button 
             onClick={() => setShowInviteDialog(true)}
             size="sm"
-            className="rounded-xl bg-myfav-primary hover:bg-myfav-primary/90 shadow-lg shadow-myfav-primary/25"
+            className="rounded-xl bg-myhigh5-primary hover:bg-myhigh5-primary/90 shadow-lg shadow-myhigh5-primary/25"
           >
             <UserPlus className="w-4 h-4 sm:mr-2" />
             <span className="hidden sm:inline">{t('dashboard.affiliates.invite')}</span>
@@ -342,8 +342,8 @@ export default function AffiliatesPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <div className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl p-3 sm:p-5 border border-gray-100 dark:border-gray-700 shadow-sm">
           <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-myfav-primary/10 dark:bg-myfav-primary/20 flex items-center justify-center">
-              <Users className="w-4 h-4 sm:w-5 sm:h-5 text-myfav-primary" />
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-myhigh5-primary/10 dark:bg-myhigh5-primary/20 flex items-center justify-center">
+              <Users className="w-4 h-4 sm:w-5 sm:h-5 text-myhigh5-primary" />
             </div>
           </div>
           <p className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">{totalAffiliates}</p>
@@ -388,7 +388,7 @@ export default function AffiliatesPage() {
         <DialogContent className="max-w-[95vw] sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
-              <LinkIcon className="w-4 h-4 sm:w-5 sm:h-5 text-myfav-primary" />
+              <LinkIcon className="w-4 h-4 sm:w-5 sm:h-5 text-myhigh5-primary" />
               {t('dashboard.affiliates.your_referral_links') || 'Vos liens de parrainage'}
             </DialogTitle>
             <DialogDescription className="text-xs sm:text-sm">
@@ -429,11 +429,11 @@ export default function AffiliatesPage() {
             )}
 
             {/* Code de parrainage */}
-            <div className="p-3 sm:p-4 bg-myfav-primary/10 dark:bg-myfav-primary/20 rounded-lg sm:rounded-xl border border-myfav-primary/20">
+            <div className="p-3 sm:p-4 bg-myhigh5-primary/10 dark:bg-myhigh5-primary/20 rounded-lg sm:rounded-xl border border-myhigh5-primary/20">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                 <div>
                   <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">{t('dashboard.affiliates.your_code')}</p>
-                  <p className="text-xl sm:text-2xl font-bold font-mono text-myfav-primary">{referralCode}</p>
+                  <p className="text-xl sm:text-2xl font-bold font-mono text-myhigh5-primary">{referralCode}</p>
                 </div>
                 <Button 
                   onClick={() => copyToClipboard(referralCode, 'code')}
@@ -635,7 +635,7 @@ export default function AffiliatesPage() {
                 <Users className="w-4 h-4" />
                 {t('dashboard.affiliates.your_affiliates') || 'Affiliés'}
                 {directAffiliates > 0 && (
-                  <span className="ml-1 px-1.5 py-0.5 text-xs bg-myfav-primary/10 text-myfav-primary rounded-full">
+                  <span className="ml-1 px-1.5 py-0.5 text-xs bg-myhigh5-primary/10 text-myhigh5-primary rounded-full">
                     {directAffiliates}
                   </span>
                 )}
@@ -660,7 +660,7 @@ export default function AffiliatesPage() {
 
             {activeTab === 'affiliates' && (
               <Link href="/dashboard/affiliates/list">
-                <Button variant="ghost" size="sm" className="text-myfav-primary hover:text-myfav-primary/80 text-xs sm:text-sm">
+                <Button variant="ghost" size="sm" className="text-myhigh5-primary hover:text-myhigh5-primary/80 text-xs sm:text-sm">
                   {t('dashboard.affiliates.see_all')}
                   <ChevronRight className="w-4 h-4 ml-1" />
                 </Button>
@@ -679,7 +679,7 @@ export default function AffiliatesPage() {
                   className="p-3 sm:p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                 >
                   <div className="flex items-start sm:items-center gap-3 sm:gap-4">
-                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-myfav-primary flex items-center justify-center text-white font-semibold shadow-lg shadow-myfav-primary/20 flex-shrink-0">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-myhigh5-primary flex items-center justify-center text-white font-semibold shadow-lg shadow-myhigh5-primary/20 flex-shrink-0">
                       {affiliate.name.charAt(0)}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -749,7 +749,7 @@ export default function AffiliatesPage() {
                 </p>
                 <Button 
                   onClick={() => setShowInviteDialog(true)}
-                  className="rounded-xl bg-myfav-primary hover:bg-myfav-primary/90"
+                  className="rounded-xl bg-myhigh5-primary hover:bg-myhigh5-primary/90"
                 >
                   <UserPlus className="w-4 h-4 mr-2" />
                   {t('dashboard.affiliates.invite_friends')}
@@ -823,7 +823,7 @@ export default function AffiliatesPage() {
                 </p>
                 <Button 
                   onClick={() => setShowInviteDialog(true)}
-                  className="rounded-xl bg-myfav-primary hover:bg-myfav-primary/90"
+                  className="rounded-xl bg-myhigh5-primary hover:bg-myhigh5-primary/90"
                 >
                   <Send className="w-4 h-4 mr-2" />
                   {t('dashboard.affiliates.send_invitation') || 'Envoyer une invitation'}

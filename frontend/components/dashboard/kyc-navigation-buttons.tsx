@@ -40,7 +40,7 @@ export function KYCNavigationButtons({
           type="button"
           onClick={onNext}
           disabled={isSubmitting}
-          className="flex-1 bg-myfav-primary hover:bg-myfav-primary-dark text-white flex items-center justify-center gap-2"
+          className="flex-1 bg-myhigh5-primary hover:bg-myhigh5-primary-dark text-white flex items-center justify-center gap-2"
         >
           {t('common.next')}
           <ChevronRight className="w-4 h-4" />
@@ -50,7 +50,7 @@ export function KYCNavigationButtons({
           type="submit"
           onClick={onSubmit}
           disabled={isSubmitting}
-          className="flex-1 bg-myfav-primary hover:bg-myfav-primary-dark text-white"
+          className="flex-1 bg-myhigh5-primary hover:bg-myhigh5-primary-dark text-white"
         >
           {isSubmitting ? t('common.submitting') : t('kyc.submit_verification')}
         </Button>

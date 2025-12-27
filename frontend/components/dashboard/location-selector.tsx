@@ -121,7 +121,7 @@ export function LocationSelector({ onLocationSelected, isLoading }: LocationSele
         <select
           value={selectedContinent}
           onChange={(e) => setSelectedContinent(e.target.value ? Number(e.target.value) : '')}
-          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myfav-primary"
+          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myhigh5-primary"
           disabled={isLoading || isLoadingData}
         >
           <option value="">Sélectionner un continent</option>
@@ -142,7 +142,7 @@ export function LocationSelector({ onLocationSelected, isLoading }: LocationSele
           <select
             value={selectedRegion}
             onChange={(e) => setSelectedRegion(e.target.value ? Number(e.target.value) : '')}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myfav-primary"
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myhigh5-primary"
             disabled={isLoading || isLoadingData}
           >
             <option value="">Sélectionner une région</option>
@@ -164,7 +164,7 @@ export function LocationSelector({ onLocationSelected, isLoading }: LocationSele
           <select
             value={selectedCountry}
             onChange={(e) => setSelectedCountry(e.target.value ? Number(e.target.value) : '')}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myfav-primary"
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myhigh5-primary"
             disabled={isLoading || isLoadingData}
           >
             <option value="">Sélectionner un pays</option>
@@ -186,7 +186,7 @@ export function LocationSelector({ onLocationSelected, isLoading }: LocationSele
           <select
             value={selectedCity}
             onChange={(e) => setSelectedCity(e.target.value ? Number(e.target.value) : '')}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myfav-primary"
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myhigh5-primary"
             disabled={isLoading || isLoadingData}
           >
             <option value="">Sélectionner une ville</option>

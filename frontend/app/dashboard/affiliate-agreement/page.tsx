@@ -110,7 +110,7 @@ export default function AffiliateAgreementPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-myfav-primary flex items-center justify-center shadow-lg shadow-myfav-primary/25">
+          <div className="w-10 h-10 rounded-xl bg-myhigh5-primary flex items-center justify-center shadow-lg shadow-myhigh5-primary/25">
             <FileText className="w-5 h-5 text-white" />
           </div>
           <div>
@@ -265,7 +265,7 @@ export default function AffiliateAgreementPage() {
                 id="agreement-checkbox"
                 checked={isChecked}
                 onChange={(e) => setIsChecked(e.target.checked)}
-                className="mt-1 w-5 h-5 rounded border-gray-300 text-myfav-primary focus:ring-myfav-primary focus:ring-2"
+                className="mt-1 w-5 h-5 rounded border-gray-300 text-myhigh5-primary focus:ring-myhigh5-primary focus:ring-2"
               />
               <label htmlFor="agreement-checkbox" className="text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
                 I have read and agree to the terms and conditions of the Affiliate Agreement
@@ -275,7 +275,7 @@ export default function AffiliateAgreementPage() {
             <Button
               onClick={acceptAgreement}
               disabled={!isChecked || isSubmitting}
-              className="w-full sm:w-auto bg-myfav-primary hover:bg-myfav-primary/90 text-white rounded-xl shadow-lg shadow-myfav-primary/25 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full sm:w-auto bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white rounded-xl shadow-lg shadow-myhigh5-primary/25 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmitting ? (
                 <>

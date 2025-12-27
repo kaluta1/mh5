@@ -244,7 +244,7 @@ export function TransactionTable({
                      transaction.external_payment_id && (
                       <Button
                         size="sm"
-                        className="bg-myfav-primary hover:bg-myfav-primary/90 text-white rounded-lg"
+                        className="bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white rounded-lg"
                         onClick={() => handlePayClick(transaction)}
                       >
                         <CreditCard className="w-4 h-4 mr-1" />

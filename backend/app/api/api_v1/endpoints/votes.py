@@ -20,7 +20,7 @@ def cast_vote(
     current_user: Any = Depends(get_current_active_user),
 ) -> Any:
     """
-    Voter pour une participation à un concours avec le système MyFav.
+    Voter pour une participation à un concours avec le système MyHigh5.
     Chaque utilisateur peut voter pour 5 participants max avec des scores de 5 à 1.
     """
     # Vérifier si le concours existe et est en phase de vote

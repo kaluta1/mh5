@@ -125,7 +125,7 @@ export function getMetadataTranslations(lang: Language = 'fr'): MetadataTranslat
  */
 export function detectLanguageFromHeaders(headers: Headers): Language {
   const acceptLanguage = headers.get('accept-language') || ''
-  const cookieLanguage = headers.get('cookie')?.match(/myfav-language=([^;]+)/)?.[1]
+  const cookieLanguage = headers.get('cookie')?.match(/myhigh5-language=([^;]+)/)?.[1]
   
   // Priorité: cookie > accept-language > défaut (fr)
   if (cookieLanguage && ['en', 'fr', 'es', 'de'].includes(cookieLanguage)) {

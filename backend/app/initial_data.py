@@ -61,14 +61,14 @@ def create_default_roles(db: Session) -> None:
 def create_admin_user(db: Session) -> None:
     """Crée un utilisateur administrateur par défaut"""
     try:
-        admin_email = "admin@myfav.com"
+        admin_email = "infos@myhigh5.com"
         admin = crud_user.get_by_email(db, email=admin_email)
         
         if not admin:
             user_in = UserCreate(
                 email=admin_email,
                 password="admin123",  # À changer en production !
-                full_name="Admin MyFav",
+                full_name="Admin MyHigh5",
                 username="admin",
                 is_active=True,
                 is_verified=True,

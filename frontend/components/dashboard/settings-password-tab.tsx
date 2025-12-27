@@ -185,7 +185,7 @@ export function SettingsPasswordTab({ user }: SettingsPasswordTabProps) {
             className={`w-full pl-10 pr-12 py-3 rounded-xl border bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 transition-all ${
               errors.currentPassword
                 ? 'border-red-500 dark:border-red-500 focus:ring-red-500 focus:border-red-500 bg-red-50 dark:bg-red-900/10'
-                : 'border-gray-300 dark:border-gray-600 focus:ring-myfav-primary focus:border-transparent'
+                : 'border-gray-300 dark:border-gray-600 focus:ring-myhigh5-primary focus:border-transparent'
             }`}
             placeholder="••••••••"
           />
@@ -218,7 +218,7 @@ export function SettingsPasswordTab({ user }: SettingsPasswordTabProps) {
             className={`w-full pl-10 pr-12 py-3 rounded-xl border bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 transition-all ${
               errors.newPassword || (newPassword && !isPasswordValid())
                 ? 'border-red-500 dark:border-red-500 focus:ring-red-500 focus:border-red-500 bg-red-50 dark:bg-red-900/10'
-                : 'border-gray-300 dark:border-gray-600 focus:ring-myfav-primary focus:border-transparent'
+                : 'border-gray-300 dark:border-gray-600 focus:ring-myhigh5-primary focus:border-transparent'
             }`}
             placeholder="••••••••"
           />
@@ -294,7 +294,7 @@ export function SettingsPasswordTab({ user }: SettingsPasswordTabProps) {
                 ? 'border-red-500 dark:border-red-500 focus:ring-red-500 focus:border-red-500 bg-red-50 dark:bg-red-900/10'
                 : confirmPassword.length > 0 && newPassword === confirmPassword
                 ? 'border-green-500 dark:border-green-500 focus:ring-green-500 focus:border-green-500'
-                : 'border-gray-300 dark:border-gray-600 focus:ring-myfav-primary focus:border-transparent'
+                : 'border-gray-300 dark:border-gray-600 focus:ring-myhigh5-primary focus:border-transparent'
             }`}
             placeholder="••••••••"
           />
@@ -323,7 +323,7 @@ export function SettingsPasswordTab({ user }: SettingsPasswordTabProps) {
         <Button
           type="submit"
           disabled={isLoading}
-          className="bg-myfav-primary hover:bg-myfav-primary/90 text-white px-8 py-3 rounded-xl font-medium shadow-lg shadow-myfav-primary/25 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white px-8 py-3 rounded-xl font-medium shadow-lg shadow-myhigh5-primary/25 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isLoading ? (
             <span className="flex items-center gap-2">

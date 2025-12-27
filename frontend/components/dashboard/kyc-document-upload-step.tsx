@@ -65,7 +65,7 @@ export function KYCDocumentUploadStep({ data, onChange }: KYCDocumentUploadStepP
     <div className={`border-2 border-dashed rounded-lg p-6 text-center transition-all ${
       value
         ? 'border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/20'
-        : 'border-gray-300 dark:border-gray-600 hover:border-myfav-primary dark:hover:border-myfav-primary'
+        : 'border-gray-300 dark:border-gray-600 hover:border-myhigh5-primary dark:hover:border-myhigh5-primary'
     }`}>
       {value ? (
         <div className="flex flex-col items-center gap-3">
@@ -123,7 +123,7 @@ export function KYCDocumentUploadStep({ data, onChange }: KYCDocumentUploadStepP
             endpoint="kycDocumentUploader"
             onClientUploadComplete={(res: any) => handleUploadComplete(fieldName, res)}
             onUploadError={(error: Error) => handleUploadError(fieldName, error)}
-            className="ut-button:bg-myfav-primary ut-button:hover:bg-myfav-primary-dark ut-button:px-4 ut-button:py-2 ut-button:text-sm"
+            className="ut-button:bg-myhigh5-primary ut-button:hover:bg-myhigh5-primary-dark ut-button:px-4 ut-button:py-2 ut-button:text-sm"
             content={{
               button({ ready }) {
                 if (ready) return <div>Choose Image</div>

@@ -61,7 +61,7 @@ export function DashboardNavbar({ onMenuToggle, onSidebarToggle }: DashboardNavb
             onClick={() => router.push('/dashboard/search')}
             className="flex-1 group flex items-center gap-3 px-4 py-2.5 bg-gray-100/80 dark:bg-gray-800/80 hover:bg-white dark:hover:bg-gray-700 border border-transparent hover:border-gray-200 dark:hover:border-gray-600 rounded-xl transition-all duration-200 hover:shadow-lg"
           >
-            <Search className="h-4 w-4 text-gray-400 group-hover:text-myfav-primary transition-colors" />
+            <Search className="h-4 w-4 text-gray-400 group-hover:text-myhigh5-primary transition-colors" />
             <span className="flex-1 text-left text-sm text-gray-500 dark:text-gray-400">
               {t('dashboard.search.placeholder') || 'Search...'}
             </span>
@@ -79,7 +79,7 @@ export function DashboardNavbar({ onMenuToggle, onSidebarToggle }: DashboardNavb
               "h-10 px-3 rounded-xl transition-all",
               "bg-gray-100/80 dark:bg-gray-800/80 hover:bg-white dark:hover:bg-gray-700",
               "border border-transparent hover:border-gray-200 dark:hover:border-gray-600",
-              pathname === '/dashboard/feed' && "bg-myfav-primary/10 border-myfav-primary/20 text-myfav-primary"
+              pathname === '/dashboard/feed' && "bg-myhigh5-primary/10 border-myhigh5-primary/20 text-myhigh5-primary"
             )}
             title={t('dashboard.nav.feed') || 'Feed'}
           >

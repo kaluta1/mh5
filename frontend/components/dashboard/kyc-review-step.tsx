@@ -28,7 +28,7 @@ export function KYCReviewStep({ data }: KYCReviewStepProps) {
     <div className="space-y-4">
       <div>
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-          <FileCheck className="w-6 h-6 text-myfav-primary" />
+          <FileCheck className="w-6 h-6 text-myhigh5-primary" />
           {t('kyc.review_submit')}
         </h2>
       </div>

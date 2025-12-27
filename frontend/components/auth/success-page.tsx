@@ -29,7 +29,7 @@ export function SuccessPage({
       </p>
       {isRedirecting && (
         <div className="flex items-center space-x-2">
-          <Loader2 className="w-5 h-5 animate-spin text-myfav-primary" />
+          <Loader2 className="w-5 h-5 animate-spin text-myhigh5-primary" />
           <span className="text-sm text-gray-600 dark:text-gray-400">
             {t('common.please_wait')}
           </span>

@@ -20,8 +20,8 @@ export function StatsCard({
   title,
   value,
   subtitle,
-  iconBgColor = 'bg-myfav-blue-100 dark:bg-myfav-blue-900/50',
-  iconColor = 'text-myfav-primary dark:text-myfav-blue-400',
+  iconBgColor = 'bg-myhigh5-blue-100 dark:bg-myhigh5-blue-900/50',
+  iconColor = 'text-myhigh5-primary dark:text-myhigh5-blue-400',
   trend
 }: StatsCardProps) {
   return (

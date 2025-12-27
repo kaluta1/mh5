@@ -68,14 +68,14 @@ export function Footer() {
   return (
     <footer className="relative bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950 border-t border-gray-200 dark:border-gray-800">
       {/* Decorative top border */}
-      <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-myfav-primary via-myfav-secondary to-myfav-primary" />
+      <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-myhigh5-primary via-myhigh5-secondary to-myhigh5-primary" />
       
       <div className="max-w-7xl mx-auto px-4 md:px-6">
         {/* Newsletter Section */}
         <div className="py-12 border-b border-gray-200 dark:border-gray-800">
           <div className="grid md:grid-cols-2 gap-8 items-center">
             <div>
-              <div className="inline-flex items-center gap-2 bg-myfav-primary/10 text-myfav-primary rounded-full px-3 py-1 text-sm font-medium mb-4">
+              <div className="inline-flex items-center gap-2 bg-myhigh5-primary/10 text-myhigh5-primary rounded-full px-3 py-1 text-sm font-medium mb-4">
                 <Mail className="w-4 h-4" />
                 Newsletter
               </div>
@@ -104,7 +104,7 @@ export function Footer() {
                   />
                   <Button 
                     type="submit"
-                    className="h-12 px-6 rounded-xl bg-gradient-to-r from-myfav-primary to-myfav-secondary hover:shadow-lg transition-all"
+                    className="h-12 px-6 rounded-xl bg-gradient-to-r from-myhigh5-primary to-myhigh5-secondary hover:shadow-lg transition-all"
                   >
                     <Send className="w-4 h-4 mr-2" />
                     {t('footer.newsletter.subscribe')}
@@ -123,10 +123,10 @@ export function Footer() {
           {/* Brand Section */}
           <div className="col-span-2 md:col-span-4 lg:col-span-2 space-y-6">
             <Link href="/" className="flex items-center space-x-2.5 group">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-myfav-primary to-myfav-secondary shadow-lg group-hover:shadow-xl transition-all">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary shadow-lg group-hover:shadow-xl transition-all">
                 <Heart className="w-5 h-5 text-white fill-current" />
               </div>
-              <span className="text-2xl font-black bg-gradient-to-r from-myfav-primary to-myfav-secondary bg-clip-text text-transparent">
+              <span className="text-2xl font-black bg-gradient-to-r from-myhigh5-primary to-myhigh5-secondary bg-clip-text text-transparent">
                 MyHigh5
               </span>
             </Link>
@@ -135,23 +135,23 @@ export function Footer() {
             </p>
             <div className="space-y-3">
               <div className="flex items-center gap-3 text-gray-600 dark:text-gray-400">
-                <div className="w-8 h-8 rounded-lg bg-myfav-primary/10 flex items-center justify-center">
-                  <Globe className="w-4 h-4 text-myfav-primary" />
+                <div className="w-8 h-8 rounded-lg bg-myhigh5-primary/10 flex items-center justify-center">
+                  <Globe className="w-4 h-4 text-myhigh5-primary" />
                 </div>
                 <span className="text-sm">{t('footer.brand.countries')}</span>
               </div>
               <div className="flex items-center gap-3 text-gray-600 dark:text-gray-400">
-                <div className="w-8 h-8 rounded-lg bg-myfav-primary/10 flex items-center justify-center">
-                  <Phone className="w-4 h-4 text-myfav-primary" />
+                <div className="w-8 h-8 rounded-lg bg-myhigh5-primary/10 flex items-center justify-center">
+                  <Phone className="w-4 h-4 text-myhigh5-primary" />
                 </div>
                 <span className="text-sm">{t('footer.brand.support')}</span>
               </div>
               <a 
-                href="mailto:support@myhigh5.com" 
-                className="flex items-center gap-3 text-gray-600 dark:text-gray-400 hover:text-myfav-primary transition-colors"
+                href="mailto:infos@myhigh5.com" 
+                className="flex items-center gap-3 text-gray-600 dark:text-gray-400 hover:text-myhigh5-primary transition-colors"
               >
-                <div className="w-8 h-8 rounded-lg bg-myfav-primary/10 flex items-center justify-center">
-                  <Mail className="w-4 h-4 text-myfav-primary" />
+                <div className="w-8 h-8 rounded-lg bg-myhigh5-primary/10 flex items-center justify-center">
+                  <Mail className="w-4 h-4 text-myhigh5-primary" />
                 </div>
                 <span className="text-sm">{t('footer.brand.email')}</span>
               </a>
@@ -168,7 +168,7 @@ export function Footer() {
                 <li key={link.name}>
                   <Link 
                     href={link.href}
-                    className="group flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-myfav-primary dark:hover:text-myfav-cyan-400 transition-colors"
+                    className="group flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-myhigh5-primary dark:hover:text-myhigh5-cyan-400 transition-colors"
                   >
                     <ArrowRight className="w-3 h-3 opacity-0 -ml-5 group-hover:opacity-100 group-hover:ml-0 transition-all" />
                     <span className="text-sm">{link.name}</span>
@@ -188,7 +188,7 @@ export function Footer() {
                 <li key={link.name}>
                   <Link 
                     href={link.href}
-                    className="group flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-myfav-primary dark:hover:text-myfav-cyan-400 transition-colors"
+                    className="group flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-myhigh5-primary dark:hover:text-myhigh5-cyan-400 transition-colors"
                   >
                     <ArrowRight className="w-3 h-3 opacity-0 -ml-5 group-hover:opacity-100 group-hover:ml-0 transition-all" />
                     <span className="text-sm">{link.name}</span>
@@ -208,7 +208,7 @@ export function Footer() {
                 <li key={link.name}>
                   <Link 
                     href={link.href}
-                    className="group flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-myfav-primary dark:hover:text-myfav-cyan-400 transition-colors"
+                    className="group flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-myhigh5-primary dark:hover:text-myhigh5-cyan-400 transition-colors"
                   >
                     <ArrowRight className="w-3 h-3 opacity-0 -ml-5 group-hover:opacity-100 group-hover:ml-0 transition-all" />
                     <span className="text-sm">{link.name}</span>

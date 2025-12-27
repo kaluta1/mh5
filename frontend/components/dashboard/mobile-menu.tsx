@@ -104,7 +104,7 @@ export function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
           {/* Header */}
           <div className="flex items-center justify-between h-16 px-4 border-b border-gray-100 dark:border-gray-800">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-myfav-primary to-myfav-secondary flex items-center justify-center shadow-lg shadow-myfav-primary/25">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary flex items-center justify-center shadow-lg shadow-myhigh5-primary/25">
                 <Heart className="w-5 h-5 text-white fill-white" />
               </div>
               <span className="text-lg font-bold text-gray-900 dark:text-white">
@@ -142,7 +142,7 @@ export function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
                           className={cn(
                             "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
                             isActive
-                              ? "bg-myfav-primary text-white shadow-lg shadow-myfav-primary/30"
+                              ? "bg-myhigh5-primary text-white shadow-lg shadow-myhigh5-primary/30"
                               : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800/50 hover:text-gray-900 dark:hover:text-white"
                           )}
                         >
@@ -173,7 +173,7 @@ export function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
               className={cn(
                 "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
                 pathname === '/dashboard/settings'
-                  ? "bg-myfav-primary text-white shadow-lg shadow-myfav-primary/30"
+                  ? "bg-myhigh5-primary text-white shadow-lg shadow-myhigh5-primary/30"
                   : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800/50 hover:text-gray-900 dark:hover:text-white"
               )}
             >

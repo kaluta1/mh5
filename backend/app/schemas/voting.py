@@ -8,7 +8,7 @@ class VoteBase(BaseModel):
     voter_id: int
     contestant_id: int
     stage_id: int
-    points: int  # 1-5 points selon le système MyFav
+    points: int  # 1-5 points selon le système MyHigh5
     vote_type: str = "regular"  # regular, premium, sponsor
 
 

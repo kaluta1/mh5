@@ -287,7 +287,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
           className={`w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 ${
             (!title.trim() || (title.length > 0 && title.length < 10))
               ? 'border-red-500 focus:ring-red-500' 
-              : 'border-gray-300 dark:border-gray-600 focus:ring-myfav-primary'
+              : 'border-gray-300 dark:border-gray-600 focus:ring-myhigh5-primary'
           }`}
           disabled={isSubmitting}
         />
@@ -328,7 +328,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
           className={`w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 resize-none ${
             (!description.trim() || (description.length > 0 && description.length < 100))
               ? 'border-red-500 focus:ring-red-500' 
-              : 'border-gray-300 dark:border-gray-600 focus:ring-myfav-primary'
+              : 'border-gray-300 dark:border-gray-600 focus:ring-myhigh5-primary'
           }`}
           disabled={isSubmitting}
         />
@@ -697,7 +697,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
             (requiresVideo && !videoUrl) ||
             isSubmitting
           }
-          className="flex-1 bg-myfav-primary hover:bg-myfav-primary-dark text-white font-bold"
+          className="flex-1 bg-myhigh5-primary hover:bg-myhigh5-primary-dark text-white font-bold"
         >
           {isSubmitting 
             ? t('common.submitting') 

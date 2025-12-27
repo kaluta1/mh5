@@ -73,7 +73,7 @@ export function ContestDetailsHeader({
                   onClick={onInfoClick}
                   variant="outline"
                   size="icon"
-                  className="rounded-full border-myfav-primary text-myfav-primary hover:bg-myfav-blue-50 dark:hover:bg-myfav-blue-900/20 cursor-help"
+                  className="rounded-full border-myhigh5-primary text-myhigh5-primary hover:bg-myhigh5-blue-50 dark:hover:bg-myhigh5-blue-900/20 cursor-help"
                 >
                   <HelpCircle className="w-5 h-5" />
                 </Button>
@@ -173,7 +173,7 @@ export function ContestDetailsHeader({
               placeholder={t('dashboard.contests.search_contestant') || 'Rechercher un participant...'}
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-300 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800/50 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myfav-primary/50 focus:border-myfav-primary/50 transition-all shadow-sm hover:shadow-md"
+              className="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-300 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800/50 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myhigh5-primary/50 focus:border-myhigh5-primary/50 transition-all shadow-sm hover:shadow-md"
             />
           </div>
         </div>

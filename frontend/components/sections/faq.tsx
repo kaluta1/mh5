@@ -48,7 +48,7 @@ export function FAQ() {
       <div className="container px-4 md:px-6 relative z-10">
         {/* Section Header */}
         <div className="text-center max-w-3xl mx-auto mb-16 md:mb-20">
-          <div className="inline-flex items-center gap-2 bg-myfav-primary/10 text-myfav-primary rounded-full px-4 py-2 text-sm font-semibold mb-6">
+          <div className="inline-flex items-center gap-2 bg-myhigh5-primary/10 text-myhigh5-primary rounded-full px-4 py-2 text-sm font-semibold mb-6">
             <HelpCircle className="w-4 h-4" />
             <span>{t('landing.faq.badge') || 'Questions fréquentes'}</span>
           </div>
@@ -75,7 +75,7 @@ export function FAQ() {
                   {faq.question}
                 </span>
                 <ChevronDown
-                  className={`w-6 h-6 text-myfav-primary flex-shrink-0 transition-transform duration-300 ${
+                  className={`w-6 h-6 text-myhigh5-primary flex-shrink-0 transition-transform duration-300 ${
                     openIndex === index ? 'rotate-180' : ''
                   }`}
                 />

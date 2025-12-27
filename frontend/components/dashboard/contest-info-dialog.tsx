@@ -38,7 +38,7 @@ function DescriptionWithDialog({ description, maxLength = 200 }: { description: 
   return (
     <>
       <p 
-        className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed cursor-pointer hover:text-myfav-primary dark:hover:text-myfav-secondary transition-colors"
+        className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed cursor-pointer hover:text-myhigh5-primary dark:hover:text-myhigh5-secondary transition-colors"
         onClick={() => setShowDialog(true)}
       >
         {truncatedDescription}

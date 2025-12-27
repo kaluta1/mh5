@@ -34,7 +34,7 @@ const config: Config = {
           DEFAULT: "#FFFF79",
           foreground: "#000000",
         },
-        myfav: {
+        myhigh5: {
           primary: "#1e40af",
           secondary: "#0891b2",
           accent: "#FFFF79",
@@ -79,7 +79,7 @@ const config: Config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
-        // Thèmes personnalisés MyFav
+        // Thèmes personnalisés MyHigh5
         cloud: {
           50: '#f0f9ff',
           100: '#e0f2fe',

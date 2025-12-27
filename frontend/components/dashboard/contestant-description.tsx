@@ -47,7 +47,7 @@ export function ContestantDescription({ description, maxLength = 200 }: Contesta
         {shouldTruncate && (
           <Button
             variant="link"
-            className="ml-1 p-0 h-auto text-myfav-primary dark:text-myfav-secondary underline"
+            className="ml-1 p-0 h-auto text-myhigh5-primary dark:text-myhigh5-secondary underline"
             onClick={() => setIsOpen(true)}
           >
             {t('common.view_more') || (language === 'fr' ? 'Voir plus' : language === 'es' ? 'Ver más' : language === 'de' ? 'Mehr anzeigen' : 'View more')}

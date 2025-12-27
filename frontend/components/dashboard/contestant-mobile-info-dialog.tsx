@@ -36,8 +36,8 @@ export function ContestantMobileInfoDialog({
       >
         <div className="space-y-4">
           {/* Contest Info */}
-          <div className="bg-gradient-to-r from-myfav-primary/10 to-myfav-primary-dark/10 rounded-lg p-3 border border-myfav-primary/20">
-            <h3 className="text-xs font-bold text-myfav-primary uppercase mb-2 tracking-wide">
+          <div className="bg-gradient-to-r from-myhigh5-primary/10 to-myhigh5-primary-dark/10 rounded-lg p-3 border border-myhigh5-primary/20">
+            <h3 className="text-xs font-bold text-myhigh5-primary uppercase mb-2 tracking-wide">
               {t('contestant_detail.contest_info')}
             </h3>
             <div className="space-y-2">

@@ -25,7 +25,7 @@ export function QuickActionCard({
 }: QuickActionCardProps) {
   return (
     <Link href={href} className="block h-full">
-      <Card className="h-full group relative overflow-hidden border-2 border-transparent hover:border-myfav-primary/30 dark:hover:border-myfav-blue-400/30 transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900">
+      <Card className="h-full group relative overflow-hidden border-2 border-transparent hover:border-myhigh5-primary/30 dark:hover:border-myhigh5-blue-400/30 transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900">
         <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${gradientFrom} ${gradientTo}`} />
         <CardContent className="p-6">
           <div className="flex items-start gap-4">
@@ -34,7 +34,7 @@ export function QuickActionCard({
               <div className="absolute inset-0 rounded-2xl bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
             </div>
             <div className="flex-1 min-w-0">
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2 group-hover:text-myfav-primary dark:group-hover:text-myfav-blue-400 transition-colors">
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2 group-hover:text-myhigh5-primary dark:group-hover:text-myhigh5-blue-400 transition-colors">
                 {title}
               </h3>
               <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed line-clamp-2">

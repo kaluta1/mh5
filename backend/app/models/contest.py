@@ -290,7 +290,7 @@ class ContestVote(Base):
     
     entry_id: Mapped[int] = mapped_column(Integer, ForeignKey("contest_entry.id"), nullable=False)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
-    score: Mapped[int] = mapped_column(Integer, nullable=False)  # 1-5 pour MyFav
+    score: Mapped[int] = mapped_column(Integer, nullable=False)  # 1-5 pour MyHigh5
     
     # Relations
     entry: Mapped["ContestEntry"] = relationship("ContestEntry", back_populates="votes")

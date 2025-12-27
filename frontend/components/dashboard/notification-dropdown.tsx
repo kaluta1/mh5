@@ -273,7 +273,7 @@ export function NotificationDropdown({ className }: NotificationDropdownProps) {
           <Button
             variant="ghost"
             onClick={handleViewAll}
-            className="w-full justify-center gap-2 text-myfav-primary hover:text-myfav-primary hover:bg-myfav-primary/10"
+            className="w-full justify-center gap-2 text-myhigh5-primary hover:text-myhigh5-primary hover:bg-myhigh5-primary/10"
           >
             <span className="text-sm font-medium">
               {t('notifications.view_all') || 'Voir toutes les notifications'}

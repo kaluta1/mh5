@@ -2402,7 +2402,7 @@ export const translations: Record<Language, TranslationKeys> = {
       referral_code: "Code",
       login: {
         title: "Connexion",
-        subtitle: "Connectez-vous à votre compte MyFav",
+        subtitle: "Connectez-vous à votre compte MyHigh5",
         email_placeholder: "Email ou nom d'utilisateur",
         password_placeholder: "Votre mot de passe",
         forgot_password: "Mot de passe oublié ?",
@@ -2417,7 +2417,7 @@ export const translations: Record<Language, TranslationKeys> = {
       },
       register: {
         title: "Inscription",
-        subtitle: "Créez votre compte MyFav gratuitement",
+        subtitle: "Créez votre compte MyHigh5 gratuitement",
         email_placeholder: "Votre adresse email",
         username_placeholder: "Nom d'utilisateur",
         username_hint: "Seules les lettres, chiffres et underscores sont autorisés",
@@ -2773,7 +2773,7 @@ export const translations: Record<Language, TranslationKeys> = {
       items: {
         marie: {
           name: "Marie Dubois",
-          text: "MyFav m'a permis de découvrir mon talent et de rencontrer une communauté incroyable. J'ai gagné 3 concours cette année !",
+          text: "MyHigh5 m'a permis de découvrir mon talent et de rencontrer une communauté incroyable. J'ai gagné 3 concours cette année !",
           role: "Gagnante Concours Beauté",
           rating: 5,
           location: "Paris, France"
@@ -2788,13 +2788,13 @@ export const translations: Record<Language, TranslationKeys> = {
         sophie: {
           name: "Sophie Laurent",
           text: "Grâce au programme d'affiliation, j'ai créé une source de revenus supplémentaire tout en m'amusant.",
-          role: "Ambassadrice MyFav",
+          role: "Ambassadrice MyHigh5",
           rating: 5,
           location: "Marseille, France"
         },
         sarah_m: {
           name: "Sarah Martin",
-          text: "Une expérience incroyable ! J'ai découvert ma passion pour la photographie grâce aux concours MyFav.",
+          text: "Une expérience incroyable ! J'ai découvert ma passion pour la photographie grâce aux concours MyHigh5.",
           role: "Photographe Amateur",
           rating: 5,
           location: "Toulouse, France"
@@ -2808,7 +2808,7 @@ export const translations: Record<Language, TranslationKeys> = {
         },
         emma_l: {
           name: "Emma Laurent",
-          text: "MyFav m'a donné la confiance de partager mes créations. Maintenant, j'ai ma propre boutique en ligne !",
+          text: "MyHigh5 m'a donné la confiance de partager mes créations. Maintenant, j'ai ma propre boutique en ligne !",
           role: "Artiste Créatrice",
           rating: 5,
           location: "Bruxelles, Belgique"
@@ -2917,7 +2917,7 @@ export const translations: Record<Language, TranslationKeys> = {
       brand: {
         countries: "Disponible dans 200+ pays",
         support: "Support 24/7",
-        email: "contact@myhigh5.com"
+        email: "infos@myhigh5.com"
       },
       quick_links: {
         title: "Liens Rapides",
@@ -4489,7 +4489,7 @@ export const translations: Record<Language, TranslationKeys> = {
       referral_code: "Code",
       login: {
         title: "Login",
-        subtitle: "Sign in to your MyFav account",
+        subtitle: "Sign in to your MyHigh5 account",
         email_placeholder: "Email or username",
         password_placeholder: "Your password",
         forgot_password: "Forgot password?",
@@ -4504,7 +4504,7 @@ export const translations: Record<Language, TranslationKeys> = {
       },
       register: {
         title: "Sign Up",
-        subtitle: "Create your free MyFav account",
+        subtitle: "Create your free MyHigh5 account",
         email_placeholder: "Your email address",
         username_placeholder: "Username",
         username_hint: "Only letters, numbers, and underscores are allowed",
@@ -4911,7 +4911,7 @@ export const translations: Record<Language, TranslationKeys> = {
       items: {
         marie: {
           name: "Marie Dubois",
-          text: "MyFav allowed me to discover my talent and meet an incredible community. I won 3 contests this year!",
+          text: "MyHigh5 allowed me to discover my talent and meet an incredible community. I won 3 contests this year!",
           role: "Beauty Contest Winner",
           rating: 5,
           location: "Paris, France"
@@ -4926,13 +4926,13 @@ export const translations: Record<Language, TranslationKeys> = {
         sophie: {
           name: "Sophie Laurent",
           text: "Thanks to the affiliate program, I created an additional source of income while having fun.",
-          role: "MyFav Ambassador",
+          role: "MyHigh5 Ambassador",
           rating: 5,
           location: "Marseille, France"
         },
         sarah_m: {
           name: "Sarah Martin",
-          text: "An incredible experience! I discovered my passion for photography through MyFav contests.",
+          text: "An incredible experience! I discovered my passion for photography through MyHigh5 contests.",
           role: "Amateur Photographer",
           rating: 5,
           location: "London, UK"
@@ -4946,7 +4946,7 @@ export const translations: Record<Language, TranslationKeys> = {
         },
         emma_l: {
           name: "Emma Laurent",
-          text: "MyFav gave me the confidence to share my creations. Now I have my own online store!",
+          text: "MyHigh5 gave me the confidence to share my creations. Now I have my own online store!",
           role: "Creative Artist",
           rating: 5,
           location: "Brussels, Belgium"
@@ -5055,7 +5055,7 @@ export const translations: Record<Language, TranslationKeys> = {
       brand: {
         countries: "Available in 200+ countries",
         support: "24/7 Support",
-        email: "contact@myhigh5.com"
+        email: "infos@myhigh5.com"
       },
       quick_links: {
         title: "Quick Links",
@@ -6642,7 +6642,7 @@ export const translations: Record<Language, TranslationKeys> = {
       referral_code: "Código",
       login: {
         title: "Iniciar Sesión",
-        subtitle: "Accede a tu cuenta MyFav",
+        subtitle: "Accede a tu cuenta MyHigh5",
         email_placeholder: "Correo o nombre de usuario",
         password_placeholder: "Tu contraseña",
         forgot_password: "¿Olvidaste tu contraseña?",
@@ -6657,7 +6657,7 @@ export const translations: Record<Language, TranslationKeys> = {
       },
       register: {
         title: "Registrarse",
-        subtitle: "Crea tu cuenta MyFav gratis",
+        subtitle: "Crea tu cuenta MyHigh5 gratis",
         email_placeholder: "Tu dirección de correo",
         username_placeholder: "Nombre de usuario",
         username_hint: "Solo se permiten letras, números y guiones bajos",
@@ -6968,7 +6968,7 @@ export const translations: Record<Language, TranslationKeys> = {
       items: {
         marie: {
           name: "Marie Dubois",
-          text: "MyFav me permitió descubrir mi talento y conocer una comunidad increíble. ¡Gané 3 concursos este año!",
+          text: "MyHigh5 me permitió descubrir mi talento y conocer una comunidad increíble. ¡Gané 3 concursos este año!",
           role: "Ganadora Concurso Belleza",
           rating: 5,
           location: "París, Francia"
@@ -6983,13 +6983,13 @@ export const translations: Record<Language, TranslationKeys> = {
         sophie: {
           name: "Sophie Laurent",
           text: "Gracias al programa de afiliados, creé una fuente adicional de ingresos mientras me divertía.",
-          role: "Embajadora MyFav",
+          role: "Embajadora MyHigh5",
           rating: 5,
           location: "Marsella, Francia"
         },
         sarah_m: {
           name: "Sarah Martín",
-          text: "¡Una experiencia increíble! Descubrí mi pasión por la fotografía a través de los concursos de MyFav.",
+          text: "¡Una experiencia increíble! Descubrí mi pasión por la fotografía a través de los concursos de MyHigh5.",
           role: "Fotógrafa Amateur",
           rating: 5,
           location: "Barcelona, España"
@@ -7003,7 +7003,7 @@ export const translations: Record<Language, TranslationKeys> = {
         },
         emma_l: {
           name: "Emma Laurent",
-          text: "MyFav me dio la confianza para compartir mis creaciones. ¡Ahora tengo mi propia tienda en línea!",
+          text: "MyHigh5 me dio la confianza para compartir mis creaciones. ¡Ahora tengo mi propia tienda en línea!",
           role: "Artista Creativa",
           rating: 5,
           location: "Bruselas, Bélgica"
@@ -7112,7 +7112,7 @@ export const translations: Record<Language, TranslationKeys> = {
       brand: {
         countries: "Disponible en 200+ países",
         support: "Soporte 24/7",
-        email: "contact@myhigh5.com"
+        email: "infos@myhigh5.com"
       },
       quick_links: {
         title: "Enlaces Rápidos",
@@ -8605,7 +8605,7 @@ export const translations: Record<Language, TranslationKeys> = {
       referral_code: "Code",
       login: {
         title: "Anmelden",
-        subtitle: "Melden Sie sich bei Ihrem MyFav-Konto an",
+        subtitle: "Melden Sie sich bei Ihrem MyHigh5-Konto an",
         email_placeholder: "E-Mail oder Benutzername",
         password_placeholder: "Ihr Passwort",
         forgot_password: "Passwort vergessen?",
@@ -8620,7 +8620,7 @@ export const translations: Record<Language, TranslationKeys> = {
       },
       register: {
         title: "Registrieren",
-        subtitle: "Erstellen Sie Ihr kostenloses MyFav-Konto",
+        subtitle: "Erstellen Sie Ihr kostenloses MyHigh5-Konto",
         email_placeholder: "Ihre E-Mail-Adresse",
         username_placeholder: "Benutzername",
         username_hint: "Nur Buchstaben, Zahlen und Unterstriche sind erlaubt",
@@ -8931,7 +8931,7 @@ export const translations: Record<Language, TranslationKeys> = {
       items: {
         marie: {
           name: "Marie Dubois",
-          text: "MyFav ermöglichte es mir, mein Talent zu entdecken und eine unglaubliche Gemeinschaft kennenzulernen. Ich habe dieses Jahr 3 Wettbewerbe gewonnen!",
+          text: "MyHigh5 ermöglichte es mir, mein Talent zu entdecken und eine unglaubliche Gemeinschaft kennenzulernen. Ich habe dieses Jahr 3 Wettbewerbe gewonnen!",
           role: "Schönheitswettbewerb Gewinnerin",
           rating: 5,
           location: "Paris, Frankreich"
@@ -8946,13 +8946,13 @@ export const translations: Record<Language, TranslationKeys> = {
         sophie: {
           name: "Sophie Laurent",
           text: "Dank des Partnerprogramms habe ich eine zusätzliche Einkommensquelle geschaffen, während ich Spaß hatte.",
-          role: "MyFav Botschafterin",
+          role: "MyHigh5 Botschafterin",
           rating: 5,
           location: "Marseille, Frankreich"
         },
         sarah_m: {
           name: "Sarah Martin",
-          text: "Eine unglaubliche Erfahrung! Ich entdeckte meine Leidenschaft für Fotografie durch MyFav-Wettbewerbe.",
+          text: "Eine unglaubliche Erfahrung! Ich entdeckte meine Leidenschaft für Fotografie durch MyHigh5-Wettbewerbe.",
           role: "Amateur-Fotografin",
           rating: 5,
           location: "Berlin, Deutschland"
@@ -8966,7 +8966,7 @@ export const translations: Record<Language, TranslationKeys> = {
         },
         emma_l: {
           name: "Emma Laurent",
-          text: "MyFav gab mir das Vertrauen, meine Kreationen zu teilen. Jetzt habe ich meinen eigenen Online-Shop!",
+          text: "MyHigh5 gab mir das Vertrauen, meine Kreationen zu teilen. Jetzt habe ich meinen eigenen Online-Shop!",
           role: "Kreative Künstlerin",
           rating: 5,
           location: "Brüssel, Belgien"
@@ -9075,7 +9075,7 @@ export const translations: Record<Language, TranslationKeys> = {
       brand: {
         countries: "In 200+ Ländern verfügbar",
         support: "24/7 Support",
-        email: "contact@myhigh5.com"
+        email: "infos@myhigh5.com"
       },
       quick_links: {
         title: "Schnelle Links",

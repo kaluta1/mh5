@@ -13,7 +13,7 @@ export function CTA() {
   return (
     <section className="relative py-20 md:py-24 lg:py-32 overflow-hidden">
       {/* Background gradient */}
-      <div className="absolute inset-0 bg-gradient-to-br from-myfav-primary via-myfav-secondary to-myfav-primary/80" />
+      <div className="absolute inset-0 bg-gradient-to-br from-myhigh5-primary via-myhigh5-secondary to-myhigh5-primary/80" />
       
       {/* Animated background elements */}
       <div className="absolute inset-0 overflow-hidden">
@@ -30,13 +30,13 @@ export function CTA() {
           {/* Main CTA Card */}
           <div className="relative bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl rounded-3xl p-8 md:p-12 lg:p-16 shadow-2xl border border-white/20">
             {/* Decorative elements */}
-            <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-myfav-primary/10 to-transparent rounded-bl-full" />
-            <div className="absolute bottom-0 left-0 w-64 h-64 bg-gradient-to-tr from-myfav-secondary/10 to-transparent rounded-tr-full" />
+            <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-myhigh5-primary/10 to-transparent rounded-bl-full" />
+            <div className="absolute bottom-0 left-0 w-64 h-64 bg-gradient-to-tr from-myhigh5-secondary/10 to-transparent rounded-tr-full" />
             
             <div className="relative z-10 text-center space-y-10">
               {/* Icon */}
               <div className="flex justify-center">
-                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-myfav-primary to-myfav-secondary flex items-center justify-center shadow-xl">
+                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary flex items-center justify-center shadow-xl">
                   <Sparkles className="w-10 h-10 text-white" />
                 </div>
               </div>
@@ -86,7 +86,7 @@ export function CTA() {
                   <Button 
                     size="lg" 
                   onClick={() => router.push('/register')}
-                  className="group text-lg px-10 py-7 bg-gradient-to-r from-myfav-primary to-myfav-secondary hover:from-myfav-primary-dark hover:to-myfav-secondary-dark text-white font-bold rounded-xl shadow-xl hover:shadow-2xl hover:shadow-myfav-primary/50 transition-all duration-300 hover:-translate-y-1 hover:scale-105"
+                  className="group text-lg px-10 py-7 bg-gradient-to-r from-myhigh5-primary to-myhigh5-secondary hover:from-myhigh5-primary-dark hover:to-myhigh5-secondary-dark text-white font-bold rounded-xl shadow-xl hover:shadow-2xl hover:shadow-myhigh5-primary/50 transition-all duration-300 hover:-translate-y-1 hover:scale-105"
                   >
                   <Sparkles className="mr-2 h-5 w-5" />
                     {t('cta.button')}
@@ -96,7 +96,7 @@ export function CTA() {
                     variant="outline" 
                     size="lg" 
                   onClick={() => router.push('/contests')}
-                  className="text-lg px-10 py-7 border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white font-semibold rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-myfav-primary dark:hover:border-myfav-primary transition-all duration-300 hover:-translate-y-1"
+                  className="text-lg px-10 py-7 border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white font-semibold rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-myhigh5-primary dark:hover:border-myhigh5-primary transition-all duration-300 hover:-translate-y-1"
                 >
                   <Trophy className="mr-2 h-5 w-5" />
                     {t('navigation.contests')}

@@ -99,7 +99,7 @@ export default function PostDetailPage() {
         {/* Post */}
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-myfav-primary" />
+            <Loader2 className="h-8 w-8 animate-spin text-myhigh5-primary" />
           </div>
         ) : post ? (
           <PostCard

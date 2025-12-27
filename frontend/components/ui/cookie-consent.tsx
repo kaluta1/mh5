@@ -113,14 +113,14 @@ export function CookieConsent() {
       <div className="max-w-4xl mx-auto">
         <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
           {/* Gradient top border */}
-          <div className="h-1 bg-gradient-to-r from-myfav-primary via-myfav-secondary to-myfav-primary" />
+          <div className="h-1 bg-gradient-to-r from-myhigh5-primary via-myhigh5-secondary to-myhigh5-primary" />
           
           <div className="p-6">
             <div className="flex flex-col md:flex-row gap-6 items-start md:items-center">
               {/* Icon & Content */}
               <div className="flex-1">
                 <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-myfav-primary to-myfav-secondary flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary flex items-center justify-center">
                     <Cookie className="w-5 h-5 text-white" />
                   </div>
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white">
@@ -131,7 +131,7 @@ export function CookieConsent() {
                   {c.description}{" "}
                   <Link 
                     href="/cookies" 
-                    className="text-myfav-primary hover:underline font-medium inline-flex items-center gap-1"
+                    className="text-myhigh5-primary hover:underline font-medium inline-flex items-center gap-1"
                   >
                     {c.learnMore}
                     <Shield className="w-3 h-3" />
@@ -151,7 +151,7 @@ export function CookieConsent() {
                 </Button>
                 <Button
                   onClick={handleAccept}
-                  className="bg-gradient-to-r from-myfav-primary to-myfav-secondary hover:shadow-lg text-white"
+                  className="bg-gradient-to-r from-myhigh5-primary to-myhigh5-secondary hover:shadow-lg text-white"
                 >
                   <Cookie className="w-4 h-4 mr-2" />
                   {c.accept}

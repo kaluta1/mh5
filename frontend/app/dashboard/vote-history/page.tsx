@@ -93,7 +93,7 @@ export default function VoteHistoryPage() {
       case 'dislike':
         return <ThumbsDown className="w-5 h-5 text-gray-500" />
       case 'vote':
-        return <Heart className="w-5 h-5 text-myfav-primary" />
+        return <Heart className="w-5 h-5 text-myhigh5-primary" />
       default:
         return null
     }
@@ -210,7 +210,7 @@ export default function VoteHistoryPage() {
                 {/* Action Button */}
                 <Button
                   onClick={() => router.push(`/dashboard/contests/1/contestant/${item.contestant_id}`)}
-                  className="w-full mt-4 bg-gradient-to-r from-myfav-primary to-myfav-primary-dark text-white hover:shadow-lg"
+                  className="w-full mt-4 bg-gradient-to-r from-myhigh5-primary to-myhigh5-primary-dark text-white hover:shadow-lg"
                 >
                   Voir le profil
                 </Button>

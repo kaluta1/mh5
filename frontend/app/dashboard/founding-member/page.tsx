@@ -36,7 +36,7 @@ export default function FoundingMemberPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-myfav-primary flex items-center justify-center shadow-lg shadow-myfav-primary/25">
+            <div className="w-10 h-10 rounded-xl bg-myhigh5-primary flex items-center justify-center shadow-lg shadow-myhigh5-primary/25">
               <BookOpen className="w-5 h-5 text-white" />
             </div>
             MyHigh5 Founding Membership: Benefits & Eligibility
@@ -54,8 +54,8 @@ export default function FoundingMemberPage() {
           {/* Exclusive Financial Benefits Section */}
           <section>
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-12 h-12 rounded-xl bg-myfav-primary/10 dark:bg-myfav-primary/20 flex items-center justify-center">
-                <DollarSign className="w-6 h-6 text-myfav-primary" />
+              <div className="w-12 h-12 rounded-xl bg-myhigh5-primary/10 dark:bg-myhigh5-primary/20 flex items-center justify-center">
+                <DollarSign className="w-6 h-6 text-myhigh5-primary" />
               </div>
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
                 Exclusive Financial Benefits
@@ -69,7 +69,7 @@ export default function FoundingMemberPage() {
               {/* Monthly Revenue Commission Pool */}
               <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
                 <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-lg bg-myfav-primary flex items-center justify-center flex-shrink-0">
+                  <div className="w-10 h-10 rounded-lg bg-myhigh5-primary flex items-center justify-center flex-shrink-0">
                     <span className="text-white font-bold text-lg">1</span>
                   </div>
                   <div className="flex-1">
@@ -94,7 +94,7 @@ export default function FoundingMemberPage() {
               {/* Annual Profit Pool */}
               <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
                 <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-lg bg-myfav-primary flex items-center justify-center flex-shrink-0">
+                  <div className="w-10 h-10 rounded-lg bg-myhigh5-primary flex items-center justify-center flex-shrink-0">
                     <span className="text-white font-bold text-lg">2</span>
                   </div>
                   <div className="flex-1">
@@ -111,11 +111,11 @@ export default function FoundingMemberPage() {
                         </p>
                         <ul className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
                           <li className="flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-myfav-primary"></span>
+                            <span className="w-1.5 h-1.5 rounded-full bg-myhigh5-primary"></span>
                             80% of the pool is allocated to MyHigh5 Founding Members.
                           </li>
                           <li className="flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-myfav-primary"></span>
+                            <span className="w-1.5 h-1.5 rounded-full bg-myhigh5-primary"></span>
                             20% of the pool is allocated to DSM Founding Members.
                           </li>
                         </ul>
@@ -133,7 +133,7 @@ export default function FoundingMemberPage() {
               {/* Affiliation and Referral Commissions */}
               <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
                 <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-lg bg-myfav-primary flex items-center justify-center flex-shrink-0">
+                  <div className="w-10 h-10 rounded-lg bg-myhigh5-primary flex items-center justify-center flex-shrink-0">
                     <span className="text-white font-bold text-lg">3</span>
                   </div>
                   <div className="flex-1">
@@ -158,14 +158,14 @@ export default function FoundingMemberPage() {
                             <tr>
                               <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">Founding Membership</td>
                               <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">Pays $100 Joining Fee</td>
-                              <td className="px-4 py-3 text-sm text-center font-semibold text-myfav-primary">$20 Commission</td>
-                              <td className="px-4 py-3 text-sm text-center font-semibold text-myfav-primary">$2 Commission</td>
+                              <td className="px-4 py-3 text-sm text-center font-semibold text-myhigh5-primary">$20 Commission</td>
+                              <td className="px-4 py-3 text-sm text-center font-semibold text-myhigh5-primary">$2 Commission</td>
                             </tr>
                             <tr>
                               <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">Annual Fee</td>
                               <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">Pays $50 Annual Fee</td>
-                              <td className="px-4 py-3 text-sm text-center font-semibold text-myfav-primary">$10 Commission</td>
-                              <td className="px-4 py-3 text-sm text-center font-semibold text-myfav-primary">$1 Commission</td>
+                              <td className="px-4 py-3 text-sm text-center font-semibold text-myhigh5-primary">$10 Commission</td>
+                              <td className="px-4 py-3 text-sm text-center font-semibold text-myhigh5-primary">$1 Commission</td>
                             </tr>
                           </tbody>
                         </table>
@@ -178,7 +178,7 @@ export default function FoundingMemberPage() {
               {/* Randomly Assigned Referrals */}
               <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
                 <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-lg bg-myfav-primary flex items-center justify-center flex-shrink-0">
+                  <div className="w-10 h-10 rounded-lg bg-myhigh5-primary flex items-center justify-center flex-shrink-0">
                     <span className="text-white font-bold text-lg">4</span>
                   </div>
                   <div className="flex-1">
@@ -197,8 +197,8 @@ export default function FoundingMemberPage() {
           {/* Eligibility and Maintenance Section */}
           <section className="pt-8 border-t border-gray-200 dark:border-gray-700">
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-12 h-12 rounded-xl bg-myfav-primary/10 dark:bg-myfav-primary/20 flex items-center justify-center">
-                <CheckCircle2 className="w-6 h-6 text-myfav-primary" />
+              <div className="w-12 h-12 rounded-xl bg-myhigh5-primary/10 dark:bg-myhigh5-primary/20 flex items-center justify-center">
+                <CheckCircle2 className="w-6 h-6 text-myhigh5-primary" />
               </div>
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
                 Eligibility and Maintenance
@@ -209,7 +209,7 @@ export default function FoundingMemberPage() {
               {/* How to Become a Founding Member */}
               <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
                 <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                  <Users className="w-5 h-5 text-myfav-primary" />
+                  <Users className="w-5 h-5 text-myhigh5-primary" />
                   How to Become a Founding Member
                 </h3>
                 <p className="text-gray-700 dark:text-gray-300 mb-4">
@@ -217,13 +217,13 @@ export default function FoundingMemberPage() {
                 </p>
                 <ul className="space-y-3">
                   <li className="flex items-start gap-3">
-                    <CheckCircle2 className="w-5 h-5 text-myfav-primary flex-shrink-0 mt-0.5" />
+                    <CheckCircle2 className="w-5 h-5 text-myhigh5-primary flex-shrink-0 mt-0.5" />
                     <span className="text-gray-700 dark:text-gray-300">
                       Pay a one-time joining fee of <span className="font-semibold text-gray-900 dark:text-white">$100</span>.
                     </span>
                   </li>
                   <li className="flex items-start gap-3">
-                    <CheckCircle2 className="w-5 h-5 text-myfav-primary flex-shrink-0 mt-0.5" />
+                    <CheckCircle2 className="w-5 h-5 text-myhigh5-primary flex-shrink-0 mt-0.5" />
                     <span className="text-gray-700 dark:text-gray-300">
                       Verify your MyHigh5 account.
                     </span>
@@ -240,7 +240,7 @@ export default function FoundingMemberPage() {
               {/* Maintaining Your Status */}
               <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
                 <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                  <Gift className="w-5 h-5 text-myfav-primary" />
+                  <Gift className="w-5 h-5 text-myhigh5-primary" />
                   Maintaining Your Status
                 </h3>
                 <div className="space-y-3">

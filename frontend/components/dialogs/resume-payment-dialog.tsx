@@ -222,7 +222,7 @@ export function ResumePaymentDialog({
             {paymentConfirmed ? (
               <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
             ) : (
-              <CreditCard className="w-5 h-5 text-myfav-primary flex-shrink-0" />
+              <CreditCard className="w-5 h-5 text-myhigh5-primary flex-shrink-0" />
             )}
             <span className="truncate">
               {paymentConfirmed 
@@ -238,7 +238,7 @@ export function ResumePaymentDialog({
 
         {isLoading && (
           <div className="flex items-center justify-center py-8">
-            <Loader2 className="w-8 h-8 animate-spin text-myfav-primary" />
+            <Loader2 className="w-8 h-8 animate-spin text-myhigh5-primary" />
           </div>
         )}
 
@@ -283,11 +283,11 @@ export function ResumePaymentDialog({
             </div>
 
             {/* Amount */}
-            <div className="bg-myfav-primary/5 dark:bg-myfav-primary/10 rounded-xl p-3 sm:p-4 text-center border border-myfav-primary/20">
+            <div className="bg-myhigh5-primary/5 dark:bg-myhigh5-primary/10 rounded-xl p-3 sm:p-4 text-center border border-myhigh5-primary/20">
               <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-1">
                 {t('payment.amount_to_send') || 'Montant à envoyer'}
               </p>
-              <p className="text-xl sm:text-2xl font-bold text-myfav-primary break-all">
+              <p className="text-xl sm:text-2xl font-bold text-myhigh5-primary break-all">
                 {paymentDetails.pay_amount} {paymentDetails.pay_currency.toUpperCase()}
               </p>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -355,7 +355,7 @@ export function ResumePaymentDialog({
             <Button
               onClick={checkPaymentStatus}
               disabled={isCheckingPayment}
-              className="w-full bg-myfav-primary hover:bg-myfav-primary/90 text-sm sm:text-base"
+              className="w-full bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-sm sm:text-base"
             >
               {isCheckingPayment ? (
                 <>

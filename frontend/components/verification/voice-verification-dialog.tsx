@@ -206,7 +206,7 @@ export function VoiceVerificationDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Mic className="w-5 h-5 text-myfav-primary" />
+            <Mic className="w-5 h-5 text-myhigh5-primary" />
             {t('verification.voice_verification') || 'Vérification vocale'}
           </DialogTitle>
           <DialogDescription>
@@ -245,7 +245,7 @@ export function VoiceVerificationDialog({
                     ? 'bg-red-500 hover:bg-red-600'
                     : mode === 'preview'
                     ? 'bg-gray-300 dark:bg-gray-700 cursor-not-allowed'
-                    : 'bg-myfav-primary hover:bg-myfav-primary-dark'
+                    : 'bg-myhigh5-primary hover:bg-myhigh5-primary-dark'
                 }`}
               >
                 {mode === 'recording' ? (
@@ -302,7 +302,7 @@ export function VoiceVerificationDialog({
                 <Button 
                   onClick={handleSubmit} 
                   disabled={isUploading}
-                  className="flex-1 bg-myfav-primary hover:bg-myfav-primary-dark"
+                  className="flex-1 bg-myhigh5-primary hover:bg-myhigh5-primary-dark"
                 >
                   {isUploading ? (
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />

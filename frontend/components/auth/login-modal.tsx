@@ -218,7 +218,7 @@ export function LoginModal({ open, onOpenChange, onSwitchToRegister, onLoginSucc
             <Button
               type="button"
               variant="link"
-              className="p-0 h-auto font-normal text-myfav-primary hover:text-myfav-primary-dark dark:text-myfav-blue-400"
+              className="p-0 h-auto font-normal text-myhigh5-primary hover:text-myhigh5-primary-dark dark:text-myhigh5-blue-400"
               onClick={() => {
                 onOpenChange(false)
                 router.push('/forgot-password')
@@ -230,7 +230,7 @@ export function LoginModal({ open, onOpenChange, onSwitchToRegister, onLoginSucc
 
           <Button 
             type="button" 
-            className="w-full bg-myfav-primary hover:bg-myfav-primary-dark text-white font-semibold" 
+            className="w-full bg-myhigh5-primary hover:bg-myhigh5-primary-dark text-white font-semibold" 
             disabled={isLoading}
             onClick={(e) => {
               e.preventDefault()
@@ -271,7 +271,7 @@ export function LoginModal({ open, onOpenChange, onSwitchToRegister, onLoginSucc
                   onSwitchToRegister()
                 }
               }}
-              className="text-sm font-medium text-myfav-primary hover:text-myfav-primary-dark dark:text-myfav-blue-400 dark:hover:text-myfav-blue-300"
+              className="text-sm font-medium text-myhigh5-primary hover:text-myhigh5-primary-dark dark:text-myhigh5-blue-400 dark:hover:text-myhigh5-blue-300"
             >
               {t('auth.login.register_link')}
             </button>

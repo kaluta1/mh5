@@ -360,12 +360,12 @@ export default function TermsPage() {
   const c = content[language] || content.en
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-myfav-blue-50 via-white to-myfav-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+    <div className="min-h-screen bg-gradient-to-br from-myhigh5-blue-50 via-white to-myhigh5-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
       <Header />
       
       <main className="pt-24 pb-16">
         {/* Hero Section */}
-        <section className="relative py-16 bg-gradient-to-r from-myfav-primary to-myfav-secondary overflow-hidden">
+        <section className="relative py-16 bg-gradient-to-r from-myhigh5-primary to-myhigh5-secondary overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,rgba(255,255,255,0.15),transparent_50%)]" />
           <div className="container px-4 md:px-6 relative z-10">
             <div className="max-w-3xl mx-auto text-center text-white">
@@ -385,7 +385,7 @@ export default function TermsPage() {
           <div className="max-w-4xl mx-auto">
             {/* Back Button */}
             <Link href="/">
-              <Button variant="ghost" className="mb-8 text-myfav-primary hover:bg-myfav-primary/10">
+              <Button variant="ghost" className="mb-8 text-myhigh5-primary hover:bg-myhigh5-primary/10">
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 {language === 'fr' ? 'Retour' : language === 'es' ? 'Volver' : language === 'de' ? 'Zurück' : 'Back'}
               </Button>
@@ -408,7 +408,7 @@ export default function TermsPage() {
                     className="bg-white dark:bg-gray-800 rounded-2xl p-6 md:p-8 shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-shadow"
                   >
                     <div className="flex items-start gap-4">
-                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-myfav-primary to-myfav-secondary flex items-center justify-center flex-shrink-0">
+                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary flex items-center justify-center flex-shrink-0">
                         <Icon className="w-6 h-6 text-white" />
                       </div>
                       <div className="flex-1">
@@ -419,7 +419,7 @@ export default function TermsPage() {
                           <ul className="space-y-2">
                             {section.content.map((item, i) => (
                               <li key={i} className="flex items-start gap-2 text-gray-600 dark:text-gray-400">
-                                <span className="text-myfav-primary mt-1">•</span>
+                                <span className="text-myhigh5-primary mt-1">•</span>
                                 <span>{item}</span>
                               </li>
                             ))}
@@ -437,15 +437,15 @@ export default function TermsPage() {
             </div>
 
             {/* Contact */}
-            <div className="mt-12 bg-gradient-to-r from-myfav-primary to-myfav-secondary rounded-2xl p-8 text-center text-white">
+            <div className="mt-12 bg-gradient-to-r from-myhigh5-primary to-myhigh5-secondary rounded-2xl p-8 text-center text-white">
               <Mail className="w-12 h-12 mx-auto mb-4 opacity-80" />
               <p className="text-lg mb-4">{c.contact}</p>
               <a 
-                href="mailto:legal@myhigh5.com" 
-                className="inline-flex items-center gap-2 bg-white text-myfav-primary px-6 py-3 rounded-xl font-semibold hover:bg-gray-100 transition-colors"
+                href="mailto:infos@myhigh5.com" 
+                className="inline-flex items-center gap-2 bg-white text-myhigh5-primary px-6 py-3 rounded-xl font-semibold hover:bg-gray-100 transition-colors"
               >
                 <Mail className="w-5 h-5" />
-                legal@myhigh5.com
+                infos@myhigh5.com
               </a>
             </div>
           </div>

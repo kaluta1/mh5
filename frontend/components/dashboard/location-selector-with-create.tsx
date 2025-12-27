@@ -230,7 +230,7 @@ export function LocationSelectorWithCreate({
             onFocus={() => setShowContinentDropdown(true)}
             placeholder="Sélectionner ou créer un continent"
             disabled={isLoading || isLoadingData}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myfav-primary"
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myhigh5-primary"
           />
           <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
         </div>
@@ -255,7 +255,7 @@ export function LocationSelectorWithCreate({
             {continentInput.trim() && !filteredContinents.some((c) => c.name.toLowerCase() === continentInput.toLowerCase()) && (
               <button
                 onClick={handleCreateContinent}
-                className="w-full text-left px-4 py-2 border-t border-gray-300 dark:border-gray-600 text-myfav-primary hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2"
+                className="w-full text-left px-4 py-2 border-t border-gray-300 dark:border-gray-600 text-myhigh5-primary hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2"
               >
                 <Plus className="w-4 h-4" />
                 Créer "{continentInput}"
@@ -282,7 +282,7 @@ export function LocationSelectorWithCreate({
               onFocus={() => setShowRegionDropdown(true)}
               placeholder="Sélectionner ou créer une région"
               disabled={isLoading || isLoadingData}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myfav-primary"
+              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myhigh5-primary"
             />
             <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
           </div>
@@ -307,7 +307,7 @@ export function LocationSelectorWithCreate({
               {regionInput.trim() && !filteredRegions.some((r) => r.name.toLowerCase() === regionInput.toLowerCase()) && (
                 <button
                   onClick={handleCreateRegion}
-                  className="w-full text-left px-4 py-2 border-t border-gray-300 dark:border-gray-600 text-myfav-primary hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2"
+                  className="w-full text-left px-4 py-2 border-t border-gray-300 dark:border-gray-600 text-myhigh5-primary hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2"
                 >
                   <Plus className="w-4 h-4" />
                   Créer "{regionInput}"
@@ -335,7 +335,7 @@ export function LocationSelectorWithCreate({
               onFocus={() => setShowCountryDropdown(true)}
               placeholder="Sélectionner ou créer un pays"
               disabled={isLoading || isLoadingData}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myfav-primary"
+              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myhigh5-primary"
             />
             <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
           </div>
@@ -360,7 +360,7 @@ export function LocationSelectorWithCreate({
               {countryInput.trim() && !filteredCountries.some((c) => c.name.toLowerCase() === countryInput.toLowerCase()) && (
                 <button
                   onClick={handleCreateCountry}
-                  className="w-full text-left px-4 py-2 border-t border-gray-300 dark:border-gray-600 text-myfav-primary hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2"
+                  className="w-full text-left px-4 py-2 border-t border-gray-300 dark:border-gray-600 text-myhigh5-primary hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2"
                 >
                   <Plus className="w-4 h-4" />
                   Créer "{countryInput}"
@@ -388,7 +388,7 @@ export function LocationSelectorWithCreate({
               onFocus={() => setShowCityDropdown(true)}
               placeholder="Sélectionner ou créer une ville"
               disabled={isLoading || isLoadingData}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myfav-primary"
+              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myhigh5-primary"
             />
             <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
           </div>
@@ -413,7 +413,7 @@ export function LocationSelectorWithCreate({
               {cityInput.trim() && !filteredCities.some((c) => c.name.toLowerCase() === cityInput.toLowerCase()) && (
                 <button
                   onClick={handleCreateCity}
-                  className="w-full text-left px-4 py-2 border-t border-gray-300 dark:border-gray-600 text-myfav-primary hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2"
+                  className="w-full text-left px-4 py-2 border-t border-gray-300 dark:border-gray-600 text-myhigh5-primary hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2"
                 >
                   <Plus className="w-4 h-4" />
                   Créer "{cityInput}"

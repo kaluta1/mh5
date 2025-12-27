@@ -159,7 +159,7 @@ export function SettingsProfileTab({ user }: SettingsProfileTabProps) {
         <div className="flex justify-center mb-8">
           {avatarUrl ? (
             <div className="flex flex-col items-center gap-4">
-              <img src={avatarUrl} alt="Avatar" className="w-32 h-32 rounded-full object-cover border-4 border-myfav-primary shadow-lg" />
+              <img src={avatarUrl} alt="Avatar" className="w-32 h-32 rounded-full object-cover border-4 border-myhigh5-primary shadow-lg" />
               <button
                 type="button"
                 onClick={() => handleAvatarChange('')}
@@ -206,7 +206,7 @@ export function SettingsProfileTab({ user }: SettingsProfileTabProps) {
             className={`w-full px-4 py-3 border rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 transition-all ${
               errors.firstName
                 ? 'border-red-500 dark:border-red-500 focus:ring-red-500 focus:border-red-500'
-                : 'border-gray-300 dark:border-gray-600 focus:ring-myfav-primary focus:border-transparent'
+                : 'border-gray-300 dark:border-gray-600 focus:ring-myhigh5-primary focus:border-transparent'
             }`}
           />
           {errors.firstName && (
@@ -228,7 +228,7 @@ export function SettingsProfileTab({ user }: SettingsProfileTabProps) {
             className={`w-full px-4 py-3 border rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 transition-all ${
               errors.lastName
                 ? 'border-red-500 dark:border-red-500 focus:ring-red-500 focus:border-red-500'
-                : 'border-gray-300 dark:border-gray-600 focus:ring-myfav-primary focus:border-transparent'
+                : 'border-gray-300 dark:border-gray-600 focus:ring-myhigh5-primary focus:border-transparent'
             }`}
           />
           {errors.lastName && (
@@ -255,7 +255,7 @@ export function SettingsProfileTab({ user }: SettingsProfileTabProps) {
           className={`w-full px-4 py-3 border rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 resize-none transition-all ${
             errors.bio
               ? 'border-red-500 dark:border-red-500 focus:ring-red-500 focus:border-red-500'
-              : 'border-gray-300 dark:border-gray-600 focus:ring-myfav-primary focus:border-transparent'
+              : 'border-gray-300 dark:border-gray-600 focus:ring-myhigh5-primary focus:border-transparent'
           }`}
         />
         <div className="flex items-center justify-between mt-2">
@@ -275,7 +275,7 @@ export function SettingsProfileTab({ user }: SettingsProfileTabProps) {
         <Button
           type="submit"
           disabled={isLoading}
-          className="bg-myfav-primary hover:bg-myfav-primary/90 text-white font-bold px-6 py-2.5 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          className="bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white font-bold px-6 py-2.5 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isLoading ? t('common.submitting') || 'Enregistrement...' : t('settings.save') || 'Enregistrer'}
         </Button>

@@ -19,8 +19,8 @@ export function Testimonials() {
       <div className="container px-4 md:px-6 relative z-10">
         {/* Section Header */}
         <div className="text-center max-w-3xl mx-auto mb-16 md:mb-20">
-          <div className="inline-flex items-center gap-2 bg-myfav-primary/10 text-myfav-primary rounded-full px-4 py-2 text-sm font-semibold mb-6">
-            <Star className="w-4 h-4 fill-myfav-primary" />
+          <div className="inline-flex items-center gap-2 bg-myhigh5-primary/10 text-myhigh5-primary rounded-full px-4 py-2 text-sm font-semibold mb-6">
+            <Star className="w-4 h-4 fill-myhigh5-primary" />
             <span>Témoignages</span>
           </div>
           <h2 className="text-4xl sm:text-5xl md:text-6xl font-black tracking-tight mb-6 bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">
@@ -43,8 +43,8 @@ export function Testimonials() {
                 className="group relative overflow-hidden border-0 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm shadow-lg hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 rounded-2xl"
               >
                 {/* Quote icon decoration */}
-                <div className="absolute top-6 right-6 w-16 h-16 bg-gradient-to-br from-myfav-primary/10 to-myfav-secondary/10 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-500">
-                  <Quote className="w-8 h-8 text-myfav-primary/30" />
+                <div className="absolute top-6 right-6 w-16 h-16 bg-gradient-to-br from-myhigh5-primary/10 to-myhigh5-secondary/10 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-500">
+                  <Quote className="w-8 h-8 text-myhigh5-primary/30" />
                 </div>
                 
                 <CardContent className="p-6 md:p-8 relative z-10">
@@ -57,13 +57,13 @@ export function Testimonials() {
 
                 {/* Content */}
                   <blockquote className="text-base leading-relaxed mb-8 text-gray-700 dark:text-gray-300 font-medium relative">
-                    <Quote className="absolute -top-2 -left-2 w-8 h-8 text-myfav-primary/20" />
+                    <Quote className="absolute -top-2 -left-2 w-8 h-8 text-myhigh5-primary/20" />
                     <span className="relative z-10">"{t(`testimonials.items.${key}.text`)}"</span>
                 </blockquote>
 
                 {/* Author */}
                   <div className="flex items-center gap-4 pt-6 border-t border-gray-200 dark:border-gray-700">
-                    <div className="w-14 h-14 rounded-full flex items-center justify-center bg-gradient-to-br from-myfav-primary to-myfav-secondary text-white font-bold text-lg shadow-lg">
+                    <div className="w-14 h-14 rounded-full flex items-center justify-center bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary text-white font-bold text-lg shadow-lg">
                     {t(`testimonials.items.${key}.name`).split(' ').map(n => n[0]).join('')}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -98,13 +98,13 @@ export function Testimonials() {
                 {testimonialKeys.slice(0, 3).map((key, index) => (
                   <div
                     key={index}
-                    className="w-12 h-12 rounded-full flex items-center justify-center text-white text-sm font-bold border-4 border-white dark:border-gray-800 bg-gradient-to-br from-myfav-primary to-myfav-secondary shadow-lg hover:scale-110 transition-transform"
+                    className="w-12 h-12 rounded-full flex items-center justify-center text-white text-sm font-bold border-4 border-white dark:border-gray-800 bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary shadow-lg hover:scale-110 transition-transform"
                   >
                     {t(`testimonials.items.${key}.name`).split(' ').map(n => n[0]).join('')}
                   </div>
                 ))}
               </div>
-              <span className="text-base font-bold text-myfav-primary dark:text-myfav-blue-400">
+              <span className="text-base font-bold text-myhigh5-primary dark:text-myhigh5-blue-400">
                 {t('testimonials.users')}
               </span>
             </div>

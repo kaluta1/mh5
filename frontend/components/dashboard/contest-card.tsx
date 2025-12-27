@@ -248,7 +248,7 @@ export function ContestCard({
       }`}
     >
       {/* Cover Image Section */}
-      <div className="relative w-full aspect-[4/3] bg-gradient-to-br from-myfav-primary via-myfav-primary-dark to-purple-600 overflow-hidden cursor-pointer"
+      <div className="relative w-full aspect-[4/3] bg-gradient-to-br from-myhigh5-primary via-myhigh5-primary-dark to-purple-600 overflow-hidden cursor-pointer"
            onClick={onOpenDetails ?? onViewContestants}>
         {coverImage && !imageError && (coverImage.startsWith('http') || coverImage.startsWith('/') || coverImage.startsWith('data:')) ? (
           <Image
@@ -265,7 +265,7 @@ export function ContestCard({
             }}
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-6xl bg-gradient-to-br from-myfav-primary/30 via-myfav-primary-dark/30 to-purple-600/30">
+          <div className="w-full h-full flex items-center justify-center text-6xl bg-gradient-to-br from-myhigh5-primary/30 via-myhigh5-primary-dark/30 to-purple-600/30">
             {coverImage && !coverImage.startsWith('http') && !coverImage.startsWith('/') && !coverImage.startsWith('data:') ? coverImage : '💎'}
           </div>
         )}
@@ -278,7 +278,7 @@ export function ContestCard({
                 <TooltipTrigger asChild>
                   <div className="bg-black/80 backdrop-blur-md rounded-lg px-2.5 py-1.5 border border-white/20 cursor-help">
                     <div className="flex items-center gap-1.5">
-                      <Clock className="w-3 h-3 text-myfav-secondary animate-pulse flex-shrink-0" />
+                      <Clock className="w-3 h-3 text-myhigh5-secondary animate-pulse flex-shrink-0" />
                       <span className="text-white text-[10px] font-medium truncate flex-1">
                         {isNomination
                           ? (t('dashboard.contests.time_remaining_to_nominate') || 'Temps restant pour nommer')
@@ -329,7 +329,7 @@ export function ContestCard({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {/* Level */}
                     <div className="flex items-center gap-2 bg-gray-800/50 border border-gray-700 rounded-lg p-3">
-                      <MapPin className="w-5 h-5 text-myfav-secondary" />
+                      <MapPin className="w-5 h-5 text-myhigh5-secondary" />
                       <div>
                         <p className="text-gray-400 text-xs mb-1">{t('dashboard.contests.level') || 'Niveau'}</p>
                         <p className="text-white font-medium text-sm">{getStatusLabel(status)}</p>
@@ -560,7 +560,7 @@ export function ContestCard({
             <Tooltip>
               <TooltipTrigger asChild>
                 <div className="flex items-center gap-1 cursor-help">
-                  <MapPin className="w-3 h-3 text-myfav-secondary" />
+                  <MapPin className="w-3 h-3 text-myhigh5-secondary" />
                   <Badge className={`${getStatusColor(status)} border-0 text-[10px] font-medium px-1.5 py-0.5`}>
                     {getStatusLabel(status)}
                   </Badge>
@@ -645,7 +645,7 @@ export function ContestCard({
                       e.stopPropagation()
                       onParticipate()
                     }}
-                    className="w-full bg-myfav-primary hover:bg-myfav-primary-dark text-white font-semibold py-2 text-xs shadow-lg shadow-myfav-primary/20 hover:shadow-myfav-primary/40 transition-all hover:scale-[1.02] rounded-lg group/btn relative overflow-hidden"
+                    className="w-full bg-myhigh5-primary hover:bg-myhigh5-primary-dark text-white font-semibold py-2 text-xs shadow-lg shadow-myhigh5-primary/20 hover:shadow-myhigh5-primary/40 transition-all hover:scale-[1.02] rounded-lg group/btn relative overflow-hidden"
                   >
                     <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover/btn:translate-x-full transition-transform duration-700" />
                     <Sparkles className="w-3.5 h-3.5 mr-1.5" />

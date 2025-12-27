@@ -25,7 +25,7 @@ export function KYCPersonalInfoStep({ data, onChange, errors = {} }: KYCPersonal
     <div className="space-y-4">
       <div>
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-          <User className="w-6 h-6 text-myfav-primary" />
+          <User className="w-6 h-6 text-myhigh5-primary" />
           {t('kyc.personal_info')}
         </h2>
       </div>
@@ -41,7 +41,7 @@ export function KYCPersonalInfoStep({ data, onChange, errors = {} }: KYCPersonal
             value={data.firstName}
             onChange={(e) => onChange('firstName', e.target.value)}
             placeholder={t('kyc.first_name_placeholder')}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myfav-primary"
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myhigh5-primary"
             required
           />
         </div>
@@ -56,7 +56,7 @@ export function KYCPersonalInfoStep({ data, onChange, errors = {} }: KYCPersonal
             value={data.lastName}
             onChange={(e) => onChange('lastName', e.target.value)}
             placeholder={t('kyc.last_name_placeholder')}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myfav-primary"
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myhigh5-primary"
             required
           />
         </div>
@@ -70,7 +70,7 @@ export function KYCPersonalInfoStep({ data, onChange, errors = {} }: KYCPersonal
             type="date"
             value={data.dateOfBirth}
             onChange={(e) => onChange('dateOfBirth', e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myfav-primary"
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myhigh5-primary"
             required
           />
         </div>
@@ -83,7 +83,7 @@ export function KYCPersonalInfoStep({ data, onChange, errors = {} }: KYCPersonal
           <select
             value={data.nationality}
             onChange={(e) => onChange('nationality', e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myfav-primary"
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myhigh5-primary"
             required
           >
             <option value="">{t('kyc.nationality_placeholder')}</option>
@@ -105,7 +105,7 @@ export function KYCPersonalInfoStep({ data, onChange, errors = {} }: KYCPersonal
             value={data.address}
             onChange={(e) => onChange('address', e.target.value)}
             placeholder={t('kyc.address_placeholder')}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myfav-primary"
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myhigh5-primary"
             required
           />
         </div>

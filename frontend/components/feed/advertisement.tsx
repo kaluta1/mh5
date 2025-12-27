@@ -30,7 +30,7 @@ export function Advertisement({
   }
 
   return (
-    <div className="bg-gradient-to-br from-myfav-primary/10 to-myfav-secondary/10 rounded-2xl p-4 relative overflow-hidden border border-myfav-primary/20">
+    <div className="bg-gradient-to-br from-myhigh5-primary/10 to-myhigh5-secondary/10 rounded-2xl p-4 relative overflow-hidden border border-myhigh5-primary/20">
       {onDismiss && (
         <Button
           variant="ghost"
@@ -51,7 +51,7 @@ export function Advertisement({
         {description}
       </p>
       <Button
-        className="w-full rounded-full bg-myfav-primary hover:bg-myfav-primary/90 text-white font-semibold"
+        className="w-full rounded-full bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white font-semibold"
         size="sm"
       >
         {ctaText}

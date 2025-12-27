@@ -71,7 +71,7 @@ export function SearchResults({ results, isLoading, searchTerm, onResultClick }:
     return (
       <div className="text-center py-12">
         <div className="inline-block">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-myfav-primary"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-myhigh5-primary"></div>
         </div>
         <p className="text-gray-500 dark:text-gray-400 mt-4">{t('common.loading') || 'Loading...'}</p>
       </div>
@@ -109,12 +109,12 @@ export function SearchResults({ results, isLoading, searchTerm, onResultClick }:
               <button
                 key={`${result.category}-${result.id}`}
                 onClick={() => onResultClick?.(result)}
-                className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 hover:shadow-lg hover:border-myfav-primary dark:hover:border-myfav-blue-400 transition text-left group"
+                className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 hover:shadow-lg hover:border-myhigh5-primary dark:hover:border-myhigh5-blue-400 transition text-left group"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     {/* Titre principal */}
-                    <p className="font-semibold text-gray-900 dark:text-white group-hover:text-myfav-primary dark:group-hover:text-myfav-blue-400 transition truncate">
+                    <p className="font-semibold text-gray-900 dark:text-white group-hover:text-myhigh5-primary dark:group-hover:text-myhigh5-blue-400 transition truncate">
                       {result.title}
                     </p>
 

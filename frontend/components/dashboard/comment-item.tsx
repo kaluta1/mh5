@@ -153,7 +153,7 @@ export function CommentItem({
                 className="w-10 h-10 rounded-full"
               />
             ) : (
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-myfav-primary to-myfav-primary-dark flex items-center justify-center text-white">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-myhigh5-primary to-myhigh5-primary-dark flex items-center justify-center text-white">
                 {comment.author_name.charAt(0).toUpperCase()}
               </div>
             )}
@@ -175,7 +175,7 @@ export function CommentItem({
                 {textParts.map((part, idx) => {
                   if (part.type === 'mention') {
                     return (
-                      <span key={idx} className="text-myfav-primary dark:text-myfav-primary-light font-medium">
+                      <span key={idx} className="text-myhigh5-primary dark:text-myhigh5-primary-light font-medium">
                         {part.fullMatch}
                       </span>
                     )
@@ -200,7 +200,7 @@ export function CommentItem({
               {!isMaxDepth && (
                 <button
                   onClick={() => setShowReplyForm(!showReplyForm)}
-                  className="flex items-center gap-1 text-myfav-primary dark:text-myfav-primary-light hover:text-myfav-primary-dark dark:hover:text-myfav-primary transition-colors ml-auto"
+                  className="flex items-center gap-1 text-myhigh5-primary dark:text-myhigh5-primary-light hover:text-myhigh5-primary-dark dark:hover:text-myhigh5-primary transition-colors ml-auto"
                 >
                   <Reply className="w-4 h-4" />
                   <span>{t('dashboard.contests.reply') || 'Répondre'}</span>
@@ -229,7 +229,7 @@ export function CommentItem({
                   }}
                   users={commenters}
                   placeholder={t('dashboard.contests.reply_placeholder') || 'Écrire une réponse...'}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-full bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myfav-primary focus:border-transparent transition-all"
+                  className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-full bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myhigh5-primary focus:border-transparent transition-all"
                   disabled={isSubmittingReply}
                 />
                 <div className="flex gap-2 justify-end">
@@ -245,7 +245,7 @@ export function CommentItem({
                   <button
                     onClick={handleReply}
                     disabled={!replyText.trim() || isSubmittingReply}
-                    className="px-4 py-1.5 text-sm bg-myfav-primary hover:bg-myfav-primary-dark text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="px-4 py-1.5 text-sm bg-myhigh5-primary hover:bg-myhigh5-primary-dark text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     {isSubmittingReply ? t('dashboard.contests.sending') || 'Envoi...' : t('dashboard.contests.reply') || 'Répondre'}
                   </button>
@@ -268,7 +268,7 @@ export function CommentItem({
                       setReplies(comment.replies)
                     }
                   }}
-                  className="text-xs text-myfav-primary dark:text-myfav-primary-light hover:underline font-medium"
+                  className="text-xs text-myhigh5-primary dark:text-myhigh5-primary-light hover:underline font-medium"
                 >
                   {expandedReplies 
                     ? (t('dashboard.contests.hide_replies') || `Masquer ${comment.reply_count} réponse(s)`).replace('{count}', String(comment.reply_count))

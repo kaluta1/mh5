@@ -153,7 +153,7 @@ export default function LoginPage() {
       <div className="relative z-10 flex justify-between items-center p-6">
         <Link 
           href="/"
-          className="inline-flex items-center text-sm font-medium text-gray-700 hover:text-myfav-primary dark:text-gray-200 dark:hover:text-myfav-blue-400 transition-colors"
+          className="inline-flex items-center text-sm font-medium text-gray-700 hover:text-myhigh5-primary dark:text-gray-200 dark:hover:text-myhigh5-blue-400 transition-colors"
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
           {t('navigation.home')}
@@ -181,17 +181,17 @@ export default function LoginPage() {
 
           {/* Bannière code de parrainage */}
           {referralCode && (
-            <div className="mb-4 p-4 bg-gradient-to-r from-myfav-primary/10 to-purple-500/10 dark:from-myfav-primary/20 dark:to-purple-500/20 rounded-xl border border-myfav-primary/20 dark:border-myfav-primary/30">
+            <div className="mb-4 p-4 bg-gradient-to-r from-myhigh5-primary/10 to-purple-500/10 dark:from-myhigh5-primary/20 dark:to-purple-500/20 rounded-xl border border-myhigh5-primary/20 dark:border-myhigh5-primary/30">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-myfav-primary/20 flex items-center justify-center">
-                  <Gift className="w-5 h-5 text-myfav-primary" />
+                <div className="w-10 h-10 rounded-full bg-myhigh5-primary/20 flex items-center justify-center">
+                  <Gift className="w-5 h-5 text-myhigh5-primary" />
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-900 dark:text-white">
                     {t('auth.referral_detected') || 'Code de parrainage détecté !'}
                   </p>
                   <p className="text-xs text-gray-600 dark:text-gray-400">
-                    {t('auth.referral_code') || 'Code'}: <span className="font-mono font-bold text-myfav-primary">{referralCode}</span>
+                    {t('auth.referral_code') || 'Code'}: <span className="font-mono font-bold text-myhigh5-primary">{referralCode}</span>
                   </p>
                 </div>
               </div>
@@ -212,7 +212,7 @@ export default function LoginPage() {
                   {t('common.redirecting')}
                 </p>
                 <div className="flex items-center space-x-2">
-                  <Loader2 className="w-5 h-5 animate-spin text-myfav-primary" />
+                  <Loader2 className="w-5 h-5 animate-spin text-myhigh5-primary" />
                   <span className="text-sm text-gray-600 dark:text-gray-400">{t('common.please_wait')}</span>
                 </div>
               </div>
@@ -245,7 +245,7 @@ export default function LoginPage() {
                         e.preventDefault()
                       }
                     }}
-                    className="pl-10 h-12 rounded-xl border-gray-200 dark:border-gray-600 focus:border-myfav-primary focus:ring-myfav-primary dsm-input"
+                    className="pl-10 h-12 rounded-xl border-gray-200 dark:border-gray-600 focus:border-myhigh5-primary focus:ring-myhigh5-primary dsm-input"
                     required
                     disabled={isLoading}
                   />
@@ -269,7 +269,7 @@ export default function LoginPage() {
                         e.preventDefault()
                       }
                     }}
-                    className="pl-10 pr-10 h-12 rounded-xl border-gray-200 dark:border-gray-600 focus:border-myfav-primary focus:ring-myfav-primary dsm-input"
+                    className="pl-10 pr-10 h-12 rounded-xl border-gray-200 dark:border-gray-600 focus:border-myhigh5-primary focus:ring-myhigh5-primary dsm-input"
                     required
                     disabled={isLoading}
                   />
@@ -288,7 +288,7 @@ export default function LoginPage() {
               <div className="flex justify-end">
                 <Link
                   href="/forgot-password"
-                  className="text-sm text-myfav-primary hover:text-myfav-primary-dark dark:text-myfav-blue-400 dark:hover:text-myfav-blue-300 transition-colors"
+                  className="text-sm text-myhigh5-primary hover:text-myhigh5-primary-dark dark:text-myhigh5-blue-400 dark:hover:text-myhigh5-blue-300 transition-colors"
                 >
                   {t('auth.login.forgot_password')}
                 </Link>
@@ -297,7 +297,7 @@ export default function LoginPage() {
               {/* Submit Button */}
               <Button
                 type="button"
-                className="w-full h-12 bg-myfav-primary hover:bg-myfav-primary-dark text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-200"
+                className="w-full h-12 bg-myhigh5-primary hover:bg-myhigh5-primary-dark text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-200"
                 disabled={isLoading}
                 onClick={(e) => {
                   e.preventDefault()
@@ -325,7 +325,7 @@ export default function LoginPage() {
                 </span>
                 <Link
                   href={referralCode ? `/register?ref=${referralCode}` : '/register'}
-                  className="text-sm font-semibold text-myfav-primary hover:text-myfav-primary-dark dark:text-myfav-blue-400 dark:hover:text-myfav-blue-300 transition-colors"
+                  className="text-sm font-semibold text-myhigh5-primary hover:text-myhigh5-primary-dark dark:text-myhigh5-blue-400 dark:hover:text-myhigh5-blue-300 transition-colors"
                 >
                   {t('auth.login.register_link')}
                 </Link>

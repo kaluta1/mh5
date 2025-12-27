@@ -379,7 +379,7 @@ export default function MyApplicationsPage() {
           emptyDescription={
             <div className="mt-4">
               <Link href="/dashboard/contests">
-                <Button className="bg-myfav-primary hover:bg-myfav-primary-dark text-white">
+                <Button className="bg-myhigh5-primary hover:bg-myhigh5-primary-dark text-white">
                   {t('dashboard.contests.my_applications.browse_contests')} →
                 </Button>
               </Link>

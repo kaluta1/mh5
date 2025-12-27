@@ -178,7 +178,7 @@ function KYCPageContent() {
         <div className="max-w-4xl mx-auto mb-4">
           <div className="bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-myfav-primary to-myfav-primary/80 rounded-xl flex items-center justify-center shadow-lg shadow-myfav-primary/20">
+              <div className="w-10 h-10 bg-gradient-to-br from-myhigh5-primary to-myhigh5-primary/80 rounded-xl flex items-center justify-center shadow-lg shadow-myhigh5-primary/20">
                 <Shield className="w-5 h-5 text-white" />
               </div>
               <div>
@@ -243,7 +243,7 @@ function KYCPageContent() {
             </p>
             <Button
               onClick={() => router.push('/dashboard')}
-              className="bg-myfav-primary hover:bg-myfav-primary/90"
+              className="bg-myhigh5-primary hover:bg-myhigh5-primary/90"
             >
               {t('common.back_to_dashboard') || 'Retour au tableau de bord'}
             </Button>
@@ -285,7 +285,7 @@ function KYCPageContent() {
               <Button
                 onClick={handleContinueVerification}
                 disabled={isInitiating}
-                className="bg-myfav-primary hover:bg-myfav-primary/90"
+                className="bg-myhigh5-primary hover:bg-myhigh5-primary/90"
               >
                 {isInitiating ? (
                   <>
@@ -401,11 +401,11 @@ function KYCPageContent() {
             </p>
             
             {/* Prix de la vérification */}
-            <div className="bg-gradient-to-r from-myfav-primary/10 to-myfav-secondary/10 border border-myfav-primary/20 rounded-xl p-4 mb-6">
+            <div className="bg-gradient-to-r from-myhigh5-primary/10 to-myhigh5-secondary/10 border border-myhigh5-primary/20 rounded-xl p-4 mb-6">
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
                 {t('kyc.verification_fee') || 'Frais de vérification'}
               </p>
-              <p className="text-2xl font-bold text-myfav-primary">
+              <p className="text-2xl font-bold text-myhigh5-primary">
                 {kycData?.kyc_price || 10} {kycData?.kyc_currency || 'USD'}
               </p>
             </div>
@@ -413,7 +413,7 @@ function KYCPageContent() {
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Button
                 onClick={() => setShowPaymentDialog(true)}
-                className="bg-myfav-primary hover:bg-myfav-primary/90"
+                className="bg-myhigh5-primary hover:bg-myhigh5-primary/90"
               >
                 <CreditCard className="w-4 h-4 mr-2" />
                 {t('kyc.pay_now') || 'Payer maintenant'}
@@ -504,7 +504,7 @@ function KYCPageContent() {
               <Button
                 onClick={handleStartVerification}
                 disabled={isInitiating}
-                className="bg-myfav-primary hover:bg-myfav-primary/90"
+                className="bg-myhigh5-primary hover:bg-myhigh5-primary/90"
               >
                 {isInitiating ? (
                   <>
@@ -547,8 +547,8 @@ function KYCPageContent() {
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-8 text-center">
-          <div className="w-16 h-16 bg-myfav-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <Shield className="w-8 h-8 text-myfav-primary" />
+          <div className="w-16 h-16 bg-myhigh5-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <Shield className="w-8 h-8 text-myhigh5-primary" />
           </div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
             {t('kyc.verification_required') || 'Vérification d\'identité requise'}
@@ -635,7 +635,7 @@ function KYCPageContent() {
             onClick={handleStartVerification}
             disabled={isInitiating}
             size="lg"
-            className="bg-myfav-primary hover:bg-myfav-primary/90 text-white px-8 py-6 text-lg rounded-xl shadow-lg shadow-myfav-primary/25"
+            className="bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white px-8 py-6 text-lg rounded-xl shadow-lg shadow-myhigh5-primary/25"
           >
             {isInitiating ? (
               <>

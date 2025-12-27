@@ -74,7 +74,7 @@ function DescriptionWithPopover({ description, maxLength = 150 }: { description:
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words cursor-pointer hover:text-myfav-primary dark:hover:text-myfav-secondary transition-colors">
+      <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words cursor-pointer hover:text-myhigh5-primary dark:hover:text-myhigh5-secondary transition-colors">
         {truncatedDescription}
       </p>
       
@@ -407,7 +407,7 @@ export function ContestantCard({
                   e.stopPropagation()
                   onViewDetails()
                 }}
-                className="text-lg font-bold text-gray-900 dark:text-white hover:text-myfav-primary dark:hover:text-myfav-blue-400 transition-colors cursor-pointer flex-1 line-clamp-2"
+                className="text-lg font-bold text-gray-900 dark:text-white hover:text-myhigh5-primary dark:hover:text-myhigh5-blue-400 transition-colors cursor-pointer flex-1 line-clamp-2"
               >
                 {participationTitle}
               </h4>
@@ -445,7 +445,7 @@ export function ContestantCard({
                     />
                     <div className="absolute inset-0 bg-black/20 group-hover:bg-black/30 transition-all flex items-center justify-center">
                       <div className="w-20 h-20 rounded-full bg-white/90 dark:bg-gray-800/90 flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg">
-                        <Play className="w-10 h-10 text-myfav-primary ml-1" fill="currentColor" />
+                        <Play className="w-10 h-10 text-myhigh5-primary ml-1" fill="currentColor" />
                       </div>
                     </div>
                   </>
@@ -531,11 +531,11 @@ export function ContestantCard({
             {/* Avatar */}
             <div className="flex-shrink-0 relative">
               {avatar && (avatar.startsWith('http') || avatar.startsWith('/')) ? (
-                <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-myfav-primary/20 to-myfav-secondary/20 ring-2 ring-gray-200 dark:ring-gray-700">
+                <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-myhigh5-primary/20 to-myhigh5-secondary/20 ring-2 ring-gray-200 dark:ring-gray-700">
                   <img src={avatar} alt={name} className="w-full h-full object-cover" />
                 </div>
               ) : (
-                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-myfav-primary to-myfav-secondary flex items-center justify-center text-lg ring-2 ring-gray-200 dark:ring-gray-700">
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary flex items-center justify-center text-lg ring-2 ring-gray-200 dark:ring-gray-700">
                   {avatar || '👤'}
                 </div>
               )}
@@ -553,7 +553,7 @@ export function ContestantCard({
                   <Tooltip>
                     <TooltipTrigger asChild>
                 <h3 
-                        className="text-base font-bold text-gray-900 dark:text-white hover:text-myfav-primary dark:hover:text-myfav-blue-400 transition-colors cursor-help"
+                        className="text-base font-bold text-gray-900 dark:text-white hover:text-myhigh5-primary dark:hover:text-myhigh5-blue-400 transition-colors cursor-help"
                   onMouseEnter={onHoverAuthor}
                   onMouseLeave={onHoverEnd}
                 >
@@ -569,7 +569,7 @@ export function ContestantCard({
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <span className="text-xs font-bold bg-gradient-to-r from-myfav-primary to-myfav-secondary text-white px-2.5 py-1 rounded-full cursor-help shadow-sm">
+                        <span className="text-xs font-bold bg-gradient-to-r from-myhigh5-primary to-myhigh5-secondary text-white px-2.5 py-1 rounded-full cursor-help shadow-sm">
                     #{rank}
                   </span>
                       </TooltipTrigger>
@@ -590,7 +590,7 @@ export function ContestantCard({
                 <Tooltip>
                   <TooltipTrigger asChild>
               <p 
-                      className="text-xs text-gray-500 dark:text-gray-500 mt-1 cursor-help hover:text-myfav-primary"
+                      className="text-xs text-gray-500 dark:text-gray-500 mt-1 cursor-help hover:text-myhigh5-primary"
                 onMouseEnter={currentUserId === userId ? onHoverVotes : undefined}
                 onMouseLeave={currentUserId === userId ? onHoverEnd : undefined}
               >

@@ -30,7 +30,7 @@ export function FloatingActionButton({
 
   const variantClasses = {
     default: 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-lg hover:shadow-xl border border-gray-200 dark:border-gray-700',
-    primary: 'bg-myfav-primary hover:bg-myfav-primary/90 text-white shadow-lg hover:shadow-xl',
+    primary: 'bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white shadow-lg hover:shadow-xl',
     secondary: 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white shadow-lg hover:shadow-xl'
   }
 

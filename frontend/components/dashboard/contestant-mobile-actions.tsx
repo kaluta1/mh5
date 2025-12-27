@@ -108,7 +108,7 @@ export function ContestantMobileActions({
           hasVoted
             ? 'bg-gray-400 dark:bg-gray-700 text-white cursor-not-allowed'
             : canVote
-            ? 'bg-gradient-to-r from-myfav-primary via-myfav-primary-dark to-indigo-600 text-white hover:shadow-lg active:scale-95'
+            ? 'bg-gradient-to-r from-myhigh5-primary via-myhigh5-primary-dark to-indigo-600 text-white hover:shadow-lg active:scale-95'
             : 'bg-gray-400 dark:bg-gray-700 text-white cursor-not-allowed'
         }`}
       >

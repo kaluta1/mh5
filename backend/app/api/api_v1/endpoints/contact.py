@@ -26,7 +26,7 @@ def send_contact_email_notification(
     """Envoyer un email de notification pour un nouveau message de contact (toujours en anglais)"""
     try:
         # Email destinataire
-        recipient_email = "enquiries@digitalshoppingmall.net"
+        recipient_email = "infos@myhigh5.com"
         
         # Traduire la catégorie en anglais
         category_translations = {
@@ -158,7 +158,7 @@ def create_contact_message(
     Créer un nouveau message de contact
     
     Le message sera stocké en base de données et un email de notification
-    sera envoyé à enquiries@digitalshoppingmall.net
+    sera envoyé à infos@myhigh5.com
     """
     # Valider la catégorie
     valid_categories = ["general", "billing", "account", "technical", "partnership", "other"]
@@ -188,7 +188,7 @@ def create_contact_message(
         
         logger.info(f"Langue détectée pour l'email de confirmation: {sender_lang}")
         
-        # Envoyer l'email de notification à enquiries@digitalshoppingmall.net en arrière-plan
+        # Envoyer l'email de notification à infos@myhigh5.com en arrière-plan
         background_tasks.add_task(
             send_contact_email_notification,
             name=message_in.name,

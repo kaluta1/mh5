@@ -52,7 +52,7 @@ export function PostPoll({ poll, postId }: PostPollProps) {
                 className={cn(
                   "w-full text-left p-3 rounded-lg border transition-colors",
                   canVote && "hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer",
-                  isSelected && "border-myfav-primary bg-myfav-primary/5",
+                  isSelected && "border-myhigh5-primary bg-myhigh5-primary/5",
                   !canVote && "cursor-default",
                   isLoading && "opacity-50"
                 )}

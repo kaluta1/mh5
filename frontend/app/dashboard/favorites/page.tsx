@@ -240,7 +240,7 @@ export default function FavoritesPage() {
                   }`}
                 >
                   {/* Background Image */}
-                  <div className="relative w-full h-32 sm:h-48 md:h-64 bg-gradient-to-br from-myfav-primary to-myfav-primary-dark flex items-center justify-center overflow-hidden">
+                  <div className="relative w-full h-32 sm:h-48 md:h-64 bg-gradient-to-br from-myhigh5-primary to-myhigh5-primary-dark flex items-center justify-center overflow-hidden">
                     {contestant.author_avatar_url ? (
                       <img
                         src={contestant.author_avatar_url}
@@ -279,7 +279,7 @@ export default function FavoritesPage() {
                   </div>
 
                   {/* Position Badge - Top Left */}
-                  <div className="absolute top-1 left-1 sm:top-2 sm:left-2 bg-myfav-primary text-white rounded-full w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center font-bold text-xs sm:text-sm shadow-lg">
+                  <div className="absolute top-1 left-1 sm:top-2 sm:left-2 bg-myhigh5-primary text-white rounded-full w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center font-bold text-xs sm:text-sm shadow-lg">
                     {index + 1}
                   </div>
 

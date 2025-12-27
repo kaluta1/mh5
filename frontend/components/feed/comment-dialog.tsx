@@ -101,8 +101,8 @@ export function CommentDialog({ open, onOpenChange, postId, onCommentAdded }: Co
                     <button
                       onClick={() => handleLike(comment.id)}
                       className={cn(
-                        "flex items-center gap-1 text-xs text-gray-500 hover:text-myfav-primary",
-                        comment.is_liked && "text-myfav-primary"
+                        "flex items-center gap-1 text-xs text-gray-500 hover:text-myhigh5-primary",
+                        comment.is_liked && "text-myhigh5-primary"
                       )}
                     >
                       <Heart className={cn("h-3 w-3", comment.is_liked && "fill-current")} />

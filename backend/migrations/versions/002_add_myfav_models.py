@@ -1,4 +1,4 @@
-"""Add all MyFav models
+"""Add all MyHigh5 models
 
 Revision ID: 002_add_myfav_models
 Revises: 001_initial_migration

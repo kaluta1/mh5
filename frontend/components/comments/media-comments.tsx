@@ -49,7 +49,7 @@ export function MediaComments({
     <div className="bg-gray-900 h-full flex flex-col">
       {/* Header */}
       <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-700 flex-shrink-0">
-        <MessageCircle className="w-4 h-4 text-myfav-primary" />
+        <MessageCircle className="w-4 h-4 text-myhigh5-primary" />
         <h3 className="text-gray-200 font-semibold text-sm">
           {t('contestant_detail.comments')} ({comments.length})
         </h3>
@@ -89,7 +89,7 @@ export function MediaComments({
                       className="w-7 h-7 rounded-full object-cover"
                     />
                   ) : (
-                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-myfav-primary to-myfav-primary-dark flex items-center justify-center text-white font-bold text-xs">
+                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-myhigh5-primary to-myhigh5-primary-dark flex items-center justify-center text-white font-bold text-xs">
                       {comment.author_name.charAt(0).toUpperCase()}
                     </div>
                   )}
@@ -97,7 +97,7 @@ export function MediaComments({
 
                 {/* Comment Content */}
                 <div className="flex-1 min-w-0">
-                  <div className="bg-gray-800 rounded-lg px-3 py-2 border-l-2 border-myfav-primary/50">
+                  <div className="bg-gray-800 rounded-lg px-3 py-2 border-l-2 border-myhigh5-primary/50">
                     <h4 className="font-semibold text-gray-200 text-xs">
                       {comment.author_name}
                     </h4>
@@ -114,7 +114,7 @@ export function MediaComments({
                         minute: '2-digit'
                       })}
                     </span>
-                    <button className="hover:text-myfav-primary transition-colors flex items-center gap-1">
+                    <button className="hover:text-myhigh5-primary transition-colors flex items-center gap-1">
                       <Heart className="w-3 h-3" />
                       <span>{t('contestant_detail.like_comment')}</span>
                     </button>
@@ -133,7 +133,7 @@ export function MediaComments({
             value={commentText}
             onChange={(e) => setCommentText(e.target.value)}
             placeholder={t('contestant_detail.comment_placeholder')}
-            className="flex-1 px-3 py-2 rounded-lg border border-gray-700 bg-gray-800 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-myfav-primary text-xs resize-none"
+            className="flex-1 px-3 py-2 rounded-lg border border-gray-700 bg-gray-800 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-myhigh5-primary text-xs resize-none"
             rows={2}
           />
         </div>
@@ -142,7 +142,7 @@ export function MediaComments({
             onClick={handlePostComment}
             disabled={!commentText.trim() || isPostingComment || isLoading}
             size="sm"
-            className="bg-gradient-to-r from-myfav-primary to-myfav-primary-dark text-white text-xs h-8"
+            className="bg-gradient-to-r from-myhigh5-primary to-myhigh5-primary-dark text-white text-xs h-8"
           >
             <Send className="w-3 h-3 mr-1" />
             {isPostingComment ? t('contestant_detail.voting') : t('contestant_detail.add_comment')}

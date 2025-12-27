@@ -116,7 +116,7 @@ export function AuthorPopover({ userId, name, avatar, country, city, rank, votes
         >
           {loadingAuthorDetails ? (
             <div className="flex items-center justify-center py-4">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-myfav-primary"></div>
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-myhigh5-primary"></div>
             </div>
           ) : (
             <div className="space-y-3">
@@ -126,7 +126,7 @@ export function AuthorPopover({ userId, name, avatar, country, city, rank, votes
                     <img src={avatar} alt={name} className="w-full h-full object-cover" />
                   </div>
                 ) : (
-                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-myfav-primary to-myfav-primary-dark flex items-center justify-center text-2xl flex-shrink-0">
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-myhigh5-primary to-myhigh5-primary-dark flex items-center justify-center text-2xl flex-shrink-0">
                     {avatar || '👤'}
                   </div>
                 )}

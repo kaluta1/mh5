@@ -89,7 +89,7 @@ export function SuggestedGroups({ currentUserId }: SuggestedGroupsProps) {
       <div className="space-y-4">
         {groups.map((group) => (
           <div key={group.id} className="flex items-start gap-3">
-            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-myfav-primary to-myfav-secondary flex items-center justify-center flex-shrink-0">
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary flex items-center justify-center flex-shrink-0">
               <Users className="w-6 h-6 text-white" />
             </div>
             <div className="flex-1 min-w-0">
@@ -128,7 +128,7 @@ export function SuggestedGroups({ currentUserId }: SuggestedGroupsProps) {
       </div>
       <Button
         variant="ghost"
-        className="w-full mt-4 text-myfav-primary hover:text-myfav-primary/80"
+        className="w-full mt-4 text-myhigh5-primary hover:text-myhigh5-primary/80"
       >
         Voir plus
       </Button>

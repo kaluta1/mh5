@@ -325,7 +325,7 @@ export function CountryCitySelector({
         <select
           value={selectedContinent}
           onChange={(e) => setSelectedContinent(e.target.value)}
-          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myfav-primary"
+          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myhigh5-primary"
           required
         >
           <option value="">Sélectionner un continent</option>
@@ -351,7 +351,7 @@ export function CountryCitySelector({
               const country = countries.find(c => c.code === e.target.value)
               if (country) onCountryChange(country.name)
             }}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myfav-primary disabled:opacity-50"
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myhigh5-primary disabled:opacity-50"
             disabled={loading || countries.length === 0}
             required
           >
@@ -375,7 +375,7 @@ export function CountryCitySelector({
           <select
             value={selectedRegion}
             onChange={(e) => setSelectedRegion(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myfav-primary disabled:opacity-50"
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myhigh5-primary disabled:opacity-50"
             disabled={loading}
           >
             <option value="">Toutes les régions</option>
@@ -398,7 +398,7 @@ export function CountryCitySelector({
           <select
             value={selectedCity}
             onChange={(e) => onCityChange(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myfav-primary disabled:opacity-50"
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myhigh5-primary disabled:opacity-50"
             disabled={loading || cities.length === 0}
             required
           >

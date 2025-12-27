@@ -33,11 +33,11 @@ export function KYCStepSidebar({ steps, currentStep, onStepClick }: KYCStepSideb
                 <div
                   className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm cursor-pointer transition-all ${
                     currentStep >= step.number
-                      ? 'bg-myfav-primary text-white'
+                      ? 'bg-myhigh5-primary text-white'
                       : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
                   } ${
                     currentStep === step.number
-                      ? 'ring-2 ring-myfav-primary ring-offset-2 dark:ring-offset-gray-900'
+                      ? 'ring-2 ring-myhigh5-primary ring-offset-2 dark:ring-offset-gray-900'
                       : ''
                   }`}
                 >
@@ -66,14 +66,14 @@ export function KYCStepSidebar({ steps, currentStep, onStepClick }: KYCStepSideb
                 onClick={() => onStepClick(step.number)}
                 className={`flex items-start gap-3 p-4 rounded-lg cursor-pointer transition-all ${
                   currentStep === step.number
-                    ? 'bg-myfav-primary/10 border border-myfav-primary'
+                    ? 'bg-myhigh5-primary/10 border border-myhigh5-primary'
                     : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
                 }`}
               >
                 <div
                   className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
                     currentStep >= step.number
-                      ? 'bg-myfav-primary text-white'
+                      ? 'bg-myhigh5-primary text-white'
                       : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
                   }`}
                 >

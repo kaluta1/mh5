@@ -79,7 +79,7 @@ export function ReportsCard({ reports = [], onGenerateReport }: ReportsCardProps
               <button
                 key={reportType.type}
                 onClick={() => onGenerateReport?.(reportType.type)}
-                className="group relative p-4 rounded-xl border-2 border-gray-200 dark:border-gray-700 hover:border-myfav-primary/50 dark:hover:border-myfav-blue-400/50 transition-all duration-300 hover:shadow-lg bg-white dark:bg-gray-800 text-left"
+                className="group relative p-4 rounded-xl border-2 border-gray-200 dark:border-gray-700 hover:border-myhigh5-primary/50 dark:hover:border-myhigh5-blue-400/50 transition-all duration-300 hover:shadow-lg bg-white dark:bg-gray-800 text-left"
               >
                 <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${reportType.color} rounded-t-xl`} />
                 <div className="flex items-start gap-3 mt-2">
@@ -87,7 +87,7 @@ export function ReportsCard({ reports = [], onGenerateReport }: ReportsCardProps
                     <Icon className="w-5 h-5 text-white" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h4 className="font-semibold text-gray-900 dark:text-white group-hover:text-myfav-primary dark:group-hover:text-myfav-blue-400 transition-colors">
+                    <h4 className="font-semibold text-gray-900 dark:text-white group-hover:text-myhigh5-primary dark:group-hover:text-myhigh5-blue-400 transition-colors">
                       {reportType.label}
                     </h4>
                     <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">

@@ -182,7 +182,7 @@ export function SelfieVerificationDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Camera className="w-5 h-5 text-myfav-primary" />
+            <Camera className="w-5 h-5 text-myhigh5-primary" />
             {getTitle()}
           </DialogTitle>
           <DialogDescription>
@@ -208,7 +208,7 @@ export function SelfieVerificationDialog({
                   className="h-24 flex-col gap-2"
                   onClick={startCamera}
                 >
-                  <Camera className="w-8 h-8 text-myfav-primary" />
+                  <Camera className="w-8 h-8 text-myhigh5-primary" />
                   <span>{t('verification.use_camera') || 'Utiliser la caméra'}</span>
                 </Button>
                 <Button 
@@ -216,7 +216,7 @@ export function SelfieVerificationDialog({
                   className="h-24 flex-col gap-2"
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  <Upload className="w-8 h-8 text-myfav-primary" />
+                  <Upload className="w-8 h-8 text-myhigh5-primary" />
                   <span>{t('verification.upload_image') || 'Importer une image'}</span>
                 </Button>
               </div>
@@ -252,7 +252,7 @@ export function SelfieVerificationDialog({
                   <X className="w-4 h-4 mr-2" />
                   {t('common.cancel') || 'Annuler'}
                 </Button>
-                <Button onClick={capturePhoto} className="flex-1 bg-myfav-primary hover:bg-myfav-primary-dark">
+                <Button onClick={capturePhoto} className="flex-1 bg-myhigh5-primary hover:bg-myhigh5-primary-dark">
                   <Camera className="w-4 h-4 mr-2" />
                   {t('verification.capture') || 'Capturer'}
                 </Button>
@@ -278,7 +278,7 @@ export function SelfieVerificationDialog({
                 <Button 
                   onClick={handleSubmit} 
                   disabled={isUploading}
-                  className="flex-1 bg-myfav-primary hover:bg-myfav-primary-dark"
+                  className="flex-1 bg-myhigh5-primary hover:bg-myhigh5-primary-dark"
                 >
                   {isUploading ? (
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />

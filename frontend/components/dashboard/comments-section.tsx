@@ -250,7 +250,7 @@ export function CommentsSection({
                   }}
                   users={commenters}
                   placeholder={t('dashboard.contests.add_comment_placeholder') || 'Ajouter un commentaire...'}
-                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-full bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myfav-primary focus:border-transparent transition-all"
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-full bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myhigh5-primary focus:border-transparent transition-all"
                   disabled={isSubmitting}
                 />
                 <div className="flex items-center justify-between">
@@ -260,7 +260,7 @@ export function CommentsSection({
                   <Button
                     onClick={handleAddComment}
                     disabled={!newComment.trim() || isSubmitting}
-                    className="px-6 py-2 bg-myfav-primary hover:bg-myfav-primary-dark text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-6 py-2 bg-myhigh5-primary hover:bg-myhigh5-primary-dark text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isSubmitting ? t('dashboard.contests.sending') || 'Envoi...' : t('dashboard.contests.send') || 'Envoyer'}
                   </Button>

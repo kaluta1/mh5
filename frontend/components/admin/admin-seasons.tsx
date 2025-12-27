@@ -174,14 +174,14 @@ export default function AdminSeasons() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-gradient-to-br from-myfav-primary via-myfav-primary/80 to-myfav-secondary dark:from-myfav-primary/20 dark:via-myfav-primary/10 dark:to-myfav-secondary/10 rounded-xl p-8 border border-myfav-primary/30 dark:border-myfav-primary/20 shadow-lg">
+      <div className="bg-gradient-to-br from-myhigh5-primary via-myhigh5-primary/80 to-myhigh5-secondary dark:from-myhigh5-primary/20 dark:via-myhigh5-primary/10 dark:to-myhigh5-secondary/10 rounded-xl p-8 border border-myhigh5-primary/30 dark:border-myhigh5-primary/20 shadow-lg">
         <div className="flex items-center gap-3 mb-2">
-          <Calendar className="h-8 w-8 text-white dark:text-myfav-secondary" />
+          <Calendar className="h-8 w-8 text-white dark:text-myhigh5-secondary" />
           <h1 className="text-4xl font-bold text-white dark:text-white">
             {t('admin.seasons.title')}
           </h1>
         </div>
-        <p className="text-myfav-primary/90 dark:text-myfav-secondary/80 font-medium">
+        <p className="text-myhigh5-primary/90 dark:text-myhigh5-secondary/80 font-medium">
           {t('admin.seasons.description')}
         </p>
       </div>
@@ -245,7 +245,7 @@ export default function AdminSeasons() {
                 </Button>
                 <Button 
                   type="submit" 
-                  className="bg-myfav-primary hover:bg-myfav-primary/90"
+                  className="bg-myhigh5-primary hover:bg-myhigh5-primary/90"
                   disabled={isSubmitting}
                 >
                   {isSubmitting ? (
@@ -268,7 +268,7 @@ export default function AdminSeasons() {
         <div className="flex justify-end">
           <Button 
             onClick={() => setShowForm(true)} 
-            className="gap-2 bg-myfav-primary hover:bg-myfav-primary/90"
+            className="gap-2 bg-myhigh5-primary hover:bg-myhigh5-primary/90"
           >
             <Plus className="h-4 w-4" />
             {t('admin.seasons.new_season')}
@@ -279,7 +279,7 @@ export default function AdminSeasons() {
       {/* List */}
       {loading ? (
         <div className="flex justify-center py-12">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-myfav-primary"></div>
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-myhigh5-primary"></div>
         </div>
       ) : (
         <div className="grid gap-4">

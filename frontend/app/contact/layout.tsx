@@ -4,8 +4,14 @@ import { getMetadataTranslations, detectLanguageFromHeaders } from "@/lib/metada
 import { headers } from "next/headers"
 
 function generateMetadata(): Metadata {
-  const headersList = headers()
-  const lang = detectLanguageFromHeaders(headersList)
+  let lang: import("@/lib/translations").Language = 'fr'
+  try {
+    const headersList = headers()
+    lang = detectLanguageFromHeaders(headersList)
+  } catch {
+    // Si headers() n'est pas disponible (lors du build), utiliser le défaut
+    lang = 'fr'
+  }
   const translations = getMetadataTranslations(lang)
 
   return createMetadata({

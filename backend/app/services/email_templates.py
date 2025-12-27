@@ -8,7 +8,7 @@ EMAIL_TRANSLATIONS = {
     "fr": {
         # Common
         "company_name": "MYHIGH5",
-        "support_email": "support@myhigh5.com",
+        "support_email": "infos@myhigh5.com",
         "all_rights_reserved": "Tous droits réservés",
         "ignore_email": "Si vous n'avez pas demandé cet email, vous pouvez l'ignorer.",
         
@@ -117,7 +117,7 @@ EMAIL_TRANSLATIONS = {
     "en": {
         # Common
         "company_name": "MYHIGH5",
-        "support_email": "support@myhigh5.com",
+        "support_email": "infos@myhigh5.com",
         "all_rights_reserved": "All rights reserved",
         "ignore_email": "If you did not request this email, you can ignore it.",
         
@@ -226,7 +226,7 @@ EMAIL_TRANSLATIONS = {
     "es": {
         # Common
         "company_name": "MYHIGH5",
-        "support_email": "support@myhigh5.com",
+        "support_email": "infos@myhigh5.com",
         "all_rights_reserved": "Todos los derechos reservados",
         "ignore_email": "Si no solicitó este correo electrónico, puede ignorarlo.",
         
@@ -335,7 +335,7 @@ EMAIL_TRANSLATIONS = {
     "de": {
         # Common
         "company_name": "MYHIGH5",
-        "support_email": "support@myhigh5.com",
+        "support_email": "infos@myhigh5.com",
         "all_rights_reserved": "Alle Rechte vorbehalten",
         "ignore_email": "Wenn Sie diese E-Mail nicht angefordert haben, können Sie sie ignorieren.",
         

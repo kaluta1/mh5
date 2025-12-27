@@ -130,12 +130,12 @@ export default function ClubsPage() {
   })
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-myfav-blue-50 via-white to-myfav-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+    <div className="min-h-screen bg-gradient-to-br from-myhigh5-blue-50 via-white to-myhigh5-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
       <Header />
       
       <main className="pt-24 pb-16">
         {/* Hero Section */}
-        <section className="relative py-16 bg-gradient-to-r from-myfav-primary to-myfav-secondary overflow-hidden">
+        <section className="relative py-16 bg-gradient-to-r from-myhigh5-primary to-myhigh5-secondary overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_50%,rgba(255,255,255,0.1),transparent_50%)]" />
           <div className="container px-4 md:px-6 relative z-10">
             <div className="max-w-3xl mx-auto text-center text-white">
@@ -190,7 +190,7 @@ export default function ClubsPage() {
                     onClick={() => setSelectedCategory(cat.id)}
                     className={`${
                       selectedCategory === cat.id 
-                        ? "bg-myfav-primary hover:bg-myfav-blue-700 text-white" 
+                        ? "bg-myhigh5-primary hover:bg-myhigh5-blue-700 text-white" 
                         : ""
                     }`}
                   >
@@ -233,7 +233,7 @@ export default function ClubsPage() {
                   className="group bg-white dark:bg-gray-800 rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1"
                 >
                   {/* Cover */}
-                  <div className="relative h-32 bg-gradient-to-br from-myfav-primary to-myfav-secondary flex items-center justify-center">
+                  <div className="relative h-32 bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary flex items-center justify-center">
                     <span className="text-6xl">{club.coverImage}</span>
                     {club.isPrivate && (
                       <Badge className="absolute top-3 right-3 bg-amber-500 text-white border-0">
@@ -265,13 +265,13 @@ export default function ClubsPage() {
                         <span>{club.memberCount.toLocaleString()} {cl.members}</span>
                       </div>
                       <div className="text-sm text-gray-500">
-                        {cl.by} <span className="font-semibold text-myfav-primary">{club.owner}</span>
+                        {cl.by} <span className="font-semibold text-myhigh5-primary">{club.owner}</span>
                       </div>
                     </div>
                     
                     <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-700">
                       {club.isPrivate ? (
-                        <div className="text-lg font-bold text-myfav-primary">
+                        <div className="text-lg font-bold text-myhigh5-primary">
                           {club.monthlyPrice}$ <span className="text-sm font-normal text-gray-500">{cl.month}</span>
                         </div>
                       ) : (
@@ -280,7 +280,7 @@ export default function ClubsPage() {
                           {cl.free}
                         </Badge>
                       )}
-                      <Button className="bg-myfav-primary hover:bg-myfav-primary-dark">
+                      <Button className="bg-myhigh5-primary hover:bg-myhigh5-primary-dark">
                         {club.isPrivate ? cl.join : cl.access}
                         <ArrowRight className="w-4 h-4 ml-2" />
                       </Button>
@@ -294,7 +294,7 @@ export default function ClubsPage() {
 
         {/* Create Club CTA */}
         <section className="container px-4 md:px-6 py-12">
-          <div className="bg-gradient-to-r from-myfav-primary to-myfav-secondary rounded-3xl p-8 md:p-12">
+          <div className="bg-gradient-to-r from-myhigh5-primary to-myhigh5-secondary rounded-3xl p-8 md:p-12">
             <div className="grid md:grid-cols-2 gap-8 items-center">
               <div className="text-white">
                 <h2 className="text-3xl md:text-4xl font-bold mb-4">
@@ -325,7 +325,7 @@ export default function ClubsPage() {
                 </ul>
                 <Button 
                   size="lg"
-                  className="bg-white text-myfav-primary hover:bg-gray-100 font-bold px-8 py-6 text-lg"
+                  className="bg-white text-myhigh5-primary hover:bg-gray-100 font-bold px-8 py-6 text-lg"
                 >
                   <Crown className="w-5 h-5 mr-2" />
                   {t('pages.clubs.cta.button') || "Créer mon Club"}

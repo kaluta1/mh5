@@ -51,7 +51,7 @@ export function ContestantsSidebar({
               <Button
                 variant="outline"
                 size="sm"
-                className="text-xs border-myfav-primary/30 text-myfav-primary hover:bg-myfav-primary hover:text-white transition-all"
+                className="text-xs border-myhigh5-primary/30 text-myhigh5-primary hover:bg-myhigh5-primary hover:text-white transition-all"
                 onClick={() => router.push(`/dashboard/contests/${contestId}/contestants`)}
               >
                 {language === 'fr' ? 'Voir tout' : language === 'es' ? 'Ver todo' : language === 'de' ? 'Alle anzeigen' : 'View all'}
@@ -69,16 +69,16 @@ export function ContestantsSidebar({
                   <img
                     src={contestant.avatar || '/default-avatar.png'}
                     alt={contestant.name}
-                    className="w-12 h-12 rounded-full object-cover ring-2 ring-gray-200 dark:ring-gray-700 group-hover:ring-myfav-primary/50 transition-all"
+                    className="w-12 h-12 rounded-full object-cover ring-2 ring-gray-200 dark:ring-gray-700 group-hover:ring-myhigh5-primary/50 transition-all"
                   />
                   {contestant.rank && contestant.rank <= 3 && (
-                    <span className="absolute -top-1 -right-1 text-xs font-bold bg-myfav-primary text-white rounded-full w-5 h-5 flex items-center justify-center shadow-lg">
+                    <span className="absolute -top-1 -right-1 text-xs font-bold bg-myhigh5-primary text-white rounded-full w-5 h-5 flex items-center justify-center shadow-lg">
                       {contestant.rank}
                     </span>
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-gray-900 dark:text-white truncate group-hover:text-myfav-primary dark:group-hover:text-myfav-blue-400 transition-colors">
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white truncate group-hover:text-myhigh5-primary dark:group-hover:text-myhigh5-blue-400 transition-colors">
                     {contestant.name}
                   </p>
                   {formatLocation ? (
@@ -104,7 +104,7 @@ export function ContestantsSidebar({
                   <Button
                     size="sm"
                     variant="outline"
-                    className="text-xs px-2 py-1 h-auto border-myfav-primary/30 text-myfav-primary hover:bg-myfav-primary hover:text-white transition-all"
+                    className="text-xs px-2 py-1 h-auto border-myhigh5-primary/30 text-myhigh5-primary hover:bg-myhigh5-primary hover:text-white transition-all"
                     onClick={() => {
                       // TODO: Implement follow functionality
                       onShowToast(t('common.follow') || 'Follow functionality coming soon', 'success')

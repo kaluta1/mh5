@@ -379,7 +379,7 @@ export default function NotificationsPage() {
           {/* Infinite scroll target */}
           {hasMore && (
             <div ref={observerTarget} className="h-10 flex items-center justify-center">
-              {isLoadingMore && <Loader2 className="h-6 w-6 animate-spin text-myfav-primary" />}
+              {isLoadingMore && <Loader2 className="h-6 w-6 animate-spin text-myhigh5-primary" />}
             </div>
           )}
         </div>

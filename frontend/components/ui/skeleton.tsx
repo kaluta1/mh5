@@ -136,7 +136,7 @@ export function DashboardSkeleton() {
   return (
     <div className="space-y-8 pb-10">
       {/* Header Skeleton */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-myfav-primary/40 via-purple-600/30 to-purple-800/40 rounded-2xl p-6 md:p-8 animate-pulse">
+      <div className="relative overflow-hidden bg-gradient-to-br from-myhigh5-primary/40 via-purple-600/30 to-purple-800/40 rounded-2xl p-6 md:p-8 animate-pulse">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
           <div className="space-y-3">
             <Skeleton className="h-4 w-32" />
@@ -190,7 +190,7 @@ export function DashboardSkeleton() {
       {/* Quick Stats Skeleton */}
       <div className="grid md:grid-cols-3 gap-4">
         {[...Array(3)].map((_, i) => (
-          <div key={i} className="bg-gradient-to-br from-myfav-primary/50 to-purple-700/50 rounded-2xl p-6 animate-pulse">
+          <div key={i} className="bg-gradient-to-br from-myhigh5-primary/50 to-purple-700/50 rounded-2xl p-6 animate-pulse">
             <div className="flex items-center justify-between mb-4">
               <Skeleton className="h-10 w-10 rounded-xl bg-white/20" />
               <Skeleton className="h-6 w-20 rounded-full bg-white/20" />

@@ -42,7 +42,7 @@ import app.models
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    description="API pour MyFav - Plateforme de concours modernes multi-langues",
+    description="API pour MyHigh5 - Plateforme de concours modernes multi-langues",
     version="0.1.0",
     docs_url="/docs",
     redoc_url="/redoc",

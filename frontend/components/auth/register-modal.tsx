@@ -266,7 +266,7 @@ export default function RegisterModal({ open, onOpenChange, onSwitchToLogin }: R
 
           <Button
             type="submit"
-            className="w-full bg-myfav-primary hover:bg-myfav-primary-dark text-white font-semibold"
+            className="w-full bg-myhigh5-primary hover:bg-myhigh5-primary-dark text-white font-semibold"
             disabled={isLoading}
           >
             {isLoading ? (
@@ -286,7 +286,7 @@ export default function RegisterModal({ open, onOpenChange, onSwitchToLogin }: R
             <button
               type="button"
               onClick={handleSwitchToLogin}
-              className="text-sm font-medium text-myfav-primary hover:text-myfav-primary-dark dark:text-myfav-blue-400 dark:hover:text-myfav-blue-300"
+              className="text-sm font-medium text-myhigh5-primary hover:text-myhigh5-primary-dark dark:text-myhigh5-blue-400 dark:hover:text-myhigh5-blue-300"
             >
               {t('auth.register.login_link')}
             </button>

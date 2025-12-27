@@ -57,14 +57,14 @@ export function CommentsSection({
             value={commentText}
             onChange={(e) => setCommentText(e.target.value)}
             placeholder={t('contestant_detail.comment_placeholder')}
-            className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myfav-primary"
+            className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myhigh5-primary"
             rows={3}
           />
           <div className="flex gap-2 justify-end">
             <Button
               onClick={handlePostComment}
               disabled={!commentText.trim() || isPostingComment || isLoading}
-              className="bg-gradient-to-r from-myfav-primary to-myfav-primary-dark text-white"
+              className="bg-gradient-to-r from-myhigh5-primary to-myhigh5-primary-dark text-white"
             >
               <Send className="w-4 h-4 mr-2" />
               {isPostingComment ? t('contestant_detail.voting') : t('contestant_detail.add_comment')}

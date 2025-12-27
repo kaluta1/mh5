@@ -178,7 +178,7 @@ export default function AffiliatesListPage() {
 
   const getLevelBadge = (level: number) => {
     const opacity = Math.max(100 - (level - 1) * 10, 20)
-    return `bg-myfav-primary/${opacity} text-white`
+    return `bg-myhigh5-primary/${opacity} text-white`
   }
 
   const getKycStatusBadge = (status: KYCStatusType | undefined) => {
@@ -261,7 +261,7 @@ export default function AffiliatesListPage() {
           </Link>
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-myfav-primary flex items-center justify-center shadow-lg shadow-myfav-primary/25">
+              <div className="w-10 h-10 rounded-xl bg-myhigh5-primary flex items-center justify-center shadow-lg shadow-myhigh5-primary/25">
                 <Users className="w-5 h-5 text-white" />
               </div>
               {t('dashboard.affiliates.all_affiliates') || 'Tous les affiliés'}
@@ -276,10 +276,10 @@ export default function AffiliatesListPage() {
       {/* Stats Summary */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         {/* Total */}
-        <div className="relative group bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-100 dark:border-gray-700 cursor-help transition-all hover:shadow-lg hover:border-myfav-primary/50">
+        <div className="relative group bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-100 dark:border-gray-700 cursor-help transition-all hover:shadow-lg hover:border-myhigh5-primary/50">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-myfav-primary/10 flex items-center justify-center">
-              <Users className="w-5 h-5 text-myfav-primary" />
+            <div className="w-10 h-10 rounded-lg bg-myhigh5-primary/10 flex items-center justify-center">
+              <Users className="w-5 h-5 text-myhigh5-primary" />
             </div>
             <div>
               <p className="text-2xl font-bold text-gray-900 dark:text-white">{totalCount}</p>
@@ -419,17 +419,17 @@ export default function AffiliatesListPage() {
 
       {/* Filters */}
       {/* Commission Rates Info */}
-      <div className="bg-gradient-to-r from-myfav-primary/10 to-purple-500/10 rounded-xl p-4 border border-myfav-primary/20">
+      <div className="bg-gradient-to-r from-myhigh5-primary/10 to-purple-500/10 rounded-xl p-4 border border-myhigh5-primary/20">
         <div className="flex items-start gap-3">
-          <div className="w-8 h-8 rounded-lg bg-myfav-primary/20 flex items-center justify-center flex-shrink-0">
-            <DollarSign className="w-4 h-4 text-myfav-primary" />
+          <div className="w-8 h-8 rounded-lg bg-myhigh5-primary/20 flex items-center justify-center flex-shrink-0">
+            <DollarSign className="w-4 h-4 text-myhigh5-primary" />
           </div>
           <div>
             <p className="font-medium text-gray-900 dark:text-white">
               {t('dashboard.affiliates.commission_structure') || 'Structure des commissions KYC'}
             </p>
             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-              <span className="font-semibold text-myfav-primary">20%</span> {t('dashboard.affiliates.level')} 1 (direct) • 
+              <span className="font-semibold text-myhigh5-primary">20%</span> {t('dashboard.affiliates.level')} 1 (direct) • 
               <span className="font-semibold text-purple-600 dark:text-purple-400 ml-1">2%</span> {t('dashboard.affiliates.levels')} 2-10 (indirect)
             </p>
           </div>
@@ -551,7 +551,7 @@ export default function AffiliatesListPage() {
               <div className="md:grid md:grid-cols-7 md:gap-4 md:items-center space-y-3 md:space-y-0">
                 {/* Affiliate Info */}
                 <div className="col-span-2 flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-myfav-primary flex items-center justify-center text-white font-semibold shadow-lg shadow-myfav-primary/20 flex-shrink-0">
+                  <div className="w-12 h-12 rounded-full bg-myhigh5-primary flex items-center justify-center text-white font-semibold shadow-lg shadow-myhigh5-primary/20 flex-shrink-0">
                     {affiliate.name.charAt(0)}
                   </div>
                   <div className="min-w-0">
@@ -653,7 +653,7 @@ export default function AffiliatesListPage() {
                     onClick={() => setCurrentPage(page)}
                     className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
                       page === currentPage
-                        ? 'bg-myfav-primary text-white'
+                        ? 'bg-myhigh5-primary text-white'
                         : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400'
                     }`}
                   >

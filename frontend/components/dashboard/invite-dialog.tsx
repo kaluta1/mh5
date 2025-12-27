@@ -102,7 +102,7 @@ export function InviteDialog({
       <DialogContent className="max-w-[95vw] sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
-            <Mail className="w-5 h-5 text-myfav-primary" />
+            <Mail className="w-5 h-5 text-myhigh5-primary" />
             {t('affiliates.invite_friend') || 'Inviter un ami'}
           </DialogTitle>
           <DialogDescription className="text-xs sm:text-sm">
@@ -121,7 +121,7 @@ export function InviteDialog({
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="ami@exemple.com"
-              className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-myfav-primary focus:border-transparent transition-all"
+              className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-myhigh5-primary focus:border-transparent transition-all"
               disabled={isLoading}
             />
           </div>
@@ -138,7 +138,7 @@ export function InviteDialog({
               placeholder={t('affiliates.message_placeholder') || 'Salut ! Rejoins-moi sur MyHigh5...'}
               rows={3}
               maxLength={500}
-              className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-myfav-primary focus:border-transparent transition-all resize-none"
+              className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-myhigh5-primary focus:border-transparent transition-all resize-none"
               disabled={isLoading}
             />
             <p className="text-xs text-gray-400 mt-1 text-right">{message.length}/500</p>
@@ -148,7 +148,7 @@ export function InviteDialog({
           <Button
             type="submit"
             disabled={isLoading || !email.trim()}
-            className="w-full bg-myfav-primary hover:bg-myfav-primary/90 text-white rounded-xl py-3 font-medium disabled:opacity-50"
+            className="w-full bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white rounded-xl py-3 font-medium disabled:opacity-50"
           >
             {isLoading ? (
               <>
@@ -179,7 +179,7 @@ export function InviteDialog({
         {/* Copier le lien */}
         <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
           <div className="flex items-center gap-2 mb-2">
-            <LinkIcon className="w-4 h-4 text-myfav-primary" />
+            <LinkIcon className="w-4 h-4 text-myhigh5-primary" />
             <span className="text-sm font-medium text-gray-900 dark:text-white">
               {t('affiliates.share_link') || 'Partager votre lien'}
             </span>
@@ -199,7 +199,7 @@ export function InviteDialog({
             </Button>
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-            {t('affiliates.code_label') || 'Code'}: <span className="font-mono font-bold text-myfav-primary">{referralCode}</span>
+            {t('affiliates.code_label') || 'Code'}: <span className="font-mono font-bold text-myhigh5-primary">{referralCode}</span>
           </p>
         </div>
       </DialogContent>

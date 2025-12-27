@@ -141,7 +141,7 @@ export default function FeedPage() {
             {/* Posts Feed */}
             {isLoading && posts.length === 0 ? (
               <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-myfav-primary" />
+                <Loader2 className="h-8 w-8 animate-spin text-myhigh5-primary" />
               </div>
             ) : posts.length === 0 ? (
               <div className="text-center py-12 px-4">
@@ -153,7 +153,7 @@ export default function FeedPage() {
                 </p>
                 <Button 
                   onClick={() => setIsPostDialogOpen(true)}
-                  className="rounded-full bg-myfav-primary hover:bg-myfav-primary/90 text-white font-semibold px-6"
+                  className="rounded-full bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white font-semibold px-6"
                 >
                   Créer votre premier post
                 </Button>

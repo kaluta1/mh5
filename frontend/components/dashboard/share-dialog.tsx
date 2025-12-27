@@ -70,11 +70,11 @@ export function ShareDialog({ isOpen, onOpenChange, shareLink, title, descriptio
                 type="text"
                 value={shareLink}
                 readOnly
-                className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myfav-primary"
+                className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myhigh5-primary"
               />
               <button
                 onClick={copyToClipboard}
-                className="px-4 py-2 bg-myfav-primary hover:bg-myfav-primary-dark text-white rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 bg-myhigh5-primary hover:bg-myhigh5-primary-dark text-white rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {linkCopied ? (
                   <>

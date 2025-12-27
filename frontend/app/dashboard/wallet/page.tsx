@@ -124,7 +124,7 @@ export default function WalletPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-myfav-primary flex items-center justify-center shadow-lg shadow-myfav-primary/25">
+            <div className="w-10 h-10 rounded-xl bg-myhigh5-primary flex items-center justify-center shadow-lg shadow-myhigh5-primary/25">
               <Wallet className="w-5 h-5 text-white" />
             </div>
             {t('dashboard.wallet.title')}
@@ -156,7 +156,7 @@ export default function WalletPage() {
       {/* Balance Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Main Balance */}
-        <div className="relative overflow-hidden bg-myfav-primary rounded-2xl p-6 text-white shadow-xl shadow-myfav-primary/20">
+        <div className="relative overflow-hidden bg-myhigh5-primary rounded-2xl p-6 text-white shadow-xl shadow-myhigh5-primary/20">
           <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
           <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full translate-y-1/2 -translate-x-1/2" />
           <div className="relative">
@@ -198,8 +198,8 @@ export default function WalletPage() {
         {/* Total Earnings */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-lg transition-shadow">
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-12 h-12 rounded-xl bg-myfav-primary/10 dark:bg-myfav-primary/20 flex items-center justify-center">
-              <Sparkles className="w-6 h-6 text-myfav-primary" />
+            <div className="w-12 h-12 rounded-xl bg-myhigh5-primary/10 dark:bg-myhigh5-primary/20 flex items-center justify-center">
+              <Sparkles className="w-6 h-6 text-myhigh5-primary" />
             </div>
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400">{t('dashboard.wallet.total_earnings')}</p>
@@ -223,7 +223,7 @@ export default function WalletPage() {
               {t('dashboard.wallet.recent_transactions')}
             </h2>
             <Link href="/dashboard/wallet/transactions">
-              <Button variant="ghost" size="sm" className="text-myfav-primary hover:text-myfav-primary/80">
+              <Button variant="ghost" size="sm" className="text-myhigh5-primary hover:text-myhigh5-primary/80">
                 {t('dashboard.wallet.see_all')}
                 <ChevronRight className="w-4 h-4 ml-1" />
               </Button>

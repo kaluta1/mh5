@@ -163,10 +163,10 @@ export default function SettingsPage() {
                   <img 
                     src={user.avatar_url} 
                     alt="Avatar" 
-                    className="w-28 h-28 rounded-2xl object-cover border-4 border-myfav-primary/30 shadow-lg"
+                    className="w-28 h-28 rounded-2xl object-cover border-4 border-myhigh5-primary/30 shadow-lg"
                   />
                 ) : (
-                  <div className="w-28 h-28 rounded-2xl bg-gradient-to-br from-myfav-primary/20 to-myfav-primary/5 border-4 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center">
+                  <div className="w-28 h-28 rounded-2xl bg-gradient-to-br from-myhigh5-primary/20 to-myhigh5-primary/5 border-4 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center">
                     <Camera className="w-10 h-10 text-gray-400 dark:text-gray-500" />
                   </div>
                 )}
@@ -189,7 +189,7 @@ export default function SettingsPage() {
                       : user?.username || user?.email?.split('@')[0] || t('settings.user') || 'Utilisateur'}
                   </h1>
                   {user?.username && (
-                    <p className="text-myfav-primary font-medium">@{user.username}</p>
+                    <p className="text-myhigh5-primary font-medium">@{user.username}</p>
                   )}
                   {user?.bio && (
                     <p className="text-gray-500 dark:text-gray-400 mt-2 text-sm line-clamp-2 max-w-lg">{user.bio}</p>
@@ -280,12 +280,12 @@ export default function SettingsPage() {
 
               {/* Referral Code */}
               {user?.personal_referral_code && (
-                <div className="mt-3 bg-myfav-primary/10 rounded-xl p-3 border border-myfav-primary/30">
+                <div className="mt-3 bg-myhigh5-primary/10 rounded-xl p-3 border border-myhigh5-primary/30">
                   <div className="flex items-center gap-2 mb-1">
-                    <Share2 className="w-4 h-4 text-myfav-primary" />
+                    <Share2 className="w-4 h-4 text-myhigh5-primary" />
                     <span className="text-xs text-gray-500 dark:text-gray-400">{t('settings.referral_code_label') || 'Code parrainage'}</span>
                   </div>
-                  <p className="text-myfav-primary font-mono font-bold text-sm">
+                  <p className="text-myhigh5-primary font-mono font-bold text-sm">
                     {user.personal_referral_code}
                   </p>
                 </div>
@@ -307,7 +307,7 @@ export default function SettingsPage() {
                     onClick={() => setCurrentTab(tab.id)}
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all ${
                       currentTab === tab.id
-                        ? 'bg-myfav-primary text-white shadow-lg shadow-myfav-primary/25'
+                        ? 'bg-myhigh5-primary text-white shadow-lg shadow-myhigh5-primary/25'
                         : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/50 hover:text-gray-900 dark:hover:text-white'
                     }`}
                   >
