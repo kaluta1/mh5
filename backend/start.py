@@ -26,12 +26,42 @@ def run_alembic_migrations():
             
         logger.info(f"PYTHONPATH configuré avec: {env['PYTHONPATH']}")
         
-        # Exécuter la commande alembic avec l'environnement modifié
-        subprocess.run(["alembic", "upgrade", "head"], check=True, env=env)
+        # Vérifier d'abord s'il y a plusieurs têtes
+        result = subprocess.run(
+            ["alembic", "heads"], 
+            capture_output=True, 
+            text=True, 
+            env=env
+        )
+        
+        # Compter le nombre de lignes dans la sortie (chaque ligne = une tête)
+        heads_output = result.stdout.strip()
+        if heads_output:
+            head_count = len([line for line in heads_output.split('\n') if line.strip()])
+            if head_count > 1:
+                logger.warning(f"Plusieurs têtes détectées ({head_count}). Utilisation de 'heads' au lieu de 'head'.")
+                # Essayer d'abord avec 'heads' pour mettre à jour toutes les têtes
+                subprocess.run(["alembic", "upgrade", "heads"], check=True, env=env)
+            else:
+                # Une seule tête, utiliser 'head' normalement
+                subprocess.run(["alembic", "upgrade", "head"], check=True, env=env)
+        else:
+            # Aucune tête trouvée, utiliser 'head' par défaut
+            subprocess.run(["alembic", "upgrade", "head"], check=True, env=env)
+        
         logger.info("Migrations terminées avec succès")
         return True
     except subprocess.CalledProcessError as e:
         logger.error(f"Erreur lors des migrations: {e}")
+        # En cas d'erreur avec 'head', essayer avec 'heads' comme fallback
+        if "Multiple head revisions" in str(e.stderr) if hasattr(e, 'stderr') else "":
+            logger.info("Tentative avec 'heads' comme fallback...")
+            try:
+                subprocess.run(["alembic", "upgrade", "heads"], check=True, env=env)
+                logger.info("Migrations terminées avec succès (fallback)")
+                return True
+            except subprocess.CalledProcessError as e2:
+                logger.error(f"Erreur lors des migrations (fallback): {e2}")
         return False
 
 def initialize_data():
