@@ -171,7 +171,9 @@ class ContestService {
     skip: number = 0, 
     limit: number = 100,
     search?: string,
-    votingLevel?: string
+    votingLevel?: string,
+    votingTypeId?: number | null,
+    hasVotingType?: boolean
   ): Promise<ContestResponse[]> {
     try {
       const params: any = { skip, limit }
@@ -180,6 +182,12 @@ class ContestService {
       }
       if (votingLevel) {
         params.voting_level = votingLevel
+      }
+      if (votingTypeId !== undefined && votingTypeId !== null) {
+        params.voting_type_id = votingTypeId
+      }
+      if (hasVotingType !== undefined) {
+        params.has_voting_type = hasVotingType
       }
       
       // Utiliser le cache pour les requêtes GET

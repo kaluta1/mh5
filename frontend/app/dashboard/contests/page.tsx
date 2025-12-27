@@ -132,13 +132,16 @@ export default function ContestsPage() {
         setPageLoading(true)
         
         // Récupérer les contests du backend avec filtres
-        // Déterminer le voting_level selon l'onglet actif
-        const votingLevel = categoryTab === 'nomination' ? 'country' : undefined
+        // Pour l'onglet Nominations : filtrer les contests qui ont un voting_type (has_voting_type = true)
+        // Pour l'onglet Participations : filtrer les contests qui n'ont pas de voting_type (has_voting_type = false)
+        const hasVotingType = categoryTab === 'nomination' ? true : categoryTab === 'participations' ? false : undefined
         const apiContests = await contestService.getContests(
           0, 
           100,
           activeSearchTerm || undefined,
-          votingLevel
+          undefined, // votingLevel n'est plus utilisé, on utilise has_voting_type à la place
+          undefined, // votingTypeId
+          hasVotingType
         )
         console.log('[ContestsPage] API response received:', apiContests?.length || 0, 'contests')
         // Debug: Log first contest's top_contestants
@@ -199,12 +202,13 @@ export default function ContestsPage() {
           console.log('[ContestsPage] Setting state with', sortedContests.length, 'contests')
           if (isMountedRef.current) {
             setAllContests(sortedContests)
-            // Filtrer selon la catégorie active pour displayedContests
+            // Le filtrage par catégorie est maintenant fait côté backend via has_voting_type
+          // On garde ce filtre pour compatibilité, mais il devrait déjà être appliqué par le backend
             const categoryFiltered = sortedContests.filter(contest => {
               if (categoryTab === 'nomination') {
-                return contest.votingType != null && contest.votingType.voting_level?.toLowerCase() === 'country'
+                return contest.votingType != null
               } else {
-                return !(contest.votingType != null && contest.votingType.voting_level?.toLowerCase() === 'country')
+                return contest.votingType == null
               }
             })
             setDisplayedContests(categoryFiltered.slice(0, ITEMS_PER_PAGE))
@@ -255,11 +259,12 @@ export default function ContestsPage() {
   useEffect(() => {
     if (allContests.length === 0) return
     
+    // Le filtrage par catégorie est maintenant fait côté backend via has_voting_type
     let categoryFiltered = allContests.filter(contest => {
       if (categoryTab === 'nomination') {
-        return contest.votingType != null && contest.votingType.voting_level?.toLowerCase() === 'country'
+        return contest.votingType != null
       } else {
-        return !(contest.votingType != null && contest.votingType.voting_level?.toLowerCase() === 'country')
+        return contest.votingType == null
       }
     })
     
@@ -324,11 +329,12 @@ export default function ContestsPage() {
     setIsLoadingMore(true)
     try {
       // Filtrer selon la catégorie active
+      // Le filtrage est maintenant fait côté backend via has_voting_type
       let categoryFiltered = allContests.filter(contest => {
         if (categoryTab === 'nomination') {
-          return contest.votingType != null && contest.votingType.voting_level?.toLowerCase() === 'country'
+          return contest.votingType != null
         } else {
-          return !(contest.votingType != null && contest.votingType.voting_level?.toLowerCase() === 'country')
+          return contest.votingType == null
         }
       })
       
@@ -382,17 +388,14 @@ export default function ContestsPage() {
     let contests = allContests
     
     // Filtrer par catégorie (Nomination ou Participations)
+    // Le filtrage est maintenant fait côté backend via has_voting_type
+    // On garde ce filtre pour compatibilité, mais il devrait déjà être appliqué par le backend
     if (categoryTab === 'nomination') {
-      // Nomination : contests avec voting_type défini ET voting_level = "country"
-      contests = contests.filter(contest => 
-        contest.votingType != null && 
-        contest.votingType.voting_level?.toLowerCase() === 'country'
-      )
+      // Nomination : contests avec voting_type défini
+      contests = contests.filter(contest => contest.votingType != null)
     } else {
-      // Participations : tous les autres contests (sans voting_type OU voting_level != "country")
-      contests = contests.filter(contest => 
-        !(contest.votingType != null && contest.votingType.voting_level?.toLowerCase() === 'country')
-      )
+      // Participations : contests sans voting_type
+      contests = contests.filter(contest => contest.votingType == null)
     }
     
     // Filtrer par type si un onglet est sélectionné

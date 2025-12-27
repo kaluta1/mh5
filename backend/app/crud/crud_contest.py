@@ -144,9 +144,27 @@ class CRUDContest:
                         )
                     )
         
+        # Gérer le filtre par voting_type_id (pour filtrer les contests avec un voting_type)
+        if "voting_type_id" in filters:
+            voting_type_id_value = filters["voting_type_id"]
+            if voting_type_id_value is not None:
+                # Si voting_type_id est fourni, filtrer par cet ID
+                query = query.filter(Contest.voting_type_id == voting_type_id_value)
+            # Si voting_type_id est explicitement None ou une valeur spéciale, on peut filtrer les contests sans voting_type
+        
+        # Gérer le filtre has_voting_type (pour filtrer les contests avec/sans voting_type)
+        if "has_voting_type" in filters:
+            has_voting_type_value = filters["has_voting_type"]
+            if has_voting_type_value is True:
+                # Filtrer les contests qui ont un voting_type_id (non null)
+                query = query.filter(Contest.voting_type_id.isnot(None))
+            elif has_voting_type_value is False:
+                # Filtrer les contests qui n'ont pas de voting_type_id (null)
+                query = query.filter(Contest.voting_type_id.is_(None))
+        
         # Gérer les autres filtres
         for field, value in filters.items():
-            if field in ["search", "voting_level"]:
+            if field in ["search", "voting_level", "voting_type_id", "has_voting_type"]:
                 continue  # Déjà traité ci-dessus
             if hasattr(Contest, field) and value is not None:
                 query = query.filter(getattr(Contest, field) == value)
