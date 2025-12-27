@@ -12,6 +12,27 @@ logger = logging.getLogger("start-script")
 def run_alembic_migrations():
     """Exécute les migrations de base de données avec Alembic"""
     logger.info("Exécution des migrations Alembic...")
+    
+    # Valider que DATABASE_URL est défini
+    database_url = os.getenv("DATABASE_URL", "").strip()
+    if not database_url:
+        logger.error(
+            "DATABASE_URL n'est pas défini dans les variables d'environnement. "
+            "Veuillez définir DATABASE_URL avec une URL de base de données valide. "
+            "Format attendu: postgresql://user:password@host:port/database"
+        )
+        return False
+    
+    # Vérifier que l'URL commence par un schéma valide
+    if not database_url.startswith(("postgresql://", "postgresql+psycopg2://", "postgres://")):
+        logger.error(
+            f"DATABASE_URL doit commencer par 'postgresql://', 'postgresql+psycopg2://' ou 'postgres://'. "
+            f"Valeur reçue: {database_url[:50]}..."
+        )
+        return False
+    
+    logger.info(f"Connexion à la base de données: {database_url.split('@')[-1] if '@' in database_url else '***'}")
+    
     try:
         # Utiliser sys.executable pour s'assurer d'utiliser le bon interpréteur Python
         # et ajouter le répertoire courant au PYTHONPATH
@@ -145,7 +166,25 @@ def main():
             import os
             from dotenv import load_dotenv
             load_dotenv()
-            logger.debug(f"DATABASE_URL: {os.getenv('DATABASE_URL', 'Non défini')}")
+            db_url = os.getenv('DATABASE_URL', 'Non défini')
+            if db_url and db_url != 'Non défini':
+                # Masquer le mot de passe dans l'URL pour la sécurité
+                if '@' in db_url:
+                    parts = db_url.split('@')
+                    if '://' in parts[0]:
+                        scheme_user_pass = parts[0]
+                        if ':' in scheme_user_pass:
+                            scheme_user, password = scheme_user_pass.rsplit(':', 1)
+                            masked_url = f"{scheme_user}:****@{parts[1]}"
+                            logger.debug(f"DATABASE_URL: {masked_url}")
+                        else:
+                            logger.debug(f"DATABASE_URL: {db_url.split('@')[0]}@****@{db_url.split('@')[1]}")
+                    else:
+                        logger.debug(f"DATABASE_URL: ****@{parts[1]}")
+                else:
+                    logger.debug(f"DATABASE_URL: {db_url}")
+            else:
+                logger.debug(f"DATABASE_URL: {db_url}")
             logger.debug(f"PYTHONPATH: {os.getenv('PYTHONPATH', 'Non défini')}")
         except Exception as e:
             logger.error(f"Erreur lors de l'affichage des variables d'environnement: {e}")

@@ -78,8 +78,8 @@ export default function PublicContestantPage() {
       {/* Métadonnées Open Graph pour le preview */}
       {contestant && (
         <>
-          <meta property="og:title" content={contestant.title || `${contestant.author_name || 'Contestant'} - MyFav`} />
-          <meta property="og:description" content={contestant.description || `Découvrez ${contestant.author_name || 'ce participant'} sur MyFav`} />
+          <meta property="og:title" content={contestant.title || `${contestant.author_name || 'Contestant'} - MyHigh5`} />
+          <meta property="og:description" content={contestant.description || `Découvrez ${contestant.author_name || 'ce participant'} sur MyHigh5`} />
           <meta property="og:type" content="profile" />
           <meta property="og:url" content={`${typeof window !== 'undefined' ? window.location.origin : ''}/contestants/${contestantId}`} />
           {contestant.author_avatar_url && (
@@ -89,8 +89,8 @@ export default function PublicContestantPage() {
             <meta property="og:image" content={contestant.image_media_ids} />
           )}
           <meta name="twitter:card" content="summary_large_image" />
-          <meta name="twitter:title" content={contestant.title || `${contestant.author_name || 'Contestant'} - MyFav`} />
-          <meta name="twitter:description" content={contestant.description || `Découvrez ${contestant.author_name || 'ce participant'} sur MyFav`} />
+          <meta name="twitter:title" content={contestant.title || `${contestant.author_name || 'Contestant'} - MyHigh5`} />
+          <meta name="twitter:description" content={contestant.description || `Découvrez ${contestant.author_name || 'ce participant'} sur MyHigh5`} />
         </>
       )}
       

@@ -11,12 +11,12 @@ services:
       - db
       - redis
     environment:
-      - DATABASE_URL=postgresql://neondb_owner:npg_Pqpdik54DZNa@ep-noisy-violet-adh359sw-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+      - DATABASE_URL=postgresql://neondb_owner:npg_pBhM89cZikgE@ep-winter-heart-a7ysbm7f-pooler.ap-southeast-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require
       - SECRET_KEY=changez_moi_en_production
       - REDIS_URL=redis://redis:6379/0
       - STORAGE_TYPE=local
       - LOCAL_STORAGE_PATH=/app/storage
-      - CORS_ORIGINS=http://localhost,http://localhost:3000
+      - CORS_ORIGINS=http://localhost,http://localhost:3000,https://mh5.vercel.app/,https://myhigh5.com/,www.myhigh5.com/,www.mh5.vercel.app/
     volumes:
       - ./:/app
       - media_data:/app/storage

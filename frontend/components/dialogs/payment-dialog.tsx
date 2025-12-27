@@ -593,7 +593,7 @@ export function PaymentDialog({
                   <div className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
                     <p><span className="font-medium">IBAN:</span> FR76 XXXX XXXX XXXX XXXX XXXX XXX</p>
                     <p><span className="font-medium">BIC:</span> XXXXXXXX</p>
-                    <p><span className="font-medium">{t('payment.beneficiary') || 'Bénéficiaire'}:</span> MyFav SAS</p>
+                    <p><span className="font-medium">{t('payment.beneficiary') || 'Bénéficiaire'}:</span> MyHigh5 SAS</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
