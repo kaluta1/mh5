@@ -11,7 +11,7 @@ services:
       - db
       - redis
     environment:
-      - DATABASE_URL=postgresql://neondb_owner:npg_pBhM89cZikgE@ep-winter-heart-a7ysbm7f-pooler.ap-southeast-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+      - DATABASE_URL=postgresql://neondb_owner:npg_Pqpdik54DZNa@ep-noisy-violet-adh359sw-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require
       - SECRET_KEY=changez_moi_en_production
       - REDIS_URL=redis://redis:6379/0
       - STORAGE_TYPE=local
