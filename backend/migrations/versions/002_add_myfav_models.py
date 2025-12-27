@@ -90,7 +90,7 @@ def upgrade() -> None:
         sa.Column('description', sa.Text(), nullable=True),
         sa.Column('min_age', sa.Integer(), nullable=True),
         sa.Column('max_age', sa.Integer(), nullable=True),
-        sa.Column('gender_restriction', postgresql.ENUM('MALE', 'FEMALE', 'OTHER', 'ANY', name='gender', create_type=False), nullable=True),
+        sa.Column('gender_restriction', postgresql.ENUM('MALE', 'FEMALE', 'OTHER', 'ANY', name='gender'), nullable=True),
         sa.Column('is_active', sa.Boolean(), nullable=True),
         sa.ForeignKeyConstraint(['contest_type_id'], ['contest_types.id'], ),
         sa.PrimaryKeyConstraint('id')
@@ -105,7 +105,7 @@ def upgrade() -> None:
         sa.Column('end_date', sa.DateTime(), nullable=False),
         sa.Column('registration_start', sa.DateTime(), nullable=False),
         sa.Column('registration_end', sa.DateTime(), nullable=False),
-        sa.Column('status', postgresql.ENUM('UPCOMING', 'REGISTRATION_OPEN', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', name='seasonstatus', create_type=False), nullable=True),
+        sa.Column('status', postgresql.ENUM('UPCOMING', 'REGISTRATION_OPEN', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', name='seasonstatus'), nullable=True),
         sa.Column('created_at', sa.DateTime(), nullable=True),
         sa.ForeignKeyConstraint(['contest_type_id'], ['contest_types.id'], ),
         sa.PrimaryKeyConstraint('id')
@@ -114,7 +114,7 @@ def upgrade() -> None:
     op.create_table('contest_stages',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('season_id', sa.Integer(), nullable=False),
-        sa.Column('stage_type', postgresql.ENUM('CITY', 'COUNTRY', 'REGION', 'CONTINENT', 'GLOBAL', name='stagelevel', create_type=False), nullable=False),
+        sa.Column('stage_type', postgresql.ENUM('CITY', 'COUNTRY', 'REGION', 'CONTINENT', 'GLOBAL', name='stagelevel'), nullable=False),
         sa.Column('geographic_entity_id', sa.Integer(), nullable=False),
         sa.Column('name', sa.String(length=200), nullable=False),
         sa.Column('start_date', sa.DateTime(), nullable=False),
@@ -122,7 +122,7 @@ def upgrade() -> None:
         sa.Column('voting_start', sa.DateTime(), nullable=False),
         sa.Column('voting_end', sa.DateTime(), nullable=False),
         sa.Column('max_participants', sa.Integer(), nullable=True),
-        sa.Column('status', postgresql.ENUM('UPCOMING', 'REGISTRATION_OPEN', 'IN_PROGRESS', 'VOTING', 'COMPLETED', name='stagestatus', create_type=False), nullable=True),
+        sa.Column('status', postgresql.ENUM('UPCOMING', 'REGISTRATION_OPEN', 'IN_PROGRESS', 'VOTING', 'COMPLETED', name='stagestatus'), nullable=True),
         sa.Column('created_at', sa.DateTime(), nullable=True),
         sa.ForeignKeyConstraint(['season_id'], ['contest_seasons.id'], ),
         sa.PrimaryKeyConstraint('id')
@@ -173,7 +173,7 @@ def upgrade() -> None:
         sa.Column('is_public', sa.Boolean(), nullable=True),
         sa.Column('max_members', sa.Integer(), nullable=True),
         sa.Column('multisig_threshold', sa.Integer(), nullable=True),
-        sa.Column('status', postgresql.ENUM('ACTIVE', 'SUSPENDED', 'CLOSED', name='clubstatus', create_type=False), nullable=True),
+        sa.Column('status', postgresql.ENUM('ACTIVE', 'SUSPENDED', 'CLOSED', name='clubstatus'), nullable=True),
         sa.Column('created_at', sa.DateTime(), nullable=True),
         sa.Column('updated_at', sa.DateTime(), nullable=True),
         sa.ForeignKeyConstraint(['owner_id'], ['user.id'], ),
@@ -186,7 +186,7 @@ def upgrade() -> None:
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('account_code', sa.String(length=20), nullable=False),
         sa.Column('account_name', sa.String(length=200), nullable=False),
-        sa.Column('account_type', postgresql.ENUM('ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE', name='accounttype', create_type=False), nullable=False),
+        sa.Column('account_type', postgresql.ENUM('ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE', name='accounttype'), nullable=False),
         sa.Column('parent_id', sa.Integer(), nullable=True),
         sa.Column('balance', sa.Numeric(precision=15, scale=2), nullable=True),
         sa.Column('description', sa.Text(), nullable=True),
@@ -202,7 +202,7 @@ def upgrade() -> None:
     op.add_column('user', sa.Column('region_id', sa.Integer(), nullable=True))
     op.add_column('user', sa.Column('country_id', sa.Integer(), nullable=True))
     op.add_column('user', sa.Column('city_id', sa.Integer(), nullable=True))
-    op.add_column('user', sa.Column('gender', postgresql.ENUM('MALE', 'FEMALE', 'OTHER', name='gender', create_type=False), nullable=True))
+    op.add_column('user', sa.Column('gender', postgresql.ENUM('MALE', 'FEMALE', 'OTHER', 'PREFER_NOT_TO_SAY', name='gender'), nullable=True))
     op.add_column('user', sa.Column('date_of_birth', sa.Date(), nullable=True))
     op.add_column('user', sa.Column('phone_number', sa.String(length=20), nullable=True))
     op.add_column('user', sa.Column('address_line1', sa.String(length=200), nullable=True))
@@ -214,7 +214,7 @@ def upgrade() -> None:
     op.add_column('user', sa.Column('profile_picture_url', sa.String(length=500), nullable=True))
     op.add_column('user', sa.Column('website_url', sa.String(length=500), nullable=True))
     op.add_column('user', sa.Column('social_media_links', sa.JSON(), nullable=True))
-    op.add_column('user', sa.Column('status', postgresql.ENUM('ACTIVE', 'SUSPENDED', 'BANNED', 'PENDING_VERIFICATION', name='userstatus', create_type=False), nullable=True))
+    op.add_column('user', sa.Column('status', postgresql.ENUM('ACTIVE', 'SUSPENDED', 'BANNED', 'PENDING_VERIFICATION', name='userstatus'), nullable=True))
     
     # Add foreign key constraints for user
     op.create_foreign_key('fk_user_continent', 'user', 'continents', ['continent_id'], ['id'])
