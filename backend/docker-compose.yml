@@ -10,13 +10,15 @@ services:
     depends_on:
       - db
       - redis
+    env_file:
+      - .env
     environment:
-      - DATABASE_URL=postgresql://neondb_owner:npg_Pqpdik54DZNa@ep-noisy-violet-adh359sw-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require
-      - SECRET_KEY=changez_moi_en_production
-      - REDIS_URL=redis://redis:6379/0
-      - STORAGE_TYPE=local
-      - LOCAL_STORAGE_PATH=/app/storage
-      - CORS_ORIGINS=http://localhost,http://localhost:3000,https://mh5.vercel.app/,https://myhigh5.com/,www.myhigh5.com/,www.mh5.vercel.app/
+      - DATABASE_URL=${DATABASE_URL}
+      - SECRET_KEY=${SECRET_KEY:-changez_moi_en_production}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - STORAGE_TYPE=${STORAGE_TYPE:-local}
+      - LOCAL_STORAGE_PATH=${LOCAL_STORAGE_PATH:-/app/storage}
+      - CORS_ORIGINS=${BACKEND_CORS_ORIGINS:-http://localhost,http://localhost:3000}
     volumes:
       - ./:/app
       - media_data:/app/storage
