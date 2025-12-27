@@ -190,11 +190,8 @@ class ContestService {
         params.has_voting_type = hasVotingType
       }
       
-      // Utiliser le cache pour les requêtes GET
-      // Ne pas utiliser le cache si on fait une recherche (pour avoir les résultats à jour)
-      const useCache = !search
-      
-      return await apiService.get<ContestResponse[]>('/api/v1/contests/', params, useCache)
+      // Le cache est maintenant géré côté backend avec Redis
+      return await apiService.get<ContestResponse[]>('/api/v1/contests/', params)
     } catch (error) {
       console.error('Error fetching contests:', error)
       throw error

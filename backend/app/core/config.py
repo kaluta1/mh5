@@ -11,7 +11,7 @@ class Settings(BaseModel):
     )
     
     API_V1_STR: str = "/api/v1"
-    PROJECT_NAME: str = "MyFav API"
+    PROJECT_NAME: str = "High5 API"
     
     # SECURITY
     SECRET_KEY: str = "c7d9fbef58c5ac4fe7d31e32a89e2c336468843c1c307177ab0ee55f54063115"
@@ -37,8 +37,9 @@ class Settings(BaseModel):
         return self.DATABASE_URL
     
     # REDIS
-    REDIS_HOST: str = "localhost"
-    REDIS_PORT: int = 6379
+    REDIS_HOST: str = os.getenv("REDIS_HOST", "localhost")
+    REDIS_PORT: int = int(os.getenv("REDIS_PORT", "6379"))
+    REDIS_URL: Optional[str] = os.getenv("REDIS_URL", None)
     
     # STORAGE
     STORAGE_TYPE: str = "local"  # "local", "s3", "azure"

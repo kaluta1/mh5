@@ -6,30 +6,102 @@ import { AuthProvider } from "@/hooks/use-auth"
 import { LanguageProvider } from "@/contexts/language-context"
 import { ToastProvider } from "@/components/ui/toast"
 import { CookieConsent } from "@/components/ui/cookie-consent"
+import { getMetadataTranslations, detectLanguageFromHeaders } from "@/lib/metadata-translations"
+import { headers } from "next/headers"
 
 const inter = Inter({ subsets: ["latin"] })
 
-export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"),
-  title: "MyFav - Plateforme de Concours Mondiale",
-  description: "Rejoignez la plus grande communauté de concours au monde. Participez, votez et gagnez dans des compétitions de beauté, talents et bien plus encore.",
-  keywords: ["concours", "beauté", "talents", "communauté", "votes", "compétition"],
-  authors: [{ name: "MyFav Team" }],
-  openGraph: {
-    title: "MyFav - Plateforme de Concours Mondiale",
-    description: "Rejoignez la plus grande communauté de concours au monde",
-    type: "website",
-    locale: "en_US",
-  },
+const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myhigh5.com"
+const defaultImage = `${appUrl}/og-image.jpg` // Image par défaut pour le partage
+
+// Générer les métadonnées selon la langue détectée
+function generateMetadata(): Metadata {
+  let lang: import("@/lib/translations").Language = 'fr'
+  try {
+    const headersList = headers()
+    lang = detectLanguageFromHeaders(headersList)
+  } catch {
+    // Si headers() n'est pas disponible, utiliser le défaut
+    lang = 'fr'
+  }
+
+  const translations = getMetadataTranslations(lang)
+  const localeMap: Record<typeof lang, string> = {
+    fr: "fr_FR",
+    en: "en_US",
+    es: "es_ES",
+    de: "de_DE",
+  }
+
+  return {
+    metadataBase: new URL(appUrl),
+    title: {
+      default: translations.pages.home.title,
+      template: `%s | ${translations.siteName}`
+    },
+    description: translations.pages.home.description,
+    keywords: ["concours", "beauté", "talents", "communauté", "votes", "compétition", "affiliation", "gagner de l'argent", "high5", "myhigh5"],
+    authors: [{ name: `${translations.siteName} Team` }],
+    creator: translations.siteName,
+    publisher: translations.siteName,
+    robots: {
+      index: true,
+      follow: true,
+      googleBot: {
+        index: true,
+        follow: true,
+        'max-video-preview': -1,
+        'max-image-preview': 'large',
+        'max-snippet': -1,
+      },
+    },
+    openGraph: {
+      type: "website",
+      locale: localeMap[lang],
+      url: appUrl,
+      siteName: translations.siteName,
+      title: translations.pages.home.title,
+      description: translations.pages.home.description,
+      images: [
+        {
+          url: defaultImage,
+          width: 1200,
+          height: 630,
+          alt: translations.pages.home.title,
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: translations.pages.home.title,
+      description: translations.pages.home.description,
+      images: [defaultImage],
+      creator: "@high5",
+    },
+    alternates: {
+      canonical: appUrl,
+    },
+  }
 }
+
+export const metadata = generateMetadata()
 
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  // Détecter la langue pour l'attribut lang du HTML
+  let htmlLang = 'fr'
+  try {
+    const headersList = headers()
+    htmlLang = detectLanguageFromHeaders(headersList)
+  } catch {
+    htmlLang = 'fr'
+  }
+
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang={htmlLang} suppressHydrationWarning>
       <body className={inter.className}>
         <ThemeProvider
           attribute="class"

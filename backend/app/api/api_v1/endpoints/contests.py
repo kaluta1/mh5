@@ -6,6 +6,7 @@ from app.api.deps import get_current_active_user, get_current_active_user_option
 from app.crud import contest
 from app.db.session import get_db
 from app.schemas.contest import Contest, ContestCreate, ContestUpdate, ContestWithEntries, ContestWithEnrichedContestants
+from app.core.cache import cache_service
 
 router = APIRouter()
 
@@ -27,6 +28,10 @@ def create_contest(
         )
     
     new_contest = contest.create(db=db, obj_in=contest_in)
+    
+    # Invalider le cache des contests
+    cache_service.invalidate_contests()
+    
     return new_contest
 
 @router.get("/", response_model=List[Contest])
@@ -46,7 +51,31 @@ def read_contests(
     """
     Récupérer tous les concours avec filtrage optionnel et statistiques.
     Endpoint public - accessible sans authentification.
+    Cache géré avec Redis (TTL: 1 heure, désactivé si recherche active).
     """
+    # Ne pas utiliser le cache si on fait une recherche (pour avoir les résultats à jour)
+    use_cache = not search
+    
+    # Générer la clé de cache
+    cache_key = cache_service._make_key(
+        "cache:contests:list",
+        skip=skip,
+        limit=limit,
+        location_id=location_id,
+        contest_type=contest_type,
+        active=active,
+        voting_level=voting_level,
+        voting_type_id=voting_type_id,
+        has_voting_type=has_voting_type
+    )
+    
+    # Vérifier le cache
+    if use_cache:
+        cached_result = cache_service.get(cache_key)
+        if cached_result is not None:
+            return cached_result
+    
+    # Construire les filtres
     filters = {}
     if location_id:
         filters["location_id"] = location_id
@@ -98,6 +127,10 @@ def read_contests(
         except Exception as e:
             # En cas d'erreur, retourner le dictionnaire tel quel (FastAPI le sérialisera)
             enriched_contests.append(enriched)
+    
+    # Stocker dans le cache si activé
+    if use_cache:
+        cache_service.set(cache_key, enriched_contests, ttl=3600)  # 1 heure
     
     return enriched_contests
 
@@ -159,6 +192,10 @@ def update_contest(
             detail="Permission insuffisante"
         )
     contest_obj = contest.update(db=db, db_obj=contest_obj, obj_in=contest_in)
+    
+    # Invalider le cache des contests
+    cache_service.invalidate_contest(contest_id)
+    
     return contest_obj
 
 @router.post("/{contest_id}/entry", status_code=status.HTTP_201_CREATED)

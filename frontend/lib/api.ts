@@ -1,5 +1,4 @@
 import axios from 'axios'
-import { apiCache } from './cache'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -183,69 +182,31 @@ export const authService = {
   }
 }
 
-// Service générique pour les autres appels API avec cache
+// Service générique pour les autres appels API (cache géré côté backend avec Redis)
 export const apiService = {
-  // GET request avec cache
-  async get<T>(endpoint: string, params?: any, useCache: boolean = true): Promise<T> {
-    // Vérifier le cache d'abord
-    if (useCache) {
-      const cached = apiCache.get<T>(endpoint, params)
-      if (cached !== null) {
-        return cached
-      }
-    }
-
-    // Faire l'appel API
+  // GET request (cache géré côté backend)
+  async get<T>(endpoint: string, params?: any, useCache?: boolean): Promise<T> {
+    // Le cache est maintenant géré côté backend avec Redis
     const response = await api.get(endpoint, { params })
-    const data = response.data
-
-    // Stocker dans le cache
-    if (useCache) {
-      // Utiliser le timestamp comme version pour détecter les nouvelles entrées
-      const version = Date.now().toString()
-      apiCache.set(endpoint, data, params, version)
-    }
-
-    return data
+    return response.data
   },
 
-  // POST request (pas de cache par défaut pour les POST)
+  // POST request
   async post<T>(endpoint: string, data?: any, invalidateCache?: string, config?: any): Promise<T> {
     const response = await api.post(endpoint, data, config)
-    const result = response.data
-
-    // Invalider le cache si spécifié
-    if (invalidateCache) {
-      apiCache.invalidate(invalidateCache)
-    }
-
-    return result
+    return response.data
   },
 
-  // PUT request (invalide le cache)
+  // PUT request
   async put<T>(endpoint: string, data?: any, invalidateCache?: string): Promise<T> {
     const response = await api.put(endpoint, data)
-    const result = response.data
-
-    // Invalider le cache si spécifié
-    if (invalidateCache) {
-      apiCache.invalidate(invalidateCache)
-    }
-
-    return result
+    return response.data
   },
 
-  // DELETE request (invalide le cache)
+  // DELETE request
   async delete<T>(endpoint: string, invalidateCache?: string): Promise<T> {
     const response = await api.delete(endpoint)
-    const result = response.data
-
-    // Invalider le cache si spécifié
-    if (invalidateCache) {
-      apiCache.invalidate(invalidateCache)
-    }
-
-    return result
+    return response.data
   }
 }
 

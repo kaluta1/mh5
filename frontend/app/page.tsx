@@ -56,7 +56,7 @@ export default function HomePage() {
       
       <main className="relative">
         <Hero />
-          <Features />
+        <Features />
         <WaysToEarn />
         <FAQ />
         <DownloadApp />

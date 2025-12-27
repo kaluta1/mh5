@@ -1,79 +1,76 @@
-import { Metadata } from 'next'
+import { Metadata } from "next"
+import { createMetadata } from "../../metadata"
+import { getMetadataTranslations, detectLanguageFromHeaders } from "@/lib/metadata-translations"
+import { headers } from "next/headers"
 
-async function getContestantData(contestantId: string): Promise<any> {
+const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myhigh5.com"
+const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+
+export async function generateMetadata({
+  params,
+}: {
+  params: { id: string }
+}): Promise<Metadata> {
+  // Détecter la langue
+  const headersList = headers()
+  const lang = detectLanguageFromHeaders(headersList)
+  const translations = getMetadataTranslations(lang)
+
   try {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-    const response = await fetch(`${apiUrl}/api/v1/contestants/${contestantId}`, {
-      cache: 'no-store'
+    // Appel direct à l'API backend pour récupérer les données du contestant
+    const response = await fetch(`${apiUrl}/api/v1/contestants/${params.id}`, {
+      next: { revalidate: 3600 }, // Cache pendant 1 heure
     })
+    
     if (!response.ok) {
-      return null
+      throw new Error("Contestant not found")
     }
-    return await response.json()
+    
+    const contestant = await response.json()
+    
+    if (!contestant) {
+      return createMetadata({
+        title: `${translations.pages.contests.title.split(' - ')[0]} - ${translations.siteName}`,
+        description: `Découvrez ce participant sur ${translations.siteName}`,
+        url: `/contestants/${params.id}`,
+        language: lang,
+      })
+    }
+
+    const title = contestant.title || `${contestant.author_name || 'Participant'} - ${translations.siteName}`
+    const description = contestant.description || `Découvrez ${contestant.author_name || 'ce participant'} sur ${translations.siteName}. Votez et soutenez !`
+    
+    // Extraire l'image depuis image_media_ids ou utiliser l'avatar
+    let image = contestant.author_avatar_url || `${appUrl}/og-image.jpg`
+    if (contestant.image_media_ids) {
+      try {
+        const imageIds = typeof contestant.image_media_ids === 'string' 
+          ? JSON.parse(contestant.image_media_ids) 
+          : contestant.image_media_ids
+        if (Array.isArray(imageIds) && imageIds.length > 0) {
+          image = typeof imageIds[0] === 'string' ? imageIds[0] : contestant.author_avatar_url || `${appUrl}/og-image.jpg`
+        }
+      } catch {
+        // Si l'image n'est pas un JSON valide, utiliser l'avatar
+      }
+    }
+
+    return createMetadata({
+      title,
+      description,
+      image,
+      url: `/contestants/${params.id}`,
+      type: "profile",
+      language: lang,
+    })
   } catch (error) {
-    console.error('Error fetching contestant for metadata:', error)
-    return null
-  }
-}
-
-export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
-  const contestant = await getContestantData(params.id)
-  
-  if (!contestant) {
-    return {
-      title: 'Contestant - MyFav',
-      description: 'Découvrez ce participant sur MyFav'
-    }
-  }
-
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-  const title = contestant.title || `${contestant.author_name || 'Contestant'} - MyFav`
-  const description = contestant.description || `Découvrez ${contestant.author_name || 'ce participant'} sur MyFav`
-  
-  // Récupérer la première image ou vidéo pour le preview
-  let imageUrl = contestant.author_avatar_url
-  if (contestant.image_media_ids) {
-    try {
-      const imageIds = JSON.parse(contestant.image_media_ids)
-      if (imageIds && imageIds.length > 0) {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-        imageUrl = `${apiUrl}/api/v1/media/${imageIds[0]}`
-      }
-    } catch (e) {
-      // Si ce n'est pas un JSON, utiliser directement
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-      imageUrl = `${apiUrl}/api/v1/media/${contestant.image_media_ids}`
-    }
-  } else if (contestant.video_media_ids) {
-    try {
-      const videoIds = JSON.parse(contestant.video_media_ids)
-      if (videoIds && videoIds.length > 0) {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-        imageUrl = `${apiUrl}/api/v1/media/${videoIds[0]}/thumbnail`
-      }
-    } catch (e) {
-      // Si ce n'est pas un JSON, utiliser directement
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-      imageUrl = `${apiUrl}/api/v1/media/${contestant.video_media_ids}/thumbnail`
-    }
-  }
-
-  return {
-    title,
-    description,
-    openGraph: {
-      title,
-      description,
-      type: 'profile',
-      url: `${baseUrl}/contestants/${params.id}`,
-      images: imageUrl ? [{ url: imageUrl }] : [],
-    },
-    twitter: {
-      card: 'summary_large_image',
-      title,
-      description,
-      images: imageUrl ? [imageUrl] : [],
-    },
+    console.error("Error generating metadata for contestant:", error)
+    return createMetadata({
+      title: `${translations.pages.contests.title.split(' - ')[0]} - ${translations.siteName}`,
+      description: `Découvrez ce participant sur ${translations.siteName}`,
+      url: `/contestants/${params.id}`,
+      language: lang,
+    })
   }
 }
 
@@ -84,4 +81,3 @@ export default function ContestantLayout({
 }) {
   return <>{children}</>
 }
-
