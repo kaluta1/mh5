@@ -150,6 +150,12 @@ export function detectLanguageFromHeaders(headers: Headers): Language {
  * Retourne les mots-clés SEO traduits selon la langue
  */
 export function getKeywords(lang: Language = 'en'): string[] {
-  return translations[lang]?.metadata?.keywords || translations.en.metadata.keywords
+  const keywordsMap: Record<Language, string[]> = {
+    fr: ["concours", "beauté", "talents", "communauté", "votes", "compétition", "affiliation", "gagner de l'argent", "high5", "myhigh5"],
+    en: ["contests", "beauty", "talents", "community", "votes", "competition", "affiliation", "earn money", "high5", "myhigh5"],
+    es: ["concursos", "belleza", "talentos", "comunidad", "votos", "competición", "afiliación", "ganar dinero", "high5", "myhigh5"],
+    de: ["Wettbewerbe", "Schönheit", "Talente", "Gemeinschaft", "Stimmen", "Wettbewerb", "Affiliate", "Geld verdienen", "high5", "myhigh5"],
+  }
+  return keywordsMap[lang] || keywordsMap.en
 }
 
