@@ -42,7 +42,7 @@ export default function VerifyEmailPage() {
       try {
         const response = await authService.verifyEmail(token)
         setStatus('success')
-        setMessage(response.message || t('auth.verify_email.success') || 'Email vérifié avec succès')
+        setMessage(response.message || t('auth.verify_email.success') || 'Email verified successfully')
         setEmail(response.email)
         
         // Rediriger vers la page de connexion après 3 secondes

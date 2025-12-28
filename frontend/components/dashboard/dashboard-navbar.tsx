@@ -71,7 +71,7 @@ export function DashboardNavbar({ onMenuToggle, onSidebarToggle }: DashboardNavb
           </button>
           
           {/* Feed Button */}
-          <Button
+          {/* <Button
             variant="ghost"
             size="sm"
             onClick={() => router.push('/dashboard/feed')}
@@ -84,7 +84,7 @@ export function DashboardNavbar({ onMenuToggle, onSidebarToggle }: DashboardNavb
             title={t('dashboard.nav.feed') || 'Feed'}
           >
             <MessageSquare className="h-5 w-5" />
-          </Button>
+          </Button> */}
         </div>
 
         {/* Right side - Actions */}
