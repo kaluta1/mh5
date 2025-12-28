@@ -15,7 +15,7 @@ from sqlalchemy import inspect
 
 # revision identifiers, used by Alembic.
 revision = 'fix_voting_type_contest'
-down_revision = '5a9dda393841'
+down_revision = 'urgent_contest_cols'  # Se rattache à la migration d'urgence
 branch_labels = None
 depends_on = None
 
