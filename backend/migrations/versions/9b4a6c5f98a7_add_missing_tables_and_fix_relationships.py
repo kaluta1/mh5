@@ -198,21 +198,7 @@ def upgrade():
     sa.UniqueConstraint('user_id')
     )
     op.create_index(op.f('ix_affiliate_tree_id'), 'affiliate_tree', ['id'], unique=False)
-    op.create_table('affiliation',
-    sa.Column('affiliate_id', sa.Integer(), nullable=False),
-    sa.Column('referred_user_id', sa.Integer(), nullable=False),
-    sa.Column('referral_code', sa.String(length=50), nullable=True),
-    sa.Column('is_active', sa.Boolean(), nullable=False),
-    sa.Column('total_commission_earned', sa.Integer(), nullable=False),
-    sa.Column('first_transaction_date', sa.DateTime(), nullable=True),
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('created_at', sa.DateTime(), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), nullable=False),
-    sa.ForeignKeyConstraint(['affiliate_id'], ['users.id'], ),
-    sa.ForeignKeyConstraint(['referred_user_id'], ['users.id'], ),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_affiliation_id'), 'affiliation', ['id'], unique=False)
+    # affiliation already created in migration 001
     op.create_table('audit_trails',
     sa.Column('table_name', sa.String(length=100), nullable=False),
     sa.Column('record_id', sa.Integer(), nullable=False),
@@ -289,19 +275,7 @@ def upgrade():
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_financial_reports_id'), 'financial_reports', ['id'], unique=False)
-    op.create_table('follow',
-    sa.Column('follower_id', sa.Integer(), nullable=False),
-    sa.Column('following_id', sa.Integer(), nullable=False),
-    sa.Column('notify_new_posts', sa.Boolean(), nullable=False),
-    sa.Column('notify_contests', sa.Boolean(), nullable=False),
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('created_at', sa.DateTime(), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), nullable=False),
-    sa.ForeignKeyConstraint(['follower_id'], ['users.id'], ),
-    sa.ForeignKeyConstraint(['following_id'], ['users.id'], ),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_follow_id'), 'follow', ['id'], unique=False)
+    # follow already created in migration 001
     op.create_table('founding_members',
     sa.Column('user_id', sa.Integer(), nullable=False),
     sa.Column('founding_membership_ratio', sa.Numeric(precision=10, scale=6), nullable=False),
@@ -365,24 +339,7 @@ def upgrade():
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_kyc_verifications_id'), 'kyc_verifications', ['id'], unique=False)
-    op.create_table('media',
-    sa.Column('title', sa.String(length=255), nullable=False),
-    sa.Column('description', sa.String(length=1024), nullable=True),
-    sa.Column('media_type', sa.String(length=20), nullable=False),
-    sa.Column('path', sa.String(length=512), nullable=False),
-    sa.Column('url', sa.String(length=512), nullable=False),
-    sa.Column('file_size', sa.Integer(), nullable=True),
-    sa.Column('width', sa.Integer(), nullable=True),
-    sa.Column('height', sa.Integer(), nullable=True),
-    sa.Column('duration', sa.Integer(), nullable=True),
-    sa.Column('user_id', sa.Integer(), nullable=False),
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('created_at', sa.DateTime(), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), nullable=False),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_media_id'), 'media', ['id'], unique=False)
+    # media already created in migration 001
     op.create_table('referral_code',
     sa.Column('user_id', sa.Integer(), nullable=False),
     sa.Column('code', sa.String(length=50), nullable=False),
@@ -398,8 +355,7 @@ def upgrade():
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
-    op.create_index(op.f('ix_referral_code_code'), 'referral_code', ['code'], unique=True)
-    op.create_index(op.f('ix_referral_code_id'), 'referral_code', ['id'], unique=False)
+    # referral_code already created in migration 001
     op.create_table('referral_links',
     sa.Column('user_id', sa.Integer(), nullable=False),
     sa.Column('referral_code', sa.String(length=50), nullable=False),
@@ -475,19 +431,7 @@ def upgrade():
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_vote_sessions_id'), 'vote_sessions', ['id'], unique=False)
-    op.create_table('wallet',
-    sa.Column('user_id', sa.Integer(), nullable=False),
-    sa.Column('balance', sa.Numeric(precision=10, scale=2), nullable=False),
-    sa.Column('currency', sa.String(length=3), nullable=False),
-    sa.Column('frozen_balance', sa.Numeric(precision=10, scale=2), nullable=False),
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('created_at', sa.DateTime(), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), nullable=False),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
-    sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('user_id')
-    )
-    op.create_index(op.f('ix_wallet_id'), 'wallet', ['id'], unique=False)
+    # wallet already created in migration 001
     op.create_table('ad_budget_transactions',
     sa.Column('campaign_id', sa.Integer(), nullable=False),
     sa.Column('transaction_type', sa.String(length=50), nullable=False),
@@ -591,24 +535,7 @@ def upgrade():
     sa.UniqueConstraint('club_id')
     )
     op.create_index(op.f('ix_club_wallets_id'), 'club_wallets', ['id'], unique=False)
-    op.create_table('commission',
-    sa.Column('user_id', sa.Integer(), nullable=False),
-    sa.Column('transaction_id', sa.Integer(), nullable=True),
-    sa.Column('contest_id', sa.Integer(), nullable=True),
-    sa.Column('amount', sa.Numeric(precision=10, scale=2), nullable=False),
-    sa.Column('currency', sa.String(length=3), nullable=False),
-    sa.Column('commission_rate', sa.Numeric(precision=5, scale=2), nullable=False),
-    sa.Column('commission_type', sa.String(length=50), nullable=False),
-    sa.Column('is_paid', sa.Boolean(), nullable=False),
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('created_at', sa.DateTime(), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), nullable=False),
-    sa.ForeignKeyConstraint(['contest_id'], ['contest.id'], ),
-    sa.ForeignKeyConstraint(['transaction_id'], ['transactions.id'], ),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_commission_id'), 'commission', ['id'], unique=False)
+    # commission already created in migration 001
     op.create_table('contest_comments',
     sa.Column('user_id', sa.Integer(), nullable=False),
     sa.Column('contestant_id', sa.Integer(), nullable=False),
@@ -624,21 +551,7 @@ def upgrade():
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_contest_comments_id'), 'contest_comments', ['id'], unique=False)
-    op.create_table('contest_entry',
-    sa.Column('contest_id', sa.Integer(), nullable=False),
-    sa.Column('user_id', sa.Integer(), nullable=False),
-    sa.Column('media_id', sa.Integer(), nullable=False),
-    sa.Column('total_score', sa.Float(), nullable=False),
-    sa.Column('rank', sa.Integer(), nullable=True),
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('created_at', sa.DateTime(), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), nullable=False),
-    sa.ForeignKeyConstraint(['contest_id'], ['contest.id'], ),
-    sa.ForeignKeyConstraint(['media_id'], ['media.id'], ),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_contest_entry_id'), 'contest_entry', ['id'], unique=False)
+    # contest_entry already created in migration 001
     op.create_table('contest_likes',
     sa.Column('user_id', sa.Integer(), nullable=False),
     sa.Column('contestant_id', sa.Integer(), nullable=False),
@@ -956,26 +869,7 @@ def upgrade():
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_club_transactions_id'), 'club_transactions', ['id'], unique=False)
-    op.create_table('comment',
-    sa.Column('user_id', sa.Integer(), nullable=False),
-    sa.Column('media_id', sa.Integer(), nullable=True),
-    sa.Column('contest_entry_id', sa.Integer(), nullable=True),
-    sa.Column('parent_id', sa.Integer(), nullable=True),
-    sa.Column('content', sa.Text(), nullable=False),
-    sa.Column('is_flagged', sa.Boolean(), nullable=False),
-    sa.Column('is_hidden', sa.Boolean(), nullable=False),
-    sa.Column('like_count', sa.Integer(), nullable=False),
-    sa.Column('reply_count', sa.Integer(), nullable=False),
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('created_at', sa.DateTime(), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), nullable=False),
-    sa.ForeignKeyConstraint(['contest_entry_id'], ['contest_entry.id'], ),
-    sa.ForeignKeyConstraint(['media_id'], ['media.id'], ),
-    sa.ForeignKeyConstraint(['parent_id'], ['comment.id'], ),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_comment_id'), 'comment', ['id'], unique=False)
+    # comment already created in migration 001
     op.create_table('contest_votes',
     sa.Column('entry_id', sa.Integer(), nullable=False),
     sa.Column('user_id', sa.Integer(), nullable=False),
@@ -1003,21 +897,7 @@ def upgrade():
     sa.UniqueConstraint('impression_id')
     )
     op.create_index(op.f('ix_ad_clicks_id'), 'ad_clicks', ['id'], unique=False)
-    op.create_table('like',
-    sa.Column('user_id', sa.Integer(), nullable=False),
-    sa.Column('media_id', sa.Integer(), nullable=True),
-    sa.Column('contest_entry_id', sa.Integer(), nullable=True),
-    sa.Column('comment_id', sa.Integer(), nullable=True),
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('created_at', sa.DateTime(), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), nullable=False),
-    sa.ForeignKeyConstraint(['comment_id'], ['comment.id'], ),
-    sa.ForeignKeyConstraint(['contest_entry_id'], ['contest_entry.id'], ),
-    sa.ForeignKeyConstraint(['media_id'], ['media.id'], ),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_like_id'), 'like', ['id'], unique=False)
+    # like already created in migration 001
     op.create_table('report',
     sa.Column('reporter_id', sa.Integer(), nullable=False),
     sa.Column('media_id', sa.Integer(), nullable=True),
@@ -1041,7 +921,7 @@ def upgrade():
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
-    op.create_index(op.f('ix_report_id'), 'report', ['id'], unique=False)
+    # report already created in migration 001
     op.create_table('transaction_approvals',
     sa.Column('transaction_id', sa.Integer(), nullable=False),
     sa.Column('admin_id', sa.Integer(), nullable=False),
@@ -1062,17 +942,13 @@ def downgrade():
     # ### commands auto generated by Alembic - please adjust! ###
     op.drop_index(op.f('ix_transaction_approvals_id'), table_name='transaction_approvals')
     op.drop_table('transaction_approvals')
-    op.drop_index(op.f('ix_report_id'), table_name='report')
-    op.drop_table('report')
-    op.drop_index(op.f('ix_like_id'), table_name='like')
-    op.drop_table('like')
+    # report, like already created in migration 001, don't drop them here
     op.drop_index(op.f('ix_ad_clicks_id'), table_name='ad_clicks')
     op.drop_table('ad_clicks')
     # prize_winner is managed by migration 001, don't drop it here
     op.drop_index(op.f('ix_contest_votes_id'), table_name='contest_votes')
     op.drop_table('contest_votes')
-    op.drop_index(op.f('ix_comment_id'), table_name='comment')
-    op.drop_table('comment')
+    # comment already created in migration 001, don't drop it here
     op.drop_index(op.f('ix_club_transactions_id'), table_name='club_transactions')
     op.drop_table('club_transactions')
     op.drop_index(op.f('ix_club_content_likes_id'), table_name='club_content_likes')
@@ -1111,12 +987,7 @@ def downgrade():
     op.drop_table('contest_submissions')
     op.drop_index(op.f('ix_contest_likes_id'), table_name='contest_likes')
     op.drop_table('contest_likes')
-    op.drop_index(op.f('ix_contest_entry_id'), table_name='contest_entry')
-    op.drop_table('contest_entry')
-    op.drop_index(op.f('ix_contest_comments_id'), table_name='contest_comments')
-    op.drop_table('contest_comments')
-    op.drop_index(op.f('ix_commission_id'), table_name='commission')
-    op.drop_table('commission')
+    # contest_entry, commission already created in migration 001, don't drop them here
     op.drop_index(op.f('ix_club_wallets_id'), table_name='club_wallets')
     op.drop_table('club_wallets')
     op.drop_index(op.f('ix_club_memberships_id'), table_name='club_memberships')
@@ -1129,30 +1000,23 @@ def downgrade():
     op.drop_table('ad_creatives')
     op.drop_index(op.f('ix_ad_budget_transactions_id'), table_name='ad_budget_transactions')
     op.drop_table('ad_budget_transactions')
-    op.drop_index(op.f('ix_wallet_id'), table_name='wallet')
-    op.drop_table('wallet')
+    # wallet, user_roles already created in migration 001, don't drop them here
     op.drop_index(op.f('ix_vote_sessions_id'), table_name='vote_sessions')
     op.drop_table('vote_sessions')
-    op.drop_table('user_roles')
     op.drop_index(op.f('ix_transactions_id'), table_name='transactions')
     op.drop_table('transactions')
     op.drop_index(op.f('ix_revenue_shares_id'), table_name='revenue_shares')
     op.drop_table('revenue_shares')
     op.drop_index(op.f('ix_referral_links_id'), table_name='referral_links')
     op.drop_table('referral_links')
-    op.drop_index(op.f('ix_referral_code_id'), table_name='referral_code')
-    op.drop_index(op.f('ix_referral_code_code'), table_name='referral_code')
-    op.drop_table('referral_code')
-    op.drop_index(op.f('ix_media_id'), table_name='media')
-    op.drop_table('media')
+    # referral_code, media already created in migration 001, don't drop them here
     op.drop_index(op.f('ix_kyc_verifications_id'), table_name='kyc_verifications')
     op.drop_table('kyc_verifications')
     op.drop_index(op.f('ix_journal_entries_id'), table_name='journal_entries')
     op.drop_table('journal_entries')
     op.drop_index(op.f('ix_founding_members_id'), table_name='founding_members')
     op.drop_table('founding_members')
-    op.drop_index(op.f('ix_follow_id'), table_name='follow')
-    op.drop_table('follow')
+    # follow already created in migration 001, don't drop it here
     op.drop_index(op.f('ix_financial_reports_id'), table_name='financial_reports')
     op.drop_table('financial_reports')
     # fan_clubs and dsp_wallets are managed by migration 002_add_myfav_models, don't drop them here
@@ -1162,8 +1026,7 @@ def downgrade():
     op.drop_table('contestants')
     op.drop_index(op.f('ix_audit_trails_id'), table_name='audit_trails')
     op.drop_table('audit_trails')
-    op.drop_index(op.f('ix_affiliation_id'), table_name='affiliation')
-    op.drop_table('affiliation')
+    # affiliation already created in migration 001, don't drop it here
     op.drop_index(op.f('ix_affiliate_tree_id'), table_name='affiliate_tree')
     op.drop_table('affiliate_tree')
     op.drop_index(op.f('ix_affiliate_commissions_id'), table_name='affiliate_commissions')
