@@ -99,11 +99,12 @@ def upgrade():
     op.create_index(op.f('ix_contestant_shares_id'), 'contestant_shares', ['id'], unique=False)
     
     # Drop foreign key constraints and columns if they exist
+    # Note: "like" is a reserved word in PostgreSQL, so we need to quote it
     op.execute("""
         DO $$ 
         BEGIN 
             ALTER TABLE contestants DROP CONSTRAINT IF EXISTS fk_contestants_contest_id;
-            ALTER TABLE like DROP CONSTRAINT IF EXISTS like_contest_entry_id_fkey;
+            ALTER TABLE "like" DROP CONSTRAINT IF EXISTS like_contest_entry_id_fkey;
         EXCEPTION WHEN OTHERS THEN
             NULL;
         END $$;
@@ -123,7 +124,7 @@ def upgrade():
                 SELECT 1 FROM information_schema.columns 
                 WHERE table_name = 'like' AND column_name = 'contest_entry_id'
             ) THEN
-                ALTER TABLE like DROP COLUMN contest_entry_id;
+                ALTER TABLE "like" DROP COLUMN contest_entry_id;
             END IF;
         EXCEPTION WHEN OTHERS THEN
             NULL;
