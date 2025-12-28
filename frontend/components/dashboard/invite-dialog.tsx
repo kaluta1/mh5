@@ -45,7 +45,7 @@ export function InviteDialog({
     e.preventDefault()
     
     if (!email.trim()) {
-      addToast(t('affiliates.invite_email_required') || 'Veuillez entrer un email', 'error')
+      addToast(t('dashboard.affiliates.invite_email_required') || 'Veuillez entrer un email', 'error')
       return
     }
 
@@ -71,7 +71,7 @@ export function InviteDialog({
       const data = await response.json()
       
       if (response.ok && data.success) {
-        addToast(t('affiliates.invite_sent_success') || 'Invitation envoyée avec succès !', 'success')
+        addToast(t('dashboard.affiliates.invite_sent_success') || 'Invitation envoyée avec succès !', 'success')
         setEmail('')
         setMessage('')
         onClose()
@@ -80,7 +80,7 @@ export function InviteDialog({
       }
     } catch (error) {
       console.error('Error sending invitation:', error)
-      addToast(t('affiliates.invite_error') || 'Erreur lors de l\'envoi de l\'invitation', 'error')
+      addToast(t('dashboard.affiliates.invite_error') || 'Erreur lors de l\'envoi de l\'invitation', 'error')
     } finally {
       setIsLoading(false)
     }
@@ -90,10 +90,10 @@ export function InviteDialog({
     try {
       await navigator.clipboard.writeText(referralLink)
       setCopiedLink(true)
-      addToast(t('affiliates.link_copied') || 'Lien copié !', 'success')
+      addToast(t('dashboard.affiliates.link_copied') || 'Lien copié !', 'success')
       setTimeout(() => setCopiedLink(false), 2000)
     } catch (error) {
-      addToast('Erreur lors de la copie', 'error')
+      addToast(t('dashboard.affiliates.copy_error') || 'Erreur lors de la copie', 'error')
     }
   }
 
@@ -103,10 +103,10 @@ export function InviteDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
             <Mail className="w-5 h-5 text-myhigh5-primary" />
-            {t('affiliates.invite_friend') || 'Inviter un ami'}
+            {t('dashboard.affiliates.invite_friend') || 'Inviter un ami'}
           </DialogTitle>
           <DialogDescription className="text-xs sm:text-sm">
-            {t('affiliates.invite_description') || 'Envoyez une invitation par email pour parrainer vos amis'}
+            {t('dashboard.affiliates.invite_description') || 'Envoyez une invitation par email pour parrainer vos amis'}
           </DialogDescription>
         </DialogHeader>
 
@@ -114,7 +114,7 @@ export function InviteDialog({
           {/* Email input */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-              {t('affiliates.email_address') || 'Adresse email'}
+              {t('dashboard.affiliates.email_address') || 'Adresse email'}
             </label>
             <input
               type="email"
@@ -129,13 +129,13 @@ export function InviteDialog({
           {/* Message optionnel */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-              {t('affiliates.personal_message') || 'Message personnalisé'} 
+              {t('dashboard.affiliates.personal_message') || 'Message personnalisé'} 
               <span className="text-gray-400 font-normal ml-1">({t('common.optional') || 'optionnel'})</span>
             </label>
             <textarea
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              placeholder={t('affiliates.message_placeholder') || 'Salut ! Rejoins-moi sur MyHigh5...'}
+              placeholder={t('dashboard.affiliates.message_placeholder') || 'Salut ! Rejoins-moi sur MyHigh5...'}
               rows={3}
               maxLength={500}
               className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-myhigh5-primary focus:border-transparent transition-all resize-none"
@@ -153,12 +153,12 @@ export function InviteDialog({
             {isLoading ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                {t('affiliates.sending') || 'Envoi en cours...'}
+                {t('dashboard.affiliates.sending') || 'Envoi en cours...'}
               </>
             ) : (
               <>
                 <Send className="w-4 h-4 mr-2" />
-                {t('affiliates.send_invitation') || 'Envoyer l\'invitation'}
+                {t('dashboard.affiliates.send_invitation') || 'Envoyer l\'invitation'}
               </>
             )}
           </Button>
@@ -181,7 +181,7 @@ export function InviteDialog({
           <div className="flex items-center gap-2 mb-2">
             <LinkIcon className="w-4 h-4 text-myhigh5-primary" />
             <span className="text-sm font-medium text-gray-900 dark:text-white">
-              {t('affiliates.share_link') || 'Partager votre lien'}
+              {t('dashboard.affiliates.share_link') || 'Partager votre lien'}
             </span>
           </div>
           <div className="flex gap-2">
@@ -199,7 +199,7 @@ export function InviteDialog({
             </Button>
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-            {t('affiliates.code_label') || 'Code'}: <span className="font-mono font-bold text-myhigh5-primary">{referralCode}</span>
+            {t('dashboard.affiliates.code_label') || 'Code'}: <span className="font-mono font-bold text-myhigh5-primary">{referralCode}</span>
           </p>
         </div>
       </DialogContent>

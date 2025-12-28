@@ -130,56 +130,11 @@ export default function FoundingMemberPage() {
                 </div>
               </div>
 
-              {/* Affiliation and Referral Commissions */}
-              <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-lg bg-myhigh5-primary flex items-center justify-center flex-shrink-0">
-                    <span className="text-white font-bold text-lg">3</span>
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                      Affiliation and Referral Commissions
-                    </h3>
-                    <p className="text-gray-700 dark:text-gray-300 mb-4">
-                      Members receive significant commissions through the Affiliate Program for the purchase of premium services, including the Founding Membership fee itself:
-                    </p>
-                    <div className="bg-white dark:bg-gray-800 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
-                      <div className="overflow-x-auto">
-                        <table className="w-full">
-                          <thead className="bg-gray-100 dark:bg-gray-700">
-                            <tr>
-                              <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">Referral Type</th>
-                              <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">Action</th>
-                              <th className="px-4 py-3 text-center text-sm font-semibold text-gray-900 dark:text-white">Direct Referral (Level 1)</th>
-                              <th className="px-4 py-3 text-center text-sm font-semibold text-gray-900 dark:text-white">Indirect Referral (Levels 2–10)</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                            <tr>
-                              <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">Founding Membership</td>
-                              <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">Pays $100 Joining Fee</td>
-                              <td className="px-4 py-3 text-sm text-center font-semibold text-myhigh5-primary">$20 Commission</td>
-                              <td className="px-4 py-3 text-sm text-center font-semibold text-myhigh5-primary">$2 Commission</td>
-                            </tr>
-                            <tr>
-                              <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">Annual Fee</td>
-                              <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">Pays $50 Annual Fee</td>
-                              <td className="px-4 py-3 text-sm text-center font-semibold text-myhigh5-primary">$10 Commission</td>
-                              <td className="px-4 py-3 text-sm text-center font-semibold text-myhigh5-primary">$1 Commission</td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
               {/* Randomly Assigned Referrals */}
               <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
                 <div className="flex items-start gap-4">
                   <div className="w-10 h-10 rounded-lg bg-myhigh5-primary flex items-center justify-center flex-shrink-0">
-                    <span className="text-white font-bold text-lg">4</span>
+                    <span className="text-white font-bold text-lg">3</span>
                   </div>
                   <div className="flex-1">
                     <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
@@ -219,7 +174,7 @@ export default function FoundingMemberPage() {
                   <li className="flex items-start gap-3">
                     <CheckCircle2 className="w-5 h-5 text-myhigh5-primary flex-shrink-0 mt-0.5" />
                     <span className="text-gray-700 dark:text-gray-300">
-                      Pay a one-time joining fee of <span className="font-semibold text-gray-900 dark:text-white">$100</span>.
+                      Pay a one-time joining fee of <span className="font-semibold text-gray-900 dark:text-white">$100</span> for the first 1,000 Founding Members, and <span className="font-semibold text-gray-900 dark:text-white">$200</span> thereafter.
                     </span>
                   </li>
                   <li className="flex items-start gap-3">
@@ -245,7 +200,7 @@ export default function FoundingMemberPage() {
                 </h3>
                 <div className="space-y-3">
                   <p className="text-gray-700 dark:text-gray-300">
-                    To maintain access to all Founding Member benefits, an annual membership fee of <span className="font-semibold text-gray-900 dark:text-white">$50</span> is required.
+                    To maintain access to all Founding Member benefits, an annual membership fee of <span className="font-semibold text-gray-900 dark:text-white">$50</span> is required for the first 1,000 Founding Members, and <span className="font-semibold text-gray-900 dark:text-white">$100</span> thereafter.
                   </p>
                   <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
                     <p className="text-sm text-gray-600 dark:text-gray-400">

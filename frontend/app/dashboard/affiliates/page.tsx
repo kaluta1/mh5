@@ -168,7 +168,7 @@ export default function AffiliatesPage() {
         const referralsData = await referralsResponse.json()
         setAffiliates(referralsData.map((r: any) => ({
           id: r.id?.toString() || '',
-          name: [r.first_name, r.last_name].filter(Boolean).join(' ') || r.full_name || 'N/A',
+          name: [r.first_name, r.last_name].filter(Boolean).join(' ') || r.full_name || r.username || 'N/A',
           avatar: r.avatar_url,
           joinedAt: r.created_at || new Date().toISOString(),
           level: 1,
@@ -227,12 +227,12 @@ export default function AffiliatesPage() {
       if (linkType) {
         setCopiedLink(linkType)
       }
-      addToast(t('affiliates.copied') || 'Lien copié !', 'success')
+      addToast(t('dashboard.affiliates.copied') || 'Lien copié !', 'success')
       setTimeout(() => {
         setCopiedLink(null)
       }, 2000)
     } catch (error) {
-      addToast('Erreur lors de la copie', 'error')
+      addToast(t('dashboard.affiliates.copy_error') || 'Erreur lors de la copie', 'error')
     }
   }
 
@@ -264,9 +264,9 @@ export default function AffiliatesPage() {
           ...prev,
           pending: prev.pending - 1
         }))
-        addToast(t('affiliates.invitation_cancelled') || 'Invitation annulée', 'success')
+        addToast(t('dashboard.affiliates.invitation_cancelled') || 'Invitation annulée', 'success')
       } else {
-        addToast('Erreur lors de l\'annulation', 'error')
+        addToast(t('dashboard.affiliates.cancel_error') || 'Erreur lors de l\'annulation', 'error')
       }
     } catch (error) {
       console.error('Error cancelling invitation:', error)
@@ -413,7 +413,7 @@ export default function AffiliatesPage() {
                       {t('dashboard.affiliates.your_sponsor') || 'Votre parrain'}
                     </p>
                     <p className="font-semibold text-sm sm:text-base text-gray-900 dark:text-white truncate">
-                      {[sponsorInfo.first_name, sponsorInfo.last_name].filter(Boolean).join(' ') || sponsorInfo.full_name || 'Parrain'}
+                      {[sponsorInfo.first_name, sponsorInfo.last_name].filter(Boolean).join(' ') || sponsorInfo.full_name || sponsorInfo.username || 'Parrain'}
                     </p>
                     <div className="flex flex-wrap items-center gap-1 sm:gap-2 text-xs text-gray-500 dark:text-gray-400">
                       {(sponsorInfo.city || sponsorInfo.country) && (

@@ -3364,7 +3364,9 @@ export const translations: Record<Language, TranslationKeys> = {
         cancel: "Annuler",
         invitation_cancelled: "Invitation annulée",
         no_pending: "Aucune invitation en attente",
-        send_invitation_desc: "Envoyez des invitations à vos amis pour les parrainer"
+        send_invitation_desc: "Envoyez des invitations à vos amis pour les parrainer",
+        copy_error: "Erreur lors de la copie",
+        cancel_error: "Erreur lors de l'annulation"
       },
       commissions: {
         title: "Mes Commissions",
@@ -5519,7 +5521,9 @@ export const translations: Record<Language, TranslationKeys> = {
         cancel: "Cancel",
         invitation_cancelled: "Invitation cancelled",
         no_pending: "No pending invitations",
-        send_invitation_desc: "Send invitations to your friends to refer them"
+        send_invitation_desc: "Send invitations to your friends to refer them",
+        copy_error: "Error copying",
+        cancel_error: "Error cancelling"
       },
       commissions: {
         title: "My Commissions",
@@ -7651,7 +7655,29 @@ export const translations: Record<Language, TranslationKeys> = {
         no_results: "Sin resultados",
         try_different_filters: "Prueba con filtros diferentes",
         showing: "Mostrando",
-        of: "de"
+        of: "de",
+        pending_invitations: "Pendiente",
+        invite_friend: "Invitar a un amigo",
+        invite_description: "Envía una invitación por correo electrónico para referir a tus amigos",
+        email_address: "Dirección de correo electrónico",
+        personal_message: "Mensaje personal",
+        message_placeholder: "¡Hola! Únete a mí en MyHigh5...",
+        send_invitation: "Enviar invitación",
+        sending: "Enviando...",
+        share_link: "Comparte tu enlace",
+        code_label: "Código",
+        link_copied: "¡Enlace copiado!",
+        invite_sent_success: "¡Invitación enviada con éxito!",
+        invite_error: "Error al enviar la invitación",
+        invite_email_required: "Por favor ingresa un correo electrónico",
+        pending: "Pendiente",
+        sent_on: "Enviado el",
+        cancel: "Cancelar",
+        invitation_cancelled: "Invitación cancelada",
+        no_pending: "No hay invitaciones pendientes",
+        send_invitation_desc: "Envía invitaciones a tus amigos para referirlos",
+        copy_error: "Error al copiar",
+        cancel_error: "Error al cancelar"
       }
     },
     dashboard: {
@@ -9706,7 +9732,29 @@ export const translations: Record<Language, TranslationKeys> = {
         no_results: "Keine Ergebnisse",
         try_different_filters: "Versuchen Sie andere Filter",
         showing: "Anzeige",
-        of: "von"
+        of: "von",
+        pending_invitations: "Ausstehend",
+        invite_friend: "Einen Freund einladen",
+        invite_description: "Senden Sie eine E-Mail-Einladung, um Ihre Freunde zu empfehlen",
+        email_address: "E-Mail-Adresse",
+        personal_message: "Persönliche Nachricht",
+        message_placeholder: "Hallo! Treten Sie mir auf MyHigh5 bei...",
+        send_invitation: "Einladung senden",
+        sending: "Wird gesendet...",
+        share_link: "Teilen Sie Ihren Link",
+        code_label: "Code",
+        link_copied: "Link kopiert!",
+        invite_sent_success: "Einladung erfolgreich gesendet!",
+        invite_error: "Fehler beim Senden der Einladung",
+        invite_email_required: "Bitte geben Sie eine E-Mail-Adresse ein",
+        pending: "Ausstehend",
+        sent_on: "Gesendet am",
+        cancel: "Abbrechen",
+        invitation_cancelled: "Einladung storniert",
+        no_pending: "Keine ausstehenden Einladungen",
+        send_invitation_desc: "Senden Sie Einladungen an Ihre Freunde, um sie zu empfehlen",
+        copy_error: "Fehler beim Kopieren",
+        cancel_error: "Fehler beim Stornieren"
       },
       subtitle: "Verfolgen Sie Ihren Fortschritt, verwalten Sie Ihre Wettbewerbe und erweitern Sie Ihr Netzwerk",
       quick_actions: "Schnellaktionen",

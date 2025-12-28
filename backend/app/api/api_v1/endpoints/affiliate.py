@@ -1,6 +1,7 @@
 from typing import List, Optional, Any
-from fastapi import APIRouter, Depends, HTTPException, status, Request, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, Request, BackgroundTasks, Body
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 
 from app.api import deps
 from app.crud import (
@@ -562,3 +563,45 @@ def cancel_invitation(
         )
     
     return {"message": "Invitation annulée"}
+
+
+class AcceptAgreementRequest(BaseModel):
+    accepted: bool = True
+
+
+@router.post("/accept-agreement", status_code=status.HTTP_200_OK)
+def accept_affiliate_agreement(
+    *,
+    db: Session = Depends(deps.get_db),
+    current_user = Depends(deps.get_current_active_user),
+    request: AcceptAgreementRequest = Body(...)
+):
+    """
+    Accepter l'accord d'affiliation.
+    """
+    from datetime import datetime
+    
+    # Vérifier si l'accord a déjà été accepté
+    if current_user.affiliate_agreement_accepted:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="L'accord d'affiliation a déjà été accepté"
+        )
+    
+    if not request.accepted:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Vous devez accepter l'accord pour continuer"
+        )
+    
+    # Mettre à jour le statut
+    current_user.affiliate_agreement_accepted = True
+    current_user.affiliate_agreement_accepted_at = datetime.utcnow()
+    db.commit()
+    db.refresh(current_user)
+    
+    return {
+        "success": True,
+        "message": "Accord d'affiliation accepté avec succès",
+        "accepted_at": current_user.affiliate_agreement_accepted_at.isoformat() if current_user.affiliate_agreement_accepted_at else None
+    }

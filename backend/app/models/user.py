@@ -97,6 +97,10 @@ class User(Base):
     # Parrain (qui a référé cet utilisateur)
     sponsor_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
     
+    # Accord d'affiliation
+    affiliate_agreement_accepted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    affiliate_agreement_accepted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    
     # Relations géographiques (dépréciées - les données sont maintenant stockées directement)
     # city_rel: Mapped[Optional["City"]] = relationship("City")
     # country_rel: Mapped[Optional["Country"]] = relationship("Country")
