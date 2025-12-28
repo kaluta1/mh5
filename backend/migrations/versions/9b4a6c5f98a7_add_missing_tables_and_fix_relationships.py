@@ -7,6 +7,7 @@ Create Date: 2025-08-28 10:16:45.851209
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 
 # revision identifiers, used by Alembic.
@@ -34,7 +35,7 @@ def upgrade():
     op.create_table('chart_of_accounts',
     sa.Column('account_code', sa.String(length=20), nullable=False),
     sa.Column('account_name', sa.String(length=200), nullable=False),
-    sa.Column('account_type', sa.Enum('ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE', name='accounttype'), nullable=False),
+    sa.Column('account_type', postgresql.ENUM('ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE', name='accounttype', create_type=False), nullable=False),
     sa.Column('parent_id', sa.Integer(), nullable=True),
     sa.Column('total_liabilities', sa.Numeric(precision=15, scale=2), nullable=False),
     sa.Column('credit_balance', sa.Numeric(precision=15, scale=2), nullable=False),
@@ -298,7 +299,7 @@ def upgrade():
     sa.Column('last_name', sa.String(length=100), nullable=True),
     sa.Column('avatar_url', sa.String(length=512), nullable=True),
     sa.Column('bio', sa.String(length=1024), nullable=True),
-    sa.Column('gender', sa.Enum('MALE', 'FEMALE', 'OTHER', 'PREFER_NOT_TO_SAY', name='gender'), nullable=True),
+    sa.Column('gender', postgresql.ENUM('MALE', 'FEMALE', 'OTHER', 'PREFER_NOT_TO_SAY', name='gender', create_type=False), nullable=True),
     sa.Column('date_of_birth', sa.DateTime(), nullable=True),
     sa.Column('phone_number', sa.String(length=20), nullable=True),
     sa.Column('city_id', sa.Integer(), nullable=True),
@@ -308,7 +309,7 @@ def upgrade():
     sa.Column('shufti_verification_id', sa.String(length=100), nullable=True),
     sa.Column('identity_verified', sa.Boolean(), nullable=False),
     sa.Column('verification_date', sa.DateTime(), nullable=True),
-    sa.Column('status', sa.Enum('ACTIVE', 'SUSPENDED', 'BANNED', 'PENDING_VERIFICATION', name='userstatus'), nullable=False),
+    sa.Column('status', postgresql.ENUM('ACTIVE', 'SUSPENDED', 'BANNED', 'PENDING_VERIFICATION', name='userstatus', create_type=False), nullable=False),
     sa.Column('last_login', sa.DateTime(), nullable=True),
     sa.Column('personal_referral_code', sa.String(length=50), nullable=True),
     sa.Column('id', sa.Integer(), nullable=False),
@@ -505,7 +506,7 @@ def upgrade():
     sa.Column('is_public', sa.Boolean(), nullable=False),
     sa.Column('max_members', sa.Integer(), nullable=True),
     sa.Column('multisig_threshold', sa.Integer(), nullable=False),
-    sa.Column('status', sa.Enum('ACTIVE', 'SUSPENDED', 'CLOSED', name='clubstatus'), nullable=False),
+    sa.Column('status', postgresql.ENUM('ACTIVE', 'SUSPENDED', 'CLOSED', name='clubstatus', create_type=False), nullable=False),
     sa.Column('created_at', sa.DateTime(), nullable=False),
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('updated_at', sa.DateTime(), nullable=False),
