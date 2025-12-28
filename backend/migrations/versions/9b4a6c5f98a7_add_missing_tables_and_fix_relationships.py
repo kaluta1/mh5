@@ -392,13 +392,7 @@ def upgrade():
     sa.UniqueConstraint('reference')
     )
     op.create_index(op.f('ix_transactions_id'), 'transactions', ['id'], unique=False)
-    op.create_table('user_roles',
-    sa.Column('user_id', sa.Integer(), nullable=False),
-    sa.Column('role_id', sa.Integer(), nullable=False),
-    sa.ForeignKeyConstraint(['role_id'], ['role.id'], ),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
-    sa.PrimaryKeyConstraint('user_id', 'role_id')
-    )
+    # user_roles already created in migration 001
     op.create_table('vote_sessions',
     sa.Column('voter_id', sa.Integer(), nullable=False),
     sa.Column('contest_type_id', sa.Integer(), nullable=False),
