@@ -1535,6 +1535,44 @@ export interface TranslationKeys {
       }
     }
   }
+  verification: {
+    requirements_title: string
+    requirements_description: string
+    contest: string
+    progress: string
+    completed: string
+    required: string
+    verify: string
+    proceed: string
+    incomplete_warning: string
+    kyc_verification: string
+    visual_verification: string
+    voice_verification: string
+    selfie: string
+    selfie_with_pet: string
+    selfie_with_document: string
+    selfie_instructions: string
+    selfie_pet_instructions: string
+    selfie_document_instructions: string
+    voice_instructions: string
+    use_camera: string
+    upload_image: string
+    camera_error: string
+    microphone_error: string
+    file_too_large: string
+    invalid_file_type: string
+    upload_error: string
+    capture: string
+    retake: string
+    confirm: string
+    tap_to_record: string
+    recording: string
+    recording_complete: string
+    play: string
+    stop: string
+    selfie_success: string
+    voice_success: string
+  }
   metadata: {
     keywords: string[]
   }
@@ -6173,8 +6211,7 @@ export const translations: Record<Language, TranslationKeys> = {
       stop: "Stop",
       selfie_success: "Selfie saved successfully",
       voice_success: "Voice recording saved successfully"
-    }
-  },
+    },
   metadata: {
     keywords: ["contests", "beauty", "talents", "community", "votes", "competition", "affiliation", "earn money", "high5", "myhigh5"]
   }
@@ -8147,8 +8184,7 @@ export const translations: Record<Language, TranslationKeys> = {
       stop: "Detener",
       selfie_success: "Selfie guardado exitosamente",
       voice_success: "Grabación de voz guardada exitosamente"
-    }
-  },
+    },
   metadata: {
     keywords: ["concursos", "belleza", "talentos", "comunidad", "votos", "competición", "afiliación", "ganar dinero", "high5", "myhigh5"]
   }
@@ -10115,10 +10151,8 @@ export const translations: Record<Language, TranslationKeys> = {
       stop: "Stopp",
       selfie_success: "Selfie erfolgreich gespeichert",
       voice_success: "Sprachaufnahme erfolgreich gespeichert"
-    }
-  },
+    },
   metadata: {
     keywords: ["Wettbewerbe", "Schönheit", "Talente", "Gemeinschaft", "Stimmen", "Wettbewerb", "Affiliate", "Geld verdienen", "high5", "myhigh5"]
   }
-}
 }
