@@ -65,6 +65,18 @@ DO $$ BEGIN
     END IF;
 END $$;
 
+-- Ajouter la colonne title à contest_seasons si elle n'existe pas
+DO $$ BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'contest_seasons' AND column_name = 'title'
+    ) THEN
+        ALTER TABLE contest_seasons ADD COLUMN title VARCHAR(200);
+        UPDATE contest_seasons SET title = 'Saison sans titre' WHERE title IS NULL;
+        ALTER TABLE contest_seasons ALTER COLUMN title SET NOT NULL;
+    END IF;
+END $$;
+
 -- Vérifier que les colonnes ont été ajoutées
 SELECT 
     column_name, 
@@ -74,4 +86,13 @@ FROM information_schema.columns
 WHERE table_name = 'contest' 
 AND column_name IN ('cover_image_url', 'voting_type_id', 'is_deleted')
 ORDER BY column_name;
+
+-- Vérifier que la colonne title existe dans contest_seasons
+SELECT 
+    column_name, 
+    data_type, 
+    is_nullable
+FROM information_schema.columns 
+WHERE table_name = 'contest_seasons' 
+AND column_name = 'title';
 

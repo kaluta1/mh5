@@ -173,7 +173,7 @@ export default function ContestsPage() {
               {/* Badge */}
               <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full px-4 py-2 mb-6">
                 <Flame className="w-4 h-4 text-orange-400" />
-                <span className="text-sm font-medium">Concours en cours</span>
+                <span className="text-sm font-medium">{t('pages.contests.badge') || "Concours en cours"}</span>
               </div>
               
               <h1 className="text-4xl md:text-6xl font-black mb-6 leading-tight">
@@ -258,12 +258,12 @@ export default function ContestsPage() {
             <div>
               <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">
                 {selectedFilter === "all" 
-                  ? "Tous les concours" 
-                  : `Concours ${filters.find(f => f.id === selectedFilter)?.label}`
+                  ? t('pages.contests.all_contests') || "Tous les concours"
+                  : `${t('pages.contests.contests_filter') || "Concours"} ${filters.find(f => f.id === selectedFilter)?.label}`
                 }
               </h2>
               <p className="text-gray-500 dark:text-gray-400 mt-1">
-                {filteredContests.length} résultat{filteredContests.length > 1 ? "s" : ""}
+                {filteredContests.length} {t('pages.contests.results') || "résultat"}{filteredContests.length > 1 ? "s" : ""}
               </p>
             </div>
           </div>
@@ -292,7 +292,7 @@ export default function ContestsPage() {
                   setSearchQuery("")
                 }}
               >
-                Réinitialiser les filtres
+                {t('pages.contests.reset_filters') || "Réinitialiser les filtres"}
               </Button>
             </div>
           ) : (
@@ -337,7 +337,7 @@ export default function ContestsPage() {
             <div className="relative z-10 text-center text-white">
               <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-2 mb-6">
                 <Users className="w-4 h-4" />
-                <span className="text-sm font-medium">Rejoignez la communauté</span>
+                <span className="text-sm font-medium">{t('pages.contests.join_community') || "Rejoignez la communauté"}</span>
               </div>
               
               <h2 className="text-3xl md:text-5xl font-black mb-6 leading-tight">
@@ -362,7 +362,7 @@ export default function ContestsPage() {
                   onClick={() => router.push('/about')}
                   className="border-2 border-white/30 text-white hover:bg-white/10 font-bold px-10 py-7 text-lg rounded-xl"
                 >
-                  En savoir plus
+                  {t('pages.contests.learn_more') || "En savoir plus"}
                 </Button>
               </div>
             </div>

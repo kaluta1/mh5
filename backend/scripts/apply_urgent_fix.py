@@ -100,6 +100,19 @@ def apply_urgent_fix():
             """))
             print("✅ Contrainte de clé étrangère vérifiée")
         
+        # Ajouter la colonne title à contest_seasons
+        if 'contest_seasons' in insp.get_table_names():
+            columns = [c['name'] for c in insp.get_columns('contest_seasons')]
+            
+            if 'title' not in columns:
+                print("📝 Ajout de la colonne title à contest_seasons...")
+                bind.execute(text("ALTER TABLE contest_seasons ADD COLUMN title VARCHAR(200)"))
+                bind.execute(text("UPDATE contest_seasons SET title = 'Saison sans titre' WHERE title IS NULL"))
+                bind.execute(text("ALTER TABLE contest_seasons ALTER COLUMN title SET NOT NULL"))
+                print("✅ Colonne title ajoutée à contest_seasons")
+            else:
+                print("ℹ️  Colonne title existe déjà dans contest_seasons")
+        
         db.commit()
         print("\n✅ Corrections d'urgence appliquées avec succès!")
         

@@ -1428,6 +1428,7 @@ export interface TranslationKeys {
   }
   pages: {
     contests: {
+      badge: string
       title: string
       subtitle: string
       search_placeholder: string
@@ -1444,6 +1445,12 @@ export interface TranslationKeys {
         participants: string
         levels: string
       }
+      all_contests: string
+      contests_filter: string
+      results: string
+      reset_filters: string
+      join_community: string
+      learn_more: string
       no_results: string
       try_different_filter: string
       auth_required_title: string
@@ -2845,33 +2852,28 @@ export const translations: Record<Language, TranslationKeys> = {
         },
         founding_membership: {
           title: "Adhésion Fondateur",
-          description: "Gagnez des commissions lorsque les membres du réseau rejoignent en tant que Membres Fondateurs (frais d'adhésion de 100$)",
-          commission: "20$ sur le niveau 1, 2$ sur les niveaux 2-10"
-        },
-        annual_membership: {
-          title: "Frais d'adhésion annuel",
-          description: "Gagnez des commissions lorsque les Membres Fondateurs paient leurs frais d'adhésion annuels (50$)",
-          commission: "10$ sur le niveau 1, 1$ sur les niveaux 2-10"
+          description: "Gagnez des commissions lorsque les membres de votre réseau de parrainage rejoignent le Club des Membres Fondateurs ou paient les frais d'adhésion annuels.",
+          commission: "20% sur le niveau 1, 2% sur les niveaux 2-10"
         },
         club_memberships: {
           title: "Adhésions aux clubs",
-          description: "Gagnez des commissions sur les frais d'adhésion aux clubs payants. Le site facture 20% des frais d'adhésion, et vous en recevez une part.",
+          description: "Gagnez des commissions sur les frais d'adhésion aux clubs payants. Le site ajoute une majoration de 20% aux frais spécifiés par le propriétaire du club, dont 20% sont versés au niveau 1, et 2% à chacun des niveaux 2 à 10.",
           commission: "20% sur le niveau 1, 2% sur les niveaux 2-10"
         },
         shop_purchases: {
           title: "Achats en boutique",
-          description: "Gagnez des commissions sur les achats de contenu numérique dans la boutique MyHigh5. Le site facture 20% de frais de plateforme, et vous en recevez une part.",
+          description: "Gagnez des commissions sur les achats de contenu numérique dans la boutique MyHigh5. Le site ajoute une majoration de 20% aux frais spécifiés par le propriétaire du club, dont 20% sont versés au niveau 1, et 2% à chacun des niveaux 2 à 10.",
           commission: "20% sur le niveau 1, 2% sur les niveaux 2-10"
         },
         ad_revenue: {
           title: "Partage des revenus publicitaires",
-          description: "Gagnez des commissions sur les revenus publicitaires générés sur les pages de concours des membres de votre réseau",
+          description: "Les participants aux concours gagnent 40% des revenus publicitaires générés sur leurs pages de concours. Leurs parrains de niveau 1 gagnent 10%, et les niveaux 2 à 10 gagnent 1% chacun. Les membres qui nomment des candidats gagnent 10% des revenus publicitaires générés par leurs candidats nommés. Leurs parrains de niveau 1 gagnent 5%, et les niveaux 2 à 10 gagnent 1% chacun.",
           commission: "10% sur le niveau 1, 1% sur les niveaux 2-10"
         },
         ad_campaigns: {
-          title: "Campagnes publicitaires",
-          description: "Gagnez des commissions sur les campagnes publicitaires achetées par les membres de votre réseau via la plateforme publicitaire native",
-          commission: "Structure de commission variable"
+          title: "Page des Sponsors du Site Web",
+          description: "Les parrains de niveau 1 gagnent une commission de 10%, et les niveaux 2 à 10 gagnent 1% chacun.",
+          commission: "10% sur le niveau 1, 1% sur les niveaux 2-10"
         }
       },
       faq: {
@@ -2879,17 +2881,17 @@ export const translations: Record<Language, TranslationKeys> = {
         title: "Questions fréquentes",
         subtitle: "Trouvez les réponses aux questions les plus courantes sur MyHigh5",
         question_1: "Comment puis-je gagner de l'argent sur MyHigh5 ?",
-        answer_1: "Vous pouvez gagner de l'argent de plusieurs façons : en participant aux concours et en remportant des prix, en rejoignant le programme d'affiliation pour gagner des commissions sur les membres que vous référez, et en devenant membre fondateur pour participer aux pools de revenus et de profits.",
+        answer_1: "Vous pouvez gagner de l'argent de plusieurs façons : en participant aux concours, en nommant des candidats, en rejoignant le programme d'affiliation pour gagner des commissions sur les membres que vous référez, et en devenant membre fondateur pour participer aux pools de revenus et de profits.",
         question_2: "Comment fonctionne le programme d'affiliation ?",
-        answer_2: "Le programme d'affiliation MyHigh5 fonctionne sur 10 niveaux. Vous gagnez 20% de commission sur les activités des membres que vous référez directement (niveau 1), et 2% sur les niveaux 2 à 10. Vous pouvez gagner des commissions sur les paiements KYC, les adhésions, les achats en boutique, et plus encore.",
+        answer_2: "Pour les paiements de frais de vérification, vous gagnez une commission de 20% sur les paiements effectués par vos parrainages directs, et une commission de 2% sur les paiements effectués par chacun de vos parrainages indirects du niveau 2 au niveau 10. Pour les revenus publicitaires, les candidats participants reçoivent 40% des revenus publicitaires générés sur leurs pages de concours. Le parrain direct d'un candidat participant reçoit 10%, et chaque parrain indirect du niveau 2 au niveau 10 reçoit 1%. Les membres qui nomment reçoivent 10% des revenus publicitaires générés sur les pages de concours de leurs candidats nommés, 5% des revenus publicitaires générés sur les pages de concours des candidats nommés par leurs parrainages directs, et 1% des revenus publicitaires générés sur les pages de concours des candidats nommés par chacun de leurs parrainages indirects du niveau 2 au niveau 10. Pour les clubs, les propriétaires de clubs reçoivent 40% des revenus publicitaires générés sur leurs pages de club ou de fans. Le parrain direct d'un propriétaire de club reçoit 10%, et chaque parrain indirect du niveau 2 au niveau 10 reçoit 1%. Pour les frais d'adhésion aux clubs, MyHigh5 applique une majoration de 20% aux frais d'abonnement sélectionnés par le membre. De cette majoration, 20% est versé au parrain direct du payeur, et 2% est versé à chaque parrain indirect du niveau 2 au niveau 10. Pour les emplacements payés sur la page des Sponsors du Site Web, 10% est versé au parrain de niveau 1, et 1% est versé à chacun des parrains des niveaux 2 à 10.",
         question_3: "Qu'est-ce que le statut de Membre Fondateur ?",
-        answer_3: "Le statut de Membre Fondateur est une opportunité limitée qui nécessite un paiement unique de 100$ et la vérification de votre compte. Les membres fondateurs participent à des pools de commissions mensuelles (10% des revenus nets) et à un pool de profits annuels (20% des profits après impôts).",
+        answer_3: "Le statut de Membre Fondateur (MFM) est une opportunité limitée qui nécessite la vérification du compte et le paiement de frais d'adhésion de 100$ et d'une cotisation annuelle de club de 50$ pour les 1 000 premiers MFM, et de frais d'adhésion de 200$ et d'une cotisation annuelle de club de 200$ par la suite. Les emplacements MFM cesseront d'exister une fois que le nombre total de MFM atteindra 10 000. Les Membres Fondateurs participent à des pools de commissions mensuelles équivalant à 10% des revenus nets et à un pool de profits annuels équivalant à 20% des profits après impôts, alloués en fonction de la proportion de leurs parrainages vérifiés de niveau 1 par rapport au nombre total de parrainages vérifiés de niveau 1.",
         question_4: "Comment puis-je participer aux concours ?",
         answer_4: "Pour participer aux concours, vous devez créer un compte gratuit, compléter votre profil, et soumettre votre candidature avec des photos ou vidéos selon les exigences du concours. Certains concours peuvent nécessiter une vérification KYC.",
         question_5: "Les concours sont-ils gratuits ?",
-        answer_5: "Oui, la participation aux concours est gratuite. Cependant, certains concours peuvent nécessiter une vérification KYC qui peut avoir un coût. Les membres fondateurs ont accès à des avantages exclusifs et à des opportunités de revenus supplémentaires.",
+        answer_5: "Oui. La participation aux concours est gratuite, mais votre compte doit être vérifié car nous devons faire correspondre le contenu de votre participation à votre identité vérifiée. Vous n'avez pas besoin de vérifier votre compte pour nommer des candidats.",
         question_6: "Comment puis-je retirer mes gains ?",
-        answer_6: "Vous pouvez retirer vos gains via votre portefeuille dans le tableau de bord. Les paiements sont traités mensuellement avec un seuil minimum de 50$ CAD. Les méthodes de paiement incluent le virement bancaire (pour les affiliés canadiens), PayPal, ou la cryptomonnaie."
+        answer_6: "Vous pouvez retirer vos gains via votre portefeuille dans le tableau de bord. Les paiements sont traités mensuellement, avec un seuil minimum de paiement de 100$. Les méthodes de paiement incluent le virement bancaire, PayPal, ou la cryptomonnaie."
       },
       download_app: {
         badge: "Application mobile",
@@ -3837,8 +3839,9 @@ export const translations: Record<Language, TranslationKeys> = {
     },
     pages: {
       contests: {
+        badge: "Concours en cours",
         title: "Découvrez nos Concours",
-        subtitle: "Participez à des compétitions passionnantes du niveau local au niveau mondial",
+        subtitle: "Participez, nommez ou votez dans des compétitions passionnantes qui progressent du niveau local au niveau mondial.",
         search_placeholder: "Rechercher un concours...",
         filters: {
           all: "Tous",
@@ -3853,6 +3856,12 @@ export const translations: Record<Language, TranslationKeys> = {
           participants: "Participants",
           levels: "Niveaux"
         },
+        all_contests: "Tous les concours",
+        contests_filter: "Concours",
+        results: "résultat",
+        reset_filters: "Réinitialiser les filtres",
+        join_community: "Rejoignez la communauté",
+        learn_more: "En savoir plus",
         no_results: "Aucun concours trouvé",
         try_different_filter: "Essayez un autre filtre ou terme de recherche",
         auth_required_title: "Connexion requise",
@@ -4983,33 +4992,28 @@ export const translations: Record<Language, TranslationKeys> = {
         },
         founding_membership: {
           title: "Founding Membership",
-          description: "Earn commissions when network members join as Founding Members ($100 joining fee)",
-          commission: "$20 on Level 1, $2 on Levels 2-10"
-        },
-        annual_membership: {
-          title: "Annual Membership Fee",
-          description: "Earn commissions when Founding Members pay their annual membership fee ($50)",
-          commission: "$10 on Level 1, $1 on Levels 2-10"
+          description: "Earn commissions when members in your referral network join Founding Members Club or pay for annual membership fee.",
+          commission: "20% on Level 1, 2% on Levels 2-10"
         },
         club_memberships: {
           title: "Club Memberships",
-          description: "Earn commissions on paid club membership fees. The website charges 20% of membership fees, and you earn a share of that.",
+          description: "Earn commissions on paid club membership fees. The website adds a 20% markup to the club owner's specified fees, of which 20% is paid to Level 1, and 2% is paid to each of Levels 2 through 10.",
           commission: "20% on Level 1, 2% on Levels 2-10"
         },
         shop_purchases: {
           title: "Shop Purchases",
-          description: "Earn commissions on digital content purchases in the MyHigh5 shop. The website charges 20% platform fees, and you earn a share of that.",
+          description: "Earn commissions on digital content purchases in the MyHigh5 shop. The website adds a 20% markup to the club owner's specified fees, of which 20% is paid to Level 1, and 2% is paid to each of Levels 2 through 10.",
           commission: "20% on Level 1, 2% on Levels 2-10"
         },
         ad_revenue: {
           title: "Ad Revenue Sharing",
-          description: "Earn commissions from ad revenues generated on contest pages of members in your network",
+          description: "Contest participants earn 40% of the advertising revenue generated on their contest pages. Their Level 1 sponsors earn 10%, and Levels 2 through 10 earn 1% each. Contest nominators earn 10% of the advertising revenue generated by their nominated contestants. Their Level 1 sponsors earn 5%, and Levels 2 through 10 earn 1% each.",
           commission: "10% on Level 1, 1% on Levels 2-10"
         },
         ad_campaigns: {
-          title: "Advertisement Campaigns",
-          description: "Earn commissions from advertising campaigns purchased by members in your network through the native ad platform",
-          commission: "Variable commission structure"
+          title: "Website Sponsors Page",
+          description: "Level 1 sponsors earn a 10% commission, and Levels 2 through 10 earn 1% each.",
+          commission: "10% on Level 1, 1% on Levels 2-10"
         }
       },
       faq: {
@@ -5017,17 +5021,17 @@ export const translations: Record<Language, TranslationKeys> = {
         title: "Frequently Asked Questions",
         subtitle: "Find answers to the most common questions about MyHigh5",
         question_1: "How can I earn money on MyHigh5?",
-        answer_1: "You can earn money in several ways: by participating in contests and winning prizes, by joining the affiliate program to earn commissions on members you refer, and by becoming a founding member to participate in revenue and profit pools.",
+        answer_1: "You can earn money in several ways: by participating in contests, by nominating contestants, by joining the affiliate program to earn commissions on members you refer, and by becoming a founding member to participate in revenue and profit pools.",
         question_2: "How does the affiliate program work?",
-        answer_2: "The MyHigh5 affiliate program works on 10 levels. You earn 20% commission on activities of members you directly refer (level 1), and 2% on levels 2 to 10. You can earn commissions on KYC payments, memberships, shop purchases, and more.",
+        answer_2: "For verification fee payments, you earn a 20% commission on payments made by your direct referrals, and a 2% commission on payments made by each of your indirect referrals from Level 2 to Level 10. For ad revenue, participating contestants receive 40% of the ad revenue generated on their contest pages. The direct sponsor of a participating contestant receives 10%, and each indirect sponsor from Level 2 to Level 10 receives 1%. Nominating members receive 10% of the ad revenue generated on the contest pages of their nominated contestants, 5% of the ad revenue generated on the contest pages of contestants nominated by their direct referrals, and 1% of the ad revenue generated on the contest pages of contestants nominated by each of their indirect referrals from Level 2 to Level 10. For clubs, club owners receive 40% of the ad revenue generated on their club or fan pages. The direct sponsor of a club owner receives 10%, and each indirect sponsor from Level 2 to Level 10 receives 1%. For club membership fees, MyHigh5 applies a 20% markup to the member's selected subscription fee. Of this markup, 20% is paid to the direct sponsor of the payer, and 2% is paid to each indirect sponsor from Level 2 to Level 10. For slots paid for on the Website Sponsors page, 10% is paid to the Level 1 sponsor, and 1% is paid to each of the Level 2 through Level 10 sponsors.",
         question_3: "What is the Founding Member status?",
-        answer_3: "The Founding Member status is a limited opportunity that requires a one-time payment of $100 and verification of your account. Founding members participate in monthly commission pools (10% of net revenues) and an annual profit pool (20% of profits after taxes).",
+        answer_3: "Founding Member (MFM) status is a limited opportunity that requires account verification and payment of a joining fee of $100 and an annual club membership fee of $50 for the first 1,000 MFMs, and a joining fee of $200 and an annual club membership fee of $200 thereafter. MFM slots will cease to exist once the total number of MFMs reaches 10,000. Founding Members participate in monthly commission pools equal to 10% of net revenues and an annual profit pool equal to 20% of profits after taxes, allocated based on the proportion of their Level 1 verified referrals relative to the total number of Level 1 verified referrals.",
         question_4: "How can I participate in contests?",
         answer_4: "To participate in contests, you need to create a free account, complete your profile, and submit your application with photos or videos according to the contest requirements. Some contests may require KYC verification.",
         question_5: "Are contests free?",
-        answer_5: "Yes, contest participation is free. However, some contests may require KYC verification which may have a cost. Founding members have access to exclusive benefits and additional revenue opportunities.",
+        answer_5: "Yes. Contest participation is free, but your account must be verified because we need to match your participation content with your verified identity. You do not need to verify your account in order to nominate contestants.",
         question_6: "How can I withdraw my earnings?",
-        answer_6: "You can withdraw your earnings via your wallet in the dashboard. Payments are processed monthly with a minimum threshold of $50 CAD. Payment methods include bank transfer (for Canadian affiliates), PayPal, or cryptocurrency."
+        answer_6: "You can withdraw your earnings through your wallet in the dashboard. Payments are processed monthly, with a minimum payout threshold of $100. Payment methods include bank transfer, PayPal, or cryptocurrency."
       },
       download_app: {
         badge: "Mobile App",
@@ -6008,8 +6012,9 @@ export const translations: Record<Language, TranslationKeys> = {
     },
     pages: {
       contests: {
+        badge: "Ongoing contests",
         title: "Discover Our Contests",
-        subtitle: "Join exciting competitions from local to global level",
+        subtitle: "Participate, nominate, or vote in exciting competitions that progress from the local level to the global level.",
         search_placeholder: "Search a contest...",
         filters: {
           all: "All",
@@ -6024,6 +6029,12 @@ export const translations: Record<Language, TranslationKeys> = {
           participants: "Participants",
           levels: "Levels"
         },
+        all_contests: "All contests",
+        contests_filter: "Contests",
+        results: "result",
+        reset_filters: "Reset filters",
+        join_community: "Join the community",
+        learn_more: "Learn more",
         no_results: "No contest found",
         try_different_filter: "Try another filter or search term",
         auth_required_title: "Login Required",
@@ -7040,33 +7051,28 @@ export const translations: Record<Language, TranslationKeys> = {
         },
         founding_membership: {
           title: "Membresía Fundadora",
-          description: "Gana comisiones cuando los miembros de la red se unan como Miembros Fundadores (tarifa de inscripción de $100)",
-          commission: "$20 en Nivel 1, $2 en Niveles 2-10"
-        },
-        annual_membership: {
-          title: "Tarifa de membresía anual",
-          description: "Gana comisiones cuando los Miembros Fundadores pagan su tarifa de membresía anual ($50)",
-          commission: "$10 en Nivel 1, $1 en Niveles 2-10"
+          description: "Gana comisiones cuando los miembros de tu red de referidos se unan al Club de Miembros Fundadores o paguen la tarifa de membresía anual.",
+          commission: "20% en Nivel 1, 2% en Niveles 2-10"
         },
         club_memberships: {
           title: "Membresías de clubes",
-          description: "Gana comisiones en las tarifas de membresía de clubes pagadas. El sitio web cobra el 20% de las tarifas de membresía, y tú obtienes una parte de eso.",
+          description: "Gana comisiones en las tarifas de membresía de clubes pagadas. El sitio web agrega un margen de beneficio del 20% a las tarifas especificadas por el propietario del club, de las cuales el 20% se paga al Nivel 1, y el 2% se paga a cada uno de los Niveles 2 a 10.",
           commission: "20% en Nivel 1, 2% en Niveles 2-10"
         },
         shop_purchases: {
           title: "Compras en la tienda",
-          description: "Gana comisiones en compras de contenido digital en la tienda MyHigh5. El sitio web cobra 20% de tarifas de plataforma, y tú obtienes una parte de eso.",
+          description: "Gana comisiones en compras de contenido digital en la tienda MyHigh5. El sitio web agrega un margen de beneficio del 20% a las tarifas especificadas por el propietario del club, de las cuales el 20% se paga al Nivel 1, y el 2% se paga a cada uno de los Niveles 2 a 10.",
           commission: "20% en Nivel 1, 2% en Niveles 2-10"
         },
         ad_revenue: {
           title: "Compartir ingresos publicitarios",
-          description: "Gana comisiones de los ingresos publicitarios generados en las páginas de concursos de los miembros de tu red",
+          description: "Los participantes en concursos ganan el 40% de los ingresos publicitarios generados en sus páginas de concursos. Sus patrocinadores de Nivel 1 ganan 10%, y los Niveles 2 a 10 ganan 1% cada uno. Los miembros que nominan candidatos ganan 10% de los ingresos publicitarios generados por sus candidatos nominados. Sus patrocinadores de Nivel 1 ganan 5%, y los Niveles 2 a 10 ganan 1% cada uno.",
           commission: "10% en Nivel 1, 1% en Niveles 2-10"
         },
         ad_campaigns: {
-          title: "Campañas publicitarias",
-          description: "Gana comisiones de las campañas publicitarias compradas por los miembros de tu red a través de la plataforma publicitaria nativa",
-          commission: "Estructura de comisión variable"
+          title: "Página de Patrocinadores del Sitio Web",
+          description: "Los patrocinadores de Nivel 1 ganan una comisión del 10%, y los Niveles 2 a 10 ganan 1% cada uno.",
+          commission: "10% en Nivel 1, 1% en Niveles 2-10"
         }
       },
       faq: {
@@ -7074,17 +7080,17 @@ export const translations: Record<Language, TranslationKeys> = {
         title: "Preguntas frecuentes",
         subtitle: "Encuentra respuestas a las preguntas más comunes sobre MyHigh5",
         question_1: "¿Cómo puedo ganar dinero en MyHigh5?",
-        answer_1: "Puedes ganar dinero de varias maneras: participando en concursos y ganando premios, uniéndote al programa de afiliados para ganar comisiones por los miembros que refieras, y convirtiéndote en miembro fundador para participar en los fondos de ingresos y ganancias.",
+        answer_1: "Puedes ganar dinero de varias maneras: participando en concursos, nominando candidatos, uniéndote al programa de afiliados para ganar comisiones por los miembros que refieras, y convirtiéndote en miembro fundador para participar en los fondos de ingresos y ganancias.",
         question_2: "¿Cómo funciona el programa de afiliados?",
-        answer_2: "El programa de afiliados de MyHigh5 funciona en 10 niveles. Ganas 20% de comisión en las actividades de los miembros que refieras directamente (nivel 1), y 2% en los niveles 2 a 10. Puedes ganar comisiones en pagos KYC, membresías, compras en la tienda, y más.",
+        answer_2: "Para los pagos de tarifas de verificación, ganas una comisión del 20% en los pagos realizados por tus referidos directos, y una comisión del 2% en los pagos realizados por cada uno de tus referidos indirectos del Nivel 2 al Nivel 10. Para los ingresos publicitarios, los candidatos participantes reciben el 40% de los ingresos publicitarios generados en sus páginas de concursos. El patrocinador directo de un candidato participante recibe 10%, y cada patrocinador indirecto del Nivel 2 al Nivel 10 recibe 1%. Los miembros que nominan reciben 10% de los ingresos publicitarios generados en las páginas de concursos de sus candidatos nominados, 5% de los ingresos publicitarios generados en las páginas de concursos de candidatos nominados por sus referidos directos, y 1% de los ingresos publicitarios generados en las páginas de concursos de candidatos nominados por cada uno de sus referidos indirectos del Nivel 2 al Nivel 10. Para los clubes, los propietarios de clubes reciben 40% de los ingresos publicitarios generados en sus páginas de club o de fans. El patrocinador directo de un propietario de club recibe 10%, y cada patrocinador indirecto del Nivel 2 al Nivel 10 recibe 1%. Para las tarifas de membresía de clubes, MyHigh5 aplica un margen de beneficio del 20% a la tarifa de suscripción seleccionada por el miembro. De este margen, 20% se paga al patrocinador directo del pagador, y 2% se paga a cada patrocinador indirecto del Nivel 2 al Nivel 10. Para los espacios pagados en la página de Patrocinadores del Sitio Web, 10% se paga al patrocinador de Nivel 1, y 1% se paga a cada uno de los patrocinadores de los Niveles 2 a 10.",
         question_3: "¿Qué es el estatus de Miembro Fundador?",
-        answer_3: "El estatus de Miembro Fundador es una oportunidad limitada que requiere un pago único de $100 y la verificación de tu cuenta. Los miembros fundadores participan en fondos de comisiones mensuales (10% de los ingresos netos) y un fondo de ganancias anual (20% de las ganancias después de impuestos).",
+        answer_3: "El estatus de Miembro Fundador (MFM) es una oportunidad limitada que requiere la verificación de la cuenta y el pago de una tarifa de inscripción de $100 y una tarifa de membresía anual de club de $50 para los primeros 1,000 MFM, y una tarifa de inscripción de $200 y una tarifa de membresía anual de club de $200 a partir de entonces. Los espacios MFM dejarán de existir una vez que el número total de MFM alcance 10,000. Los Miembros Fundadores participan en fondos de comisiones mensuales equivalentes al 10% de los ingresos netos y un fondo de ganancias anual equivalente al 20% de las ganancias después de impuestos, asignados en función de la proporción de sus referidos verificados de Nivel 1 en relación con el número total de referidos verificados de Nivel 1.",
         question_4: "¿Cómo puedo participar en concursos?",
         answer_4: "Para participar en concursos, necesitas crear una cuenta gratuita, completar tu perfil, y enviar tu solicitud con fotos o videos según los requisitos del concurso. Algunos concursos pueden requerir verificación KYC.",
         question_5: "¿Los concursos son gratuitos?",
-        answer_5: "Sí, la participación en concursos es gratuita. Sin embargo, algunos concursos pueden requerir verificación KYC que puede tener un costo. Los miembros fundadores tienen acceso a beneficios exclusivos y oportunidades de ingresos adicionales.",
+        answer_5: "Sí. La participación en concursos es gratuita, pero tu cuenta debe estar verificada porque necesitamos hacer coincidir el contenido de tu participación con tu identidad verificada. No necesitas verificar tu cuenta para nominar candidatos.",
         question_6: "¿Cómo puedo retirar mis ganancias?",
-        answer_6: "Puedes retirar tus ganancias a través de tu billetera en el panel de control. Los pagos se procesan mensualmente con un umbral mínimo de $50 CAD. Los métodos de pago incluyen transferencia bancaria (para afiliados canadienses), PayPal, o criptomoneda."
+        answer_6: "Puedes retirar tus ganancias a través de tu billetera en el panel de control. Los pagos se procesan mensualmente, con un umbral mínimo de pago de $100. Los métodos de pago incluyen transferencia bancaria, PayPal, o criptomoneda."
       },
       download_app: {
         badge: "Aplicación móvil",
@@ -7971,8 +7977,9 @@ export const translations: Record<Language, TranslationKeys> = {
     },
     pages: {
       contests: {
+        badge: "Concursos en curso",
         title: "Descubre Nuestros Concursos",
-        subtitle: "Participa en competiciones emocionantes del nivel local al global",
+        subtitle: "Participa, nombra o vota en competiciones emocionantes que progresan del nivel local al nivel global.",
         search_placeholder: "Buscar un concurso...",
         filters: {
           all: "Todos",
@@ -7987,6 +7994,12 @@ export const translations: Record<Language, TranslationKeys> = {
           participants: "Participantes",
           levels: "Niveles"
         },
+        all_contests: "Todos los concursos",
+        contests_filter: "Concursos",
+        results: "resultado",
+        reset_filters: "Restablecer filtros",
+        join_community: "Únete a la comunidad",
+        learn_more: "Saber más",
         no_results: "Ningún concurso encontrado",
         try_different_filter: "Prueba otro filtro o término de búsqueda",
         auth_required_title: "Inicio de sesión requerido",
@@ -9003,33 +9016,28 @@ export const translations: Record<Language, TranslationKeys> = {
         },
         founding_membership: {
           title: "Gründungsmitgliedschaft",
-          description: "Verdienen Sie Provisionen, wenn Netzwerkmitglieder als Gründungsmitglieder beitreten (Beitrittsgebühr von 100$)",
-          commission: "20$ auf Stufe 1, 2$ auf Stufen 2-10"
-        },
-        annual_membership: {
-          title: "Jährliche Mitgliedsgebühr",
-          description: "Verdienen Sie Provisionen, wenn Gründungsmitglieder ihre jährliche Mitgliedsgebühr (50$) zahlen",
-          commission: "10$ auf Stufe 1, 1$ auf Stufen 2-10"
+          description: "Verdienen Sie Provisionen, wenn Mitglieder in Ihrem Empfehlungsnetzwerk dem Gründungsmitglieder-Club beitreten oder die jährliche Mitgliedsgebühr zahlen.",
+          commission: "20% auf Stufe 1, 2% auf Stufen 2-10"
         },
         club_memberships: {
           title: "Club-Mitgliedschaften",
-          description: "Verdienen Sie Provisionen auf bezahlte Club-Mitgliedsgebühren. Die Website berechnet 20% der Mitgliedsgebühren, und Sie erhalten einen Anteil davon.",
+          description: "Verdienen Sie Provisionen auf bezahlte Club-Mitgliedsgebühren. Die Website fügt einen Aufschlag von 20% zu den vom Clubeigentümer festgelegten Gebühren hinzu, wovon 20% an Stufe 1 und 2% an jede der Stufen 2 bis 10 gezahlt werden.",
           commission: "20% auf Stufe 1, 2% auf Stufen 2-10"
         },
         shop_purchases: {
           title: "Einkäufe im Shop",
-          description: "Verdienen Sie Provisionen auf digitale Inhaltskäufe im MyHigh5-Shop. Die Website berechnet 20% Plattformgebühren, und Sie erhalten einen Anteil davon.",
+          description: "Verdienen Sie Provisionen auf digitale Inhaltskäufe im MyHigh5-Shop. Die Website fügt einen Aufschlag von 20% zu den vom Clubeigentümer festgelegten Gebühren hinzu, wovon 20% an Stufe 1 und 2% an jede der Stufen 2 bis 10 gezahlt werden.",
           commission: "20% auf Stufe 1, 2% auf Stufen 2-10"
         },
         ad_revenue: {
           title: "Werbeeinnahmen teilen",
-          description: "Verdienen Sie Provisionen aus Werbeeinnahmen, die auf Wettbewerbsseiten von Mitgliedern in Ihrem Netzwerk generiert werden",
+          description: "Wettbewerbsteilnehmer verdienen 40% der Werbeeinnahmen, die auf ihren Wettbewerbsseiten generiert werden. Ihre Stufe-1-Patrone verdienen 10%, und die Stufen 2 bis 10 verdienen jeweils 1%. Mitglieder, die Kandidaten nominieren, verdienen 10% der Werbeeinnahmen, die von ihren nominierten Kandidaten generiert werden. Ihre Stufe-1-Patrone verdienen 5%, und die Stufen 2 bis 10 verdienen jeweils 1%.",
           commission: "10% auf Stufe 1, 1% auf Stufen 2-10"
         },
         ad_campaigns: {
-          title: "Werbekampagnen",
-          description: "Verdienen Sie Provisionen aus Werbekampagnen, die von Mitgliedern in Ihrem Netzwerk über die native Werbeplattform gekauft werden",
-          commission: "Variable Provisionsstruktur"
+          title: "Website-Sponsoren-Seite",
+          description: "Stufe-1-Patrone verdienen eine Provision von 10%, und die Stufen 2 bis 10 verdienen jeweils 1%.",
+          commission: "10% auf Stufe 1, 1% auf Stufen 2-10"
         }
       },
       faq: {
@@ -9037,17 +9045,17 @@ export const translations: Record<Language, TranslationKeys> = {
         title: "Häufig gestellte Fragen",
         subtitle: "Finden Sie Antworten auf die häufigsten Fragen zu MyHigh5",
         question_1: "Wie kann ich bei MyHigh5 Geld verdienen?",
-        answer_1: "Sie können auf verschiedene Weise Geld verdienen: durch Teilnahme an Wettbewerben und Gewinnen von Preisen, durch Beitritt zum Affiliate-Programm, um Provisionen für Mitglieder zu verdienen, die Sie werben, und durch Gründungsmitgliedschaft, um an Einnahme- und Gewinnpools teilzunehmen.",
+        answer_1: "Sie können auf verschiedene Weise Geld verdienen: durch Teilnahme an Wettbewerben, durch Nominieren von Kandidaten, durch Beitritt zum Affiliate-Programm, um Provisionen für Mitglieder zu verdienen, die Sie werben, und durch Gründungsmitgliedschaft, um an Einnahme- und Gewinnpools teilzunehmen.",
         question_2: "Wie funktioniert das Affiliate-Programm?",
-        answer_2: "Das MyHigh5 Affiliate-Programm funktioniert auf 10 Ebenen. Sie verdienen 20% Provision auf Aktivitäten von Mitgliedern, die Sie direkt werben (Stufe 1), und 2% auf Stufen 2 bis 10. Sie können Provisionen auf KYC-Zahlungen, Mitgliedschaften, Shop-Einkäufe und mehr verdienen.",
+        answer_2: "Für Verifizierungsgebührenzahlungen verdienen Sie eine Provision von 20% auf Zahlungen, die von Ihren direkten Empfehlungen getätigt werden, und eine Provision von 2% auf Zahlungen, die von jeder Ihrer indirekten Empfehlungen von Stufe 2 bis Stufe 10 getätigt werden. Für Werbeeinnahmen erhalten teilnehmende Kandidaten 40% der Werbeeinnahmen, die auf ihren Wettbewerbsseiten generiert werden. Der direkte Patron eines teilnehmenden Kandidaten erhält 10%, und jeder indirekte Patron von Stufe 2 bis Stufe 10 erhält 1%. Nominierende Mitglieder erhalten 10% der Werbeeinnahmen, die auf den Wettbewerbsseiten ihrer nominierten Kandidaten generiert werden, 5% der Werbeeinnahmen, die auf den Wettbewerbsseiten von Kandidaten generiert werden, die von ihren direkten Empfehlungen nominiert wurden, und 1% der Werbeeinnahmen, die auf den Wettbewerbsseiten von Kandidaten generiert werden, die von jeder ihrer indirekten Empfehlungen von Stufe 2 bis Stufe 10 nominiert wurden. Für Clubs erhalten Clubeigentümer 40% der Werbeeinnahmen, die auf ihren Club- oder Fan-Seiten generiert werden. Der direkte Patron eines Clubeigentümers erhält 10%, und jeder indirekte Patron von Stufe 2 bis Stufe 10 erhält 1%. Für Club-Mitgliedsgebühren wendet MyHigh5 einen Aufschlag von 20% auf die vom Mitglied ausgewählte Abonnementgebühr an. Von diesem Aufschlag werden 20% an den direkten Patron des Zahlers gezahlt, und 2% werden an jeden indirekten Patron von Stufe 2 bis Stufe 10 gezahlt. Für auf der Website-Sponsoren-Seite bezahlte Plätze werden 10% an den Stufe-1-Patron gezahlt, und 1% wird an jeden der Stufe-2-bis-Stufe-10-Patrone gezahlt.",
         question_3: "Was ist der Status eines Gründungsmitglieds?",
-        answer_3: "Der Status eines Gründungsmitglieds ist eine begrenzte Gelegenheit, die eine einmalige Zahlung von 100$ und die Verifizierung Ihres Kontos erfordert. Gründungsmitglieder nehmen an monatlichen Provisionspools (10% der Nettoumsätze) und einem jährlichen Gewinnpool (20% der Gewinne nach Steuern) teil.",
+        answer_3: "Der Status eines Gründungsmitglieds (MFM) ist eine begrenzte Gelegenheit, die die Kontoverifizierung und die Zahlung einer Beitrittsgebühr von 100$ und einer jährlichen Club-Mitgliedsgebühr von 50$ für die ersten 1.000 MFM erfordert, und eine Beitrittsgebühr von 200$ und eine jährliche Club-Mitgliedsgebühr von 200$ danach. MFM-Plätze werden nicht mehr existieren, sobald die Gesamtzahl der MFM 10.000 erreicht. Gründungsmitglieder nehmen an monatlichen Provisionspools teil, die 10% der Nettoumsätze entsprechen, und einem jährlichen Gewinnpool, der 20% der Gewinne nach Steuern entspricht, zugeteilt basierend auf dem Anteil ihrer verifizierten Empfehlungen der Stufe 1 im Verhältnis zur Gesamtzahl der verifizierten Empfehlungen der Stufe 1.",
         question_4: "Wie kann ich an Wettbewerben teilnehmen?",
         answer_4: "Um an Wettbewerben teilzunehmen, müssen Sie ein kostenloses Konto erstellen, Ihr Profil vervollständigen und Ihre Bewerbung mit Fotos oder Videos gemäß den Anforderungen des Wettbewerbs einreichen. Einige Wettbewerbe können eine KYC-Verifizierung erfordern.",
         question_5: "Sind Wettbewerbe kostenlos?",
-        answer_5: "Ja, die Teilnahme an Wettbewerben ist kostenlos. Einige Wettbewerbe können jedoch eine KYC-Verifizierung erfordern, die Kosten verursachen kann. Gründungsmitglieder haben Zugang zu exklusiven Vorteilen und zusätzlichen Einnahmemöglichkeiten.",
+        answer_5: "Ja. Die Teilnahme an Wettbewerben ist kostenlos, aber Ihr Konto muss verifiziert sein, da wir Ihren Teilnahmeinhalt mit Ihrer verifizierten Identität abgleichen müssen. Sie müssen Ihr Konto nicht verifizieren, um Kandidaten zu nominieren.",
         question_6: "Wie kann ich meine Einnahmen abheben?",
-        answer_6: "Sie können Ihre Einnahmen über Ihre Brieftasche im Dashboard abheben. Zahlungen werden monatlich mit einem Mindestbetrag von 50$ CAD verarbeitet. Zahlungsmethoden umfassen Banküberweisung (für kanadische Affiliates), PayPal oder Kryptowährung."
+        answer_6: "Sie können Ihre Einnahmen über Ihre Brieftasche im Dashboard abheben. Zahlungen werden monatlich verarbeitet, mit einem Mindestauszahlungsschwellenwert von 100$. Zahlungsmethoden umfassen Banküberweisung, PayPal oder Kryptowährung."
       },
       download_app: {
         badge: "Mobile App",
@@ -9928,8 +9936,9 @@ export const translations: Record<Language, TranslationKeys> = {
     },
     pages: {
       contests: {
+        badge: "Laufende Wettbewerbe",
         title: "Entdecken Sie unsere Wettbewerbe",
-        subtitle: "Nehmen Sie an spannenden Wettbewerben vom lokalen bis zum globalen Level teil",
+        subtitle: "Nehmen Sie teil, nominieren Sie oder stimmen Sie in spannenden Wettbewerben ab, die vom lokalen zum globalen Level fortschreiten.",
         search_placeholder: "Wettbewerb suchen...",
         filters: {
           all: "Alle",
@@ -9944,6 +9953,12 @@ export const translations: Record<Language, TranslationKeys> = {
           participants: "Teilnehmer",
           levels: "Levels"
         },
+        all_contests: "Alle Wettbewerbe",
+        contests_filter: "Wettbewerbe",
+        results: "Ergebnis",
+        reset_filters: "Filter zurücksetzen",
+        join_community: "Treten Sie der Gemeinschaft bei",
+        learn_more: "Mehr erfahren",
         no_results: "Kein Wettbewerb gefunden",
         try_different_filter: "Versuchen Sie einen anderen Filter oder Suchbegriff",
         auth_required_title: "Anmeldung erforderlich",
