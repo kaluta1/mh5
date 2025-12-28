@@ -55,9 +55,17 @@ def upgrade():
                 SELECT 1 FROM information_schema.columns 
                 WHERE table_name = 'contest_seasons' AND column_name = 'title'
             ) THEN
-                UPDATE contest_seasons SET title = 'Saison sans titre' WHERE title IS NULL;
-                ALTER TABLE contest_seasons ALTER COLUMN title SET NOT NULL;
+                BEGIN
+                    UPDATE contest_seasons SET title = 'Saison sans titre' WHERE title IS NULL;
+                    ALTER TABLE contest_seasons ALTER COLUMN title SET NOT NULL;
+                EXCEPTION WHEN OTHERS THEN
+                    -- Column might not exist or already NOT NULL, ignore
+                    NULL;
+                END;
             END IF;
+        EXCEPTION WHEN OTHERS THEN
+            -- Table or column might not exist, ignore
+            NULL;
         END $$;
     """)
     
