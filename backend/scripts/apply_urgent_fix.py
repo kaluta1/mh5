@@ -77,6 +77,13 @@ def apply_urgent_fix():
             else:
                 print("ℹ️  Colonne voting_type_id existe déjà")
             
+            if 'is_deleted' not in columns:
+                print("📝 Ajout de la colonne is_deleted...")
+                bind.execute(text("ALTER TABLE contest ADD COLUMN is_deleted BOOLEAN DEFAULT false NOT NULL"))
+                print("✅ Colonne is_deleted ajoutée")
+            else:
+                print("ℹ️  Colonne is_deleted existe déjà")
+            
             # Ajouter la contrainte de clé étrangère
             print("📝 Vérification de la contrainte de clé étrangère...")
             bind.execute(text("""

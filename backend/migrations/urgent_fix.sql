@@ -44,6 +44,15 @@ DO $$ BEGIN
     END IF;
 END $$;
 
+DO $$ BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'contest' AND column_name = 'is_deleted'
+    ) THEN
+        ALTER TABLE contest ADD COLUMN is_deleted BOOLEAN DEFAULT false NOT NULL;
+    END IF;
+END $$;
+
 -- Ajouter la contrainte de clé étrangère si elle n'existe pas
 DO $$ BEGIN
     IF NOT EXISTS (
@@ -63,6 +72,6 @@ SELECT
     is_nullable
 FROM information_schema.columns 
 WHERE table_name = 'contest' 
-AND column_name IN ('cover_image_url', 'voting_type_id')
+AND column_name IN ('cover_image_url', 'voting_type_id', 'is_deleted')
 ORDER BY column_name;
 

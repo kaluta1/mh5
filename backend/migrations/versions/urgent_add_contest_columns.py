@@ -73,6 +73,7 @@ def upgrade() -> None:
         critical_columns = [
             ('cover_image_url', 'VARCHAR(500)'),
             ('voting_type_id', 'INTEGER'),
+            ('is_deleted', 'BOOLEAN DEFAULT false NOT NULL'),
         ]
         
         for col_name, col_type in critical_columns:
