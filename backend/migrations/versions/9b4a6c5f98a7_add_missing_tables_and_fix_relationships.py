@@ -79,19 +79,6 @@ def upgrade():
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_tax_configurations_id'), 'tax_configurations', ['id'], unique=False)
-    op.create_table('countries',
-    sa.Column('region_id', sa.Integer(), nullable=False),
-    sa.Column('name', sa.String(length=100), nullable=False),
-    sa.Column('code', sa.String(length=3), nullable=False),
-    sa.Column('flag_url', sa.String(length=255), nullable=True),
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('created_at', sa.DateTime(), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), nullable=False),
-    sa.ForeignKeyConstraint(['region_id'], ['regions.id'], ),
-    sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('code')
-    )
-    op.create_index(op.f('ix_countries_id'), 'countries', ['id'], unique=False)
     # countries, cities, contest_stages already created in migration 002
     op.create_table('prize',
     sa.Column('contest_id', sa.Integer(), nullable=False),
