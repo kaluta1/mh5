@@ -100,7 +100,7 @@ def apply_urgent_fix():
             """))
             print("✅ Contrainte de clé étrangère vérifiée")
         
-        # Ajouter les colonnes title et is_deleted à contest_seasons
+        # Ajouter les colonnes title, is_deleted, created_at et updated_at à contest_seasons
         if 'contest_seasons' in insp.get_table_names():
             columns = [c['name'] for c in insp.get_columns('contest_seasons')]
             
@@ -119,6 +119,20 @@ def apply_urgent_fix():
                 print("✅ Colonne is_deleted ajoutée à contest_seasons")
             else:
                 print("ℹ️  Colonne is_deleted existe déjà dans contest_seasons")
+            
+            if 'created_at' not in columns:
+                print("📝 Ajout de la colonne created_at à contest_seasons...")
+                bind.execute(text("ALTER TABLE contest_seasons ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL"))
+                print("✅ Colonne created_at ajoutée à contest_seasons")
+            else:
+                print("ℹ️  Colonne created_at existe déjà dans contest_seasons")
+            
+            if 'updated_at' not in columns:
+                print("📝 Ajout de la colonne updated_at à contest_seasons...")
+                bind.execute(text("ALTER TABLE contest_seasons ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL"))
+                print("✅ Colonne updated_at ajoutée à contest_seasons")
+            else:
+                print("ℹ️  Colonne updated_at existe déjà dans contest_seasons")
         
         db.commit()
         print("\n✅ Corrections d'urgence appliquées avec succès!")

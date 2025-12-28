@@ -28,7 +28,7 @@ def column_exists(table_name, column_name):
 
 
 def upgrade():
-    """Add title and is_deleted columns to contest_seasons if they don't exist"""
+    """Add title, is_deleted, created_at, and updated_at columns to contest_seasons if they don't exist"""
     # Add title column if it doesn't exist
     if not column_exists('contest_seasons', 'title'):
         op.execute("""
@@ -62,10 +62,42 @@ def upgrade():
                 NULL;
             END $$;
         """)
+    
+    # Add created_at column if it doesn't exist
+    if not column_exists('contest_seasons', 'created_at'):
+        op.execute("""
+            DO $$ 
+            BEGIN 
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_name = 'contest_seasons' AND column_name = 'created_at'
+                ) THEN
+                    ALTER TABLE contest_seasons ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL;
+                END IF;
+            EXCEPTION WHEN OTHERS THEN
+                NULL;
+            END $$;
+        """)
+    
+    # Add updated_at column if it doesn't exist
+    if not column_exists('contest_seasons', 'updated_at'):
+        op.execute("""
+            DO $$ 
+            BEGIN 
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_name = 'contest_seasons' AND column_name = 'updated_at'
+                ) THEN
+                    ALTER TABLE contest_seasons ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL;
+                END IF;
+            EXCEPTION WHEN OTHERS THEN
+                NULL;
+            END $$;
+        """)
 
 
 def downgrade():
-    """Remove title and is_deleted columns from contest_seasons"""
+    """Remove title, is_deleted, created_at, and updated_at columns from contest_seasons"""
     op.execute("""
         DO $$ 
         BEGIN 
@@ -81,6 +113,20 @@ def downgrade():
                 WHERE table_name = 'contest_seasons' AND column_name = 'is_deleted'
             ) THEN
                 ALTER TABLE contest_seasons DROP COLUMN is_deleted;
+            END IF;
+            
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name = 'contest_seasons' AND column_name = 'created_at'
+            ) THEN
+                ALTER TABLE contest_seasons DROP COLUMN created_at;
+            END IF;
+            
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name = 'contest_seasons' AND column_name = 'updated_at'
+            ) THEN
+                ALTER TABLE contest_seasons DROP COLUMN updated_at;
             END IF;
         EXCEPTION WHEN OTHERS THEN
             NULL;

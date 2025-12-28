@@ -87,6 +87,26 @@ DO $$ BEGIN
     END IF;
 END $$;
 
+-- Ajouter la colonne created_at à contest_seasons si elle n'existe pas
+DO $$ BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'contest_seasons' AND column_name = 'created_at'
+    ) THEN
+        ALTER TABLE contest_seasons ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL;
+    END IF;
+END $$;
+
+-- Ajouter la colonne updated_at à contest_seasons si elle n'existe pas
+DO $$ BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'contest_seasons' AND column_name = 'updated_at'
+    ) THEN
+        ALTER TABLE contest_seasons ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL;
+    END IF;
+END $$;
+
 -- Vérifier que les colonnes ont été ajoutées
 SELECT 
     column_name, 
@@ -97,13 +117,13 @@ WHERE table_name = 'contest'
 AND column_name IN ('cover_image_url', 'voting_type_id', 'is_deleted')
 ORDER BY column_name;
 
--- Vérifier que les colonnes title et is_deleted existent dans contest_seasons
+-- Vérifier que les colonnes title, is_deleted, created_at et updated_at existent dans contest_seasons
 SELECT 
     column_name, 
     data_type, 
     is_nullable
 FROM information_schema.columns 
 WHERE table_name = 'contest_seasons' 
-AND column_name IN ('title', 'is_deleted')
+AND column_name IN ('title', 'is_deleted', 'created_at', 'updated_at')
 ORDER BY column_name;
 
