@@ -32,23 +32,8 @@ def upgrade():
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_ad_placements_id'), 'ad_placements', ['id'], unique=False)
-    op.create_table('chart_of_accounts',
-    sa.Column('account_code', sa.String(length=20), nullable=False),
-    sa.Column('account_name', sa.String(length=200), nullable=False),
-    sa.Column('account_type', postgresql.ENUM('ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE', name='accounttype', create_type=False), nullable=False),
-    sa.Column('parent_id', sa.Integer(), nullable=True),
-    sa.Column('total_liabilities', sa.Numeric(precision=15, scale=2), nullable=False),
-    sa.Column('credit_balance', sa.Numeric(precision=15, scale=2), nullable=False),
-    sa.Column('description', sa.Text(), nullable=True),
-    sa.Column('is_active', sa.Boolean(), nullable=False),
-    sa.Column('created_at', sa.DateTime(), nullable=False),
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), nullable=False),
-    sa.ForeignKeyConstraint(['parent_id'], ['chart_of_accounts.id'], ),
-    sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('account_code')
-    )
-    op.create_index(op.f('ix_chart_of_accounts_id'), 'chart_of_accounts', ['id'], unique=False)
+    # chart_of_accounts table already created in migration 002_add_myfav_models
+    # contest_template, location, role, contest are already created in migration 001
     op.create_table('commission_rates',
     sa.Column('level', sa.Integer(), nullable=False),
     sa.Column('commission_type', sa.Enum('AD_REVENUE', 'CLUB_MEMBERSHIP', 'SHOP_PURCHASE', 'CONTEST_PARTICIPATION', name='commissiontype'), nullable=False),
@@ -60,50 +45,9 @@ def upgrade():
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_commission_rates_id'), 'commission_rates', ['id'], unique=False)
-    op.create_table('contest_template',
-    sa.Column('name', sa.String(length=255), nullable=False),
-    sa.Column('description', sa.Text(), nullable=True),
-    sa.Column('contest_type', sa.String(length=50), nullable=False),
-    sa.Column('has_geo_restrictions', sa.Boolean(), nullable=False),
-    sa.Column('has_gender_restrictions', sa.Boolean(), nullable=False),
-    sa.Column('default_submission_days', sa.Integer(), nullable=False),
-    sa.Column('default_voting_days', sa.Integer(), nullable=False),
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('created_at', sa.DateTime(), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), nullable=False),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_contest_template_id'), 'contest_template', ['id'], unique=False)
-    op.create_table('contest_types',
-    sa.Column('name', sa.String(length=100), nullable=False),
-    sa.Column('slug', sa.String(length=100), nullable=False),
-    sa.Column('description', sa.Text(), nullable=True),
-    sa.Column('rules', sa.Text(), nullable=True),
-    sa.Column('voting_restriction', sa.Enum('NONE', 'MALE_ONLY', 'FEMALE_ONLY', 'GEOGRAPHIC', 'AGE_RESTRICTED', name='votingrestriction'), nullable=False),
-    sa.Column('max_submissions_per_user', sa.Integer(), nullable=False),
-    sa.Column('upload_duration_days', sa.Integer(), nullable=False),
-    sa.Column('voting_duration_days', sa.Integer(), nullable=False),
-    sa.Column('is_active', sa.Boolean(), nullable=False),
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('created_at', sa.DateTime(), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), nullable=False),
-    sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('name'),
-    sa.UniqueConstraint('slug')
-    )
-    op.create_index(op.f('ix_contest_types_id'), 'contest_types', ['id'], unique=False)
-    op.create_table('continents',
-    sa.Column('name', sa.String(length=100), nullable=False),
-    sa.Column('code', sa.String(length=10), nullable=False),
-    sa.Column('description', sa.Text(), nullable=True),
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('created_at', sa.DateTime(), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), nullable=False),
-    sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('code'),
-    sa.UniqueConstraint('name')
-    )
-    op.create_index(op.f('ix_continents_id'), 'continents', ['id'], unique=False)
+    # contest_template already created in migration 001
+    # contest_types, continents, regions, countries, cities, contest_categories, contest_seasons, contest_stages
+    # are already created in migration 002_add_myfav_models
     op.create_table('dsp_exchange_rates',
     sa.Column('currency', sa.String(length=3), nullable=False),
     sa.Column('rate_to_usd', sa.Numeric(precision=10, scale=6), nullable=False),
@@ -115,92 +59,7 @@ def upgrade():
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_dsp_exchange_rates_id'), 'dsp_exchange_rates', ['id'], unique=False)
-    op.create_table('location',
-    sa.Column('name', sa.String(length=255), nullable=False),
-    sa.Column('level', sa.String(length=20), nullable=False),
-    sa.Column('parent_id', sa.Integer(), nullable=True),
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('created_at', sa.DateTime(), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), nullable=False),
-    sa.ForeignKeyConstraint(['parent_id'], ['location.id'], ),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_location_id'), 'location', ['id'], unique=False)
-    op.create_table('role',
-    sa.Column('name', sa.String(length=64), nullable=False),
-    sa.Column('description', sa.String(length=255), nullable=True),
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('created_at', sa.DateTime(), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), nullable=False),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_role_id'), 'role', ['id'], unique=False)
-    op.create_index(op.f('ix_role_name'), 'role', ['name'], unique=True)
-    op.create_table('contest',
-    sa.Column('name', sa.String(length=255), nullable=False),
-    sa.Column('description', sa.Text(), nullable=True),
-    sa.Column('contest_type', sa.String(length=50), nullable=False),
-    sa.Column('template_id', sa.Integer(), nullable=True),
-    sa.Column('submission_start_date', sa.Date(), nullable=False),
-    sa.Column('submission_end_date', sa.Date(), nullable=False),
-    sa.Column('voting_start_date', sa.Date(), nullable=False),
-    sa.Column('voting_end_date', sa.Date(), nullable=False),
-    sa.Column('is_active', sa.Boolean(), nullable=False),
-    sa.Column('is_submission_open', sa.Boolean(), nullable=False),
-    sa.Column('is_voting_open', sa.Boolean(), nullable=False),
-    sa.Column('level', sa.String(length=20), nullable=False),
-    sa.Column('location_id', sa.Integer(), nullable=True),
-    sa.Column('gender_restriction', sa.String(length=20), nullable=True),
-    sa.Column('max_entries_per_user', sa.Integer(), nullable=False),
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('created_at', sa.DateTime(), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), nullable=False),
-    sa.ForeignKeyConstraint(['location_id'], ['location.id'], ),
-    sa.ForeignKeyConstraint(['template_id'], ['contest_template.id'], ),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_contest_id'), 'contest', ['id'], unique=False)
-    op.create_table('contest_categories',
-    sa.Column('contest_type_id', sa.Integer(), nullable=False),
-    sa.Column('name', sa.String(length=100), nullable=False),
-    sa.Column('slug', sa.String(length=100), nullable=False),
-    sa.Column('description', sa.Text(), nullable=True),
-    sa.Column('is_active', sa.Boolean(), nullable=False),
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('created_at', sa.DateTime(), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), nullable=False),
-    sa.ForeignKeyConstraint(['contest_type_id'], ['contest_types.id'], ),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_contest_categories_id'), 'contest_categories', ['id'], unique=False)
-    op.create_table('contest_seasons',
-    sa.Column('contest_type_id', sa.Integer(), nullable=False),
-    sa.Column('year', sa.Integer(), nullable=False),
-    sa.Column('season_number', sa.Integer(), nullable=False),
-    sa.Column('title', sa.String(length=200), nullable=True),
-    sa.Column('status', sa.Enum('UPCOMING', 'UPLOAD_PHASE', 'VOTING_ACTIVE', 'VOTING_ENDED', 'COMPLETED', 'CANCELLED', name='conteststatus'), nullable=False),
-    sa.Column('start_date', sa.DateTime(), nullable=False),
-    sa.Column('end_date', sa.DateTime(), nullable=True),
-    sa.Column('upload_end_date', sa.DateTime(), nullable=True),
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('created_at', sa.DateTime(), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), nullable=False),
-    sa.ForeignKeyConstraint(['contest_type_id'], ['contest_types.id'], ),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_contest_seasons_id'), 'contest_seasons', ['id'], unique=False)
-    op.create_table('regions',
-    sa.Column('continent_id', sa.Integer(), nullable=False),
-    sa.Column('name', sa.String(length=100), nullable=False),
-    sa.Column('code', sa.String(length=10), nullable=False),
-    sa.Column('description', sa.Text(), nullable=True),
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('created_at', sa.DateTime(), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), nullable=False),
-    sa.ForeignKeyConstraint(['continent_id'], ['continents.id'], ),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_regions_id'), 'regions', ['id'], unique=False)
+    # location, role, contest already created in migration 001
     op.create_table('tax_configurations',
     sa.Column('tax_name', sa.String(length=100), nullable=False),
     sa.Column('tax_type', sa.String(length=50), nullable=False),
@@ -233,6 +92,7 @@ def upgrade():
     sa.UniqueConstraint('code')
     )
     op.create_index(op.f('ix_countries_id'), 'countries', ['id'], unique=False)
+    # countries, cities, contest_stages already created in migration 002
     op.create_table('prize',
     sa.Column('contest_id', sa.Integer(), nullable=False),
     sa.Column('position', sa.Integer(), nullable=False),
@@ -251,42 +111,6 @@ def upgrade():
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_prize_id'), 'prize', ['id'], unique=False)
-    op.create_table('cities',
-    sa.Column('country_id', sa.Integer(), nullable=False),
-    sa.Column('name', sa.String(length=100), nullable=False),
-    sa.Column('latitude', sa.Float(), nullable=True),
-    sa.Column('longitude', sa.Float(), nullable=True),
-    sa.Column('population', sa.Integer(), nullable=True),
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('created_at', sa.DateTime(), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), nullable=False),
-    sa.ForeignKeyConstraint(['country_id'], ['countries.id'], ),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_cities_id'), 'cities', ['id'], unique=False)
-    op.create_table('contest_stages',
-    sa.Column('season_id', sa.Integer(), nullable=False),
-    sa.Column('stage_level', sa.Enum('UPLOAD', 'CITY', 'COUNTRY', 'REGIONAL', 'CONTINENTAL', 'GLOBAL', 'FINALE', name='conteststagelevel'), nullable=False),
-    sa.Column('continent_id', sa.Integer(), nullable=True),
-    sa.Column('region_id', sa.Integer(), nullable=True),
-    sa.Column('country_id', sa.Integer(), nullable=True),
-    sa.Column('city_id', sa.Integer(), nullable=True),
-    sa.Column('status', sa.Enum('UPCOMING', 'UPLOAD_PHASE', 'VOTING_ACTIVE', 'VOTING_ENDED', 'COMPLETED', 'CANCELLED', name='conteststatus'), nullable=False),
-    sa.Column('start_date', sa.DateTime(), nullable=False),
-    sa.Column('end_date', sa.DateTime(), nullable=False),
-    sa.Column('max_qualifiers', sa.Integer(), nullable=False),
-    sa.Column('min_participants', sa.Integer(), nullable=False),
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('created_at', sa.DateTime(), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), nullable=False),
-    sa.ForeignKeyConstraint(['city_id'], ['cities.id'], ),
-    sa.ForeignKeyConstraint(['continent_id'], ['continents.id'], ),
-    sa.ForeignKeyConstraint(['country_id'], ['countries.id'], ),
-    sa.ForeignKeyConstraint(['region_id'], ['regions.id'], ),
-    sa.ForeignKeyConstraint(['season_id'], ['contest_seasons.id'], ),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_contest_stages_id'), 'contest_stages', ['id'], unique=False)
     op.create_table('users',
     sa.Column('email', sa.String(length=255), nullable=False),
     sa.Column('hashed_password', sa.String(length=255), nullable=False),
@@ -480,41 +304,7 @@ def upgrade():
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_digital_products_id'), 'digital_products', ['id'], unique=False)
-    op.create_table('dsp_wallets',
-    sa.Column('user_id', sa.Integer(), nullable=False),
-    sa.Column('balance_dsp', sa.Numeric(precision=15, scale=2), nullable=False),
-    sa.Column('frozen_balance', sa.Numeric(precision=15, scale=2), nullable=False),
-    sa.Column('total_earned', sa.Numeric(precision=15, scale=2), nullable=False),
-    sa.Column('total_spent', sa.Numeric(precision=15, scale=2), nullable=False),
-    sa.Column('created_at', sa.DateTime(), nullable=False),
-    sa.Column('last_updated', sa.DateTime(), nullable=False),
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), nullable=False),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
-    sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('user_id')
-    )
-    op.create_index(op.f('ix_dsp_wallets_id'), 'dsp_wallets', ['id'], unique=False)
-    op.create_table('fan_clubs',
-    sa.Column('owner_id', sa.Integer(), nullable=False),
-    sa.Column('name', sa.String(length=200), nullable=False),
-    sa.Column('slug', sa.String(length=200), nullable=False),
-    sa.Column('description', sa.Text(), nullable=True),
-    sa.Column('premium_fee', sa.Numeric(precision=10, scale=2), nullable=True),
-    sa.Column('annual_discount_percentage', sa.Numeric(precision=5, scale=2), nullable=False),
-    sa.Column('requires_approval', sa.Boolean(), nullable=False),
-    sa.Column('is_public', sa.Boolean(), nullable=False),
-    sa.Column('max_members', sa.Integer(), nullable=True),
-    sa.Column('multisig_threshold', sa.Integer(), nullable=False),
-    sa.Column('status', postgresql.ENUM('ACTIVE', 'SUSPENDED', 'CLOSED', name='clubstatus', create_type=False), nullable=False),
-    sa.Column('created_at', sa.DateTime(), nullable=False),
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), nullable=False),
-    sa.ForeignKeyConstraint(['owner_id'], ['users.id'], ),
-    sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('slug')
-    )
-    op.create_index(op.f('ix_fan_clubs_id'), 'fan_clubs', ['id'], unique=False)
+    # dsp_wallets and fan_clubs already created in migration 002_add_myfav_models
     op.create_table('financial_reports',
     sa.Column('report_type', sa.Enum('BALANCE_SHEET', 'INCOME_STATEMENT', 'CASH_FLOW', 'TRIAL_BALANCE', 'GENERAL_LEDGER', name='reporttype'), nullable=False),
     sa.Column('period_start', sa.DateTime(), nullable=False),
@@ -1414,10 +1204,7 @@ def downgrade():
     op.drop_table('follow')
     op.drop_index(op.f('ix_financial_reports_id'), table_name='financial_reports')
     op.drop_table('financial_reports')
-    op.drop_index(op.f('ix_fan_clubs_id'), table_name='fan_clubs')
-    op.drop_table('fan_clubs')
-    op.drop_index(op.f('ix_dsp_wallets_id'), table_name='dsp_wallets')
-    op.drop_table('dsp_wallets')
+    # fan_clubs and dsp_wallets are managed by migration 002_add_myfav_models, don't drop them here
     op.drop_index(op.f('ix_digital_products_id'), table_name='digital_products')
     op.drop_table('digital_products')
     op.drop_index(op.f('ix_contestants_id'), table_name='contestants')
@@ -1438,41 +1225,19 @@ def downgrade():
     op.drop_index(op.f('ix_users_id'), table_name='users')
     op.drop_index(op.f('ix_users_email'), table_name='users')
     op.drop_table('users')
-    op.drop_index(op.f('ix_contest_stages_id'), table_name='contest_stages')
-    op.drop_table('contest_stages')
-    op.drop_index(op.f('ix_cities_id'), table_name='cities')
-    op.drop_table('cities')
+    # contest_stages, cities, countries, regions, contest_seasons, contest_categories
+    # are managed by migration 002_add_myfav_models, don't drop them here
     op.drop_index(op.f('ix_prize_id'), table_name='prize')
     op.drop_table('prize')
-    op.drop_index(op.f('ix_countries_id'), table_name='countries')
-    op.drop_table('countries')
     op.drop_index(op.f('ix_tax_configurations_id'), table_name='tax_configurations')
     op.drop_table('tax_configurations')
-    op.drop_index(op.f('ix_regions_id'), table_name='regions')
-    op.drop_table('regions')
-    op.drop_index(op.f('ix_contest_seasons_id'), table_name='contest_seasons')
-    op.drop_table('contest_seasons')
-    op.drop_index(op.f('ix_contest_categories_id'), table_name='contest_categories')
-    op.drop_table('contest_categories')
-    op.drop_index(op.f('ix_contest_id'), table_name='contest')
-    op.drop_table('contest')
-    op.drop_index(op.f('ix_role_name'), table_name='role')
-    op.drop_index(op.f('ix_role_id'), table_name='role')
-    op.drop_table('role')
-    op.drop_index(op.f('ix_location_id'), table_name='location')
-    op.drop_table('location')
+    # contest, role, location, contest_template are managed by migration 001, don't drop them here
     op.drop_index(op.f('ix_dsp_exchange_rates_id'), table_name='dsp_exchange_rates')
     op.drop_table('dsp_exchange_rates')
-    op.drop_index(op.f('ix_continents_id'), table_name='continents')
-    op.drop_table('continents')
-    op.drop_index(op.f('ix_contest_types_id'), table_name='contest_types')
-    op.drop_table('contest_types')
-    op.drop_index(op.f('ix_contest_template_id'), table_name='contest_template')
-    op.drop_table('contest_template')
+    # continents and contest_types are managed by migration 002_add_myfav_models, don't drop them here
     op.drop_index(op.f('ix_commission_rates_id'), table_name='commission_rates')
     op.drop_table('commission_rates')
-    op.drop_index(op.f('ix_chart_of_accounts_id'), table_name='chart_of_accounts')
-    op.drop_table('chart_of_accounts')
+    # chart_of_accounts table is managed by migration 002_add_myfav_models, don't drop it here
     op.drop_index(op.f('ix_ad_placements_id'), table_name='ad_placements')
     op.drop_table('ad_placements')
     # ### end Alembic commands ###
