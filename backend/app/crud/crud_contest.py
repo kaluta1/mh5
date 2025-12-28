@@ -1034,13 +1034,22 @@ class CRUDContest:
         # Récupérer les signalements de l'utilisateur courant pour les contestants
         reported_contestants = set()
         if current_user_id:
-            from app.models.comment import Report
-            user_reports = db.query(Report.contestant_id).filter(
-                Report.reporter_id == current_user_id,
-                Report.status == "pending",
-                Report.contestant_id.isnot(None)
-            ).all()
-            reported_contestants = {report[0] for report in user_reports if report[0] is not None}
+            try:
+                from app.models.comment import Report
+                from sqlalchemy import inspect as sa_inspect
+                # Vérifier si la colonne contestant_id existe dans la table report
+                insp = sa_inspect(db.bind)
+                report_columns = [col['name'] for col in insp.get_columns('report')]
+                if 'contestant_id' in report_columns:
+                    user_reports = db.query(Report.contestant_id).filter(
+                        Report.reporter_id == current_user_id,
+                        Report.status == "pending",
+                        Report.contestant_id.isnot(None)
+                    ).all()
+                    reported_contestants = {report[0] for report in user_reports if report[0] is not None}
+            except Exception:
+                # Si la colonne n'existe pas, on ignore les signalements
+                pass
         
         if current_user_id:
             author_favs = db.query(MyFavorites.contestant_id)\
