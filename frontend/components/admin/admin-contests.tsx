@@ -72,6 +72,12 @@ interface Contest {
     commission_source: string
     commission_rules?: any
   }
+  category_id?: number | null
+  category?: {
+    id: number
+    name: string
+    slug: string
+  }
 }
 
 export default function AdminContests() {
@@ -135,13 +141,24 @@ export default function AdminContests() {
     max_images: 10,
     verification_video_max_duration: 30, // 30 seconds
     verification_max_size_mb: 50,
-    voting_type_id: null as number | null
+    voting_type_id: null as number | null,
+    category_id: null as number | null
   })
   const [uploadedImage, setUploadedImage] = useState<string>('')
   const [seasons, setSeasons] = useState<Array<{ id: number; title: string; level: string }>>([])
   const [loadingSeasons, setLoadingSeasons] = useState(false)
   const [votingTypes, setVotingTypes] = useState<Array<{ id: number; name: string; voting_level: string; commission_source: string; commission_rules?: any }>>([])
   const [loadingVotingTypes, setLoadingVotingTypes] = useState(false)
+  const [categories, setCategories] = useState<Array<{ id: number; name: string; slug: string; description?: string; is_active: boolean }>>([])
+  const [loadingCategories, setLoadingCategories] = useState(false)
+  const [showCategoryForm, setShowCategoryForm] = useState(false)
+  const [categoryFormData, setCategoryFormData] = useState({
+    name: '',
+    slug: '',
+    description: '',
+    is_active: true
+  })
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false)
   const [showVotingTypeForm, setShowVotingTypeForm] = useState(false)
   const [votingTypeFormData, setVotingTypeFormData] = useState({
     name: '',
@@ -155,6 +172,7 @@ export default function AdminContests() {
     fetchContests()
     fetchSeasons()
     fetchVotingTypes()
+    fetchCategories()
   }, [])
 
   const fetchSeasons = async () => {
@@ -191,6 +209,61 @@ export default function AdminContests() {
       setVotingTypes([])
     } finally {
       setLoadingVotingTypes(false)
+    }
+  }
+
+  const fetchCategories = async () => {
+    try {
+      setLoadingCategories(true)
+      const response = await api.get('/api/v1/categories/', { params: { active_only: true } })
+      if (response.data && Array.isArray(response.data)) {
+        setCategories(response.data)
+      } else {
+        setCategories([])
+      }
+    } catch (error: any) {
+      console.error('Erreur lors du chargement des catégories:', error)
+      addToast(t('admin.contests.categories_load_error') || 'Erreur lors du chargement des catégories', 'error')
+      setCategories([])
+    } finally {
+      setLoadingCategories(false)
+    }
+  }
+
+  const handleCreateCategory = async () => {
+    if (!categoryFormData.name.trim()) {
+      addToast(t('admin.contests.category_name_required') || 'Le nom de la catégorie est requis', 'error')
+      return
+    }
+    
+    setIsCreatingCategory(true)
+    try {
+      // Générer le slug à partir du nom si non fourni
+      const slug = categoryFormData.slug.trim() || categoryFormData.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+      
+      const response = await api.post('/api/v1/categories/', {
+        name: categoryFormData.name.trim(),
+        slug: slug,
+        description: categoryFormData.description.trim() || null,
+        is_active: categoryFormData.is_active
+      })
+      
+      addToast(t('admin.contests.category_created') || 'Catégorie créée avec succès', 'success')
+      setCategories([...categories, response.data])
+      setFormData({ ...formData, category_id: response.data.id })
+      setShowCategoryForm(false)
+      setCategoryFormData({
+        name: '',
+        slug: '',
+        description: '',
+        is_active: true
+      })
+    } catch (error: any) {
+      console.error('Erreur lors de la création de la catégorie:', error)
+      const errorMessage = error.response?.data?.detail || t('admin.contests.category_create_error') || 'Erreur lors de la création'
+      addToast(errorMessage, 'error')
+    } finally {
+      setIsCreatingCategory(false)
     }
   }
 
@@ -288,6 +361,12 @@ export default function AdminContests() {
     try {
       setLoading(true)
       const data = await contestService.getAllContests()
+      console.log('Fetched contests data:', data)
+      if (data && data.length > 0) {
+        console.log('First contest from API:', data[0])
+        console.log('First contest category_id:', (data[0] as any).category_id)
+        console.log('First contest category:', (data[0] as any).category)
+      }
       setContests(data as Contest[])
     } catch (error) {
       console.error('Erreur lors du chargement des concours:', error)
@@ -301,10 +380,12 @@ export default function AdminContests() {
     setIsSubmitting(true)
     try {
       // Prepare data
+      console.log('Form data category_id:', formData.category_id)
       const dataToSend: any = {
         name: formData.name,
         description: formData.description,
         contest_type: formData.contest_type,
+        category_id: formData.category_id ?? null,  // S'assurer que category_id est toujours envoyé, même si null
         season_id: formData.season_id ? parseInt(formData.season_id) : null,
         is_active: formData.is_active,
         is_submission_open: formData.is_submission_open,
@@ -426,7 +507,8 @@ export default function AdminContests() {
         max_images: 10,
         verification_video_max_duration: 30,
         verification_max_size_mb: 50,
-        voting_type_id: null
+        voting_type_id: null,
+        category_id: null
     })
     setUploadedImage('')
   }
@@ -439,10 +521,14 @@ export default function AdminContests() {
       return dateStr.split('T')[0]
     }
 
+    console.log('Editing contest:', contest)
+    console.log('Contest category_id:', contest.category_id)
+
     setFormData({
       name: contest.name,
       description: contest.description || '',
       contest_type: contest.contest_type,
+      category_id: contest.category_id || null,
       season_id: contest.season_id?.toString() || '',
       is_active: contest.is_active,
       is_submission_open: contest.is_submission_open,
@@ -824,7 +910,49 @@ export default function AdminContests() {
                   />
                 </div>
 
-                {/* Type de concours */}
+                {/* Catégorie */}
+                <div>
+                  <label className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
+                    {t('admin.contests.category') || 'Catégorie'}
+                  </label>
+                  <div className="flex gap-2">
+                    <Select
+                      value={formData.category_id ? formData.category_id.toString() : "none"}
+                      onValueChange={(value) => {
+                        const categoryId = value && value !== 'none' ? parseInt(value) : null
+                        const selectedCategory = categories.find(c => c.id === categoryId)
+                        setFormData({ 
+                          ...formData, 
+                          category_id: categoryId,
+                          contest_type: selectedCategory ? selectedCategory.slug : formData.contest_type
+                        })
+                      }}
+                    >
+                      <SelectTrigger className="flex-1 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                        <SelectValue placeholder={t('admin.contests.select_category') || 'Sélectionner une catégorie'} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">{t('admin.contests.no_category') || 'Aucune catégorie'}</SelectItem>
+                        {categories.filter(c => c.is_active).map((category) => (
+                          <SelectItem key={category.id} value={category.id.toString()}>
+                            {category.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      type="button"
+                      onClick={() => setShowCategoryForm(true)}
+                      variant="outline"
+                      className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    >
+                      <Plus className="w-4 h-4 mr-1" />
+                      {t('admin.contests.add_category') || 'Ajouter'}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Type de concours (auto-rempli si catégorie sélectionnée) */}
                 <div>
                   <label className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
                     {t('admin.contests.contest_type')}
@@ -832,10 +960,16 @@ export default function AdminContests() {
                   <Input
                     value={formData.contest_type}
                     onChange={(e) => setFormData({ ...formData, contest_type: e.target.value })}
-                    placeholder={t('admin.contests.type_placeholder') || 'Ex: beauty, handsome'}
+                    placeholder={t('admin.contests.type_placeholder') || 'Ex: beauty, handsome (auto-rempli si catégorie sélectionnée)'}
                     required
                     className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    disabled={!!formData.category_id}
                   />
+                  {formData.category_id && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      {t('admin.contests.contest_type_auto_filled') || 'Le type de concours est automatiquement rempli à partir de la catégorie'}
+                    </p>
+                  )}
                 </div>
 
                 {/* Saison du concours */}
@@ -1250,6 +1384,134 @@ export default function AdminContests() {
                   </Button>
                 </div>
               </form>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Category Form Modal */}
+      {showCategoryForm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-lg dark:bg-gray-800">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4 border-b dark:border-gray-700">
+              <CardTitle className="text-xl font-bold text-gray-900 dark:text-white">
+                {t('admin.contests.create_category') || 'Créer une catégorie'}
+              </CardTitle>
+              <button
+                onClick={() => {
+                  setShowCategoryForm(false)
+                  setCategoryFormData({
+                    name: '',
+                    slug: '',
+                    description: '',
+                    is_active: true
+                  })
+                }}
+                className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <div className="space-y-4">
+                {/* Nom */}
+                <div>
+                  <label className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
+                    {t('admin.contests.name') || 'Nom'} <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    value={categoryFormData.name}
+                    onChange={(e) => {
+                      const name = e.target.value
+                      const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+                      setCategoryFormData({ ...categoryFormData, name, slug })
+                    }}
+                    placeholder={t('admin.contests.category_name_placeholder') || 'Ex: Pop, Rock, Hip hop'}
+                    required
+                    className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  />
+                </div>
+
+                {/* Slug */}
+                <div>
+                  <label className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
+                    {t('admin.contests.slug') || 'Slug'} <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    value={categoryFormData.slug}
+                    onChange={(e) => setCategoryFormData({ ...categoryFormData, slug: e.target.value })}
+                    placeholder={t('admin.contests.slug_placeholder') || 'Ex: pop, rock, hip-hop'}
+                    required
+                    className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    {t('admin.contests.slug_help') || 'Le slug est généré automatiquement à partir du nom. Vous pouvez le modifier si nécessaire.'}
+                  </p>
+                </div>
+
+                {/* Description */}
+                <div>
+                  <label className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
+                    {t('admin.contests.description') || 'Description'}
+                  </label>
+                  <textarea
+                    value={categoryFormData.description}
+                    onChange={(e) => setCategoryFormData({ ...categoryFormData, description: e.target.value })}
+                    placeholder={t('admin.contests.category_description_placeholder') || 'Description de la catégorie (optionnel)'}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-myhigh5-primary"
+                  />
+                </div>
+
+                {/* Active */}
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 dark:bg-gray-700">
+                  <input
+                    type="checkbox"
+                    id="category_is_active"
+                    checked={categoryFormData.is_active}
+                    onChange={(e) => setCategoryFormData({ ...categoryFormData, is_active: e.target.checked })}
+                    className="rounded"
+                  />
+                  <label htmlFor="category_is_active" className="text-sm font-medium cursor-pointer text-gray-900 dark:text-white">
+                    {t('admin.contests.active') || 'Actif'}
+                  </label>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-3 justify-end pt-4 border-t dark:border-gray-700 mt-6">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setShowCategoryForm(false)
+                    setCategoryFormData({
+                      name: '',
+                      slug: '',
+                      description: '',
+                      is_active: true
+                    })
+                  }}
+                  disabled={isCreatingCategory}
+                >
+                  {t('admin.contests.cancel') || 'Annuler'}
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleCreateCategory}
+                  disabled={isCreatingCategory || !categoryFormData.name || !categoryFormData.slug}
+                  className="bg-gradient-to-r from-myhigh5-primary to-myhigh5-secondary hover:shadow-lg disabled:opacity-70"
+                >
+                  {isCreatingCategory ? (
+                    <div className="flex items-center gap-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      {t('admin.contests.creating') || 'Création...'}
+                    </div>
+                  ) : (
+                    t('admin.contests.create') || 'Créer'
+                  )}
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>

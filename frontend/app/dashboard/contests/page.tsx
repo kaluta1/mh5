@@ -554,7 +554,7 @@ export default function ContestsPage() {
         </div>
        
         {/* Barre d'onglets principaux (Nomination / Participations) */}
-        <div className="mb-6 border-b border-gray-800">
+        <div className="mb-4 border-b border-gray-800">
           <div className="flex space-x-1">
             <button
               onClick={() => {
@@ -587,6 +587,15 @@ export default function ContestsPage() {
               {t('dashboard.contests.participations') || 'Participations'}
             </button>
           </div>
+        </div>
+        
+        {/* Hint explicatif pour l'onglet actif */}
+        <div className="mb-6 px-4 py-3 bg-gray-800/50 border border-gray-700/50 rounded-lg">
+          <p className="text-sm text-gray-400">
+            {categoryTab === 'nomination' 
+              ? (t('dashboard.contests.nomination_hint') || 'Nominate others to enter into competitions. Vote for contestants who have been nominated by their fans.')
+              : (t('dashboard.contests.participations_hint') || 'Participate yourself in competitions. Contestants sign up directly to compete.')}
+          </p>
         </div>
 
         {/* Barre de recherche et tri */}

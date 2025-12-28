@@ -57,6 +57,7 @@ cors_origins = [
     "http://127.0.0.1:3000",
     "http://127.0.0.1:8000",
     "https://myhigh5.com",
+    "https://www.myhigh5.com",
     "https://mh5-sbe4.onrender.com",
 ]
 

@@ -3,9 +3,9 @@
     "relation": ["delegate_permission/common.handle_all_urls"],
     "target": {
       "namespace": "android_app",
-      "package_name": "com.investissement.investir",
+      "package_name": "com.contest.myhighfive",
       "sha256_cert_fingerprints": [
-        "6C:D0:A0:54:EC:BA:D9:97:6F:B4:A6:B9:36:51:F6:78:64:E5:71:CE:64:2C:6E:37:B0:03:94:4B:79:1A:60:E7"
+        "D4:7C:27:4E:0F:9E:33:F0:FA:DE:BC:6E:59:9A:06:EB:AD:A4:6F:0A:9E:58:85:9C:01:4D:EE:D7:6A:3B:BA:C2"
       ]
     }
   }

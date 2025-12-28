@@ -195,6 +195,19 @@ class CRUDContest:
         location_id = obj_in.location_id if obj_in.location_id and obj_in.location_id > 0 else None
         template_id = obj_in.template_id if obj_in.template_id and obj_in.template_id > 0 else None
         voting_type_id = obj_in.voting_type_id if obj_in.voting_type_id and obj_in.voting_type_id > 0 else None
+        category_id = obj_in.category_id if obj_in.category_id and obj_in.category_id > 0 else None
+        
+        # Si category_id est fourni, récupérer la catégorie et mettre à jour contest_type
+        contest_type = obj_in.contest_type
+        if category_id:
+            from app.models.category import Category
+            category = db.query(Category).filter(Category.id == category_id).first()
+            if category:
+                # Utiliser le slug de la catégorie comme contest_type
+                contest_type = category.slug
+            else:
+                # Si la catégorie n'existe pas, garder le contest_type fourni
+                pass
         
         # Convertir les strings en enums si nécessaire
         verification_type = obj_in.verification_type
@@ -237,7 +250,7 @@ class CRUDContest:
         db_obj = Contest(
             name=contest_name,
             description=obj_in.description,
-            contest_type=obj_in.contest_type,
+            contest_type=contest_type,  # Utiliser le contest_type mis à jour si category_id est fourni
             cover_image_url=obj_in.cover_image_url,
             submission_start_date=obj_in.submission_start_date,
             submission_end_date=obj_in.submission_end_date,
@@ -252,6 +265,7 @@ class CRUDContest:
             max_entries_per_user=obj_in.max_entries_per_user,
             template_id=template_id,
             voting_type_id=voting_type_id,
+            category_id=category_id,
             # Verification requirements
             requires_kyc=obj_in.requires_kyc,
             verification_type=verification_type,
@@ -277,7 +291,7 @@ class CRUDContest:
         from datetime import datetime, date
         
         if isinstance(obj_in, dict):
-            update_data = obj_in
+            update_data = obj_in.copy()  # Faire une copie pour éviter de modifier l'original
         else:
             # Gérer Pydantic v1 et v2
             if hasattr(obj_in, 'model_dump'):
@@ -286,6 +300,22 @@ class CRUDContest:
             else:
                 # Pydantic v1
                 update_data = obj_in.dict(exclude_unset=True)
+            
+            # S'assurer que category_id est toujours inclus s'il est présent dans la requête
+            # même s'il est None (pour permettre de désassigner une catégorie)
+            if hasattr(obj_in, 'category_id'):
+                category_id_value = getattr(obj_in, 'category_id', None)
+                update_data['category_id'] = category_id_value
+        
+        # Log pour débogage
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Update contest - category_id in update_data: {'category_id' in update_data}, value: {update_data.get('category_id')}")
+        
+        # Si category_id est dans update_data (même si None), s'assurer qu'il est traité
+        if 'category_id' in update_data:
+            # La valeur sera traitée dans la boucle for plus bas
+            pass
         
         # Liste des champs de dates à convertir
         date_fields = [
@@ -359,8 +389,18 @@ class CRUDContest:
                         value = value.date()
                 
                 # Convertir les IDs 0 en None pour éviter les violations de FK
-                elif field in ('location_id', 'template_id', 'voting_type_id') and value == 0:
+                elif field in ('location_id', 'template_id', 'voting_type_id', 'category_id') and value == 0:
                     value = None
+                # Si category_id est fourni, récupérer la catégorie et mettre à jour contest_type
+                elif field == 'category_id':
+                    if value is not None and value != 0:
+                        from app.models.category import Category
+                        category = db.query(Category).filter(Category.id == value).first()
+                        if category:
+                            # Mettre à jour contest_type avec le slug de la catégorie
+                            update_data['contest_type'] = category.slug
+                    # S'assurer que category_id est bien assigné (même si None)
+                    # value est déjà défini, il sera assigné via setattr plus bas
                 # Convertir les strings en enums pour verification_type
                 elif field == 'verification_type' and value is not None:
                     if isinstance(value, str):
@@ -660,6 +700,28 @@ class CRUDContest:
                 # Si la table n'existe pas ou erreur, on laisse voting_type_data à None
                 pass
         
+        # Charger l'objet category si category_id existe
+        category_data = None
+        category_id_value = getattr(contest, 'category_id', None)
+        if category_id_value:
+            try:
+                from app.models.category import Category
+                category = db.query(Category).filter(Category.id == category_id_value).first()
+                if category:
+                    category_data = {
+                        "id": category.id,
+                        "name": category.name,
+                        "slug": category.slug,
+                        "description": category.description,
+                        "is_active": category.is_active
+                    }
+            except Exception as e:
+                # En cas d'erreur, on laisse category_data à None
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Error loading category {category_id_value} for contest {contest.id}: {e}")
+                pass
+        
         # Calculer dynamiquement is_submission_open basé sur les dates
         from datetime import date
         today = date.today()
@@ -735,6 +797,8 @@ class CRUDContest:
             "template_id": contest.template_id,
             "voting_type_id": getattr(contest, 'voting_type_id', None),
             "voting_type": voting_type_data,  # Objet voting_type complet (déjà un dict)
+            "category_id": category_id_value,  # ID de la catégorie (toujours inclure, même si None)
+            "category": category_data,  # Objet category complet (déjà un dict) ou None
             "created_at": contest.created_at,
             "updated_at": contest.updated_at,
             "entries_count": entries_count,
@@ -763,6 +827,11 @@ class CRUDContest:
             # Top contestants preview
             "top_contestants": top_contestants,
         }
+        
+        # Log pour vérifier que category_id est bien dans le résultat
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Contest {contest.id} - result dict contains category_id: {'category_id' in result}, value: {result.get('category_id')}")
         
         return result
 

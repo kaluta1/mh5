@@ -1,12 +1,28 @@
 from fastapi import APIRouter
+import logging
 
-from app.api.api_v1.endpoints import auth, users, media, contests, votes, kyc, contestant, geography, favorites, search, search_history, comments, admin, season_migration, notifications, analytics, affiliate, payments, roles, verifications, wallet, voting_types, suggested_contests, social, private_messages, contact
+logger = logging.getLogger(__name__)
+
+try:
+    from app.api.api_v1.endpoints import auth, users, media, contests, votes, kyc, contestant, geography, favorites, search, search_history, comments, admin, season_migration, notifications, analytics, affiliate, payments, roles, verifications, wallet, voting_types, suggested_contests, social, private_messages, contact, categories
+    logger.info("All endpoints imported successfully")
+except ImportError as e:
+    logger.error(f"Error importing endpoints: {e}", exc_info=True)
+    raise
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["Authentification"])
 api_router.include_router(users.router, prefix="/users", tags=["Utilisateurs"])
 api_router.include_router(media.router, prefix="/media", tags=["Médias"])
 api_router.include_router(contests.router, prefix="/contests", tags=["Concours"])
+
+# Enregistrer le router categories avec logging
+try:
+    api_router.include_router(categories.router, prefix="/categories", tags=["Catégories"])
+    logger.info("Categories router registered successfully at /categories")
+except Exception as e:
+    logger.error(f"Error registering categories router: {e}", exc_info=True)
+    raise
 # IMPORTANT: voting-types doit être inclus AVANT votes pour éviter les conflits de routes
 api_router.include_router(voting_types.router, prefix="/voting-types", tags=["Types de vote"])
 api_router.include_router(suggested_contests.router, prefix="/suggested-contests", tags=["Suggestions de concours"])

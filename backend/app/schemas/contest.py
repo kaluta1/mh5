@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Optional, Any, Literal
+from typing import List, Optional, Any, Literal, Dict
 from datetime import date, datetime
 from pydantic import BaseModel, Field
 from enum import Enum
@@ -66,6 +66,7 @@ class ContestBase(BaseModel):
     max_entries_per_user: int = 1
     template_id: Optional[int] = None
     voting_type_id: Optional[int] = None
+    category_id: Optional[int] = None
     
     # ============== VERIFICATION REQUIREMENTS ==============
     requires_kyc: bool = True
@@ -115,6 +116,7 @@ class ContestUpdate(BaseModel):
     max_entries_per_user: Optional[int] = None
     template_id: Optional[int] = None
     voting_type_id: Optional[int] = None
+    category_id: Optional[int] = None
     image_url: Optional[str] = None
     # Verification requirements - accept strings for flexibility
     requires_kyc: Optional[bool] = None
@@ -203,6 +205,7 @@ class Contest(ContestBase):
     image_url: Optional[str] = None  # URL de l'image principale
     top_contestants: List[TopContestantPreview] = []  # Top contestants preview
     voting_type: Optional["VotingType"] = None  # Type de vote associé
+    category: Optional[Dict[str, Any]] = None  # Catégorie associée (id, name, slug, description, is_active)
     # Dates des saisons (calculées automatiquement)
     city_season_start_date: Optional[date] = None
     city_season_end_date: Optional[date] = None

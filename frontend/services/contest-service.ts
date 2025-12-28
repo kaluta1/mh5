@@ -112,6 +112,14 @@ export interface ContestResponse {
     commission_source: string
     commission_rules?: any
   } | null
+  category_id?: number | null
+  category?: {
+    id: number
+    name: string
+    slug: string
+    description?: string
+    is_active: boolean
+  } | null
   // Top contestants preview
   top_contestants?: Array<{
     id: number
@@ -414,6 +422,54 @@ class ContestService {
       return response.data
     } catch (error) {
       console.error(`Error fetching vote details for contestant ${contestantId}:`, error)
+      throw error
+    }
+  }
+
+  /**
+   * Récupère les votes MyHigh5 de l'utilisateur courant (saisons actives uniquement)
+   * Retourne les 5 contestants pour lesquels l'utilisateur a voté, groupés par season
+   */
+  async getMyHigh5Votes(): Promise<any> {
+    try {
+      const response = await api.get('/api/v1/contestants/user/my-votes')
+      return response.data
+    } catch (error) {
+      console.error('Error fetching MyHigh5 votes:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Récupère l'historique complet des votes MyHigh5 de l'utilisateur
+   * Inclut toutes les saisons (actives et inactives), groupées par contestant
+   */
+  async getMyHigh5VotesHistory(contestId?: number): Promise<any> {
+    try {
+      const params = contestId ? { contest_id: contestId } : {}
+      const response = await api.get('/api/v1/contestants/user/my-votes/history', { params })
+      return response.data
+    } catch (error) {
+      console.error('Error fetching MyHigh5 votes history:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Réordonne les votes MyHigh5 de l'utilisateur pour une season donnée
+   * Le 1er reçoit 5 points, le 2ème 4 points, etc.
+   */
+  async reorderMyHigh5Votes(
+    votes: Array<{ contestant_id: number; position: number }>, 
+    seasonId: number
+  ): Promise<void> {
+    try {
+      await api.put('/api/v1/contestants/user/my-votes/reorder', { 
+        votes,
+        season_id: seasonId
+      })
+    } catch (error) {
+      console.error('Error reordering MyHigh5 votes:', error)
       throw error
     }
   }

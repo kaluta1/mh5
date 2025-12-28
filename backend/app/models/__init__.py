@@ -12,6 +12,7 @@ from .advertising import AdCampaign, AdCreative, AdPlacement, AdImpression, AdCl
 from .accounting import ChartOfAccounts, JournalEntry, JournalLine, FinancialReport, RevenueTransaction, TaxConfiguration, AuditTrail
 from .media import Media
 from .contest import Contest, ContestTemplate, Location, ContestEntry, ContestVote
+from .category import Category
 from .prize import Prize, PrizeWinner, Commission
 from .comment import Comment, Like, Report
 from .follow import Follow, Affiliation, ReferralCode
@@ -37,6 +38,7 @@ __all__ = [
     "AdCampaign", "AdCreative", "AdPlacement", "AdImpression", "AdClick", "AdRevenueShare", "AdBudgetTransaction", "AdPerformanceMetrics",
     "ChartOfAccounts", "JournalEntry", "JournalLine", "FinancialReport", "RevenueTransaction", "TaxConfiguration", "AuditTrail",
     "Media", "Contest", "ContestTemplate", "Location", "ContestEntry", "ContestVote",
+    "Category",
     "Prize", "PrizeWinner", "Commission",
     "Comment", "Like", "Report",
     "Follow", "Affiliation", "ReferralCode",

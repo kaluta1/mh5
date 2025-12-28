@@ -58,6 +58,334 @@ def get_my_contestants(
     return result
 
 
+@router.get("/user/my-votes")
+def get_my_votes(
+    *,
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_active_user),
+    season_id: Optional[int] = Query(None, description="Filter by season_id")
+) -> dict:
+    """
+    Récupère les votes de l'utilisateur connecté (MyHigh5), groupés par season.
+    Retourne uniquement les votes des saisons actives (is_active=True dans ContestSeasonLink).
+    Les votes sont limités à 5 par season.
+    """
+    from sqlalchemy.orm import joinedload
+    from sqlalchemy import case, func
+    from app.models.contests import Contestant, ContestSeasonLink
+    from app.models.contest import Contest
+    
+    # Construire la requête de base avec filtre sur les saisons actives
+    query = db.query(ContestantVoting).options(
+        joinedload(ContestantVoting.contestant),
+        joinedload(ContestantVoting.season),
+        joinedload(ContestantVoting.contest)
+    ).join(
+        ContestSeasonLink,
+        and_(
+            ContestSeasonLink.contest_id == ContestantVoting.contest_id,
+            ContestSeasonLink.season_id == ContestantVoting.season_id,
+            ContestSeasonLink.is_active == True
+        )
+    ).filter(
+        ContestantVoting.user_id == current_user.id
+    )
+    
+    # Filtrer par season_id si fourni
+    if season_id:
+        query = query.filter(ContestantVoting.season_id == season_id)
+    
+    # Récupérer tous les votes
+    all_votes = query.order_by(
+        ContestantVoting.season_id,
+        # Les votes avec position définie d'abord, triés par position
+        # Puis les votes sans position, triés par date
+        case(
+            (ContestantVoting.position.isnot(None), ContestantVoting.position),
+            else_=1000  # Mettre les votes sans position à la fin
+        ),
+        ContestantVoting.vote_date.asc()
+    ).all()
+    
+    # Grouper par season_id
+    votes_by_season = {}
+    for vote in all_votes:
+        season_key = vote.season_id
+        if season_key not in votes_by_season:
+            votes_by_season[season_key] = []
+        votes_by_season[season_key].append(vote)
+    
+    # Limiter à 5 votes par season et construire le résultat
+    result = {
+        "seasons": []
+    }
+    
+    for season_id_key, votes in votes_by_season.items():
+        # Limiter à 5 votes par season
+        season_votes = votes[:5]
+        
+        # Récupérer les infos de la season et du contest
+        first_vote = season_votes[0]
+        season = first_vote.season
+        contest = db.query(Contest).filter(Contest.id == first_vote.contest_id).first()
+        
+        season_votes_list = []
+        for idx, vote in enumerate(season_votes, 1):
+            contestant = vote.contestant
+            if not contestant:
+                continue
+                
+            # Récupérer l'auteur du contestant
+            author = db.query(User).filter(User.id == contestant.user_id).first()
+            
+            # Compter les votes pour ce contestant
+            votes_count = db.query(ContestantVoting).filter(
+                ContestantVoting.contestant_id == contestant.id
+            ).count()
+            
+            # Calculer les points si position est définie, sinon utiliser la position par défaut
+            position = vote.position if vote.position else idx
+            points = vote.points if vote.points is not None else (6 - position if 1 <= position <= 5 else None)
+            
+            season_votes_list.append({
+                "position": position,
+                "points": points,
+                "contestant_id": contestant.id,
+                "contestant_title": contestant.title,
+                "contestant_description": contestant.description,
+                "author_id": contestant.user_id,
+                "author_name": author.full_name if author else None,
+                "author_avatar_url": author.avatar_url if author else None,
+                "author_country": author.country if author else None,
+                "author_city": author.city if author else None,
+                "votes_count": votes_count,
+                "vote_date": vote.vote_date.isoformat() if vote.vote_date else None,
+                "season_id": vote.season_id,
+                "contest_id": vote.contest_id,
+                "season_level": season.level if season else None
+            })
+        
+        result["seasons"].append({
+            "season_id": season_id_key,
+            "season_level": season.level if season else None,
+            "contest_id": first_vote.contest_id,
+            "contest_name": contest.name if contest else None,
+            "votes": season_votes_list,
+            "votes_count": len(season_votes_list),
+            "remaining_slots": 5 - len(season_votes_list)
+        })
+    
+    return result
+
+
+@router.get("/user/my-votes/history")
+def get_my_votes_history(
+    *,
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_active_user),
+    contest_id: Optional[int] = Query(None, description="Filter by contest_id")
+) -> dict:
+    """
+    Récupère l'historique complet des votes de l'utilisateur connecté (MyHigh5).
+    Retourne tous les votes, y compris ceux des saisons inactives, groupés par contestant et season.
+    """
+    from sqlalchemy.orm import joinedload
+    from sqlalchemy import case
+    from app.models.contests import Contestant
+    from app.models.contest import Contest
+    
+    # Construire la requête de base (sans filtre sur is_active)
+    query = db.query(ContestantVoting).options(
+        joinedload(ContestantVoting.contestant),
+        joinedload(ContestantVoting.season),
+        joinedload(ContestantVoting.contest)
+    ).filter(
+        ContestantVoting.user_id == current_user.id
+    )
+    
+    # Filtrer par contest_id si fourni
+    if contest_id:
+        query = query.filter(ContestantVoting.contest_id == contest_id)
+    
+    # Récupérer tous les votes, triés par contest_id, puis season_id, puis position/date
+    all_votes = query.order_by(
+        ContestantVoting.contest_id,
+        ContestantVoting.season_id,
+        # Les votes avec position définie d'abord, triés par position
+        # Puis les votes sans position, triés par date
+        case(
+            (ContestantVoting.position.isnot(None), ContestantVoting.position),
+            else_=1000
+        ),
+        ContestantVoting.vote_date.asc()
+    ).all()
+    
+    # Grouper par contest_id, puis par season_id
+    votes_by_contest = {}
+    for vote in all_votes:
+        contest_key = vote.contest_id
+        season_key = vote.season_id
+        
+        if contest_key not in votes_by_contest:
+            votes_by_contest[contest_key] = {}
+        if season_key not in votes_by_contest[contest_key]:
+            votes_by_contest[contest_key][season_key] = []
+        
+        votes_by_contest[contest_key][season_key].append(vote)
+    
+    # Construire le résultat groupé par contestant
+    result = {
+        "history": []
+    }
+    
+    for contest_id_key, seasons in votes_by_contest.items():
+        contest = db.query(Contest).filter(Contest.id == contest_id_key).first()
+        
+        contest_data = {
+            "contest_id": contest_id_key,
+            "contest_name": contest.name if contest else None,
+            "seasons": []
+        }
+        
+        for season_id_key, votes in seasons.items():
+            # Limiter à 5 votes par season pour l'affichage
+            season_votes = votes[:5]
+            
+            if not season_votes:
+                continue
+            
+            first_vote = season_votes[0]
+            season = first_vote.season
+            
+            # Vérifier si la saison est active
+            from app.models.contests import ContestSeasonLink
+            season_link = db.query(ContestSeasonLink).filter(
+                ContestSeasonLink.contest_id == contest_id_key,
+                ContestSeasonLink.season_id == season_id_key
+            ).first()
+            is_active = season_link.is_active if season_link else False
+            
+            season_votes_list = []
+            for idx, vote in enumerate(season_votes, 1):
+                contestant = vote.contestant
+                if not contestant:
+                    continue
+                    
+                # Récupérer l'auteur du contestant
+                author = db.query(User).filter(User.id == contestant.user_id).first()
+                
+                # Compter les votes pour ce contestant
+                votes_count = db.query(ContestantVoting).filter(
+                    ContestantVoting.contestant_id == contestant.id
+                ).count()
+                
+                # Calculer les points si position est définie, sinon utiliser la position par défaut
+                position = vote.position if vote.position else idx
+                points = vote.points if vote.points is not None else (6 - position if 1 <= position <= 5 else None)
+                
+                season_votes_list.append({
+                    "position": position,
+                    "points": points,
+                    "contestant_id": contestant.id,
+                    "contestant_title": contestant.title,
+                    "contestant_description": contestant.description,
+                    "author_id": contestant.user_id,
+                    "author_name": author.full_name if author else None,
+                    "author_avatar_url": author.avatar_url if author else None,
+                    "author_country": author.country if author else None,
+                    "author_city": author.city if author else None,
+                    "votes_count": votes_count,
+                    "vote_date": vote.vote_date.isoformat() if vote.vote_date else None,
+                    "season_id": vote.season_id,
+                    "contest_id": vote.contest_id,
+                    "season_level": season.level if season else None
+                })
+            
+            contest_data["seasons"].append({
+                "season_id": season_id_key,
+                "season_level": season.level if season else None,
+                "is_active": is_active,
+                "votes": season_votes_list,
+                "votes_count": len(season_votes_list)
+            })
+        
+        result["history"].append(contest_data)
+    
+    return result
+
+
+@router.put("/user/my-votes/reorder")
+def reorder_my_votes(
+    *,
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_active_user),
+    data: dict
+) -> dict:
+    """
+    Réordonne les votes MyHigh5 de l'utilisateur pour une season donnée.
+    Le 1er reçoit 5 points, le 2ème 4 points, le 3ème 3 points, etc.
+    Les votes sont groupés par season_id.
+    """
+    votes_to_reorder = data.get("votes", [])
+    season_id = data.get("season_id")
+    
+    if not votes_to_reorder:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No votes to reorder"
+        )
+    
+    if not season_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="season_id is required"
+        )
+    
+    if len(votes_to_reorder) > 5:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Maximum 5 votes allowed per season"
+        )
+    
+    # Vérifier que tous les votes appartiennent à l'utilisateur et à la même season
+    contestant_ids = [v["contestant_id"] for v in votes_to_reorder]
+    
+    user_votes = db.query(ContestantVoting).filter(
+        ContestantVoting.user_id == current_user.id,
+        ContestantVoting.contestant_id.in_(contestant_ids),
+        ContestantVoting.season_id == season_id
+    ).all()
+    
+    user_vote_contestant_ids = {vote.contestant_id for vote in user_votes}
+    
+    for contestant_id in contestant_ids:
+        if contestant_id not in user_vote_contestant_ids:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Vote for contestant {contestant_id} not found in season {season_id}"
+            )
+    
+    # Mettre à jour les positions et les points
+    # Points: position 1 = 5 points, position 2 = 4 points, etc.
+    for vote_data in votes_to_reorder:
+        contestant_id = vote_data["contestant_id"]
+        new_position = vote_data["position"]
+        
+        # Calculer les points selon la position (1->5, 2->4, 3->3, 4->2, 5->1)
+        new_points = 6 - new_position if 1 <= new_position <= 5 else None
+        
+        # Trouver le vote correspondant et mettre à jour sa position et ses points
+        for vote in user_votes:
+            if vote.contestant_id == contestant_id:
+                vote.position = new_position
+                vote.points = new_points
+                break
+    
+    db.commit()
+    
+    return {"message": "Votes reordered successfully", "count": len(votes_to_reorder), "season_id": season_id}
+
+
 # IMPORTANT: Cette route DOIT venir avant /contest/{contest_id}
 @router.get("/favorites")
 def get_user_favorites(
@@ -1069,21 +1397,68 @@ def vote_for_contestant(
         f"(no existing vote found for this season)"
     )
     
-    # Créer un nouvel enregistrement dans ContestantVoting
+    # Import pour case
+    from sqlalchemy import case
+    
+    # Récupérer tous les votes existants de l'utilisateur pour cette saison
+    # Triés par position (1-5) puis par date (le plus ancien en premier)
+    existing_votes_for_season = db.query(ContestantVoting).filter(
+        ContestantVoting.user_id == current_user.id,
+        ContestantVoting.season_id == season.id
+    ).order_by(
+        # Les votes avec position définie d'abord, triés par position
+        # Puis les votes sans position, triés par date (le plus ancien en premier)
+        case(
+            (ContestantVoting.position.isnot(None), ContestantVoting.position),
+            else_=1000
+        ),
+        ContestantVoting.vote_date.asc()
+    ).all()
+    
+    # Si on a déjà 5 votes, supprimer le 5ème (le plus ancien ou celui avec position=5)
+    if len(existing_votes_for_season) >= 5:
+        # Le 5ème vote à supprimer (le plus ancien ou celui avec position=5)
+        vote_to_remove = existing_votes_for_season[4]  # Index 4 = 5ème élément
+        logger.info(
+            f"[VOTE REPLACE] Removing 5th vote (ID: {vote_to_remove.id}, "
+            f"contestant_id: {vote_to_remove.contestant_id}, position: {vote_to_remove.position}) "
+            f"to make room for new vote"
+        )
+        db.delete(vote_to_remove)
+        # Retirer ce vote de la liste
+        existing_votes_for_season = existing_votes_for_season[:4]
+    
+    # Créer le nouveau vote avec position=1 (le plus récent devient le 1er)
     new_voting = ContestantVoting(
         user_id=current_user.id,
         contestant_id=contestant_id,
         contest_id=contest.id,
-        season_id=season.id
+        season_id=season.id,
+        position=1,  # Le nouveau vote est toujours en position 1
+        points=5     # Position 1 = 5 points
     )
     
     try:
         db.add(new_voting)
+        db.flush()  # Flush pour obtenir l'ID sans commit
+        
+        # Réorganiser les positions des votes existants
+        # Le nouveau vote est en position 1, les autres descendent (2, 3, 4, 5)
+        for idx, existing_vote in enumerate(existing_votes_for_season, start=2):
+            new_position = idx
+            new_points = 6 - new_position  # 5, 4, 3, 2, 1 -> 4, 3, 2, 1 pour les positions 2-5
+            existing_vote.position = new_position
+            existing_vote.points = new_points
+            logger.info(
+                f"[VOTE REORDER] Updated vote ID {existing_vote.id}: "
+                f"position={new_position}, points={new_points}"
+            )
+        
         db.commit()
         db.refresh(new_voting)
         logger.info(
             f"[VOTE SUCCESS] Vote created: user {current_user.id}, contestant {contestant_id}, "
-            f"season {season.id}, voting_id: {new_voting.id}"
+            f"season {season.id}, voting_id: {new_voting.id}, position=1, points=5"
         )
     except Exception as e:
         db.rollback()

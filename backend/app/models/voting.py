@@ -183,6 +183,14 @@ class ContestantVoting(Base):
     
     vote_date: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     
+    # Position dans le classement MyHigh5 de l'utilisateur (1-5)
+    # Le 1er reçoit 5 points, le 2ème 4 points, etc.
+    position: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
+    
+    # Points attribués selon la position (5, 4, 3, 2, 1)
+    # Calculé automatiquement lors du vote ou du réordonnancement
+    points: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
+    
     # Relations
     user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
     contestant: Mapped["Contestant"] = relationship("Contestant")
