@@ -415,7 +415,9 @@ def like_comment(
         db.commit()
     
     updated_comment = comment_crud.get_comment(db, comment_id)
-    return serialize_comment_with_replies(updated_comment, db, current_user.id)
+    # Pour un seul commentaire, on crée un dict vide pour les réponses
+    liked_ids = {comment_id}  # L'utilisateur vient de liker ce commentaire
+    return serialize_comment_with_replies(updated_comment, {}, liked_ids, current_user.id)
 
 
 @router.post("/comment/{comment_id}/unlike")
@@ -434,7 +436,9 @@ def unlike_comment(
     
     comment_crud.unlike_comment(db, current_user.id, comment_id)
     updated_comment = comment_crud.get_comment(db, comment_id)
-    return serialize_comment_with_replies(updated_comment, db, current_user.id)
+    # Pour un seul commentaire, on crée un dict vide pour les réponses
+    liked_ids = set()  # L'utilisateur vient de retirer son like
+    return serialize_comment_with_replies(updated_comment, {}, liked_ids, current_user.id)
 
 
 @router.get("/comment/{comment_id}/replies")
