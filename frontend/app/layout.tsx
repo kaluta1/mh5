@@ -6,7 +6,7 @@ import { AuthProvider } from "@/hooks/use-auth"
 import { LanguageProvider } from "@/contexts/language-context"
 import { ToastProvider } from "@/components/ui/toast"
 import { CookieConsent } from "@/components/ui/cookie-consent"
-import { getMetadataTranslations, detectLanguageFromHeaders } from "@/lib/metadata-translations"
+import { getMetadataTranslations, detectLanguageFromHeaders, getKeywords } from "@/lib/metadata-translations"
 import { headers } from "next/headers"
 
 const inter = Inter({ subsets: ["latin"] })
@@ -40,7 +40,7 @@ function generateMetadata(): Metadata {
       template: `%s | ${translations.siteName}`
     },
     description: translations.pages.home.description,
-    keywords: ["concours", "beauté", "talents", "communauté", "votes", "compétition", "affiliation", "gagner de l'argent", "high5", "myhigh5"],
+    keywords: getKeywords(lang),
     authors: [{ name: `${translations.siteName} Team` }],
     creator: translations.siteName,
     publisher: translations.siteName,

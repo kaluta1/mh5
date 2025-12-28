@@ -1535,6 +1535,9 @@ export interface TranslationKeys {
       }
     }
   }
+  metadata: {
+    keywords: string[]
+  }
 }
 
 export const translations: Record<Language, TranslationKeys> = {
@@ -3990,6 +3993,10 @@ export const translations: Record<Language, TranslationKeys> = {
       voice_success: "Enregistrement vocal enregistré avec succès"
     }
   },
+  metadata: {
+    keywords: ["concours", "beauté", "talents", "communauté", "votes", "compétition", "affiliation", "gagner de l'argent", "high5", "myhigh5"]
+  }
+},
   en: {
     admin: {
       title: "Administration Panel",
@@ -6168,6 +6175,10 @@ export const translations: Record<Language, TranslationKeys> = {
       voice_success: "Voice recording saved successfully"
     }
   },
+  metadata: {
+    keywords: ["contests", "beauty", "talents", "community", "votes", "competition", "affiliation", "earn money", "high5", "myhigh5"]
+  }
+},
   es: {
     admin: {
       title: "Panel de Administración",
@@ -8138,6 +8149,10 @@ export const translations: Record<Language, TranslationKeys> = {
       voice_success: "Grabación de voz guardada exitosamente"
     }
   },
+  metadata: {
+    keywords: ["concursos", "belleza", "talentos", "comunidad", "votos", "competición", "afiliación", "ganar dinero", "high5", "myhigh5"]
+  }
+},
   de: {
     admin: {
       title: "Verwaltungsbereich",
@@ -10101,5 +10116,9 @@ export const translations: Record<Language, TranslationKeys> = {
       selfie_success: "Selfie erfolgreich gespeichert",
       voice_success: "Sprachaufnahme erfolgreich gespeichert"
     }
+  },
+  metadata: {
+    keywords: ["Wettbewerbe", "Schönheit", "Talente", "Gemeinschaft", "Stimmen", "Wettbewerb", "Affiliate", "Geld verdienen", "high5", "myhigh5"]
   }
+}
 }

@@ -146,3 +146,10 @@ export function detectLanguageFromHeaders(headers: Headers): Language {
   return 'fr' // Défaut
 }
 
+/**
+ * Retourne les mots-clés SEO traduits selon la langue
+ */
+export function getKeywords(lang: Language = 'en'): string[] {
+  return translations[lang]?.metadata?.keywords || translations.en.metadata.keywords
+}
+
