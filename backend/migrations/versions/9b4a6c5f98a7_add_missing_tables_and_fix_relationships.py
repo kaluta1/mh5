@@ -80,24 +80,7 @@ def upgrade():
     )
     op.create_index(op.f('ix_tax_configurations_id'), 'tax_configurations', ['id'], unique=False)
     # countries, cities, contest_stages already created in migration 002
-    op.create_table('prize',
-    sa.Column('contest_id', sa.Integer(), nullable=False),
-    sa.Column('position', sa.Integer(), nullable=False),
-    sa.Column('prize_type', sa.Enum('CASH', 'GIFT_CARD', 'PHYSICAL_ITEM', 'DIGITAL_ITEM', 'EXPERIENCE', 'CREDITS', name='prizetype'), nullable=False),
-    sa.Column('value', sa.Numeric(precision=10, scale=2), nullable=False),
-    sa.Column('currency', sa.String(length=3), nullable=False),
-    sa.Column('title', sa.String(length=255), nullable=False),
-    sa.Column('description', sa.String(length=1000), nullable=True),
-    sa.Column('image_url', sa.String(length=512), nullable=True),
-    sa.Column('requires_shipping', sa.Boolean(), nullable=False),
-    sa.Column('shipping_info', sa.String(length=1000), nullable=True),
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('created_at', sa.DateTime(), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), nullable=False),
-    sa.ForeignKeyConstraint(['contest_id'], ['contest.id'], ),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_prize_id'), 'prize', ['id'], unique=False)
+    # prize already created in migration 001
     op.create_table('users',
     sa.Column('email', sa.String(length=255), nullable=False),
     sa.Column('hashed_password', sa.String(length=255), nullable=False),
@@ -1005,25 +988,7 @@ def upgrade():
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_contest_votes_id'), 'contest_votes', ['id'], unique=False)
-    op.create_table('prize_winner',
-    sa.Column('prize_id', sa.Integer(), nullable=False),
-    sa.Column('user_id', sa.Integer(), nullable=False),
-    sa.Column('contest_entry_id', sa.Integer(), nullable=False),
-    sa.Column('is_claimed', sa.Boolean(), nullable=False),
-    sa.Column('is_delivered', sa.Boolean(), nullable=False),
-    sa.Column('delivery_address', sa.String(length=1000), nullable=True),
-    sa.Column('tracking_number', sa.String(length=100), nullable=True),
-    sa.Column('admin_notes', sa.String(length=1000), nullable=True),
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('created_at', sa.DateTime(), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), nullable=False),
-    sa.ForeignKeyConstraint(['contest_entry_id'], ['contest_entry.id'], ),
-    sa.ForeignKeyConstraint(['prize_id'], ['prize.id'], ),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
-    sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('prize_id')
-    )
-    op.create_index(op.f('ix_prize_winner_id'), 'prize_winner', ['id'], unique=False)
+    # prize_winner already created in migration 001
     op.create_table('ad_clicks',
     sa.Column('impression_id', sa.Integer(), nullable=False),
     sa.Column('cost', sa.Numeric(precision=8, scale=4), nullable=False),
@@ -1103,8 +1068,7 @@ def downgrade():
     op.drop_table('like')
     op.drop_index(op.f('ix_ad_clicks_id'), table_name='ad_clicks')
     op.drop_table('ad_clicks')
-    op.drop_index(op.f('ix_prize_winner_id'), table_name='prize_winner')
-    op.drop_table('prize_winner')
+    # prize_winner is managed by migration 001, don't drop it here
     op.drop_index(op.f('ix_contest_votes_id'), table_name='contest_votes')
     op.drop_table('contest_votes')
     op.drop_index(op.f('ix_comment_id'), table_name='comment')
@@ -1214,8 +1178,7 @@ def downgrade():
     op.drop_table('users')
     # contest_stages, cities, countries, regions, contest_seasons, contest_categories
     # are managed by migration 002_add_myfav_models, don't drop them here
-    op.drop_index(op.f('ix_prize_id'), table_name='prize')
-    op.drop_table('prize')
+    # prize is managed by migration 001, don't drop it here
     op.drop_index(op.f('ix_tax_configurations_id'), table_name='tax_configurations')
     op.drop_table('tax_configurations')
     # contest, role, location, contest_template are managed by migration 001, don't drop them here
