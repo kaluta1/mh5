@@ -5,7 +5,7 @@ from .kyc import KYCVerification, KYCDocument, KYCAuditLog
 from .voting import Vote, VoteSession, MyFavorites, ContestComment, ContestLike, PageView, ContestantReaction, ContestantShare, ReactionType
 from .geography import Continent, Region, Country, City
 from .dsp import DSPWallet, DSPTransaction, DSPExchangeRate, DigitalProduct, DigitalPurchase, ProductReview
-from .contests import ContestType, ContestCategory, ContestSeason, ContestStage, Contestant, ContestSubmission, ContestantRanking
+from .contests import ContestType, ContestCategory, ContestSeason, ContestStage, Contestant, ContestSubmission, ContestantRanking, ContestantSeason, ContestSeasonLink
 from .clubs import FanClub, ClubAdmin, ClubMembership, ClubWallet, ClubTransaction, TransactionApproval, ClubContent, ClubContentComment, ClubContentLike
 from .affiliate import AffiliateTree, CommissionRate, AffiliateCommission, ReferralLink, ReferralClick, FoundingMember, RevenueShare
 from .advertising import AdCampaign, AdCreative, AdPlacement, AdImpression, AdClick, AdRevenueShare, AdBudgetTransaction, AdPerformanceMetrics

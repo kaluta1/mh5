@@ -40,30 +40,95 @@ def upgrade():
     op.create_index(op.f('ix_notifications_id'), 'notifications', ['id'], unique=False)
     op.create_index(op.f('ix_notifications_is_read'), 'notifications', ['is_read'], unique=False)
     op.create_index(op.f('ix_notifications_user_id'), 'notifications', ['user_id'], unique=False)
-    op.drop_index('ix_admin_contests_id', table_name='admin_contests')
-    op.drop_table('admin_contests')
+    # Drop admin_contests table and index if they exist
+    op.execute("""
+        DO $$ 
+        BEGIN 
+            IF EXISTS (
+                SELECT 1 FROM pg_indexes 
+                WHERE indexname = 'ix_admin_contests_id'
+            ) THEN
+                DROP INDEX IF EXISTS ix_admin_contests_id;
+            END IF;
+            
+            IF EXISTS (
+                SELECT 1 FROM information_schema.tables 
+                WHERE table_name = 'admin_contests'
+            ) THEN
+                DROP TABLE IF EXISTS admin_contests;
+            END IF;
+        END $$;
+    """)
     op.alter_column('contest', 'voting_restriction',
                existing_type=postgresql.ENUM('NONE', 'MALE_ONLY', 'FEMALE_ONLY', 'GEOGRAPHIC', 'AGE_RESTRICTED', name='votingrestriction'),
                nullable=False,
                existing_server_default=sa.text("'NONE'::votingrestriction"))
-    op.drop_index('ix_contest_season_links_contest_id', table_name='contest_season_links')
-    op.drop_index('ix_contest_season_links_season_id', table_name='contest_season_links')
+    
+    # Safely drop indexes and constraints if they exist
+    op.execute("""
+        DO $$ 
+        BEGIN 
+            DROP INDEX IF EXISTS ix_contest_season_links_contest_id;
+            DROP INDEX IF EXISTS ix_contest_season_links_season_id;
+            DROP INDEX IF EXISTS uq_contest_seasons_level_active;
+            DROP INDEX IF EXISTS ix_contestant_reactions_contestant_id;
+            DROP INDEX IF EXISTS ix_contestant_reactions_user_id;
+            DROP INDEX IF EXISTS ix_contestant_seasons_contestant_id;
+            DROP INDEX IF EXISTS ix_contestant_seasons_season_id;
+            DROP INDEX IF EXISTS ix_contestant_shares_contestant_id;
+            DROP INDEX IF EXISTS ix_contestant_shares_user_id;
+        EXCEPTION WHEN OTHERS THEN
+            NULL;
+        END $$;
+    """)
+    
     op.create_index(op.f('ix_contest_season_links_id'), 'contest_season_links', ['id'], unique=False)
-    op.drop_index('uq_contest_seasons_level_active', table_name='contest_seasons', postgresql_where='(is_deleted = false)')
-    op.drop_index('ix_contestant_reactions_contestant_id', table_name='contestant_reactions')
-    op.drop_index('ix_contestant_reactions_user_id', table_name='contestant_reactions')
-    op.drop_constraint('uq_user_contestant_reaction', 'contestant_reactions', type_='unique')
+    
+    # Drop unique constraint if it exists
+    op.execute("""
+        DO $$ 
+        BEGIN 
+            ALTER TABLE contestant_reactions DROP CONSTRAINT IF EXISTS uq_user_contestant_reaction;
+        EXCEPTION WHEN OTHERS THEN
+            NULL;
+        END $$;
+    """)
+    
     op.create_index(op.f('ix_contestant_reactions_id'), 'contestant_reactions', ['id'], unique=False)
-    op.drop_index('ix_contestant_seasons_contestant_id', table_name='contestant_seasons')
-    op.drop_index('ix_contestant_seasons_season_id', table_name='contestant_seasons')
     op.create_index(op.f('ix_contestant_seasons_id'), 'contestant_seasons', ['id'], unique=False)
-    op.drop_index('ix_contestant_shares_contestant_id', table_name='contestant_shares')
-    op.drop_index('ix_contestant_shares_user_id', table_name='contestant_shares')
     op.create_index(op.f('ix_contestant_shares_id'), 'contestant_shares', ['id'], unique=False)
-    op.drop_constraint('fk_contestants_contest_id', 'contestants', type_='foreignkey')
-    op.drop_column('contestants', 'contest_id')
-    op.drop_constraint('like_contest_entry_id_fkey', 'like', type_='foreignkey')
-    op.drop_column('like', 'contest_entry_id')
+    
+    # Drop foreign key constraints and columns if they exist
+    op.execute("""
+        DO $$ 
+        BEGIN 
+            ALTER TABLE contestants DROP CONSTRAINT IF EXISTS fk_contestants_contest_id;
+            ALTER TABLE like DROP CONSTRAINT IF EXISTS like_contest_entry_id_fkey;
+        EXCEPTION WHEN OTHERS THEN
+            NULL;
+        END $$;
+    """)
+    
+    op.execute("""
+        DO $$ 
+        BEGIN 
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name = 'contestants' AND column_name = 'contest_id'
+            ) THEN
+                ALTER TABLE contestants DROP COLUMN contest_id;
+            END IF;
+            
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name = 'like' AND column_name = 'contest_entry_id'
+            ) THEN
+                ALTER TABLE like DROP COLUMN contest_entry_id;
+            END IF;
+        EXCEPTION WHEN OTHERS THEN
+            NULL;
+        END $$;
+    """)
     # ### end Alembic commands ###
 
 
