@@ -110,10 +110,10 @@ class CRUDContest:
         db: Session, *, skip: int = 0, limit: int = 100, filters: Dict[str, Any] = {}
     ) -> List[Contest]:
         """Récupère une liste de concours avec filtres"""
-        from sqlalchemy.orm import joinedload
+        # Note: On ne fait plus de joinedload sur voting_type ici car la table peut ne pas exister
+        # Le voting_type est chargé séparément dans enrich_contest_with_stats si nécessaire
         
-        query = db.query(Contest).filter(Contest.is_deleted == False)\
-            .options(joinedload(Contest.voting_type))
+        query = db.query(Contest).filter(Contest.is_deleted == False)
         
         # Gérer la recherche textuelle sur plusieurs champs
         if "search" in filters and filters["search"]:
@@ -128,21 +128,32 @@ class CRUDContest:
             )
         
         # Gérer le filtre par voting_level
+        # Note: On vérifie d'abord si la table voting_type existe avant de faire des joins
         if "voting_level" in filters and filters["voting_level"]:
-            from app.models.contest import VotingType
-            # Pour "country", on veut seulement les contests avec voting_type et voting_level = "country"
-            if filters["voting_level"].lower() == "country":
-                query = query.join(VotingType, Contest.voting_type_id == VotingType.id)\
-                    .filter(VotingType.voting_level == filters["voting_level"])
-            else:
-                # Pour les autres cas, utiliser outerjoin
-                query = query.outerjoin(VotingType, Contest.voting_type_id == VotingType.id)\
-                    .filter(
-                        or_(
-                            VotingType.voting_level == filters["voting_level"],
-                            Contest.voting_type_id.is_(None)
-                        )
-                    )
+            try:
+                from app.models.contest import VotingType
+                from sqlalchemy import inspect as sa_inspect
+                
+                # Vérifier si la table voting_type existe
+                insp = sa_inspect(db.bind)
+                if 'voting_type' in insp.get_table_names():
+                    # Pour "country", on veut seulement les contests avec voting_type et voting_level = "country"
+                    if filters["voting_level"].lower() == "country":
+                        query = query.join(VotingType, Contest.voting_type_id == VotingType.id)\
+                            .filter(VotingType.voting_level == filters["voting_level"])
+                    else:
+                        # Pour les autres cas, utiliser outerjoin
+                        query = query.outerjoin(VotingType, Contest.voting_type_id == VotingType.id)\
+                            .filter(
+                                or_(
+                                    VotingType.voting_level == filters["voting_level"],
+                                    Contest.voting_type_id.is_(None)
+                                )
+                            )
+                # Si la table n'existe pas, on ignore ce filtre
+            except Exception:
+                # En cas d'erreur, on ignore ce filtre
+                pass
         
         # Gérer le filtre par voting_type_id (pour filtrer les contests avec un voting_type)
         if "voting_type_id" in filters:
@@ -643,18 +654,27 @@ class CRUDContest:
         # Charger l'objet voting_type si voting_type_id existe
         voting_type_data = None
         if contest.voting_type_id:
-            from app.models.contest import VotingType
-            voting_type = db.query(VotingType).filter(VotingType.id == contest.voting_type_id).first()
-            if voting_type:
-                voting_type_data = {
-                    "id": voting_type.id,
-                    "name": voting_type.name,
-                    "voting_level": voting_type.voting_level.value if hasattr(voting_type.voting_level, 'value') else str(voting_type.voting_level),
-                    "commission_source": voting_type.commission_source.value if hasattr(voting_type.commission_source, 'value') else str(voting_type.commission_source),
-                    "commission_rules": voting_type.commission_rules,
-                    "created_at": voting_type.created_at,
-                    "updated_at": voting_type.updated_at
-                }
+            try:
+                from app.models.contest import VotingType
+                from sqlalchemy import inspect as sa_inspect
+                
+                # Vérifier si la table voting_type existe
+                insp = sa_inspect(db.bind)
+                if 'voting_type' in insp.get_table_names():
+                    voting_type = db.query(VotingType).filter(VotingType.id == contest.voting_type_id).first()
+                    if voting_type:
+                        voting_type_data = {
+                            "id": voting_type.id,
+                            "name": voting_type.name,
+                            "voting_level": voting_type.voting_level.value if hasattr(voting_type.voting_level, 'value') else str(voting_type.voting_level),
+                            "commission_source": voting_type.commission_source.value if hasattr(voting_type.commission_source, 'value') else str(voting_type.commission_source),
+                            "commission_rules": voting_type.commission_rules,
+                            "created_at": voting_type.created_at,
+                            "updated_at": voting_type.updated_at
+                        }
+            except Exception:
+                # Si la table n'existe pas ou erreur, on laisse voting_type_data à None
+                pass
         
         # Calculer dynamiquement is_submission_open basé sur les dates
         from datetime import date

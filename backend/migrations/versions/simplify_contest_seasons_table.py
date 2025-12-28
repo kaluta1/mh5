@@ -17,6 +17,17 @@ depends_on = None
 
 
 def upgrade():
+    from sqlalchemy import inspect
+    
+    bind = op.get_bind()
+    insp = inspect(bind)
+    
+    def column_exists(table_name, column_name):
+        if table_name not in insp.get_table_names():
+            return False
+        columns = [c['name'] for c in insp.get_columns(table_name)]
+        return column_name in columns
+    
     # Create SeasonLevel enum type
     op.execute("""
         DO $$ BEGIN 
@@ -34,17 +45,18 @@ def upgrade():
         END $$;
     """)
     
-    # Add level column (nullable first, we'll update it later)
-    # Use the enum type we just created
-    level_enum = postgresql.ENUM('city', 'country', 'regional', 'continent', 'global', name='seasonlevel', create_type=False)
-    level_enum.create(op.get_bind(), checkfirst=True)
-    op.add_column('contest_seasons', sa.Column('level', level_enum, nullable=True))
-    
-    # Set default value for existing rows
-    op.execute("UPDATE contest_seasons SET level = 'city' WHERE level IS NULL")
-    
-    # Make level NOT NULL
-    op.alter_column('contest_seasons', 'level', nullable=False)
+    # Add level column only if it doesn't exist
+    if not column_exists('contest_seasons', 'level'):
+        # Use the enum type we just created
+        level_enum = postgresql.ENUM('city', 'country', 'regional', 'continent', 'global', name='seasonlevel', create_type=False)
+        level_enum.create(op.get_bind(), checkfirst=True)
+        op.add_column('contest_seasons', sa.Column('level', level_enum, nullable=True))
+        
+        # Set default value for existing rows
+        op.execute("UPDATE contest_seasons SET level = 'city' WHERE level IS NULL")
+        
+        # Make level NOT NULL
+        op.alter_column('contest_seasons', 'level', nullable=False)
     
     # Make title NOT NULL (if it's not already)
     # First check if title column exists, if yes, set a default and make it NOT NULL

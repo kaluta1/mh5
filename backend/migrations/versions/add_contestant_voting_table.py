@@ -17,28 +17,37 @@ depends_on = None
 
 
 def upgrade():
-    # Créer la table contestant_voting
-    op.create_table(
-        'contestant_voting',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.text('now()')),
-        sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.text('now()')),
-        sa.Column('user_id', sa.Integer(), nullable=False),
-        sa.Column('contestant_id', sa.Integer(), nullable=False),
-        sa.Column('contest_id', sa.Integer(), nullable=False),
-        sa.Column('season_id', sa.Integer(), nullable=False),
-        sa.Column('vote_date', sa.DateTime(), nullable=False, server_default=sa.text('now()')),
-        sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
-        sa.ForeignKeyConstraint(['contestant_id'], ['contestants.id'], ),
-        sa.ForeignKeyConstraint(['contest_id'], ['contest.id'], ),
-        sa.ForeignKeyConstraint(['season_id'], ['contest_seasons.id'], ),
-        sa.PrimaryKeyConstraint('id'),
-        sa.UniqueConstraint('user_id', 'contestant_id', 'contest_id', name='uq_contestant_voting')
-    )
-    op.create_index(op.f('ix_contestant_voting_user_id'), 'contestant_voting', ['user_id'], unique=False)
-    op.create_index(op.f('ix_contestant_voting_contestant_id'), 'contestant_voting', ['contestant_id'], unique=False)
-    op.create_index(op.f('ix_contestant_voting_contest_id'), 'contestant_voting', ['contest_id'], unique=False)
-    op.create_index(op.f('ix_contestant_voting_season_id'), 'contestant_voting', ['season_id'], unique=False)
+    from sqlalchemy import inspect
+    
+    bind = op.get_bind()
+    insp = inspect(bind)
+    
+    def table_exists(table_name):
+        return table_name in insp.get_table_names()
+    
+    # Créer la table contestant_voting si elle n'existe pas
+    if not table_exists('contestant_voting'):
+        op.create_table(
+            'contestant_voting',
+            sa.Column('id', sa.Integer(), nullable=False),
+            sa.Column('created_at', sa.DateTime(), nullable=True, server_default=sa.text('now()')),
+            sa.Column('updated_at', sa.DateTime(), nullable=True, server_default=sa.text('now()')),
+            sa.Column('user_id', sa.Integer(), nullable=False),
+            sa.Column('contestant_id', sa.Integer(), nullable=False),
+            sa.Column('contest_id', sa.Integer(), nullable=False),
+            sa.Column('season_id', sa.Integer(), nullable=False),
+            sa.Column('vote_date', sa.DateTime(), nullable=False, server_default=sa.text('now()')),
+            sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
+            sa.ForeignKeyConstraint(['contestant_id'], ['contestants.id'], ),
+            sa.ForeignKeyConstraint(['contest_id'], ['contest.id'], ),
+            sa.ForeignKeyConstraint(['season_id'], ['contest_seasons.id'], ),
+            sa.PrimaryKeyConstraint('id'),
+            sa.UniqueConstraint('user_id', 'contestant_id', 'season_id', name='uq_contestant_voting')
+        )
+        op.create_index(op.f('ix_contestant_voting_user_id'), 'contestant_voting', ['user_id'], unique=False)
+        op.create_index(op.f('ix_contestant_voting_contestant_id'), 'contestant_voting', ['contestant_id'], unique=False)
+        op.create_index(op.f('ix_contestant_voting_contest_id'), 'contestant_voting', ['contest_id'], unique=False)
+        op.create_index(op.f('ix_contestant_voting_season_id'), 'contestant_voting', ['season_id'], unique=False)
 
 
 def downgrade():
