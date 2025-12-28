@@ -153,8 +153,8 @@ export const ourFileRouter = {
    * Route pour uploader les documents de participation
    */
   participationDocumentUploader: f({
-    image: { maxFileSize: "1MB" },
-    video: { maxFileSize: "1MB" },
+    image: { maxFileSize: "4MB" },
+    video: { maxFileSize: "8MB" },
     pdf: { maxFileSize: "1MB" },
     blob: { maxFileSize: "1MB" }
   })
