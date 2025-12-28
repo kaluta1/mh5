@@ -47,9 +47,19 @@ def upgrade():
     op.alter_column('contest_seasons', 'level', nullable=False)
     
     # Make title NOT NULL (if it's not already)
-    # First check if title can be null, if yes, set a default and make it NOT NULL
-    op.execute("UPDATE contest_seasons SET title = 'Saison sans titre' WHERE title IS NULL")
-    op.alter_column('contest_seasons', 'title', nullable=False, existing_type=sa.String(200))
+    # First check if title column exists, if yes, set a default and make it NOT NULL
+    op.execute("""
+        DO $$ 
+        BEGIN 
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name = 'contest_seasons' AND column_name = 'title'
+            ) THEN
+                UPDATE contest_seasons SET title = 'Saison sans titre' WHERE title IS NULL;
+                ALTER TABLE contest_seasons ALTER COLUMN title SET NOT NULL;
+            END IF;
+        END $$;
+    """)
     
     # Drop obsolete columns (check if they exist first)
     op.execute("""
