@@ -1,7 +1,7 @@
 -- Script pour corriger la table my_favorites sur Render
--- La colonne contest_type_id n'est pas utilisée dans le modèle mais existe dans la table
+-- Plusieurs colonnes ne sont pas utilisées dans le modèle mais existent dans la table avec NOT NULL
 
--- Option 1: Supprimer la contrainte NOT NULL sur contest_type_id
+-- Supprimer la contrainte NOT NULL sur contest_type_id
 DO $$
 BEGIN
     IF EXISTS (
@@ -15,18 +15,47 @@ BEGIN
     END IF;
 END $$;
 
--- Option 2 (alternative): Supprimer complètement la colonne si non utilisée
--- Décommentez les lignes suivantes si vous voulez supprimer la colonne
--- DO $$
--- BEGIN
---     IF EXISTS (
---         SELECT 1 FROM information_schema.columns 
---         WHERE table_name = 'my_favorites' AND column_name = 'contest_type_id'
---     ) THEN
---         ALTER TABLE my_favorites DROP COLUMN contest_type_id;
---         RAISE NOTICE 'Colonne contest_type_id supprimée de my_favorites';
---     END IF;
--- END $$;
+-- Supprimer la contrainte NOT NULL sur stage_id
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'my_favorites' AND column_name = 'stage_id'
+    ) THEN
+        ALTER TABLE my_favorites ALTER COLUMN stage_id DROP NOT NULL;
+        RAISE NOTICE 'Contrainte NOT NULL supprimée de stage_id';
+    ELSE
+        RAISE NOTICE 'Colonne stage_id n existe pas dans my_favorites';
+    END IF;
+END $$;
+
+-- Supprimer la contrainte NOT NULL sur contest_id (si existe)
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'my_favorites' AND column_name = 'contest_id'
+    ) THEN
+        ALTER TABLE my_favorites ALTER COLUMN contest_id DROP NOT NULL;
+        RAISE NOTICE 'Contrainte NOT NULL supprimée de contest_id';
+    ELSE
+        RAISE NOTICE 'Colonne contest_id n existe pas dans my_favorites';
+    END IF;
+END $$;
+
+-- Supprimer la contrainte NOT NULL sur season_id (si existe)
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'my_favorites' AND column_name = 'season_id'
+    ) THEN
+        ALTER TABLE my_favorites ALTER COLUMN season_id DROP NOT NULL;
+        RAISE NOTICE 'Contrainte NOT NULL supprimée de season_id';
+    ELSE
+        RAISE NOTICE 'Colonne season_id n existe pas dans my_favorites';
+    END IF;
+END $$;
 
 -- Vérifier la structure de la table
 SELECT column_name, data_type, is_nullable 
