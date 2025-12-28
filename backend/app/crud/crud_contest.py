@@ -607,22 +607,6 @@ class CRUDContest:
         else:
             voting_restriction_str = str(contest.voting_restriction)
         
-        # Si la restriction du Contest est NONE, essayer de récupérer depuis ContestType
-        if voting_restriction_str == 'none' or not voting_restriction_str:
-            from app.models.contests import ContestType
-            # Essayer de trouver le ContestType par slug ou name
-            contest_type_obj = db.query(ContestType).filter(
-                (ContestType.slug == contest.contest_type) | (ContestType.name == contest.contest_type)
-            ).first()
-            
-            if contest_type_obj and contest_type_obj.voting_restriction:
-                if hasattr(contest_type_obj.voting_restriction, 'value'):
-                    voting_restriction_str = contest_type_obj.voting_restriction.value
-                elif isinstance(contest_type_obj.voting_restriction, str):
-                    voting_restriction_str = contest_type_obj.voting_restriction
-                else:
-                    voting_restriction_str = str(contest_type_obj.voting_restriction)
-        
         # Normaliser la valeur et extraire la restriction de genre
         voting_restriction_normalized = voting_restriction_str.lower().strip() if voting_restriction_str else None
         
