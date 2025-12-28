@@ -39,8 +39,9 @@ def upgrade():
     mfm_exists = result.fetchone() is not None
     
     if not mfm_exists:
+        # Use price column (as defined in the model)
         conn.execute(sa.text("""
-            INSERT INTO product_types (code, name, description, base_price, currency, validity_days, is_active, has_affiliate_commission, affiliate_direct_amount, affiliate_indirect_amount)
+            INSERT INTO product_types (code, name, description, price, currency, validity_days, is_active, has_affiliate_commission, affiliate_direct_amount, affiliate_indirect_amount)
             VALUES (
                 'mfm_membership', 
                 'MFM (Founding Member)', 
@@ -62,8 +63,9 @@ def upgrade():
     annual_exists = result.fetchone() is not None
     
     if not annual_exists:
+        # Use price column (as defined in the model)
         conn.execute(sa.text("""
-            INSERT INTO product_types (code, name, description, base_price, currency, validity_days, is_active, has_affiliate_commission, affiliate_direct_amount, affiliate_indirect_amount)
+            INSERT INTO product_types (code, name, description, price, currency, validity_days, is_active, has_affiliate_commission, affiliate_direct_amount, affiliate_indirect_amount)
             VALUES (
                 'annual_membership', 
                 'Annual Membership', 
