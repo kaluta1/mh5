@@ -77,6 +77,16 @@ DO $$ BEGIN
     END IF;
 END $$;
 
+-- Ajouter la colonne is_deleted à contest_seasons si elle n'existe pas
+DO $$ BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'contest_seasons' AND column_name = 'is_deleted'
+    ) THEN
+        ALTER TABLE contest_seasons ADD COLUMN is_deleted BOOLEAN DEFAULT false NOT NULL;
+    END IF;
+END $$;
+
 -- Vérifier que les colonnes ont été ajoutées
 SELECT 
     column_name, 
@@ -87,12 +97,13 @@ WHERE table_name = 'contest'
 AND column_name IN ('cover_image_url', 'voting_type_id', 'is_deleted')
 ORDER BY column_name;
 
--- Vérifier que la colonne title existe dans contest_seasons
+-- Vérifier que les colonnes title et is_deleted existent dans contest_seasons
 SELECT 
     column_name, 
     data_type, 
     is_nullable
 FROM information_schema.columns 
 WHERE table_name = 'contest_seasons' 
-AND column_name = 'title';
+AND column_name IN ('title', 'is_deleted')
+ORDER BY column_name;
 

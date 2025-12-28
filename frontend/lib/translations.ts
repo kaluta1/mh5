@@ -2855,6 +2855,11 @@ export const translations: Record<Language, TranslationKeys> = {
           description: "Gagnez des commissions lorsque les membres de votre réseau de parrainage rejoignent le Club des Membres Fondateurs ou paient les frais d'adhésion annuels.",
           commission: "20% sur le niveau 1, 2% sur les niveaux 2-10"
         },
+        annual_membership: {
+          title: "Cotisation Annuelle",
+          description: "Gagnez des commissions lorsque les Membres Fondateurs paient leur cotisation annuelle (50$).",
+          commission: "10$ sur le niveau 1, 1$ sur les niveaux 2-10"
+        },
         club_memberships: {
           title: "Adhésions aux clubs",
           description: "Gagnez des commissions sur les frais d'adhésion aux clubs payants. Le site ajoute une majoration de 20% aux frais spécifiés par le propriétaire du club, dont 20% sont versés au niveau 1, et 2% à chacun des niveaux 2 à 10.",
@@ -4995,6 +5000,11 @@ export const translations: Record<Language, TranslationKeys> = {
           description: "Earn commissions when members in your referral network join Founding Members Club or pay for annual membership fee.",
           commission: "20% on Level 1, 2% on Levels 2-10"
         },
+        annual_membership: {
+          title: "Annual Membership Fee",
+          description: "Earn commissions when Founding Members pay their annual membership fee ($50).",
+          commission: "$10 on Level 1, $1 on Levels 2-10"
+        },
         club_memberships: {
           title: "Club Memberships",
           description: "Earn commissions on paid club membership fees. The website adds a 20% markup to the club owner's specified fees, of which 20% is paid to Level 1, and 2% is paid to each of Levels 2 through 10.",
@@ -7054,6 +7064,11 @@ export const translations: Record<Language, TranslationKeys> = {
           description: "Gana comisiones cuando los miembros de tu red de referidos se unan al Club de Miembros Fundadores o paguen la tarifa de membresía anual.",
           commission: "20% en Nivel 1, 2% en Niveles 2-10"
         },
+        annual_membership: {
+          title: "Tarifa de Membresía Anual",
+          description: "Gana comisiones cuando los Miembros Fundadores pagan su tarifa de membresía anual ($50).",
+          commission: "$10 en Nivel 1, $1 en Niveles 2-10"
+        },
         club_memberships: {
           title: "Membresías de clubes",
           description: "Gana comisiones en las tarifas de membresía de clubes pagadas. El sitio web agrega un margen de beneficio del 20% a las tarifas especificadas por el propietario del club, de las cuales el 20% se paga al Nivel 1, y el 2% se paga a cada uno de los Niveles 2 a 10.",
@@ -9018,6 +9033,11 @@ export const translations: Record<Language, TranslationKeys> = {
           title: "Gründungsmitgliedschaft",
           description: "Verdienen Sie Provisionen, wenn Mitglieder in Ihrem Empfehlungsnetzwerk dem Gründungsmitglieder-Club beitreten oder die jährliche Mitgliedsgebühr zahlen.",
           commission: "20% auf Stufe 1, 2% auf Stufen 2-10"
+        },
+        annual_membership: {
+          title: "Jährliche Mitgliedsgebühr",
+          description: "Verdienen Sie Provisionen, wenn Gründungsmitglieder ihre jährliche Mitgliedsgebühr zahlen (50$).",
+          commission: "10$ auf Stufe 1, 1$ auf Stufen 2-10"
         },
         club_memberships: {
           title: "Club-Mitgliedschaften",

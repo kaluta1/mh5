@@ -28,7 +28,8 @@ def column_exists(table_name, column_name):
 
 
 def upgrade():
-    """Add title column to contest_seasons if it doesn't exist"""
+    """Add title and is_deleted columns to contest_seasons if they don't exist"""
+    # Add title column if it doesn't exist
     if not column_exists('contest_seasons', 'title'):
         op.execute("""
             DO $$ 
@@ -45,10 +46,26 @@ def upgrade():
                 NULL;
             END $$;
         """)
+    
+    # Add is_deleted column if it doesn't exist
+    if not column_exists('contest_seasons', 'is_deleted'):
+        op.execute("""
+            DO $$ 
+            BEGIN 
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_name = 'contest_seasons' AND column_name = 'is_deleted'
+                ) THEN
+                    ALTER TABLE contest_seasons ADD COLUMN is_deleted BOOLEAN DEFAULT false NOT NULL;
+                END IF;
+            EXCEPTION WHEN OTHERS THEN
+                NULL;
+            END $$;
+        """)
 
 
 def downgrade():
-    """Remove title column from contest_seasons"""
+    """Remove title and is_deleted columns from contest_seasons"""
     op.execute("""
         DO $$ 
         BEGIN 
@@ -57,6 +74,13 @@ def downgrade():
                 WHERE table_name = 'contest_seasons' AND column_name = 'title'
             ) THEN
                 ALTER TABLE contest_seasons DROP COLUMN title;
+            END IF;
+            
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name = 'contest_seasons' AND column_name = 'is_deleted'
+            ) THEN
+                ALTER TABLE contest_seasons DROP COLUMN is_deleted;
             END IF;
         EXCEPTION WHEN OTHERS THEN
             NULL;
