@@ -133,6 +133,52 @@ def apply_urgent_fix():
                 print("✅ Colonne updated_at ajoutée à contest_seasons")
             else:
                 print("ℹ️  Colonne updated_at existe déjà dans contest_seasons")
+            
+            # Supprimer les colonnes obsolètes qui ne sont plus dans le modèle
+            obsolete_columns = [
+                'registration_start', 'registration_end', 'contest_type_id', 
+                'year', 'season_number', 'status', 'start_date', 
+                'end_date', 'upload_end_date'
+            ]
+            for col in obsolete_columns:
+                if col in columns:
+                    print(f"📝 Suppression de la colonne obsolète {col} de contest_seasons...")
+                    try:
+                        bind.execute(text(f"ALTER TABLE contest_seasons DROP COLUMN IF EXISTS {col}"))
+                        print(f"✅ Colonne {col} supprimée de contest_seasons")
+                    except Exception as e:
+                        print(f"⚠️  Erreur lors de la suppression de {col}: {e}")
+        
+        # Convertir contest.level de ENUM à VARCHAR(20) si nécessaire
+        if 'contest' in insp.get_table_names():
+            print("📝 Vérification de la colonne contest.level...")
+            try:
+                result = bind.execute(text("""
+                    SELECT data_type, udt_name 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'contest' AND column_name = 'level'
+                """))
+                row = result.fetchone()
+                if row and row[0] == 'USER-DEFINED' and row[1] == 'contest_level':
+                    print("📝 Conversion de contest.level de ENUM à VARCHAR(20)...")
+                    bind.execute(text("ALTER TABLE contest ALTER COLUMN level TYPE VARCHAR(20) USING level::text"))
+                    
+                    # Vérifier si le type ENUM est encore utilisé ailleurs
+                    result = bind.execute(text("""
+                        SELECT COUNT(*) 
+                        FROM information_schema.columns 
+                        WHERE udt_name = 'contest_level'
+                    """))
+                    count = result.fetchone()[0]
+                    if count == 0:
+                        print("📝 Suppression du type ENUM contest_level...")
+                        bind.execute(text("DROP TYPE IF EXISTS contest_level"))
+                    
+                    print("✅ Colonne contest.level convertie en VARCHAR(20)")
+                else:
+                    print("ℹ️  Colonne contest.level est déjà VARCHAR ou n'existe pas")
+            except Exception as e:
+                print(f"⚠️  Erreur lors de la conversion de contest.level: {e}")
         
         db.commit()
         print("\n✅ Corrections d'urgence appliquées avec succès!")

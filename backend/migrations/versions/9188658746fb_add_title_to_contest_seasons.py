@@ -94,6 +94,47 @@ def upgrade():
                 NULL;
             END $$;
         """)
+    
+    # Drop obsolete columns that are no longer in the model
+    op.execute("""
+        DO $$ BEGIN
+            ALTER TABLE contest_seasons DROP COLUMN IF EXISTS registration_start;
+            ALTER TABLE contest_seasons DROP COLUMN IF EXISTS registration_end;
+            ALTER TABLE contest_seasons DROP COLUMN IF EXISTS contest_type_id;
+            ALTER TABLE contest_seasons DROP COLUMN IF EXISTS year;
+            ALTER TABLE contest_seasons DROP COLUMN IF EXISTS season_number;
+            ALTER TABLE contest_seasons DROP COLUMN IF EXISTS status;
+            ALTER TABLE contest_seasons DROP COLUMN IF EXISTS start_date;
+            ALTER TABLE contest_seasons DROP COLUMN IF EXISTS end_date;
+            ALTER TABLE contest_seasons DROP COLUMN IF EXISTS upload_end_date;
+        EXCEPTION WHEN undefined_column THEN null;
+        END $$;
+    """)
+    
+    # Convert contest.level from ENUM to VARCHAR(20) if it's still an ENUM
+    op.execute("""
+        DO $$ 
+        BEGIN 
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name = 'contest' 
+                AND column_name = 'level'
+                AND udt_name = 'contest_level'
+            ) THEN
+                ALTER TABLE contest ALTER COLUMN level TYPE VARCHAR(20) USING level::text;
+                
+                -- Drop the ENUM type if it's no longer used
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE udt_name = 'contest_level'
+                ) THEN
+                    DROP TYPE IF EXISTS contest_level;
+                END IF;
+            END IF;
+        EXCEPTION WHEN OTHERS THEN
+            NULL;
+        END $$;
+    """)
 
 
 def downgrade():
