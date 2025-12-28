@@ -153,12 +153,12 @@ export default function ContestsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-myhigh5-blue-50 via-white to-myhigh5-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+    <div className="min-h-screen bg-white dark:bg-gray-900">
       <Header />
       
       <main className="pt-24 pb-16">
         {/* Hero Section */}
-        <section className="relative py-20 overflow-hidden">
+        <section className="relative py-20 overflow-hidden">  
           {/* Background gradient */}
           <div className="absolute inset-0 bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary" />
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.15),transparent_50%)]" />
