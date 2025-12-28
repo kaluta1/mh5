@@ -339,23 +339,7 @@ def upgrade():
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_kyc_verifications_id'), 'kyc_verifications', ['id'], unique=False)
-    # media already created in migration 001
-    op.create_table('referral_code',
-    sa.Column('user_id', sa.Integer(), nullable=False),
-    sa.Column('code', sa.String(length=50), nullable=False),
-    sa.Column('is_active', sa.Boolean(), nullable=False),
-    sa.Column('max_uses', sa.Integer(), nullable=True),
-    sa.Column('current_uses', sa.Integer(), nullable=False),
-    sa.Column('commission_rate', sa.Integer(), nullable=False),
-    sa.Column('valid_from', sa.DateTime(), nullable=True),
-    sa.Column('valid_until', sa.DateTime(), nullable=True),
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('created_at', sa.DateTime(), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), nullable=False),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
-    sa.PrimaryKeyConstraint('id')
-    )
-    # referral_code already created in migration 001
+    # media, referral_code already created in migration 001
     op.create_table('referral_links',
     sa.Column('user_id', sa.Integer(), nullable=False),
     sa.Column('referral_code', sa.String(length=50), nullable=False),
@@ -897,31 +881,7 @@ def upgrade():
     sa.UniqueConstraint('impression_id')
     )
     op.create_index(op.f('ix_ad_clicks_id'), 'ad_clicks', ['id'], unique=False)
-    # like already created in migration 001
-    op.create_table('report',
-    sa.Column('reporter_id', sa.Integer(), nullable=False),
-    sa.Column('media_id', sa.Integer(), nullable=True),
-    sa.Column('contest_entry_id', sa.Integer(), nullable=True),
-    sa.Column('comment_id', sa.Integer(), nullable=True),
-    sa.Column('user_id', sa.Integer(), nullable=True),
-    sa.Column('reason', sa.String(length=100), nullable=False),
-    sa.Column('description', sa.Text(), nullable=True),
-    sa.Column('status', sa.String(length=20), nullable=False),
-    sa.Column('reviewed_by', sa.Integer(), nullable=True),
-    sa.Column('reviewed_at', sa.DateTime(), nullable=True),
-    sa.Column('moderator_notes', sa.Text(), nullable=True),
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('created_at', sa.DateTime(), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), nullable=False),
-    sa.ForeignKeyConstraint(['comment_id'], ['comment.id'], ),
-    sa.ForeignKeyConstraint(['contest_entry_id'], ['contest_entry.id'], ),
-    sa.ForeignKeyConstraint(['media_id'], ['media.id'], ),
-    sa.ForeignKeyConstraint(['reporter_id'], ['users.id'], ),
-    sa.ForeignKeyConstraint(['reviewed_by'], ['users.id'], ),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
-    sa.PrimaryKeyConstraint('id')
-    )
-    # report already created in migration 001
+    # like, report already created in migration 001
     op.create_table('transaction_approvals',
     sa.Column('transaction_id', sa.Integer(), nullable=False),
     sa.Column('admin_id', sa.Integer(), nullable=False),
