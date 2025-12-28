@@ -32,13 +32,13 @@ export function createMetadata({
   language?: Language
 }): Metadata {
   // Détecter la langue si non fournie
-  let lang: Language = language || 'fr'
+  let lang: Language = language || 'en'
   try {
     const headersList = headers()
     lang = detectLanguageFromHeaders(headersList)
   } catch {
     // Si headers() n'est pas disponible (côté client), utiliser la langue fournie ou défaut
-    lang = language || 'fr'
+    lang = language || 'en'
   }
 
   const translations = getMetadataTranslations(lang)

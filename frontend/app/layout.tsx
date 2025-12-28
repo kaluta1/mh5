@@ -16,13 +16,13 @@ const defaultImage = `${appUrl}/og-image.jpg` // Image par défaut pour le parta
 
 // Générer les métadonnées selon la langue détectée
 function generateMetadata(): Metadata {
-  let lang: import("@/lib/translations").Language = 'fr'
+  let lang: import("@/lib/translations").Language = 'en'
   try {
     const headersList = headers()
     lang = detectLanguageFromHeaders(headersList)
   } catch {
     // Si headers() n'est pas disponible, utiliser le défaut
-    lang = 'fr'
+    lang = 'en'
   }
 
   const translations = getMetadataTranslations(lang)
@@ -92,12 +92,12 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   // Détecter la langue pour l'attribut lang du HTML
-  let htmlLang = 'fr'
+  let htmlLang = 'en'
   try {
     const headersList = headers()
     htmlLang = detectLanguageFromHeaders(headersList)
   } catch {
-    htmlLang = 'fr'
+    htmlLang = 'en'
   }
 
   return (

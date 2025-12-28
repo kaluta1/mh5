@@ -3,7 +3,7 @@
 import * as React from "react"
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { ChevronLeft, ChevronRight, Trophy, Users, Heart, Camera, Music, Gamepad2 } from "lucide-react"
+import { ChevronLeft, ChevronRight, Trophy, Users, Heart, Camera, Music, Gamepad2, Zap, Mountain, Star } from "lucide-react"
 import { useLanguage } from "@/contexts/language-context"
 
 const carouselSlides = [
@@ -40,14 +40,14 @@ const carouselSlides = [
   {
     id: 3,
     icon: Music,
-    title: "Latest Hits",
-    titleEn: "Latest Hits",
-    titleEs: "Últimos Éxitos",
-    titleDe: "Neueste Hits",
-    description: "Partagez vos créations musicales et artistiques",
-    descriptionEn: "Share your musical and artistic creations",
-    descriptionEs: "Comparte tus creaciones musicales y artísticas",
-    descriptionDe: "Teilen Sie Ihre musikalischen und künstlerischen Kreationen",
+    title: "Musiques",
+    titleEn: "Musics",
+    titleEs: "Músicas",
+    titleDe: "Musik",
+    description: "Promouvez votre musique et votez pour les chansons que vous aimez",
+    descriptionEn: "Promote your music and vote for the songs you like",
+    descriptionEs: "Promociona tu música y vota por las canciones que te gustan",
+    descriptionDe: "Bewerben Sie Ihre Musik und stimmen Sie für die Songs, die Ihnen gefallen",
     gradient: "from-green-100 to-emerald-100",
     iconColor: "text-green-600",
     bgColor: "bg-green-100"
@@ -59,10 +59,10 @@ const carouselSlides = [
     titleEn: "Pet Contests",
     titleEs: "Concursos de Mascotas",
     titleDe: "Haustier-Wettbewerbe",
-    description: "Vos compagnons à quatre pattes méritent d'être célébrés",
-    descriptionEn: "Your four-legged companions deserve to be celebrated",
-    descriptionEs: "Tus compañeros de cuatro patas merecen ser celebrados",
-    descriptionDe: "Ihre vierbeinigen Begleiter verdienen es, gefeiert zu werden",
+    description: "Vos animaux de compagnie préférés méritent d'être célébrés",
+    descriptionEn: "Your favorite pets deserve to be celebrated",
+    descriptionEs: "Tus mascotas favoritas merecen ser celebradas",
+    descriptionDe: "Ihre Lieblingshaustiere verdienen es, gefeiert zu werden",
     gradient: "from-orange-100 to-red-100",
     iconColor: "text-orange-600",
     bgColor: "bg-orange-100"
@@ -70,17 +70,62 @@ const carouselSlides = [
   {
     id: 5,
     icon: Gamepad2,
-    title: "Clubs Sportifs",
-    titleEn: "Sports Clubs",
-    titleEs: "Clubes Deportivos",
-    titleDe: "Sportvereine",
-    description: "Compétitions sportives et défis entre équipes",
-    descriptionEn: "Sports competitions and team challenges",
-    descriptionEs: "Competencias deportivas y desafíos de equipo",
-    descriptionDe: "Sportwettbewerbe und Teamherausforderungen",
+    title: "Sports",
+    titleEn: "Sports",
+    titleEs: "Deportes",
+    titleDe: "Sport",
+    description: "Promouvez votre sport favori et votez pour vos équipes et joueurs préférés",
+    descriptionEn: "Promote your favorite sport and vote for your favorite teams and players.",
+    descriptionEs: "Promociona tu deporte favorito y vota por tus equipos y jugadores favoritos",
+    descriptionDe: "Bewerben Sie Ihren Lieblingssport und stimmen Sie für Ihre Lieblingsteams und -spieler",
     gradient: "from-purple-100 to-indigo-100",
     iconColor: "text-purple-600",
     bgColor: "bg-purple-100"
+  },
+  {
+    id: 6,
+    icon: Zap,
+    title: "Danseurs",
+    titleEn: "Dancers",
+    titleEs: "Bailarines",
+    titleDe: "Tänzer",
+    description: "Montrez vos talents de danse et votez pour vos danseurs préférés",
+    descriptionEn: "Showcase your dancing skills and vote for your favorite dancers",
+    descriptionEs: "Muestra tus habilidades de baile y vota por tus bailarines favoritos",
+    descriptionDe: "Zeigen Sie Ihre Tanzfähigkeiten und stimmen Sie für Ihre Lieblingstänzer",
+    gradient: "from-yellow-100 to-amber-100",
+    iconColor: "text-yellow-600",
+    bgColor: "bg-yellow-100"
+  },
+  {
+    id: 7,
+    icon: Mountain,
+    title: "Merveille Naturelle",
+    titleEn: "Natural Wonder",
+    titleEs: "Maravilla Natural",
+    titleDe: "Naturwunder",
+    description: "Promouvez votre lieu naturel préféré pour que d'autres puissent le découvrir",
+    descriptionEn: "Promote your favorite natural scenic location for others to discover",
+    descriptionEs: "Promociona tu lugar natural favorito para que otros lo descubran",
+    descriptionDe: "Bewerben Sie Ihren Lieblingsort in der Natur, damit andere ihn entdecken können",
+    gradient: "from-teal-100 to-cyan-100",
+    iconColor: "text-teal-600",
+    bgColor: "bg-teal-100"
+  },
+  {
+    id: 8,
+    icon: Star,
+    title: "Personne Célèbre",
+    titleEn: "Famous Person",
+    titleEs: "Persona Famoso",
+    titleDe: "Berühmte Person",
+    description: "Faites-nous connaître qui est votre modèle",
+    descriptionEn: "Let's know who is your role model",
+    descriptionEs: "Hagamos saber quién es tu modelo a seguir",
+    descriptionDe: "Lassen Sie uns wissen, wer Ihr Vorbild ist",
+    gradient: "from-rose-100 to-pink-100",
+    iconColor: "text-rose-600",
+    bgColor: "bg-rose-100"
   }
 ]
 
