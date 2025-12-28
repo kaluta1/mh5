@@ -34,7 +34,7 @@ def create_contest(
     
     return new_contest
 
-@router.get("/", response_model=List[Contest])
+@router.get("/")
 def read_contests(
     *,
     db: Session = Depends(get_db),
@@ -47,34 +47,11 @@ def read_contests(
     voting_level: str = Query(None, description="Filtrer par niveau de vote (country pour Nomination)"),
     voting_type_id: int = Query(None, description="Filtrer par ID du type de vote (pour Nominations)"),
     has_voting_type: bool = Query(None, description="Filtrer les contests avec/sans voting_type (True = avec, False = sans)"),
-) -> Any:
+) -> List[dict]:
     """
     Récupérer tous les concours avec filtrage optionnel et statistiques.
     Endpoint public - accessible sans authentification.
-    Cache géré avec Redis (TTL: 1 heure, désactivé si recherche active).
     """
-    # Ne pas utiliser le cache si on fait une recherche (pour avoir les résultats à jour)
-    use_cache = not search
-    
-    # Générer la clé de cache
-    cache_key = cache_service._make_key(
-        "cache:contests:list",
-        skip=skip,
-        limit=limit,
-        location_id=location_id,
-        contest_type=contest_type,
-        active=active,
-        voting_level=voting_level,
-        voting_type_id=voting_type_id,
-        has_voting_type=has_voting_type
-    )
-    
-    # Vérifier le cache
-    if use_cache:
-        cached_result = cache_service.get(cache_key)
-        if cached_result is not None:
-            return cached_result
-    
     # Construire les filtres
     filters = {}
     if location_id:
@@ -92,106 +69,20 @@ def read_contests(
     if has_voting_type is not None:
         filters["has_voting_type"] = has_voting_type
     
+    # Récupérer les contests depuis la base de données
     contests = contest.get_multi_with_filters(
         db=db, skip=skip, limit=limit, filters=filters
     )
     
     # Enrichir chaque contest avec les statistiques
+    # enrich_contest_with_stats retourne un dictionnaire avec toutes les valeurs converties
     enriched_contests = []
     for c in contests:
-        # S'assurer que c'est bien un objet Contest SQLAlchemy, pas déjà un dictionnaire
-        if isinstance(c, dict):
-            # Si c'est déjà un dictionnaire, l'utiliser directement
-            enriched = c
-        else:
-            # Récupérer directement voting_restriction depuis le modèle Contest
-            voting_restriction_value = 'none'
-            if c.voting_restriction:
-                if hasattr(c.voting_restriction, 'value'):
-                    voting_restriction_value = c.voting_restriction.value
-                elif isinstance(c.voting_restriction, str):
-                    voting_restriction_value = c.voting_restriction
-                else:
-                    voting_restriction_value = str(c.voting_restriction)
-            
-            # Enrichir avec les stats
-            enriched = contest.enrich_contest_with_stats(db=db, contest=c)
-            
-            # FORCER voting_restriction à être présent avec la valeur du modèle
-            # S'assurer que c'est toujours une chaîne de caractères
-            enriched['voting_restriction'] = str(voting_restriction_value) if voting_restriction_value else 'none'
-        
-        # S'assurer que tous les champs requis sont présents
-        if 'gender_restriction' not in enriched:
-            enriched['gender_restriction'] = None
-        
-        # Convertir voting_type de dictionnaire à objet VotingType si nécessaire
-        if 'voting_type' in enriched and enriched['voting_type'] is not None:
-            if isinstance(enriched['voting_type'], dict):
-                try:
-                    enriched['voting_type'] = VotingType(**enriched['voting_type'])
-                except Exception as e:
-                    # Si la conversion échoue, mettre à None
-                    enriched['voting_type'] = None
-            elif not isinstance(enriched['voting_type'], VotingType):
-                # Si c'est un objet SQLAlchemy, le convertir en dictionnaire puis en VotingType
-                try:
-                    vt = enriched['voting_type']
-                    voting_type_dict = {
-                        "id": vt.id,
-                        "name": vt.name,
-                        "voting_level": vt.voting_level.value if hasattr(vt.voting_level, 'value') else str(vt.voting_level),
-                        "commission_source": vt.commission_source.value if hasattr(vt.commission_source, 'value') else str(vt.commission_source),
-                        "commission_rules": vt.commission_rules,
-                        "created_at": vt.created_at,
-                        "updated_at": vt.updated_at
-                    }
-                    enriched['voting_type'] = VotingType(**voting_type_dict)
-                except Exception as e:
-                    enriched['voting_type'] = None
-        
-        # S'assurer que tous les enums sont convertis en strings
-        if 'verification_type' in enriched and enriched['verification_type'] is not None:
-            if not isinstance(enriched['verification_type'], str):
-                if hasattr(enriched['verification_type'], 'value'):
-                    enriched['verification_type'] = enriched['verification_type'].value
-                else:
-                    enriched['verification_type'] = str(enriched['verification_type'])
-        
-        if 'participant_type' in enriched and enriched['participant_type'] is not None:
-            if not isinstance(enriched['participant_type'], str):
-                if hasattr(enriched['participant_type'], 'value'):
-                    enriched['participant_type'] = enriched['participant_type'].value
-                else:
-                    enriched['participant_type'] = str(enriched['participant_type'])
-        
-        # Créer l'objet Contest à partir du dictionnaire
-        try:
-            contest_response = Contest(**enriched)
-            enriched_contests.append(contest_response)
-        except Exception as e:
-            # En cas d'erreur, logger et essayer de nettoyer le dictionnaire
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f"Erreur lors de la création de l'objet Contest: {e}")
-            logger.error(f"Données enrichies (premiers 500 chars): {str(enriched)[:500]}")
-            
-            # Nettoyer le dictionnaire en convertissant tous les objets SQLAlchemy en types primitifs
-            cleaned_enriched = {}
-            for key, value in enriched.items():
-                if hasattr(value, '__dict__') and not isinstance(value, (str, int, float, bool, type(None), dict, list)):
-                    # C'est probablement un objet SQLAlchemy, le convertir en string ou None
-                    cleaned_enriched[key] = None
-                else:
-                    cleaned_enriched[key] = value
-            
-            try:
-                contest_response = Contest(**cleaned_enriched)
-                enriched_contests.append(contest_response)
-            except Exception as e2:
-                logger.error(f"Erreur même après nettoyage: {e2}")
-                # Dernier recours : retourner un dictionnaire minimal
-                enriched_contests.append(cleaned_enriched)
+        enriched = contest.enrich_contest_with_stats(db=db, contest=c)
+        if isinstance(enriched, dict):
+            enriched_contests.append(enriched)
+    
+    return enriched_contests
     
     # Stocker dans le cache si activé
     if use_cache:

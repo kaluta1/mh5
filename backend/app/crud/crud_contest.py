@@ -721,6 +721,13 @@ class CRUDContest:
                 if today > voting_end:
                     is_voting_open_calculated = False
         
+        # Convertir level en string (peut être un enum)
+        level_value = contest.level
+        if hasattr(level_value, 'value'):
+            level_value = level_value.value
+        elif level_value is not None and not isinstance(level_value, str):
+            level_value = str(level_value)
+        
         result = {
             "id": contest.id,
             "name": contest.name,
@@ -735,15 +742,15 @@ class CRUDContest:
             "is_active": contest.is_active,
             "is_submission_open": is_submission_open_calculated,
             "is_voting_open": is_voting_open_calculated,
-            "level": contest.level,
-            "season_level": season_level,  # Niveau depuis la season
+            "level": level_value,
+            "season_level": season_level,  # Niveau depuis la season (déjà converti en string)
             "location_id": contest.location_id,
             "gender_restriction": final_gender_restriction,
             "voting_restriction": voting_restriction_str,  # TOUJOURS retourner, même si 'none'
             "max_entries_per_user": contest.max_entries_per_user,
             "template_id": contest.template_id,
             "voting_type_id": getattr(contest, 'voting_type_id', None),
-            "voting_type": voting_type_data,  # Objet voting_type complet
+            "voting_type": voting_type_data,  # Objet voting_type complet (déjà un dict)
             "created_at": contest.created_at,
             "updated_at": contest.updated_at,
             "entries_count": entries_count,
