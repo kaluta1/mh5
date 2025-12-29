@@ -71,7 +71,7 @@ export function Header({ user, onLoginClick, onLogout }: HeaderProps) {
   const navigationItems = [
     { name: t('navigation.home'), href: "/", icon: Home },
     ...(isAuthenticated ? [{ name: t('navigation.dashboard'), href: "/dashboard", icon: LayoutDashboard }] : []),
-    ...(isAuthenticated ? [{ name: 'Feed', href: "/dashboard/feed", icon: MessageSquare }] : []),
+    // ...(isAuthenticated ? [{ name: 'Feed', href: "/dashboard/feed", icon: MessageSquare }] : []),
     { name: t('navigation.contests'), href: "/contests", icon: Trophy },
     { name: t('navigation.about'), href: "/about", icon: Info },
     { name: t('navigation.contact'), href: "/contact", icon: Mail }
