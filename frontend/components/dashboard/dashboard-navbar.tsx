@@ -25,6 +25,20 @@ export function DashboardNavbar({ onMenuToggle, onSidebarToggle }: DashboardNavb
   const pathname = usePathname()
   const { user, logout } = useAuth()
 
+  const handleLogout = async () => {
+    // Sauvegarder l'URL actuelle avant de déconnecter
+    const currentUrl = pathname
+    if (currentUrl && currentUrl !== '/') {
+      localStorage.setItem('returnUrl', currentUrl)
+    }
+    
+    // Déconnecter l'utilisateur
+    await logout()
+    
+    // Rediriger vers la page de connexion avec le paramètre returnUrl
+    router.push(`/login?returnUrl=${encodeURIComponent(currentUrl)}`)
+  }
+
   return (
     <header className="fixed top-0 left-0 right-0 z-40 h-16">
       {/* Glass morphism background */}
@@ -100,7 +114,7 @@ export function DashboardNavbar({ onMenuToggle, onSidebarToggle }: DashboardNavb
           </Button>
 
           {/* Shop Button */}
-          <Button 
+          {/* <Button 
             variant="ghost" 
             size="sm" 
             onClick={() => router.push('/dashboard/shop')}
@@ -108,10 +122,10 @@ export function DashboardNavbar({ onMenuToggle, onSidebarToggle }: DashboardNavb
           >
             <ShoppingBag className="h-4 w-4" />
             <span className="hidden lg:inline text-sm font-medium">{t('dashboard.nav.shop') || 'Shop'}</span>
-          </Button>
+          </Button> */}
 
           {/* Divider */}
-          <div className="hidden sm:block w-px h-8 bg-gray-200 dark:bg-gray-700 mx-1" />
+          {/* <div className="hidden sm:block w-px h-8 bg-gray-200 dark:bg-gray-700 mx-1" /> */}
 
           {/* Settings Group */}
           <div className="hidden sm:flex items-center bg-gray-100/60 dark:bg-gray-800/60 rounded-xl p-1 gap-0.5">
@@ -130,7 +144,7 @@ export function DashboardNavbar({ onMenuToggle, onSidebarToggle }: DashboardNavb
             <div className="ml-1 sm:ml-2">
               <UserDropdown 
                 user={user}
-                onLogout={logout}
+                onLogout={handleLogout}
                 onSettings={() => router.push('/dashboard/settings')}
                 onProfile={() => router.push('/dashboard/profile')}
                 onKYC={() => router.push('/dashboard/kyc')}

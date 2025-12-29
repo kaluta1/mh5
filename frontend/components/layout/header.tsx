@@ -45,6 +45,20 @@ export function Header({ user, onLoginClick, onLogout }: HeaderProps) {
   const [isScrolled, setIsScrolled] = useState(false)
   const { t } = useLanguage()
 
+  const handleLogout = async () => {
+    // Sauvegarder l'URL actuelle avant de déconnecter
+    const currentUrl = pathname
+    if (currentUrl && currentUrl !== '/') {
+      localStorage.setItem('returnUrl', currentUrl)
+    }
+    
+    // Déconnecter l'utilisateur
+    await logout()
+    
+    // Rediriger vers la page de connexion avec le paramètre returnUrl
+    router.push(`/login?returnUrl=${encodeURIComponent(currentUrl)}`)
+  }
+
   // Handle scroll effect
   useEffect(() => {
     const handleScroll = () => {
@@ -153,7 +167,7 @@ export function Header({ user, onLoginClick, onLogout }: HeaderProps) {
               {isAuthenticated && authUser ? (
                 <UserDropdown 
                   user={authUser}
-                  onLogout={logout}
+                  onLogout={handleLogout}
                   onProfile={() => router.push('/profile')}
                   onSettings={() => router.push('/settings')}
                 />

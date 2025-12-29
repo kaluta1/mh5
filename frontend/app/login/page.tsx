@@ -47,9 +47,16 @@ export default function LoginPage() {
   // Rediriger si déjà connecté
   useEffect(() => {
     if (isAuthenticated) {
-      router.push('/dashboard/contests')
+      // Vérifier s'il y a une URL de retour sauvegardée
+      const returnUrl = searchParams.get('returnUrl') || localStorage.getItem('returnUrl')
+      if (returnUrl && returnUrl !== '/login' && returnUrl !== '/') {
+        localStorage.removeItem('returnUrl')
+        router.push(returnUrl)
+      } else {
+        router.push('/dashboard/contests')
+      }
     }
-  }, [isAuthenticated, router])
+  }, [isAuthenticated, router, searchParams])
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }))

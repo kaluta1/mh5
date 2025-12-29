@@ -99,7 +99,7 @@ function formatGender(gender: string | null, t: any): string {
 
 export default function SettingsPage() {
   const router = useRouter()
-  const { user, isAuthenticated, isLoading } = useAuth()
+  const { user, isAuthenticated, isLoading, refreshUser } = useAuth()
   const { t } = useLanguage()
   const { addToast } = useToast()
 
@@ -348,9 +348,9 @@ export default function SettingsPage() {
               </div>
 
               {/* Tab Content */}
-              {currentTab === 'profile' && <SettingsProfileTab user={user} />}
-              {currentTab === 'location' && <SettingsLocationTab user={user} />}
-              {currentTab === 'demographics' && <SettingsDemographicsTab user={user} />}
+              {currentTab === 'profile' && <SettingsProfileTab user={user} onUpdate={refreshUser} />}
+              {currentTab === 'location' && <SettingsLocationTab user={user} onUpdate={refreshUser} />}
+              {currentTab === 'demographics' && <SettingsDemographicsTab user={user} onUpdate={refreshUser} />}
               {currentTab === 'password' && <SettingsPasswordTab user={user} />}
             </div>
           </div>

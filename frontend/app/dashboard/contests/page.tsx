@@ -255,7 +255,7 @@ export default function ContestsPage() {
     loadData()
   }, [isLoading, isAuthenticated, activeSearchTerm, categoryTab])
 
-  // Mettre à jour displayedContests quand categoryTab ou sortBy change
+  // Mettre à jour displayedContests quand categoryTab, sortBy ou activeTab change
   useEffect(() => {
     if (allContests.length === 0) return
     
@@ -267,6 +267,14 @@ export default function ContestsPage() {
         return contest.votingType == null
       }
     })
+    
+    // Filtrer par type si un onglet est sélectionné (mais pas "all")
+    if (activeTab !== 'all') {
+      const selectedType = contestTypes.find(t => t.id === activeTab)
+      if (selectedType && selectedType.value) {
+        categoryFiltered = categoryFiltered.filter(contest => contest.contestType === selectedType.value)
+      }
+    }
     
     // Appliquer le tri
     const sorted = [...categoryFiltered].sort((a, b) => {
@@ -296,7 +304,7 @@ export default function ContestsPage() {
     setDisplayedContests(sorted.slice(0, ITEMS_PER_PAGE))
     setHasMore(sorted.length > ITEMS_PER_PAGE)
     setCurrentPage(1)
-  }, [categoryTab, allContests, sortBy])
+  }, [categoryTab, allContests, sortBy, activeTab, contestTypes])
 
   // Infinite scroll avec Intersection Observer
   useEffect(() => {
@@ -560,8 +568,7 @@ export default function ContestsPage() {
               onClick={() => {
                 setCategoryTab('nomination')
                 setActiveTab('all')
-                setCurrentPage(1)
-                setDisplayedContests([])
+                // Le useEffect se chargera de la mise à jour
               }}
               className={`px-6 py-3 text-base font-semibold transition-colors border-b-2 ${
                 categoryTab === 'nomination'
@@ -575,8 +582,7 @@ export default function ContestsPage() {
               onClick={() => {
                 setCategoryTab('participations')
                 setActiveTab('all')
-                setCurrentPage(1)
-                setDisplayedContests([])
+                // Le useEffect se chargera de la mise à jour
               }}
               className={`px-6 py-3 text-base font-semibold transition-colors border-b-2 ${
                 categoryTab === 'participations'
@@ -658,8 +664,7 @@ export default function ContestsPage() {
                 key={type.id}
                 onClick={() => {
                   setActiveTab(type.id)
-                  setCurrentPage(1)
-                  setDisplayedContests([])
+                  // Ne pas vider displayedContests, le useEffect se chargera de la mise à jour
                 }}
                 className={`px-4 py-3 text-sm font-medium whitespace-nowrap transition-colors border-b-2 ${
                   activeTab === type.id
@@ -703,8 +708,8 @@ export default function ContestsPage() {
           </div>
         )}
 
-        {/* Alerte KYC informative (non bloquante) - certains concours peuvent l'exiger */}
-        {isProfileComplete && !isKycVerified && (
+        {/* Alerte KYC informative (non bloquante) - certains concours peuvent l'exiger - Uniquement sur l'onglet Participations */}
+        {isProfileComplete && !isKycVerified && categoryTab === 'participations' && (
           <div className="hidden md:block mb-6">
             <div className="flex items-center justify-between gap-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/50 rounded-xl">
               <div className="flex items-center gap-3">

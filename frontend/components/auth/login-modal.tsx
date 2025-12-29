@@ -1,8 +1,8 @@
 "use client"
 
 import * as React from "react"
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect } from "react"
+import { useRouter, usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -30,6 +30,7 @@ interface LoginModalProps {
 export function LoginModal({ open, onOpenChange, onSwitchToRegister, onLoginSuccess, onRegisterClick }: LoginModalProps) {
   const { t } = useLanguage()
   const router = useRouter()
+  const pathname = usePathname()
   const { login, isAuthenticated } = useAuth()
   const [formData, setFormData] = useState({
     emailOrUsername: "",
@@ -39,6 +40,13 @@ export function LoginModal({ open, onOpenChange, onSwitchToRegister, onLoginSucc
   const [isLoading, setIsLoading] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Sauvegarder l'URL actuelle quand le modal s'ouvre
+  useEffect(() => {
+    if (open && pathname && pathname !== '/login' && pathname !== '/') {
+      localStorage.setItem('returnUrl', pathname)
+    }
+  }, [open, pathname])
 
   const validateForm = () => {
     if (!formData.emailOrUsername.trim() || !formData.password.trim()) {
@@ -72,10 +80,18 @@ export function LoginModal({ open, onOpenChange, onSwitchToRegister, onLoginSucc
       setFormData({ emailOrUsername: "", password: "" })
       setError(null)
       
-      // Fermer le modal et rediriger vers les contests
+      // Fermer le modal et rediriger vers l'URL sauvegardée ou par défaut
       setTimeout(() => {
         onOpenChange(false)
-        router.push('/dashboard/contests')
+        
+        // Vérifier s'il y a une URL de retour sauvegardée
+        const returnUrl = localStorage.getItem('returnUrl')
+        if (returnUrl && returnUrl !== '/login' && returnUrl !== '/') {
+          localStorage.removeItem('returnUrl')
+          router.push(returnUrl)
+        } else {
+          router.push('/dashboard/contests')
+        }
       }, 1500)
     } catch (err: any) {
       console.error('Login error:', err)

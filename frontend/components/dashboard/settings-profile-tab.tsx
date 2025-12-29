@@ -9,9 +9,10 @@ import { User, FileText, Image as ImageIcon } from 'lucide-react'
 
 interface SettingsProfileTabProps {
   user: any
+  onUpdate?: () => Promise<void>
 }
 
-export function SettingsProfileTab({ user }: SettingsProfileTabProps) {
+export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) {
   const { t } = useLanguage()
   const { addToast } = useToast()
 
@@ -117,6 +118,11 @@ export function SettingsProfileTab({ user }: SettingsProfileTabProps) {
         throw new Error(error.detail || t('profile_setup.update_error') || 'Erreur lors de la mise à jour')
       }
 
+      // Rafraîchir les données utilisateur
+      if (onUpdate) {
+        await onUpdate()
+      }
+
       addToast(t('profile_setup.success') || 'Profil mis à jour avec succès!', 'success')
       setErrors({})
     } catch (err: any) {
@@ -141,10 +147,41 @@ export function SettingsProfileTab({ user }: SettingsProfileTabProps) {
     }
   }
 
-  const handleAvatarChange = (url: string) => {
+  const handleAvatarChange = async (url: string) => {
     setAvatarUrl(url)
     if (errors.avatarUrl) {
       setErrors(prev => ({ ...prev, avatarUrl: undefined }))
+    }
+
+    // Sauvegarder automatiquement la photo de profil
+    if (url) {
+      try {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
+        if (!token) {
+          return
+        }
+
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+        const response = await fetch(`${apiUrl}/api/v1/users/me`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            avatar_url: url,
+          }),
+        })
+
+        if (response.ok) {
+          // Rafraîchir les données utilisateur pour mettre à jour l'affichage
+          if (onUpdate) {
+            await onUpdate()
+          }
+        }
+      } catch (err) {
+        console.error('Erreur lors de la sauvegarde automatique de la photo:', err)
+      }
     }
   }
 
@@ -160,21 +197,36 @@ export function SettingsProfileTab({ user }: SettingsProfileTabProps) {
           {avatarUrl ? (
             <div className="flex flex-col items-center gap-4">
               <img src={avatarUrl} alt="Avatar" className="w-32 h-32 rounded-full object-cover border-4 border-myhigh5-primary shadow-lg" />
-              <button
-                type="button"
-                onClick={() => handleAvatarChange('')}
-                className="px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors"
-              >
-                {t('settings.remove') || 'Supprimer'}
-              </button>
+              <div className="flex gap-2">
+                <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-2 bg-gray-50 dark:bg-gray-700/50">
+                  <UploadButton
+                    endpoint="profileAvatar"
+                    onClientUploadComplete={async (res) => {
+                      if (res && res.length > 0) {
+                        await handleAvatarChange(res[0].url)
+                      }
+                    }}
+                    onUploadError={(error: Error) => {
+                      addToast(`${t('profile_setup.upload_error') || 'Erreur d\'upload'}: ${error.message}`, 'error')
+                    }}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => await handleAvatarChange('')}
+                  className="px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors"
+                >
+                  {t('settings.remove') || 'Supprimer'}
+                </button>
+              </div>
             </div>
           ) : (
             <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-6 bg-gray-50 dark:bg-gray-700/50 w-full max-w-xs">
               <UploadButton
                 endpoint="profileAvatar"
-                onClientUploadComplete={(res) => {
+                onClientUploadComplete={async (res) => {
                   if (res && res.length > 0) {
-                    handleAvatarChange(res[0].url)
+                    await handleAvatarChange(res[0].url)
                   }
                 }}
                 onUploadError={(error: Error) => {

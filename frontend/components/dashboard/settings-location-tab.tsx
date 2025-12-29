@@ -9,9 +9,10 @@ import { MapPin, AlertCircle } from 'lucide-react'
 
 interface SettingsLocationTabProps {
   user: any
+  onUpdate?: () => Promise<void>
 }
 
-export function SettingsLocationTab({ user }: SettingsLocationTabProps) {
+export function SettingsLocationTab({ user, onUpdate }: SettingsLocationTabProps) {
   const { t } = useLanguage()
   const { addToast } = useToast()
 
@@ -151,6 +152,11 @@ export function SettingsLocationTab({ user }: SettingsLocationTabProps) {
       if (!response.ok) {
         const error = await response.json()
         throw new Error(error.detail || t('profile_setup.update_error') || 'Erreur lors de la mise à jour')
+      }
+
+      // Rafraîchir les données utilisateur
+      if (onUpdate) {
+        await onUpdate()
       }
 
       addToast(t('profile_setup.success') || 'Localisation mise à jour avec succès!', 'success')

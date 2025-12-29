@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { UserPlus, MessageCircle } from 'lucide-react'
+// import { UserPlus, MessageCircle } from 'lucide-react' // Boutons cachés
 import { useLanguage } from '@/contexts/language-context'
 
 interface Contestant {
@@ -100,7 +100,8 @@ export function ContestantsSidebar({
                     </p>
                   )}
                 </div>
-                <div className="flex flex-col gap-2">
+                {/* Boutons Follow et Message cachés */}
+                {/* <div className="flex flex-col gap-2">
                   <Button
                     size="sm"
                     variant="outline"
@@ -125,7 +126,7 @@ export function ContestantsSidebar({
                     <MessageCircle className="w-3 h-3 mr-1" />
                     {language === 'fr' ? 'Message' : language === 'es' ? 'Mensaje' : language === 'de' ? 'Nachricht' : 'Message'}
                   </Button>
-                </div>
+                </div> */}
               </div>
             ))}
           </div>

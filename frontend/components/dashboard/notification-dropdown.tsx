@@ -21,8 +21,16 @@ interface NotificationDropdownProps {
 }
 
 export function NotificationDropdown({ className }: NotificationDropdownProps) {
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
   const router = useRouter()
+  
+  // Mapping des langues vers les locales
+  const localeMap: Record<string, string> = {
+    fr: 'fr-FR',
+    en: 'en-US',
+    es: 'es-ES',
+    de: 'de-DE'
+  }
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadCount, setUnreadCount] = useState<number>(0)
   const [isOpen, setIsOpen] = useState(false)
@@ -118,48 +126,13 @@ export function NotificationDropdown({ className }: NotificationDropdownProps) {
   const formatDate = (dateString: string) => {
     try {
       const date = new Date(dateString)
-      const now = new Date()
-      const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000)
-      
-      if (diffInSeconds < 60) {
-        return t('notifications.time.just_now') || 'Just now'
-      } else if (diffInSeconds < 3600) {
-        const minutes = Math.floor(diffInSeconds / 60)
-        if (minutes === 1) {
-          return t('notifications.time.minute_ago') || '1 minute ago'
-        }
-        return (t('notifications.time.minutes_ago') || '{count} minutes ago').replace('{count}', minutes.toString())
-      } else if (diffInSeconds < 86400) {
-        const hours = Math.floor(diffInSeconds / 3600)
-        if (hours === 1) {
-          return t('notifications.time.hour_ago') || '1 hour ago'
-        }
-        return (t('notifications.time.hours_ago') || '{count} hours ago').replace('{count}', hours.toString())
-      } else if (diffInSeconds < 604800) {
-        const days = Math.floor(diffInSeconds / 86400)
-        if (days === 1) {
-          return t('notifications.time.day_ago') || '1 day ago'
-        }
-        return (t('notifications.time.days_ago') || '{count} days ago').replace('{count}', days.toString())
-      } else if (diffInSeconds < 2592000) {
-        const weeks = Math.floor(diffInSeconds / 604800)
-        if (weeks === 1) {
-          return t('notifications.time.week_ago') || '1 week ago'
-        }
-        return (t('notifications.time.weeks_ago') || '{count} weeks ago').replace('{count}', weeks.toString())
-      } else if (diffInSeconds < 31536000) {
-        const months = Math.floor(diffInSeconds / 2592000)
-        if (months === 1) {
-          return t('notifications.time.month_ago') || '1 month ago'
-        }
-        return (t('notifications.time.months_ago') || '{count} months ago').replace('{count}', months.toString())
-      } else {
-        const years = Math.floor(diffInSeconds / 31536000)
-        if (years === 1) {
-          return t('notifications.time.year_ago') || '1 year ago'
-        }
-        return (t('notifications.time.years_ago') || '{count} years ago').replace('{count}', years.toString())
-      }
+      return date.toLocaleDateString(localeMap[language] || 'fr-FR', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
     } catch {
       return dateString
     }
