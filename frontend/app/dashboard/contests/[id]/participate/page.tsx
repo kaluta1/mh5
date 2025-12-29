@@ -32,6 +32,7 @@ export default function ParticipateInContestPage() {
   const [needsProfileSetup, setNeedsProfileSetup] = useState(false)
   const [needsKYC, setNeedsKYC] = useState(false)
   const [contest, setContest] = useState<any>(null)
+  const [isNomination, setIsNomination] = useState(false)
   const [userAlreadyParticipating, setUserAlreadyParticipating] = useState(false)
   const [isEditingParticipation, setIsEditingParticipation] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -126,6 +127,10 @@ export default function ParticipateInContestPage() {
         if (contestId) {
           const contestData = await contestService.getContestById(contestId)
           setContest(contestData)
+          
+          // Détecter si c'est une nomination (si voting_type existe)
+          const isNominationContest = contestData.voting_type != null
+          setIsNomination(isNominationContest)
           
           // Vérifier si des vérifications sont requises pour ce contest
           const needsVerification = 
@@ -270,14 +275,28 @@ export default function ParticipateInContestPage() {
       if (errorDetail) {
         const errorLower = errorDetail.toLowerCase()
         
-        if (errorLower.includes('masculin') || errorLower.includes('male')) {
+        // Détecter les erreurs de genre
+        if (errorLower.includes('masculin') || errorLower.includes('male') || errorLower.includes('male participants only')) {
           errorMessage = t('dashboard.contests.participation_form.error.gender_restriction_male')
-        } else if (errorLower.includes('féminin') || errorLower.includes('female')) {
+        } else if (errorLower.includes('féminin') || errorLower.includes('female') || errorLower.includes('female participants only')) {
           errorMessage = t('dashboard.contests.participation_form.error.gender_restriction_female')
-        } else if (errorLower.includes('genre') || errorLower.includes('gender')) {
+        } else if (errorLower.includes('genre') || errorLower.includes('gender') || errorLower.includes('gender information')) {
           errorMessage = t('dashboard.contests.participation_form.error.gender_not_set')
-        } else {
-          // Utiliser le message d'erreur du backend s'il est disponible
+        } 
+        // Détecter les erreurs de soumission déjà effectuée
+        else if (errorLower.includes('already') && (errorLower.includes('submission') || errorLower.includes('candidature'))) {
+          errorMessage = t('dashboard.contests.participation_form.error.already_submitted')
+        }
+        // Détecter les erreurs de soumission fermée
+        else if (errorLower.includes('closed') || errorLower.includes('fermée') || errorLower.includes('fermé') || errorLower.includes('not open')) {
+          errorMessage = t('dashboard.contests.participation_form.error.submission_closed')
+        }
+        // Détecter les erreurs de date limite
+        else if (errorLower.includes('deadline') || errorLower.includes('date limite') || errorLower.includes('dépassée') || errorLower.includes('passed')) {
+          errorMessage = t('dashboard.contests.participation_form.error.deadline_passed')
+        }
+        // Utiliser le message d'erreur du backend s'il est disponible
+        else {
           errorMessage = errorDetail
         }
       }
@@ -383,8 +402,8 @@ export default function ParticipateInContestPage() {
                   </div>
                 )}
 
-                {/* KYC Notification (optionnel) */}
-                {needsKYC && (
+                {/* KYC Notification (optionnel) - Ne pas afficher pour les nominations */}
+                {needsKYC && !isNomination && (
                   <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg mb-4">
                     <p className="text-amber-900 dark:text-amber-200 text-sm">
                       {t('participation.kyc_notification') || '⚠️ Votre identité n\'a pas été vérifiée. Nous vous recommandons de compléter votre vérification KYC pour une meilleure expérience.'}
@@ -413,12 +432,13 @@ export default function ParticipateInContestPage() {
                     isSubmitting={isSubmitting}
                     isEditing={isEditingParticipation}
                     initialData={existingParticipationData}
+                    isNomination={isNomination}
                     mediaRequirements={{
-                      requiresVideo: contest?.requires_video,
+                      requiresVideo: isNomination ? true : contest?.requires_video,
                       maxVideos: contest?.max_videos,
                       videoMaxDuration: contest?.video_max_duration,
                       videoMaxSizeMb: contest?.video_max_size_mb,
-                      minImages: contest?.min_images,
+                      minImages: isNomination ? 0 : contest?.min_images,
                       maxImages: contest?.max_images
                     }}
                   />

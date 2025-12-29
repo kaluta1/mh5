@@ -19,8 +19,8 @@ export function detectVideoPlatform(url: string | null | undefined): VideoPlatfo
   
   const lowerUrl = url.toLowerCase().trim()
   
-  // YouTube
-  if (lowerUrl.includes('youtube.com') || lowerUrl.includes('youtu.be')) {
+  // YouTube (incluant YouTube Shorts)
+  if (lowerUrl.includes('youtube.com') || lowerUrl.includes('youtu.be') || lowerUrl.includes('youtube.com/shorts')) {
     return 'youtube'
   }
   
@@ -54,6 +54,15 @@ export function detectVideoPlatform(url: string | null | undefined): VideoPlatfo
 function extractYouTubeId(url: string | null | undefined): string | null {
   if (!url || typeof url !== 'string') return null
   
+  const lowerUrl = url.toLowerCase()
+  
+  // YouTube Shorts: youtube.com/shorts/VIDEO_ID
+  const shortsMatch = lowerUrl.match(/youtube\.com\/shorts\/([^&\n?#\/]+)/)
+  if (shortsMatch && shortsMatch[1]) {
+    return shortsMatch[1]
+  }
+  
+  // YouTube standard formats
   const patterns = [
     /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
     /youtube\.com\/watch\?.*v=([^&\n?#]+)/

@@ -40,9 +40,10 @@ interface ParticipationFormProps {
     videoUrl?: string
   }
   mediaRequirements?: MediaRequirements
+  isNomination?: boolean
 }
 
-export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting: externalIsSubmitting, isEditing = false, initialData, mediaRequirements }: ParticipationFormProps) {
+export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting: externalIsSubmitting, isEditing = false, initialData, mediaRequirements, isNomination = false }: ParticipationFormProps) {
   const { t } = useLanguage()
   const router = useRouter()
   const { addToast } = useToast()
@@ -65,9 +66,10 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
   const [videoUrlInput, setVideoUrlInput] = useState('')
   
   // Media requirements with defaults
-  const minImages = mediaRequirements?.minImages ?? 1
+  // Pour les nominations : images optionnelles (minImages = 0), vidéos obligatoires
+  const minImages = isNomination ? 0 : (mediaRequirements?.minImages ?? 1)
   const maxImages = mediaRequirements?.maxImages ?? 10
-  const requiresVideo = mediaRequirements?.requiresVideo ?? false
+  const requiresVideo = isNomination ? true : (mediaRequirements?.requiresVideo ?? false)
   const maxVideos = mediaRequirements?.maxVideos ?? 1
 
   // Récupérer le token depuis localStorage
@@ -132,6 +134,15 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
   const handleVideoFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    
+    // Pour les nominations : les fichiers vidéo ne sont pas autorisés, seulement les URLs
+    if (isNomination) {
+      addToast(t('participation.video_file_not_allowed') || 'Les fichiers vidéo ne sont pas autorisés pour les nominations. Veuillez utiliser une URL YouTube (y compris YouTube Shorts), TikTok, ou un autre lien vidéo.', 'error')
+      if (videoInputRef.current) {
+        videoInputRef.current.value = ''
+      }
+      return
+    }
     
     await videoUpload.upload(file)
     
@@ -203,8 +214,22 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
       addToast(t('participation.invalid_url') || 'URL invalide', 'error')
       return
     }
+    
+    // Pour les nominations : valider que ce n'est pas Facebook ou Vimeo
+    if (isNomination) {
+      const platform = detectVideoPlatform(videoUrlInput)
+      if (platform === 'facebook') {
+        addToast(t('participation.video_platform_not_allowed'), 'error')
+        return
+      }
+      if (platform === 'vimeo') {
+        addToast(t('participation.video_platform_not_allowed'), 'error')
+        return
+      }
+    }
+    
     if (!isVideoUrl(videoUrlInput)) {
-      addToast(t('participation.invalid_video_url') || 'URL vidéo invalide. Formats supportés: YouTube, Vimeo, TikTok, Facebook ou fichiers vidéo (MP4, WebM, etc.)', 'error')
+      addToast(t('participation.invalid_video_url'), 'error')
       return
     }
     setVideoUrl(videoUrlInput.trim())
@@ -236,7 +261,8 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
       return
     }
 
-    if (imageUrls.length === 0) {
+    // Pour les nominations, les images sont optionnelles
+    if (!isNomination && imageUrls.length === 0) {
       addToast(t('participation.errors.content_image_required') || 'Au moins une image est requise', 'error')
       return
     }
@@ -268,7 +294,8 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
   // Calculate errors
   const hasTitleError = title.trim().length > 0 && title.trim().length < 10
   const hasDescriptionError = description.trim().length > 0 && description.trim().length < 100
-  const hasImageError = imageUrls.length === 0
+  // Pour les nominations, les images sont optionnelles
+  const hasImageError = !isNomination && imageUrls.length === 0
   const hasVideoError = requiresVideo && !videoUrl
 
   return (
@@ -362,10 +389,12 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
             {t('participation.media_requirements') || 'Exigences média'}
           </h4>
           <ul className="text-sm text-blue-800 dark:text-blue-300 space-y-1">
+            {!isNomination && (
             <li className="flex items-center gap-2">
               {imageUrls.length >= minImages ? <CheckCircle className="w-4 h-4 text-green-500" /> : <AlertCircle className="w-4 h-4 text-amber-500" />}
               {t('participation.images_required') || 'Images'}: {minImages} min, {maxImages} max ({imageUrls.length}/{maxImages})
             </li>
+            )}
             {requiresVideo && (
               <li className="flex items-center gap-2">
                 {videoUrl ? <CheckCircle className="w-4 h-4 text-green-500" /> : <AlertCircle className="w-4 h-4 text-amber-500" />}
@@ -376,7 +405,8 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
         </div>
       )}
 
-      {/* Section 3: Content Images */}
+      {/* Section 3: Content Images - Masqué pour les nominations */}
+      {!isNomination && (
       <div className={`bg-gray-50 dark:bg-gray-800 rounded-lg p-6 border ${
         hasImageError 
           ? 'border-red-500 dark:border-red-500' 
@@ -526,6 +556,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
           </div>
         )}
       </div>
+      )}
 
       {/* Section 4: Content Video */}
       <div className={`bg-gray-50 dark:bg-gray-800 rounded-lg p-6 border ${
@@ -542,7 +573,8 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
         
         {!videoUrl && (
           <div className="space-y-3">
-            {/* Upload button avec modération */}
+            {/* Upload button avec modération - Masqué pour les nominations */}
+            {!isNomination && (
             <div 
               className="p-6 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg bg-white/50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition cursor-pointer"
               onClick={() => !videoUpload.isUploading && !isSubmitting && videoInputRef.current?.click()}
@@ -592,6 +624,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
                 </div>
               )}
             </div>
+            )}
 
             {/* URL Import Option */}
             <div className="flex items-center gap-2">
@@ -693,7 +726,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
             title.trim().length < 10 || 
             !description.trim() || 
             description.trim().length < 100 || 
-            imageUrls.length === 0 || 
+            (!isNomination && imageUrls.length === 0) || 
             (requiresVideo && !videoUrl) ||
             isSubmitting
           }

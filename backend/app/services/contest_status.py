@@ -93,27 +93,27 @@ class ContestStatusService:
         ).first()
         
         if not contest:
-            return False, "Concours non trouvé"
+            return False, "Contest not found"
         
         # Vérifier si le contest est actif
         if not contest.is_active:
-            return False, "Ce concours n'est pas actif"
+            return False, "This contest is not active"
         
         # Vérifier si les soumissions sont ouvertes
         if not contest.is_submission_open:
-            return False, "Les inscriptions pour ce concours sont fermées"
+            return False, "Submissions are closed for this contest"
         
         # Vérifier si le voting est déjà ouvert (on ne peut plus soumettre si le vote est ouvert)
         if contest.is_voting_open:
-            return False, "Les inscriptions sont fermées car le vote est déjà ouvert"
+            return False, "Submissions are closed because voting is already open"
         
         # Vérifier les dates
         today = date.today()
         if today < contest.submission_start_date:
-            return False, f"Les inscriptions commenceront le {contest.submission_start_date}"
+            return False, f"Submissions will start on {contest.submission_start_date}"
         
         if today > contest.submission_end_date:
-            return False, f"Les inscriptions se sont terminées le {contest.submission_end_date}"
+            return False, f"Submissions ended on {contest.submission_end_date}"
         
         return True, ""
     
@@ -131,23 +131,23 @@ class ContestStatusService:
         ).first()
         
         if not contest:
-            return False, "Concours non trouvé"
+            return False, "Contest not found"
         
         # Vérifier si le contest est actif
         if not contest.is_active:
-            return False, "Ce concours n'est pas actif"
+            return False, "This contest is not active"
         
         # Vérifier si le vote est ouvert
         if not contest.is_voting_open:
-            return False, "Le vote n'est pas ouvert pour ce concours"
+            return False, "Voting is not open for this contest"
         
         # Vérifier les dates
         today = date.today()
         if today < contest.submission_end_date:
-            return False, f"Le vote commencera après le {contest.submission_end_date}"
+            return False, f"Voting will start after {contest.submission_end_date}"
         
         if today > contest.voting_end_date:
-            return False, f"Le vote s'est terminé le {contest.voting_end_date}"
+            return False, f"Voting ended on {contest.voting_end_date}"
         
         return True, ""
 

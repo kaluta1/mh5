@@ -319,6 +319,8 @@ export interface TranslationKeys {
     image_url_placeholder: string
     video_url_placeholder: string
     invalid_video_url: string
+    video_platform_not_allowed: string
+    video_file_not_allowed: string
     url_required: string
     invalid_url: string
     max_images_reached: string
@@ -1219,6 +1221,9 @@ export interface TranslationKeys {
             gender_restriction_male: string
             gender_restriction_female: string
             gender_not_set: string
+            already_submitted: string
+            submission_closed: string
+            deadline_passed: string
           }
       }
     }
@@ -2376,7 +2381,10 @@ export const translations: Record<Language, TranslationKeys> = {
             submit_error: "Erreur lors de la soumission",
             gender_restriction_male: "Ce concours est réservé aux participants masculins uniquement.",
             gender_restriction_female: "Ce concours est réservé aux participantes féminines uniquement.",
-            gender_not_set: "Votre profil ne contient pas d'information de genre. Veuillez compléter votre profil pour participer à ce concours."
+            gender_not_set: "Votre profil ne contient pas d'information de genre. Veuillez compléter votre profil pour participer à ce concours.",
+            already_submitted: "Vous avez déjà soumis une candidature pour ce concours.",
+            submission_closed: "Les inscriptions sont fermées pour ce concours.",
+            deadline_passed: "La date limite de soumission est dépassée."
           }
         }
       },
@@ -2754,7 +2762,9 @@ export const translations: Record<Language, TranslationKeys> = {
       add: "Ajouter",
       image_url_placeholder: "https://exemple.com/image.jpg",
       video_url_placeholder: "https://youtube.com/watch?v=... ou https://exemple.com/video.mp4",
-      invalid_video_url: "URL vidéo invalide. Formats supportés: YouTube, Vimeo, TikTok, Facebook ou fichiers vidéo (MP4, WebM, etc.)",
+      invalid_video_url: "URL vidéo non supportée. Formats acceptés : YouTube (y compris YouTube Shorts), TikTok, ou fichiers vidéo directs (MP4, WebM, MOV, etc.). Les liens Facebook et Vimeo ne sont pas autorisés pour les nominations.",
+      video_platform_not_allowed: "Cette plateforme vidéo n'est pas autorisée pour les nominations. Veuillez utiliser YouTube (y compris YouTube Shorts), TikTok, ou un lien de fichier vidéo direct (MP4, WebM, MOV, etc.).",
+      video_file_not_allowed: "Les fichiers vidéo ne sont pas autorisés pour les nominations. Veuillez utiliser une URL YouTube (y compris YouTube Shorts), TikTok, ou un autre lien vidéo.",
       url_required: "URL requise",
       invalid_url: "URL invalide",
       max_images_reached: "Nombre maximum d'images atteint",
@@ -3692,7 +3702,10 @@ export const translations: Record<Language, TranslationKeys> = {
             submit_error: "Erreur lors de la soumission",
             gender_restriction_male: "Ce concours est réservé aux participants masculins uniquement.",
             gender_restriction_female: "Ce concours est réservé aux participantes féminines uniquement.",
-            gender_not_set: "Votre profil ne contient pas d'information de genre. Veuillez compléter votre profil pour participer à ce concours."
+            gender_not_set: "Votre profil ne contient pas d'information de genre. Veuillez compléter votre profil pour participer à ce concours.",
+            already_submitted: "Vous avez déjà soumis une candidature pour ce concours.",
+            submission_closed: "Les inscriptions sont fermées pour ce concours.",
+            deadline_passed: "La date limite de soumission est dépassée."
           }
         }
       },
@@ -4909,7 +4922,9 @@ export const translations: Record<Language, TranslationKeys> = {
       add: "Add",
       image_url_placeholder: "https://example.com/image.jpg",
       video_url_placeholder: "https://youtube.com/watch?v=... or https://example.com/video.mp4",
-      invalid_video_url: "Invalid video URL. Supported formats: YouTube, Vimeo, TikTok, Facebook or video files (MP4, WebM, etc.)",
+      invalid_video_url: "Unsupported video URL. Accepted formats: YouTube (including YouTube Shorts), TikTok, or direct video files (MP4, WebM, MOV, etc.). Facebook and Vimeo links are not allowed for nominations.",
+      video_platform_not_allowed: "This video platform is not allowed for nominations. Please use YouTube (including YouTube Shorts), TikTok, or a direct video file link (MP4, WebM, MOV, etc.).",
+      video_file_not_allowed: "Video file uploads are not allowed for nominations. Please use a YouTube URL (including YouTube Shorts), TikTok, or another video link.",
       url_required: "URL required",
       invalid_url: "Invalid URL",
       max_images_reached: "Maximum number of images reached",
@@ -5882,7 +5897,10 @@ export const translations: Record<Language, TranslationKeys> = {
             submit_error: "Error submitting entry",
             gender_restriction_male: "This contest is reserved for male participants only.",
             gender_restriction_female: "This contest is reserved for female participants only.",
-            gender_not_set: "Your profile does not contain gender information. Please complete your profile to participate in this contest."
+            gender_not_set: "Your profile does not contain gender information. Please complete your profile to participate in this contest.",
+            already_submitted: "You already have a submission for this contest.",
+            submission_closed: "Submissions are closed for this contest.",
+            deadline_passed: "The submission deadline has passed."
           }
         },
         suggest_contest: {
@@ -7116,7 +7134,9 @@ export const translations: Record<Language, TranslationKeys> = {
       add: "Agregar",
       image_url_placeholder: "https://ejemplo.com/imagen.jpg",
       video_url_placeholder: "https://youtube.com/watch?v=... o https://ejemplo.com/video.mp4",
-      invalid_video_url: "URL de video inválida. Formatos soportados: YouTube, Vimeo, TikTok, Facebook o archivos de video (MP4, WebM, etc.)",
+      invalid_video_url: "URL de video no soportada. Formatos aceptados: YouTube (incluyendo YouTube Shorts), TikTok, o archivos de video directos (MP4, WebM, MOV, etc.). Los enlaces de Facebook y Vimeo no están permitidos para nominaciones.",
+      video_platform_not_allowed: "Esta plataforma de video no está permitida para nominaciones. Por favor use YouTube (incluyendo YouTube Shorts), TikTok, o un enlace de archivo de video directo (MP4, WebM, MOV, etc.).",
+      video_file_not_allowed: "La carga de archivos de video no está permitida para nominaciones. Por favor use una URL de YouTube (incluyendo YouTube Shorts), TikTok, u otro enlace de video.",
       url_required: "URL requerida",
       invalid_url: "URL inválida",
       max_images_reached: "Número máximo de imágenes alcanzado",
@@ -7958,7 +7978,10 @@ export const translations: Record<Language, TranslationKeys> = {
             submit_error: "Error al enviar la candidatura",
             gender_restriction_male: "Este concurso está reservado solo para participantes masculinos.",
             gender_restriction_female: "Este concurso está reservado solo para participantes femeninas.",
-            gender_not_set: "Su perfil no contiene información de género. Por favor complete su perfil para participar en este concurso."
+            gender_not_set: "Su perfil no contiene información de género. Por favor complete su perfil para participar en este concurso.",
+            already_submitted: "Ya ha enviado una candidatura para este concurso.",
+            submission_closed: "Las inscripciones están cerradas para este concurso.",
+            deadline_passed: "La fecha límite de envío ha pasado."
           }
         }
       },
@@ -9194,7 +9217,9 @@ export const translations: Record<Language, TranslationKeys> = {
       add: "Hinzufügen",
       image_url_placeholder: "https://beispiel.com/bild.jpg",
       video_url_placeholder: "https://youtube.com/watch?v=... oder https://beispiel.com/video.mp4",
-      invalid_video_url: "Ungültige Video-URL. Unterstützte Formate: YouTube, Vimeo, TikTok, Facebook oder Videodateien (MP4, WebM, etc.)",
+      invalid_video_url: "Nicht unterstützte Video-URL. Akzeptierte Formate: YouTube (einschließlich YouTube Shorts), TikTok oder direkte Videodateien (MP4, WebM, MOV, etc.). Facebook- und Vimeo-Links sind für Nominierungen nicht erlaubt.",
+      video_platform_not_allowed: "Diese Videoplattform ist für Nominierungen nicht erlaubt. Bitte verwenden Sie YouTube (einschließlich YouTube Shorts), TikTok oder einen direkten Videodatei-Link (MP4, WebM, MOV, etc.).",
+      video_file_not_allowed: "Das Hochladen von Videodateien ist für Nominierungen nicht erlaubt. Bitte verwenden Sie eine YouTube-URL (einschließlich YouTube Shorts), TikTok oder einen anderen Video-Link.",
       url_required: "URL erforderlich",
       invalid_url: "Ungültige URL",
       max_images_reached: "Maximale Anzahl an Bildern erreicht",
@@ -10032,7 +10057,10 @@ export const translations: Record<Language, TranslationKeys> = {
             submit_error: "Fehler beim Einreichen der Bewerbung",
             gender_restriction_male: "Dieser Wettbewerb ist nur für männliche Teilnehmer reserviert.",
             gender_restriction_female: "Dieser Wettbewerb ist nur für weibliche Teilnehmerinnen reserviert.",
-            gender_not_set: "Ihr Profil enthält keine Geschlechtsangabe. Bitte vervollständigen Sie Ihr Profil, um an diesem Wettbewerb teilzunehmen."
+            gender_not_set: "Ihr Profil enthält keine Geschlechtsangabe. Bitte vervollständigen Sie Ihr Profil, um an diesem Wettbewerb teilzunehmen.",
+            already_submitted: "Sie haben bereits eine Bewerbung für diesen Wettbewerb eingereicht.",
+            submission_closed: "Die Anmeldungen sind für diesen Wettbewerb geschlossen.",
+            deadline_passed: "Die Einreichungsfrist ist abgelaufen."
           }
         }
       },
