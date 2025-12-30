@@ -11,7 +11,7 @@ import { useLanguage } from '@/contexts/language-context'
 import { useRouter } from 'next/navigation'
 import { useModeratedUpload } from '@/hooks/use-moderated-upload'
 import { useToast } from '@/components/ui/toast'
-import { isValidVideoUrl, detectVideoPlatform } from '@/lib/utils/video-platforms'
+import { isValidVideoUrl, detectVideoPlatform, isYouTubeShort } from '@/lib/utils/video-platforms'
 
 interface MediaRequirements {
   requiresVideo?: boolean
@@ -212,6 +212,12 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
     }
     if (!isValidUrl(videoUrlInput)) {
       addToast(t('participation.invalid_url') || 'URL invalide', 'error')
+      return
+    }
+    
+    // Vérifier si c'est un YouTube Short (interdit)
+    if (isYouTubeShort(videoUrlInput)) {
+      addToast(t('participation.youtube_shorts_not_allowed') || 'Les YouTube Shorts ne sont pas autorisés. Veuillez utiliser une vidéo YouTube standard.', 'error')
       return
     }
     

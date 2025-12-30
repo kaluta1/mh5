@@ -6,10 +6,8 @@ import { useAuth } from '@/hooks/use-auth'
 import { useLanguage } from '@/contexts/language-context'
 import { useToast } from '@/components/ui/toast'
 import { ParticipateFormSkeleton } from '@/components/ui/skeleton'
-import { KYCAlert } from '@/components/dashboard/kyc-alert'
 import { ParticipationForm } from '@/components/dashboard/participation-form'
 import { contestService } from '@/services/contest-service'
-import { AlertCircle, Shield, Camera, Mic, Video, Award, FileCheck } from 'lucide-react'
 import { 
   VerificationRequirementsDialog, 
   SelfieVerificationDialog, 
@@ -38,6 +36,7 @@ export default function ParticipateInContestPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitSuccess, setSubmitSuccess] = useState(false)
   const [timeRemaining, setTimeRemaining] = useState<string>('')
+  const [timeValues, setTimeValues] = useState<{ days: number; hours: number; minutes: number; seconds: number; isClosed: boolean; isNA: boolean } | null>(null)
   const [existingParticipationData, setExistingParticipationData] = useState<any>(null)
   const [participantId, setParticipantId] = useState<number | null>(null)
   
@@ -56,7 +55,7 @@ export default function ParticipateInContestPage() {
   // Calculer le temps restant
   useEffect(() => {
     if (!contest?.submission_end_date) {
-      setTimeRemaining('N/A')
+      setTimeValues({ days: 0, hours: 0, minutes: 0, seconds: 0, isClosed: false, isNA: true })
       return
     }
 
@@ -66,7 +65,7 @@ export default function ParticipateInContestPage() {
       const difference = endDate - now
 
       if (difference <= 0) {
-        setTimeRemaining('Fermé')
+        setTimeValues({ days: 0, hours: 0, minutes: 0, seconds: 0, isClosed: true, isNA: false })
         return
       }
 
@@ -75,15 +74,7 @@ export default function ParticipateInContestPage() {
       const minutes = Math.floor((difference / 1000 / 60) % 60)
       const seconds = Math.floor((difference / 1000) % 60)
 
-      if (days > 0) {
-        setTimeRemaining(`${days}j ${hours}h ${minutes}m`)
-      } else if (hours > 0) {
-        setTimeRemaining(`${hours}h ${minutes}m ${seconds}s`)
-      } else if (minutes > 0) {
-        setTimeRemaining(`${minutes}m ${seconds}s`)
-      } else {
-        setTimeRemaining(`${seconds}s`)
-      }
+      setTimeValues({ days, hours, minutes, seconds, isClosed: false, isNA: false })
     }
 
     // Mettre à jour immédiatement
@@ -94,6 +85,40 @@ export default function ParticipateInContestPage() {
 
     return () => clearInterval(interval)
   }, [contest?.submission_end_date])
+
+  // Formater le temps restant avec les traductions
+  useEffect(() => {
+    if (!timeValues) {
+      setTimeRemaining('')
+      return
+    }
+
+    if (timeValues.isNA) {
+      setTimeRemaining('N/A')
+      return
+    }
+
+    if (timeValues.isClosed) {
+      setTimeRemaining(t('dashboard.contests.closed') || 'Fermé')
+      return
+    }
+
+    const { days, hours, minutes, seconds } = timeValues
+    const dayUnit = t('dashboard.contests.time_unit_days') || 'j'
+    const hourUnit = t('dashboard.contests.time_unit_hours') || 'h'
+    const minuteUnit = t('dashboard.contests.time_unit_minutes') || 'm'
+    const secondUnit = t('dashboard.contests.time_unit_seconds') || 's'
+
+    if (days > 0) {
+      setTimeRemaining(`${days}${dayUnit} ${hours}${hourUnit} ${minutes}${minuteUnit}`)
+    } else if (hours > 0) {
+      setTimeRemaining(`${hours}${hourUnit} ${minutes}${minuteUnit} ${seconds}${secondUnit}`)
+    } else if (minutes > 0) {
+      setTimeRemaining(`${minutes}${minuteUnit} ${seconds}${secondUnit}`)
+    } else {
+      setTimeRemaining(`${seconds}${secondUnit}`)
+    }
+  }, [timeValues, t])
 
   // Redirection si non authentifié
   useEffect(() => {
@@ -295,7 +320,7 @@ export default function ParticipateInContestPage() {
         else if (errorLower.includes('deadline') || errorLower.includes('date limite') || errorLower.includes('dépassée') || errorLower.includes('passed')) {
           errorMessage = t('dashboard.contests.participation_form.error.deadline_passed')
         }
-        // Utiliser le message d'erreur du backend s'il est disponible
+          // Utiliser le message d'erreur du backend s'il est disponible
         else {
           errorMessage = errorDetail
         }
@@ -507,7 +532,7 @@ export default function ParticipateInContestPage() {
                     ⏱️ {t('dashboard.contests.time_remaining')}
                   </p>
                   <p className="text-lg font-bold text-orange-600 dark:text-orange-400">
-                    {timeRemaining || 'Chargement...'}
+                    {timeRemaining || t('common.loading') || 'Chargement...'}
                   </p>
                 </div>
               </div>

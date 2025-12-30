@@ -228,6 +228,15 @@ export function convertToEmbedUrl(url: string | null | undefined): VideoInfo {
 }
 
 /**
+ * Vérifie si une URL est un YouTube Short
+ */
+export function isYouTubeShort(url: string | null | undefined): boolean {
+  if (!url || typeof url !== 'string') return false
+  const lowerUrl = url.toLowerCase().trim()
+  return lowerUrl.includes('youtube.com/shorts/') || lowerUrl.includes('/shorts/')
+}
+
+/**
  * Vérifie si une URL est une URL de plateforme vidéo valide
  */
 export function isValidVideoUrl(url: string | null | undefined): boolean {

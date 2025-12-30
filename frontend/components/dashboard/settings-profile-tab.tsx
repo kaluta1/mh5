@@ -211,13 +211,13 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
                     }}
                   />
                 </div>
-                <button
-                  type="button"
+              <button
+                type="button"
                   onClick={async () => await handleAvatarChange('')}
-                  className="px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors"
-                >
-                  {t('settings.remove') || 'Supprimer'}
-                </button>
+                className="px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors"
+              >
+                {t('settings.remove') || 'Supprimer'}
+              </button>
               </div>
             </div>
           ) : (

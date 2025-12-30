@@ -174,7 +174,7 @@ export function SettingsDemographicsTab({ user, onUpdate }: SettingsDemographics
     if (errors.gender) {
       setErrors(prev => ({ ...prev, gender: undefined }))
     }
-    setGender(value)
+      setGender(value)
   }
 
   return (
@@ -273,12 +273,12 @@ export function SettingsDemographicsTab({ user, onUpdate }: SettingsDemographics
             <select
               value={year}
               onChange={(e) => handleDateChange('year', e.target.value)}
-              disabled={isLoading}
+          disabled={isLoading}
               className={`w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-700 border text-gray-900 dark:text-white focus:outline-none focus:ring-2 transition-all ${
-                errors.dateOfBirth
-                  ? 'border-red-500 dark:border-red-500 focus:ring-red-500 focus:border-red-500'
-                  : 'border-gray-300 dark:border-gray-600 focus:ring-myhigh5-primary focus:border-transparent'
-              }`}
+            errors.dateOfBirth
+              ? 'border-red-500 dark:border-red-500 focus:ring-red-500 focus:border-red-500'
+              : 'border-gray-300 dark:border-gray-600 focus:ring-myhigh5-primary focus:border-transparent'
+          }`}
             >
               <option value="">{language === 'fr' ? 'Année' : language === 'es' ? 'Año' : language === 'de' ? 'Jahr' : 'Year'}</option>
               {years.map((y) => (

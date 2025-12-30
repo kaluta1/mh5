@@ -14,10 +14,10 @@ const carouselSlides = [
     titleEn: "Beauty Contests",
     titleEs: "Concursos de Belleza", 
     titleDe: "Schönheitswettbewerbe",
-    description: "Découvrez les plus beaux talents de votre région",
-    descriptionEn: "Discover the most beautiful talents in your region",
-    descriptionEs: "Descubre los talentos más hermosos de tu región",
-    descriptionDe: "Entdecken Sie die schönsten Talente Ihrer Region",
+    description: "Découvrez les plus belles femmes",
+    descriptionEn: "Discover the most attractive women",
+    descriptionEs: "Descubre las mujeres más atractivas",
+    descriptionDe: "Entdecken Sie die attraktivsten Frauen",
     gradient: "from-pink-100 to-purple-100",
     iconColor: "text-pink-600",
     bgColor: "bg-pink-100"
@@ -205,19 +205,19 @@ export function InteractiveCarousel() {
       <Button
         variant="ghost"
         size="icon"
-        className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-white/80 hover:bg-white/90 rounded-full shadow-lg transition-all duration-200 hover:scale-110"
+        className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-blue-500 hover:bg-blue-600 rounded-full shadow-lg transition-all duration-200 hover:scale-110"
         onClick={prevSlide}
       >
-        <ChevronLeft className="h-5 w-5 text-gray-700" />
+        <ChevronLeft className="h-5 w-5 text-white" />
       </Button>
       
       <Button
         variant="ghost"
         size="icon"
-        className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-white/80 hover:bg-white/90 rounded-full shadow-lg transition-all duration-200 hover:scale-110"
+        className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-blue-500 hover:bg-blue-600 rounded-full shadow-lg transition-all duration-200 hover:scale-110"
         onClick={nextSlide}
       >
-        <ChevronRight className="h-5 w-5 text-gray-700" />
+        <ChevronRight className="h-5 w-5 text-white" />
       </Button>
 
       {/* Indicators */}

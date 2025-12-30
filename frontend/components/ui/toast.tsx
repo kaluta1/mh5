@@ -25,14 +25,10 @@ export const ToastContext = createContext<ToastContextType | undefined>(undefine
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
 
-  const addToast = (message: string, type: ToastType = 'info', duration = 5000) => {
+  const addToast = (message: string, type: ToastType = 'info', duration = 12000) => {
     const id = Math.random().toString(36).substr(2, 9)
     const newToast: Toast = { id, message, type, duration }
     setToasts((prev) => [...prev, newToast])
-
-    if (duration > 0) {
-      setTimeout(() => removeToast(id), duration)
-    }
   }
 
   const removeToast = (id: string) => {
@@ -77,6 +73,17 @@ interface ToastItemProps {
 
 function ToastItem({ toast, onRemove }: ToastItemProps) {
   const [isExiting, setIsExiting] = useState(false)
+
+  useEffect(() => {
+    if (toast.duration && toast.duration > 0) {
+      const timer = setTimeout(() => {
+        setIsExiting(true)
+        setTimeout(() => onRemove(toast.id), 300)
+      }, toast.duration)
+      
+      return () => clearTimeout(timer)
+    }
+  }, [toast.duration, toast.id, onRemove])
 
   const handleClose = () => {
     setIsExiting(true)

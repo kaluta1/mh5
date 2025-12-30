@@ -53,7 +53,7 @@ export default function LoginPage() {
         localStorage.removeItem('returnUrl')
         router.push(returnUrl)
       } else {
-        router.push('/dashboard/contests')
+      router.push('/dashboard/contests')
       }
     }
   }, [isAuthenticated, router, searchParams])
