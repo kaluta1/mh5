@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { MapPin, Globe } from 'lucide-react'
+import { Globe } from 'lucide-react'
 import geographyData from '@/lib/geography-data-complete.json'
 import { useLanguage } from '@/contexts/language-context'
 
@@ -31,7 +31,6 @@ export function LocationSelectorSimple({
   )
   
   const [selectedCountryCode, setSelectedCountryCode] = useState('')
-  const [cities, setCities] = useState<string[]>([])
 
   // Quand le pays change
   const handleCountryChange = (countryCode: string) => {
@@ -52,20 +51,9 @@ export function LocationSelectorSimple({
       console.log('Appel onContinentChange avec:', country.continent)
       onContinentChange(country.continent)
       
-      // Charger les villes (pour maintenant, tableau vide)
-      const cityList: string[] = []
-      setCities(cityList)
-      console.log('Villes chargées:', cityList.length)
-      
-      // Réinitialiser la ville
+      // Réinitialiser la ville (callback vide si non utilisé)
       onCityChange('')
     }
-  }
-
-  // Quand la ville change
-  const handleCityChange = (city: string) => {
-    console.log('Ville sélectionnée:', city)
-    onCityChange(city)
   }
 
   return (
@@ -91,46 +79,6 @@ export function LocationSelectorSimple({
         </select>
       </div>
 
-      {/* City Selection */}
-      {selectedCountryCode && cities.length > 0 && (
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
-            <MapPin className="inline mr-2 h-4 w-4" />
-            {t('auth.register.city')} *
-          </label>
-          <select
-            value={selectedCity}
-            onChange={(e) => handleCityChange(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myhigh5-primary"
-            required
-          >
-            <option value="">{t('auth.register.city_placeholder')}</option>
-            {cities.map((city) => (
-              <option key={city} value={city}>
-                {city}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-
-      {/* Manual City Input if no cities available */}
-      {selectedCountryCode && cities.length === 0 && (
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
-            <MapPin className="inline mr-2 h-4 w-4" />
-            {t('auth.register.city')} *
-          </label>
-          <input
-            type="text"
-            value={selectedCity}
-            onChange={(e) => handleCityChange(e.target.value)}
-            placeholder={t('auth.register.city_placeholder')}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myhigh5-primary"
-            required
-          />
-        </div>
-      )}
     </div>
   )
 }

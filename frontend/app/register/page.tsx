@@ -26,7 +26,6 @@ export default function RegisterPage() {
     password: '',
     confirmPassword: '',
     country: '',
-    city: '',
     region: '',
     continent: ''
   })
@@ -151,14 +150,6 @@ export default function RegisterPage() {
     })
   }, [])
 
-  const handleCityChange = useCallback((city: string) => {
-    console.log('handleCityChange appelé avec:', city)
-    setFormData(prev => {
-      const newData = { ...prev, city }
-      console.log('FormData après handleCityChange:', newData)
-      return newData
-    })
-  }, [])
 
   const handleRegionChange = useCallback((region: string) => {
     console.log('handleRegionChange appelé avec:', region)
@@ -203,11 +194,7 @@ export default function RegisterPage() {
 
     if (!formData.country) {
       errors.country = true
-      errorMessage = t('auth.register.errors.location_required') || 'Veuillez sélectionner votre pays et votre ville'
-    }
-    if (!formData.city) {
-      errors.city = true
-      errorMessage = t('auth.register.errors.location_required') || 'Veuillez sélectionner votre pays et votre ville'
+      errorMessage = t('auth.register.errors.location_required') || 'Veuillez sélectionner votre pays'
     }
 
     if (formData.password && formData.confirmPassword && formData.password !== formData.confirmPassword) {
@@ -287,7 +274,6 @@ export default function RegisterPage() {
         username: formData.username,
         password: formData.password,
         country: formData.country,
-        city: formData.city,
         region: formData.region,
         continent: formData.continent,
         sponsor_code: referralCode || undefined  // Passer le code de parrainage
@@ -646,13 +632,12 @@ export default function RegisterPage() {
                 </div>
               </div>
 
-              {/* Country & City Selection */}
+              {/* Country Selection */}
               <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
                 <LocationSelectorSimple
                   selectedCountry={formData.country}
-                  selectedCity={formData.city}
                   onCountryChange={handleCountryChange}
-                  onCityChange={handleCityChange}
+                  onCityChange={() => {}} // Callback vide car on ne demande plus la ville
                   onRegionChange={handleRegionChange}
                   onContinentChange={handleContinentChange}
                 />

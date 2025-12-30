@@ -228,16 +228,21 @@ export function ContestCard({
     const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
     const diffSeconds = Math.floor((diffMs % (1000 * 60)) / 1000)
     
+    const daysUnit = t('dashboard.contests.time_unit_days') || 'j'
+    const hoursUnit = t('dashboard.contests.time_unit_hours') || 'h'
+    const minutesUnit = t('dashboard.contests.time_unit_minutes') || 'm'
+    const secondsUnit = t('dashboard.contests.time_unit_seconds') || 's'
+    
     if (diffDays > 0) {
-      return `${diffDays}j ${diffHours}h`
+      return `${diffDays}${daysUnit} ${diffHours}${hoursUnit}`
     } else if (diffHours > 0) {
-      return `${diffHours}h ${diffMinutes}m`
+      return `${diffHours}${hoursUnit} ${diffMinutes}${minutesUnit}`
     } else if (diffMinutes > 0) {
-      return `${diffMinutes}m ${diffSeconds}s`
+      return `${diffMinutes}${minutesUnit} ${diffSeconds}${secondsUnit}`
     } else if (diffSeconds > 0) {
-      return `${diffSeconds}s`
+      return `${diffSeconds}${secondsUnit}`
     } else {
-      return '0s'
+      return `0${secondsUnit}`
     }
   }
 
@@ -448,7 +453,7 @@ export function ContestCard({
                           <ShieldCheck className="w-5 h-5 text-emerald-300" />
                           <div>
                             <p className="text-emerald-300 font-medium text-sm">{t('dashboard.contests.kyc_required') || 'Identité vérifiée'}</p>
-                            <p className="text-gray-400 text-xs">{t('dashboard.contests.kyc_required_description') || 'KYC requis pour participer'}</p>
+                            <p className="text-gray-400 text-xs">{t('dashboard.contests.kyc_required_description') || 'Seuls les participants avec une identité vérifiée peuvent participer à ce concours'}</p>
                           </div>
                         </div>
                       )}
@@ -457,7 +462,7 @@ export function ContestCard({
                           <Eye className="w-5 h-5 text-blue-300" />
                           <div>
                             <p className="text-blue-300 font-medium text-sm">{t('dashboard.contests.visual_verification') || 'Photo de vous'}</p>
-                            <p className="text-gray-400 text-xs">{t('dashboard.contests.visual_verification_description') || 'Vérification visuelle requise'}</p>
+                            <p className="text-gray-400 text-xs">{t('dashboard.contests.visual_verification_description') || 'Une photo de vous est obligatoire pour participer à ce concours'}</p>
                           </div>
                         </div>
                       )}
@@ -466,7 +471,7 @@ export function ContestCard({
                           <Mic className="w-5 h-5 text-purple-300" />
                           <div>
                             <p className="text-purple-300 font-medium text-sm">{t('dashboard.contests.voice_verification') || 'Vérification vocale'}</p>
-                            <p className="text-gray-400 text-xs">{t('dashboard.contests.voice_verification_description') || 'Vérification vocale requise'}</p>
+                            <p className="text-gray-400 text-xs">{t('dashboard.contests.voice_verification_description') || 'Une vérification vocale est obligatoire pour participer à ce concours'}</p>
                           </div>
                         </div>
                       )}
@@ -475,7 +480,7 @@ export function ContestCard({
                           <Trophy className="w-5 h-5 text-amber-300" />
                           <div>
                             <p className="text-amber-300 font-medium text-sm">{t('dashboard.contests.brand_verification') || 'Marque vérifiée'}</p>
-                            <p className="text-gray-400 text-xs">{t('dashboard.contests.brand_verification_description') || 'Marque vérifiée requise'}</p>
+                            <p className="text-gray-400 text-xs">{t('dashboard.contests.brand_verification_description') || 'Seules les marques vérifiées peuvent participer à ce concours'}</p>
                           </div>
                         </div>
                       )}
@@ -484,7 +489,7 @@ export function ContestCard({
                           <FileCheck className="w-5 h-5 text-cyan-300" />
                           <div>
                             <p className="text-cyan-300 font-medium text-sm">{t('dashboard.contests.content_verification') || 'Contenu original'}</p>
-                            <p className="text-gray-400 text-xs">{t('dashboard.contests.content_verification_description') || 'Contenu original requis'}</p>
+                            <p className="text-gray-400 text-xs">{t('dashboard.contests.content_verification_description') || 'Seul le contenu original est autorisé pour participer à ce concours'}</p>
                           </div>
                         </div>
                       )}
@@ -497,7 +502,11 @@ export function ContestCard({
                                 ? (t('dashboard.contests.female_only') || 'Femmes uniquement') 
                                 : (t('dashboard.contests.male_only') || 'Hommes uniquement')}
                             </p>
-                            <p className="text-gray-400 text-xs">{t('dashboard.contests.gender_restriction') || 'Restriction de genre'}</p>
+                            <p className="text-gray-400 text-xs">
+                              {genderRestriction === 'female'
+                                ? (t('dashboard.contests.gender_restriction_female_description') || 'Seules les participantes féminines sont autorisées à participer à ce concours')
+                                : (t('dashboard.contests.gender_restriction_male_description') || 'Seuls les participants masculins sont autorisés à participer à ce concours')}
+                            </p>
                           </div>
                         </div>
                       )}
@@ -513,7 +522,7 @@ export function ContestCard({
                                   : `< ${maxAge} ${t('dashboard.contests.years') || 'ans'}`
                               }
                             </p>
-                            <p className="text-gray-400 text-xs">{t('dashboard.contests.age_restriction') || 'Restriction d\'âge'}</p>
+                            <p className="text-gray-400 text-xs">{t('dashboard.contests.age_restriction_description') || 'Seuls les participants dans la tranche d\'âge spécifiée peuvent participer'}</p>
                           </div>
                         </div>
                       )}
