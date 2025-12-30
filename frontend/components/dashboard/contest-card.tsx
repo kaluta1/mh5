@@ -664,26 +664,6 @@ export function ContestCard({
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
-          {/* KYC Requirement - next to votes */}
-          {requiresKyc && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className="flex items-center gap-1 text-emerald-400 cursor-help">
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                    <span className="text-emerald-400 font-semibold text-sm">
-                      {t('dashboard.contests.kyc_required') || 'KYC'}
-                    </span>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent className="bg-gray-800 text-white border-gray-700">
-                  <p className="text-xs">
-                    {t('dashboard.contests.kyc_required_description') || 'Seuls les participants avec une identité vérifiée peuvent participer à ce concours'}
-                  </p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
         </div>
 
         {/* Action Button - Always visible */}
