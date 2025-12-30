@@ -306,8 +306,31 @@ export function ContestCard({
           </div>
         )}
 
-        {/* Info button - top right */}
-        <div className="absolute top-3 right-3 z-10" onClick={(e) => e.stopPropagation()}>
+        {/* KYC badge on cover image - top right */}
+        {requiresKyc && (
+          <div className="absolute top-3 right-3 z-10" onClick={(e) => e.stopPropagation()}>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-1 bg-emerald-500/90 backdrop-blur-md rounded-full px-2 py-1 border border-emerald-400/50 shadow-lg cursor-help">
+                    <ShieldCheck className="w-3 h-3 text-white" />
+                    <span className="text-white text-[10px] font-semibold whitespace-nowrap">
+                      {t('dashboard.contests.kyc_required') || 'KYC'}
+                    </span>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent className="bg-gray-800 text-white border-gray-700">
+                  <p className="text-xs">
+                    {t('dashboard.contests.kyc_required_description') || 'Seuls les participants avec une identité vérifiée peuvent participer à ce concours'}
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+        )}
+
+        {/* Info button - top right (or top left if KYC is shown) */}
+        <div className={`absolute ${requiresKyc ? 'top-3 left-3' : 'top-3 right-3'} z-10`} onClick={(e) => e.stopPropagation()}>
           <Dialog open={showInfoDialog} onOpenChange={setShowInfoDialog}>
             <TooltipProvider>
               <Tooltip>
@@ -565,24 +588,6 @@ export function ContestCard({
               </Tooltip>
             </TooltipProvider>
           )}
-          {/* KYC Requirement */}
-          {requiresKyc && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="flex items-center gap-1 bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full text-[10px] font-semibold border border-emerald-500/30 whitespace-nowrap cursor-help">
-                    <ShieldCheck className="w-3 h-3" />
-                    {t('dashboard.contests.kyc_required') || 'KYC requis'}
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent className="bg-gray-800 text-white border-gray-700">
-                  <p className="text-xs">
-                    {t('dashboard.contests.kyc_required_description') || 'Seuls les participants avec une identité vérifiée peuvent participer à ce concours'}
-                  </p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -659,6 +664,26 @@ export function ContestCard({
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
+          {/* KYC Requirement - next to votes */}
+          {requiresKyc && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-1 text-emerald-400 cursor-help">
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span className="text-emerald-400 font-semibold text-sm">
+                      {t('dashboard.contests.kyc_required') || 'KYC'}
+                    </span>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent className="bg-gray-800 text-white border-gray-700">
+                  <p className="text-xs">
+                    {t('dashboard.contests.kyc_required_description') || 'Seuls les participants avec une identité vérifiée peuvent participer à ce concours'}
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
         </div>
 
         {/* Action Button - Always visible */}
