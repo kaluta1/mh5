@@ -57,6 +57,7 @@ export default function ContestsPage() {
   const [showAuthDialog, setShowAuthDialog] = useState(false)
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [selectedContestId, setSelectedContestId] = useState<string | null>(null)
+  const [shouldGoToParticipate, setShouldGoToParticipate] = useState(false)
 
   // Extraire les types de contests disponibles depuis les données du backend
   const contestTypes = React.useMemo(() => {
@@ -217,12 +218,23 @@ export default function ContestsPage() {
     )
   }
 
-  // Show auth dialog if not authenticated, otherwise go to contest
+  // Show auth dialog if not authenticated, otherwise go to contest details
   const handleContestClick = (contestId: string) => {
     if (isAuthenticated) {
       router.push(`/dashboard/contests/${contestId}`)
     } else {
       setSelectedContestId(contestId)
+      setShowAuthDialog(true)
+    }
+  }
+
+  // Handle participation/nomination click - redirect to participate page
+  const handleParticipateClick = (contestId: string) => {
+    if (isAuthenticated) {
+      router.push(`/dashboard/contests/${contestId}/participate`)
+    } else {
+      setSelectedContestId(contestId)
+      setShouldGoToParticipate(true)
       setShowAuthDialog(true)
     }
   }
@@ -241,7 +253,13 @@ export default function ContestsPage() {
   const handleLoginSuccess = () => {
     setShowLoginModal(false)
     if (selectedContestId) {
-      router.push(`/dashboard/contests/${selectedContestId}`)
+      if (shouldGoToParticipate) {
+        router.push(`/dashboard/contests/${selectedContestId}/participate`)
+        setShouldGoToParticipate(false)
+      } else {
+        router.push(`/dashboard/contests/${selectedContestId}`)
+      }
+      setSelectedContestId(null)
     }
   }
 
@@ -500,7 +518,7 @@ export default function ContestsPage() {
                   isFavorite={favorites.includes(contest.id)}
                   onToggleFavorite={() => handleToggleFavorite(contest.id)}
                   onViewContestants={() => handleContestClick(contest.id)}
-                  onParticipate={() => handleContestClick(contest.id)}
+                  onParticipate={() => handleParticipateClick(contest.id)}
                   onOpenDetails={() => handleContestClick(contest.id)}
                 />
               ))}

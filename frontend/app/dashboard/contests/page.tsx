@@ -36,7 +36,16 @@ export default function ContestsPage() {
   const [showMobileAlert, setShowMobileAlert] = useState(true)
   const [activeTab, setActiveTab] = useState<string>('all')
   const [showSuggestDialog, setShowSuggestDialog] = useState(false)
-  const [categoryTab, setCategoryTab] = useState<'nomination' | 'participations'>('participations')
+  // Restaurer l'onglet depuis localStorage ou utiliser 'participations' par défaut
+  const [categoryTab, setCategoryTab] = useState<'nomination' | 'participations'>(() => {
+    if (typeof window !== 'undefined') {
+      const savedTab = localStorage.getItem('contests_category_tab')
+      if (savedTab === 'nomination' || savedTab === 'participations') {
+        return savedTab as 'nomination' | 'participations'
+      }
+    }
+    return 'participations'
+  })
   const [sortBy, setSortBy] = useState<string>('participants') // participants, votes, date, name
   const ITEMS_PER_PAGE = 9
   const observerTarget = React.useRef(null)
@@ -94,6 +103,13 @@ export default function ContestsPage() {
       isMountedRef.current = false
     }
   }, [])
+
+  // Sauvegarder l'onglet dans localStorage quand il change
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('contests_category_tab', categoryTab)
+    }
+  }, [categoryTab])
 
   // Charger les contests et les favoris
   useEffect(() => {

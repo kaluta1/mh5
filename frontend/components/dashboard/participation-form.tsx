@@ -260,8 +260,10 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
 
     if (!description.trim()) {
       errors.push(t('participation.errors.content_description_required') || 'La description du contenu est requise')
-    } else if (description.trim().length > 20) {
-      errors.push(t('participation.errors.content_description_max_length') || 'La description du contenu ne doit pas dépasser 20 caractères')
+    } else if (description.trim().length < 20) {
+      errors.push(t('participation.errors.content_description_min_length') || 'La description du contenu doit contenir au moins 20 caractères')
+    } else if (description.trim().length > 50) {
+      errors.push(t('participation.errors.content_description_max_length') || 'La description du contenu ne doit pas dépasser 50 caractères')
     }
 
     // Pour les nominations, les images sont optionnelles
@@ -303,7 +305,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
 
   // Calculate errors
   const hasTitleError = title.trim().length > 0 && (title.trim().length < 5 || title.trim().length > 5)
-  const hasDescriptionError = description.trim().length > 0 && description.trim().length > 20
+  const hasDescriptionError = description.trim().length > 0 && (description.trim().length < 20 || description.trim().length > 50)
   // Pour les nominations, les images sont optionnelles
   const hasImageError = !isNomination && imageUrls.length === 0
   const hasVideoError = requiresVideo && !videoUrl
@@ -363,8 +365,8 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
         <textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder={t('participation.content_description_placeholder') || 'Enter content description (maximum 20 characters)'}
-          maxLength={20}
+          placeholder={t('participation.content_description_placeholder') || 'Enter content description (20-50 characters)'}
+          maxLength={50}
           rows={4}
           className={`w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 resize-none ${
             (!description.trim() || hasDescriptionError)
@@ -375,9 +377,11 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
         />
         <div className="flex items-center justify-between mt-2">
           <p className={`text-xs ${hasDescriptionError ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'}`}>
-            {description.length > 20 
-              ? `${t('participation.max_characters') || 'Maximum'} 20 ${t('participation.characters') || 'characters'} (${description.length}/20)`
-              : `${description.length}/20`
+            {description.length < 20 
+              ? `${t('participation.min_characters') || 'Minimum'} 20 ${t('participation.characters') || 'characters'} (${description.length}/20)`
+              : description.length > 50
+              ? `${t('participation.max_characters') || 'Maximum'} 50 ${t('participation.characters') || 'characters'} (${description.length}/50)`
+              : `${description.length}/50`
             }
           </p>
         </div>
@@ -388,7 +392,9 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
             <span>
               {!description.trim() 
                 ? t('participation.errors.content_description_required') || 'Content Description is required'
-                : t('participation.errors.content_description_max_length') || 'Content description must not exceed 20 characters'
+                : description.length < 20
+                ? t('participation.errors.content_description_min_length') || 'Content description must contain at least 20 characters'
+                : t('participation.errors.content_description_max_length') || 'Content description must not exceed 50 characters'
               }
             </span>
           </div>

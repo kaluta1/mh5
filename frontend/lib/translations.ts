@@ -343,12 +343,15 @@ export interface TranslationKeys {
     errors: {
       content_title_required: string
       content_title_min_length: string
+      content_title_max_length: string
       content_description_required: string
       content_description_min_length: string
+      content_description_max_length: string
       content_image_required: string
       at_least_one_image: string
       content_video_required: string
       video_required_for_contest: string
+      fill_all_fields: string
     }
   }
   features: {
@@ -2823,7 +2826,7 @@ export const translations: Record<Language, TranslationKeys> = {
       content_title: "Titre du contenu",
       content_title_placeholder: "Entrez le titre du contenu (minimum 10 caractères)",
       content_description: "Description du contenu",
-      content_description_placeholder: "Entrez la description du contenu (minimum 100 caractères)",
+      content_description_placeholder: "Entrez la description du contenu (20-50 caractères)",
       content_image: "Image du contenu",
       content_video_required: "Vidéo du contenu *",
       content_video_optional: "Vidéo du contenu (optionnel)",
@@ -2832,13 +2835,16 @@ export const translations: Record<Language, TranslationKeys> = {
       // Errors
       errors: {
         content_title_required: "Titre du contenu",
-        content_title_min_length: "Le titre du contenu doit contenir au moins 10 caractères",
+        content_title_min_length: "Le titre du contenu doit contenir au moins 5 caractères",
+        content_title_max_length: "Le titre du contenu ne doit pas dépasser 5 caractères",
         content_description_required: "Description du contenu",
-        content_description_min_length: "La description du contenu doit contenir au moins 100 caractères",
+        content_description_min_length: "La description du contenu doit contenir au moins 20 caractères",
+        content_description_max_length: "La description du contenu ne doit pas dépasser 50 caractères",
         content_image_required: "Image du contenu",
         at_least_one_image: "Au moins une image est requise",
         content_video_required: "Vidéo du contenu",
-        video_required_for_contest: "Une vidéo est requise pour ce concours"
+        video_required_for_contest: "Une vidéo est requise pour ce concours",
+        fill_all_fields: "Veuillez remplir tous les champs requis avant de soumettre"
       }
     },
     moderation: {
@@ -4994,7 +5000,7 @@ export const translations: Record<Language, TranslationKeys> = {
       content_title: "Content Title",
       content_title_placeholder: "Enter content title (minimum 10 characters)",
       content_description: "Content Description",
-      content_description_placeholder: "Enter content description (minimum 100 characters)",
+      content_description_placeholder: "Enter content description (20-50 characters)",
       content_image: "Content Image",
       content_video_required: "Content Video *",
       content_video_optional: "Content Video (optional)",
@@ -5003,13 +5009,16 @@ export const translations: Record<Language, TranslationKeys> = {
       // Errors
       errors: {
         content_title_required: "Content Title",
-        content_title_min_length: "Content title must contain at least 10 characters",
+        content_title_min_length: "Content title must contain at least 5 characters",
+        content_title_max_length: "Content title must not exceed 5 characters",
         content_description_required: "Content Description",
-        content_description_min_length: "Content description must contain at least 100 characters",
+        content_description_min_length: "Content description must contain at least 20 characters",
+        content_description_max_length: "Content description must not exceed 50 characters",
         content_image_required: "Content Image",
         at_least_one_image: "At least one image is required",
         content_video_required: "Content Video",
-        video_required_for_contest: "A video is required for this contest"
+        video_required_for_contest: "A video is required for this contest",
+        fill_all_fields: "Please fill in all required fields before submitting"
       }
     },
     moderation: {
@@ -7235,7 +7244,7 @@ export const translations: Record<Language, TranslationKeys> = {
       content_title: "Título del Contenido",
       content_title_placeholder: "Ingrese el título del contenido (mínimo 10 caracteres)",
       content_description: "Descripción del Contenido",
-      content_description_placeholder: "Ingrese la descripción del contenido (mínimo 100 caracteres)",
+      content_description_placeholder: "Ingrese la descripción del contenido (20-50 caracteres)",
       content_image: "Imagen del Contenido",
       content_video_required: "Video del Contenido *",
       content_video_optional: "Video del Contenido (opcional)",
@@ -7244,13 +7253,16 @@ export const translations: Record<Language, TranslationKeys> = {
       // Errors
       errors: {
         content_title_required: "Título del Contenido",
-        content_title_min_length: "El título del contenido debe contener al menos 10 caracteres",
+        content_title_min_length: "El título del contenido debe contener al menos 5 caracteres",
+        content_title_max_length: "El título del contenido no debe exceder 5 caracteres",
         content_description_required: "Descripción del Contenido",
-        content_description_min_length: "La descripción del contenido debe contener al menos 100 caracteres",
+        content_description_min_length: "La descripción del contenido debe contener al menos 20 caracteres",
+        content_description_max_length: "La descripción del contenido no debe exceder 50 caracteres",
         content_image_required: "Imagen del Contenido",
         at_least_one_image: "Se requiere al menos una imagen",
         content_video_required: "Video del Contenido",
-        video_required_for_contest: "Se requiere un video para este concurso"
+        video_required_for_contest: "Se requiere un video para este concurso",
+        fill_all_fields: "Por favor complete todos los campos requeridos antes de enviar"
       }
     },
     moderation: {
@@ -9326,7 +9338,7 @@ export const translations: Record<Language, TranslationKeys> = {
       content_title: "Inhaltstitel",
       content_title_placeholder: "Geben Sie den Inhaltstitel ein (mindestens 10 Zeichen)",
       content_description: "Inhaltsbeschreibung",
-      content_description_placeholder: "Geben Sie die Inhaltsbeschreibung ein (mindestens 100 Zeichen)",
+      content_description_placeholder: "Geben Sie die Inhaltsbeschreibung ein (20-50 Zeichen)",
       content_image: "Inhaltsbild",
       content_video_required: "Inhaltsvideo *",
       content_video_optional: "Inhaltsvideo (optional)",
@@ -9335,13 +9347,16 @@ export const translations: Record<Language, TranslationKeys> = {
       // Errors
       errors: {
         content_title_required: "Inhaltstitel",
-        content_title_min_length: "Der Inhaltstitel muss mindestens 10 Zeichen enthalten",
+        content_title_min_length: "Der Inhaltstitel muss mindestens 5 Zeichen enthalten",
+        content_title_max_length: "Der Inhaltstitel darf nicht mehr als 5 Zeichen enthalten",
         content_description_required: "Inhaltsbeschreibung",
-        content_description_min_length: "Die Inhaltsbeschreibung muss mindestens 100 Zeichen enthalten",
+        content_description_min_length: "Die Inhaltsbeschreibung muss mindestens 20 Zeichen enthalten",
+        content_description_max_length: "Die Inhaltsbeschreibung darf nicht mehr als 50 Zeichen enthalten",
         content_image_required: "Inhaltsbild",
         at_least_one_image: "Mindestens ein Bild ist erforderlich",
         content_video_required: "Inhaltsvideo",
-        video_required_for_contest: "Ein Video ist für diesen Wettbewerb erforderlich"
+        video_required_for_contest: "Ein Video ist für diesen Wettbewerb erforderlich",
+        fill_all_fields: "Bitte füllen Sie alle erforderlichen Felder aus, bevor Sie absenden"
       }
     },
     moderation: {
