@@ -114,6 +114,9 @@ class User(Base):
     # Rôle unique de l'utilisateur
     role_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("roles.id"), nullable=True)
     role: Mapped[Optional["Role"]] = relationship("Role", back_populates="users")
+    
+    # Logs de connexion
+    login_logs: Mapped[List["LoginLog"]] = relationship("LoginLog", back_populates="user", cascade="all, delete-orphan")
     medias: Mapped[List["Media"]] = relationship("Media", back_populates="user")
     
     # Relations concours

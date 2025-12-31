@@ -25,6 +25,8 @@ from .social_group import SocialGroup, GroupMember, GroupJoinRequest, GroupMessa
 from .feed import Feed
 from .private_message import PrivateConversation, ConversationParticipant, PrivateMessage, PrivateMessageReadReceipt, GroupInvitation, ConversationType, PrivateMessageStatus
 from .contact_message import ContactMessage
+from .newsletter import NewsletterSubscription
+from .login_log import LoginLog
 
 __all__ = [
     "User", "Role", "Permission", "role_permissions", "UserTransaction", "Wallet",
@@ -51,4 +53,6 @@ __all__ = [
     "Feed",
     "PrivateConversation", "ConversationParticipant", "PrivateMessage", "PrivateMessageReadReceipt", "GroupInvitation", "ConversationType", "PrivateMessageStatus",
     "ContactMessage",
+    "NewsletterSubscription",
+    "LoginLog",
 ]

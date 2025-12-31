@@ -23,6 +23,11 @@ from app.db.session import get_db
 from app.crud import user as crud_user
 from app.api.deps import get_current_active_user
 from app.services.email import email_service
+from app.crud.crud_login_log import crud_login_log
+from app.services.device_location import extract_login_info, get_location_info
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -128,10 +133,69 @@ def verify_email(
     
     return {"message": "Email vérifié avec succès", "email": email}
 
+def log_login_attempt(
+    db: Session,
+    user_id: int,
+    request: Request,
+    is_successful: bool = True,
+    failure_reason: Optional[str] = None
+):
+    """Enregistrer une tentative de connexion dans les logs"""
+    try:
+        # Extraire les informations de base (synchrone)
+        login_info = extract_login_info(request)
+        
+        # Pour la localisation, on essaie de la récupérer mais on ne bloque pas si ça échoue
+        location_info = {}
+        try:
+            # Utiliser asyncio pour récupérer la localisation
+            import asyncio
+            try:
+                # Essayer de récupérer la boucle d'événements existante
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # Si on est déjà dans une boucle, on ne peut pas utiliser run_until_complete
+                    # On laisse location_info vide et on continue (la géolocalisation est optionnelle)
+                    pass
+                else:
+                    location_info = loop.run_until_complete(
+                        get_location_info(request, login_info.get("ip_address"))
+                    )
+            except RuntimeError:
+                # Pas de boucle d'événements, créer une nouvelle
+                try:
+                    location_info = asyncio.run(
+                        get_location_info(request, login_info.get("ip_address"))
+                    )
+                except:
+                    pass
+        except Exception as e:
+            logger.warning(f"Impossible de récupérer la localisation: {e}")
+        
+        # Créer le log
+        crud_login_log.create(
+            db,
+            obj_in={
+                "user_id": user_id,
+                "ip_address": login_info.get("ip_address"),
+                "user_agent": login_info.get("user_agent"),
+                "device_info": login_info.get("device_info"),
+                "location_info": location_info,
+                "is_successful": is_successful,
+                "failure_reason": failure_reason
+            }
+        )
+    except Exception as e:
+        # Ne pas faire échouer la connexion si le logging échoue
+        logger.error(f"Erreur lors de l'enregistrement du log de connexion: {e}")
+
+
 @router.post("/login", response_model=Token)
 def login_access_token(
     db: Session = Depends(get_db),
-    form_data: OAuth2PasswordRequestForm = Depends()
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    request: Request = None,
+    background_tasks: BackgroundTasks = None
 ) -> Any:
     """
     OAuth2 compatible token login, obtenir un access token pour les futures requêtes.
@@ -139,12 +203,46 @@ def login_access_token(
     user = crud_user.authenticate(
         db, email_or_username=form_data.username, password=form_data.password
     )
+    
     if not user:
+        # Enregistrer la tentative de connexion échouée
+        if request and background_tasks:
+            background_tasks.add_task(
+                log_login_attempt,
+                db=db,
+                user_id=0,  # Pas d'utilisateur pour un échec
+                request=request,
+                is_successful=False,
+                failure_reason="Email/Username ou mot de passe incorrect"
+            )
+        elif request:
+            # Si pas de background_tasks, essayer de logger directement (peut être lent)
+            try:
+                log_login_attempt(db, 0, request, False, "Email/Username ou mot de passe incorrect")
+            except:
+                pass
+        
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Email/Username ou mot de passe incorrect.",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    
+    # Enregistrer la connexion réussie en arrière-plan
+    if request and background_tasks:
+        background_tasks.add_task(
+            log_login_attempt,
+            db=db,
+            user_id=user.id,
+            request=request,
+            is_successful=True
+        )
+    elif request:
+        # Si pas de background_tasks, logger directement (peut être lent)
+        try:
+            log_login_attempt(db, user.id, request, True)
+        except:
+            pass
     
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     return {

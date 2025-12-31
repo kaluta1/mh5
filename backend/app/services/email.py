@@ -1,5 +1,5 @@
 """
-Service d'envoi d'emails pour MYHIGH5 via Resend API
+Service d'envoi d'emails pour MyHigh5 via Resend API
 """
 import resend
 from typing import Optional, List
@@ -16,7 +16,8 @@ from app.services.email_templates import (
     get_kyc_approved_email,
     get_kyc_rejected_email,
     get_commission_email,
-    get_contact_confirmation_email
+    get_contact_confirmation_email,
+    get_newsletter_subscription_email
 )
 
 logger = logging.getLogger(__name__)
@@ -241,6 +242,18 @@ class EmailService:
             lang, name, subject, category, message
         )
         return self.send_email(to_email, subject_email, html_content, text_content)
+    
+    def send_newsletter_subscription_email(
+        self,
+        to_email: str,
+        lang: str = "en",
+        unsubscribe_url: Optional[str] = None
+    ) -> bool:
+        """Send newsletter subscription confirmation email"""
+        subject, html_content, text_content = get_newsletter_subscription_email(
+            lang, unsubscribe_url
+        )
+        return self.send_email(to_email, subject, html_content, text_content)
 
 
 # Instance singleton

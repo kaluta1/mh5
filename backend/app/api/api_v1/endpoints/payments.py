@@ -633,7 +633,7 @@ async def get_invoice(
     <body>
         <div class="invoice">
             <div class="header">
-                <div class="logo">MYHIGH5</div>
+                <div class="logo">MyHigh5</div>
                 <div class="invoice-info">
                     <h2>{t["invoice"]}</h2>
                     <p>{t["invoice_number"]} {deposit.id:06d}</p>
@@ -650,7 +650,7 @@ async def get_invoice(
                 </div>
                 <div class="party">
                     <h3>{t["issuer"]}</h3>
-                    <p><strong>MYHIGH5</strong></p>
+                    <p><strong>MyHigh5</strong></p>
                     <p>{t["online_services"]}</p>
                     <p>infos@myhigh5.com</p>
                 </div>

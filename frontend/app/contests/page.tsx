@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Header } from "@/components/layout/header"
 import { Footer } from "@/components/sections/footer"
@@ -9,10 +9,11 @@ import { ContestCard } from "@/components/dashboard/contest-card"
 import { contestService, Contest, ContestResponse } from "@/services/contest-service"
 import { useLanguage } from "@/contexts/language-context"
 import { useAuth } from "@/hooks/use-auth"
-import { Search, Trophy, Globe, MapPin, Users, Flame, Building2, Flag, Globe2, Lock, LogIn, UserPlus } from "lucide-react"
+import { Search, Trophy, Globe, MapPin, Users, Flame, Building2, Flag, Globe2, Lock, LogIn, UserPlus, ArrowUpDown } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Skeleton, SkeletonButton } from "@/components/ui/skeleton"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
@@ -44,15 +45,55 @@ export default function ContestsPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user, isAuthenticated } = useAuth()
-  const [contests, setContests] = useState<Contest[]>([])
+  const [allContests, setAllContests] = useState<Contest[]>([])
   const [filteredContests, setFilteredContests] = useState<Contest[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [searchQuery, setSearchQuery] = useState("")
-  const [selectedFilter, setSelectedFilter] = useState<string>("all")
+  const [searchTerm, setSearchTerm] = useState("") // Terme de recherche dans l'input
+  const [activeSearchTerm, setActiveSearchTerm] = useState("") // Terme de recherche actif (utilisé pour l'API)
+  const [categoryTab, setCategoryTab] = useState<'nomination' | 'participations'>('participations')
+  const [activeTab, setActiveTab] = useState<string>('all')
+  const [sortBy, setSortBy] = useState<string>('participants') // participants, votes, date, name
   const [favorites, setFavorites] = useState<string[]>([])
   const [showAuthDialog, setShowAuthDialog] = useState(false)
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [selectedContestId, setSelectedContestId] = useState<string | null>(null)
+
+  // Extraire les types de contests disponibles depuis les données du backend
+  const contestTypes = React.useMemo(() => {
+    const types = new Set<string>()
+    
+    // Parcourir tous les contests pour extraire les types uniques
+    allContests.forEach(contest => {
+      if (contest.contestType) {
+        types.add(contest.contestType)
+      }
+    })
+    
+    // Créer la liste des types avec "Tout" en premier
+    const typeList: Array<{ id: string, label: string, value: string | null }> = [
+      { id: 'all', label: t('dashboard.contests.all') || 'Tout', value: null }
+    ]
+    
+    // Ajouter chaque type unique trouvé
+    Array.from(types).sort().forEach(type => {
+      // Normaliser le type en minuscules pour la traduction
+      const normalizedType = type.toLowerCase()
+      // Chercher la traduction avec le type normalisé
+      const translationKey = `dashboard.contests.contest_type.${normalizedType}`
+      let label = t(translationKey)
+      
+      // Si pas de traduction trouvée (la fonction t retourne la clé si non trouvée)
+      // ou si le label contient "dashboard.contests.contest_type" (signe qu'il n'a pas été trouvé)
+      if (!label || label === translationKey || label.includes('dashboard.contests.contest_type')) {
+        // Utiliser le type original formaté
+        label = type.charAt(0).toUpperCase() + type.slice(1).replace(/_/g, ' ')
+      }
+      
+      typeList.push({ id: type, label, value: type })
+    })
+    
+    return typeList
+  }, [allContests, t])
 
   // Capturer le code de parrainage depuis l'URL
   useEffect(() => {
@@ -62,23 +103,80 @@ export default function ContestsPage() {
     }
   }, [searchParams])
 
+  // Charger les contests
   useEffect(() => {
     loadContests()
-  }, [])
+  }, [activeSearchTerm, categoryTab])
 
+  // Filtrer et trier les contests
   useEffect(() => {
-    filterContests()
-  }, [searchQuery, selectedFilter, contests])
+    if (allContests.length === 0) return
+    
+    // Filtrer par catégorie (Nomination ou Participations)
+    let categoryFiltered = allContests.filter(contest => {
+      if (categoryTab === 'nomination') {
+        return contest.votingType != null
+      } else {
+        return contest.votingType == null
+      }
+    })
+    
+    // Filtrer par type si un onglet est sélectionné (mais pas "all")
+    if (activeTab !== 'all') {
+      const selectedType = contestTypes.find(t => t.id === activeTab)
+      if (selectedType && selectedType.value) {
+        categoryFiltered = categoryFiltered.filter(contest => contest.contestType === selectedType.value)
+      }
+    }
+    
+    // La recherche est maintenant gérée côté backend, pas besoin de filtrer ici
+    
+    // Trier les contests selon l'option sélectionnée
+    const sortedContests = [...categoryFiltered].sort((a, b) => {
+      switch (sortBy) {
+        case 'participants':
+          if (b.contestants !== a.contestants) {
+            return b.contestants - a.contestants
+          }
+          return b.received - a.received
+        case 'votes':
+          if (b.received !== a.received) {
+            return b.received - a.received
+          }
+          return b.contestants - a.contestants
+        case 'date':
+          return new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
+        case 'name':
+          return a.title.localeCompare(b.title)
+        default:
+          if (b.contestants !== a.contestants) {
+            return b.contestants - a.contestants
+          }
+          return b.received - a.received
+      }
+    })
+    
+    setFilteredContests(sortedContests)
+  }, [allContests, categoryTab, activeTab, sortBy, contestTypes])
 
   const loadContests = async () => {
     try {
       setIsLoading(true)
-      const response = await contestService.getContests(0, 100)
+      // Pour l'onglet Nominations : filtrer les contests qui ont un voting_type (has_voting_type = true)
+      // Pour l'onglet Participations : filtrer les contests qui n'ont pas de voting_type (has_voting_type = false)
+      const hasVotingType = categoryTab === 'nomination' ? true : categoryTab === 'participations' ? false : undefined
+      const response = await contestService.getContests(
+        0, 
+        100,
+        activeSearchTerm || undefined,
+        undefined, // votingLevel n'est plus utilisé
+        undefined, // votingTypeId
+        hasVotingType
+      )
       const mappedContests = response.map((c: ContestResponse) => 
         contestService.mapResponseToContest(c)
       )
-      setContests(mappedContests)
-      setFilteredContests(mappedContests)
+      setAllContests(mappedContests)
     } catch (error) {
       console.error("Error loading contests:", error)
     } finally {
@@ -86,21 +184,30 @@ export default function ContestsPage() {
     }
   }
 
-  const filterContests = () => {
-    let filtered = [...contests]
-    
-    if (searchQuery) {
-      filtered = filtered.filter(c => 
-        c.title.toLowerCase().includes(searchQuery.toLowerCase())
-      )
+  // Fonction pour déclencher la recherche
+  const handleSearch = () => {
+    // Si la recherche est vide, réinitialiser pour afficher toute la liste
+    if (searchTerm.trim() === '') {
+      setActiveSearchTerm('')
+    } else {
+      setActiveSearchTerm(searchTerm)
     }
-    
-    if (selectedFilter !== "all") {
-      filtered = filtered.filter(c => c.status === selectedFilter)
-    }
-    
-    setFilteredContests(filtered)
   }
+
+  // Gérer l'appui sur Entrée dans l'input de recherche
+  const handleSearchKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handleSearch()
+    }
+  }
+
+  // Détecter quand la barre de recherche est vidée
+  useEffect(() => {
+    if (searchTerm === '' && activeSearchTerm !== '') {
+      // La barre de recherche a été vidée, réinitialiser la recherche active
+      setActiveSearchTerm('')
+    }
+  }, [searchTerm, activeSearchTerm])
 
   const handleToggleFavorite = (contestId: string) => {
     setFavorites(prev => 
@@ -138,19 +245,6 @@ export default function ContestsPage() {
     }
   }
 
-  const filters = [
-    { id: "all", label: t('pages.contests.filters.all') || "Tous", icon: Trophy, color: "bg-myhigh5-blue-600" },
-    { id: "city", label: t('pages.contests.filters.city') || "Ville", icon: Building2, color: "bg-myhigh5-cyan-500" },
-    { id: "country", label: t('pages.contests.filters.country') || "Pays", icon: Flag, color: "bg-myhigh5-blue-500" },
-    { id: "regional", label: t('pages.contests.filters.regional') || "Régional", icon: MapPin, color: "bg-myhigh5-cyan-600" },
-    { id: "continental", label: t('pages.contests.filters.continental') || "Continental", icon: Globe, color: "bg-myhigh5-primary" },
-    { id: "global", label: t('pages.contests.filters.global') || "Global", icon: Globe2, color: "bg-myhigh5-blue-800" },
-  ]
-
-  const getFilterCount = (filterId: string) => {
-    if (filterId === "all") return contests.length
-    return contests.filter(c => c.status === filterId).length
-  }
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900">
@@ -187,13 +281,13 @@ export default function ContestsPage() {
               <div className="grid grid-cols-3 gap-4 md:gap-6 max-w-2xl mx-auto">
                 <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-4 md:p-6 hover:bg-white/15 transition-all">
                   <Trophy className="w-8 h-8 mx-auto mb-2 text-amber-400" />
-                  <div className="text-3xl md:text-4xl font-black">{contests.length}</div>
+                  <div className="text-3xl md:text-4xl font-black">{allContests.length}</div>
                   <div className="text-xs md:text-sm opacity-80 mt-1">{t('pages.contests.stats.active') || "Concours actifs"}</div>
                 </div>
                 <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-4 md:p-6 hover:bg-white/15 transition-all">
                   <Users className="w-8 h-8 mx-auto mb-2 text-myhigh5-cyan-400" />
                   <div className="text-3xl md:text-4xl font-black">
-                    {contests.reduce((acc, c) => acc + c.contestants, 0).toLocaleString()}
+                    {allContests.reduce((acc, c) => acc + c.contestants, 0).toLocaleString()}
                   </div>
                   <div className="text-xs md:text-sm opacity-80 mt-1">{t('pages.contests.stats.participants') || "Participants"}</div>
                 </div>
@@ -210,44 +304,115 @@ export default function ContestsPage() {
         {/* Search & Filters */}
         <section className="container px-4 md:px-6 -mt-8 relative z-20">
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 border border-gray-100 dark:border-gray-700">
-            <div className="flex flex-col lg:flex-row gap-6">
-              {/* Search */}
-              <div className="relative flex-1">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <Input
-                  placeholder={t('pages.contests.search_placeholder') || "Rechercher un concours..."}
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-12 h-14 text-lg rounded-xl border-gray-200 dark:border-gray-600 focus:ring-2 focus:ring-myhigh5-primary/20"
-                />
-              </div>
-              
-              {/* Filter buttons */}
-              <div className="flex flex-wrap gap-2">
-                {filters.map((filter) => (
-                  <Button
-                    key={filter.id}
-                    variant={selectedFilter === filter.id ? "default" : "outline"}
-                    onClick={() => setSelectedFilter(filter.id)}
-                    className={`h-14 px-4 rounded-xl transition-all duration-200 ${
-                      selectedFilter === filter.id 
-                        ? `${filter.color} hover:opacity-90 text-white border-0 shadow-lg` 
-                        : "hover:bg-gray-50 dark:hover:bg-gray-700"
-                    }`}
-                  >
-                    <filter.icon className="w-4 h-4 mr-2" />
-                    <span className="font-medium">{filter.label}</span>
-                    <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${
-                      selectedFilter === filter.id 
-                        ? "bg-white/20" 
-                        : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
-                    }`}>
-                      {getFilterCount(filter.id)}
-                    </span>
-                  </Button>
-                ))}
+            {/* Barre d'onglets principaux (Nomination / Participations) */}
+            <div className="mb-6 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex space-x-1">
+                <button
+                  onClick={() => {
+                    setCategoryTab('nomination')
+                    setActiveTab('all')
+                  }}
+                  className={`px-6 py-3 text-base font-semibold transition-colors border-b-2 ${
+                    categoryTab === 'nomination'
+                      ? 'border-blue-500 text-blue-500'
+                      : 'border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+                  }`}
+                >
+                  {t('dashboard.contests.nomination') || 'Nomination'}
+                </button>
+                <button
+                  onClick={() => {
+                    setCategoryTab('participations')
+                    setActiveTab('all')
+                  }}
+                  className={`px-6 py-3 text-base font-semibold transition-colors border-b-2 ${
+                    categoryTab === 'participations'
+                      ? 'border-blue-500 text-blue-500'
+                      : 'border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+                  }`}
+                >
+                  {t('dashboard.contests.participations') || 'Participations'}
+                </button>
               </div>
             </div>
+            
+            {/* Hint explicatif pour l'onglet actif */}
+            <div className="mb-6 px-4 py-3 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg">
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                {categoryTab === 'nomination' 
+                  ? (t('dashboard.contests.nomination_hint') || 'Nominate others to enter into competitions. Vote for contestants who have been nominated by their fans.')
+                  : (t('dashboard.contests.participations_hint') || 'Participate yourself in competitions. Contestants sign up directly to compete.')}
+              </p>
+            </div>
+
+            <div className="flex flex-col lg:flex-row gap-6">
+              {/* Search */}
+              <div className="flex-1 flex gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                  <Input
+                    type="text"
+                    placeholder={t('dashboard.contests.search_placeholder') || 'Rechercher un concours...'}
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onKeyPress={handleSearchKeyPress}
+                    className="pl-10 h-14 text-lg rounded-xl border-gray-200 dark:border-gray-600 focus:ring-2 focus:ring-myhigh5-primary/20"
+                  />
+                </div>
+                <Button
+                  onClick={handleSearch}
+                  className="bg-blue-500 hover:bg-blue-600 text-white px-6 h-14 rounded-xl"
+                >
+                  <Search className="w-4 h-4 mr-2" />
+                  {t('dashboard.contests.search_button') || 'Rechercher'}
+                </Button>
+              </div>
+              
+              {/* Sélecteur de tri */}
+              <div className="w-full lg:w-48">
+                <Select value={sortBy} onValueChange={(value) => setSortBy(value)}>
+                  <SelectTrigger className="h-14 text-lg rounded-xl border-gray-200 dark:border-gray-600">
+                    <ArrowUpDown className="w-4 h-4 mr-2" />
+                    <SelectValue placeholder={t('dashboard.contests.sort') || 'Trier par'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="participants">
+                      {t('dashboard.contests.sort_participants') || 'Plus de participants'}
+                    </SelectItem>
+                    <SelectItem value="votes">
+                      {t('dashboard.contests.sort_votes') || 'Plus de votes'}
+                    </SelectItem>
+                    <SelectItem value="date">
+                      {t('dashboard.contests.sort_date') || 'Plus récent'}
+                    </SelectItem>
+                    <SelectItem value="name">
+                      {t('dashboard.contests.sort_name') || 'Nom (A-Z)'}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Barre d'onglets de navigation par type */}
+            {contestTypes.length > 1 && (
+              <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                <div className="flex space-x-1 overflow-x-auto scrollbar-hide">
+                  {contestTypes.map((type) => (
+                    <button
+                      key={type.id}
+                      onClick={() => setActiveTab(type.id)}
+                      className={`px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors border-b-2 ${
+                        activeTab === type.id
+                          ? 'border-blue-500 text-blue-500'
+                          : 'border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+                      }`}
+                    >
+                      {type.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </section>
 
@@ -257,9 +422,9 @@ export default function ContestsPage() {
           <div className="flex items-center justify-between mb-8">
             <div>
               <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">
-                {selectedFilter === "all" 
+                {activeTab === "all" 
                   ? t('pages.contests.all_contests') || "Tous les concours"
-                  : `${t('pages.contests.contests_filter') || "Concours"} ${filters.find(f => f.id === selectedFilter)?.label}`
+                  : `${t('pages.contests.contests_filter') || "Concours"} ${contestTypes.find(t => t.id === activeTab)?.label}`
                 }
               </h2>
               <p className="text-gray-500 dark:text-gray-400 mt-1">
@@ -288,8 +453,9 @@ export default function ContestsPage() {
               <Button 
                 variant="outline" 
                 onClick={() => {
-                  setSelectedFilter("all")
-                  setSearchQuery("")
+                  setActiveTab("all")
+                  setSearchTerm("")
+                  setActiveSearchTerm("")
                 }}
               >
                 {t('pages.contests.reset_filters') || "Réinitialiser les filtres"}
@@ -302,6 +468,7 @@ export default function ContestsPage() {
                   key={contest.id}
                   id={contest.id}
                   title={contest.title}
+                  description={contest.description}
                   coverImage={contest.coverImage}
                   startDate={contest.startDate}
                   status={contest.status}
@@ -315,10 +482,26 @@ export default function ContestsPage() {
                   participationStartDate={contest.participationStartDate}
                   participationEndDate={contest.participationEndDate}
                   votingStartDate={contest.votingStartDate}
+                  userGender={(user as any)?.gender as 'male' | 'female' | 'other' | 'prefer_not_to_say' | null | undefined}
+                  canParticipate={true}
+                  isKycVerified={user?.identity_verified || false}
+                  topContestants={contest.topContestants}
+                  requiresKyc={contest.requiresKyc}
+                  verificationType={contest.verificationType}
+                  participantType={contest.participantType}
+                  requiresVisualVerification={contest.requiresVisualVerification}
+                  requiresVoiceVerification={contest.requiresVoiceVerification}
+                  requiresBrandVerification={contest.requiresBrandVerification}
+                  requiresContentVerification={contest.requiresContentVerification}
+                  minAge={contest.minAge}
+                  maxAge={contest.maxAge}
+                  isNomination={categoryTab === 'nomination'}
+                  votingType={contest.votingType}
                   isFavorite={favorites.includes(contest.id)}
                   onToggleFavorite={() => handleToggleFavorite(contest.id)}
                   onViewContestants={() => handleContestClick(contest.id)}
                   onParticipate={() => handleContestClick(contest.id)}
+                  onOpenDetails={() => handleContestClick(contest.id)}
                 />
               ))}
             </div>

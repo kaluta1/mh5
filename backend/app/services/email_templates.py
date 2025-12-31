@@ -1,5 +1,5 @@
 """
-Email Templates with Multi-language Support for MYHIGH5
+Email Templates with Multi-language Support for MyHigh5
 """
 from typing import Optional
 
@@ -7,14 +7,14 @@ from typing import Optional
 EMAIL_TRANSLATIONS = {
     "fr": {
         # Common
-        "company_name": "MYHIGH5",
+        "company_name": "MyHigh5",
         "support_email": "infos@myhigh5.com",
         "all_rights_reserved": "Tous droits réservés",
         "ignore_email": "Si vous n'avez pas demandé cet email, vous pouvez l'ignorer.",
         
         # Welcome / Registration
-        "welcome_subject": "Bienvenue sur MYHIGH5 !",
-        "welcome_title": "Bienvenue sur MYHIGH5 !",
+        "welcome_subject": "Bienvenue sur MyHigh5 !",
+        "welcome_title": "Bienvenue sur MyHigh5 !",
         "welcome_message": "Nous sommes ravis de vous accueillir dans notre communauté. Votre compte a été créé avec succès.",
         "welcome_verify": "Pour activer votre compte, veuillez vérifier votre adresse email en cliquant sur le bouton ci-dessous.",
         "verify_email_button": "Vérifier mon email",
@@ -25,13 +25,13 @@ EMAIL_TRANSLATIONS = {
         "welcome_feature_4": "📈 Générez des revenus passifs",
         
         # Email Verification
-        "verify_subject": "Vérifiez votre adresse email - MYHIGH5",
+        "verify_subject": "Vérifiez votre adresse email - MyHigh5",
         "verify_title": "Vérification de votre email",
         "verify_message": "Cliquez sur le bouton ci-dessous pour vérifier votre adresse email.",
         "verify_expiry": "Ce lien expire dans 24 heures.",
         
         # Password Reset
-        "reset_subject": "Réinitialisation de votre mot de passe - MYHIGH5",
+        "reset_subject": "Réinitialisation de votre mot de passe - MyHigh5",
         "reset_title": "Réinitialisation du mot de passe",
         "reset_message": "Vous avez demandé à réinitialiser votre mot de passe. Cliquez sur le bouton ci-dessous pour créer un nouveau mot de passe.",
         "reset_button": "Réinitialiser mon mot de passe",
@@ -39,7 +39,7 @@ EMAIL_TRANSLATIONS = {
         "reset_ignore": "Si vous n'avez pas demandé cette réinitialisation, ignorez cet email. Votre mot de passe ne sera pas modifié.",
         
         # Password Change Security
-        "password_change_security_subject": "Alerte de sécurité - Changement de mot de passe - MYHIGH5",
+        "password_change_security_subject": "Alerte de sécurité - Changement de mot de passe - MyHigh5",
         "password_change_security_title": "Changement de mot de passe détecté",
         "password_change_security_message": "Votre mot de passe a été modifié avec succès. Si vous n'avez pas effectué cette modification, veuillez contacter immédiatement notre support.",
         "password_change_security_action": "Si vous avez effectué cette modification, vous pouvez ignorer cet email.",
@@ -50,14 +50,14 @@ EMAIL_TRANSLATIONS = {
         "password_change_security_unknown_location": "Localisation inconnue",
         
         # Invitation
-        "invitation_subject": "{inviter_name} vous invite à rejoindre MYHIGH5 !",
+        "invitation_subject": "{inviter_name} vous invite à rejoindre MyHigh5 !",
         "invitation_title": "Vous avez reçu une invitation !",
-        "invitation_message": "<strong style='color: #8B5CF6;'>{inviter_name}</strong> vous invite à rejoindre MYHIGH5, la plateforme où vous pouvez participer à des concours et gagner des prix incroyables !",
-        "invitation_button": "Rejoindre MYHIGH5",
+        "invitation_message": "<strong style='color: #8B5CF6;'>{inviter_name}</strong> vous invite à rejoindre MyHigh5, la plateforme où vous pouvez participer à des concours et gagner des prix incroyables !",
+        "invitation_button": "Rejoindre MyHigh5",
         "referral_code_label": "Votre code de parrainage :",
         
         # Payment Confirmation
-        "payment_subject": "Confirmation de paiement - MYHIGH5",
+        "payment_subject": "Confirmation de paiement - MyHigh5",
         "payment_title": "Paiement confirmé !",
         "payment_message": "Votre paiement de <strong>{amount}</strong> pour <strong>{product}</strong> a été confirmé avec succès.",
         "payment_reference": "Référence :",
@@ -65,33 +65,33 @@ EMAIL_TRANSLATIONS = {
         "payment_thank_you": "Merci pour votre confiance !",
         
         # KYC Verification
-        "kyc_approved_subject": "Vérification KYC approuvée - MYHIGH5",
+        "kyc_approved_subject": "Vérification KYC approuvée - MyHigh5",
         "kyc_approved_title": "Votre identité a été vérifiée !",
         "kyc_approved_message": "Félicitations ! Votre vérification d'identité (KYC) a été approuvée. Vous avez maintenant accès à toutes les fonctionnalités de la plateforme.",
         
-        "kyc_rejected_subject": "Vérification KYC refusée - MYHIGH5",
+        "kyc_rejected_subject": "Vérification KYC refusée - MyHigh5",
         "kyc_rejected_title": "Vérification KYC non approuvée",
         "kyc_rejected_message": "Malheureusement, votre vérification d'identité n'a pas été approuvée. Veuillez soumettre à nouveau vos documents.",
         "kyc_rejected_reason": "Raison :",
         
         # Commission
-        "commission_subject": "Nouvelle commission reçue - MYHIGH5",
+        "commission_subject": "Nouvelle commission reçue - MyHigh5",
         "commission_title": "Vous avez gagné une commission !",
         "commission_message": "Vous avez reçu une commission de <strong>{amount}</strong> grâce à l'activité de votre réseau.",
         "commission_type": "Type :",
         "commission_from": "Source :",
         
         # Contest
-        "contest_approved_subject": "Votre candidature a été approuvée - MYHIGH5",
+        "contest_approved_subject": "Votre candidature a été approuvée - MyHigh5",
         "contest_approved_title": "Candidature approuvée !",
         "contest_approved_message": "Votre candidature au concours <strong>{contest_name}</strong> a été approuvée. Bonne chance !",
         
-        "contest_rejected_subject": "Candidature refusée - MYHIGH5",
+        "contest_rejected_subject": "Candidature refusée - MyHigh5",
         "contest_rejected_title": "Candidature non approuvée",
         "contest_rejected_message": "Votre candidature au concours <strong>{contest_name}</strong> n'a pas été approuvée.",
         
         # Contestant Report
-        "contestant_report_subject": "Nouveau signalement de contestant - MYHIGH5",
+        "contestant_report_subject": "Nouveau signalement de contestant - MyHigh5",
         "contestant_report_title": "Signalement de contestant",
         "contestant_report_message": "Un nouveau signalement a été soumis pour un contestant.",
         "contestant_report_contestant": "Contestant signalé :",
@@ -103,7 +103,7 @@ EMAIL_TRANSLATIONS = {
         "contestant_report_view_button": "Voir le signalement",
         
         # Contact Confirmation
-        "contact_confirmation_subject": "Nous avons bien reçu votre message - MYHIGH5",
+        "contact_confirmation_subject": "Nous avons bien reçu votre message - MyHigh5",
         "contact_confirmation_title": "Message reçu !",
         "contact_confirmation_greeting": "Bonjour {name},",
         "contact_confirmation_message": "Nous avons bien reçu votre message et nous vous remercions de nous avoir contactés.",
@@ -113,17 +113,29 @@ EMAIL_TRANSLATIONS = {
         "contact_confirmation_category_label": "Catégorie :",
         "contact_confirmation_message_label": "Message :",
         "contact_confirmation_thank_you": "Merci pour votre patience !",
+        
+        # Newsletter Subscription
+        "newsletter_subscription_subject": "Bienvenue dans notre newsletter - MyHigh5",
+        "newsletter_subscription_title": "Merci de vous être abonné !",
+        "newsletter_subscription_message": "Vous vous êtes abonné avec succès à la newsletter MyHigh5. Vous recevrez désormais les dernières actualités, mises à jour et offres exclusives.",
+        "newsletter_subscription_what_you_get": "Ce que vous recevrez :",
+        "newsletter_subscription_benefit_1": "📧 Dernières annonces de concours",
+        "newsletter_subscription_benefit_2": "🏆 Offres et promotions exclusives",
+        "newsletter_subscription_benefit_3": "💡 Astuces pour maximiser vos gains",
+        "newsletter_subscription_benefit_4": "🎉 Événements spéciaux et compétitions",
+        "newsletter_subscription_unsubscribe": "Si vous ne souhaitez plus recevoir nos emails, vous pouvez vous désabonner à tout moment.",
+        "newsletter_subscription_unsubscribe_link": "Se désabonner",
     },
     "en": {
         # Common
-        "company_name": "MYHIGH5",
+        "company_name": "MyHigh5",
         "support_email": "infos@myhigh5.com",
         "all_rights_reserved": "All rights reserved",
         "ignore_email": "If you did not request this email, you can ignore it.",
         
         # Welcome / Registration
-        "welcome_subject": "Welcome to MYHIGH5!",
-        "welcome_title": "Welcome to MYHIGH5!",
+        "welcome_subject": "Welcome to MyHigh5!",
+        "welcome_title": "Welcome to MyHigh5!",
         "welcome_message": "We are delighted to welcome you to our community. Your account has been created successfully.",
         "welcome_verify": "To activate your account, please verify your email address by clicking the button below.",
         "verify_email_button": "Verify my email",
@@ -134,13 +146,13 @@ EMAIL_TRANSLATIONS = {
         "welcome_feature_4": "📈 Generate passive income",
         
         # Email Verification
-        "verify_subject": "Verify your email address - MYHIGH5",
+        "verify_subject": "Verify your email address - MyHigh5",
         "verify_title": "Email Verification",
         "verify_message": "Click the button below to verify your email address.",
         "verify_expiry": "This link expires in 24 hours.",
         
         # Password Reset
-        "reset_subject": "Password Reset - MYHIGH5",
+        "reset_subject": "Password Reset - MyHigh5",
         "reset_title": "Password Reset",
         "reset_message": "You requested to reset your password. Click the button below to create a new password.",
         "reset_button": "Reset my password",
@@ -148,7 +160,7 @@ EMAIL_TRANSLATIONS = {
         "reset_ignore": "If you did not request this reset, please ignore this email. Your password will not be changed.",
         
         # Password Change Security
-        "password_change_security_subject": "Security Alert - Password Changed - MYHIGH5",
+        "password_change_security_subject": "Security Alert - Password Changed - MyHigh5",
         "password_change_security_title": "Password Change Detected",
         "password_change_security_message": "Your password has been successfully changed. If you did not make this change, please contact our support immediately.",
         "password_change_security_action": "If you made this change, you can safely ignore this email.",
@@ -159,14 +171,14 @@ EMAIL_TRANSLATIONS = {
         "password_change_security_unknown_location": "Unknown location",
         
         # Invitation
-        "invitation_subject": "{inviter_name} invites you to join MYHIGH5!",
+        "invitation_subject": "{inviter_name} invites you to join MyHigh5!",
         "invitation_title": "You've received an invitation!",
-        "invitation_message": "<strong style='color: #8B5CF6;'>{inviter_name}</strong> invites you to join MYHIGH5, the platform where you can participate in contests and win amazing prizes!",
-        "invitation_button": "Join MYHIGH5",
+        "invitation_message": "<strong style='color: #8B5CF6;'>{inviter_name}</strong> invites you to join MyHigh5, the platform where you can participate in contests and win amazing prizes!",
+        "invitation_button": "Join MyHigh5",
         "referral_code_label": "Your referral code:",
         
         # Payment Confirmation
-        "payment_subject": "Payment Confirmation - MYHIGH5",
+        "payment_subject": "Payment Confirmation - MyHigh5",
         "payment_title": "Payment Confirmed!",
         "payment_message": "Your payment of <strong>{amount}</strong> for <strong>{product}</strong> has been successfully confirmed.",
         "payment_reference": "Reference:",
@@ -174,33 +186,33 @@ EMAIL_TRANSLATIONS = {
         "payment_thank_you": "Thank you for your trust!",
         
         # KYC Verification
-        "kyc_approved_subject": "KYC Verification Approved - MYHIGH5",
+        "kyc_approved_subject": "KYC Verification Approved - MyHigh5",
         "kyc_approved_title": "Your identity has been verified!",
         "kyc_approved_message": "Congratulations! Your identity verification (KYC) has been approved. You now have access to all platform features.",
         
-        "kyc_rejected_subject": "KYC Verification Rejected - MYHIGH5",
+        "kyc_rejected_subject": "KYC Verification Rejected - MyHigh5",
         "kyc_rejected_title": "KYC Verification Not Approved",
         "kyc_rejected_message": "Unfortunately, your identity verification was not approved. Please submit your documents again.",
         "kyc_rejected_reason": "Reason:",
         
         # Commission
-        "commission_subject": "New Commission Received - MYHIGH5",
+        "commission_subject": "New Commission Received - MyHigh5",
         "commission_title": "You've earned a commission!",
         "commission_message": "You received a commission of <strong>{amount}</strong> from your network's activity.",
         "commission_type": "Type:",
         "commission_from": "Source:",
         
         # Contest
-        "contest_approved_subject": "Your application has been approved - MYHIGH5",
+        "contest_approved_subject": "Your application has been approved - MyHigh5",
         "contest_approved_title": "Application Approved!",
         "contest_approved_message": "Your application for the contest <strong>{contest_name}</strong> has been approved. Good luck!",
         
-        "contest_rejected_subject": "Application Rejected - MYHIGH5",
+        "contest_rejected_subject": "Application Rejected - MyHigh5",
         "contest_rejected_title": "Application Not Approved",
         "contest_rejected_message": "Your application for the contest <strong>{contest_name}</strong> was not approved.",
         
         # Contestant Report
-        "contestant_report_subject": "New Contestant Report - MYHIGH5",
+        "contestant_report_subject": "New Contestant Report - MyHigh5",
         "contestant_report_title": "Contestant Report",
         "contestant_report_message": "A new report has been submitted for a contestant.",
         "contestant_report_contestant": "Reported Contestant:",
@@ -212,7 +224,7 @@ EMAIL_TRANSLATIONS = {
         "contestant_report_view_button": "View Report",
         
         # Contact Confirmation
-        "contact_confirmation_subject": "We have received your message - MYHIGH5",
+        "contact_confirmation_subject": "We have received your message - MyHigh5",
         "contact_confirmation_title": "Message received!",
         "contact_confirmation_greeting": "Hello {name},",
         "contact_confirmation_message": "We have received your message and thank you for contacting us.",
@@ -222,17 +234,29 @@ EMAIL_TRANSLATIONS = {
         "contact_confirmation_category_label": "Category:",
         "contact_confirmation_message_label": "Message:",
         "contact_confirmation_thank_you": "Thank you for your patience!",
+        
+        # Newsletter Subscription
+        "newsletter_subscription_subject": "Welcome to our newsletter - MyHigh5",
+        "newsletter_subscription_title": "Thank you for subscribing!",
+        "newsletter_subscription_message": "You have successfully subscribed to the MyHigh5 newsletter. You will now receive the latest news, updates, and exclusive offers.",
+        "newsletter_subscription_what_you_get": "What you'll receive:",
+        "newsletter_subscription_benefit_1": "📧 Latest contest announcements",
+        "newsletter_subscription_benefit_2": "🏆 Exclusive offers and promotions",
+        "newsletter_subscription_benefit_3": "💡 Tips and tricks to maximize your earnings",
+        "newsletter_subscription_benefit_4": "🎉 Special events and competitions",
+        "newsletter_subscription_unsubscribe": "If you no longer wish to receive our emails, you can unsubscribe at any time.",
+        "newsletter_subscription_unsubscribe_link": "Unsubscribe",
     },
     "es": {
         # Common
-        "company_name": "MYHIGH5",
+        "company_name": "MyHigh5",
         "support_email": "infos@myhigh5.com",
         "all_rights_reserved": "Todos los derechos reservados",
         "ignore_email": "Si no solicitó este correo electrónico, puede ignorarlo.",
         
         # Welcome / Registration
-        "welcome_subject": "¡Bienvenido a MYHIGH5!",
-        "welcome_title": "¡Bienvenido a MYHIGH5!",
+        "welcome_subject": "¡Bienvenido a MyHigh5!",
+        "welcome_title": "¡Bienvenido a MyHigh5!",
         "welcome_message": "Estamos encantados de darte la bienvenida a nuestra comunidad. Tu cuenta ha sido creada exitosamente.",
         "welcome_verify": "Para activar tu cuenta, verifica tu dirección de correo electrónico haciendo clic en el botón de abajo.",
         "verify_email_button": "Verificar mi email",
@@ -243,13 +267,13 @@ EMAIL_TRANSLATIONS = {
         "welcome_feature_4": "📈 Genera ingresos pasivos",
         
         # Email Verification
-        "verify_subject": "Verifica tu correo electrónico - MYHIGH5",
+        "verify_subject": "Verifica tu correo electrónico - MyHigh5",
         "verify_title": "Verificación de email",
         "verify_message": "Haz clic en el botón de abajo para verificar tu dirección de correo electrónico.",
         "verify_expiry": "Este enlace expira en 24 horas.",
         
         # Password Reset
-        "reset_subject": "Restablecimiento de contraseña - MYHIGH5",
+        "reset_subject": "Restablecimiento de contraseña - MyHigh5",
         "reset_title": "Restablecimiento de contraseña",
         "reset_message": "Solicitaste restablecer tu contraseña. Haz clic en el botón de abajo para crear una nueva contraseña.",
         "reset_button": "Restablecer mi contraseña",
@@ -257,7 +281,7 @@ EMAIL_TRANSLATIONS = {
         "reset_ignore": "Si no solicitaste este restablecimiento, ignora este correo. Tu contraseña no será modificada.",
         
         # Password Change Security
-        "password_change_security_subject": "Alerta de seguridad - Contraseña cambiada - MYHIGH5",
+        "password_change_security_subject": "Alerta de seguridad - Contraseña cambiada - MyHigh5",
         "password_change_security_title": "Cambio de contraseña detectado",
         "password_change_security_message": "Tu contraseña ha sido cambiada exitosamente. Si no realizaste este cambio, contacta inmediatamente a nuestro soporte.",
         "password_change_security_action": "Si realizaste este cambio, puedes ignorar este correo de forma segura.",
@@ -268,14 +292,14 @@ EMAIL_TRANSLATIONS = {
         "password_change_security_unknown_location": "Ubicación desconocida",
         
         # Invitation
-        "invitation_subject": "¡{inviter_name} te invita a unirte a MYHIGH5!",
+        "invitation_subject": "¡{inviter_name} te invita a unirte a MyHigh5!",
         "invitation_title": "¡Has recibido una invitación!",
-        "invitation_message": "<strong style='color: #8B5CF6;'>{inviter_name}</strong> te invita a unirte a MYHIGH5, la plataforma donde puedes participar en concursos y ganar premios increíbles!",
-        "invitation_button": "Unirse a MYHIGH5",
+        "invitation_message": "<strong style='color: #8B5CF6;'>{inviter_name}</strong> te invita a unirte a MyHigh5, la plataforma donde puedes participar en concursos y ganar premios increíbles!",
+        "invitation_button": "Unirse a MyHigh5",
         "referral_code_label": "Tu código de referido:",
         
         # Payment Confirmation
-        "payment_subject": "Confirmación de pago - MYHIGH5",
+        "payment_subject": "Confirmación de pago - MyHigh5",
         "payment_title": "¡Pago confirmado!",
         "payment_message": "Tu pago de <strong>{amount}</strong> por <strong>{product}</strong> ha sido confirmado exitosamente.",
         "payment_reference": "Referencia:",
@@ -283,33 +307,33 @@ EMAIL_TRANSLATIONS = {
         "payment_thank_you": "¡Gracias por tu confianza!",
         
         # KYC Verification
-        "kyc_approved_subject": "Verificación KYC aprobada - MYHIGH5",
+        "kyc_approved_subject": "Verificación KYC aprobada - MyHigh5",
         "kyc_approved_title": "¡Tu identidad ha sido verificada!",
         "kyc_approved_message": "¡Felicitaciones! Tu verificación de identidad (KYC) ha sido aprobada. Ahora tienes acceso a todas las funciones de la plataforma.",
         
-        "kyc_rejected_subject": "Verificación KYC rechazada - MYHIGH5",
+        "kyc_rejected_subject": "Verificación KYC rechazada - MyHigh5",
         "kyc_rejected_title": "Verificación KYC no aprobada",
         "kyc_rejected_message": "Lamentablemente, tu verificación de identidad no fue aprobada. Por favor, envía tus documentos nuevamente.",
         "kyc_rejected_reason": "Razón:",
         
         # Commission
-        "commission_subject": "Nueva comisión recibida - MYHIGH5",
+        "commission_subject": "Nueva comisión recibida - MyHigh5",
         "commission_title": "¡Has ganado una comisión!",
         "commission_message": "Recibiste una comisión de <strong>{amount}</strong> gracias a la actividad de tu red.",
         "commission_type": "Tipo:",
         "commission_from": "Fuente:",
         
         # Contest
-        "contest_approved_subject": "Tu candidatura ha sido aprobada - MYHIGH5",
+        "contest_approved_subject": "Tu candidatura ha sido aprobada - MyHigh5",
         "contest_approved_title": "¡Candidatura aprobada!",
         "contest_approved_message": "Tu candidatura al concurso <strong>{contest_name}</strong> ha sido aprobada. ¡Buena suerte!",
         
-        "contest_rejected_subject": "Candidatura rechazada - MYHIGH5",
+        "contest_rejected_subject": "Candidatura rechazada - MyHigh5",
         "contest_rejected_title": "Candidatura no aprobada",
         "contest_rejected_message": "Tu candidatura al concurso <strong>{contest_name}</strong> no fue aprobada.",
         
         # Contestant Report
-        "contestant_report_subject": "Nuevo reporte de concursante - MYHIGH5",
+        "contestant_report_subject": "Nuevo reporte de concursante - MyHigh5",
         "contestant_report_title": "Reporte de concursante",
         "contestant_report_message": "Se ha enviado un nuevo reporte para un concursante.",
         "contestant_report_contestant": "Concursante reportado:",
@@ -321,7 +345,7 @@ EMAIL_TRANSLATIONS = {
         "contestant_report_view_button": "Ver reporte",
         
         # Contact Confirmation
-        "contact_confirmation_subject": "Hemos recibido su mensaje - MYHIGH5",
+        "contact_confirmation_subject": "Hemos recibido su mensaje - MyHigh5",
         "contact_confirmation_title": "¡Mensaje recibido!",
         "contact_confirmation_greeting": "Hola {name},",
         "contact_confirmation_message": "Hemos recibido su mensaje y le agradecemos por contactarnos.",
@@ -331,17 +355,29 @@ EMAIL_TRANSLATIONS = {
         "contact_confirmation_category_label": "Categoría:",
         "contact_confirmation_message_label": "Mensaje:",
         "contact_confirmation_thank_you": "¡Gracias por su paciencia!",
+        
+        # Newsletter Subscription
+        "newsletter_subscription_subject": "Bienvenido a nuestro boletín - MyHigh5",
+        "newsletter_subscription_title": "¡Gracias por suscribirse!",
+        "newsletter_subscription_message": "Se ha suscrito exitosamente al boletín de MyHigh5. Ahora recibirá las últimas noticias, actualizaciones y ofertas exclusivas.",
+        "newsletter_subscription_what_you_get": "Lo que recibirá:",
+        "newsletter_subscription_benefit_1": "📧 Últimos anuncios de concursos",
+        "newsletter_subscription_benefit_2": "🏆 Ofertas y promociones exclusivas",
+        "newsletter_subscription_benefit_3": "💡 Consejos para maximizar sus ganancias",
+        "newsletter_subscription_benefit_4": "🎉 Eventos especiales y competiciones",
+        "newsletter_subscription_unsubscribe": "Si ya no desea recibir nuestros correos electrónicos, puede cancelar su suscripción en cualquier momento.",
+        "newsletter_subscription_unsubscribe_link": "Cancelar suscripción",
     },
     "de": {
         # Common
-        "company_name": "MYHIGH5",
+        "company_name": "MyHigh5",
         "support_email": "infos@myhigh5.com",
         "all_rights_reserved": "Alle Rechte vorbehalten",
         "ignore_email": "Wenn Sie diese E-Mail nicht angefordert haben, können Sie sie ignorieren.",
         
         # Welcome / Registration
-        "welcome_subject": "Willkommen bei MYHIGH5!",
-        "welcome_title": "Willkommen bei MYHIGH5!",
+        "welcome_subject": "Willkommen bei MyHigh5!",
+        "welcome_title": "Willkommen bei MyHigh5!",
         "welcome_message": "Wir freuen uns, Sie in unserer Community begrüßen zu dürfen. Ihr Konto wurde erfolgreich erstellt.",
         "welcome_verify": "Um Ihr Konto zu aktivieren, bestätigen Sie bitte Ihre E-Mail-Adresse, indem Sie auf die Schaltfläche unten klicken.",
         "verify_email_button": "E-Mail bestätigen",
@@ -352,13 +388,13 @@ EMAIL_TRANSLATIONS = {
         "welcome_feature_4": "📈 Generieren Sie passives Einkommen",
         
         # Email Verification
-        "verify_subject": "Bestätigen Sie Ihre E-Mail-Adresse - MYHIGH5",
+        "verify_subject": "Bestätigen Sie Ihre E-Mail-Adresse - MyHigh5",
         "verify_title": "E-Mail-Bestätigung",
         "verify_message": "Klicken Sie auf die Schaltfläche unten, um Ihre E-Mail-Adresse zu bestätigen.",
         "verify_expiry": "Dieser Link läuft in 24 Stunden ab.",
         
         # Password Reset
-        "reset_subject": "Passwort zurücksetzen - MYHIGH5",
+        "reset_subject": "Passwort zurücksetzen - MyHigh5",
         "reset_title": "Passwort zurücksetzen",
         "reset_message": "Sie haben angefordert, Ihr Passwort zurückzusetzen. Klicken Sie auf die Schaltfläche unten, um ein neues Passwort zu erstellen.",
         "reset_button": "Passwort zurücksetzen",
@@ -366,7 +402,7 @@ EMAIL_TRANSLATIONS = {
         "reset_ignore": "Wenn Sie dieses Zurücksetzen nicht angefordert haben, ignorieren Sie bitte diese E-Mail. Ihr Passwort wird nicht geändert.",
         
         # Password Change Security
-        "password_change_security_subject": "Sicherheitswarnung - Passwort geändert - MYHIGH5",
+        "password_change_security_subject": "Sicherheitswarnung - Passwort geändert - MyHigh5",
         "password_change_security_title": "Passwortänderung erkannt",
         "password_change_security_message": "Ihr Passwort wurde erfolgreich geändert. Wenn Sie diese Änderung nicht vorgenommen haben, kontaktieren Sie bitte sofort unseren Support.",
         "password_change_security_action": "Wenn Sie diese Änderung vorgenommen haben, können Sie diese E-Mail sicher ignorieren.",
@@ -377,14 +413,14 @@ EMAIL_TRANSLATIONS = {
         "password_change_security_unknown_location": "Unbekannter Standort",
         
         # Invitation
-        "invitation_subject": "{inviter_name} lädt Sie ein, MYHIGH5 beizutreten!",
+        "invitation_subject": "{inviter_name} lädt Sie ein, MyHigh5 beizutreten!",
         "invitation_title": "Sie haben eine Einladung erhalten!",
-        "invitation_message": "<strong style='color: #8B5CF6;'>{inviter_name}</strong> lädt Sie ein, MYHIGH5 beizutreten, die Plattform, auf der Sie an Wettbewerben teilnehmen und tolle Preise gewinnen können!",
-        "invitation_button": "MYHIGH5 beitreten",
+        "invitation_message": "<strong style='color: #8B5CF6;'>{inviter_name}</strong> lädt Sie ein, MyHigh5 beizutreten, die Plattform, auf der Sie an Wettbewerben teilnehmen und tolle Preise gewinnen können!",
+        "invitation_button": "MyHigh5 beitreten",
         "referral_code_label": "Ihr Empfehlungscode:",
         
         # Payment Confirmation
-        "payment_subject": "Zahlungsbestätigung - MYHIGH5",
+        "payment_subject": "Zahlungsbestätigung - MyHigh5",
         "payment_title": "Zahlung bestätigt!",
         "payment_message": "Ihre Zahlung von <strong>{amount}</strong> für <strong>{product}</strong> wurde erfolgreich bestätigt.",
         "payment_reference": "Referenz:",
@@ -392,33 +428,33 @@ EMAIL_TRANSLATIONS = {
         "payment_thank_you": "Vielen Dank für Ihr Vertrauen!",
         
         # KYC Verification
-        "kyc_approved_subject": "KYC-Verifizierung genehmigt - MYHIGH5",
+        "kyc_approved_subject": "KYC-Verifizierung genehmigt - MyHigh5",
         "kyc_approved_title": "Ihre Identität wurde verifiziert!",
         "kyc_approved_message": "Herzlichen Glückwunsch! Ihre Identitätsprüfung (KYC) wurde genehmigt. Sie haben jetzt Zugang zu allen Plattformfunktionen.",
         
-        "kyc_rejected_subject": "KYC-Verifizierung abgelehnt - MYHIGH5",
+        "kyc_rejected_subject": "KYC-Verifizierung abgelehnt - MyHigh5",
         "kyc_rejected_title": "KYC-Verifizierung nicht genehmigt",
         "kyc_rejected_message": "Leider wurde Ihre Identitätsprüfung nicht genehmigt. Bitte reichen Sie Ihre Dokumente erneut ein.",
         "kyc_rejected_reason": "Grund:",
         
         # Commission
-        "commission_subject": "Neue Provision erhalten - MYHIGH5",
+        "commission_subject": "Neue Provision erhalten - MyHigh5",
         "commission_title": "Sie haben eine Provision verdient!",
         "commission_message": "Sie haben eine Provision von <strong>{amount}</strong> durch die Aktivität Ihres Netzwerks erhalten.",
         "commission_type": "Typ:",
         "commission_from": "Quelle:",
         
         # Contest
-        "contest_approved_subject": "Ihre Bewerbung wurde genehmigt - MYHIGH5",
+        "contest_approved_subject": "Ihre Bewerbung wurde genehmigt - MyHigh5",
         "contest_approved_title": "Bewerbung genehmigt!",
         "contest_approved_message": "Ihre Bewerbung für den Wettbewerb <strong>{contest_name}</strong> wurde genehmigt. Viel Glück!",
         
-        "contest_rejected_subject": "Bewerbung abgelehnt - MYHIGH5",
+        "contest_rejected_subject": "Bewerbung abgelehnt - MyHigh5",
         "contest_rejected_title": "Bewerbung nicht genehmigt",
         "contest_rejected_message": "Ihre Bewerbung für den Wettbewerb <strong>{contest_name}</strong> wurde nicht genehmigt.",
         
         # Contestant Report
-        "contestant_report_subject": "Neuer Teilnehmerbericht - MYHIGH5",
+        "contestant_report_subject": "Neuer Teilnehmerbericht - MyHigh5",
         "contestant_report_title": "Teilnehmerbericht",
         "contestant_report_message": "Ein neuer Bericht wurde für einen Teilnehmer eingereicht.",
         "contestant_report_contestant": "Gemeldeter Teilnehmer:",
@@ -430,7 +466,7 @@ EMAIL_TRANSLATIONS = {
         "contestant_report_view_button": "Bericht anzeigen",
         
         # Contact Confirmation
-        "contact_confirmation_subject": "Wir haben Ihre Nachricht erhalten - MYHIGH5",
+        "contact_confirmation_subject": "Wir haben Ihre Nachricht erhalten - MyHigh5",
         "contact_confirmation_title": "Nachricht erhalten!",
         "contact_confirmation_greeting": "Hallo {name},",
         "contact_confirmation_message": "Wir haben Ihre Nachricht erhalten und danken Ihnen für Ihre Kontaktaufnahme.",
@@ -440,6 +476,18 @@ EMAIL_TRANSLATIONS = {
         "contact_confirmation_category_label": "Kategorie:",
         "contact_confirmation_message_label": "Nachricht:",
         "contact_confirmation_thank_you": "Vielen Dank für Ihre Geduld!",
+        
+        # Newsletter Subscription
+        "newsletter_subscription_subject": "Willkommen zu unserem Newsletter - MyHigh5",
+        "newsletter_subscription_title": "Vielen Dank für Ihr Abonnement!",
+        "newsletter_subscription_message": "Sie haben sich erfolgreich für den MyHigh5-Newsletter angemeldet. Sie erhalten nun die neuesten Nachrichten, Updates und exklusive Angebote.",
+        "newsletter_subscription_what_you_get": "Was Sie erhalten werden:",
+        "newsletter_subscription_benefit_1": "📧 Neueste Wettbewerbsankündigungen",
+        "newsletter_subscription_benefit_2": "🏆 Exklusive Angebote und Werbeaktionen",
+        "newsletter_subscription_benefit_3": "💡 Tipps und Tricks zur Maximierung Ihrer Einnahmen",
+        "newsletter_subscription_benefit_4": "🎉 Besondere Veranstaltungen und Wettbewerbe",
+        "newsletter_subscription_unsubscribe": "Wenn Sie unsere E-Mails nicht mehr erhalten möchten, können Sie sich jederzeit abmelden.",
+        "newsletter_subscription_unsubscribe_link": "Abmelden",
     }
 }
 
@@ -1149,3 +1197,65 @@ def get_contact_confirmation_email(
 """
     
     return t('contact_confirmation_subject'), html, text
+
+
+def get_newsletter_subscription_email(
+    lang: str,
+    unsubscribe_url: Optional[str] = None
+) -> tuple[str, str, str]:
+    """Generate newsletter subscription confirmation email"""
+    t = lambda key, **kwargs: get_translation(lang, key, **kwargs)
+    
+    # Construire l'URL de désinscription si fournie
+    unsubscribe_link = unsubscribe_url or f"{get_translation(lang, 'support_email')}"
+    
+    content = f"""
+        <p style="margin: 0 0 24px 0;">
+            {t('newsletter_subscription_message')}
+        </p>
+        
+        <div style="background-color: #f4f4f5; border-radius: 8px; padding: 20px; margin: 24px 0;">
+            <p style="margin: 0 0 16px 0; color: #18181b; font-weight: 600; font-size: 16px;">
+                {t('newsletter_subscription_what_you_get')}
+            </p>
+            <ul style="margin: 0; padding-left: 20px; color: #52525b;">
+                <li style="margin: 8px 0;">{t('newsletter_subscription_benefit_1')}</li>
+                <li style="margin: 8px 0;">{t('newsletter_subscription_benefit_2')}</li>
+                <li style="margin: 8px 0;">{t('newsletter_subscription_benefit_3')}</li>
+                <li style="margin: 8px 0;">{t('newsletter_subscription_benefit_4')}</li>
+            </ul>
+        </div>
+        
+        <p style="margin: 24px 0 0 0; color: #52525b; font-size: 14px;">
+            {t('newsletter_subscription_unsubscribe')}
+        </p>
+    """
+    
+    html = get_base_email_template(
+        lang=lang,
+        title=t('newsletter_subscription_title'),
+        content=content,
+        button_text=t('newsletter_subscription_unsubscribe_link') if unsubscribe_url else None,
+        button_url=unsubscribe_url
+    )
+    
+    text = f"""
+{t('newsletter_subscription_title')}
+
+{t('newsletter_subscription_message')}
+
+{t('newsletter_subscription_what_you_get')}
+
+{t('newsletter_subscription_benefit_1')}
+{t('newsletter_subscription_benefit_2')}
+{t('newsletter_subscription_benefit_3')}
+{t('newsletter_subscription_benefit_4')}
+
+{t('newsletter_subscription_unsubscribe')}
+
+{unsubscribe_url if unsubscribe_url else ''}
+
+© 2024 {t('company_name')}. {t('all_rights_reserved')}.
+"""
+    
+    return t('newsletter_subscription_subject'), html, text

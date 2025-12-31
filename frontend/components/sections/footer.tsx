@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,6 +22,9 @@ import {
   CheckCircle
 } from "lucide-react"
 import { useLanguage } from "@/contexts/language-context"
+import { newsletterService, type NewsletterSubscriptionData } from "@/services/newsletter-service"
+import { useToast } from "@/components/ui/toast"
+import api from "@/lib/api"
 
 const socialLinks = [
   { name: "Facebook", icon: Facebook, href: "https://facebook.com/myhigh5", color: "hover:bg-blue-600" },
@@ -32,17 +35,122 @@ const socialLinks = [
 
 export function Footer() {
   const { t } = useLanguage()
+  const { addToast } = useToast()
   const [email, setEmail] = useState("")
   const [subscribed, setSubscribed] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [deviceInfo, setDeviceInfo] = useState<NewsletterSubscriptionData['device_info']>(null)
+  const [locationInfo, setLocationInfo] = useState<NewsletterSubscriptionData['location_info']>(null)
+  const [categories, setCategories] = useState<Array<{ id: number; name: string; slug: string }>>([])
+  const [categoriesLoading, setCategoriesLoading] = useState(true)
 
-  const handleSubscribe = (e: React.FormEvent) => {
+  const getBrowserName = (): string => {
+    if (typeof window === 'undefined') return 'Unknown'
+    const ua = navigator.userAgent
+    if (ua.includes('Chrome')) return 'Chrome'
+    if (ua.includes('Firefox')) return 'Firefox'
+    if (ua.includes('Safari')) return 'Safari'
+    if (ua.includes('Edge')) return 'Edge'
+    if (ua.includes('Opera')) return 'Opera'
+    return 'Unknown'
+  }
+
+  // Collecter les informations de l'appareil
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setDeviceInfo({
+        user_agent: navigator.userAgent,
+        platform: navigator.platform,
+        browser: getBrowserName(),
+        screen_width: window.screen.width,
+        screen_height: window.screen.height,
+      })
+    }
+  }, [])
+
+  // Collecter les informations de localisation
+  useEffect(() => {
+    const fetchLocationInfo = async () => {
+      try {
+        // Utiliser une API de géolocalisation gratuite
+        const response = await fetch('https://ipapi.co/json/')
+        if (response.ok) {
+          const data = await response.json()
+          setLocationInfo({
+            country: data.country_name,
+            city: data.city,
+            continent: data.continent_code,
+            ip: data.ip,
+            timezone: data.timezone,
+          })
+        }
+      } catch (error) {
+        console.error('Erreur lors de la récupération de la localisation:', error)
+        // Essayer une autre API en fallback
+        try {
+          const fallbackResponse = await fetch('https://api.ipify.org?format=json')
+          if (fallbackResponse.ok) {
+            const ipData = await fallbackResponse.json()
+            setLocationInfo({
+              ip: ipData.ip,
+            })
+          }
+        } catch (fallbackError) {
+          console.error('Erreur avec l\'API de fallback:', fallbackError)
+        }
+      }
+    }
+
+    fetchLocationInfo()
+  }, [])
+
+  const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (email) {
+    if (!email || isSubmitting) return
+
+    setIsSubmitting(true)
+    try {
+      const subscriptionData: NewsletterSubscriptionData = {
+        email,
+        device_info: deviceInfo || undefined,
+        location_info: locationInfo || undefined,
+      }
+
+      await newsletterService.subscribe(subscriptionData)
       setSubscribed(true)
       setEmail("")
-      setTimeout(() => setSubscribed(false), 3000)
+      addToast(t('common.success') || 'Inscription réussie !', 'success')
+      setTimeout(() => setSubscribed(false), 5000)
+    } catch (error: any) {
+      console.error('Erreur lors de l\'abonnement:', error)
+      addToast(error.message || 'Une erreur est survenue', 'error')
+    } finally {
+      setIsSubmitting(false)
     }
   }
+
+  // Charger les catégories depuis l'API
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        setCategoriesLoading(true)
+        const response = await api.get('/api/v1/categories/', {
+          params: { active_only: true }
+        })
+        if (response.data && Array.isArray(response.data)) {
+          setCategories(response.data)
+        }
+      } catch (error) {
+        console.error('Erreur lors du chargement des catégories:', error)
+        // En cas d'erreur, on garde un tableau vide
+        setCategories([])
+      } finally {
+        setCategoriesLoading(false)
+      }
+    }
+
+    fetchCategories()
+  }, [])
 
   const quickLinks = [
     { name: t('footer.quick_links.about'), href: "/about", icon: Users },
@@ -51,13 +159,11 @@ export function Footer() {
     { name: t('navigation.contact') || "Contact", href: "/contact", icon: Mail },
   ]
 
-  const categoryLinks = [
-    { name: t('footer.categories.beauty'), href: "/contests?category=beauty" },
-    { name: t('footer.categories.handsome'), href: "/contests?category=handsome" },
-    { name: t('footer.categories.latest_hits'), href: "/contests?category=hits" },
-    { name: t('footer.categories.pets'), href: "/contests?category=pets" },
-    { name: t('footer.categories.sports_clubs'), href: "/contests?category=sports" },
-  ]
+  // Les catégories sont maintenant chargées depuis l'API
+  const categoryLinks = categories.map(category => ({
+    name: category.name,
+    href: `/contests?category=${category.slug}`
+  }))
 
   const legalLinks = [
     { name: t('footer.legal.privacy'), href: "/privacy" },
@@ -104,10 +210,11 @@ export function Footer() {
                   />
                   <Button 
                     type="submit"
-                    className="h-12 px-6 rounded-xl bg-gradient-to-r from-myhigh5-primary to-myhigh5-secondary hover:shadow-lg transition-all"
+                    disabled={isSubmitting}
+                    className="h-12 px-6 rounded-xl bg-gradient-to-r from-myhigh5-primary to-myhigh5-secondary hover:shadow-lg transition-all disabled:opacity-50"
                   >
                     <Send className="w-4 h-4 mr-2" />
-                    {t('footer.newsletter.subscribe')}
+                    {isSubmitting ? (t('common.loading') || 'Chargement...') : t('footer.newsletter.subscribe')}
                   </Button>
                 </form>
               )}
@@ -183,19 +290,31 @@ export function Footer() {
             <h4 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">
               {t('footer.categories.title')}
             </h4>
-            <ul className="space-y-3">
-              {categoryLinks.map((link) => (
-                <li key={link.name}>
-                  <Link 
-                    href={link.href}
-                    className="group flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-myhigh5-primary dark:hover:text-myhigh5-cyan-400 transition-colors"
-                  >
-                    <ArrowRight className="w-3 h-3 opacity-0 -ml-5 group-hover:opacity-100 group-hover:ml-0 transition-all" />
-                    <span className="text-sm">{link.name}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
+            {categoriesLoading ? (
+              <ul className="space-y-3">
+                {[...Array(3)].map((_, i) => (
+                  <li key={i} className="h-4 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+                ))}
+              </ul>
+            ) : categoryLinks.length > 0 ? (
+              <ul className="space-y-3">
+                {categoryLinks.slice(0, 6).map((link) => (
+                  <li key={link.name}>
+                    <Link 
+                      href={link.href}
+                      className="group flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-myhigh5-primary dark:hover:text-myhigh5-cyan-400 transition-colors"
+                    >
+                      <ArrowRight className="w-3 h-3 opacity-0 -ml-5 group-hover:opacity-100 group-hover:ml-0 transition-all" />
+                      <span className="text-sm">{link.name}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {t('footer.categories.no_categories') || 'Aucune catégorie disponible'}
+              </p>
+            )}
           </div>
 
           {/* Legal */}
@@ -225,9 +344,14 @@ export function Footer() {
             <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-500">
               <span>{t('footer.copyright')}</span>
               <span className="mx-2">•</span>
-              <span>{t('common.made_with') || "Made with"}</span>
-              <Heart className="w-4 h-4 text-red-500 fill-current mx-1" />
-              <span>in Montreal</span>
+              <a 
+                href="https://eminilabs.com" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="hover:text-myhigh5-primary dark:hover:text-myhigh5-cyan-400 transition-colors"
+              >
+                Emini
+              </a>
             </div>
             
             <div className="flex items-center gap-2">
