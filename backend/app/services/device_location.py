@@ -107,66 +107,79 @@ async def get_location_info(request: Request, ip_address: Optional[str] = None) 
     """
     Récupère les informations de localisation basées sur l'adresse IP.
     Utilise une API externe pour géolocaliser l'IP.
+    Structure identique à celle utilisée dans la newsletter : ip, city, timezone, continent
+    
+    Même logique que le frontend : appelle https://ipapi.co/json/ pour obtenir toutes les infos
     """
     location_info: Dict[str, Any] = {}
     
+    # Récupérer l'IP réelle du client (comme dans le frontend)
     if not ip_address:
         ip_address = get_client_ip(request)
     
-    if not ip_address:
-        return location_info
-    
-    # Ajouter l'IP dans les infos de localisation
-    location_info["ip"] = ip_address
-    
-    # Vérifier si c'est une IP locale/localhost
-    if ip_address in ["127.0.0.1", "localhost", "::1"] or ip_address.startswith("192.168.") or ip_address.startswith("10.") or ip_address.startswith("172."):
-        location_info["is_local"] = True
-        return location_info
-    
-    location_info["is_local"] = False
-    
-    # Utiliser une API de géolocalisation gratuite
+    # Utiliser une API de géolocalisation gratuite (même que le frontend)
     try:
         import httpx
         
-        # Essayer ipapi.co (gratuit, 1000 requêtes/jour)
+        # Utiliser ipapi.co/json/ comme dans le frontend pour obtenir toutes les infos
+        # Si on a une IP, on l'utilise, sinon l'API détecte automatiquement
         async with httpx.AsyncClient(timeout=5.0) as client:
             try:
-                response = await client.get(f"https://ipapi.co/{ip_address}/json/")
+                # Appeler l'API comme dans le frontend
+                if ip_address and ip_address not in ["127.0.0.1", "localhost", "::1"] and not ip_address.startswith("192.168.") and not ip_address.startswith("10.") and not ip_address.startswith("172."):
+                    # Pour les IPs publiques, utiliser l'IP spécifique
+                    url = f"https://ipapi.co/{ip_address}/json/"
+                else:
+                    # Pour les IPs locales ou si pas d'IP, laisser l'API détecter
+                    # Mais côté serveur, on doit passer l'IP extraite de la requête
+                    # On utilise quand même l'IP extraite si disponible
+                    if ip_address:
+                        url = f"https://ipapi.co/{ip_address}/json/"
+                    else:
+                        # Si vraiment pas d'IP, on ne peut pas faire la requête
+                        return location_info
+                
+                response = await client.get(url)
                 if response.status_code == 200:
                     data = response.json()
                     
                     if "error" not in data:
-                        location_info["country"] = data.get("country_name")
-                        location_info["country_code"] = data.get("country_code")
+                        # Structure identique à la newsletter : ip, city, timezone, continent
+                        # Utiliser les mêmes noms de champs que le frontend
+                        # L'API retourne l'IP dans le champ "ip", utiliser celle-ci (plus fiable)
+                        location_info["ip"] = data.get("ip") or ip_address  # IP retournée par l'API (plus fiable) ou celle extraite en fallback
                         location_info["city"] = data.get("city")
-                        location_info["region"] = data.get("region")
-                        location_info["continent"] = data.get("continent_code")
                         location_info["timezone"] = data.get("timezone")
-                        location_info["latitude"] = data.get("latitude")
-                        location_info["longitude"] = data.get("longitude")
-                        location_info["isp"] = data.get("org")
+                        location_info["continent"] = data.get("continent_code")  # continent_code comme dans le frontend
+                        # Optionnel : country pour plus d'infos (country_name comme dans le frontend)
+                        location_info["country"] = data.get("country_name")
                         return location_info
             except Exception as e:
                 logger.warning(f"Erreur avec ipapi.co: {e}")
             
             # Fallback: essayer ip-api.com (gratuit, 45 requêtes/minute)
             try:
-                response = await client.get(f"http://ip-api.com/json/{ip_address}", timeout=5.0)
+                if ip_address and ip_address not in ["127.0.0.1", "localhost", "::1"] and not ip_address.startswith("192.168.") and not ip_address.startswith("10.") and not ip_address.startswith("172."):
+                    url = f"http://ip-api.com/json/{ip_address}"
+                else:
+                    if ip_address:
+                        url = f"http://ip-api.com/json/{ip_address}"
+                    else:
+                        return location_info
+                
+                response = await client.get(url, timeout=5.0)
                 if response.status_code == 200:
                     data = response.json()
                     
                     if data.get("status") == "success":
-                        location_info["country"] = data.get("country")
-                        location_info["country_code"] = data.get("countryCode")
+                        # Structure identique à la newsletter : ip, city, timezone, continent
+                        location_info["ip"] = data.get("query") or ip_address  # ip-api.com utilise "query" pour l'IP
                         location_info["city"] = data.get("city")
-                        location_info["region"] = data.get("regionName")
-                        location_info["continent"] = None  # ip-api.com ne fournit pas le continent
                         location_info["timezone"] = data.get("timezone")
-                        location_info["latitude"] = data.get("lat")
-                        location_info["longitude"] = data.get("lon")
-                        location_info["isp"] = data.get("isp")
+                        # ip-api.com ne fournit pas le continent, on laisse None
+                        location_info["continent"] = None
+                        # Optionnel : country pour plus d'infos
+                        location_info["country"] = data.get("country")
                         return location_info
             except Exception as e:
                 logger.warning(f"Erreur avec ip-api.com: {e}")
@@ -175,6 +188,10 @@ async def get_location_info(request: Request, ip_address: Optional[str] = None) 
         logger.warning("httpx n'est pas installé, impossible de récupérer la géolocalisation")
     except Exception as e:
         logger.error(f"Erreur lors de la récupération de la géolocalisation: {e}")
+    
+    # Si on n'a pas pu récupérer les infos, on retourne au moins l'IP extraite
+    if ip_address:
+        location_info["ip"] = ip_address
     
     return location_info
 

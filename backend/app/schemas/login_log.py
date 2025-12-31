@@ -29,10 +29,11 @@ class LoginLogCreate(BaseModel):
                     "screen_height": 1080
                 },
                 "location_info": {
-                    "country": "Canada",
+                    "ip": "192.168.1.1",
                     "city": "Montreal",
-                    "continent": "North America",
-                    "timezone": "America/Montreal"
+                    "timezone": "America/Montreal",
+                    "continent": "NA",
+                    "country": "Canada"
                 },
                 "is_successful": True,
                 "failure_reason": None

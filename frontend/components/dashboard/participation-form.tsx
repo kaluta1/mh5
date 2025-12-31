@@ -247,39 +247,38 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
+    // Vérifier tous les champs et afficher un toast d'erreur si quelque chose manque
+    const errors: string[] = []
+
     if (!title.trim()) {
-      addToast(t('participation.errors.content_title_required') || 'Le titre du contenu est requis', 'error')
-      return
-    }
-
-    if (title.trim().length < 5) {
-      addToast(t('participation.errors.content_title_min_length') || 'Le titre du contenu doit contenir au moins 5 caractères', 'error')
-      return
-    }
-
-    if (title.trim().length > 5) {
-      addToast(t('participation.errors.content_title_max_length') || 'Le titre du contenu ne doit pas dépasser 5 caractères', 'error')
-      return
+      errors.push(t('participation.errors.content_title_required') || 'Le titre du contenu est requis')
+    } else if (title.trim().length < 5) {
+      errors.push(t('participation.errors.content_title_min_length') || 'Le titre du contenu doit contenir au moins 5 caractères')
+    } else if (title.trim().length > 5) {
+      errors.push(t('participation.errors.content_title_max_length') || 'Le titre du contenu ne doit pas dépasser 5 caractères')
     }
 
     if (!description.trim()) {
-      addToast(t('participation.errors.content_description_required') || 'La description du contenu est requise', 'error')
-      return
-    }
-
-    if (description.trim().length > 20) {
-      addToast(t('participation.errors.content_description_max_length') || 'La description du contenu ne doit pas dépasser 20 caractères', 'error')
-      return
+      errors.push(t('participation.errors.content_description_required') || 'La description du contenu est requise')
+    } else if (description.trim().length > 20) {
+      errors.push(t('participation.errors.content_description_max_length') || 'La description du contenu ne doit pas dépasser 20 caractères')
     }
 
     // Pour les nominations, les images sont optionnelles
     if (!isNomination && imageUrls.length === 0) {
-      addToast(t('participation.errors.content_image_required') || 'Au moins une image est requise', 'error')
-      return
+      errors.push(t('participation.errors.content_image_required') || 'Au moins une image est requise')
     }
 
     if (requiresVideo && !videoUrl) {
-      addToast(t('participation.errors.content_video_required') || 'Une vidéo est requise pour ce concours', 'error')
+      errors.push(t('participation.errors.content_video_required') || 'Une vidéo est requise pour ce concours')
+    }
+
+    // Si des erreurs sont présentes, afficher un toast d'erreur
+    if (errors.length > 0) {
+      const errorMessage = errors.length === 1 
+        ? errors[0]
+        : t('participation.errors.fill_all_fields') || 'Veuillez remplir tous les champs requis avant de soumettre'
+      addToast(errorMessage, 'error')
       return
     }
 
@@ -736,15 +735,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
         </Button>
         <Button
           type="submit"
-          disabled={
-            !title.trim() || 
-            title.trim().length !== 5 || 
-            !description.trim() || 
-            description.trim().length > 20 || 
-            (!isNomination && imageUrls.length === 0) || 
-            (requiresVideo && !videoUrl) ||
-            isSubmitting
-          }
+          disabled={isSubmitting}
           className="flex-1 bg-myhigh5-primary hover:bg-myhigh5-primary-dark text-white font-bold"
         >
           {isSubmitting 
