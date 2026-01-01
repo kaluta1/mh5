@@ -247,40 +247,44 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    // Vérifier tous les champs et afficher un toast d'erreur si quelque chose manque
-    const errors: string[] = []
-
     if (!title.trim()) {
-      errors.push(t('participation.errors.content_title_required') || 'Le titre du contenu est requis')
-    } else if (title.trim().length < 5) {
-      errors.push(t('participation.errors.content_title_min_length') || 'Le titre du contenu doit contenir au moins 5 caractères')
-    } else if (title.trim().length > 5) {
-      errors.push(t('participation.errors.content_title_max_length') || 'Le titre du contenu ne doit pas dépasser 5 caractères')
+      addToast(t('participation.errors.content_title_required') || 'Le titre du contenu est requis', 'error')
+      return
+    }
+
+    if (title.trim().length < 5) {
+      addToast(t('participation.errors.content_title_min_length') || 'Le titre du contenu doit contenir au moins 5 caractères', 'error')
+      return
+    }
+
+    if (title.trim().length > 100) {
+      addToast(t('participation.errors.content_title_max_length') || 'Le titre du contenu ne doit pas dépasser 100 caractères', 'error')
+      return
     }
 
     if (!description.trim()) {
-      errors.push(t('participation.errors.content_description_required') || 'La description du contenu est requise')
-    } else if (description.trim().length < 20) {
-      errors.push(t('participation.errors.content_description_min_length') || 'La description du contenu doit contenir au moins 20 caractères')
-    } else if (description.trim().length > 50) {
-      errors.push(t('participation.errors.content_description_max_length') || 'La description du contenu ne doit pas dépasser 50 caractères')
+      addToast(t('participation.errors.content_description_required') || 'La description du contenu est requise', 'error')
+      return
+    }
+
+    if (description.trim().length < 20) {
+      addToast(t('participation.errors.content_description_min_length') || 'La description du contenu doit contenir au moins 20 caractères', 'error')
+      return
+    }
+
+    if (description.trim().length > 500) {
+      addToast(t('participation.errors.content_description_max_length') || 'La description du contenu ne doit pas dépasser 500 caractères', 'error')
+      return
     }
 
     // Pour les nominations, les images sont optionnelles
     if (!isNomination && imageUrls.length === 0) {
-      errors.push(t('participation.errors.content_image_required') || 'Au moins une image est requise')
+      addToast(t('participation.errors.content_image_required') || 'Au moins une image est requise', 'error')
+      return
     }
 
     if (requiresVideo && !videoUrl) {
-      errors.push(t('participation.errors.content_video_required') || 'Une vidéo est requise pour ce concours')
-    }
-
-    // Si des erreurs sont présentes, afficher un toast d'erreur
-    if (errors.length > 0) {
-      const errorMessage = errors.length === 1 
-        ? errors[0]
-        : t('participation.errors.fill_all_fields') || 'Veuillez remplir tous les champs requis avant de soumettre'
-      addToast(errorMessage, 'error')
+      addToast(t('participation.errors.content_video_required') || 'Une vidéo est requise pour ce concours', 'error')
       return
     }
 
@@ -304,8 +308,8 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
   }
 
   // Calculate errors
-  const hasTitleError = title.trim().length > 0 && (title.trim().length < 5 || title.trim().length > 5)
-  const hasDescriptionError = description.trim().length > 0 && (description.trim().length < 20 || description.trim().length > 50)
+  const hasTitleError = title.trim().length > 0 && (title.trim().length < 5 || title.trim().length > 100)
+  const hasDescriptionError = description.trim().length > 0 && (description.trim().length < 20 || description.trim().length > 500)
   // Pour les nominations, les images sont optionnelles
   const hasImageError = !isNomination && imageUrls.length === 0
   const hasVideoError = requiresVideo && !videoUrl
@@ -321,8 +325,8 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder={t('participation.content_title_placeholder') || 'Enter content title (exactly 5 characters)'}
-          maxLength={5}
+          placeholder={t('participation.content_title_placeholder') || 'Enter content title (5-100 characters)'}
+          maxLength={100}
           className={`w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 ${
             (!title.trim() || hasTitleError)
               ? 'border-red-500 focus:ring-red-500' 
@@ -334,9 +338,9 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
           <p className={`text-xs ${hasTitleError ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'}`}>
             {title.length < 5 
               ? `${t('participation.min_characters') || 'Minimum'} 5 ${t('participation.characters') || 'characters'} (${title.length}/5)`
-              : title.length > 5
-              ? `${t('participation.max_characters') || 'Maximum'} 5 ${t('participation.characters') || 'characters'} (${title.length}/5)`
-              : `${title.length}/5`
+              : title.length > 100
+              ? `${t('participation.max_characters') || 'Maximum'} 100 ${t('participation.characters') || 'characters'} (${title.length}/100)`
+              : `${title.length}/100`
             }
           </p>
         </div>
@@ -349,7 +353,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
                 ? t('participation.errors.content_title_required') || 'Content Title is required'
                 : title.length < 5
                 ? t('participation.errors.content_title_min_length') || 'Content title must contain at least 5 characters'
-                : t('participation.errors.content_title_max_length') || 'Content title must not exceed 5 characters'
+                : t('participation.errors.content_title_max_length') || 'Content title must not exceed 100 characters'
               }
             </span>
           </div>
@@ -365,8 +369,8 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
         <textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder={t('participation.content_description_placeholder') || 'Enter content description (20-50 characters)'}
-          maxLength={50}
+          placeholder={t('participation.content_description_placeholder') || 'Enter content description (20-500 characters)'}
+          maxLength={500}
           rows={4}
           className={`w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 resize-none ${
             (!description.trim() || hasDescriptionError)
@@ -379,9 +383,9 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
           <p className={`text-xs ${hasDescriptionError ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'}`}>
             {description.length < 20 
               ? `${t('participation.min_characters') || 'Minimum'} 20 ${t('participation.characters') || 'characters'} (${description.length}/20)`
-              : description.length > 50
-              ? `${t('participation.max_characters') || 'Maximum'} 50 ${t('participation.characters') || 'characters'} (${description.length}/50)`
-              : `${description.length}/50`
+              : description.length > 500
+              ? `${t('participation.max_characters') || 'Maximum'} 500 ${t('participation.characters') || 'characters'} (${description.length}/500)`
+              : `${description.length}/500`
             }
           </p>
         </div>
@@ -394,7 +398,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
                 ? t('participation.errors.content_description_required') || 'Content Description is required'
                 : description.length < 20
                 ? t('participation.errors.content_description_min_length') || 'Content description must contain at least 20 characters'
-                : t('participation.errors.content_description_max_length') || 'Content description must not exceed 50 characters'
+                : t('participation.errors.content_description_max_length') || 'Content description must not exceed 500 characters'
               }
             </span>
           </div>
@@ -741,7 +745,17 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
         </Button>
         <Button
           type="submit"
-          disabled={isSubmitting}
+          disabled={
+            !title.trim() || 
+            title.trim().length < 5 || 
+            title.trim().length > 100 ||
+            !description.trim() || 
+            description.trim().length < 20 || 
+            description.trim().length > 500 ||
+            (!isNomination && imageUrls.length === 0) || 
+            (requiresVideo && !videoUrl) ||
+            isSubmitting
+          }
           className="flex-1 bg-myhigh5-primary hover:bg-myhigh5-primary-dark text-white font-bold"
         >
           {isSubmitting 
