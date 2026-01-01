@@ -813,46 +813,46 @@ export default function ContestDetailPage() {
                   </div>
                 </div>
               ) : (
-                <ContestantsList
-                  contestants={filteredContestants}
-                  contestId={contestId}
-                      currentUserId={user?.id}
-                  favorites={favorites}
-                  searchQuery={searchQuery}
-                  onToggleFavorite={handleToggleFavorite}
-                  onViewDetails={(contestantId) => router.push(`/dashboard/contests/${contestId}/contestant/${contestantId}`)}
-                  onVote={() => {
-                    // Le vote est géré dans ContestantCard, pas de redirection nécessaire
-                  }}
-                  onComment={() => {}}
-                  onShare={() => {}}
-                  onReport={handleReportClick}
-                  onEdit={() => router.push(`/dashboard/contests/${contestId}/participate?edit=true`)}
-                  onDelete={handleDeleteContestant}
-                  onHoverAuthor={(contestantId, data) => handleHoverStart('author', contestantId, data)}
-                  onHoverEnd={handleHoverEnd}
-                  onHoverDescription={(contestantId, description) => handleHoverStart('description', contestantId, description)}
-                  onHoverVotes={(contestantId, votes) => {
-                    const contestant = contest.contestants.find(c => c.id === contestantId)
-                    // Seul l'auteur peut voir la liste des votes
-                    if (user?.id === contestant?.userId) {
-                      handleHoverStart('votes', contestantId, votes)
-                    }
-                  }}
-                  onHoverReactions={(contestantId, reactions) => {
-                    const contestant = contest.contestants.find(c => c.id === contestantId)
-                    if (user?.id === contestant?.userId) {
-                      handleHoverStart('reactions', contestantId, reactions)
-                    }
-                  }}
-                  onHoverFavorites={(contestantId, favorites) => {
-                    const contestant = contest.contestants.find(c => c.id === contestantId)
-                    // Seul l'auteur peut voir la liste des favoris
-                    if (user?.id === contestant?.userId) {
-                      handleHoverStart('favorites', contestantId, favorites)
-                    }
-                  }}
-                />
+              <ContestantsList
+                contestants={filteredContestants}
+                contestId={contestId}
+                    currentUserId={user?.id}
+                favorites={favorites}
+                searchQuery={searchQuery}
+                onToggleFavorite={handleToggleFavorite}
+                onViewDetails={(contestantId) => router.push(`/dashboard/contests/${contestId}/contestant/${contestantId}`)}
+                onVote={() => {
+                  // Le vote est géré dans ContestantCard, pas de redirection nécessaire
+                }}
+                onComment={() => {}}
+                onShare={() => {}}
+                onReport={handleReportClick}
+                onEdit={() => router.push(`/dashboard/contests/${contestId}/participate?edit=true`)}
+                onDelete={handleDeleteContestant}
+                onHoverAuthor={(contestantId, data) => handleHoverStart('author', contestantId, data)}
+                onHoverEnd={handleHoverEnd}
+                onHoverDescription={(contestantId, description) => handleHoverStart('description', contestantId, description)}
+                onHoverVotes={(contestantId, votes) => {
+                  const contestant = contest.contestants.find(c => c.id === contestantId)
+                  // Seul l'auteur peut voir la liste des votes
+                  if (user?.id === contestant?.userId) {
+                    handleHoverStart('votes', contestantId, votes)
+                  }
+                }}
+                onHoverReactions={(contestantId, reactions) => {
+                  const contestant = contest.contestants.find(c => c.id === contestantId)
+                  if (user?.id === contestant?.userId) {
+                    handleHoverStart('reactions', contestantId, reactions)
+                  }
+                }}
+                onHoverFavorites={(contestantId, favorites) => {
+                  const contestant = contest.contestants.find(c => c.id === contestantId)
+                  // Seul l'auteur peut voir la liste des favoris
+                  if (user?.id === contestant?.userId) {
+                    handleHoverStart('favorites', contestantId, favorites)
+                  }
+                }}
+              />
               )}
             </div>
 

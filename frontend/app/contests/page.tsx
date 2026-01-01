@@ -257,7 +257,7 @@ export default function ContestsPage() {
         router.push(`/dashboard/contests/${selectedContestId}/participate`)
         setShouldGoToParticipate(false)
       } else {
-        router.push(`/dashboard/contests/${selectedContestId}`)
+      router.push(`/dashboard/contests/${selectedContestId}`)
       }
       setSelectedContestId(null)
     }
@@ -366,9 +366,9 @@ export default function ContestsPage() {
             <div className="flex flex-col lg:flex-row gap-6">
               {/* Search */}
               <div className="flex-1 flex gap-2">
-                <div className="relative flex-1">
+              <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                  <Input
+                <Input
                     type="text"
                     placeholder={t('dashboard.contests.search_placeholder') || 'Rechercher un concours...'}
                     value={searchTerm}
@@ -409,8 +409,8 @@ export default function ContestsPage() {
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-
+              </div>
+              
             {/* Barre d'onglets de navigation par type */}
             {contestTypes.length > 1 && (
               <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
@@ -427,9 +427,9 @@ export default function ContestsPage() {
                     >
                       {type.label}
                     </button>
-                  ))}
-                </div>
+                ))}
               </div>
+            </div>
             )}
           </div>
         </section>

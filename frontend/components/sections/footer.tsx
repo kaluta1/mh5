@@ -297,19 +297,19 @@ export function Footer() {
                 ))}
               </ul>
             ) : categoryLinks.length > 0 ? (
-              <ul className="space-y-3">
+            <ul className="space-y-3">
                 {categoryLinks.slice(0, 6).map((link) => (
-                  <li key={link.name}>
-                    <Link 
-                      href={link.href}
-                      className="group flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-myhigh5-primary dark:hover:text-myhigh5-cyan-400 transition-colors"
-                    >
-                      <ArrowRight className="w-3 h-3 opacity-0 -ml-5 group-hover:opacity-100 group-hover:ml-0 transition-all" />
-                      <span className="text-sm">{link.name}</span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
+                <li key={link.name}>
+                  <Link 
+                    href={link.href}
+                    className="group flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-myhigh5-primary dark:hover:text-myhigh5-cyan-400 transition-colors"
+                  >
+                    <ArrowRight className="w-3 h-3 opacity-0 -ml-5 group-hover:opacity-100 group-hover:ml-0 transition-all" />
+                    <span className="text-sm">{link.name}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
             ) : (
               <p className="text-sm text-gray-500 dark:text-gray-400">
                 {t('footer.categories.no_categories') || 'Aucune catégorie disponible'}
