@@ -325,7 +325,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder={t('participation.content_title_placeholder') || 'Enter content title (5-100 characters)'}
+          placeholder={t('participation.content_title_placeholder') || 'Entrez le titre de votre candidature (5-100 caractères)'}
           maxLength={100}
           className={`w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 ${
             (!title.trim() || hasTitleError)
@@ -369,7 +369,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
         <textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder={t('participation.content_description_placeholder') || 'Enter content description (20-500 characters)'}
+          placeholder={t('participation.content_description_placeholder') || 'Décrivez votre candidature (20-500 caractères)'}
           maxLength={500}
           rows={4}
           className={`w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 resize-none ${
