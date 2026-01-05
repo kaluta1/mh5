@@ -37,7 +37,7 @@
     "affiliate": {
       "title": "Programme d'Affiliation",
       "description": "Gagnez jusqu'à 10 niveaux de profondeur",
-      "revenue_share": "40% aux participants, 10% aux sponsors"
+      "revenue_share": "20% aux participants, 5% aux sponsors"
     },
     "carousel": {
       "winner_1": "Gagnante Concours Beauté 2024",
@@ -136,8 +136,8 @@
       "EFM_MEMBERSHIP": "Abonnement EFM",
       "FOUNDING_MEMBERSHIP_FEE": "Adhésion Founding Member",
       "ANNUAL_MEMBERSHIP_FEE": "Cotisation Annuelle FM",
-      "MONTHLY_REVENUE_POOL": "Pool Mensuel (10%)",
-      "ANNUAL_PROFIT_POOL": "Pool Annuel (20%)"
+      "MONTHLY_REVENUE_POOL": "Pool Mensuel (5%)",
+      "ANNUAL_PROFIT_POOL": "Pool Annuel (10%)"
     },
     "type_descriptions": {
       "AD_REVENUE": "Commission sur les revenus publicitaires générés par vos filleuls",
@@ -148,8 +148,8 @@
       "EFM_MEMBERSHIP": "Commission sur les abonnements EFM de vos filleuls",
       "FOUNDING_MEMBERSHIP_FEE": "20$ direct / 2$ indirect (N2-10) sur l'adhésion FM (100$)",
       "ANNUAL_MEMBERSHIP_FEE": "10$ direct / 1$ indirect (N2-10) sur la cotisation annuelle (50$)",
-      "MONTHLY_REVENUE_POOL": "Part du pool mensuel de 10% des revenus nets",
-      "ANNUAL_PROFIT_POOL": "Part du pool annuel de 20% des profits après taxes"
+      "MONTHLY_REVENUE_POOL": "Part du pool mensuel de 5% des revenus nets",
+      "ANNUAL_PROFIT_POOL": "Part du pool annuel de 10% des profits après taxes"
     },
     "rates": {
       "founding_direct": "20$ par parrainage direct",
@@ -265,7 +265,7 @@
         "subtitle": "Monétisez votre contenu, gérez votre communauté et gagnez grâce au programme d'affiliation.",
         "feature1": "Paiements sécurisés via DSP",
         "feature2": "Gestion multi-administrateurs",
-        "feature3": "20% de commission sur les ventes",
+        "feature3": "10% de commission sur les ventes",
         "button": "Créer mon Club"
       }
     },

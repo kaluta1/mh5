@@ -2992,37 +2992,37 @@ export const translations: Record<Language, TranslationKeys> = {
         kyc_payments: {
           title: "Paiements KYC",
           description: "Gagnez des commissions lorsque les membres de votre réseau complètent leur vérification KYC",
-          commission: "20% sur le niveau 1, 2% sur les niveaux 2-10"
+          commission: "10% sur le niveau 1, 1% sur les niveaux 2-10"
         },
         founding_membership: {
           title: "Adhésion Fondateur",
           description: "Gagnez des commissions lorsque les membres de votre réseau de parrainage rejoignent le Club des Membres Fondateurs ou paient les frais d'adhésion annuels.",
-          commission: "20% sur le niveau 1, 2% sur les niveaux 2-10"
+          commission: "10% sur le niveau 1, 1% sur les niveaux 2-10"
         },
         annual_membership: {
           title: "Cotisation Annuelle",
-          description: "Gagnez des commissions lorsque les Membres Fondateurs paient leur cotisation annuelle (50$).",
-          commission: "10$ sur le niveau 1, 1$ sur les niveaux 2-10"
+          description: "Gagnez des commissions lorsque les Membres Fondateurs paient leur cotisation annuelle.",
+          commission: "10% sur le niveau 1, 1% sur les niveaux 2-10"
         },
         club_memberships: {
           title: "Adhésions aux clubs",
-          description: "Gagnez des commissions sur les frais d'adhésion aux clubs payants. Le site ajoute une majoration de 20% aux frais spécifiés par le propriétaire du club, dont 20% sont versés au niveau 1, et 2% à chacun des niveaux 2 à 10.",
-          commission: "20% sur le niveau 1, 2% sur les niveaux 2-10"
+          description: "Gagnez des commissions sur les frais d'adhésion aux clubs payants. Le site ajoute une majoration de 10% aux frais spécifiés par le propriétaire du club, dont 10% sont versés au niveau 1, et 1% à chacun des niveaux 2 à 10.",
+          commission: "10% sur le niveau 1, 1% sur les niveaux 2-10"
         },
         shop_purchases: {
           title: "Achats en boutique",
-          description: "Gagnez des commissions sur les achats de contenu numérique dans la boutique MyHigh5. Le site ajoute une majoration de 20% aux frais spécifiés par le propriétaire du club, dont 20% sont versés au niveau 1, et 2% à chacun des niveaux 2 à 10.",
-          commission: "20% sur le niveau 1, 2% sur les niveaux 2-10"
+          description: "Gagnez des commissions sur les achats de contenu numérique dans la boutique MyHigh5. Le site ajoute une majoration de 10% aux frais spécifiés par le propriétaire du club, dont 10% sont versés au niveau 1, et 1% à chacun des niveaux 2 à 10.",
+          commission: "10% sur le niveau 1, 1% sur les niveaux 2-10"
         },
         ad_revenue: {
           title: "Partage des revenus publicitaires",
-          description: "Les participants aux concours gagnent 40% des revenus publicitaires générés sur leurs pages de concours. Leurs parrains de niveau 1 gagnent 10%, et les niveaux 2 à 10 gagnent 1% chacun. Les membres qui nomment des candidats gagnent 10% des revenus publicitaires générés par leurs candidats nommés. Leurs parrains de niveau 1 gagnent 5%, et les niveaux 2 à 10 gagnent 1% chacun.",
-          commission: "10% sur le niveau 1, 1% sur les niveaux 2-10"
+          description: "Les participants aux concours gagnent 20% des revenus publicitaires générés sur leurs pages de concours. Leurs parrains de niveau 1 gagnent 5%, et les niveaux 2 à 10 gagnent 0.5% chacun. Les membres qui nomment des candidats gagnent 5% des revenus publicitaires générés par leurs candidats nommés. Leurs parrains de niveau 1 gagnent 2.5%, et les niveaux 2 à 10 gagnent 0.5% chacun.",
+          commission: "5% sur le niveau 1, 0.5% sur les niveaux 2-10"
         },
         ad_campaigns: {
           title: "Page des Sponsors du Site Web",
-          description: "Les parrains de niveau 1 gagnent une commission de 10%, et les niveaux 2 à 10 gagnent 1% chacun.",
-          commission: "10% sur le niveau 1, 1% sur les niveaux 2-10"
+          description: "Les parrains de niveau 1 gagnent une commission de 5%, et les niveaux 2 à 10 gagnent 0.5% chacun.",
+          commission: "5% sur le niveau 1, 0.5% sur les niveaux 2-10"
         }
       },
       faq: {
@@ -3032,9 +3032,9 @@ export const translations: Record<Language, TranslationKeys> = {
         question_1: "Comment puis-je gagner de l'argent sur MyHigh5 ?",
         answer_1: "Vous pouvez gagner de l'argent de plusieurs façons : en participant aux concours, en nommant des candidats, en rejoignant le programme d'affiliation pour gagner des commissions sur les membres que vous référez, et en devenant membre fondateur pour participer aux pools de revenus et de profits.",
         question_2: "Comment fonctionne le programme d'affiliation ?",
-        answer_2: "Pour les paiements de frais de vérification, vous gagnez une commission de 20% sur les paiements effectués par vos parrainages directs, et une commission de 2% sur les paiements effectués par chacun de vos parrainages indirects du niveau 2 au niveau 10. Pour les revenus publicitaires, les candidats participants reçoivent 40% des revenus publicitaires générés sur leurs pages de concours. Le parrain direct d'un candidat participant reçoit 10%, et chaque parrain indirect du niveau 2 au niveau 10 reçoit 1%. Les membres qui nomment reçoivent 10% des revenus publicitaires générés sur les pages de concours de leurs candidats nommés, 5% des revenus publicitaires générés sur les pages de concours des candidats nommés par leurs parrainages directs, et 1% des revenus publicitaires générés sur les pages de concours des candidats nommés par chacun de leurs parrainages indirects du niveau 2 au niveau 10. Pour les clubs, les propriétaires de clubs reçoivent 40% des revenus publicitaires générés sur leurs pages de club ou de fans. Le parrain direct d'un propriétaire de club reçoit 10%, et chaque parrain indirect du niveau 2 au niveau 10 reçoit 1%. Pour les frais d'adhésion aux clubs, MyHigh5 applique une majoration de 20% aux frais d'abonnement sélectionnés par le membre. De cette majoration, 20% est versé au parrain direct du payeur, et 2% est versé à chaque parrain indirect du niveau 2 au niveau 10. Pour les emplacements payés sur la page des Sponsors du Site Web, 10% est versé au parrain de niveau 1, et 1% est versé à chacun des parrains des niveaux 2 à 10.",
+        answer_2: "Pour les paiements de frais de vérification, vous gagnez une commission de 10% sur les paiements effectués par vos parrainages directs, et une commission de 1% sur les paiements effectués par chacun de vos parrainages indirects du niveau 2 au niveau 10. Pour les revenus publicitaires, les candidats participants reçoivent 20% des revenus publicitaires générés sur leurs pages de concours. Le parrain direct d'un candidat participant reçoit 5%, et chaque parrain indirect du niveau 2 au niveau 10 reçoit 0.5%. Les membres qui nomment reçoivent 5% des revenus publicitaires générés sur les pages de concours de leurs candidats nommés, 2.5% des revenus publicitaires générés sur les pages de concours des candidats nommés par leurs parrainages directs, et 0.5% des revenus publicitaires générés sur les pages de concours des candidats nommés par chacun de leurs parrainages indirects du niveau 2 au niveau 10. Pour les clubs, les propriétaires de clubs reçoivent 20% des revenus publicitaires générés sur leurs pages de club ou de fans. Le parrain direct d'un propriétaire de club reçoit 5%, et chaque parrain indirect du niveau 2 au niveau 10 reçoit 0.5%. Pour les frais d'adhésion aux clubs, MyHigh5 applique une majoration de 10% aux frais d'abonnement sélectionnés par le membre. De cette majoration, 10% est versé au parrain direct du payeur, et 1% est versé à chaque parrain indirect du niveau 2 au niveau 10. Pour les emplacements payés sur la page des Sponsors du Site Web, 5% est versé au parrain de niveau 1, et 0.5% est versé à chacun des parrains des niveaux 2 à 10.",
         question_3: "Qu'est-ce que le statut de Membre Fondateur ?",
-        answer_3: "Le statut de Membre Fondateur (MFM) est une opportunité limitée qui nécessite la vérification du compte et le paiement de frais d'adhésion de 100$ et d'une cotisation annuelle de club de 50$ pour les 1 000 premiers MFM, et de frais d'adhésion de 200$ et d'une cotisation annuelle de club de 200$ par la suite. Les emplacements MFM cesseront d'exister une fois que le nombre total de MFM atteindra 10 000. Les Membres Fondateurs participent à des pools de commissions mensuelles équivalant à 10% des revenus nets et à un pool de profits annuels équivalant à 20% des profits après impôts, alloués en fonction de la proportion de leurs parrainages vérifiés de niveau 1 par rapport au nombre total de parrainages vérifiés de niveau 1.",
+        answer_3: "Le statut de Membre Fondateur (MFM) est une opportunité limitée qui nécessite la vérification du compte et le paiement de frais d'adhésion de 100$ et d'une cotisation annuelle de club de 50$ pour les 1 000 premiers MFM, et de frais d'adhésion de 200$ et d'une cotisation annuelle de club de 200$ par la suite. Les emplacements MFM cesseront d'exister une fois que le nombre total de MFM atteindra 10 000. Les Membres Fondateurs participent à des pools de commissions mensuelles équivalant à 5% des revenus nets et à un pool de profits annuels équivalant à 10% des profits après impôts, alloués en fonction de la proportion de leurs parrainages vérifiés de niveau 1 par rapport au nombre total de parrainages vérifiés de niveau 1.",
         question_4: "Comment puis-je participer aux concours ?",
         answer_4: "Pour participer aux concours, vous devez créer un compte gratuit, compléter votre profil, et soumettre votre candidature avec des photos ou vidéos selon les exigences du concours. Certains concours peuvent nécessiter une vérification KYC.",
         question_5: "Les concours sont-ils gratuits ?",
@@ -3353,7 +3353,7 @@ export const translations: Record<Language, TranslationKeys> = {
         commission: "Commission",
         no_commission: "Aucune commission",
         kyc_pending: "KYC en cours",
-        commission_rate: "20% sur les paiements KYC",
+        commission_rate: "10% sur les paiements KYC",
         commission_structure: "Structure des commissions KYC",
         all_kyc_statuses: "Tous KYC",
         kyc_status_label: "Statut KYC",
@@ -3367,9 +3367,9 @@ export const translations: Record<Language, TranslationKeys> = {
         direct_referrals: "Directs (Niv. 1)",
         indirect_referrals: "Indirects (Niv. 2-10)",
         direct_tooltip_title: "Referrals Directs",
-        direct_tooltip_desc: "Utilisateurs que vous avez directement parrainés (niveau 1). Vous gagnez 20% de commission sur leurs paiements KYC.",
+        direct_tooltip_desc: "Utilisateurs que vous avez directement parrainés (niveau 1). Vous gagnez 10% de commission sur leurs paiements KYC.",
         indirect_tooltip_title: "Referrals Indirects",
-        indirect_tooltip_desc: "Utilisateurs parrainés par vos filleuls (niveaux 2-10). Vous gagnez 2% de commission sur leurs paiements KYC.",
+        indirect_tooltip_desc: "Utilisateurs parrainés par vos filleuls (niveaux 2-10). Vous gagnez 1% de commission sur leurs paiements KYC.",
         earned: "Gagné",
         total_tooltip_title: "Total Affiliés",
         total_tooltip_desc: "Nombre total de personnes dans votre réseau d'affiliation, tous niveaux confondus (1 à 10).",
@@ -3380,7 +3380,7 @@ export const translations: Record<Language, TranslationKeys> = {
         commissions_tooltip_title: "Total Commissions",
         commissions_tooltip_desc: "Somme de toutes les commissions gagnées grâce à votre réseau d'affiliation.",
         col_affiliate_hint: "Informations sur le membre de votre réseau",
-        col_level_hint: "Niveau 1 = direct (20%), Niveaux 2-10 = indirect (2%)",
+        col_level_hint: "Niveau 1 = direct (10%), Niveaux 2-10 = indirect (1%)",
         col_kyc_hint: "Statut de vérification d'identité (commission perçue si approuvé)",
         col_referrals_hint: "Nombre de personnes parrainées par cet affilié",
         col_earnings_hint: "Commission que vous avez gagnée grâce à cet affilié",
@@ -3388,7 +3388,7 @@ export const translations: Record<Language, TranslationKeys> = {
         levels: "Niveaux",
         direct_commission: "Commission directe",
         indirect_commission: "Commissions indirectes",
-        indirect_description: "Gagnez 2% sur chaque niveau de votre réseau, jusqu'au 10ème niveau.",
+        indirect_description: "Gagnez 1% sur chaque niveau de votre réseau, jusqu'au 10ème niveau.",
         cookie_tracking: "Tracking par cookies : 30 jours",
         all_affiliates: "Tous les affiliés",
         affiliates_found: "affiliés trouvés",
@@ -3474,8 +3474,8 @@ export const translations: Record<Language, TranslationKeys> = {
           MFM_MEMBERSHIP: "FM Joining Fees",
           FOUNDING_MEMBERSHIP_FEE: "Adhésion Founding Member",
           ANNUAL_MEMBERSHIP_FEE: "Cotisation Annuelle FM",
-          MONTHLY_REVENUE_POOL: "Pool Mensuel (10%)",
-          ANNUAL_PROFIT_POOL: "Pool Annuel (20%)"
+          MONTHLY_REVENUE_POOL: "Pool Mensuel (5%)",
+          ANNUAL_PROFIT_POOL: "Pool Annuel (10%)"
         },
         rates: {
           founding_direct: "20$ par parrainage direct",
@@ -3965,7 +3965,7 @@ export const translations: Record<Language, TranslationKeys> = {
       select_for_myself: "Pour moi-même",
       select_service: "Sélectionnez un service pour vous",
       kyc_description: "Vérification d'identité pour participer aux concours",
-      mfm_description: "Accès au pool de revenus mensuels (10%) et annuels (20%) + referrals aléatoires",
+      mfm_description: "Accès au pool de revenus mensuels (5%) et annuels (10%) + referrals aléatoires",
       annual_description: "Renouvellement annuel du statut Founding Member",
       total_to_pay: "Total à payer",
       card: "Carte bancaire",
@@ -4084,7 +4084,7 @@ export const translations: Record<Language, TranslationKeys> = {
           subtitle: "Monétisez votre contenu, gérez votre communauté et gagnez grâce au programme d'affiliation.",
           feature1: "Paiements sécurisés via DSP",
           feature2: "Gestion multi-administrateurs",
-          feature3: "20% de commission sur les ventes",
+          feature3: "10% de commission sur les ventes",
           button: "Créer mon Club"
         }
       },
@@ -5221,37 +5221,37 @@ export const translations: Record<Language, TranslationKeys> = {
         kyc_payments: {
           title: "KYC Payments",
           description: "Earn commissions when members in your network complete their KYC verification",
-          commission: "20% on Level 1, 2% on Levels 2-10"
+          commission: "10% on Level 1, 1% on Levels 2-10"
         },
         founding_membership: {
           title: "Founding Membership",
           description: "Earn commissions when members in your referral network join Founding Members Club or pay for annual membership fee.",
-          commission: "20% on Level 1, 2% on Levels 2-10"
+          commission: "10% on Level 1, 1% on Levels 2-10"
         },
         annual_membership: {
           title: "Annual Membership Fee",
-          description: "Earn commissions when Founding Members pay their annual membership fee ($50).",
-          commission: "$10 on Level 1, $1 on Levels 2-10"
+          description: "Earn commissions when Founding Members pay their annual membership fee.",
+          commission: "10% on Level 1, 1% on Levels 2-10"
         },
         club_memberships: {
           title: "Club Memberships",
-          description: "Earn commissions on paid club membership fees. The website adds a 20% markup to the club owner's specified fees, of which 20% is paid to Level 1, and 2% is paid to each of Levels 2 through 10.",
-          commission: "20% on Level 1, 2% on Levels 2-10"
+          description: "Earn commissions on paid club membership fees. The website adds a 10% markup to the club owner's specified fees, of which 10% is paid to Level 1, and 1% is paid to each of Levels 2 through 10.",
+          commission: "10% on Level 1, 1% on Levels 2-10"
         },
         shop_purchases: {
           title: "Shop Purchases",
-          description: "Earn commissions on digital content purchases in the MyHigh5 shop. The website adds a 20% markup to the club owner's specified fees, of which 20% is paid to Level 1, and 2% is paid to each of Levels 2 through 10.",
-          commission: "20% on Level 1, 2% on Levels 2-10"
+          description: "Earn commissions on digital content purchases in the MyHigh5 shop. The website adds a 10% markup to the club owner's specified fees, of which 10% is paid to Level 1, and 1% is paid to each of Levels 2 through 10.",
+          commission: "10% on Level 1, 1% on Levels 2-10"
         },
         ad_revenue: {
           title: "Ad Revenue Sharing",
-          description: "Contest participants earn 40% of the advertising revenue generated on their contest pages. Their Level 1 sponsors earn 10%, and Levels 2 through 10 earn 1% each. Contest nominators earn 10% of the advertising revenue generated by their nominated contestants. Their Level 1 sponsors earn 5%, and Levels 2 through 10 earn 1% each.",
-          commission: "10% on Level 1, 1% on Levels 2-10"
+          description: "Contest participants earn 20% of the advertising revenue generated on their contest pages. Their Level 1 sponsors earn 5%, and Levels 2 through 10 earn 0.5% each. Contest nominators earn 5% of the advertising revenue generated by their nominated contestants. Their Level 1 sponsors earn 2.5%, and Levels 2 through 10 earn 0.5% each.",
+          commission: "5% on Level 1, 0.5% on Levels 2-10"
         },
         ad_campaigns: {
           title: "Website Sponsors Page",
-          description: "Level 1 sponsors earn a 10% commission, and Levels 2 through 10 earn 1% each.",
-          commission: "10% on Level 1, 1% on Levels 2-10"
+          description: "Level 1 sponsors earn a 5% commission, and Levels 2 through 10 earn 0.5% each.",
+          commission: "5% on Level 1, 0.5% on Levels 2-10"
         }
       },
       faq: {
@@ -5261,9 +5261,9 @@ export const translations: Record<Language, TranslationKeys> = {
         question_1: "How can I earn money on MyHigh5?",
         answer_1: "You can earn money in several ways: by participating in contests, by nominating contestants, by joining the affiliate program to earn commissions on members you refer, and by becoming a founding member to participate in revenue and profit pools.",
         question_2: "How does the affiliate program work?",
-        answer_2: "For verification fee payments, you earn a 20% commission on payments made by your direct referrals, and a 2% commission on payments made by each of your indirect referrals from Level 2 to Level 10. For ad revenue, participating contestants receive 40% of the ad revenue generated on their contest pages. The direct sponsor of a participating contestant receives 10%, and each indirect sponsor from Level 2 to Level 10 receives 1%. Nominating members receive 10% of the ad revenue generated on the contest pages of their nominated contestants, 5% of the ad revenue generated on the contest pages of contestants nominated by their direct referrals, and 1% of the ad revenue generated on the contest pages of contestants nominated by each of their indirect referrals from Level 2 to Level 10. For clubs, club owners receive 40% of the ad revenue generated on their club or fan pages. The direct sponsor of a club owner receives 10%, and each indirect sponsor from Level 2 to Level 10 receives 1%. For club membership fees, MyHigh5 applies a 20% markup to the member's selected subscription fee. Of this markup, 20% is paid to the direct sponsor of the payer, and 2% is paid to each indirect sponsor from Level 2 to Level 10. For slots paid for on the Website Sponsors page, 10% is paid to the Level 1 sponsor, and 1% is paid to each of the Level 2 through Level 10 sponsors.",
+        answer_2: "For verification fee payments, you earn a 10% commission on payments made by your direct referrals, and a 1% commission on payments made by each of your indirect referrals from Level 2 to Level 10. For ad revenue, participating contestants receive 20% of the ad revenue generated on their contest pages. The direct sponsor of a participating contestant receives 5%, and each indirect sponsor from Level 2 to Level 10 receives 0.5%. Nominating members receive 5% of the ad revenue generated on the contest pages of their nominated contestants, 2.5% of the ad revenue generated on the contest pages of contestants nominated by their direct referrals, and 0.5% of the ad revenue generated on the contest pages of contestants nominated by each of their indirect referrals from Level 2 to Level 10. For clubs, club owners receive 20% of the ad revenue generated on their club or fan pages. The direct sponsor of a club owner receives 5%, and each indirect sponsor from Level 2 to Level 10 receives 0.5%. For club membership fees, MyHigh5 applies a 10% markup to the member's selected subscription fee. Of this markup, 10% is paid to the direct sponsor of the payer, and 1% is paid to each indirect sponsor from Level 2 to Level 10. For slots paid for on the Website Sponsors page, 5% is paid to the Level 1 sponsor, and 0.5% is paid to each of the Level 2 through Level 10 sponsors.",
         question_3: "What is the Founding Member status?",
-        answer_3: "Founding Member (MFM) status is a limited opportunity that requires account verification and payment of a joining fee of $100 and an annual club membership fee of $50 for the first 1,000 MFMs, and a joining fee of $200 and an annual club membership fee of $200 thereafter. MFM slots will cease to exist once the total number of MFMs reaches 10,000. Founding Members participate in monthly commission pools equal to 10% of net revenues and an annual profit pool equal to 20% of profits after taxes, allocated based on the proportion of their Level 1 verified referrals relative to the total number of Level 1 verified referrals.",
+        answer_3: "Founding Member (MFM) status is a limited opportunity that requires account verification and payment of a joining fee of $100 and an annual club membership fee of $50 for the first 1,000 MFMs, and a joining fee of $200 and an annual club membership fee of $200 thereafter. MFM slots will cease to exist once the total number of MFMs reaches 10,000. Founding Members participate in monthly commission pools equal to 5% of net revenues and an annual profit pool equal to 10% of profits after taxes, allocated based on the proportion of their Level 1 verified referrals relative to the total number of Level 1 verified referrals.",
         question_4: "How can I participate in contests?",
         answer_4: "To participate in contests, you need to create a free account, complete your profile, and submit your application with photos or videos according to the contest requirements. Some contests may require KYC verification.",
         question_5: "Are contests free?",
@@ -5529,7 +5529,7 @@ export const translations: Record<Language, TranslationKeys> = {
         commission: "Commission",
         no_commission: "No commission",
         kyc_pending: "KYC pending",
-        commission_rate: "20% on KYC payments",
+        commission_rate: "10% on KYC payments",
         commission_structure: "KYC Commission Structure",
         all_kyc_statuses: "All KYC",
         kyc_status_label: "KYC Status",
@@ -5543,9 +5543,9 @@ export const translations: Record<Language, TranslationKeys> = {
         direct_referrals: "Direct (Lvl. 1)",
         indirect_referrals: "Indirect (Lvl. 2-10)",
         direct_tooltip_title: "Direct Referrals",
-        direct_tooltip_desc: "Users you directly referred (level 1). You earn 20% commission on their KYC payments.",
+        direct_tooltip_desc: "Users you directly referred (level 1). You earn 10% commission on their KYC payments.",
         indirect_tooltip_title: "Indirect Referrals",
-        indirect_tooltip_desc: "Users referred by your referrals (levels 2-10). You earn 2% commission on their KYC payments.",
+        indirect_tooltip_desc: "Users referred by your referrals (levels 2-10). You earn 1% commission on their KYC payments.",
         earned: "Earned",
         total_tooltip_title: "Total Affiliates",
         total_tooltip_desc: "Total number of people in your affiliate network, all levels combined (1 to 10).",
@@ -5556,7 +5556,7 @@ export const translations: Record<Language, TranslationKeys> = {
         commissions_tooltip_title: "Total Commissions",
         commissions_tooltip_desc: "Sum of all commissions earned through your affiliate network.",
         col_affiliate_hint: "Information about the member in your network",
-        col_level_hint: "Level 1 = direct (20%), Levels 2-10 = indirect (2%)",
+        col_level_hint: "Level 1 = direct (10%), Levels 2-10 = indirect (1%)",
         col_kyc_hint: "Identity verification status (commission received if approved)",
         col_referrals_hint: "Number of people referred by this affiliate",
         col_earnings_hint: "Commission you earned from this affiliate",
@@ -5564,7 +5564,7 @@ export const translations: Record<Language, TranslationKeys> = {
         levels: "Levels",
         direct_commission: "Direct commission",
         indirect_commission: "Indirect commissions",
-        indirect_description: "Earn 2% on each level of your network, up to the 10th level.",
+        indirect_description: "Earn 1% on each level of your network, up to the 10th level.",
         cookie_tracking: "Cookie tracking: 30 days",
         all_affiliates: "All affiliates",
         affiliates_found: "affiliates found",
@@ -5650,8 +5650,8 @@ export const translations: Record<Language, TranslationKeys> = {
           MFM_MEMBERSHIP: "FM Joining Fees",
           FOUNDING_MEMBERSHIP_FEE: "Founding Member Fee",
           ANNUAL_MEMBERSHIP_FEE: "Annual FM Fee",
-          MONTHLY_REVENUE_POOL: "Monthly Pool (10%)",
-          ANNUAL_PROFIT_POOL: "Annual Pool (20%)"
+          MONTHLY_REVENUE_POOL: "Monthly Pool (5%)",
+          ANNUAL_PROFIT_POOL: "Annual Pool (10%)"
         },
         rates: {
           founding_direct: "$20 per direct referral",
@@ -6250,7 +6250,7 @@ export const translations: Record<Language, TranslationKeys> = {
       select_for_myself: "For myself",
       select_service: "Select a service for yourself",
       kyc_description: "Identity verification to participate in contests",
-      mfm_description: "Access to monthly (10%) and annual (20%) revenue pools + random referrals",
+      mfm_description: "Access to monthly (5%) and annual (10%) revenue pools + random referrals",
       annual_description: "Annual renewal of Founding Member status",
       total_to_pay: "Total to pay",
       card: "Credit card",
@@ -6369,7 +6369,7 @@ export const translations: Record<Language, TranslationKeys> = {
           subtitle: "Monetize your content, manage your community and earn through the affiliate program.",
           feature1: "Secure payments via DSP",
           feature2: "Multi-administrator management",
-          feature3: "20% commission on sales",
+          feature3: "10% commission on sales",
           button: "Create my Club"
         }
       },
@@ -7410,12 +7410,12 @@ export const translations: Record<Language, TranslationKeys> = {
         kyc_payments: {
           title: "Pagos KYC",
           description: "Gana comisiones cuando los miembros de tu red completen su verificación KYC",
-          commission: "20% en Nivel 1, 2% en Niveles 2-10"
+          commission: "10% en Nivel 1, 1% en Niveles 2-10"
         },
         founding_membership: {
           title: "Membresía Fundadora",
           description: "Gana comisiones cuando los miembros de tu red de referidos se unan al Club de Miembros Fundadores o paguen la tarifa de membresía anual.",
-          commission: "20% en Nivel 1, 2% en Niveles 2-10"
+          commission: "10% en Nivel 1, 1% en Niveles 2-10"
         },
         annual_membership: {
           title: "Tarifa de Membresía Anual",
@@ -7424,13 +7424,13 @@ export const translations: Record<Language, TranslationKeys> = {
         },
         club_memberships: {
           title: "Membresías de clubes",
-          description: "Gana comisiones en las tarifas de membresía de clubes pagadas. El sitio web agrega un margen de beneficio del 20% a las tarifas especificadas por el propietario del club, de las cuales el 20% se paga al Nivel 1, y el 2% se paga a cada uno de los Niveles 2 a 10.",
-          commission: "20% en Nivel 1, 2% en Niveles 2-10"
+          description: "Gana comisiones en las tarifas de membresía de clubes pagadas. El sitio web agrega un margen de beneficio del 10% a las tarifas especificadas por el propietario del club, de las cuales el 10% se paga al Nivel 1, y el 1% se paga a cada uno de los Niveles 2 a 10.",
+          commission: "10% en Nivel 1, 1% en Niveles 2-10"
         },
         shop_purchases: {
           title: "Compras en la tienda",
-          description: "Gana comisiones en compras de contenido digital en la tienda MyHigh5. El sitio web agrega un margen de beneficio del 20% a las tarifas especificadas por el propietario del club, de las cuales el 20% se paga al Nivel 1, y el 2% se paga a cada uno de los Niveles 2 a 10.",
-          commission: "20% en Nivel 1, 2% en Niveles 2-10"
+          description: "Gana comisiones en compras de contenido digital en la tienda MyHigh5. El sitio web agrega un margen de beneficio del 10% a las tarifas especificadas por el propietario del club, de las cuales el 10% se paga al Nivel 1, y el 1% se paga a cada uno de los Niveles 2 a 10.",
+          commission: "10% en Nivel 1, 1% en Niveles 2-10"
         },
         ad_revenue: {
           title: "Compartir ingresos publicitarios",
@@ -9504,12 +9504,12 @@ export const translations: Record<Language, TranslationKeys> = {
         kyc_payments: {
           title: "KYC-Zahlungen",
           description: "Verdienen Sie Provisionen, wenn Mitglieder in Ihrem Netzwerk ihre KYC-Verifizierung abschließen",
-          commission: "20% auf Stufe 1, 2% auf Stufen 2-10"
+          commission: "10% auf Stufe 1, 1% auf Stufen 2-10"
         },
         founding_membership: {
           title: "Gründungsmitgliedschaft",
           description: "Verdienen Sie Provisionen, wenn Mitglieder in Ihrem Empfehlungsnetzwerk dem Gründungsmitglieder-Club beitreten oder die jährliche Mitgliedsgebühr zahlen.",
-          commission: "20% auf Stufe 1, 2% auf Stufen 2-10"
+          commission: "10% auf Stufe 1, 1% auf Stufen 2-10"
         },
         annual_membership: {
           title: "Jährliche Mitgliedsgebühr",
@@ -9518,13 +9518,13 @@ export const translations: Record<Language, TranslationKeys> = {
         },
         club_memberships: {
           title: "Club-Mitgliedschaften",
-          description: "Verdienen Sie Provisionen auf bezahlte Club-Mitgliedsgebühren. Die Website fügt einen Aufschlag von 20% zu den vom Clubeigentümer festgelegten Gebühren hinzu, wovon 20% an Stufe 1 und 2% an jede der Stufen 2 bis 10 gezahlt werden.",
-          commission: "20% auf Stufe 1, 2% auf Stufen 2-10"
+          description: "Verdienen Sie Provisionen auf bezahlte Club-Mitgliedsgebühren. Die Website fügt einen Aufschlag von 10% zu den vom Clubeigentümer festgelegten Gebühren hinzu, wovon 10% an Stufe 1 und 1% an jede der Stufen 2 bis 10 gezahlt werden.",
+          commission: "10% auf Stufe 1, 1% auf Stufen 2-10"
         },
         shop_purchases: {
           title: "Einkäufe im Shop",
-          description: "Verdienen Sie Provisionen auf digitale Inhaltskäufe im MyHigh5-Shop. Die Website fügt einen Aufschlag von 20% zu den vom Clubeigentümer festgelegten Gebühren hinzu, wovon 20% an Stufe 1 und 2% an jede der Stufen 2 bis 10 gezahlt werden.",
-          commission: "20% auf Stufe 1, 2% auf Stufen 2-10"
+          description: "Verdienen Sie Provisionen auf digitale Inhaltskäufe im MyHigh5-Shop. Die Website fügt einen Aufschlag von 10% zu den vom Clubeigentümer festgelegten Gebühren hinzu, wovon 10% an Stufe 1 und 1% an jede der Stufen 2 bis 10 gezahlt werden.",
+          commission: "10% auf Stufe 1, 1% auf Stufen 2-10"
         },
         ad_revenue: {
           title: "Werbeeinnahmen teilen",

@@ -16,11 +16,11 @@ export function FAQ() {
     },
     {
       question: t('landing.faq.question_2') || 'Comment fonctionne le programme d\'affiliation ?',
-      answer: t('landing.faq.answer_2') || 'Le programme d\'affiliation MyHigh5 fonctionne sur 10 niveaux. Vous gagnez 20% de commission sur les activités des membres que vous référez directement (niveau 1), et 2% sur les niveaux 2 à 10. Vous pouvez gagner des commissions sur les paiements KYC, les adhésions, les achats en boutique, et plus encore.'
+      answer: t('landing.faq.answer_2') || 'Le programme d\'affiliation MyHigh5 fonctionne sur 10 niveaux. Vous gagnez 10% de commission sur les activités des membres que vous référez directement (niveau 1), et 1% sur les niveaux 2 à 10. Vous pouvez gagner des commissions sur les paiements KYC, les adhésions, les achats en boutique, et plus encore.'
     },
     {
       question: t('landing.faq.question_3') || 'Qu\'est-ce que le statut de Membre Fondateur ?',
-      answer: t('landing.faq.answer_3') || 'Le statut de Membre Fondateur est une opportunité limitée qui nécessite un paiement unique de 100$ et la vérification de votre compte. Les membres fondateurs participent à des pools de commissions mensuelles (10% des revenus nets) et à un pool de profits annuels (20% des profits après impôts).'
+      answer: t('landing.faq.answer_3') || 'Le statut de Membre Fondateur est une opportunité limitée qui nécessite un paiement unique de 100$ et la vérification de votre compte. Les membres fondateurs participent à des pools de commissions mensuelles (5% des revenus nets) et à un pool de profits annuels (10% des profits après impôts).'
     },
     {
       question: t('landing.faq.question_4') || 'Comment puis-je participer aux concours ?',
