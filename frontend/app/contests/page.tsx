@@ -228,10 +228,10 @@ export default function ContestsPage() {
     }
   }
 
-  // Handle participation/nomination click - redirect to participate page
+  // Handle participation/nomination click - redirect to apply page
   const handleParticipateClick = (contestId: string) => {
     if (isAuthenticated) {
-      router.push(`/dashboard/contests/${contestId}/participate`)
+      router.push(`/dashboard/contests/${contestId}/apply`)
     } else {
       setSelectedContestId(contestId)
       setShouldGoToParticipate(true)
@@ -254,7 +254,7 @@ export default function ContestsPage() {
     setShowLoginModal(false)
     if (selectedContestId) {
       if (shouldGoToParticipate) {
-        router.push(`/dashboard/contests/${selectedContestId}/participate`)
+        router.push(`/dashboard/contests/${selectedContestId}/apply`)
         setShouldGoToParticipate(false)
       } else {
       router.push(`/dashboard/contests/${selectedContestId}`)

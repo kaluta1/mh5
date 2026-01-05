@@ -653,7 +653,7 @@ export default function ContestDetailPage() {
 
                     {/* CTA Button */}
                     <Button
-                      onClick={() => router.push(`/dashboard/contests/${contestId}/participate`)}
+                      onClick={() => router.push(`/dashboard/contests/${contestId}/apply`)}
                       className="bg-myhigh5-primary hover:bg-myhigh5-blue-700 text-white font-semibold px-8 py-6 text-lg rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
                     >
                       {isNomination 
@@ -827,7 +827,7 @@ export default function ContestDetailPage() {
                 onComment={() => {}}
                 onShare={() => {}}
                 onReport={handleReportClick}
-                onEdit={() => router.push(`/dashboard/contests/${contestId}/participate?edit=true`)}
+                onEdit={() => router.push(`/dashboard/contests/${contestId}/apply?edit=true`)}
                 onDelete={handleDeleteContestant}
                 onHoverAuthor={(contestantId, data) => handleHoverStart('author', contestantId, data)}
                 onHoverEnd={handleHoverEnd}

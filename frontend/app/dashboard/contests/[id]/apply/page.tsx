@@ -16,7 +16,7 @@ import {
   BrandVerificationDialog
 } from '@/components/verification'
 
-export default function ParticipateInContestPage() {
+export default function ApplyToContestPage() {
   const { t } = useLanguage()
   const router = useRouter()
   const params = useParams()
@@ -639,3 +639,4 @@ export default function ParticipateInContestPage() {
     </div>
   )
 }
+

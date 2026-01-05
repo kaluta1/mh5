@@ -310,7 +310,7 @@ export default function MyApplicationsPage() {
           >
             <Eye className="w-4 h-4" />
           </Button>
-          <Link href={`/dashboard/contests/${app.contestId}/participate?edit=true`}>
+          <Link href={`/dashboard/contests/${app.contestId}/apply?edit=true`}>
             <Button
               variant="outline"
               size="sm"

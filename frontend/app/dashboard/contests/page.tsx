@@ -498,7 +498,7 @@ export default function ContestsPage() {
   }
 
   const handleParticipate = (contestId: string) => {
-    router.push(`/dashboard/contests/${contestId}/participate`)
+    router.push(`/dashboard/contests/${contestId}/apply`)
   }
 
   // Fonction pour déclencher la recherche

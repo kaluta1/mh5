@@ -945,28 +945,184 @@ class CRUDContest:
             
             # Récupérer les contestants avec leurs relations
             if all_contestant_ids:
-                contestants = db.query(Contestant)\
+                contestants_query = db.query(Contestant)\
                     .filter(
                         Contestant.id.in_(all_contestant_ids),
-                    Contestant.is_deleted == False
-                )\
-                .options(
-                    joinedload(Contestant.user)
-                )\
-                .all()
+                        Contestant.is_deleted == False
+                    )\
+                    .options(
+                        joinedload(Contestant.user)
+                    )
+                
+                # Filtrer selon le niveau de la saison et la localisation de l'utilisateur connecté
+                if season:
+                    season_level = None
+                    if hasattr(season, "level") and season.level is not None:
+                        season_level = season.level.value if hasattr(season.level, "value") else str(season.level)
+                        if isinstance(season_level, str):
+                            season_level = season_level.lower()
+                    
+                    # Récupérer l'utilisateur connecté avec sa localisation (si connecté)
+                    current_user = None
+                    if current_user_id:
+                        current_user = db.query(User).filter(User.id == current_user_id).first()
+                    
+                    if season_level:
+                        from app.models.contests import ContestStage, ContestantRanking
+                        
+                        # Joindre avec User pour filtrer par localisation
+                        contestants_query = contestants_query.join(User, Contestant.user_id == User.id)
+                        
+                        # Mapping entre SeasonLevel et ContestStageLevel
+                        stage_level_map = {
+                            "city": "city",
+                            "country": "country", 
+                            "regional": "regional",
+                            "region": "regional",
+                            "continent": "continental",  # ContestStageLevel utilise "continental"
+                            "global": "global"
+                        }
+                        
+                        target_stage_level = stage_level_map.get(season_level, "global")
+                        
+                        # Récupérer les IDs des stages du niveau correspondant pour cette saison
+                        stage_ids = db.query(ContestStage.id)\
+                            .filter(
+                                ContestStage.season_id == season.id,
+                                ContestStage.stage_level == target_stage_level
+                            )\
+                            .all()
+                        stage_ids_list = [s[0] for s in stage_ids]
+                        
+                        # Appliquer le filtrage géographique et par ranking selon le niveau de la saison
+                        if season_level == "city":
+                            # Pour city : filtrer par même city que l'utilisateur connecté
+                            # Pas besoin de vérifier le ranking (tous les contestants de la city sont inclus)
+                            if current_user and current_user.city:
+                                contestants_query = contestants_query.filter(
+                                    func.lower(User.city) == func.lower(current_user.city)
+                                )
+                            else:
+                                # Si l'utilisateur n'est pas connecté ou n'a pas de city, ne retourner aucun contestant
+                                contestants_query = contestants_query.filter(False)
+                        elif season_level == "country":
+                            # Pour country : filtrer par même country ET avoir un ranking dans un stage country
+                            if current_user and current_user.country:
+                                # Filtrer par country
+                                contestants_query = contestants_query.filter(
+                                    func.lower(User.country) == func.lower(current_user.country)
+                                )
+                                
+                                # Filtrer par ranking dans un stage country
+                                if stage_ids_list:
+                                    contestants_with_ranking = db.query(ContestantRanking.contestant_id)\
+                                        .filter(ContestantRanking.stage_id.in_(stage_ids_list))\
+                                        .distinct()\
+                                        .all()
+                                    contestant_ids_with_ranking = [r[0] for r in contestants_with_ranking]
+                                    
+                                    # Filtrer par IDs des contestants ayant atteint le niveau country
+                                    contestants_query = contestants_query.filter(
+                                        Contestant.id.in_(contestant_ids_with_ranking)
+                                    )
+                                else:
+                                    # Si aucun stage country, ne retourner aucun contestant
+                                    contestants_query = contestants_query.filter(False)
+                            else:
+                                # Si l'utilisateur n'est pas connecté ou n'a pas de country, ne retourner aucun contestant
+                                contestants_query = contestants_query.filter(False)
+                        elif season_level in ("regional", "region"):
+                            # Pour regional : filtrer par même region ET avoir un ranking dans un stage regional
+                            if current_user and hasattr(current_user, "region") and current_user.region:
+                                # Filtrer par region
+                                contestants_query = contestants_query.filter(
+                                    func.lower(User.region) == func.lower(current_user.region)
+                                )
+                                
+                                # Filtrer par ranking dans un stage regional
+                                if stage_ids_list:
+                                    contestants_with_ranking = db.query(ContestantRanking.contestant_id)\
+                                        .filter(ContestantRanking.stage_id.in_(stage_ids_list))\
+                                        .distinct()\
+                                        .all()
+                                    contestant_ids_with_ranking = [r[0] for r in contestants_with_ranking]
+                                    
+                                    # Filtrer par IDs des contestants ayant atteint le niveau regional
+                                    contestants_query = contestants_query.filter(
+                                        Contestant.id.in_(contestant_ids_with_ranking)
+                                    )
+                                else:
+                                    # Si aucun stage regional, ne retourner aucun contestant
+                                    contestants_query = contestants_query.filter(False)
+                            else:
+                                # Si l'utilisateur n'est pas connecté ou n'a pas de region, ne retourner aucun contestant
+                                contestants_query = contestants_query.filter(False)
+                        elif season_level == "continent":
+                            # Pour continent : filtrer par même continent ET avoir un ranking dans un stage continental
+                            if current_user and current_user.continent:
+                                # Filtrer par continent
+                                contestants_query = contestants_query.filter(
+                                    func.lower(User.continent) == func.lower(current_user.continent)
+                                )
+                                
+                                # Filtrer par ranking dans un stage continental
+                                if stage_ids_list:
+                                    contestants_with_ranking = db.query(ContestantRanking.contestant_id)\
+                                        .filter(ContestantRanking.stage_id.in_(stage_ids_list))\
+                                        .distinct()\
+                                        .all()
+                                    contestant_ids_with_ranking = [r[0] for r in contestants_with_ranking]
+                                    
+                                    # Filtrer par IDs des contestants ayant atteint le niveau continental
+                                    contestants_query = contestants_query.filter(
+                                        Contestant.id.in_(contestant_ids_with_ranking)
+                                    )
+                                else:
+                                    # Si aucun stage continental, ne retourner aucun contestant
+                                    contestants_query = contestants_query.filter(False)
+                            else:
+                                # Si l'utilisateur n'est pas connecté ou n'a pas de continent, ne retourner aucun contestant
+                                contestants_query = contestants_query.filter(False)
+                        elif season_level == "global":
+                            # Pour global : récupérer tous les contestants qui ont réussi à atteindre ce niveau
+                            # (ceux qui ont un ranking dans un stage global)
+                            # Pas de filtrage géographique pour global
+                            
+                            # Filtrer les contestants qui ont un ranking dans un stage global
+                            if stage_ids_list:
+                                contestants_with_ranking = db.query(ContestantRanking.contestant_id)\
+                                    .filter(ContestantRanking.stage_id.in_(stage_ids_list))\
+                                    .distinct()\
+                                    .all()
+                                contestant_ids_with_ranking = [r[0] for r in contestants_with_ranking]
+                                
+                                # Filtrer par IDs des contestants ayant atteint le niveau global
+                                contestants_query = contestants_query.filter(
+                                    Contestant.id.in_(contestant_ids_with_ranking)
+                                )
+                            else:
+                                # Si aucun stage global, ne retourner aucun contestant
+                                contestants_query = contestants_query.filter(False)
+                
+                contestants = contestants_query.all()
             else:
                 contestants = []
         else:
             # Fallback : utiliser l'ancien système (season_id = contest_id)
-            contestants = db.query(Contestant)\
+            contestants_query = db.query(Contestant)\
                 .filter(
                     Contestant.season_id == contest_id,
                     Contestant.is_deleted == False
                 )\
                 .options(
                     joinedload(Contestant.user)
-                )\
-                .all()
+                )
+            
+            # Appliquer le même filtrage géographique si un utilisateur est connecté
+            # Note: Dans ce cas, on n'a pas de season, donc on ne filtre pas
+            # (on pourrait récupérer le niveau depuis le contest si nécessaire)
+            
+            contestants = contestants_query.all()
         
         # Récupérer tous les IDs des contestants
         contestant_ids = [c.id for c in contestants]

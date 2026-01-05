@@ -117,7 +117,7 @@ export default function ProfileSetupPage() {
       const contestId = typeof window !== 'undefined' ? sessionStorage.getItem('contestId') : null
       if (contestId) {
         sessionStorage.removeItem('contestId')
-        router.push(`/dashboard/contests/${contestId}/participate`)
+        router.push(`/dashboard/contests/${contestId}/apply`)
       } else {
         router.push('/dashboard')
       }

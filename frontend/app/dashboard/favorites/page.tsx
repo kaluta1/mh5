@@ -163,7 +163,7 @@ export default function FavoritesPage() {
   }
 
   const handleParticipate = (contestId: string) => {
-    router.push(`/dashboard/contests/${contestId}/participate`)
+    router.push(`/dashboard/contests/${contestId}/apply`)
   }
 
   if (isLoading || pageLoading) {
