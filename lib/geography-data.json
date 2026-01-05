@@ -1,0 +1,1022 @@
+{
+  "continents": [
+    "Africa",
+    "Asia",
+    "Europe",
+    "North America",
+    "South America",
+    "Oceania"
+  ],
+  "countries": [
+    {
+      "id": "DZ",
+      "name": "Algeria",
+      "code": "DZ",
+      "continent": "Africa",
+      "region": "North Africa"
+    },
+    {
+      "id": "AO",
+      "name": "Angola",
+      "code": "AO",
+      "continent": "Africa",
+      "region": "Central Africa"
+    },
+    {
+      "id": "BJ",
+      "name": "Benin",
+      "code": "BJ",
+      "continent": "Africa",
+      "region": "West Africa"
+    },
+    {
+      "id": "BW",
+      "name": "Botswana",
+      "code": "BW",
+      "continent": "Africa",
+      "region": "Southern Africa"
+    },
+    {
+      "id": "BF",
+      "name": "Burkina Faso",
+      "code": "BF",
+      "continent": "Africa",
+      "region": "West Africa"
+    },
+    {
+      "id": "BI",
+      "name": "Burundi",
+      "code": "BI",
+      "continent": "Africa",
+      "region": "East Africa"
+    },
+    {
+      "id": "CM",
+      "name": "Cameroon",
+      "code": "CM",
+      "continent": "Africa",
+      "region": "Central Africa"
+    },
+    {
+      "id": "CV",
+      "name": "Cape Verde",
+      "code": "CV",
+      "continent": "Africa",
+      "region": "West Africa"
+    },
+    {
+      "id": "CF",
+      "name": "Central African Republic",
+      "code": "CF",
+      "continent": "Africa",
+      "region": "Central Africa"
+    },
+    {
+      "id": "TD",
+      "name": "Chad",
+      "code": "TD",
+      "continent": "Africa",
+      "region": "Central Africa"
+    },
+    {
+      "id": "KM",
+      "name": "Comoros",
+      "code": "KM",
+      "continent": "Africa",
+      "region": "East Africa"
+    },
+    {
+      "id": "CG",
+      "name": "Congo",
+      "code": "CG",
+      "continent": "Africa",
+      "region": "Central Africa"
+    },
+    {
+      "id": "CD",
+      "name": "Democratic Republic of the Congo",
+      "code": "CD",
+      "continent": "Africa",
+      "region": "Central Africa"
+    },
+    {
+      "id": "CI",
+      "name": "Côte d'Ivoire",
+      "code": "CI",
+      "continent": "Africa",
+      "region": "West Africa"
+    },
+    {
+      "id": "DJ",
+      "name": "Djibouti",
+      "code": "DJ",
+      "continent": "Africa",
+      "region": "East Africa"
+    },
+    {
+      "id": "EG",
+      "name": "Egypt",
+      "code": "EG",
+      "continent": "Africa",
+      "region": "North Africa"
+    },
+    {
+      "id": "GQ",
+      "name": "Equatorial Guinea",
+      "code": "GQ",
+      "continent": "Africa",
+      "region": "Central Africa"
+    },
+    {
+      "id": "ER",
+      "name": "Eritrea",
+      "code": "ER",
+      "continent": "Africa",
+      "region": "East Africa"
+    },
+    {
+      "id": "SZ",
+      "name": "Eswatini",
+      "code": "SZ",
+      "continent": "Africa",
+      "region": "Southern Africa"
+    },
+    {
+      "id": "ET",
+      "name": "Ethiopia",
+      "code": "ET",
+      "continent": "Africa",
+      "region": "East Africa"
+    },
+    {
+      "id": "GA",
+      "name": "Gabon",
+      "code": "GA",
+      "continent": "Africa",
+      "region": "Central Africa"
+    },
+    {
+      "id": "GM",
+      "name": "Gambia",
+      "code": "GM",
+      "continent": "Africa",
+      "region": "West Africa"
+    },
+    {
+      "id": "GH",
+      "name": "Ghana",
+      "code": "GH",
+      "continent": "Africa",
+      "region": "West Africa"
+    },
+    {
+      "id": "GN",
+      "name": "Guinea",
+      "code": "GN",
+      "continent": "Africa",
+      "region": "West Africa"
+    },
+    {
+      "id": "GW",
+      "name": "Guinea-Bissau",
+      "code": "GW",
+      "continent": "Africa",
+      "region": "West Africa"
+    },
+    {
+      "id": "KE",
+      "name": "Kenya",
+      "code": "KE",
+      "continent": "Africa",
+      "region": "East Africa"
+    },
+    {
+      "id": "LS",
+      "name": "Lesotho",
+      "code": "LS",
+      "continent": "Africa",
+      "region": "Southern Africa"
+    },
+    {
+      "id": "LR",
+      "name": "Liberia",
+      "code": "LR",
+      "continent": "Africa",
+      "region": "West Africa"
+    },
+    {
+      "id": "LY",
+      "name": "Libya",
+      "code": "LY",
+      "continent": "Africa",
+      "region": "North Africa"
+    },
+    {
+      "id": "MG",
+      "name": "Madagascar",
+      "code": "MG",
+      "continent": "Africa",
+      "region": "East Africa"
+    },
+    {
+      "id": "MW",
+      "name": "Malawi",
+      "code": "MW",
+      "continent": "Africa",
+      "region": "Southern Africa"
+    },
+    {
+      "id": "ML",
+      "name": "Mali",
+      "code": "ML",
+      "continent": "Africa",
+      "region": "West Africa"
+    },
+    {
+      "id": "MR",
+      "name": "Mauritania",
+      "code": "MR",
+      "continent": "Africa",
+      "region": "West Africa"
+    },
+    {
+      "id": "MU",
+      "name": "Mauritius",
+      "code": "MU",
+      "continent": "Africa",
+      "region": "East Africa"
+    },
+    {
+      "id": "MA",
+      "name": "Morocco",
+      "code": "MA",
+      "continent": "Africa",
+      "region": "North Africa"
+    },
+    {
+      "id": "MZ",
+      "name": "Mozambique",
+      "code": "MZ",
+      "continent": "Africa",
+      "region": "Southern Africa"
+    },
+    {
+      "id": "NA",
+      "name": "Namibia",
+      "code": "NA",
+      "continent": "Africa",
+      "region": "Southern Africa"
+    },
+    {
+      "id": "NE",
+      "name": "Niger",
+      "code": "NE",
+      "continent": "Africa",
+      "region": "West Africa"
+    },
+    {
+      "id": "NG",
+      "name": "Nigeria",
+      "code": "NG",
+      "continent": "Africa",
+      "region": "West Africa"
+    },
+    {
+      "id": "RW",
+      "name": "Rwanda",
+      "code": "RW",
+      "continent": "Africa",
+      "region": "East Africa"
+    },
+    {
+      "id": "ST",
+      "name": "São Tomé and Príncipe",
+      "code": "ST",
+      "continent": "Africa",
+      "region": "Central Africa"
+    },
+    {
+      "id": "SN",
+      "name": "Senegal",
+      "code": "SN",
+      "continent": "Africa",
+      "region": "West Africa"
+    },
+    {
+      "id": "SC",
+      "name": "Seychelles",
+      "code": "SC",
+      "continent": "Africa",
+      "region": "East Africa"
+    },
+    {
+      "id": "SL",
+      "name": "Sierra Leone",
+      "code": "SL",
+      "continent": "Africa",
+      "region": "West Africa"
+    },
+    {
+      "id": "SO",
+      "name": "Somalia",
+      "code": "SO",
+      "continent": "Africa",
+      "region": "East Africa"
+    },
+    {
+      "id": "ZA",
+      "name": "South Africa",
+      "code": "ZA",
+      "continent": "Africa",
+      "region": "Southern Africa"
+    },
+    {
+      "id": "SS",
+      "name": "South Sudan",
+      "code": "SS",
+      "continent": "Africa",
+      "region": "East Africa"
+    },
+    {
+      "id": "SD",
+      "name": "Sudan",
+      "code": "SD",
+      "continent": "Africa",
+      "region": "North Africa"
+    },
+    {
+      "id": "TZ",
+      "name": "Tanzania",
+      "code": "TZ",
+      "continent": "Africa",
+      "region": "East Africa"
+    },
+    {
+      "id": "TG",
+      "name": "Togo",
+      "code": "TG",
+      "continent": "Africa",
+      "region": "West Africa"
+    },
+    {
+      "id": "TN",
+      "name": "Tunisia",
+      "code": "TN",
+      "continent": "Africa",
+      "region": "North Africa"
+    },
+    {
+      "id": "UG",
+      "name": "Uganda",
+      "code": "UG",
+      "continent": "Africa",
+      "region": "East Africa"
+    },
+    {
+      "id": "ZM",
+      "name": "Zambia",
+      "code": "ZM",
+      "continent": "Africa",
+      "region": "Southern Africa"
+    },
+    {
+      "id": "ZW",
+      "name": "Zimbabwe",
+      "code": "ZW",
+      "continent": "Africa",
+      "region": "Southern Africa"
+    },
+    {
+      "id": "SN",
+      "name": "Senegal",
+      "code": "SN",
+      "continent": "Africa",
+      "region": "West Africa"
+    },
+    {
+      "id": "BJ",
+      "name": "Benin",
+      "code": "BJ",
+      "continent": "Africa",
+      "region": "West Africa"
+    },
+    {
+      "id": "CI",
+      "name": "Ivory Coast",
+      "code": "CI",
+      "continent": "Africa",
+      "region": "West Africa"
+    },
+    {
+      "id": "GH",
+      "name": "Ghana",
+      "code": "GH",
+      "continent": "Africa",
+      "region": "West Africa"
+    },
+    {
+      "id": "NG",
+      "name": "Nigeria",
+      "code": "NG",
+      "continent": "Africa",
+      "region": "West Africa"
+    },
+    {
+      "id": "ML",
+      "name": "Mali",
+      "code": "ML",
+      "continent": "Africa",
+      "region": "West Africa"
+    },
+    {
+      "id": "TG",
+      "name": "Togo",
+      "code": "TG",
+      "continent": "Africa",
+      "region": "West Africa"
+    },
+    {
+      "id": "BF",
+      "name": "Burkina Faso",
+      "code": "BF",
+      "continent": "Africa",
+      "region": "West Africa"
+    },
+    {
+      "id": "GN",
+      "name": "Guinea",
+      "code": "GN",
+      "continent": "Africa",
+      "region": "West Africa"
+    },
+    {
+      "id": "GW",
+      "name": "Guinea-Bissau",
+      "code": "GW",
+      "continent": "Africa",
+      "region": "West Africa"
+    },
+    {
+      "id": "LR",
+      "name": "Liberia",
+      "code": "LR",
+      "continent": "Africa",
+      "region": "West Africa"
+    },
+    {
+      "id": "SL",
+      "name": "Sierra Leone",
+      "code": "SL",
+      "continent": "Africa",
+      "region": "West Africa"
+    },
+    {
+      "id": "ZA",
+      "name": "South Africa",
+      "code": "ZA",
+      "continent": "Africa",
+      "region": "South Africa"
+    },
+    {
+      "id": "BW",
+      "name": "Botswana",
+      "code": "BW",
+      "continent": "Africa",
+      "region": "South Africa"
+    },
+    {
+      "id": "NA",
+      "name": "Namibia",
+      "code": "NA",
+      "continent": "Africa",
+      "region": "South Africa"
+    },
+    {
+      "id": "ZW",
+      "name": "Zimbabwe",
+      "code": "ZW",
+      "continent": "Africa",
+      "region": "South Africa"
+    },
+    {
+      "id": "ZM",
+      "name": "Zambia",
+      "code": "ZM",
+      "continent": "Africa",
+      "region": "South Africa"
+    },
+    {
+      "id": "MW",
+      "name": "Malawi",
+      "code": "MW",
+      "continent": "Africa",
+      "region": "South Africa"
+    },
+    {
+      "id": "MZ",
+      "name": "Mozambique",
+      "code": "MZ",
+      "continent": "Africa",
+      "region": "South Africa"
+    },
+    {
+      "id": "SZ",
+      "name": "Eswatini",
+      "code": "SZ",
+      "continent": "Africa",
+      "region": "South Africa"
+    },
+    {
+      "id": "LS",
+      "name": "Lesotho",
+      "code": "LS",
+      "continent": "Africa",
+      "region": "South Africa"
+    },
+    {
+      "id": "EG",
+      "name": "Egypt",
+      "code": "EG",
+      "continent": "Africa",
+      "region": "North Africa"
+    },
+    {
+      "id": "LY",
+      "name": "Libya",
+      "code": "LY",
+      "continent": "Africa",
+      "region": "North Africa"
+    },
+    {
+      "id": "TN",
+      "name": "Tunisia",
+      "code": "TN",
+      "continent": "Africa",
+      "region": "North Africa"
+    },
+    {
+      "id": "DZ",
+      "name": "Algeria",
+      "code": "DZ",
+      "continent": "Africa",
+      "region": "North Africa"
+    },
+    {
+      "id": "MA",
+      "name": "Morocco",
+      "code": "MA",
+      "continent": "Africa",
+      "region": "North Africa"
+    },
+    {
+      "id": "SD",
+      "name": "Sudan",
+      "code": "SD",
+      "continent": "Africa",
+      "region": "North Africa"
+    },
+    {
+      "id": "KE",
+      "name": "Kenya",
+      "code": "KE",
+      "continent": "Africa",
+      "region": "East Africa"
+    },
+    {
+      "id": "TZ",
+      "name": "Tanzania",
+      "code": "TZ",
+      "continent": "Africa",
+      "region": "East Africa"
+    },
+    {
+      "id": "UG",
+      "name": "Uganda",
+      "code": "UG",
+      "continent": "Africa",
+      "region": "East Africa"
+    },
+    {
+      "id": "ET",
+      "name": "Ethiopia",
+      "code": "ET",
+      "continent": "Africa",
+      "region": "East Africa"
+    },
+    {
+      "id": "RW",
+      "name": "Rwanda",
+      "code": "RW",
+      "continent": "Africa",
+      "region": "East Africa"
+    },
+    {
+      "id": "BI",
+      "name": "Burundi",
+      "code": "BI",
+      "continent": "Africa",
+      "region": "East Africa"
+    },
+    {
+      "id": "SO",
+      "name": "Somalia",
+      "code": "SO",
+      "continent": "Africa",
+      "region": "East Africa"
+    },
+    {
+      "id": "DJ",
+      "name": "Djibouti",
+      "code": "DJ",
+      "continent": "Africa",
+      "region": "East Africa"
+    },
+    {
+      "id": "VN",
+      "name": "Vietnam",
+      "code": "VN",
+      "continent": "Asia",
+      "region": "Southeast Asia"
+    },
+    {
+      "id": "TH",
+      "name": "Thailand",
+      "code": "TH",
+      "continent": "Asia",
+      "region": "Southeast Asia"
+    },
+    {
+      "id": "PH",
+      "name": "Philippines",
+      "code": "PH",
+      "continent": "Asia",
+      "region": "Southeast Asia"
+    },
+    {
+      "id": "ID",
+      "name": "Indonesia",
+      "code": "ID",
+      "continent": "Asia",
+      "region": "Southeast Asia"
+    },
+    {
+      "id": "MY",
+      "name": "Malaysia",
+      "code": "MY",
+      "continent": "Asia",
+      "region": "Southeast Asia"
+    },
+    {
+      "id": "SG",
+      "name": "Singapore",
+      "code": "SG",
+      "continent": "Asia",
+      "region": "Southeast Asia"
+    },
+    {
+      "id": "KH",
+      "name": "Cambodia",
+      "code": "KH",
+      "continent": "Asia",
+      "region": "Southeast Asia"
+    },
+    {
+      "id": "LA",
+      "name": "Laos",
+      "code": "LA",
+      "continent": "Asia",
+      "region": "Southeast Asia"
+    },
+    {
+      "id": "MM",
+      "name": "Myanmar",
+      "code": "MM",
+      "continent": "Asia",
+      "region": "Southeast Asia"
+    },
+    {
+      "id": "IN",
+      "name": "India",
+      "code": "IN",
+      "continent": "Asia",
+      "region": "South Asia"
+    },
+    {
+      "id": "PK",
+      "name": "Pakistan",
+      "code": "PK",
+      "continent": "Asia",
+      "region": "South Asia"
+    },
+    {
+      "id": "BD",
+      "name": "Bangladesh",
+      "code": "BD",
+      "continent": "Asia",
+      "region": "South Asia"
+    },
+    {
+      "id": "LK",
+      "name": "Sri Lanka",
+      "code": "LK",
+      "continent": "Asia",
+      "region": "South Asia"
+    },
+    {
+      "id": "NP",
+      "name": "Nepal",
+      "code": "NP",
+      "continent": "Asia",
+      "region": "South Asia"
+    },
+    {
+      "id": "SA",
+      "name": "Saudi Arabia",
+      "code": "SA",
+      "continent": "Asia",
+      "region": "Middle East"
+    },
+    {
+      "id": "AE",
+      "name": "United Arab Emirates",
+      "code": "AE",
+      "continent": "Asia",
+      "region": "Middle East"
+    },
+    {
+      "id": "IL",
+      "name": "Israel",
+      "code": "IL",
+      "continent": "Asia",
+      "region": "Middle East"
+    },
+    {
+      "id": "JO",
+      "name": "Jordan",
+      "code": "JO",
+      "continent": "Asia",
+      "region": "Middle East"
+    },
+    {
+      "id": "LB",
+      "name": "Lebanon",
+      "code": "LB",
+      "continent": "Asia",
+      "region": "Middle East"
+    },
+    {
+      "id": "IR",
+      "name": "Iran",
+      "code": "IR",
+      "continent": "Asia",
+      "region": "Middle East"
+    },
+    {
+      "id": "IQ",
+      "name": "Iraq",
+      "code": "IQ",
+      "continent": "Asia",
+      "region": "Middle East"
+    },
+    {
+      "id": "FR",
+      "name": "France",
+      "code": "FR",
+      "continent": "Europe",
+      "region": "Western Europe"
+    },
+    {
+      "id": "DE",
+      "name": "Germany",
+      "code": "DE",
+      "continent": "Europe",
+      "region": "Western Europe"
+    },
+    {
+      "id": "GB",
+      "name": "United Kingdom",
+      "code": "GB",
+      "continent": "Europe",
+      "region": "Western Europe"
+    },
+    {
+      "id": "ES",
+      "name": "Spain",
+      "code": "ES",
+      "continent": "Europe",
+      "region": "Western Europe"
+    },
+    {
+      "id": "IT",
+      "name": "Italy",
+      "code": "IT",
+      "continent": "Europe",
+      "region": "Western Europe"
+    },
+    {
+      "id": "NL",
+      "name": "Netherlands",
+      "code": "NL",
+      "continent": "Europe",
+      "region": "Western Europe"
+    },
+    {
+      "id": "BE",
+      "name": "Belgium",
+      "code": "BE",
+      "continent": "Europe",
+      "region": "Western Europe"
+    },
+    {
+      "id": "CH",
+      "name": "Switzerland",
+      "code": "CH",
+      "continent": "Europe",
+      "region": "Western Europe"
+    },
+    {
+      "id": "AT",
+      "name": "Austria",
+      "code": "AT",
+      "continent": "Europe",
+      "region": "Western Europe"
+    },
+    {
+      "id": "SE",
+      "name": "Sweden",
+      "code": "SE",
+      "continent": "Europe",
+      "region": "Northern Europe"
+    },
+    {
+      "id": "NO",
+      "name": "Norway",
+      "code": "NO",
+      "continent": "Europe",
+      "region": "Northern Europe"
+    },
+    {
+      "id": "DK",
+      "name": "Denmark",
+      "code": "DK",
+      "continent": "Europe",
+      "region": "Northern Europe"
+    },
+    {
+      "id": "FI",
+      "name": "Finland",
+      "code": "FI",
+      "continent": "Europe",
+      "region": "Northern Europe"
+    },
+    {
+      "id": "IS",
+      "name": "Iceland",
+      "code": "IS",
+      "continent": "Europe",
+      "region": "Northern Europe"
+    },
+    {
+      "id": "IE",
+      "name": "Ireland",
+      "code": "IE",
+      "continent": "Europe",
+      "region": "Northern Europe"
+    },
+    {
+      "id": "PL",
+      "name": "Poland",
+      "code": "PL",
+      "continent": "Europe",
+      "region": "Eastern Europe"
+    },
+    {
+      "id": "CZ",
+      "name": "Czech Republic",
+      "code": "CZ",
+      "continent": "Europe",
+      "region": "Eastern Europe"
+    },
+    {
+      "id": "SK",
+      "name": "Slovakia",
+      "code": "SK",
+      "continent": "Europe",
+      "region": "Eastern Europe"
+    },
+    {
+      "id": "HU",
+      "name": "Hungary",
+      "code": "HU",
+      "continent": "Europe",
+      "region": "Eastern Europe"
+    },
+    {
+      "id": "RO",
+      "name": "Romania",
+      "code": "RO",
+      "continent": "Europe",
+      "region": "Eastern Europe"
+    },
+    {
+      "id": "BG",
+      "name": "Bulgaria",
+      "code": "BG",
+      "continent": "Europe",
+      "region": "Eastern Europe"
+    },
+    {
+      "id": "US",
+      "name": "United States",
+      "code": "US",
+      "continent": "North America",
+      "region": "North America"
+    },
+    {
+      "id": "CA",
+      "name": "Canada",
+      "code": "CA",
+      "continent": "North America",
+      "region": "North America"
+    },
+    {
+      "id": "MX",
+      "name": "Mexico",
+      "code": "MX",
+      "continent": "North America",
+      "region": "North America"
+    },
+    {
+      "id": "BR",
+      "name": "Brazil",
+      "code": "BR",
+      "continent": "South America",
+      "region": "South America"
+    },
+    {
+      "id": "CO",
+      "name": "Colombia",
+      "code": "CO",
+      "continent": "South America",
+      "region": "South America"
+    },
+    {
+      "id": "AR",
+      "name": "Argentina",
+      "code": "AR",
+      "continent": "South America",
+      "region": "South America"
+    },
+    {
+      "id": "CL",
+      "name": "Chile",
+      "code": "CL",
+      "continent": "South America",
+      "region": "South America"
+    },
+    {
+      "id": "PE",
+      "name": "Peru",
+      "code": "PE",
+      "continent": "South America",
+      "region": "South America"
+    },
+    {
+      "id": "EC",
+      "name": "Ecuador",
+      "code": "EC",
+      "continent": "South America",
+      "region": "South America"
+    },
+    {
+      "id": "VE",
+      "name": "Venezuela",
+      "code": "VE",
+      "continent": "South America",
+      "region": "South America"
+    },
+    {
+      "id": "AU",
+      "name": "Australia",
+      "code": "AU",
+      "continent": "Oceania",
+      "region": "Oceania"
+    },
+    {
+      "id": "NZ",
+      "name": "New Zealand",
+      "code": "NZ",
+      "continent": "Oceania",
+      "region": "Oceania"
+    },
+    {
+      "id": "FJ",
+      "name": "Fiji",
+      "code": "FJ",
+      "continent": "Oceania",
+      "region": "Oceania"
+    }
+  ],
+  "regions": [],
+  "cities": []
+}

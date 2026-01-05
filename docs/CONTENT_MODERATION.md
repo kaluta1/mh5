@@ -1,0 +1,200 @@
+# Configuration de la Modération de Contenu
+
+## Variables d'environnement requises
+
+Ajoutez ces variables à votre fichier `.env.local` :
+
+```env
+# Activer/Désactiver la modération de contenu
+ENABLE_CONTENT_MODERATION=true
+
+# Sightengine - Modération d'images/vidéos + Comparaison de visages
+# Inscription: https://sightengine.com/
+SLIGTHENGINE_API_USER=your_api_user
+SLIGTHENGINE_API_KEY=your_api_key
+
+# AssemblyAI - Modération audio + Transcription
+# Inscription: https://www.assemblyai.com/
+ASSEMBLYAI_API_KEY=your_assemblyai_api_key
+
+# Uploadthing
+UPLOADTHING_SECRET=your_uploadthing_secret
+UPLOADTHING_APP_ID=your_app_id
+```
+
+## Services utilisés
+
+### Sightengine (Images/Vidéos)
+
+**Prix** : À partir de $29/mois
+
+**Fonctionnalités utilisées** :
+- ✅ Détection de nudité / contenu adulte
+- ✅ Détection de violence / gore
+- ✅ Détection d'armes
+- ✅ Détection de contenu offensant
+- ✅ Modération de vidéos
+- ✅ Détection de visages
+- ✅ Comparaison de visages (ownership verification)
+
+### AssemblyAI (Audio)
+
+**Prix** : À partir de $0.25/heure d'audio
+
+**Fonctionnalités utilisées** :
+- ✅ Transcription audio
+- ✅ Détection de discours haineux
+- ✅ Détection de langage vulgaire (profanity)
+- ✅ Détection de menaces/violence verbale
+- ✅ Détection de contenu sensible
+- ✅ Vérification de présence vocale (voice ownership basique)
+
+## Flux de modération (AVANT upload)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                  1. SÉLECTION DU FICHIER                        │
+│                     (Client)                                    │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│           2. ENVOI À /api/upload/moderated                      │
+│              (Fichier en base64)                                │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│           3. MODÉRATION SIGHTENGINE                             │
+│  ✗ Nudité / Contenu adulte                                     │
+│  ✗ Violence / Gore / Sang / Cadavres                           │
+│  ✗ Armes                                                        │
+│  ✗ Contenu offensant                                           │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+              ┌───────────────┴───────────────┐
+              │                               │
+        ✅ Approuvé                      ❌ Rejeté
+              │                               │
+              ▼                               ▼
+┌─────────────────────────┐   ┌─────────────────────────┐
+│ 4. OWNERSHIP CHECK      │   │ Erreur 422 retournée    │
+│   (si visage détecté)   │   │ Fichier NON uploadé     │
+└─────────────────────────┘   └─────────────────────────┘
+              │
+              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│           5. UPLOAD VERS UPLOADTHING                            │
+│              (Seulement si tout est OK)                         │
+└─────────────────────────────────────────────────────────────────┘
+              │
+              ▼
+        ✅ URL retournée au client
+```
+
+## API Endpoints
+
+### POST /api/upload/moderated (Principal)
+Upload avec modération AVANT stockage. C'est l'endpoint utilisé par le formulaire de participation.
+
+```json
+// Request: FormData
+// - file: File (image ou vidéo)
+// - verificationImageUrl: string (optionnel, pour ownership check)
+
+// Response (succès)
+{
+  "success": true,
+  "file": {
+    "url": "https://utfs.io/f/xxx",
+    "key": "xxx",
+    "name": "image.jpg",
+    "size": 12345,
+    "type": "image/jpeg"
+  },
+  "moderated": true
+}
+
+// Response (rejeté - 422)
+{
+  "error": "Contenu rejeté par la modération",
+  "flags": [
+    { "type": "adult", "severity": "high", "confidence": 0.95, "description": "Contenu adulte détecté" }
+  ],
+  "details": "Contenu adulte détecté"
+}
+```
+
+### POST /api/content/moderate
+Modère un contenu déjà uploadé (pour vérification manuelle).
+
+```json
+// Request
+{
+  "contentUrl": "https://example.com/image.jpg",
+  "contentType": "image"
+}
+
+// Response
+{
+  "success": true,
+  "moderation": {
+    "isApproved": true,
+    "confidence": 0.95,
+    "flags": [],
+    "details": {}
+  }
+}
+```
+
+### POST /api/content/verify-ownership
+Vérifie que l'auteur du contenu est le même que le selfie de vérification.
+
+```json
+// Request
+{
+  "verificationImageUrl": "https://example.com/selfie.jpg",
+  "uploadedImageUrl": "https://example.com/content.jpg"
+}
+
+// Response
+{
+  "success": true,
+  "ownership": {
+    "isMatch": true,
+    "confidence": 0.87,
+    "faceDetected": true,
+    "details": {
+      "similarity": 0.87,
+      "verificationImageFaces": 1,
+      "uploadedImageFaces": 1
+    }
+  }
+}
+```
+
+## Seuils de modération
+
+Les seuils sont configurables dans `lib/services/content-moderation-service.ts` :
+
+```typescript
+const MODERATION_THRESHOLDS = {
+  nudity: 0.6,        // Score au-delà = contenu adulte
+  violence: 0.7,      // Score au-delà = contenu violent
+  gore: 0.5,          // Score pour gore/cadavres/sang
+  weapons: 0.8,       // Score pour armes
+  offensive: 0.7,     // Score pour contenu offensant
+  drugs: 0.8,         // Score pour drogues
+}
+```
+
+## Mode développement
+
+Sans clés API configurées, le service fonctionne en mode "pass-through" :
+- Tous les contenus sont approuvés
+- Les vérifications d'ownership retournent `isMatch: true`
+- Un warning est affiché dans les logs
+
+## Aucune dépendance supplémentaire requise
+
+Sightengine est appelé via son API REST, aucune installation de package npm n'est nécessaire.
