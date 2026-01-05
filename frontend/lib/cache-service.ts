@@ -13,11 +13,30 @@ class CacheService {
   private cache: Map<string, CacheEntry<any>> = new Map()
   private readonly DEFAULT_TTL = 10 * 60 * 1000 // 5 minutes par défaut
   private readonly STORAGE_KEY = 'api_cache'
+  private enabled: boolean = true // Cache activé
 
   constructor() {
     this.loadFromStorage()
     // Nettoyer le cache expiré au démarrage
     this.cleanExpired()
+  }
+
+  /**
+   * Active ou désactive le cache
+   */
+  setEnabled(enabled: boolean): void {
+    this.enabled = enabled
+    if (!enabled) {
+      // Si désactivé, vider le cache
+      this.clear()
+    }
+  }
+
+  /**
+   * Vérifie si le cache est activé
+   */
+  isEnabled(): boolean {
+    return this.enabled
   }
 
   /**
@@ -76,6 +95,10 @@ class CacheService {
    * Récupère une valeur du cache
    */
   get<T>(endpoint: string, params?: any): T | null {
+    if (!this.enabled) {
+      return null
+    }
+
     const key = this.generateKey(endpoint, params)
     const entry = this.cache.get(key)
 
@@ -98,6 +121,10 @@ class CacheService {
    * Met une valeur en cache
    */
   set<T>(endpoint: string, data: T, params?: any, ttl?: number): void {
+    if (!this.enabled) {
+      return
+    }
+
     const key = this.generateKey(endpoint, params)
     const entry: CacheEntry<T> = {
       data,
@@ -113,6 +140,10 @@ class CacheService {
    * Invalide le cache pour un endpoint spécifique ou un pattern
    */
   invalidate(endpoint?: string, pattern?: string): void {
+    if (!this.enabled) {
+      return
+    }
+
     if (endpoint) {
       // Invalider toutes les clés qui commencent par cet endpoint
       const keysToDelete: string[] = []

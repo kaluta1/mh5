@@ -224,20 +224,7 @@ class ContestService {
    */
   async getContestById(contestId: string): Promise<ContestResponse> {
     try {
-      const cacheKey = `/api/v1/contests/${contestId}`
-      
-      // Vérifier le cache
-      const cached = cacheService.get<ContestResponse>(cacheKey)
-      if (cached) {
-        return cached
-      }
-      
-      // Si pas en cache, faire la requête
-      const response = await api.get(cacheKey)
-      
-      // Mettre en cache
-      cacheService.set(cacheKey, response.data)
-      
+      const response = await api.get(`/api/v1/contests/${contestId}`)
       return response.data
     } catch (error) {
       console.error(`Error fetching contest ${contestId}:`, error)
@@ -272,9 +259,6 @@ class ContestService {
       // Invalider le cache du contest spécifique et de la liste
       cacheService.invalidate(`/api/v1/contests/${contestId}`)
       cacheService.invalidate('/api/v1/contests/')
-      
-      // Mettre à jour le cache avec les nouvelles données
-      cacheService.set(`/api/v1/contests/${contestId}`, result)
       
       return result
     } catch (error) {
@@ -395,21 +379,8 @@ class ContestService {
    */
   async getContestantById(contestantId: number): Promise<ContestantWithAuthorAndStats | null> {
     try {
-      const cacheKey = `/api/v1/contestants/${contestantId}`
-      
-      // Vérifier le cache
-      const cached = cacheService.get<ContestantWithAuthorAndStats>(cacheKey)
-      if (cached) {
-        return cached
-      }
-      
-      // Si pas en cache, faire la requête
-      const response = await api.get(cacheKey)
+      const response = await api.get(`/api/v1/contestants/${contestantId}`)
       console.log(`Contestant ${contestantId} fetched:`, response.data)
-      
-      // Mettre en cache
-      cacheService.set(cacheKey, response.data)
-      
       return response.data
     } catch (error) {
       console.error(`Error fetching contestant ${contestantId}:`, error)
@@ -528,20 +499,7 @@ class ContestService {
    */
   async getVoteDetails(contestantId: number): Promise<any> {
     try {
-      const cacheKey = `/api/v1/contestants/${contestantId}/votes/details`
-      
-      // Vérifier le cache
-      const cached = cacheService.get<any>(cacheKey)
-      if (cached) {
-        return cached
-      }
-      
-      // Si pas en cache, faire la requête
-      const response = await api.get(cacheKey)
-      
-      // Mettre en cache
-      cacheService.set(cacheKey, response.data)
-      
+      const response = await api.get(`/api/v1/contestants/${contestantId}/votes/details`)
       return response.data
     } catch (error) {
       console.error(`Error fetching vote details for contestant ${contestantId}:`, error)
@@ -632,20 +590,7 @@ class ContestService {
    */
   async getFavoriteDetails(contestantId: number): Promise<any> {
     try {
-      const cacheKey = `/api/v1/contestants/${contestantId}/favorites/details`
-      
-      // Vérifier le cache
-      const cached = cacheService.get<any>(cacheKey)
-      if (cached) {
-        return cached
-      }
-      
-      // Si pas en cache, faire la requête
-      const response = await api.get(cacheKey)
-      
-      // Mettre en cache
-      cacheService.set(cacheKey, response.data)
-      
+      const response = await api.get(`/api/v1/contestants/${contestantId}/favorites/details`)
       return response.data
     } catch (error) {
       console.error(`Error fetching favorite details for contestant ${contestantId}:`, error)
@@ -1048,4 +993,3 @@ class ContestService {
 }
 
 export const contestService = new ContestService()
-3

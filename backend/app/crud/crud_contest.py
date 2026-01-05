@@ -953,160 +953,8 @@ class CRUDContest:
                     .options(
                         joinedload(Contestant.user)
                     )
-                
-                # Filtrer selon le niveau de la saison et la localisation de l'utilisateur connecté
-                if season:
-                    season_level = None
-                    if hasattr(season, "level") and season.level is not None:
-                        season_level = season.level.value if hasattr(season.level, "value") else str(season.level)
-                        if isinstance(season_level, str):
-                            season_level = season_level.lower()
-                    
-                    # Récupérer l'utilisateur connecté avec sa localisation (si connecté)
-                    current_user = None
-                    if current_user_id:
-                        current_user = db.query(User).filter(User.id == current_user_id).first()
-                    
-                    if season_level:
-                        from app.models.contests import ContestStage, ContestantRanking
-                        
-                        # Joindre avec User pour filtrer par localisation
-                        contestants_query = contestants_query.join(User, Contestant.user_id == User.id)
-                        
-                        # Mapping entre SeasonLevel et ContestStageLevel
-                        stage_level_map = {
-                            "city": "city",
-                            "country": "country", 
-                            "regional": "regional",
-                            "region": "regional",
-                            "continent": "continental",  # ContestStageLevel utilise "continental"
-                            "global": "global"
-                        }
-                        
-                        target_stage_level = stage_level_map.get(season_level, "global")
-                        
-                        # Récupérer les IDs des stages du niveau correspondant pour cette saison
-                        stage_ids = db.query(ContestStage.id)\
-                            .filter(
-                                ContestStage.season_id == season.id,
-                                ContestStage.stage_level == target_stage_level
-                            )\
-                            .all()
-                        stage_ids_list = [s[0] for s in stage_ids]
-                        
-                        # Appliquer le filtrage géographique et par ranking selon le niveau de la saison
-                        if season_level == "city":
-                            # Pour city : filtrer par même city que l'utilisateur connecté
-                            # Pas besoin de vérifier le ranking (tous les contestants de la city sont inclus)
-                            if current_user and current_user.city:
-                                contestants_query = contestants_query.filter(
-                                    func.lower(User.city) == func.lower(current_user.city)
-                                )
-                            else:
-                                # Si l'utilisateur n'est pas connecté ou n'a pas de city, ne retourner aucun contestant
-                                contestants_query = contestants_query.filter(False)
-                        elif season_level == "country":
-                            # Pour country : filtrer par même country ET avoir un ranking dans un stage country
-                            if current_user and current_user.country:
-                                # Filtrer par country
-                                contestants_query = contestants_query.filter(
-                                    func.lower(User.country) == func.lower(current_user.country)
-                                )
-                                
-                                # Filtrer par ranking dans un stage country
-                                if stage_ids_list:
-                                    contestants_with_ranking = db.query(ContestantRanking.contestant_id)\
-                                        .filter(ContestantRanking.stage_id.in_(stage_ids_list))\
-                                        .distinct()\
-                                        .all()
-                                    contestant_ids_with_ranking = [r[0] for r in contestants_with_ranking]
-                                    
-                                    # Filtrer par IDs des contestants ayant atteint le niveau country
-                                    contestants_query = contestants_query.filter(
-                                        Contestant.id.in_(contestant_ids_with_ranking)
-                                    )
-                                else:
-                                    # Si aucun stage country, ne retourner aucun contestant
-                                    contestants_query = contestants_query.filter(False)
-                            else:
-                                # Si l'utilisateur n'est pas connecté ou n'a pas de country, ne retourner aucun contestant
-                                contestants_query = contestants_query.filter(False)
-                        elif season_level in ("regional", "region"):
-                            # Pour regional : filtrer par même region ET avoir un ranking dans un stage regional
-                            if current_user and hasattr(current_user, "region") and current_user.region:
-                                # Filtrer par region
-                                contestants_query = contestants_query.filter(
-                                    func.lower(User.region) == func.lower(current_user.region)
-                                )
-                                
-                                # Filtrer par ranking dans un stage regional
-                                if stage_ids_list:
-                                    contestants_with_ranking = db.query(ContestantRanking.contestant_id)\
-                                        .filter(ContestantRanking.stage_id.in_(stage_ids_list))\
-                                        .distinct()\
-                                        .all()
-                                    contestant_ids_with_ranking = [r[0] for r in contestants_with_ranking]
-                                    
-                                    # Filtrer par IDs des contestants ayant atteint le niveau regional
-                                    contestants_query = contestants_query.filter(
-                                        Contestant.id.in_(contestant_ids_with_ranking)
-                                    )
-                                else:
-                                    # Si aucun stage regional, ne retourner aucun contestant
-                                    contestants_query = contestants_query.filter(False)
-                            else:
-                                # Si l'utilisateur n'est pas connecté ou n'a pas de region, ne retourner aucun contestant
-                                contestants_query = contestants_query.filter(False)
-                        elif season_level == "continent":
-                            # Pour continent : filtrer par même continent ET avoir un ranking dans un stage continental
-                            if current_user and current_user.continent:
-                                # Filtrer par continent
-                                contestants_query = contestants_query.filter(
-                                    func.lower(User.continent) == func.lower(current_user.continent)
-                                )
-                                
-                                # Filtrer par ranking dans un stage continental
-                                if stage_ids_list:
-                                    contestants_with_ranking = db.query(ContestantRanking.contestant_id)\
-                                        .filter(ContestantRanking.stage_id.in_(stage_ids_list))\
-                                        .distinct()\
-                                        .all()
-                                    contestant_ids_with_ranking = [r[0] for r in contestants_with_ranking]
-                                    
-                                    # Filtrer par IDs des contestants ayant atteint le niveau continental
-                                    contestants_query = contestants_query.filter(
-                                        Contestant.id.in_(contestant_ids_with_ranking)
-                                    )
-                                else:
-                                    # Si aucun stage continental, ne retourner aucun contestant
-                                    contestants_query = contestants_query.filter(False)
-                            else:
-                                # Si l'utilisateur n'est pas connecté ou n'a pas de continent, ne retourner aucun contestant
-                                contestants_query = contestants_query.filter(False)
-                        elif season_level == "global":
-                            # Pour global : récupérer tous les contestants qui ont réussi à atteindre ce niveau
-                            # (ceux qui ont un ranking dans un stage global)
-                            # Pas de filtrage géographique pour global
-                            
-                            # Filtrer les contestants qui ont un ranking dans un stage global
-                            if stage_ids_list:
-                                contestants_with_ranking = db.query(ContestantRanking.contestant_id)\
-                                    .filter(ContestantRanking.stage_id.in_(stage_ids_list))\
-                                    .distinct()\
-                                    .all()
-                                contestant_ids_with_ranking = [r[0] for r in contestants_with_ranking]
-                                
-                                # Filtrer par IDs des contestants ayant atteint le niveau global
-                                contestants_query = contestants_query.filter(
-                                    Contestant.id.in_(contestant_ids_with_ranking)
-                                )
-                            else:
-                                # Si aucun stage global, ne retourner aucun contestant
-                                contestants_query = contestants_query.filter(False)
-                
-                contestants = contestants_query.all()
             else:
-                contestants = []
+                contestants_query = None
         else:
             # Fallback : utiliser l'ancien système (season_id = contest_id)
             contestants_query = db.query(Contestant)\
@@ -1117,20 +965,100 @@ class CRUDContest:
                 .options(
                     joinedload(Contestant.user)
                 )
-            
-            # Appliquer le même filtrage géographique si un utilisateur est connecté
-            # Note: Dans ce cas, on n'a pas de season, donc on ne filtre pas
-            # (on pourrait récupérer le niveau depuis le contest si nécessaire)
-            
-            contestants = contestants_query.all()
         
-        # Récupérer tous les IDs des contestants
-        contestant_ids = [c.id for c in contestants]
-        
-        # Récupérer l'utilisateur courant (pour les règles de vote basées sur la localisation)
+        # Appliquer le filtrage géographique selon le niveau de la saison et l'utilisateur connecté
+        # Récupérer l'utilisateur courant pour le filtrage géographique
         current_user = None
         if current_user_id:
             current_user = db.query(User).filter(User.id == current_user_id).first()
+        
+        # Déterminer le niveau de la saison pour le filtrage
+        season_level = None
+        if season and hasattr(season, "level") and season.level is not None:
+            season_level = season.level.value if hasattr(season.level, "value") else str(season.level)
+            if isinstance(season_level, str):
+                season_level = season_level.lower()
+        
+        # Appliquer le filtrage géographique dans la requête SQL si un utilisateur est connecté
+        if contestants_query and current_user and season_level and season_level != "global":
+            from sqlalchemy import and_
+            
+            # Joindre avec la table User pour filtrer par localisation
+            # On utilise join car on a besoin de filtrer sur les colonnes de User
+            contestants_query = contestants_query.join(User, Contestant.user_id == User.id)
+            
+            # Fonction helper pour créer des conditions de filtrage
+            def create_location_filter(level: str, user: User):
+                """
+                Crée un filtre SQL basé sur le niveau et la localisation de l'utilisateur.
+                La logique est similaire à is_geographically_allowed mais appliquée au filtrage SQL.
+                """
+                def is_valid_location(value: Optional[str]) -> bool:
+                    if not value:
+                        return False
+                    val_lower = str(value).lower().strip()
+                    return val_lower not in ("unknown", "none", "", "null")
+                
+                # Construire les conditions selon le niveau
+                if level == "city":
+                    # Même ville ET même pays
+                    conditions = []
+                    if is_valid_location(user.country):
+                        conditions.append(User.country.ilike(user.country))
+                    if is_valid_location(user.city):
+                        conditions.append(User.city.ilike(user.city))
+                    # Si aucune condition valide, pas de filtre (afficher tous)
+                    if not conditions:
+                        return None
+                    # Combiner avec AND (les deux doivent correspondre si les deux sont valides)
+                    return and_(*conditions) if len(conditions) > 1 else conditions[0]
+                    
+                elif level == "country":
+                    # Même pays ET même continent
+                    conditions = []
+                    if is_valid_location(user.continent):
+                        conditions.append(User.continent.ilike(user.continent))
+                    if is_valid_location(user.country):
+                        conditions.append(User.country.ilike(user.country))
+                    if not conditions:
+                        return None
+                    return and_(*conditions) if len(conditions) > 1 else conditions[0]
+                    
+                elif level in ("regional", "region"):
+                    # Même région ET même continent
+                    conditions = []
+                    if is_valid_location(user.continent):
+                        conditions.append(User.continent.ilike(user.continent))
+                    user_region = getattr(user, "region", None)
+                    if is_valid_location(user_region):
+                        # Vérifier si la colonne region existe dans User
+                        if hasattr(User, "region"):
+                            conditions.append(User.region.ilike(user_region))
+                    if not conditions:
+                        return None
+                    return and_(*conditions) if len(conditions) > 1 else conditions[0]
+                    
+                elif level == "continent":
+                    # Même continent uniquement
+                    if is_valid_location(user.continent):
+                        return User.continent.ilike(user.continent)
+                    return None
+                
+                # Niveau inconnu ou global -> pas de filtre
+                return None
+            
+            location_filter = create_location_filter(season_level, current_user)
+            if location_filter is not None:
+                contestants_query = contestants_query.filter(location_filter)
+        
+        # Exécuter la requête
+        if contestants_query:
+            contestants = contestants_query.all()
+        else:
+            contestants = []
+        
+        # Récupérer tous les IDs des contestants (après filtrage)
+        contestant_ids = [c.id for c in contestants]
         
         # Récupérer tous les votes avec utilisateurs (depuis ContestantVoting)
         # Filtrer par season_id pour ne récupérer que les votes de cette saison
@@ -1448,7 +1376,8 @@ class CRUDContest:
             # 1. Il est authentifié
             # 2. Ce n'est pas sa propre candidature
             # 3. Il n'a pas déjà voté pour ce contestant dans cette saison
-            # 4. Il respecte les restrictions géographiques selon le niveau de la saison
+            # Note: Les restrictions géographiques sont appliquées au niveau de l'affichage des contestants,
+            # pas au niveau du vote. Si un contestant est visible, l'utilisateur peut voter pour lui.
             # IMPORTANT: Un utilisateur peut voter pour plusieurs contestants différents dans la même saison
             # Mais il ne peut pas voter deux fois pour le même contestant dans la même saison
             # Si l'utilisateur a voté pour le contestant X dans la saison CITY, il peut voter pour le contestant Y dans la même saison CITY
@@ -1486,83 +1415,11 @@ class CRUDContest:
                         else:
                             # L'utilisateur n'a pas encore voté pour ce contestant dans cette saison
                             has_voted = False
-                            # Vérifier les restrictions géographiques selon le niveau de la saison
-                            # La fonction is_geographically_allowed retourne True si season_level est None
-                            geo_ok = is_geographically_allowed(current_user, contestant)
-                            can_vote = geo_ok
-                            
-                            # Déterminer la raison de restriction géographique si nécessaire
-                            if not geo_ok:
-                                if season_level and contestant.user:
-                                    lvl = str(season_level).lower()
-                                    v = current_user
-                                    u = contestant.user
-                                    
-                                    def eq(a: Optional[str], b: Optional[str]) -> bool:
-                                        return bool(a and b and a.lower() == b.lower())
-                                    
-                                    def is_valid_location(value: Optional[str]) -> bool:
-                                        if not value:
-                                            return False
-                                        val_lower = str(value).lower().strip()
-                                        return val_lower not in ("unknown", "none", "", "null")
-                                    
-                                    def compare_with_unknown(val1: Optional[str], val2: Optional[str]) -> bool:
-                                        valid1 = is_valid_location(val1)
-                                        valid2 = is_valid_location(val2)
-                                        if valid1 and valid2:
-                                            return eq(val1, val2)
-                                        return True
-                                    
-                                    if lvl == "city":
-                                        country_match = compare_with_unknown(v.country, u.country)
-                                        if not country_match:
-                                            vote_restriction_reason = "different_country"
-                                        else:
-                                            city_match = compare_with_unknown(v.city, u.city)
-                                            if not city_match:
-                                                vote_restriction_reason = "different_city"
-                                    elif lvl == "country":
-                                        continent_match = compare_with_unknown(v.continent, u.continent)
-                                        if not continent_match:
-                                            vote_restriction_reason = "different_continent"
-                                        else:
-                                            country_match = compare_with_unknown(v.country, u.country)
-                                            if not country_match:
-                                                vote_restriction_reason = "different_country"
-                                    elif lvl in ("regional", "region"):
-                                        continent_match = compare_with_unknown(v.continent, u.continent)
-                                        if not continent_match:
-                                            vote_restriction_reason = "different_continent"
-                                        else:
-                                            v_region = getattr(v, "region", None)
-                                            u_region = getattr(u, "region", None)
-                                            # Log pour déboguer
-                                            import logging
-                                            logger = logging.getLogger(__name__)
-                                            logger.info(f"[REGION CHECK] Contest {contest_id}, Contestant {contestant.id}, User {v.id if v else 'None'}, Season level: {lvl}")
-                                            logger.info(f"[REGION CHECK] Voter region: '{v_region}' (type: {type(v_region)}), Contestant user region: '{u_region}' (type: {type(u_region)})")
-                                            logger.info(f"[REGION CHECK] Voter continent: '{v.continent}', Contestant user continent: '{u.continent}'")
-                                            logger.info(f"[REGION CHECK] is_valid_location(v_region): {is_valid_location(v_region)}, is_valid_location(u_region): {is_valid_location(u_region)}")
-                                            region_match = compare_with_unknown(v_region, u_region)
-                                            logger.info(f"[REGION CHECK] region_match result: {region_match}, geo_ok before: {geo_ok}")
-                                            if not region_match:
-                                                vote_restriction_reason = "different_region"
-                                                logger.info(f"[REGION CHECK] Setting vote_restriction_reason to 'different_region' for contestant {contestant.id}")
-                                            else:
-                                                logger.info(f"[REGION CHECK] Regions match or one is Unknown, no restriction for contestant {contestant.id}")
-                                    elif lvl == "continent":
-                                        continent_match = compare_with_unknown(v.continent, u.continent)
-                                        if not continent_match:
-                                            vote_restriction_reason = "different_continent"
-                                else:
-                                    # Si pas de season_level ou pas de contestant.user, on ne peut pas déterminer la raison exacte
-                                    # Mais on sait que can_vote est False, donc on met une raison générique
-                                    vote_restriction_reason = "geographic_restriction"
-                            
-                            # S'assurer que vote_restriction_reason est défini si can_vote est False
-                            if not can_vote and not vote_restriction_reason:
-                                vote_restriction_reason = "geographic_restriction"
+                            # Plus de restriction géographique pour le vote
+                            # L'utilisateur peut voter s'il n'a pas déjà voté et ce n'est pas sa propre candidature
+                            can_vote = True
+           
+           
             else:
                 # Si current_user_id est None (utilisateur non authentifié), can_vote et has_voted restent False
                 vote_restriction_reason = "not_authenticated"
