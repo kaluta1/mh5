@@ -7419,8 +7419,8 @@ export const translations: Record<Language, TranslationKeys> = {
         },
         annual_membership: {
           title: "Tarifa de Membresía Anual",
-          description: "Gana comisiones cuando los Miembros Fundadores pagan su tarifa de membresía anual ($50).",
-          commission: "$10 en Nivel 1, $1 en Niveles 2-10"
+          description: "Gana comisiones cuando los Miembros Fundadores pagan su tarifa de membresía anual.",
+          commission: "10% en Nivel 1, 1% en Niveles 2-10"
         },
         club_memberships: {
           title: "Membresías de clubes",
@@ -9513,8 +9513,8 @@ export const translations: Record<Language, TranslationKeys> = {
         },
         annual_membership: {
           title: "Jährliche Mitgliedsgebühr",
-          description: "Verdienen Sie Provisionen, wenn Gründungsmitglieder ihre jährliche Mitgliedsgebühr zahlen (50$).",
-          commission: "10$ auf Stufe 1, 1$ auf Stufen 2-10"
+          description: "Verdienen Sie Provisionen, wenn Gründungsmitglieder ihre jährliche Mitgliedsgebühr zahlen.",
+          commission: "10% auf Stufe 1, 1% auf Stufen 2-10"
         },
         club_memberships: {
           title: "Club-Mitgliedschaften",

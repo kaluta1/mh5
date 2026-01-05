@@ -545,7 +545,7 @@ export default function AffiliatesPage() {
                     <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">{t('dashboard.affiliates.direct_referrals')}</p>
                   </div>
                   <div className="text-right flex-shrink-0">
-                    <p className="text-2xl sm:text-3xl font-bold text-emerald-500">20%</p>
+                    <p className="text-2xl sm:text-3xl font-bold text-emerald-500">10%</p>
                     <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 hidden sm:block">{t('dashboard.affiliates.direct_commission') || 'Commission directe'}</p>
                   </div>
                 </div>
@@ -563,7 +563,7 @@ export default function AffiliatesPage() {
                     {t('dashboard.affiliates.indirect_commission') || 'Indirect'}
                   </span>
                 </div>
-                <p className="text-xl sm:text-2xl font-bold text-emerald-500">2%</p>
+                <p className="text-xl sm:text-2xl font-bold text-emerald-500">1%</p>
               </div>
               
               <div className="flex flex-wrap gap-1.5 sm:gap-2">
@@ -578,7 +578,7 @@ export default function AffiliatesPage() {
               </div>
               
               <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 mt-2 sm:mt-3">
-                {t('dashboard.affiliates.indirect_description') || 'Gagnez 2% sur chaque niveau de votre réseau, jusqu\'au 10ème niveau.'}
+                {t('dashboard.affiliates.indirect_description') || 'Gagnez 1% sur chaque niveau de votre réseau, jusqu\'au 10ème niveau.'}
               </p>
             </div>
 
@@ -589,7 +589,7 @@ export default function AffiliatesPage() {
                   <p className="font-medium text-sm sm:text-base text-gray-900 dark:text-white">{t('dashboard.affiliates.total_potential') || 'Total potentiel'}</p>
                   <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">{t('dashboard.affiliates.max_commission') || 'Commission maximale sur 10 niveaux'}</p>
                 </div>
-                <p className="text-2xl sm:text-3xl font-bold text-emerald-600 dark:text-emerald-400">38%</p>
+                <p className="text-2xl sm:text-3xl font-bold text-emerald-600 dark:text-emerald-400">19%</p>
               </div>
             </div>
 

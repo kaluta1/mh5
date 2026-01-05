@@ -312,7 +312,7 @@ export default function AffiliatesListPage() {
           <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-gray-900 dark:bg-gray-700 text-white text-sm rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
             <p className="font-semibold mb-1">{t('dashboard.affiliates.direct_tooltip_title') || 'Referrals Directs'}</p>
             <p className="text-gray-300 text-xs mb-2">
-              {t('dashboard.affiliates.direct_tooltip_desc') || 'Utilisateurs que vous avez directement parrainés (niveau 1). Vous gagnez 20% de commission sur leurs paiements KYC.'}
+              {t('dashboard.affiliates.direct_tooltip_desc') || 'Utilisateurs que vous avez directement parrainés (niveau 1). Vous gagnez 10% de commission sur leurs paiements KYC.'}
             </p>
             <div className="flex items-center justify-between pt-2 border-t border-gray-700 dark:border-gray-600">
               <span className="text-xs text-gray-400">{t('dashboard.affiliates.earned') || 'Gagné'}:</span>
@@ -338,7 +338,7 @@ export default function AffiliatesListPage() {
           <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-gray-900 dark:bg-gray-700 text-white text-sm rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
             <p className="font-semibold mb-1">{t('dashboard.affiliates.indirect_tooltip_title') || 'Referrals Indirects'}</p>
             <p className="text-gray-300 text-xs mb-2">
-              {t('dashboard.affiliates.indirect_tooltip_desc') || 'Utilisateurs parrainés par vos filleuls (niveaux 2-10). Vous gagnez 2% de commission sur leurs paiements KYC.'}
+              {t('dashboard.affiliates.indirect_tooltip_desc') || 'Utilisateurs parrainés par vos filleuls (niveaux 2-10). Vous gagnez 1% de commission sur leurs paiements KYC.'}
             </p>
             <div className="flex items-center justify-between pt-2 border-t border-gray-700 dark:border-gray-600">
               <span className="text-xs text-gray-400">{t('dashboard.affiliates.earned') || 'Gagné'}:</span>
@@ -429,8 +429,8 @@ export default function AffiliatesListPage() {
               {t('dashboard.affiliates.commission_structure') || 'Structure des commissions KYC'}
             </p>
             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-              <span className="font-semibold text-myhigh5-primary">20%</span> {t('dashboard.affiliates.level')} 1 (direct) • 
-              <span className="font-semibold text-purple-600 dark:text-purple-400 ml-1">2%</span> {t('dashboard.affiliates.levels')} 2-10 (indirect)
+              <span className="font-semibold text-myhigh5-primary">10%</span> {t('dashboard.affiliates.level')} 1 (direct) • 
+              <span className="font-semibold text-purple-600 dark:text-purple-400 ml-1">1%</span> {t('dashboard.affiliates.levels')} 2-10 (indirect)
             </p>
           </div>
         </div>
@@ -508,7 +508,7 @@ export default function AffiliatesListPage() {
           <div className="text-center relative group cursor-help">
             <span className="border-b border-dashed border-gray-400">{t('dashboard.affiliates.level')}</span>
             <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-56 p-2 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-              {t('dashboard.affiliates.col_level_hint') || 'Niveau 1 = direct (20%), Niveaux 2-10 = indirect (2%)'}
+              {t('dashboard.affiliates.col_level_hint') || 'Niveau 1 = direct (10%), Niveaux 2-10 = indirect (1%)'}
             </div>
           </div>
           {/* KYC */}

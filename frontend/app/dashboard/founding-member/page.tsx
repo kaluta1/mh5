@@ -74,10 +74,10 @@ export default function FoundingMemberPage() {
                   </div>
                   <div className="flex-1">
                     <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                      Monthly Revenue Commission Pool (10%)
+                      Monthly Revenue Commission Pool (5%)
                     </h3>
                     <p className="text-gray-700 dark:text-gray-300 mb-3">
-                      Ten percent (10%) of MyHigh5's monthly net revenue is allocated to the Founding Members Commission Pool. This pool is distributed monthly based on each member's Founding Membership Ratio.
+                      Five percent (5%) of MyHigh5's monthly net revenue is allocated to the Founding Members Commission Pool. This pool is distributed monthly based on each member's Founding Membership Ratio.
                     </p>
                     <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
                       <p className="text-sm font-medium text-gray-900 dark:text-white mb-1">
@@ -99,10 +99,10 @@ export default function FoundingMemberPage() {
                   </div>
                   <div className="flex-1">
                     <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                      Annual Profit Pool (20%)
+                      Annual Profit Pool (10%)
                     </h3>
                     <p className="text-gray-700 dark:text-gray-300 mb-3">
-                      Founding Members of MyHigh5 and DSM participate in a combined pool comprising twenty percent (20%) of MyHigh5's annual profit after taxes.
+                      Founding Members of MyHigh5 and DSM participate in a combined pool comprising ten percent (10%) of MyHigh5's annual profit after taxes.
                     </p>
                     <div className="space-y-3">
                       <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">

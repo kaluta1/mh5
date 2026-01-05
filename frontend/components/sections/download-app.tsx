@@ -47,14 +47,19 @@ export function DownloadApp() {
                   size="lg"
                   className="group bg-white text-myhigh5-primary hover:bg-gray-100 font-bold px-8 py-6 rounded-xl shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 hover:scale-105"
                   onClick={() => {
-                    // TODO: Add App Store link
-                    window.open('https://apps.apple.com', '_blank')
+                    // Télécharger l'APK depuis le dossier public
+                    const link = document.createElement('a')
+                    link.href = '/app-release.apk'
+                    link.download = 'myhigh5-app.apk'
+                    document.body.appendChild(link)
+                    link.click()
+                    document.body.removeChild(link)
                   }}
                 >
                   <Apple className="w-6 h-6 mr-3" />
                   <div className="text-left">
-                    <div className="text-xs opacity-70">{t('landing.download_app.download_on') || 'Télécharger sur'}</div>
-                    <div className="text-lg font-bold">{t('landing.download_app.app_store') || 'App Store'}</div>
+                    <div className="text-xs opacity-70">{t('landing.download_app.download_on') || 'Télécharger'}</div>
+                    <div className="text-lg font-bold">{t('landing.download_app.app_store') || 'App iOS'}</div>
                   </div>
                 </Button>
                 
@@ -63,14 +68,19 @@ export function DownloadApp() {
                   variant="outline"
                   className="group bg-white/10 backdrop-blur-sm border-2 border-white/30 text-white hover:bg-white/20 font-bold px-8 py-6 rounded-xl transition-all duration-300 hover:-translate-y-1 hover:scale-105"
                   onClick={() => {
-                    // TODO: Add Google Play link
-                    window.open('https://play.google.com', '_blank')
+                    // Télécharger l'APK depuis le dossier public
+                    const link = document.createElement('a')
+                    link.href = '/app-release.apk'
+                    link.download = 'myhigh5-app.apk'
+                    document.body.appendChild(link)
+                    link.click()
+                    document.body.removeChild(link)
                   }}
                 >
                   <Play className="w-6 h-6 mr-3" />
                   <div className="text-left">
-                    <div className="text-xs opacity-70">{t('landing.download_app.available_on') || 'Disponible sur'}</div>
-                    <div className="text-lg font-bold">{t('landing.download_app.google_play') || 'Google Play'}</div>
+                    <div className="text-xs opacity-70">{t('landing.download_app.available_on') || 'Télécharger'}</div>
+                    <div className="text-lg font-bold">{t('landing.download_app.google_play') || 'App Android'}</div>
                   </div>
                 </Button>
               </div>

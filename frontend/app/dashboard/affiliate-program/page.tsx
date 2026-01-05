@@ -143,7 +143,7 @@ export default function AffiliateProgramPage() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-3xl font-bold text-myhigh5-primary">20%</p>
+                    <p className="text-3xl font-bold text-myhigh5-primary">10%</p>
                     <p className="text-sm text-gray-500 dark:text-gray-400">Commission</p>
                   </div>
                 </div>
@@ -161,7 +161,7 @@ export default function AffiliateProgramPage() {
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-3xl font-bold text-gray-700 dark:text-gray-300">2%</p>
+                    <p className="text-3xl font-bold text-gray-700 dark:text-gray-300">1%</p>
                     <p className="text-sm text-gray-500 dark:text-gray-400">Per Level</p>
                   </div>
                 </div>
@@ -176,7 +176,7 @@ export default function AffiliateProgramPage() {
                   ))}
                 </div>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-4">
-                  Maximum potential commission: <span className="font-semibold text-gray-900 dark:text-white">38%</span> (20% + 2% × 9 levels)
+                  Maximum potential commission: <span className="font-semibold text-gray-900 dark:text-white">19%</span> (10% + 1% × 9 levels)
                 </p>
               </div>
             </div>
@@ -208,7 +208,7 @@ export default function AffiliateProgramPage() {
                   Earn commissions when members in your network complete their KYC verification
                 </p>
                 <p className="text-lg font-bold text-myhigh5-primary">
-                  20% on Level 1, 2% on Levels 2-10
+                  10% on Level 1, 1% on Levels 2-10
                 </p>
               </div>
 
@@ -226,7 +226,7 @@ export default function AffiliateProgramPage() {
                   Earn commissions when network members join as Founding Members ($100 joining fee)
                 </p>
                 <p className="text-lg font-bold text-myhigh5-primary">
-                  $20 on Level 1, $2 on Levels 2-10
+                  10% on Level 1, 1% on Levels 2-10
                 </p>
               </div>
 
@@ -241,10 +241,10 @@ export default function AffiliateProgramPage() {
                   </h3>
                 </div>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                  Earn commissions when Founding Members pay their annual membership fee ($50)
+                  Earn commissions when Founding Members pay their annual membership fee.
                 </p>
                 <p className="text-lg font-bold text-myhigh5-primary">
-                  $10 on Level 1, $1 on Levels 2-10
+                  10% on Level 1, 1% on Levels 2-10
                 </p>
               </div>
 
@@ -259,10 +259,10 @@ export default function AffiliateProgramPage() {
                   </h3>
                 </div>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                  Earn commissions on paid club membership fees. The website charges 20% of membership fees, and you earn a share of that.
+                  Earn commissions on paid club membership fees. The website charges 10% of membership fees, and you earn a share of that.
                 </p>
                 <p className="text-lg font-bold text-myhigh5-primary">
-                  20% on Level 1, 2% on Levels 2-10
+                  10% on Level 1, 1% on Levels 2-10
                 </p>
               </div>
 
@@ -277,10 +277,10 @@ export default function AffiliateProgramPage() {
                   </h3>
                 </div>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                  Earn commissions on digital content purchases in the MyHigh5 shop. The website charges 20% platform fees, and you earn a share of that.
+                  Earn commissions on digital content purchases in the MyHigh5 shop. The website charges 10% platform fees, and you earn a share of that.
                 </p>
                 <p className="text-lg font-bold text-myhigh5-primary">
-                  20% on Level 1, 2% on Levels 2-10
+                  10% on Level 1, 1% on Levels 2-10
                 </p>
               </div>
 
@@ -298,7 +298,7 @@ export default function AffiliateProgramPage() {
                   Earn commissions from ad revenues generated on contest pages of members in your network
                 </p>
                 <p className="text-lg font-bold text-myhigh5-primary">
-                  10% on Level 1, 1% on Levels 2-10
+                  5% on Level 1, 0.5% on Levels 2-10
                 </p>
               </div>
 

@@ -19,7 +19,8 @@ import {
   BookOpen,
   Network,
   Users,
-  Hand
+  Hand,
+  Globe
 } from "lucide-react"
 
 const baseMenuSections = [
@@ -152,6 +153,33 @@ export function DashboardSidebar({ isCollapsed = false, onToggleCollapse }: Dash
             ))}
           </div>
         </nav>
+
+        {/* Footer - Landing Page Link */}
+        <div className={cn(
+          "border-t border-gray-100 dark:border-gray-800 p-4",
+          isCollapsed ? "px-2" : "px-3"
+        )}>
+          <Link
+            href="/"
+            className={cn(
+              "group flex items-center gap-3 rounded-lg transition-all duration-200",
+              isCollapsed ? "justify-center p-3" : "px-3 py-2.5",
+              "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800/50 hover:text-gray-900 dark:hover:text-white"
+            )}
+            title={isCollapsed ? t('navigation.home') : undefined}
+          >
+            <Globe className={cn(
+              "h-5 w-5 flex-shrink-0 transition-transform duration-200",
+              "group-hover:scale-110"
+            )} />
+            
+            {!isCollapsed && (
+              <span className="text-sm font-medium">
+                {t('navigation.home')}
+              </span>
+            )}
+          </Link>
+        </div>
       </aside>
     </>
   )
