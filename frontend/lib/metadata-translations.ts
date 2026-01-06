@@ -57,7 +57,7 @@ function getNestedTranslation(lang: Language, keys: string[]): string {
   return typeof value === 'string' ? value : keys.join('.')
 }
 
-export function getMetadataTranslations(lang: Language = 'fr'): MetadataTranslations {
+export function getMetadataTranslations(lang: Language = 'en'): MetadataTranslations {
   const siteName = 'High5'
   
   // Récupérer les traductions
@@ -143,7 +143,7 @@ export function detectLanguageFromHeaders(headers: Headers): Language {
     }
   }
   
-  return 'fr' // Défaut
+  return 'en' // Défaut
 }
 
 /**

@@ -14,8 +14,40 @@ const inter = Inter({ subsets: ["latin"] })
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myhigh5.com"
 const defaultImage = `${appUrl}/og-image.jpg` // Image par défaut pour le partage
 
+// Récupérer une image de contest pour le thumbnail
+async function getFeaturedContestImage(): Promise<string> {
+  try {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+    const response = await fetch(`${apiUrl}/api/v1/contests?limit=1&skip=0`, {
+      next: { revalidate: 3600 } // Cache pour 1 heure
+    })
+    
+    if (response.ok) {
+      const data = await response.json()
+      if (data && data.length > 0) {
+        const contest = data[0]
+        // Utiliser image_url ou cover_image_url
+        const imageUrl = contest.image_url || contest.cover_image_url
+        if (imageUrl) {
+          // Si c'est une URL relative, construire l'URL complète
+          if (imageUrl.startsWith('/')) {
+            return `${apiUrl}${imageUrl}`
+          } else if (imageUrl.startsWith('http')) {
+            return imageUrl
+          } else {
+            return `${apiUrl}/${imageUrl}`
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching contest image for metadata:', error)
+  }
+  return defaultImage
+}
+
 // Générer les métadonnées selon la langue détectée
-function generateMetadata(): Metadata {
+async function generateMetadata(): Promise<Metadata> {
   let lang: import("@/lib/translations").Language = 'en'
   try {
     const headersList = headers()
@@ -32,6 +64,9 @@ function generateMetadata(): Metadata {
     es: "es_ES",
     de: "de_DE",
   }
+
+  // Récupérer une image de contest pour le thumbnail
+  const ogImage = await getFeaturedContestImage()
 
   return {
     metadataBase: new URL(appUrl),
@@ -64,7 +99,7 @@ function generateMetadata(): Metadata {
       description: translations.pages.home.description,
       images: [
         {
-          url: defaultImage,
+          url: ogImage,
           width: 1200,
           height: 630,
           alt: translations.pages.home.title,
@@ -75,7 +110,7 @@ function generateMetadata(): Metadata {
       card: "summary_large_image",
       title: translations.pages.home.title,
       description: translations.pages.home.description,
-      images: [defaultImage],
+      images: [ogImage],
       creator: "@high5",
     },
     alternates: {

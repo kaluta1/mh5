@@ -3,7 +3,38 @@ import { createMetadata } from "../metadata"
 import { getMetadataTranslations, detectLanguageFromHeaders } from "@/lib/metadata-translations"
 import { headers } from "next/headers"
 
-function generateMetadata(): Metadata {
+async function getFeaturedContestImage(): Promise<string | undefined> {
+  try {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+    const response = await fetch(`${apiUrl}/api/v1/contests?limit=1&skip=0`, {
+      next: { revalidate: 3600 } // Cache pour 1 heure
+    })
+    
+    if (response.ok) {
+      const data = await response.json()
+      if (data && data.length > 0) {
+        const contest = data[0]
+        // Utiliser image_url ou cover_image_url
+        const imageUrl = contest.image_url || contest.cover_image_url
+        if (imageUrl) {
+          // Si c'est une URL relative, construire l'URL complète
+          if (imageUrl.startsWith('/')) {
+            return `${apiUrl}${imageUrl}`
+          } else if (imageUrl.startsWith('http')) {
+            return imageUrl
+          } else {
+            return `${apiUrl}/${imageUrl}`
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching contest image for metadata:', error)
+  }
+  return undefined
+}
+
+async function generateMetadata(): Promise<Metadata> {
   let lang: import("@/lib/translations").Language = 'en'
   try {
     const headersList = headers()
@@ -13,11 +44,18 @@ function generateMetadata(): Metadata {
     lang = 'en'
   }
   const translations = getMetadataTranslations(lang)
+  
+  // Récupérer l'image d'un contest pour le thumbnail
+  const contestImage = await getFeaturedContestImage()
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myhigh5.com"
+  const defaultImage = `${appUrl}/og-image.jpg`
+  const ogImage = contestImage || defaultImage
 
   return createMetadata({
     title: translations.pages.contests.title,
     description: translations.pages.contests.description,
     url: "/contests",
+    image: ogImage,
     language: lang,
   })
 }
