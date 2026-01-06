@@ -37,11 +37,19 @@ const BENEFITS = {
 type LeaderboardType = 'regular' | 'mfm'
 
 export default function LeaderboardPage() {
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
   const { isAuthenticated, isLoading } = useAuth()
   const [topSponsors, setTopSponsors] = useState<TopSponsor[]>([])
   const [pageLoading, setPageLoading] = useState(true)
   const [leaderboardType, setLeaderboardType] = useState<LeaderboardType>('regular')
+  
+  // Mapping des langues vers les locales
+  const localeMap: Record<string, string> = {
+    fr: 'fr-FR',
+    en: 'en-US',
+    es: 'es-ES',
+    de: 'de-DE'
+  }
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
@@ -246,7 +254,7 @@ export default function LeaderboardPage() {
                               <Calendar className="w-4 h-4" />
                               <span>
                                 {new Date(sponsor.created_at).toLocaleDateString(
-                                  t('locale') || 'fr-FR',
+                                  localeMap[language] || 'en-US',
                                   { year: 'numeric', month: 'short' }
                                 )}
                               </span>
