@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 import { authService } from '@/lib/api'
+import { cacheService } from '@/lib/cache-service'
 
 export interface UserRole {
   id: number
@@ -148,6 +149,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await authService.logout()
     setUser(null)
     setPermissions([])
+    // Invalider tout le cache lors de la déconnexion
+    cacheService.clear()
   }
 
   const refreshUser = async () => {

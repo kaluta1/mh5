@@ -32,6 +32,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { InviteDialog } from '@/components/dashboard/invite-dialog'
+import { cacheService } from '@/lib/cache-service'
 
 interface Affiliate {
   id: string
@@ -136,15 +137,18 @@ export default function AffiliatesPage() {
   const loadAffiliatesData = async () => {
     try {
       const token = localStorage.getItem('access_token')
-      const headers = token ? { 'Authorization': `Bearer ${token}` } : {}
+      if (!token) return
       
-      // Récupérer les statistiques d'affiliation
-      const statsResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/affiliates/stats`, {
-        headers
-      })
+      const headers = { 'Authorization': `Bearer ${token}` }
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
       
-      if (statsResponse.ok) {
-        const stats = await statsResponse.json()
+      // Récupérer les statistiques d'affiliation (avec cache)
+      const statsEndpoint = '/api/v1/affiliates/stats'
+      const statsCacheKey = statsEndpoint
+      const cachedStats = cacheService.get<any>(statsCacheKey)
+      
+      if (cachedStats) {
+        const stats = cachedStats
         const code = stats.referral_code || ''
         setReferralCode(code)
         setReferralLinks(generateReferralLinks(code))
@@ -153,20 +157,35 @@ export default function AffiliatesPage() {
         setTotalCommissions(stats.total_commissions || 0)
         setConversionRate(stats.conversion_rate || 0)
       } else {
-        // Utiliser le code de l'utilisateur depuis /me si stats non disponible
-        const code = user?.personal_referral_code || ''
-        setReferralCode(code)
-        setReferralLinks(generateReferralLinks(code))
+        const statsResponse = await fetch(`${baseUrl}${statsEndpoint}`, { headers })
+        
+        if (statsResponse.ok) {
+          const stats = await statsResponse.json()
+          const code = stats.referral_code || ''
+          setReferralCode(code)
+          setReferralLinks(generateReferralLinks(code))
+          setTotalAffiliates(stats.total_affiliates || 0)
+          setDirectAffiliates(stats.direct_referrals || 0)
+          setTotalCommissions(stats.total_commissions || 0)
+          setConversionRate(stats.conversion_rate || 0)
+          // Mettre en cache
+          cacheService.set(statsCacheKey, stats)
+        } else {
+          // Utiliser le code de l'utilisateur depuis /me si stats non disponible
+          const code = user?.personal_referral_code || ''
+          setReferralCode(code)
+          setReferralLinks(generateReferralLinks(code))
+        }
       }
       
-      // Récupérer les parrainages directs (filleuls) avec les commissions
-      const referralsResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/affiliates/referrals/detailed?limit=10`, {
-        headers
-      })
+      // Récupérer les parrainages directs (filleuls) avec les commissions (avec cache)
+      const referralsEndpoint = '/api/v1/affiliates/referrals/detailed'
+      const referralsParams = { limit: 10 }
+      const referralsCacheKey = referralsEndpoint
+      const cachedReferrals = cacheService.get<any[]>(referralsCacheKey, referralsParams)
       
-      if (referralsResponse.ok) {
-        const referralsData = await referralsResponse.json()
-        setAffiliates(referralsData.map((r: any) => ({
+      if (cachedReferrals) {
+        setAffiliates(cachedReferrals.map((r: any) => ({
           id: r.id?.toString() || '',
           name: [r.first_name, r.last_name].filter(Boolean).join(' ') || r.full_name || r.username || 'N/A',
           avatar: r.avatar_url,
@@ -180,16 +199,47 @@ export default function AffiliatesPage() {
           has_paid_kyc: r.has_paid_kyc,
           commissions_generated: r.commissions_generated || 0
         })))
+      } else {
+        const referralsResponse = await fetch(`${baseUrl}${referralsEndpoint}?limit=10`, { headers })
+        
+        if (referralsResponse.ok) {
+          const referralsData = await referralsResponse.json()
+          const mappedData = referralsData.map((r: any) => ({
+            id: r.id?.toString() || '',
+            name: [r.first_name, r.last_name].filter(Boolean).join(' ') || r.full_name || r.username || 'N/A',
+            avatar: r.avatar_url,
+            joinedAt: r.created_at || new Date().toISOString(),
+            level: 1,
+            totalEarnings: r.commissions_generated || 0,
+            status: 'active',
+            country: r.country,
+            city: r.city,
+            identity_verified: r.identity_verified,
+            has_paid_kyc: r.has_paid_kyc,
+            commissions_generated: r.commissions_generated || 0
+          }))
+          setAffiliates(mappedData)
+          // Mettre en cache les données brutes (avant mapping)
+          cacheService.set(referralsCacheKey, referralsData, referralsParams)
+        }
       }
 
-      // Récupérer les informations du parrain de l'utilisateur connecté
-      const sponsorResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/affiliates/sponsor`, {
-        headers
-      })
-      if (sponsorResponse.ok) {
-        const sponsorData = await sponsorResponse.json()
-        if (sponsorData) {
-          setSponsorInfo(sponsorData)
+      // Récupérer les informations du parrain de l'utilisateur connecté (avec cache)
+      const sponsorEndpoint = '/api/v1/affiliates/sponsor'
+      const sponsorCacheKey = sponsorEndpoint
+      const cachedSponsor = cacheService.get<any>(sponsorCacheKey)
+      
+      if (cachedSponsor) {
+        setSponsorInfo(cachedSponsor)
+      } else {
+        const sponsorResponse = await fetch(`${baseUrl}${sponsorEndpoint}`, { headers })
+        if (sponsorResponse.ok) {
+          const sponsorData = await sponsorResponse.json()
+          if (sponsorData) {
+            setSponsorInfo(sponsorData)
+            // Mettre en cache
+            cacheService.set(sponsorCacheKey, sponsorData)
+          }
         }
       }
 
