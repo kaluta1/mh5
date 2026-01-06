@@ -298,7 +298,7 @@ export default function AffiliateProgramPage() {
                   Earn commissions from ad revenues generated on contest pages of members in your network
                 </p>
                 <p className="text-lg font-bold text-myhigh5-primary">
-                  5% on Level 1, 0.5% on Levels 2-10
+                  5% on Level 1, 1% on Levels 2-10
                 </p>
               </div>
 

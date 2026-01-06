@@ -36,7 +36,7 @@ export default function ContestsPage() {
   const [showMobileAlert, setShowMobileAlert] = useState(true)
   const [activeTab, setActiveTab] = useState<string>('all')
   const [showSuggestDialog, setShowSuggestDialog] = useState(false)
-  // Restaurer l'onglet depuis localStorage ou utiliser 'participations' par défaut
+  // Restaurer l'onglet depuis localStorage ou utiliser 'nomination' par défaut
   const [categoryTab, setCategoryTab] = useState<'nomination' | 'participations'>(() => {
     if (typeof window !== 'undefined') {
       const savedTab = localStorage.getItem('contests_category_tab')
@@ -44,7 +44,7 @@ export default function ContestsPage() {
         return savedTab as 'nomination' | 'participations'
       }
     }
-    return 'participations'
+    return 'nomination'
   })
   const [sortBy, setSortBy] = useState<string>('participants') // participants, votes, date, name
   const ITEMS_PER_PAGE = 9

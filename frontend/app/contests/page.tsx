@@ -50,7 +50,7 @@ export default function ContestsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("") // Terme de recherche dans l'input
   const [activeSearchTerm, setActiveSearchTerm] = useState("") // Terme de recherche actif (utilisé pour l'API)
-  const [categoryTab, setCategoryTab] = useState<'nomination' | 'participations'>('participations')
+  const [categoryTab, setCategoryTab] = useState<'nomination' | 'participations'>('nomination')
   const [activeTab, setActiveTab] = useState<string>('all')
   const [sortBy, setSortBy] = useState<string>('participants') // participants, votes, date, name
   const [favorites, setFavorites] = useState<string[]>([])
@@ -121,6 +121,9 @@ export default function ContestsPage() {
         return contest.votingType == null
       }
     })
+    
+    // Exclure les contests sans participants
+    categoryFiltered = categoryFiltered.filter(contest => contest.contestants > 0)
     
     // Filtrer par type si un onglet est sélectionné (mais pas "all")
     if (activeTab !== 'all') {

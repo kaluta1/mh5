@@ -81,7 +81,7 @@ export function FAQ() {
                 />
               </button>
               {openIndex === index && (
-                <div className="px-6 md:px-8 pb-6 md:pb-8 text-gray-600 dark:text-gray-400 leading-relaxed animate-in slide-in-from-top-2 duration-300">
+                <div className="px-6 md:px-8 pb-6 md:pb-8 text-gray-600 dark:text-gray-400 leading-relaxed animate-in slide-in-from-top-2 duration-300 whitespace-pre-line">
                   {faq.answer}
                 </div>
               )}

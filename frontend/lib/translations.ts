@@ -889,67 +889,84 @@ export interface TranslationKeys {
       mark_resolved_error: string
       load_error: string
     }
-    search: {
-      placeholder: string
-      title: string
-      description: string
-      no_results: string
-      start_typing: string
-      contest: string
-      contestant: string
-      club: string
-      product: string
-      recent_searches?: string
-      no_history?: string
-    }
-    nav: {
-      home: string
-      contests: string
-      my_applications: string
-      clubs: string
-      favorites: string
-      search: string
-      pages: string
-      wallet: string
-      affiliates: string
-      commissions: string
-      prize: string
-      shop: string
-      main: string
-      competitions: string
-      business: string
-      resources: string
-      founding_member: string
-      affiliate_program: string
-      affiliate_agreement: string
-      account: string
-      settings: string
-      admin: string
-      admin_panel: string
-      admin_panel_desc: string
-      notifications?: string
-      notifications_desc?: string
-      home_desc?: string
-      search_desc?: string
-      contests_desc?: string
-      my_applications_desc?: string
-      clubs_desc?: string
-      favorites_desc?: string
-      wallet_desc?: string
-      affiliates_desc?: string
-      commissions_desc?: string
-      prize_desc?: string
-    }
-    stats: {
-      contests: string
-      clubs: string
-      favorites: string
-      points: string
-    }
-    quick_actions: string
-    recent_activity: string
-    no_activity: string
-    position: {
+    dashboard: {
+      welcome: string
+      subtitle: string
+      search: {
+        placeholder: string
+        title: string
+        description: string
+        no_results: string
+        start_typing: string
+        contest: string
+        contestant: string
+        club: string
+        product: string
+        recent_searches?: string
+        no_history?: string
+      }
+      nav: {
+        home: string
+        contests: string
+        my_applications: string
+        clubs: string
+        favorites: string
+        search: string
+        pages: string
+        wallet: string
+        affiliates: string
+        commissions: string
+        leaderboard: string
+        prize: string
+        shop: string
+        main: string
+        competitions: string
+        business: string
+        resources: string
+        founding_member: string
+        affiliate_program: string
+        affiliate_agreement: string
+        account: string
+        settings: string
+        admin: string
+        admin_panel: string
+        admin_panel_desc: string
+        notifications?: string
+        notifications_desc?: string
+        home_desc?: string
+        search_desc?: string
+        contests_desc?: string
+        my_applications_desc?: string
+        clubs_desc?: string
+        favorites_desc?: string
+        wallet_desc?: string
+        affiliates_desc?: string
+        commissions_desc?: string
+        prize_desc?: string
+      }
+      leaderboard?: {
+        title: string
+        subtitle: string
+        mfm_subtitle?: string
+        regular_tab?: string
+        mfm_tab?: string
+        referrals: string
+        benefit?: string
+        champion: string
+        no_data: string
+        info_title: string
+        info_description: string
+      }
+      stats: {
+        contests: string
+        clubs: string
+        favorites: string
+        points: string
+      }
+      quick_actions: string
+      recent_activity: string
+      no_activity: string
+      position: {
       title: string
       no_contests: string
       rank: string
@@ -962,267 +979,267 @@ export interface TranslationKeys {
       referrals: string
       commissions: string
       active: string
-    }
-    contests: {
-      title: string
-      description: string
-      no_contests: string
-      no_description: string
-      all: string
-      nomination: string
-      participations: string
-      nominate: string
-      tooltip_nominate: string
-      time_remaining_to_nominate: string
-      search_placeholder: string
-      sort: string
-      sort_participants: string
-      sort_votes: string
-      sort_date: string
-      sort_name: string
-      voting_type: string
-      voting_level_country: string
-      voting_level_city: string
-      voting_level_regional: string
-      voting_level_continent: string
-      voting_level_global: string
-      status: string
-      level: string
-      city: string
-      country: string
-      continental: string
-      regional: string
-      global: string
-      contestants: string
-      likes: string
-      comments: string
-      received: string
-      participate: string
-      nominate: string
-      tooltip_nominate: string
-      time_remaining_to_nominate: string
-      contest_type: {
-        [key: string]: string
       }
-      add_favorite: string
-      remove_favorite: string
-      added_to_favorites: string
-      removed_from_favorites: string
-      open: string
-      open_for_candidacy: string
-      closed: string
-      max_favorites: string
-      favorite_limit_reached: string
-      top_participants: string
-      top_5_description: string
-      view_contestants: string
-      time_remaining: string
-      time_remaining_to_participate: string
-      time_unit_days: string
-      time_unit_hours: string
-      time_unit_minutes: string
-      time_unit_seconds: string
-      candidacy_ends: string
-      participation_ongoing: string
-      vote: string
-      view_details: string
-      already_voted: string
-      cannot_vote: string
-      votes: string
-      contest_info: string
-      contest_dates: string
-      submission_start: string
-      submission_end: string
-      voting_start: string
-      participant_type: string
-      participant_individual: string
-      participant_pet: string
-      participant_club: string
-      participant_content: string
-      kyc_required_description: string
-      visual_verification_description: string
-      voice_verification_description: string
-      brand_verification_description: string
-      content_verification_description: string
-      gender_restriction: string
-      gender_restriction_female_description: string
-      gender_restriction_male_description: string
-      age_restriction: string
-      age_restriction_description: string
-      submission: string
-      voting: string
-      start: string
-      end: string
-      add_to_favorites: string
-      remove_from_favorites: string
-      reaction_added: string
-      reaction_removed: string
-      no_reactions: string
-      no_votes: string
-      no_favorites: string
-      more: string
-      loading: string
-      votes: string
-      favorites: string
-      points: string
-      share: string
-      share_title: string
-      share_description: string
-      share_link_label: string
-      copy: string
-      copied: string
-      share_natively: string
-      report: string
-      reactions: string
-      you_reacted: string
-      no_reactions: string
-      people_reacted: string
-      be_first_to_react: string
-      participant: string
-      rank: string
-      reaction: string
-      search_contestant: string
-      no_contestants: string
-      no_contestants_found: string
-      like: string
-      love: string
-      wow: string
-      dislike: string
-      reply: string
-      reply_placeholder: string
-      show_replies: string
-      hide_replies: string
-      like_added: string
-      like_removed: string
-      comment_added: string
-      reply_added: string
-      mention_hint: string
-      you: string
-      favorite: string
-      comments_description: string
-      vote_error: string
-      voting_not_open: string
-      already_voted_error: string
-      cannot_vote_own: string
-      vote_success: string
-      vote_gender_restriction_male: string
-      vote_gender_restriction_female: string
-      vote_gender_not_set: string
-      add_comment_placeholder: string
-      sending: string
-      send: string
-      no_comments: string
-      gender: string
-      edit: string
-      delete: string
-      age: string
-      years: string
-      country: string
-      city: string
-      bio: string
-      male: string
-      female: string
-      my_applications: {
+      contests: {
         title: string
         description: string
-        no_applications: string
-        browse_contests: string
+        no_contests: string
+        no_description: string
+        all: string
+        nomination: string
+        participations: string
+        nominate: string
+        tooltip_nominate: string
+        time_remaining_to_nominate: string
+        search_placeholder: string
+        sort: string
+        sort_participants: string
+        sort_votes: string
+        sort_date: string
+        sort_name: string
+        voting_type: string
+        voting_level_country: string
+        voting_level_city: string
+        voting_level_regional: string
+        voting_level_continent: string
+        voting_level_global: string
         status: string
-        status_pending: string
-        status_approved: string
-        status_rejected: string
-        rank: string
+        level: string
+        city: string
+        country: string
+        continental: string
+        regional: string
+        global: string
+        contestants: string
+        likes: string
+        comments: string
+        received: string
+        participate: string
+        nominate: string
+        tooltip_nominate: string
+        time_remaining_to_nominate: string
+        contest_type: {
+          [key: string]: string
+        }
+        add_favorite: string
+        remove_favorite: string
+        added_to_favorites: string
+        removed_from_favorites: string
+        open: string
+        open_for_candidacy: string
+        closed: string
+        max_favorites: string
+        favorite_limit_reached: string
+        top_participants: string
+        top_5_description: string
+        view_contestants: string
+        time_remaining: string
+        time_remaining_to_participate: string
+        time_unit_days: string
+        time_unit_hours: string
+        time_unit_minutes: string
+        time_unit_seconds: string
+        candidacy_ends: string
+        participation_ongoing: string
+        vote: string
         view_details: string
-        view_page: string
-        edit_not_available: string
-        delete_not_available: string
-        delete_confirm_message: string
-        details: string
-        statistics: string
-        total_shares: string
-        shares_by_platform: string
-        no_shares: string
-        contest: string
-        date: string
-        media: string
-        no_title: string
-        user: string
-        media_alt: string
-        video_alt: string
-      }
-      suggest_contest: {
-        title: string
-        description: string
-        button: string
-        name_label: string
-        name_placeholder: string
-        description_label: string
-        description_placeholder: string
-        category_label: string
-        category_placeholder: string
-        submit: string
-        submitting: string
-        success: string
-        success_message: string
-        cancel: string
-        error: {
-          name_required: string
-          category_required: string
-          submit_error: string
-          network_error: string
-          server_error: string
+        already_voted: string
+        cannot_vote: string
+        votes: string
+        contest_info: string
+        contest_dates: string
+        submission_start: string
+        submission_end: string
+        voting_start: string
+        participant_type: string
+        participant_individual: string
+        participant_pet: string
+        participant_club: string
+        participant_content: string
+        kyc_required_description: string
+        visual_verification_description: string
+        voice_verification_description: string
+        brand_verification_description: string
+        content_verification_description: string
+        gender_restriction: string
+        gender_restriction_female_description: string
+        gender_restriction_male_description: string
+        age_restriction: string
+        age_restriction_description: string
+        submission: string
+        voting: string
+        start: string
+        end: string
+        add_to_favorites: string
+        remove_from_favorites: string
+        reaction_added: string
+        reaction_removed: string
+        no_reactions: string
+        no_votes: string
+        no_favorites: string
+        more: string
+        loading: string
+        votes: string
+        favorites: string
+        points: string
+        share: string
+        share_title: string
+        share_description: string
+        share_link_label: string
+        copy: string
+        copied: string
+        share_natively: string
+        report: string
+        reactions: string
+        you_reacted: string
+        no_reactions: string
+        people_reacted: string
+        be_first_to_react: string
+        participant: string
+        rank: string
+        reaction: string
+        search_contestant: string
+        no_contestants: string
+        no_contestants_found: string
+        like: string
+        love: string
+        wow: string
+        dislike: string
+        reply: string
+        reply_placeholder: string
+        show_replies: string
+        hide_replies: string
+        like_added: string
+        like_removed: string
+        comment_added: string
+        reply_added: string
+        mention_hint: string
+        you: string
+        favorite: string
+        comments_description: string
+        vote_error: string
+        voting_not_open: string
+        already_voted_error: string
+        cannot_vote_own: string
+        vote_success: string
+        vote_gender_restriction_male: string
+        vote_gender_restriction_female: string
+        vote_gender_not_set: string
+        add_comment_placeholder: string
+        sending: string
+        send: string
+        no_comments: string
+        gender: string
+        edit: string
+        delete: string
+        age: string
+        years: string
+        country: string
+        city: string
+        bio: string
+        male: string
+        female: string
+        my_applications: {
+          title: string
+          description: string
+          no_applications: string
+          browse_contests: string
+          status: string
+          status_pending: string
+          status_approved: string
+          status_rejected: string
+          rank: string
+          view_details: string
+          view_page: string
+          edit_not_available: string
+          delete_not_available: string
+          delete_confirm_message: string
+          details: string
+          statistics: string
+          total_shares: string
+          shares_by_platform: string
+          no_shares: string
+          contest: string
+          date: string
+          media: string
+          no_title: string
+          user: string
+          media_alt: string
+          video_alt: string
         }
-      }
-      report_contestant: {
-        title: string
-        description: string
-        contestant: string
-        reason_label: string
-        reason_placeholder: string
-        description_label: string
-        description_placeholder: string
-        characters: string
-        submit: string
-        submitting: string
-        success: string
-        cancel: string
-        reasons: {
-          spam: string
-          inappropriate: string
-          harassment: string
-          fake: string
-          copyright: string
-          other: string
+        suggest_contest: {
+          title: string
+          description: string
+          button: string
+          name_label: string
+          name_placeholder: string
+          description_label: string
+          description_placeholder: string
+          category_label: string
+          category_placeholder: string
+          submit: string
+          submitting: string
+          success: string
+          success_message: string
+          cancel: string
+          error: {
+            name_required: string
+            category_required: string
+            submit_error: string
+            network_error: string
+            server_error: string
+          }
         }
-        error: {
-          reason_required: string
-          description_required: string
-          description_min_length: string
-          submit_error: string
-          network_error: string
-          server_error: string
+        report_contestant: {
+          title: string
+          description: string
+          contestant: string
+          reason_label: string
+          reason_placeholder: string
+          description_label: string
+          description_placeholder: string
+          characters: string
+          submit: string
+          submitting: string
+          success: string
+          cancel: string
+          reasons: {
+            spam: string
+            inappropriate: string
+            harassment: string
+            fake: string
+            copyright: string
+            other: string
+          }
+          error: {
+            reason_required: string
+            description_required: string
+            description_min_length: string
+            submit_error: string
+            network_error: string
+            server_error: string
+          }
         }
-      }
-      participation_form: {
-        title: string
-        description: string
-        select_media: string
-        drag_drop: string
-        file_info: string
-        submit: string
-        success: string
-        success_title: string
-        success_edit: string
-        already_participating: string
-        edit_participation: string
-        click_add_images: string
-        preparing: string
-        checking_files: string
-        uploading: string
-        images_format: string
-        click_add_video: string
-        video_format: string
-        cancel: string
+        participation_form: {
+          title: string
+          description: string
+          select_media: string
+          drag_drop: string
+          file_info: string
+          submit: string
+          success: string
+          success_title: string
+          success_edit: string
+          already_participating: string
+          edit_participation: string
+          click_add_images: string
+          preparing: string
+          checking_files: string
+          uploading: string
+          images_format: string
+          click_add_video: string
+          video_format: string
+          cancel: string
           error: {
             no_media_selected: string
             invalid_file_type: string
@@ -1236,15 +1253,16 @@ export interface TranslationKeys {
             submission_closed: string
             deadline_passed: string
           }
+        }
       }
-    }
-    favorites: {
-      title: string
-      description: string
-      contests_tab: string
-      contestants_tab: string
-      no_favorite_contests: string
-      no_favorite_contestants: string
+      favorites: {
+        title: string
+        description: string
+        contests_tab: string
+        contestants_tab: string
+        no_favorite_contests: string
+        no_favorite_contestants: string
+      }
     }
   }
   kyc: {
@@ -2071,6 +2089,7 @@ export const translations: Record<Language, TranslationKeys> = {
         wallet: "Portefeuille",
         affiliates: "Affiliés",
         commissions: "Commissions",
+        leaderboard: "Classement",
         prize: "Prix",
         shop: "Boutique",
         main: "Principal",
@@ -2468,6 +2487,19 @@ export const translations: Record<Language, TranslationKeys> = {
         no_history: "Aucun historique",
         no_history_description: "Vous n'avez pas encore d'historique de votes.",
         inactive: "Terminé"
+      },
+      leaderboard: {
+        title: "Classement des Sponsors",
+        subtitle: "Les 10 meilleurs sponsors avec le plus de référents directs",
+        mfm_subtitle: "Les 10 meilleurs sponsors MFM avec le plus de référents directs ayant acheté MFM",
+        regular_tab: "Classement Général",
+        mfm_tab: "Classement MFM",
+        referrals: "Référents",
+        benefit: "Bénéfice",
+        champion: "Champion",
+        no_data: "Aucun sponsor trouvé",
+        info_title: "Comment fonctionne le classement ?",
+        info_description: "Le classement est basé sur le nombre de référents directs (niveau 1) de chaque sponsor. Plus vous avez de référents directs, plus votre position dans le classement est élevée."
       }
     },
     hero: {
@@ -3016,13 +3048,13 @@ export const translations: Record<Language, TranslationKeys> = {
         },
         ad_revenue: {
           title: "Partage des revenus publicitaires",
-          description: "Les participants aux concours gagnent 20% des revenus publicitaires générés sur leurs pages de concours. Leurs parrains de niveau 1 gagnent 5%, et les niveaux 2 à 10 gagnent 0.5% chacun. Les membres qui nomment des candidats gagnent 5% des revenus publicitaires générés par leurs candidats nommés. Leurs parrains de niveau 1 gagnent 2.5%, et les niveaux 2 à 10 gagnent 0.5% chacun.",
-          commission: "5% sur le niveau 1, 0.5% sur les niveaux 2-10"
+          description: "Les participants aux concours gagnent 40% des revenus publicitaires générés sur leurs pages de concours. Leurs parrains de niveau 1 gagnent 5%, et les niveaux 2 à 10 gagnent 1% chacun. Les membres qui nomment des candidats gagnent 10% des revenus publicitaires générés par leurs candidats nommés. Leurs parrains de niveau 1 gagnent 2.5%, et les niveaux 2 à 10 gagnent 1% chacun.",
+          commission: "5% sur le niveau 1, 1% sur les niveaux 2-10"
         },
         ad_campaigns: {
           title: "Page des Sponsors du Site Web",
-          description: "Les parrains de niveau 1 gagnent une commission de 5%, et les niveaux 2 à 10 gagnent 0.5% chacun.",
-          commission: "5% sur le niveau 1, 0.5% sur les niveaux 2-10"
+          description: "Les parrains de niveau 1 gagnent une commission de 10%, et les niveaux 2 à 10 gagnent 1% chacun.",
+          commission: "10% sur le niveau 1, 1% sur les niveaux 2-10"
         }
       },
       faq: {
@@ -3032,7 +3064,7 @@ export const translations: Record<Language, TranslationKeys> = {
         question_1: "Comment puis-je gagner de l'argent sur MyHigh5 ?",
         answer_1: "Vous pouvez gagner de l'argent de plusieurs façons : en participant aux concours, en nommant des candidats, en rejoignant le programme d'affiliation pour gagner des commissions sur les membres que vous référez, et en devenant membre fondateur pour participer aux pools de revenus et de profits.",
         question_2: "Comment fonctionne le programme d'affiliation ?",
-        answer_2: "Pour les paiements de frais de vérification, vous gagnez une commission de 10% sur les paiements effectués par vos parrainages directs, et une commission de 1% sur les paiements effectués par chacun de vos parrainages indirects du niveau 2 au niveau 10. Pour les revenus publicitaires, les candidats participants reçoivent 20% des revenus publicitaires générés sur leurs pages de concours. Le parrain direct d'un candidat participant reçoit 5%, et chaque parrain indirect du niveau 2 au niveau 10 reçoit 0.5%. Les membres qui nomment reçoivent 5% des revenus publicitaires générés sur les pages de concours de leurs candidats nommés, 2.5% des revenus publicitaires générés sur les pages de concours des candidats nommés par leurs parrainages directs, et 0.5% des revenus publicitaires générés sur les pages de concours des candidats nommés par chacun de leurs parrainages indirects du niveau 2 au niveau 10. Pour les clubs, les propriétaires de clubs reçoivent 20% des revenus publicitaires générés sur leurs pages de club ou de fans. Le parrain direct d'un propriétaire de club reçoit 5%, et chaque parrain indirect du niveau 2 au niveau 10 reçoit 0.5%. Pour les frais d'adhésion aux clubs, MyHigh5 applique une majoration de 10% aux frais d'abonnement sélectionnés par le membre. De cette majoration, 10% est versé au parrain direct du payeur, et 1% est versé à chaque parrain indirect du niveau 2 au niveau 10. Pour les emplacements payés sur la page des Sponsors du Site Web, 5% est versé au parrain de niveau 1, et 0.5% est versé à chacun des parrains des niveaux 2 à 10.",
+        answer_2: "• Paiements de frais de vérification :\n  Vous gagnez une commission de 10% sur les paiements effectués par vos parrainages directs, et une commission de 1% sur les paiements effectués par chacun de vos parrainages indirects du niveau 2 au niveau 10.\n\n• Revenus publicitaires (Candidats participants) :\n  Les candidats participants reçoivent 40% des revenus publicitaires générés sur leurs pages de concours. Le parrain direct d'un candidat participant reçoit 5%, et chaque parrain indirect du niveau 2 au niveau 10 reçoit 1%.\n\n• Revenus publicitaires (Membres qui nomment) :\n  Les membres qui nomment reçoivent 10% des revenus publicitaires générés sur les pages de concours de leurs candidats nommés, 2.5% des revenus publicitaires générés sur les pages de concours des candidats nommés par leurs parrainages directs, et 1% des revenus publicitaires générés sur les pages de concours des candidats nommés par chacun de leurs parrainages indirects du niveau 2 au niveau 10.\n\n• Revenus publicitaires (Clubs) :\n  Les propriétaires de clubs reçoivent 20% des revenus publicitaires générés sur leurs pages de club ou de fans. Le parrain direct d'un propriétaire de club reçoit 5%, et chaque parrain indirect du niveau 2 au niveau 10 reçoit 0.5%.\n\n• Frais d'adhésion aux clubs :\n  MyHigh5 applique une majoration de 10% aux frais d'abonnement sélectionnés par le membre. De cette majoration, 10% est versé au parrain direct du payeur, et 1% est versé à chaque parrain indirect du niveau 2 au niveau 10.\n\n• Emplacements sur la page des Sponsors du Site Web :\n  Pour les emplacements payés sur la page des Sponsors du Site Web, 10% est versé au parrain de niveau 1, et 1% est versé à chacun des parrains des niveaux 2 à 10.",
         question_3: "Qu'est-ce que le statut de Membre Fondateur ?",
         answer_3: "Le statut de Membre Fondateur (MFM) est une opportunité limitée qui nécessite la vérification du compte et le paiement de frais d'adhésion de 100$ et d'une cotisation annuelle de club de 50$ pour les 1 000 premiers MFM, et de frais d'adhésion de 200$ et d'une cotisation annuelle de club de 200$ par la suite. Les emplacements MFM cesseront d'exister une fois que le nombre total de MFM atteindra 10 000. Les Membres Fondateurs participent à des pools de commissions mensuelles équivalant à 5% des revenus nets et à un pool de profits annuels équivalant à 10% des profits après impôts, alloués en fonction de la proportion de leurs parrainages vérifiés de niveau 1 par rapport au nombre total de parrainages vérifiés de niveau 1.",
         question_4: "Comment puis-je participer aux concours ?",
@@ -3178,6 +3210,7 @@ export const translations: Record<Language, TranslationKeys> = {
         wallet: "Portefeuille",
         affiliates: "Affiliés",
         commissions: "Commissions",
+        leaderboard: "Classement",
         prize: "Prix",
         shop: "Boutique",
         main: "Principal",
@@ -5245,13 +5278,13 @@ export const translations: Record<Language, TranslationKeys> = {
         },
         ad_revenue: {
           title: "Ad Revenue Sharing",
-          description: "Contest participants earn 20% of the advertising revenue generated on their contest pages. Their Level 1 sponsors earn 5%, and Levels 2 through 10 earn 0.5% each. Contest nominators earn 5% of the advertising revenue generated by their nominated contestants. Their Level 1 sponsors earn 2.5%, and Levels 2 through 10 earn 0.5% each.",
-          commission: "5% on Level 1, 0.5% on Levels 2-10"
+          description: "Contest participants earn 40% of the advertising revenue generated on their contest pages. Their Level 1 sponsors earn 5%, and Levels 2 through 10 earn 1% each. Contest nominators earn 10% of the advertising revenue generated by their nominated contestants. Their Level 1 sponsors earn 2.5%, and Levels 2 through 10 earn 1% each.",
+          commission: "5% on Level 1, 1% on Levels 2-10"
         },
         ad_campaigns: {
           title: "Website Sponsors Page",
-          description: "Level 1 sponsors earn a 5% commission, and Levels 2 through 10 earn 0.5% each.",
-          commission: "5% on Level 1, 0.5% on Levels 2-10"
+          description: "Level 1 sponsors earn a 10% commission, and Levels 2 through 10 earn 1% each.",
+          commission: "10% on Level 1, 1% on Levels 2-10"
         }
       },
       faq: {
@@ -5261,7 +5294,7 @@ export const translations: Record<Language, TranslationKeys> = {
         question_1: "How can I earn money on MyHigh5?",
         answer_1: "You can earn money in several ways: by participating in contests, by nominating contestants, by joining the affiliate program to earn commissions on members you refer, and by becoming a founding member to participate in revenue and profit pools.",
         question_2: "How does the affiliate program work?",
-        answer_2: "For verification fee payments, you earn a 10% commission on payments made by your direct referrals, and a 1% commission on payments made by each of your indirect referrals from Level 2 to Level 10. For ad revenue, participating contestants receive 20% of the ad revenue generated on their contest pages. The direct sponsor of a participating contestant receives 5%, and each indirect sponsor from Level 2 to Level 10 receives 0.5%. Nominating members receive 5% of the ad revenue generated on the contest pages of their nominated contestants, 2.5% of the ad revenue generated on the contest pages of contestants nominated by their direct referrals, and 0.5% of the ad revenue generated on the contest pages of contestants nominated by each of their indirect referrals from Level 2 to Level 10. For clubs, club owners receive 20% of the ad revenue generated on their club or fan pages. The direct sponsor of a club owner receives 5%, and each indirect sponsor from Level 2 to Level 10 receives 0.5%. For club membership fees, MyHigh5 applies a 10% markup to the member's selected subscription fee. Of this markup, 10% is paid to the direct sponsor of the payer, and 1% is paid to each indirect sponsor from Level 2 to Level 10. For slots paid for on the Website Sponsors page, 5% is paid to the Level 1 sponsor, and 0.5% is paid to each of the Level 2 through Level 10 sponsors.",
+        answer_2: "• Verification Fee Payments:\n  You earn a 10% commission on payments made by your direct referrals, and a 1% commission on payments made by each of your indirect referrals from Level 2 to Level 10.\n\n• Ad Revenue (Participating Contestants):\n  Participating contestants receive 40% of the ad revenue generated on their contest pages. The direct sponsor of a participating contestant receives 5%, and each indirect sponsor from Level 2 to Level 10 receives 1%.\n\n• Ad Revenue (Nominating Members):\n  Nominating members receive 10% of the ad revenue generated on the contest pages of their nominated contestants, 2.5% of the ad revenue generated on the contest pages of contestants nominated by their direct referrals, and 1% of the ad revenue generated on the contest pages of contestants nominated by each of their indirect referrals from Level 2 to Level 10.\n\n• Ad Revenue (Clubs):\n  Club owners receive 20% of the ad revenue generated on their club or fan pages. The direct sponsor of a club owner receives 5%, and each indirect sponsor from Level 2 to Level 10 receives 0.5%.\n\n• Club Membership Fees:\n  MyHigh5 applies a 10% markup to the member's selected subscription fee. Of this markup, 10% is paid to the direct sponsor of the payer, and 1% is paid to each indirect sponsor from Level 2 to Level 10.\n\n• Website Sponsors Page Slots:\n  For slots paid for on the Website Sponsors page, 10% is paid to the Level 1 sponsor, and 1% is paid to each of the Level 2 through Level 10 sponsors.",
         question_3: "What is the Founding Member status?",
         answer_3: "Founding Member (MFM) status is a limited opportunity that requires account verification and payment of a joining fee of $100 and an annual club membership fee of $50 for the first 1,000 MFMs, and a joining fee of $200 and an annual club membership fee of $200 thereafter. MFM slots will cease to exist once the total number of MFMs reaches 10,000. Founding Members participate in monthly commission pools equal to 5% of net revenues and an annual profit pool equal to 10% of profits after taxes, allocated based on the proportion of their Level 1 verified referrals relative to the total number of Level 1 verified referrals.",
         question_4: "How can I participate in contests?",
@@ -5354,6 +5387,7 @@ export const translations: Record<Language, TranslationKeys> = {
         wallet: "Wallet",
         affiliates: "Affiliates",
         commissions: "Commissions",
+        leaderboard: "Leaderboard",
         prize: "Prize",
         shop: "Shop",
         main: "Main",
@@ -6083,6 +6117,19 @@ export const translations: Record<Language, TranslationKeys> = {
         no_history: "No history",
         no_history_description: "You don't have any vote history yet.",
         inactive: "Ended"
+      },
+      leaderboard: {
+        title: "Sponsors Leaderboard",
+        subtitle: "Top 10 sponsors with the most direct referrals",
+        mfm_subtitle: "Top 10 MFM sponsors with the most direct referrals who purchased MFM",
+        regular_tab: "General Leaderboard",
+        mfm_tab: "MFM Leaderboard",
+        referrals: "Referrals",
+        benefit: "Benefit",
+        champion: "Champion",
+        no_data: "No sponsors found",
+        info_title: "How does the leaderboard work?",
+        info_description: "The leaderboard is based on the number of direct referrals (level 1) each sponsor has. The more direct referrals you have, the higher your position in the leaderboard."
       }
     },
     kyc: {
@@ -7434,8 +7481,8 @@ export const translations: Record<Language, TranslationKeys> = {
         },
         ad_revenue: {
           title: "Compartir ingresos publicitarios",
-          description: "Los participantes en concursos ganan el 40% de los ingresos publicitarios generados en sus páginas de concursos. Sus patrocinadores de Nivel 1 ganan 10%, y los Niveles 2 a 10 ganan 1% cada uno. Los miembros que nominan candidatos ganan 10% de los ingresos publicitarios generados por sus candidatos nominados. Sus patrocinadores de Nivel 1 ganan 5%, y los Niveles 2 a 10 ganan 1% cada uno.",
-          commission: "10% en Nivel 1, 1% en Niveles 2-10"
+          description: "Los participantes en concursos ganan el 40% de los ingresos publicitarios generados en sus páginas de concursos. Sus patrocinadores de Nivel 1 ganan 5%, y los Niveles 2 a 10 ganan 1% cada uno. Los miembros que nominan candidatos ganan 10% de los ingresos publicitarios generados por sus candidatos nominados. Sus patrocinadores de Nivel 1 ganan 2.5%, y los Niveles 2 a 10 ganan 1% cada uno.",
+          commission: "5% en Nivel 1, 1% en Niveles 2-10"
         },
         ad_campaigns: {
           title: "Página de Patrocinadores del Sitio Web",
@@ -7450,7 +7497,7 @@ export const translations: Record<Language, TranslationKeys> = {
         question_1: "¿Cómo puedo ganar dinero en MyHigh5?",
         answer_1: "Puedes ganar dinero de varias maneras: participando en concursos, nominando candidatos, uniéndote al programa de afiliados para ganar comisiones por los miembros que refieras, y convirtiéndote en miembro fundador para participar en los fondos de ingresos y ganancias.",
         question_2: "¿Cómo funciona el programa de afiliados?",
-        answer_2: "Para los pagos de tarifas de verificación, ganas una comisión del 20% en los pagos realizados por tus referidos directos, y una comisión del 2% en los pagos realizados por cada uno de tus referidos indirectos del Nivel 2 al Nivel 10. Para los ingresos publicitarios, los candidatos participantes reciben el 40% de los ingresos publicitarios generados en sus páginas de concursos. El patrocinador directo de un candidato participante recibe 10%, y cada patrocinador indirecto del Nivel 2 al Nivel 10 recibe 1%. Los miembros que nominan reciben 10% de los ingresos publicitarios generados en las páginas de concursos de sus candidatos nominados, 5% de los ingresos publicitarios generados en las páginas de concursos de candidatos nominados por sus referidos directos, y 1% de los ingresos publicitarios generados en las páginas de concursos de candidatos nominados por cada uno de sus referidos indirectos del Nivel 2 al Nivel 10. Para los clubes, los propietarios de clubes reciben 40% de los ingresos publicitarios generados en sus páginas de club o de fans. El patrocinador directo de un propietario de club recibe 10%, y cada patrocinador indirecto del Nivel 2 al Nivel 10 recibe 1%. Para las tarifas de membresía de clubes, MyHigh5 aplica un margen de beneficio del 20% a la tarifa de suscripción seleccionada por el miembro. De este margen, 20% se paga al patrocinador directo del pagador, y 2% se paga a cada patrocinador indirecto del Nivel 2 al Nivel 10. Para los espacios pagados en la página de Patrocinadores del Sitio Web, 10% se paga al patrocinador de Nivel 1, y 1% se paga a cada uno de los patrocinadores de los Niveles 2 a 10.",
+        answer_2: "• Pagos de tarifas de verificación:\n  Ganas una comisión del 10% en los pagos realizados por tus referidos directos, y una comisión del 1% en los pagos realizados por cada uno de tus referidos indirectos del Nivel 2 al Nivel 10.\n\n• Ingresos publicitarios (Candidatos participantes):\n  Los candidatos participantes reciben el 40% de los ingresos publicitarios generados en sus páginas de concursos. El patrocinador directo de un candidato participante recibe 5%, y cada patrocinador indirecto del Nivel 2 al Nivel 10 recibe 1%.\n\n• Ingresos publicitarios (Miembros que nominan):\n  Los miembros que nominan reciben 10% de los ingresos publicitarios generados en las páginas de concursos de sus candidatos nominados, 2.5% de los ingresos publicitarios generados en las páginas de concursos de candidatos nominados por sus referidos directos, y 1% de los ingresos publicitarios generados en las páginas de concursos de candidatos nominados por cada uno de sus referidos indirectos del Nivel 2 al Nivel 10.\n\n• Ingresos publicitarios (Clubes):\n  Los propietarios de clubes reciben 20% de los ingresos publicitarios generados en sus páginas de club o de fans. El patrocinador directo de un propietario de club recibe 5%, y cada patrocinador indirecto del Nivel 2 al Nivel 10 recibe 0.5%.\n\n• Tarifas de membresía de clubes:\n  MyHigh5 aplica un margen de beneficio del 10% a la tarifa de suscripción seleccionada por el miembro. De este margen, 10% se paga al patrocinador directo del pagador, y 1% se paga a cada patrocinador indirecto del Nivel 2 al Nivel 10.\n\n• Espacios en la página de Patrocinadores del Sitio Web:\n  Para los espacios pagados en la página de Patrocinadores del Sitio Web, 10% se paga al patrocinador de Nivel 1, y 1% se paga a cada uno de los patrocinadores de los Niveles 2 a 10.",
         question_3: "¿Qué es el estatus de Miembro Fundador?",
         answer_3: "El estatus de Miembro Fundador (MFM) es una oportunidad limitada que requiere la verificación de la cuenta y el pago de una tarifa de inscripción de $100 y una tarifa de membresía anual de club de $50 para los primeros 1,000 MFM, y una tarifa de inscripción de $200 y una tarifa de membresía anual de club de $200 a partir de entonces. Los espacios MFM dejarán de existir una vez que el número total de MFM alcance 10,000. Los Miembros Fundadores participan en fondos de comisiones mensuales equivalentes al 10% de los ingresos netos y un fondo de ganancias anual equivalente al 20% de las ganancias después de impuestos, asignados en función de la proporción de sus referidos verificados de Nivel 1 en relación con el número total de referidos verificados de Nivel 1.",
         question_4: "¿Cómo puedo participar en concursos?",
@@ -7541,6 +7588,7 @@ export const translations: Record<Language, TranslationKeys> = {
         wallet: "Billetera",
         affiliates: "Afiliados",
         commissions: "Comisiones",
+        leaderboard: "Clasificación",
         prize: "Premio",
         shop: "Tienda",
         main: "Principal",
@@ -8122,6 +8170,19 @@ export const translations: Record<Language, TranslationKeys> = {
         no_history: "Sin historial",
         no_history_description: "Aún no tienes historial de votos.",
         inactive: "Finalizado"
+      },
+      leaderboard: {
+        title: "Clasificación de Patrocinadores",
+        subtitle: "Los 10 mejores patrocinadores con más referidos directos",
+        mfm_subtitle: "Los 10 mejores patrocinadores MFM con más referidos directos que compraron MFM",
+        regular_tab: "Clasificación General",
+        mfm_tab: "Clasificación MFM",
+        referrals: "Referidos",
+        benefit: "Beneficio",
+        champion: "Campeón",
+        no_data: "No se encontraron patrocinadores",
+        info_title: "¿Cómo funciona la clasificación?",
+        info_description: "La clasificación se basa en el número de referidos directos (nivel 1) que tiene cada patrocinador. Cuantos más referidos directos tengas, mayor será tu posición en la clasificación."
       }
     },
     contestant_detail: {
@@ -9528,8 +9589,8 @@ export const translations: Record<Language, TranslationKeys> = {
         },
         ad_revenue: {
           title: "Werbeeinnahmen teilen",
-          description: "Wettbewerbsteilnehmer verdienen 40% der Werbeeinnahmen, die auf ihren Wettbewerbsseiten generiert werden. Ihre Stufe-1-Patrone verdienen 10%, und die Stufen 2 bis 10 verdienen jeweils 1%. Mitglieder, die Kandidaten nominieren, verdienen 10% der Werbeeinnahmen, die von ihren nominierten Kandidaten generiert werden. Ihre Stufe-1-Patrone verdienen 5%, und die Stufen 2 bis 10 verdienen jeweils 1%.",
-          commission: "10% auf Stufe 1, 1% auf Stufen 2-10"
+          description: "Wettbewerbsteilnehmer verdienen 40% der Werbeeinnahmen, die auf ihren Wettbewerbsseiten generiert werden. Ihre Stufe-1-Patrone verdienen 5%, und die Stufen 2 bis 10 verdienen jeweils 1%. Mitglieder, die Kandidaten nominieren, verdienen 10% der Werbeeinnahmen, die von ihren nominierten Kandidaten generiert werden. Ihre Stufe-1-Patrone verdienen 2.5%, und die Stufen 2 bis 10 verdienen jeweils 1%.",
+          commission: "5% auf Stufe 1, 1% auf Stufen 2-10"
         },
         ad_campaigns: {
           title: "Website-Sponsoren-Seite",
@@ -9544,7 +9605,7 @@ export const translations: Record<Language, TranslationKeys> = {
         question_1: "Wie kann ich bei MyHigh5 Geld verdienen?",
         answer_1: "Sie können auf verschiedene Weise Geld verdienen: durch Teilnahme an Wettbewerben, durch Nominieren von Kandidaten, durch Beitritt zum Affiliate-Programm, um Provisionen für Mitglieder zu verdienen, die Sie werben, und durch Gründungsmitgliedschaft, um an Einnahme- und Gewinnpools teilzunehmen.",
         question_2: "Wie funktioniert das Affiliate-Programm?",
-        answer_2: "Für Verifizierungsgebührenzahlungen verdienen Sie eine Provision von 20% auf Zahlungen, die von Ihren direkten Empfehlungen getätigt werden, und eine Provision von 2% auf Zahlungen, die von jeder Ihrer indirekten Empfehlungen von Stufe 2 bis Stufe 10 getätigt werden. Für Werbeeinnahmen erhalten teilnehmende Kandidaten 40% der Werbeeinnahmen, die auf ihren Wettbewerbsseiten generiert werden. Der direkte Patron eines teilnehmenden Kandidaten erhält 10%, und jeder indirekte Patron von Stufe 2 bis Stufe 10 erhält 1%. Nominierende Mitglieder erhalten 10% der Werbeeinnahmen, die auf den Wettbewerbsseiten ihrer nominierten Kandidaten generiert werden, 5% der Werbeeinnahmen, die auf den Wettbewerbsseiten von Kandidaten generiert werden, die von ihren direkten Empfehlungen nominiert wurden, und 1% der Werbeeinnahmen, die auf den Wettbewerbsseiten von Kandidaten generiert werden, die von jeder ihrer indirekten Empfehlungen von Stufe 2 bis Stufe 10 nominiert wurden. Für Clubs erhalten Clubeigentümer 40% der Werbeeinnahmen, die auf ihren Club- oder Fan-Seiten generiert werden. Der direkte Patron eines Clubeigentümers erhält 10%, und jeder indirekte Patron von Stufe 2 bis Stufe 10 erhält 1%. Für Club-Mitgliedsgebühren wendet MyHigh5 einen Aufschlag von 20% auf die vom Mitglied ausgewählte Abonnementgebühr an. Von diesem Aufschlag werden 20% an den direkten Patron des Zahlers gezahlt, und 2% werden an jeden indirekten Patron von Stufe 2 bis Stufe 10 gezahlt. Für auf der Website-Sponsoren-Seite bezahlte Plätze werden 10% an den Stufe-1-Patron gezahlt, und 1% wird an jeden der Stufe-2-bis-Stufe-10-Patrone gezahlt.",
+        answer_2: "• Verifizierungsgebührenzahlungen:\n  Sie verdienen eine Provision von 10% auf Zahlungen, die von Ihren direkten Empfehlungen getätigt werden, und eine Provision von 1% auf Zahlungen, die von jeder Ihrer indirekten Empfehlungen von Stufe 2 bis Stufe 10 getätigt werden.\n\n• Werbeeinnahmen (Teilnehmende Kandidaten):\n  Teilnehmende Kandidaten erhalten 40% der Werbeeinnahmen, die auf ihren Wettbewerbsseiten generiert werden. Der direkte Patron eines teilnehmenden Kandidaten erhält 5%, und jeder indirekte Patron von Stufe 2 bis Stufe 10 erhält 1%.\n\n• Werbeeinnahmen (Nominierende Mitglieder):\n  Nominierende Mitglieder erhalten 10% der Werbeeinnahmen, die auf den Wettbewerbsseiten ihrer nominierten Kandidaten generiert werden, 2.5% der Werbeeinnahmen, die auf den Wettbewerbsseiten von Kandidaten generiert werden, die von ihren direkten Empfehlungen nominiert wurden, und 1% der Werbeeinnahmen, die auf den Wettbewerbsseiten von Kandidaten generiert werden, die von jeder ihrer indirekten Empfehlungen von Stufe 2 bis Stufe 10 nominiert wurden.\n\n• Werbeeinnahmen (Clubs):\n  Clubeigentümer erhalten 20% der Werbeeinnahmen, die auf ihren Club- oder Fan-Seiten generiert werden. Der direkte Patron eines Clubeigentümers erhält 5%, und jeder indirekte Patron von Stufe 2 bis Stufe 10 erhält 0.5%.\n\n• Club-Mitgliedsgebühren:\n  MyHigh5 wendet einen Aufschlag von 10% auf die vom Mitglied ausgewählte Abonnementgebühr an. Von diesem Aufschlag werden 10% an den direkten Patron des Zahlers gezahlt, und 1% werden an jeden indirekten Patron von Stufe 2 bis Stufe 10 gezahlt.\n\n• Website-Sponsoren-Seite Plätze:\n  Für auf der Website-Sponsoren-Seite bezahlte Plätze werden 10% an den Stufe-1-Patron gezahlt, und 1% wird an jeden der Stufe-2-bis-Stufe-10-Patrone gezahlt.",
         question_3: "Was ist der Status eines Gründungsmitglieds?",
         answer_3: "Der Status eines Gründungsmitglieds (MFM) ist eine begrenzte Gelegenheit, die die Kontoverifizierung und die Zahlung einer Beitrittsgebühr von 100$ und einer jährlichen Club-Mitgliedsgebühr von 50$ für die ersten 1.000 MFM erfordert, und eine Beitrittsgebühr von 200$ und eine jährliche Club-Mitgliedsgebühr von 200$ danach. MFM-Plätze werden nicht mehr existieren, sobald die Gesamtzahl der MFM 10.000 erreicht. Gründungsmitglieder nehmen an monatlichen Provisionspools teil, die 10% der Nettoumsätze entsprechen, und einem jährlichen Gewinnpool, der 20% der Gewinne nach Steuern entspricht, zugeteilt basierend auf dem Anteil ihrer verifizierten Empfehlungen der Stufe 1 im Verhältnis zur Gesamtzahl der verifizierten Empfehlungen der Stufe 1.",
         question_4: "Wie kann ich an Wettbewerben teilnehmen?",
@@ -9637,6 +9698,7 @@ export const translations: Record<Language, TranslationKeys> = {
         wallet: "Geldbörse",
         affiliates: "Partner",
         commissions: "Provisionen",
+        leaderboard: "Rangliste",
         prize: "Preis",
         shop: "Shop",
         main: "Hauptmenü",
@@ -10214,6 +10276,19 @@ export const translations: Record<Language, TranslationKeys> = {
         no_history: "Kein Verlauf",
         no_history_description: "Sie haben noch keinen Abstimmungsverlauf.",
         inactive: "Beendet"
+      },
+      leaderboard: {
+        title: "Sponsor-Rangliste",
+        subtitle: "Die 10 besten Sponsoren mit den meisten direkten Empfehlungen",
+        mfm_subtitle: "Die 10 besten MFM-Sponsoren mit den meisten direkten Empfehlungen, die MFM gekauft haben",
+        regular_tab: "Allgemeine Rangliste",
+        mfm_tab: "MFM-Rangliste",
+        referrals: "Empfehlungen",
+        benefit: "Vorteil",
+        champion: "Champion",
+        no_data: "Keine Sponsoren gefunden",
+        info_title: "Wie funktioniert die Rangliste?",
+        info_description: "Die Rangliste basiert auf der Anzahl der direkten Empfehlungen (Stufe 1), die jeder Sponsor hat. Je mehr direkte Empfehlungen Sie haben, desto höher ist Ihre Position in der Rangliste."
       }
     },
     contestant_detail: {

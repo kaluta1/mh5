@@ -172,6 +172,117 @@ class CRUDUser:
         """Compte le nombre de filleuls directs d'un utilisateur."""
         return db.query(User).filter(User.sponsor_id == user_id).count()
     
+    def get_top_sponsors(self, db: Session, limit: int = 10) -> List[dict]:
+        """Récupère les meilleurs sponsors (ceux avec le plus de référents directs)."""
+        from sqlalchemy import func
+        
+        # Créer une sous-requête pour compter les référents par sponsor
+        referrals_subquery = db.query(
+            User.sponsor_id,
+            func.count(User.id).label('referrals_count')
+        ).filter(
+            User.sponsor_id.isnot(None)
+        ).group_by(User.sponsor_id).subquery()
+        
+        # Joindre avec la table User pour obtenir les informations des sponsors
+        top_sponsors = db.query(
+            User.id,
+            User.username,
+            User.email,
+            User.first_name,
+            User.last_name,
+            User.full_name,
+            User.avatar_url,
+            User.country,
+            User.city,
+            User.created_at,
+            referrals_subquery.c.referrals_count
+        ).join(
+            referrals_subquery, User.id == referrals_subquery.c.sponsor_id
+        ).order_by(
+            referrals_subquery.c.referrals_count.desc()
+        ).limit(limit).all()
+        
+        result = []
+        for sponsor in top_sponsors:
+            result.append({
+                "id": sponsor.id,
+                "username": sponsor.username,
+                "email": sponsor.email,
+                "first_name": sponsor.first_name,
+                "last_name": sponsor.last_name,
+                "full_name": sponsor.full_name,
+                "avatar_url": sponsor.avatar_url,
+                "country": sponsor.country,
+                "city": sponsor.city,
+                "created_at": sponsor.created_at.isoformat() if sponsor.created_at else None,
+                "referrals_count": sponsor.referrals_count or 0
+            })
+        
+        return result
+    
+    def get_top_mfm_sponsors(self, db: Session, limit: int = 10) -> List[dict]:
+        """Récupère les meilleurs sponsors MFM (ceux avec le plus de référents directs qui ont acheté mfm_membership)."""
+        from sqlalchemy import func
+        from app.models.payment import Deposit, ProductType, DepositStatus
+        
+        # Créer une sous-requête pour obtenir les utilisateurs distincts qui ont acheté MFM
+        mfm_users_subquery = db.query(
+            User.id.label('user_id'),
+            User.sponsor_id
+        ).join(
+            Deposit, User.id == Deposit.user_id
+        ).join(
+            ProductType, Deposit.product_type_id == ProductType.id
+        ).filter(
+            User.sponsor_id.isnot(None),
+            ProductType.code == 'mfm_membership',
+            Deposit.status == DepositStatus.VALIDATED
+        ).distinct().subquery()
+        
+        # Compter les référents MFM par sponsor
+        referrals_subquery = db.query(
+            mfm_users_subquery.c.sponsor_id,
+            func.count(mfm_users_subquery.c.user_id).label('referrals_count')
+        ).group_by(mfm_users_subquery.c.sponsor_id).subquery()
+        
+        # Joindre avec la table User pour obtenir les informations des sponsors
+        top_sponsors = db.query(
+            User.id,
+            User.username,
+            User.email,
+            User.first_name,
+            User.last_name,
+            User.full_name,
+            User.avatar_url,
+            User.country,
+            User.city,
+            User.created_at,
+            referrals_subquery.c.referrals_count
+        ).join(
+            referrals_subquery, User.id == referrals_subquery.c.sponsor_id
+        ).order_by(
+            referrals_subquery.c.referrals_count.desc()
+        ).limit(limit).all()
+        
+        result = []
+        for sponsor in top_sponsors:
+            result.append({
+                "id": sponsor.id,
+                "username": sponsor.username,
+                "email": sponsor.email,
+                "first_name": sponsor.first_name,
+                "last_name": sponsor.last_name,
+                "full_name": sponsor.full_name,
+                "avatar_url": sponsor.avatar_url,
+                "country": sponsor.country,
+                "city": sponsor.city,
+                "created_at": sponsor.created_at.isoformat() if sponsor.created_at else None,
+                "referrals_count": sponsor.referrals_count or 0
+            })
+        
+        return result
+    
     def get_all_referrals_multilevel(
         self, db: Session, user_id: int, 
         skip: int = 0, limit: int = 50,

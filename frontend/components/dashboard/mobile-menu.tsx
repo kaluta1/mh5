@@ -19,7 +19,8 @@ import {
   Network,
   Users,
   Hand,
-  Globe
+  Globe,
+  Award
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useLanguage } from "@/contexts/language-context"
@@ -46,6 +47,7 @@ const baseMenuSections = [
       { name: "dashboard.nav.wallet", href: "/dashboard/wallet", icon: Wallet },
       { name: "dashboard.nav.affiliates", href: "/dashboard/affiliates", icon: UserPlus },
       { name: "dashboard.nav.commissions", href: "/dashboard/commissions", icon: DollarSign },
+      { name: "dashboard.nav.leaderboard", href: "/dashboard/leaderboard", icon: Award },
     ]
   },
   {

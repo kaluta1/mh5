@@ -605,3 +605,27 @@ def accept_affiliate_agreement(
         "message": "Accord d'affiliation accepté avec succès",
         "accepted_at": current_user.affiliate_agreement_accepted_at.isoformat() if current_user.affiliate_agreement_accepted_at else None
     }
+
+
+@router.get("/leaderboard")
+def get_leaderboard(
+    db: Session = Depends(deps.get_db),
+    limit: int = 10
+):
+    """
+    Récupérer le classement des meilleurs sponsors (ceux avec le plus de référents directs).
+    """
+    top_sponsors = crud_user.get_top_sponsors(db=db, limit=limit)
+    return top_sponsors
+
+
+@router.get("/leaderboard/mfm")
+def get_mfm_leaderboard(
+    db: Session = Depends(deps.get_db),
+    limit: int = 10
+):
+    """
+    Récupérer le classement des meilleurs sponsors MFM (ceux avec le plus de référents directs qui ont acheté mfm_membership).
+    """
+    top_sponsors = crud_user.get_top_mfm_sponsors(db=db, limit=limit)
+    return top_sponsors

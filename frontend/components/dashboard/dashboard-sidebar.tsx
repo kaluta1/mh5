@@ -20,14 +20,16 @@ import {
   Network,
   Users,
   Hand,
-  Globe
+  Globe,
+  LayoutDashboard,
+  Award
 } from "lucide-react"
 
 const baseMenuSections = [
   {
     title: "dashboard.nav.main",
     items: [
-      { name: "dashboard.nav.overview", href: "/dashboard", icon: Home },
+      { name: "dashboard.nav.overview", href: "/dashboard", icon: LayoutDashboard },
       { name: "dashboard.nav.contests", href: "/dashboard/contests", icon: Trophy },
       { name: "dashboard.nav.myhigh5", href: "/dashboard/myhigh5", icon: Hand },
       // { name: "dashboard.nav.groups", href: "/dashboard/groups", icon: Users },
@@ -42,6 +44,7 @@ const baseMenuSections = [
       { name: "dashboard.nav.wallet", href: "/dashboard/wallet", icon: Wallet },
       { name: "dashboard.nav.affiliates", href: "/dashboard/affiliates", icon: UserPlus },
       { name: "dashboard.nav.commissions", href: "/dashboard/commissions", icon: DollarSign },
+      { name: "dashboard.nav.leaderboard", href: "/dashboard/leaderboard", icon: Award },
     ]
   },
   {
@@ -107,6 +110,32 @@ export function DashboardSidebar({ isCollapsed = false, onToggleCollapse }: Dash
           isCollapsed ? "px-2" : "px-3"
         )}>
           <div className="space-y-6">
+            {/* Home Button */}
+            <div>
+              <Link
+                href="/"
+                className={cn(
+                  "group flex items-center gap-3 rounded-lg transition-all duration-200",
+                  isCollapsed ? "justify-center p-3" : "px-3 py-2.5",
+                  pathname === "/"
+                    ? "bg-myhigh5-primary text-white shadow-lg shadow-myhigh5-primary/30"
+                    : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800/50 hover:text-gray-900 dark:hover:text-white"
+                )}
+                title={isCollapsed ? t('navigation.home') : undefined}
+              >
+                <Home className={cn(
+                  "h-5 w-5 flex-shrink-0 transition-transform duration-200",
+                  pathname !== "/" && "group-hover:scale-110"
+                )} />
+                
+                {!isCollapsed && (
+                  <span className="text-sm font-medium">
+                    {t('navigation.home')}
+                  </span>
+                )}
+              </Link>
+            </div>
+
             {displayMenuSections.map((section, idx) => (
               <div key={idx}>
                 {!isCollapsed && (
