@@ -47,7 +47,7 @@ async function getFeaturedContestImage(): Promise<string> {
 }
 
 // Générer les métadonnées selon la langue détectée
-async function generateMetadata(): Promise<Metadata> {
+export async function generateMetadata(): Promise<Metadata> {
   let lang: import("@/lib/translations").Language = 'en'
   try {
     const headersList = headers()
@@ -129,7 +129,6 @@ async function generateMetadata(): Promise<Metadata> {
   }
 }
 
-export const metadata = generateMetadata()
 
 export default function RootLayout({
   children,

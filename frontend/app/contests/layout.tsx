@@ -34,7 +34,7 @@ async function getFeaturedContestImage(): Promise<string | undefined> {
   return undefined
 }
 
-async function generateMetadata(): Promise<Metadata> {
+export async function generateMetadata(): Promise<Metadata> {
   let lang: import("@/lib/translations").Language = 'en'
   try {
     const headersList = headers()
@@ -59,8 +59,6 @@ async function generateMetadata(): Promise<Metadata> {
     language: lang,
   })
 }
-
-export const metadata: Metadata = generateMetadata()
 
 export default function ContestsLayout({
   children,
