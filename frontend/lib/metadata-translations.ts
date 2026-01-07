@@ -84,16 +84,32 @@ export function getMetadataTranslations(lang: Language = 'en'): MetadataTranslat
   }
   
   const aboutNav = getNestedTranslation(lang, ['navigation', 'about'])
-  const aboutSubtitle = getNestedTranslation(lang, ['pages', 'about', 'subtitle'])
+  let aboutSubtitle = getNestedTranslation(lang, ['pages', 'about', 'subtitle'])
+  // Si le subtitle est une clé de traduction, utiliser une valeur par défaut en anglais
+  if (!aboutSubtitle || aboutSubtitle === 'pages.about.subtitle' || aboutSubtitle.startsWith('pages.')) {
+    aboutSubtitle = 'The first global contest platform connecting talents worldwide, from local to global level.'
+  }
   
   const contactNav = getNestedTranslation(lang, ['navigation', 'contact'])
-  const contactSubtitle = getNestedTranslation(lang, ['pages', 'contact', 'subtitle'])
+  let contactSubtitle = getNestedTranslation(lang, ['pages', 'contact', 'subtitle'])
+  // Si le subtitle est une clé de traduction, utiliser une valeur par défaut en anglais
+  if (!contactSubtitle || contactSubtitle === 'pages.contact.subtitle' || contactSubtitle.startsWith('pages.')) {
+    contactSubtitle = 'Our team is here to help. We usually respond within 24 hours.'
+  }
   
   const loginNav = getNestedTranslation(lang, ['navigation', 'login'])
-  const loginSubtitle = getNestedTranslation(lang, ['auth', 'login', 'subtitle'])
+  let loginSubtitle = getNestedTranslation(lang, ['auth', 'login', 'subtitle'])
+  // Si le subtitle est une clé de traduction, utiliser une valeur par défaut en anglais
+  if (!loginSubtitle || loginSubtitle === 'auth.login.subtitle' || loginSubtitle.startsWith('auth.')) {
+    loginSubtitle = 'Sign in to your High5 account to participate in contests, vote and win prizes!'
+  }
   
   const registerNav = getNestedTranslation(lang, ['navigation', 'register'])
-  const registerSubtitle = getNestedTranslation(lang, ['auth', 'register', 'subtitle'])
+  let registerSubtitle = getNestedTranslation(lang, ['auth', 'register', 'subtitle'])
+  // Si le subtitle est une clé de traduction, utiliser une valeur par défaut en anglais
+  if (!registerSubtitle || registerSubtitle === 'auth.register.subtitle' || registerSubtitle.startsWith('auth.')) {
+    registerSubtitle = 'Create your High5 account and join the world\'s largest contest community. Start participating, voting and winning today!'
+  }
 
   return {
     siteName,
@@ -109,20 +125,20 @@ export function getMetadataTranslations(lang: Language = 'en'): MetadataTranslat
         description: contestsSubtitle,
       },
       about: {
-        title: `${aboutNav || 'À Propos'} - ${siteName}`,
-        description: aboutSubtitle || 'Découvrez High5, la première plateforme mondiale de concours qui connecte les talents du monde entier.',
+        title: `${aboutNav || 'About'} - ${siteName}`,
+        description: aboutSubtitle,
       },
       contact: {
         title: `${contactNav || 'Contact'} - ${siteName}`,
-        description: contactSubtitle || 'Contactez l\'équipe High5. Nous sommes là pour vous aider avec vos questions sur la plateforme, les concours, les paiements et plus encore.',
+        description: contactSubtitle,
       },
       login: {
-        title: `${loginNav || 'Connexion'} - ${siteName}`,
-        description: loginSubtitle || 'Connectez-vous à votre compte High5 pour participer aux concours, voter et gagner des prix !',
+        title: `${loginNav || 'Login'} - ${siteName}`,
+        description: loginSubtitle,
       },
       register: {
-        title: `${registerNav || 'Inscription'} - ${siteName}`,
-        description: registerSubtitle || 'Créez votre compte High5 et rejoignez la plus grande communauté de concours au monde. Commencez à participer, voter et gagner dès aujourd\'hui !',
+        title: `${registerNav || 'Register'} - ${siteName}`,
+        description: registerSubtitle,
       },
     },
   }
