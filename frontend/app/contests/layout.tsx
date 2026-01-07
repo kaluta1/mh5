@@ -51,7 +51,12 @@ export async function generateMetadata(): Promise<Metadata> {
   const contestImage = await getFeaturedContestImage()
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myhigh5.com"
   const defaultImage = `${appUrl}/thumbnails.png`
-  const ogImage = contestImage || defaultImage
+  let ogImage = contestImage || defaultImage
+  
+  // S'assurer que l'image est une URL absolue
+  if (!ogImage.startsWith('http')) {
+    ogImage = ogImage.startsWith('/') ? `${appUrl}${ogImage}` : `${appUrl}/${ogImage}`
+  }
 
   // Utiliser le titre et la description en anglais pour les partages
   const englishTitle = englishTranslations.pages.contests.title || 'Contests - High5'

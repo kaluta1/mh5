@@ -13,10 +13,12 @@ function generateMetadata(): Metadata {
     lang = 'en'
   }
   const translations = getMetadataTranslations(lang)
+  // Traductions en anglais pour les partages sociaux
+  const englishTranslations = getMetadataTranslations('en')
 
   return createMetadata({
-    title: translations.pages.contact.title,
-    description: translations.pages.contact.description,
+    title: englishTranslations.pages.contact.title, // Titre en anglais pour les partages
+    description: englishTranslations.pages.contact.description, // Description en anglais pour les partages
     url: "/contact",
     language: lang,
   })

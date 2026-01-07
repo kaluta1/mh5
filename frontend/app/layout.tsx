@@ -69,6 +69,13 @@ export async function generateMetadata(): Promise<Metadata> {
 
   // Récupérer une image de contest pour le thumbnail
   const ogImage = await getFeaturedContestImage()
+  
+  // S'assurer que l'image est une URL absolue
+  const absoluteOgImage = ogImage.startsWith('http') ? ogImage : `${appUrl}${ogImage.startsWith('/') ? ogImage : '/' + ogImage}`
+  
+  // Utiliser les traductions en anglais pour tous les partages sociaux
+  const englishTitle = englishTranslations.pages.home.title
+  const englishDescription = englishTranslations.pages.home.description || englishTranslations.defaultDescription || 'Join contests, build your network, and earn through our 10-level affiliate program. Every vote, every referral generates income.'
 
   return {
     metadataBase: new URL(appUrl),
@@ -92,29 +99,27 @@ export async function generateMetadata(): Promise<Metadata> {
         'max-snippet': -1,
       },
     },
-    // S'assurer que la description est valide et en anglais
-    
     openGraph: {
       type: "website",
       locale: "en_US", // Toujours en anglais pour les partages
       url: appUrl,
       siteName: englishTranslations.siteName,
-      title: englishTranslations.pages.home.title,
-      description: translations.pages.home.description,
+      title: englishTitle,
+      description: englishDescription,
       images: [
         {
-          url: ogImage,
+          url: absoluteOgImage,
           width: 1200,
           height: 630,
-          alt: englishTranslations.pages.home.title,
+          alt: englishTitle,
         },
       ],
     },
     twitter: {
       card: "summary_large_image",
-      title: englishTranslations.pages.home.title,
-      description: translations.pages.home.description,
-      images: [ogImage],
+      title: englishTitle,
+      description: englishDescription,
+      images: [absoluteOgImage],
       creator: "@high5",
     },
     alternates: {

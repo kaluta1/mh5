@@ -15,6 +15,8 @@ export async function generateMetadata({
   const headersList = headers()
   const lang = detectLanguageFromHeaders(headersList)
   const translations = getMetadataTranslations(lang)
+  // Traductions en anglais pour les partages sociaux
+  const englishTranslations = getMetadataTranslations('en')
 
   try {
     // Appel direct à l'API backend pour récupérer les données du concours
@@ -30,20 +32,27 @@ export async function generateMetadata({
     
     if (!contest) {
       return createMetadata({
-        title: translations.pages.contests.title,
-        description: `Découvrez ce concours sur ${translations.siteName}`,
+        title: englishTranslations.pages.contests.title, // Titre en anglais
+        description: `Discover this contest on ${englishTranslations.siteName}`, // Description en anglais
         url: `/dashboard/contests/${params.id}`,
         language: lang,
       })
     }
 
-    const title = `${contest.name || translations.pages.contests.title.split(' - ')[0]} - ${translations.siteName}`
-    const description = contest.description || `Participez au concours ${contest.name || 'ce concours'} sur ${translations.siteName}. Votez pour vos favoris et gagnez des prix !`
-    const image = contest.cover_image_url || contest.image_url || `${appUrl}/thumbnails.png`
+    // Utiliser le nom du contest mais avec une description en anglais
+    const title = `${contest.name || 'Contest'} - ${englishTranslations.siteName}`
+    const description = contest.description 
+      ? contest.description 
+      : `Participate in the contest ${contest.name || 'this contest'} on ${englishTranslations.siteName}. Vote for your favorites and win prizes!`
+    let image = contest.cover_image_url || contest.image_url || `${appUrl}/thumbnails.png`
+    // S'assurer que l'image est une URL absolue
+    if (!image.startsWith('http')) {
+      image = image.startsWith('/') ? `${appUrl}${image}` : `${appUrl}/${image}`
+    }
 
     return createMetadata({
-      title,
-      description,
+      title, // Titre avec nom du contest
+      description, // Description en anglais
       image,
       url: `/dashboard/contests/${params.id}`,
       type: "article",
@@ -52,8 +61,8 @@ export async function generateMetadata({
   } catch (error) {
     console.error("Error generating metadata for contest:", error)
     return createMetadata({
-      title: translations.pages.contests.title,
-      description: `Découvrez ce concours sur ${translations.siteName}`,
+      title: englishTranslations.pages.contests.title, // Titre en anglais
+      description: `Discover this contest on ${englishTranslations.siteName}`, // Description en anglais
       url: `/dashboard/contests/${params.id}`,
       language: lang,
     })

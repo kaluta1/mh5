@@ -45,15 +45,20 @@ export function createMetadata({
   // Traductions en anglais pour les partages sociaux (toujours en anglais)
   const englishTranslations = getMetadataTranslations('en')
   const fullTitle = title.includes("High5") ? title : `${title} | ${translations.siteName}`
-  // Titre en anglais pour les partages
-  const englishTitle = title.includes("High5") ? title : `${title} | ${englishTranslations.siteName}`
-  const ogImage = image || defaultImage
+  // Utiliser le titre tel quel pour les partages (déjà en anglais si passé correctement)
+  // Si le titre contient déjà "High5", l'utiliser tel quel, sinon ajouter le siteName
+  const englishTitle = title.includes("High5") || title.includes(" - ") ? title : `${title} | ${englishTranslations.siteName}`
+  
+  // S'assurer que l'image est une URL absolue
+  let ogImage = image || defaultImage
+  if (!ogImage.startsWith('http')) {
+    ogImage = ogImage.startsWith('/') ? `${appUrl}${ogImage}` : `${appUrl}/${ogImage}`
+  }
+  
   const canonicalUrl = url ? `${appUrl}${url}` : appUrl
   
-  // Utiliser la description en anglais pour les partages si disponible, sinon utiliser celle fournie
-  // Pour les pages spécifiques, on peut passer une description en anglais
-  // Sinon, on utilise une description générique en anglais
-  const ogDescription = description || englishTranslations.defaultDescription
+  // Utiliser la description fournie (déjà en anglais si passée correctement)
+  const ogDescription = description || englishTranslations.defaultDescription || 'Join contests, build your network, and earn through our 10-level affiliate program.'
 
   return {
     title: fullTitle,

@@ -15,6 +15,8 @@ export async function generateMetadata({
   const headersList = headers()
   const lang = detectLanguageFromHeaders(headersList)
   const translations = getMetadataTranslations(lang)
+  // Traductions en anglais pour les partages sociaux
+  const englishTranslations = getMetadataTranslations('en')
 
   try {
     // Appel direct à l'API backend pour récupérer les données du contestant
@@ -30,15 +32,18 @@ export async function generateMetadata({
     
     if (!contestant) {
       return createMetadata({
-        title: `${translations.pages.contests.title.split(' - ')[0]} - ${translations.siteName}`,
-        description: `Découvrez ce participant sur ${translations.siteName}`,
+        title: `${englishTranslations.pages.contests.title.split(' - ')[0]} - ${englishTranslations.siteName}`, // Titre en anglais
+        description: `Discover this participant on ${englishTranslations.siteName}`, // Description en anglais
         url: `/contestants/${params.id}`,
         language: lang,
       })
     }
 
-    const title = contestant.title || `${contestant.author_name || 'Participant'} - ${translations.siteName}`
-    const description = contestant.description || `Découvrez ${contestant.author_name || 'ce participant'} sur ${translations.siteName}. Votez et soutenez !`
+    // Utiliser le nom du participant mais avec une description en anglais
+    const title = contestant.title || `${contestant.author_name || 'Participant'} - ${englishTranslations.siteName}`
+    const description = contestant.description 
+      ? contestant.description 
+      : `Discover ${contestant.author_name || 'this participant'} on ${englishTranslations.siteName}. Vote and support!`
     
     // Extraire l'image depuis image_media_ids ou utiliser l'avatar
     let image = contestant.author_avatar_url || `${appUrl}/thumbnails.png`
@@ -54,10 +59,14 @@ export async function generateMetadata({
         // Si l'image n'est pas un JSON valide, utiliser l'avatar
       }
     }
+    // S'assurer que l'image est une URL absolue
+    if (!image.startsWith('http')) {
+      image = image.startsWith('/') ? `${appUrl}${image}` : `${appUrl}/${image}`
+    }
 
     return createMetadata({
-      title,
-      description,
+      title, // Titre avec nom du participant
+      description, // Description en anglais
       image,
       url: `/contestants/${params.id}`,
       type: "profile",
@@ -66,8 +75,8 @@ export async function generateMetadata({
   } catch (error) {
     console.error("Error generating metadata for contestant:", error)
     return createMetadata({
-      title: `${translations.pages.contests.title.split(' - ')[0]} - ${translations.siteName}`,
-      description: `Découvrez ce participant sur ${translations.siteName}`,
+      title: `${englishTranslations.pages.contests.title.split(' - ')[0]} - ${englishTranslations.siteName}`, // Titre en anglais
+      description: `Discover this participant on ${englishTranslations.siteName}`, // Description en anglais
       url: `/contestants/${params.id}`,
       language: lang,
     })
