@@ -109,7 +109,7 @@ export function WaysToEarn() {
                   </p>
                   
                   <div className="pt-4 border-t border-gray-200/50 dark:border-gray-700/50">
-                    <p className="text-lg font-bold text-myhigh5-primary">
+                    <p className="text-lg font-bold text-myhigh5-primary whitespace-pre-line">
                       {method.commission}
                     </p>
                   </div>

@@ -297,9 +297,10 @@ export default function AffiliateProgramPage() {
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
                   Earn commissions from ad revenues generated on contest pages of members in your network
                 </p>
-                <p className="text-lg font-bold text-myhigh5-primary">
-                  5% on Level 1, 1% on Levels 2-10
-                </p>
+                <div className="text-lg font-bold text-myhigh5-primary space-y-1">
+                  <p>Participants: 40% for self, 5% for Level 1, 1% for each of Levels 2 to 10.</p>
+                  <p>Nominators: 10% for self, 2.5% for Level 1, 1% for each of Levels 2 to 10.</p>
+                </div>
               </div>
 
               {/* Advertisement */}
