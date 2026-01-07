@@ -92,13 +92,15 @@ export async function generateMetadata(): Promise<Metadata> {
         'max-snippet': -1,
       },
     },
+    // S'assurer que la description est valide et en anglais
+    
     openGraph: {
       type: "website",
       locale: "en_US", // Toujours en anglais pour les partages
       url: appUrl,
       siteName: englishTranslations.siteName,
       title: englishTranslations.pages.home.title,
-      description: englishTranslations.pages.home.description,
+      description: translations.pages.home.description,
       images: [
         {
           url: ogImage,
@@ -111,7 +113,7 @@ export async function generateMetadata(): Promise<Metadata> {
     twitter: {
       card: "summary_large_image",
       title: englishTranslations.pages.home.title,
-      description: englishTranslations.pages.home.description,
+      description: translations.pages.home.description,
       images: [ogImage],
       creator: "@high5",
     },

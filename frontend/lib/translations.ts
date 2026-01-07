@@ -2508,6 +2508,7 @@ export const translations: Record<Language, TranslationKeys> = {
       title_line2: "grande communauté",
       title_line3: "de concours",
       subtitle: "Participez en tant que candidat, nommez votre candidat préféré dans votre pays, ou votez dans n'importe quel concours, et soyez récompensé tout en vous amusant.",
+      description: "Participez en tant que candidat, nommez votre candidat préféré dans votre pays, ou votez dans n'importe quel concours, et soyez récompensé tout en vous amusant.",
       cta: "Commencer maintenant",
       demo: "Voir la démo",
       stats: {
@@ -4684,9 +4685,11 @@ export const translations: Record<Language, TranslationKeys> = {
     hero: {
       badge: "World's #1 Contest Platform",
       title_line1: "Join the largest",
-      title_line2: "contest community",
+      title_line2: "contest Platform",
       title_line3: "in the world",
       subtitle: "Participate as a contestant, nominate your favorite contestant in your country, or vote in any contest you like, and get rewarded while having fun.",
+      description: "Participate as a contestant, nominate your favorite contestant in your country, or vote in any contest you like, and get rewarded while having fun.",
+
       cta: "Get Started Now",
       demo: "Watch Demo",
       stats: {
@@ -6984,6 +6987,7 @@ export const translations: Record<Language, TranslationKeys> = {
       badge: "Plataforma de concursos #1 mundial",
       title_line1: "Únete a la mayor",
       title_line2: "comunidad de concursos",
+      description: "Participa como concursante, nomina tu concursante favorito en tu país, o vota en cualquier concurso que te guste, y obtén recompensas mientras te diviertes.",
       title_line3: "del mundo",
       subtitle: "Participa como concursante, nomina tu concursante favorito en tu país, o vota en cualquier concurso que te guste, y obtén recompensas mientras te diviertes.",
       cta: "Comenzar ahora",
@@ -9093,6 +9097,7 @@ export const translations: Record<Language, TranslationKeys> = {
       title_line1: "Treten Sie der größten",
       title_line2: "Wettbewerbs-Community",
       title_line3: "der Welt bei",
+      description: "Nehmen Sie als Teilnehmer teil, nominieren Sie Ihren Lieblingsteilnehmer in Ihrem Land, oder stimmen Sie bei jedem Wettbewerb ab, und werden Sie belohnt, während Sie Spaß haben.",
       subtitle: "Nehmen Sie als Teilnehmer teil, nominieren Sie Ihren Lieblingsteilnehmer in Ihrem Land, oder stimmen Sie bei jedem Wettbewerb ab, und werden Sie belohnt, während Sie Spaß haben.",
       cta: "Jetzt Loslegen",
       demo: "Demo Ansehen",

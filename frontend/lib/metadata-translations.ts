@@ -70,10 +70,18 @@ export function getMetadataTranslations(lang: Language = 'en'): MetadataTranslat
     heroTitle = heroTitleLine2 || heroTitleLine1 || 'Compete & Earn'
   }
   const heroSubtitle = getNestedTranslation(lang, ['hero', 'subtitle'])
-  const heroDescription = getNestedTranslation(lang, ['hero', 'description'])
+  let heroDescription = getNestedTranslation(lang, ['hero', 'description'])
+  // Si la description est une clé de traduction (commence par "hero."), utiliser une valeur par défaut
+  if (!heroDescription || heroDescription === 'hero.description' || heroDescription.startsWith('hero.')) {
+    heroDescription = 'Join contests, build your network, and earn through our 10-level affiliate program. Every vote, every referral generates income.'
+  }
   
   const contestsNav = getNestedTranslation(lang, ['navigation', 'contests'])
-  const contestsSubtitle = getNestedTranslation(lang, ['pages', 'contests', 'subtitle'])
+  let contestsSubtitle = getNestedTranslation(lang, ['pages', 'contests', 'subtitle'])
+  // Si le subtitle est une clé de traduction, utiliser une valeur par défaut en anglais
+  if (!contestsSubtitle || contestsSubtitle === 'pages.contests.subtitle' || contestsSubtitle.startsWith('pages.')) {
+    contestsSubtitle = 'Join exciting competitions from local to global level. Participate, nominate, or vote in exciting competitions that progress from the local level to the global level.'
+  }
   
   const aboutNav = getNestedTranslation(lang, ['navigation', 'about'])
   const aboutSubtitle = getNestedTranslation(lang, ['pages', 'about', 'subtitle'])
@@ -98,7 +106,7 @@ export function getMetadataTranslations(lang: Language = 'en'): MetadataTranslat
       },
       contests: {
         title: `${contestsNav || 'Concours'} - ${siteName}`,
-        description: contestsSubtitle || 'Explorez tous les concours disponibles sur High5. Participez à des concours de beauté, talents, photographie et bien plus encore.',
+        description: contestsSubtitle,
       },
       about: {
         title: `${aboutNav || 'À Propos'} - ${siteName}`,

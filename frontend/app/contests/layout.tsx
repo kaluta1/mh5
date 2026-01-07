@@ -53,9 +53,13 @@ export async function generateMetadata(): Promise<Metadata> {
   const defaultImage = `${appUrl}/thumbnails.png`
   const ogImage = contestImage || defaultImage
 
+  // Utiliser le titre et la description en anglais pour les partages
+  const englishTitle = englishTranslations.pages.contests.title || 'Contests - High5'
+  const englishDescription = englishTranslations.pages.contests.description || 'Join exciting competitions from local to global level. Participate, nominate, or vote in exciting competitions that progress from the local level to the global level.'
+  
   return createMetadata({
-    title: translations.pages.contests.title,
-    description: englishTranslations.pages.contests.description, // Description en anglais pour les partages
+    title: englishTitle, // Titre en anglais pour les partages
+    description: englishDescription, // Description en anglais pour les partages
     url: "/contests",
     image: ogImage,
     language: lang,
