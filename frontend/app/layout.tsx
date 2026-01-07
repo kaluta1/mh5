@@ -12,7 +12,7 @@ import { headers } from "next/headers"
 const inter = Inter({ subsets: ["latin"] })
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myhigh5.com"
-const defaultImage = `${appUrl}/og-image.jpg` // Image par défaut pour le partage
+const defaultImage = `${appUrl}/thumbnails.png` // Image par défaut pour le partage
 
 // Récupérer une image de contest pour le thumbnail
 async function getFeaturedContestImage(): Promise<string> {
@@ -115,6 +115,16 @@ async function generateMetadata(): Promise<Metadata> {
     },
     alternates: {
       canonical: appUrl,
+    },
+    icons: {
+      icon: [
+        { url: '/thumbnails.png', sizes: 'any' },
+        { url: '/thumbnails.png', type: 'image/png' },
+      ],
+      apple: [
+        { url: '/thumbnails.png', sizes: '180x180', type: 'image/png' },
+      ],
+      shortcut: '/thumbnails.png',
     },
   }
 }

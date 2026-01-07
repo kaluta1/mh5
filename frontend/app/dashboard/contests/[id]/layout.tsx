@@ -39,7 +39,7 @@ export async function generateMetadata({
 
     const title = `${contest.name || translations.pages.contests.title.split(' - ')[0]} - ${translations.siteName}`
     const description = contest.description || `Participez au concours ${contest.name || 'ce concours'} sur ${translations.siteName}. Votez pour vos favoris et gagnez des prix !`
-    const image = contest.cover_image_url || contest.image_url || `${appUrl}/og-image.jpg`
+    const image = contest.cover_image_url || contest.image_url || `${appUrl}/thumbnails.png`
 
     return createMetadata({
       title,

@@ -7,7 +7,7 @@ import { getMetadataTranslations, detectLanguageFromHeaders } from "@/lib/metada
 import { headers } from "next/headers"
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myhigh5.com"
-const defaultImage = `${appUrl}/og-image.jpg`
+const defaultImage = `${appUrl}/thumbnails.png`
 
 const localeMap: Record<Language, string> = {
   fr: "fr_FR",

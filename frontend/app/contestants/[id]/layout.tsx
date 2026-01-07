@@ -41,14 +41,14 @@ export async function generateMetadata({
     const description = contestant.description || `Découvrez ${contestant.author_name || 'ce participant'} sur ${translations.siteName}. Votez et soutenez !`
     
     // Extraire l'image depuis image_media_ids ou utiliser l'avatar
-    let image = contestant.author_avatar_url || `${appUrl}/og-image.jpg`
+    let image = contestant.author_avatar_url || `${appUrl}/thumbnails.png`
     if (contestant.image_media_ids) {
       try {
         const imageIds = typeof contestant.image_media_ids === 'string' 
           ? JSON.parse(contestant.image_media_ids) 
           : contestant.image_media_ids
         if (Array.isArray(imageIds) && imageIds.length > 0) {
-          image = typeof imageIds[0] === 'string' ? imageIds[0] : contestant.author_avatar_url || `${appUrl}/og-image.jpg`
+          image = typeof imageIds[0] === 'string' ? imageIds[0] : contestant.author_avatar_url || `${appUrl}/thumbnails.png`
         }
       } catch {
         // Si l'image n'est pas un JSON valide, utiliser l'avatar

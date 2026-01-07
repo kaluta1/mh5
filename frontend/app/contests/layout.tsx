@@ -48,7 +48,7 @@ async function generateMetadata(): Promise<Metadata> {
   // Récupérer l'image d'un contest pour le thumbnail
   const contestImage = await getFeaturedContestImage()
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myhigh5.com"
-  const defaultImage = `${appUrl}/og-image.jpg`
+  const defaultImage = `${appUrl}/thumbnails.png`
   const ogImage = contestImage || defaultImage
 
   return createMetadata({
