@@ -58,6 +58,8 @@ export async function generateMetadata(): Promise<Metadata> {
   }
 
   const translations = getMetadataTranslations(lang)
+  // Traductions en anglais pour les partages sociaux (toujours en anglais)
+  const englishTranslations = getMetadataTranslations('en')
   const localeMap: Record<typeof lang, string> = {
     fr: "fr_FR",
     en: "en_US",
@@ -92,24 +94,24 @@ export async function generateMetadata(): Promise<Metadata> {
     },
     openGraph: {
       type: "website",
-      locale: localeMap[lang],
+      locale: "en_US", // Toujours en anglais pour les partages
       url: appUrl,
-      siteName: translations.siteName,
-      title: translations.pages.home.title,
-      description: translations.pages.home.description,
+      siteName: englishTranslations.siteName,
+      title: englishTranslations.pages.home.title,
+      description: englishTranslations.pages.home.description,
       images: [
         {
           url: ogImage,
           width: 1200,
           height: 630,
-          alt: translations.pages.home.title,
+          alt: englishTranslations.pages.home.title,
         },
       ],
     },
     twitter: {
       card: "summary_large_image",
-      title: translations.pages.home.title,
-      description: translations.pages.home.description,
+      title: englishTranslations.pages.home.title,
+      description: englishTranslations.pages.home.description,
       images: [ogImage],
       creator: "@high5",
     },

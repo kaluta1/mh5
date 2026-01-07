@@ -42,33 +42,42 @@ export function createMetadata({
   }
 
   const translations = getMetadataTranslations(lang)
+  // Traductions en anglais pour les partages sociaux (toujours en anglais)
+  const englishTranslations = getMetadataTranslations('en')
   const fullTitle = title.includes("High5") ? title : `${title} | ${translations.siteName}`
+  // Titre en anglais pour les partages
+  const englishTitle = title.includes("High5") ? title : `${title} | ${englishTranslations.siteName}`
   const ogImage = image || defaultImage
   const canonicalUrl = url ? `${appUrl}${url}` : appUrl
+  
+  // Utiliser la description en anglais pour les partages si disponible, sinon utiliser celle fournie
+  // Pour les pages spécifiques, on peut passer une description en anglais
+  // Sinon, on utilise une description générique en anglais
+  const ogDescription = description || englishTranslations.defaultDescription
 
   return {
     title: fullTitle,
     description,
     openGraph: {
-      title: fullTitle,
-      description,
+      title: englishTitle,
+      description: ogDescription,
       url: canonicalUrl,
-      siteName: translations.siteName,
+      siteName: englishTranslations.siteName,
       images: [
         {
           url: ogImage,
           width: 1200,
           height: 630,
-          alt: title,
+          alt: englishTitle,
         },
       ],
-      locale: localeMap[lang],
+      locale: "en_US", // Toujours en anglais pour les partages
       type,
     },
     twitter: {
       card: "summary_large_image",
-      title: fullTitle,
-      description,
+      title: englishTitle,
+      description: ogDescription,
       images: [ogImage],
     },
     alternates: {

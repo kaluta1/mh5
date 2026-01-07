@@ -44,6 +44,8 @@ export async function generateMetadata(): Promise<Metadata> {
     lang = 'en'
   }
   const translations = getMetadataTranslations(lang)
+  // Traductions en anglais pour les partages sociaux
+  const englishTranslations = getMetadataTranslations('en')
   
   // Récupérer l'image d'un contest pour le thumbnail
   const contestImage = await getFeaturedContestImage()
@@ -53,7 +55,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
   return createMetadata({
     title: translations.pages.contests.title,
-    description: translations.pages.contests.description,
+    description: englishTranslations.pages.contests.description, // Description en anglais pour les partages
     url: "/contests",
     image: ogImage,
     language: lang,
