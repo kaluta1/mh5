@@ -4,7 +4,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    from app.api.api_v1.endpoints import auth, users, media, contests, votes, kyc, contestant, geography, favorites, search, search_history, comments, admin, season_migration, notifications, analytics, affiliate, payments, roles, verifications, wallet, voting_types, suggested_contests, social, private_messages, contact, categories, newsletter
+    from app.api.api_v1.endpoints import auth, users, media, contests, votes, kyc, contestant, geography, favorites, search, search_history, comments, admin, season_migration, notifications, analytics, affiliate, payments, roles, verifications, wallet, voting_types, suggested_contests, social, private_messages, contact, categories, newsletter, share
     logger.info("All endpoints imported successfully")
 except ImportError as e:
     logger.error(f"Error importing endpoints: {e}", exc_info=True)
@@ -47,3 +47,4 @@ api_router.include_router(social.router, prefix="/social", tags=["Service Social
 api_router.include_router(private_messages.router, prefix="/messages", tags=["Messagerie Privée"])
 api_router.include_router(contact.router, tags=["Contact"])
 api_router.include_router(newsletter.router, prefix="/newsletter", tags=["Newsletter"])
+api_router.include_router(share.router, prefix="/share", tags=["Partage Social"])
