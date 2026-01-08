@@ -41,7 +41,21 @@ async def share_contestant(
     # Échapper les caractères HTML pour éviter les injections
     title = html.escape(contestant.title or "MyHighFive")
     description = html.escape(contestant.description or "Découvrez cette participation sur MyHighFive")[:200]
-    author_name = html.escape(contestant.author_name or "Participant")
+    
+    # Récupérer le nom de l'auteur depuis la relation user
+    author_name = "Participant"
+    if contestant.user:
+        if contestant.user.full_name:
+            author_name = html.escape(contestant.user.full_name)
+        elif contestant.user.username:
+            author_name = html.escape(contestant.user.username)
+        elif contestant.user.first_name or contestant.user.last_name:
+            name_parts = []
+            if contestant.user.first_name:
+                name_parts.append(contestant.user.first_name)
+            if contestant.user.last_name:
+                name_parts.append(contestant.user.last_name)
+            author_name = html.escape(" ".join(name_parts))
     
     # Récupérer la première image ou utiliser une image par défaut
     image_url = "https://myhigh5.com/icons/Icon-512.png"
