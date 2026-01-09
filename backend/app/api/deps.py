@@ -30,7 +30,7 @@ def get_current_user(
         token_data = TokenPayload(**payload)
     except (JWTError, ValidationError):
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token invalide",
             headers={"WWW-Authenticate": "Bearer"}
         )

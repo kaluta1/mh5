@@ -16,7 +16,9 @@ from app.core.security import (
     create_password_reset_token,
     verify_password_reset_token,
     create_email_verification_token,
-    verify_email_verification_token
+    verify_email_verification_token,
+    validate_access_token,
+    get_user_id_from_token
 )
 from app.core.config import settings
 from app.db.session import get_db
@@ -365,6 +367,37 @@ def read_user_me(
     Récupérer les informations de l'utilisateur connecté.
     """
     return current_user
+
+
+@router.post("/validate-token")
+def validate_token(
+    token: str = Query(..., description="Token JWT à valider")
+) -> Any:
+    """
+    Valide un token JWT et retourne l'ID utilisateur si valide.
+    Utilisé par les microservices pour valider les tokens sans accès à la base de données.
+    """
+    payload = validate_access_token(token)
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token invalide ou expiré",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+    
+    user_id = get_user_id_from_token(token)
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token invalide: ID utilisateur manquant",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+    
+    return {
+        "valid": True,
+        "user_id": user_id,
+        "exp": payload.get("exp")
+    }
 
 
 @router.post("/change-password", response_model=PasswordResetResponse)

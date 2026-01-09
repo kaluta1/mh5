@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import Any, Union
+from typing import Any, Union, Optional
 
 from jose import jwt
 import bcrypt
@@ -89,3 +89,33 @@ def decode_access_token(token: str) -> dict:
         return decoded_token
     except jwt.JWTError:
         return {}
+
+def validate_access_token(token: str) -> Optional[dict]:
+    """
+    Valide un token d'accès JWT et retourne le payload si valide.
+    Utilisé par les microservices pour valider les tokens sans accès à la base de données.
+    
+    Returns:
+        dict: Le payload du token si valide, None sinon
+    """
+    try:
+        decoded_token = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        return decoded_token
+    except jwt.JWTError:
+        return None
+
+def get_user_id_from_token(token: str) -> Optional[int]:
+    """
+    Extrait l'ID utilisateur depuis un token JWT valide.
+    Utilisé par les microservices pour obtenir l'ID utilisateur sans accès à la base de données.
+    
+    Returns:
+        int: L'ID utilisateur si le token est valide, None sinon
+    """
+    payload = validate_access_token(token)
+    if payload and "sub" in payload:
+        try:
+            return int(payload["sub"])
+        except (ValueError, TypeError):
+            return None
+    return None
