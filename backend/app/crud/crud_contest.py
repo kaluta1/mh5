@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, TYPE_CHECKING
 from datetime import datetime, date, timedelta
 
 from sqlalchemy.orm import Session, joinedload
@@ -7,6 +7,9 @@ from sqlalchemy import func, or_
 from app.models.contest import Contest, ContestEntry, ContestVote
 from app.models.contests import Contestant, ContestantRanking
 from app.schemas.contest import ContestCreate, ContestUpdate
+
+if TYPE_CHECKING:
+    from app.models.user import User
 
 
 def calculate_season_dates(voting_start_date: date) -> Dict[str, Optional[date]]:
@@ -477,7 +480,7 @@ class CRUDContest:
         
         return {"success": True, "entry_id": entry.id}
 
-    def enrich_contest_with_stats(self, db: Session, contest: Contest, current_user: Optional[User] = None) -> Dict[str, Any]:
+    def enrich_contest_with_stats(self, db: Session, contest: Contest, current_user: Optional['User'] = None) -> Dict[str, Any]:
         """Enrichit un contest avec les statistiques (nombre de participants et votes)"""
         from app.models.contests import ContestSeasonLink, ContestSeason, SeasonLevel
         from app.models.user import User
@@ -1303,7 +1306,7 @@ class CRUDContest:
         
         # Fonction utilitaire pour vérifier si un utilisateur peut voter pour un contestant
         # Utilise maintenant directement les champs du Contestant (simplifié)
-        def is_geographically_allowed(voter: Optional[User], candidate: Contestant) -> bool:
+        def is_geographically_allowed(voter: Optional['User'], candidate: Contestant) -> bool:
             # Si pas de voter ou pas de season_level, permettre le vote
             if not voter or not season_level:
                 return True
