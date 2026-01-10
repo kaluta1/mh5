@@ -11,6 +11,7 @@ from app.schemas.category import CategoryCreate, CategoryUpdate, Category as Cat
 router = APIRouter()
 
 
+@router.get("", response_model=List[CategorySchema])
 @router.get("/", response_model=List[CategorySchema])
 def get_categories(
     *,
@@ -25,6 +26,7 @@ def get_categories(
     return categories
 
 
+@router.post("", response_model=CategorySchema, status_code=status.HTTP_201_CREATED)
 @router.post("/", response_model=CategorySchema, status_code=status.HTTP_201_CREATED)
 def create_category(
     *,

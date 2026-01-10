@@ -626,7 +626,16 @@ class CRUDContestant:
         if existing:
             raise ValueError("L'utilisateur a déjà une candidature pour cette saison")
         
-        # Créer la candidature
+        # Récupérer l'utilisateur pour copier ses données géographiques
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise ValueError("Utilisateur non trouvé")
+        
+        # Créer la candidature avec les données géographiques et le genre de l'utilisateur
+        author_gender_value = None
+        if user.gender:
+            author_gender_value = user.gender.value if hasattr(user.gender, 'value') else str(user.gender)
+        
         db_obj = Contestant(
             user_id=user_id,
             season_id=season_id,
@@ -634,6 +643,11 @@ class CRUDContestant:
             description=description,
             image_media_ids=image_media_ids,
             video_media_ids=video_media_ids,
+            city=user.city,
+            country=user.country,
+            region=user.region,
+            continent=user.continent,
+            author_gender=author_gender_value,
             registration_date=datetime.utcnow(),
             verification_status="pending",
             is_active=True

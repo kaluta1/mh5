@@ -477,19 +477,65 @@ class CRUDContest:
         
         return {"success": True, "entry_id": entry.id}
 
-    def enrich_contest_with_stats(self, db: Session, contest: Contest) -> Dict[str, Any]:
+    def enrich_contest_with_stats(self, db: Session, contest: Contest, current_user: Optional[User] = None) -> Dict[str, Any]:
         """Enrichit un contest avec les statistiques (nombre de participants et votes)"""
-        from app.models.contests import ContestSeasonLink, ContestSeason
+        from app.models.contests import ContestSeasonLink, ContestSeason, SeasonLevel
         from app.models.user import User
         
-        # Compter le nombre de participants (contestants avec season_id = contest.id)
-        # Utiliser distinct pour éviter les doublons et exclure les supprimés
-        entries_count = db.query(func.count(Contestant.id.distinct()))\
+        # Récupérer la saison active du contest via ContestSeasonLink
+        season_level = None
+        season_link = db.query(ContestSeasonLink).filter(
+            ContestSeasonLink.contest_id == contest.id,
+            ContestSeasonLink.is_active == True
+        ).first()
+        
+        if season_link:
+            season = db.query(ContestSeason).filter(
+                ContestSeason.id == season_link.season_id,
+                ContestSeason.is_deleted == False
+            ).first()
+            if season:
+                season_level = season.level.value if hasattr(season.level, 'value') else str(season.level)
+        
+        # Si pas de saison trouvée, utiliser le niveau du contest par défaut
+        if not season_level:
+            season_level = contest.level.lower() if contest.level else None
+        
+        # Compter le nombre de participants selon la saison et la localisation de l'utilisateur
+        entries_query = db.query(func.count(Contestant.id.distinct()))\
             .filter(
                 Contestant.season_id == contest.id,
                 Contestant.is_deleted == False
-            )\
-            .scalar() or 0
+            )
+        
+        # Filtrer par localisation selon le niveau de la saison et l'utilisateur connecté
+        if current_user and season_level:
+            season_level_lower = season_level.lower()
+            
+            if season_level_lower == "city":
+                # Filtrer par ville et pays
+                entries_query = entries_query.filter(
+                    Contestant.city == current_user.city,
+                    Contestant.country == current_user.country
+                )
+            elif season_level_lower == "country":
+                # Filtrer par pays
+                entries_query = entries_query.filter(
+                    Contestant.country == current_user.country
+                )
+            elif season_level_lower in ("regional", "region"):
+                # Filtrer par région
+                entries_query = entries_query.filter(
+                    Contestant.region == current_user.region
+                )
+            elif season_level_lower == "continent":
+                # Filtrer par continent
+                entries_query = entries_query.filter(
+                    Contestant.continent == current_user.continent
+                )
+            # Pour "global", pas de filtre géographique
+        
+        entries_count = entries_query.scalar() or 0
         
         # Récupérer les top 5 contestants par votes
         top_contestants = []
@@ -591,18 +637,6 @@ class CRUDContest:
             total_votes = db.query(func.count(ContestEntry.id))\
                 .filter(ContestEntry.contest_id == contest.id)\
                 .scalar() or 0
-        
-        # Récupérer le niveau depuis la season via ContestSeasonLink
-        season_level = contest.level  # Par défaut, utiliser le niveau du contest
-        season_link = db.query(ContestSeasonLink).filter(
-            ContestSeasonLink.contest_id == contest.id,
-            ContestSeasonLink.is_active == True
-        ).first()
-        
-        if season_link:
-            season = db.query(ContestSeason).filter(ContestSeason.id == season_link.season_id).first()
-            if season:
-                season_level = season.level.value if hasattr(season.level, 'value') else str(season.level)
         
         # Construire l'URL complète de l'image de couverture si elle existe
         # Priorité: image_url > cover_image_url
@@ -980,18 +1014,15 @@ class CRUDContest:
                 season_level = season_level.lower()
         
         # Appliquer le filtrage géographique dans la requête SQL si un utilisateur est connecté
+        # Utilisation directe des colonnes de Contestant (plus besoin de jointure avec User)
         if contestants_query and current_user and season_level and season_level != "global":
             from sqlalchemy import and_
-            
-            # Joindre avec la table User pour filtrer par localisation
-            # On utilise join car on a besoin de filtrer sur les colonnes de User
-            contestants_query = contestants_query.join(User, Contestant.user_id == User.id)
             
             # Fonction helper pour créer des conditions de filtrage
             def create_location_filter(level: str, user: User):
                 """
                 Crée un filtre SQL basé sur le niveau et la localisation de l'utilisateur.
-                La logique est similaire à is_geographically_allowed mais appliquée au filtrage SQL.
+                Utilise directement les colonnes de Contestant (city, country, region, continent).
                 """
                 def is_valid_location(value: Optional[str]) -> bool:
                     if not value:
@@ -999,14 +1030,14 @@ class CRUDContest:
                     val_lower = str(value).lower().strip()
                     return val_lower not in ("unknown", "none", "", "null")
                 
-                # Construire les conditions selon le niveau
+                # Construire les conditions selon le niveau en utilisant les colonnes de Contestant
                 if level == "city":
                     # Même ville ET même pays
                     conditions = []
                     if is_valid_location(user.country):
-                        conditions.append(User.country.ilike(user.country))
+                        conditions.append(Contestant.country.ilike(user.country))
                     if is_valid_location(user.city):
-                        conditions.append(User.city.ilike(user.city))
+                        conditions.append(Contestant.city.ilike(user.city))
                     # Si aucune condition valide, pas de filtre (afficher tous)
                     if not conditions:
                         return None
@@ -1014,34 +1045,22 @@ class CRUDContest:
                     return and_(*conditions) if len(conditions) > 1 else conditions[0]
                     
                 elif level == "country":
-                    # Même pays ET même continent
-                    conditions = []
-                    if is_valid_location(user.continent):
-                        conditions.append(User.continent.ilike(user.continent))
+                    # Même pays
                     if is_valid_location(user.country):
-                        conditions.append(User.country.ilike(user.country))
-                    if not conditions:
-                        return None
-                    return and_(*conditions) if len(conditions) > 1 else conditions[0]
+                        return Contestant.country.ilike(user.country)
+                    return None
                     
                 elif level in ("regional", "region"):
-                    # Même région ET même continent
-                    conditions = []
-                    if is_valid_location(user.continent):
-                        conditions.append(User.continent.ilike(user.continent))
+                    # Même région
                     user_region = getattr(user, "region", None)
                     if is_valid_location(user_region):
-                        # Vérifier si la colonne region existe dans User
-                        if hasattr(User, "region"):
-                            conditions.append(User.region.ilike(user_region))
-                    if not conditions:
-                        return None
-                    return and_(*conditions) if len(conditions) > 1 else conditions[0]
+                        return Contestant.region.ilike(user_region)
+                    return None
                     
                 elif level == "continent":
                     # Même continent uniquement
                     if is_valid_location(user.continent):
-                        return User.continent.ilike(user.continent)
+                        return Contestant.continent.ilike(user.continent)
                     return None
                 
                 # Niveau inconnu ou global -> pas de filtre
@@ -1250,15 +1269,13 @@ class CRUDContest:
         # - continent -> classement par continent
         # - global  -> classement global (tous ensemble)
         def get_group_key(c: Contestant) -> str:
-            # S'assurer que l'utilisateur est chargé
-            if not hasattr(c, 'user') or not c.user:
-                return "global"
+            # Utiliser directement les champs du Contestant (plus besoin de relation User)
             lvl = (season_level or "global") if isinstance(season_level, str) else "global"
             lvl = lvl.lower()
-            country = (c.user.country or "").lower() if getattr(c.user, "country", None) else ""
-            city = (c.user.city or "").lower() if getattr(c.user, "city", None) else ""
-            continent = (c.user.continent or "").lower() if getattr(c.user, "continent", None) else ""
-            region = (getattr(c.user, "region", "") or "").lower()
+            country = (c.country or "").lower() if c.country else ""
+            city = (c.city or "").lower() if c.city else ""
+            continent = (c.continent or "").lower() if c.continent else ""
+            region = (c.region or "").lower() if c.region else ""
             
             if lvl == "city":
                 return f"city:{country}:{city}"
@@ -1285,18 +1302,14 @@ class CRUDContest:
                 ranks[cid] = position
         
         # Fonction utilitaire pour vérifier si un utilisateur peut voter pour un contestant
+        # Utilise maintenant directement les champs du Contestant (simplifié)
         def is_geographically_allowed(voter: Optional[User], candidate: Contestant) -> bool:
-            # Si pas de voter, pas de candidate.user, ou pas de season_level, permettre le vote
-            if not voter or not hasattr(candidate, 'user') or not candidate.user:
-                return True
-            
-            # Si pas de season_level défini, pas de restriction géographique
-            if not season_level:
+            # Si pas de voter ou pas de season_level, permettre le vote
+            if not voter or not season_level:
                 return True
             
             lvl = str(season_level).lower()
             v = voter
-            u = candidate.user
             
             def eq(a: Optional[str], b: Optional[str]) -> bool:
                 return bool(a and b and a.lower() == b.lower())
@@ -1316,30 +1329,24 @@ class CRUDContest:
                 # Si au moins une est "Unknown", on accepte (pas de restriction)
                 return True
             
+            # Utiliser directement les champs du Contestant au lieu de candidate.user
             # Appliquer les restrictions selon le niveau de la saison
             if lvl == "city":
                 # Même ville ET même pays
-                country_match = compare_with_unknown(v.country, u.country)
+                country_match = compare_with_unknown(v.country, candidate.country)
                 if not country_match:
                     return False
-                return compare_with_unknown(v.city, u.city)
+                return compare_with_unknown(v.city, candidate.city)
             elif lvl == "country":
-                # Même pays ET même continent
-                continent_match = compare_with_unknown(v.continent, u.continent)
-                if not continent_match:
-                    return False
-                return compare_with_unknown(v.country, u.country)
+                # Même pays
+                return compare_with_unknown(v.country, candidate.country)
             elif lvl in ("regional", "region"):
-                # Même région ET même continent
-                continent_match = compare_with_unknown(v.continent, u.continent)
-                if not continent_match:
-                    return False
+                # Même région
                 v_region = getattr(v, "region", None)
-                u_region = getattr(u, "region", None)
-                return compare_with_unknown(v_region, u_region)
+                return compare_with_unknown(v_region, candidate.region)
             elif lvl == "continent":
                 # Même continent
-                return compare_with_unknown(v.continent, u.continent)
+                return compare_with_unknown(v.continent, candidate.continent)
             else:
                 # Global ou niveau inconnu -> pas de restriction géographique
                 return True
@@ -1424,6 +1431,14 @@ class CRUDContest:
                 # Si current_user_id est None (utilisateur non authentifié), can_vote et has_voted restent False
                 vote_restriction_reason = "not_authenticated"
             
+            # Utiliser les données directement du Contestant (plus besoin de relation User pour les données géographiques)
+            # Mais on garde la relation User pour le nom et l'avatar
+            author_name = None
+            author_avatar_url = None
+            if contestant.user:
+                author_name = contestant.user.full_name or f"{contestant.user.first_name or ''} {contestant.user.last_name or ''}".strip()
+                author_avatar_url = contestant.user.avatar_url
+            
             enriched_contestants.append({
                 "id": contestant.id,
                 "user_id": contestant.user_id,
@@ -1434,13 +1449,14 @@ class CRUDContest:
                 "video_media_ids": contestant.video_media_ids,
                 "registration_date": contestant.registration_date,
                 "is_qualified": contestant.is_qualified,
-                # Infos auteur
-                "author_name": contestant.user.full_name or f"{contestant.user.first_name or ''} {contestant.user.last_name or ''}".strip() if contestant.user else None,
-                "author_country": contestant.user.country if contestant.user else None,
-                "author_city": contestant.user.city if contestant.user else None,
-                "author_continent": contestant.user.continent if contestant.user else None,
-                "author_region": contestant.user.region if contestant.user else None,
-                "author_avatar_url": contestant.user.avatar_url if contestant.user else None,
+                # Infos auteur - utiliser directement les champs du Contestant
+                "author_name": author_name,
+                "author_country": contestant.country,
+                "author_city": contestant.city,
+                "author_continent": contestant.continent,
+                "author_region": contestant.region,
+                "author_gender": contestant.author_gender,
+                "author_avatar_url": author_avatar_url,
                 # Stats
                 "rank": ranks.get(contestant.id),
                 "votes_count": votes_count_by_contestant.get(contestant.id, 0),

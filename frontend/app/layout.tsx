@@ -19,12 +19,15 @@ async function getFeaturedContestImage(): Promise<string> {
   try {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
     const response = await fetch(`${apiUrl}/api/v1/contests?limit=1&skip=0`, {
-      next: { revalidate: 3600 } // Cache pour 1 heure
+      next: { revalidate: 3600 }, // Cache pour 1 heure
+      headers: {
+        'Accept': 'application/json',
+      }
     })
     
     if (response.ok) {
       const data = await response.json()
-      if (data && data.length > 0) {
+      if (data && Array.isArray(data) && data.length > 0) {
         const contest = data[0]
         // Utiliser image_url ou cover_image_url
         const imageUrl = contest.image_url || contest.cover_image_url
@@ -39,9 +42,15 @@ async function getFeaturedContestImage(): Promise<string> {
           }
         }
       }
+    } else if (response.status === 404) {
+      // Si l'endpoint n'existe pas, retourner l'image par défaut sans erreur
+      console.warn('Contests endpoint not found, using default image')
     }
   } catch (error) {
-    console.error('Error fetching contest image for metadata:', error)
+    // Ne pas logger l'erreur en production pour éviter le spam
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Error fetching contest image for metadata:', error)
+    }
   }
   return defaultImage
 }

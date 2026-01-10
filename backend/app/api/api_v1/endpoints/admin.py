@@ -4,11 +4,15 @@ from sqlalchemy.exc import IntegrityError
 from psycopg2.errors import UniqueViolation
 from app.db.base_class import Base
 from app.api.deps import get_db, get_current_user
-from app.models.user import User
-from app.models.contest import Contest, ContestEntry
+from app.models.user import User, Role
+from app.models.contest import Contest, ContestEntry, SuggestedContest
 from app.models.contests import ContestSeason, ContestStage, ContestStageLevel, VotingRestriction, Contestant, ContestSubmission, SeasonLevel, ContestantSeason, ContestSeasonLink
 from app.models.media import Media
 from app.models.comment import Comment, Report
+from app.models.payment import Deposit, ProductType, DepositStatus
+from app.models.transaction import UserTransaction, TransactionType, TransactionStatus
+from app.models.clubs import FanClub, ClubMembership, ClubAdmin
+from app.models.category import Category
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any, Dict, Any
 from datetime import datetime, timedelta, date
@@ -2067,7 +2071,8 @@ async def get_all_users(
         if is_verified is not None:
             query = query.filter(User.is_verified == is_verified)
         
-        users = query.all()
+        # Trier du plus récent au plus ancien
+        users = query.order_by(User.created_at.desc()).all()
         
         # Enrichir avec les statistiques
         result = []
@@ -2202,6 +2207,157 @@ async def get_user_details(
             
             comments_list.append(comment_data)
         
+        # Récupérer les dépôts
+        deposits = db.query(Deposit).filter(Deposit.user_id == user.id).order_by(Deposit.created_at.desc()).all()
+        deposits_list = []
+        for d in deposits:
+            product_type = db.query(ProductType).filter(ProductType.id == d.product_type_id).first()
+            deposits_list.append({
+                'id': d.id,
+                'amount': float(d.amount),
+                'currency': d.currency,
+                'crypto_currency': d.crypto_currency,
+                'crypto_amount': float(d.crypto_amount) if d.crypto_amount else None,
+                'status': d.status.value if d.status else None,
+                'product_type': product_type.code if product_type else None,
+                'product_type_name': product_type.name if product_type else None,
+                'order_id': d.order_id,
+                'tx_hash': d.tx_hash,
+                'created_at': d.created_at.isoformat() if d.created_at else None,
+                'validated_at': d.validated_at.isoformat() if d.validated_at else None,
+                'is_used': d.is_used
+            })
+        
+        # Récupérer les retraits
+        withdrawals = db.query(UserTransaction).filter(
+            UserTransaction.user_id == user.id,
+            UserTransaction.transaction_type == TransactionType.WITHDRAWAL
+        ).order_by(UserTransaction.created_at.desc()).all()
+        withdrawals_list = []
+        for w in withdrawals:
+            withdrawals_list.append({
+                'id': w.id,
+                'amount': float(w.amount),
+                'currency': w.currency,
+                'status': w.status.value if w.status else None,
+                'description': w.description,
+                'reference': w.reference,
+                'payment_method': w.payment_method,
+                'payment_reference': w.payment_reference,
+                'processed_at': w.processed_at.isoformat() if w.processed_at else None,
+                'created_at': w.created_at.isoformat() if w.created_at else None
+            })
+        
+        # Récupérer le rôle
+        role_info = None
+        if user.role_id:
+            role = db.query(Role).filter(Role.id == user.role_id).first()
+            if role:
+                role_info = {
+                    'id': role.id,
+                    'name': role.name,
+                    'description': role.description
+                }
+        
+        # Récupérer les clubs (clubs dont l'utilisateur est membre)
+        club_memberships = db.query(ClubMembership).filter(ClubMembership.member_id == user.id).all()
+        clubs_list = []
+        for cm in club_memberships:
+            club = db.query(FanClub).filter(FanClub.id == cm.club_id).first()
+            if club:
+                clubs_list.append({
+                    'id': club.id,
+                    'name': club.name,
+                    'slug': club.slug,
+                    'description': club.description,
+                    'membership_type': cm.membership_type.value if cm.membership_type else None,
+                    'membership_status': cm.status.value if cm.status else None,
+                    'start_date': cm.start_date.isoformat() if cm.start_date else None,
+                    'end_date': cm.end_date.isoformat() if cm.end_date else None,
+                    'is_owner': club.owner_id == user.id,
+                    'is_admin': db.query(ClubAdmin).filter(
+                        ClubAdmin.club_id == club.id,
+                        ClubAdmin.admin_id == user.id
+                    ).first() is not None
+                })
+        
+        # Récupérer les clubs dont l'utilisateur est propriétaire
+        owned_clubs = db.query(FanClub).filter(FanClub.owner_id == user.id).all()
+        for club in owned_clubs:
+            # Vérifier si déjà dans la liste
+            if not any(c['id'] == club.id for c in clubs_list):
+                clubs_list.append({
+                    'id': club.id,
+                    'name': club.name,
+                    'slug': club.slug,
+                    'description': club.description,
+                    'membership_type': None,
+                    'membership_status': None,
+                    'start_date': None,
+                    'end_date': None,
+                    'is_owner': True,
+                    'is_admin': True
+                })
+        
+        # Récupérer les suggestions de contest (si le modèle a un user_id, sinon liste vide)
+        # Note: Le modèle SuggestedContest n'a pas de user_id, donc on retourne une liste vide
+        # Si vous avez besoin de cette fonctionnalité, il faudra ajouter user_id au modèle
+        suggested_contests_list = []
+        
+        # Récupérer les reports (signalements faits par l'utilisateur et signalements sur l'utilisateur)
+        reports_made = db.query(Report).filter(Report.reporter_id == user.id).order_by(Report.created_at.desc()).all()
+        reports_made_list = []
+        for r in reports_made:
+            reports_made_list.append({
+                'id': r.id,
+                'reason': r.reason,
+                'description': r.description,
+                'status': r.status,
+                'media_id': r.media_id,
+                'contest_entry_id': r.contest_entry_id,
+                'comment_id': r.comment_id,
+                'user_id': r.user_id,
+                'contestant_id': r.contestant_id,
+                'contest_id': r.contest_id,
+                'reviewed_by': r.reviewed_by,
+                'reviewed_at': r.reviewed_at.isoformat() if r.reviewed_at else None,
+                'created_at': r.created_at.isoformat() if r.created_at else None
+            })
+        
+        reports_received = db.query(Report).filter(Report.user_id == user.id).order_by(Report.created_at.desc()).all()
+        reports_received_list = []
+        for r in reports_received:
+            reports_received_list.append({
+                'id': r.id,
+                'reason': r.reason,
+                'description': r.description,
+                'status': r.status,
+                'reporter_id': r.reporter_id,
+                'reviewed_by': r.reviewed_by,
+                'reviewed_at': r.reviewed_at.isoformat() if r.reviewed_at else None,
+                'created_at': r.created_at.isoformat() if r.created_at else None
+            })
+        
+        # Récupérer l'arbre d'affiliation sur 10 niveaux
+        from app.crud import user as crud_user
+        affiliate_tree_data = crud_user.get_all_referrals_multilevel(
+            db=db,
+            user_id=user.id,
+            skip=0,
+            limit=10000,  # Limite élevée pour récupérer tous les niveaux
+            level_filter=None,
+            status_filter=None,
+            search_query=None,
+            kyc_status_filter=None
+        )
+        
+        # Organiser l'arbre par niveaux
+        affiliate_tree_by_level = {}
+        for level in range(1, 11):
+            affiliate_tree_by_level[level] = [
+                r for r in affiliate_tree_data.get('referrals', []) if r.get('level') == level
+            ]
+        
         return {
             'id': user.id,
             'email': user.email,
@@ -2231,7 +2387,21 @@ async def get_user_details(
             'contests_list': contests_list,
             'contestants_list': contestants_list,
             'contest_comments': comments_list,
-            'last_login': user.last_login
+            'last_login': user.last_login,
+            'deposits': deposits_list,
+            'withdrawals': withdrawals_list,
+            'role': role_info,
+            'clubs': clubs_list,
+            'suggested_contests': suggested_contests_list,
+            'reports_made': reports_made_list,
+            'reports_received': reports_received_list,
+            'affiliate_tree': {
+                'total_referrals': affiliate_tree_data.get('total', 0),
+                'total_all_levels': affiliate_tree_data.get('total_all_levels', 0),
+                'level_stats': affiliate_tree_data.get('level_stats', {}),
+                'kyc_stats': affiliate_tree_data.get('kyc_stats', {}),
+                'by_level': affiliate_tree_by_level
+            }
         }
     except HTTPException:
         raise
@@ -2408,6 +2578,40 @@ async def get_admin_statistics(
         reviewed_reports = db.query(Report).filter(Report.status == 'reviewed').count()
         resolved_reports = db.query(Report).filter(Report.status == 'resolved').count()
         
+        # Rapports par type
+        # Rapports sur des contests (qui peuvent avoir des catégories)
+        reports_by_contest = db.query(Report).filter(Report.contest_id.isnot(None)).count()
+        reports_by_user = db.query(Report).filter(Report.user_id.isnot(None)).count()
+        reports_by_contestant = db.query(Report).filter(Report.contestant_id.isnot(None)).count()
+        reports_by_comment = db.query(Report).filter(Report.comment_id.isnot(None)).count()
+        reports_by_media = db.query(Report).filter(Report.media_id.isnot(None)).count()
+        
+        # Rapports par catégorie (rapports sur des contests qui ont une catégorie)
+        # On compte les rapports liés à des contests avec catégorie
+        reports_by_category = db.query(Report).join(Contest).filter(
+            Report.contest_id.isnot(None),
+            Contest.category_id.isnot(None)
+        ).count()
+        
+        # Statistiques des catégories
+        total_categories = db.query(Category).filter(Category.is_active == True).count()
+        
+        # Catégories avec leurs statistiques
+        categories_data = []
+        categories = db.query(Category).filter(Category.is_active == True).all()
+        for category in categories:
+            contests_count = db.query(Contest).filter(
+                Contest.category_id == category.id,
+                Contest.is_deleted == False
+            ).count()
+            
+            # Compter les utilisations (nombre de contests utilisant cette catégorie)
+            categories_data.append({
+                'name': category.name,
+                'count': contests_count,
+                'contests': contests_count
+            })
+        
         return {
             'seasons': {
                 'total': total_seasons
@@ -2439,7 +2643,19 @@ async def get_admin_statistics(
                 'total': total_reports,
                 'pending': pending_reports,
                 'reviewed': reviewed_reports,
-                'resolved': resolved_reports
+                'resolved': resolved_reports,
+                'by_type': {
+                    'category': reports_by_category,
+                    'contest': reports_by_contest,
+                    'user': reports_by_user,
+                    'contestant': reports_by_contestant,
+                    'comment': reports_by_comment,
+                    'media': reports_by_media
+                }
+            },
+            'categories': {
+                'total': total_categories,
+                'chart_data': categories_data
             }
         }
     except Exception as e:
@@ -2448,11 +2664,167 @@ async def get_admin_statistics(
             detail=f"Erreur lors de la récupération des statistiques: {str(e)}"
         )
 
+@router.get("/reports")
+async def get_reports(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    skip: int = 0,
+    limit: int = 100,
+    status: Optional[str] = Query(None, description="Filtrer par statut (pending, reviewed, resolved)"),
+):
+    """
+    Récupère tous les reports avec les informations enrichies (contestant, auteur, reporter)
+    """
+    check_admin(current_user)
+    
+    try:
+        query = db.query(Report)
+        
+        if status:
+            query = query.filter(Report.status == status)
+        
+        # Filtrer uniquement les reports sur des contestants
+        query = query.filter(Report.contestant_id.isnot(None))
+        
+        reports = query.order_by(Report.created_at.desc()).offset(skip).limit(limit).all()
+        
+        result = []
+        for report in reports:
+            # Récupérer le contestant
+            contestant = db.query(Contestant).filter(Contestant.id == report.contestant_id).first()
+            
+            # Récupérer l'auteur du contestant
+            author = None
+            if contestant:
+                author = db.query(User).filter(User.id == contestant.user_id).first()
+            
+            # Récupérer le reporter
+            reporter = db.query(User).filter(User.id == report.reporter_id).first()
+            
+            # Récupérer le contest si disponible
+            contest = None
+            if report.contest_id:
+                contest = db.query(Contest).filter(Contest.id == report.contest_id).first()
+            
+            result.append({
+                'id': report.id,
+                'reason': report.reason,
+                'description': report.description,
+                'status': report.status,
+                'created_at': report.created_at.isoformat() if report.created_at else None,
+                'reviewed_at': report.reviewed_at.isoformat() if report.reviewed_at else None,
+                'reviewed_by': report.reviewed_by,
+                'moderator_notes': report.moderator_notes,
+                'contestant': {
+                    'id': contestant.id if contestant else None,
+                    'title': contestant.title if contestant else None,
+                    'description': contestant.description if contestant else None,
+                    'verification_status': contestant.verification_status if contestant else None,
+                } if contestant else None,
+                'author': {
+                    'id': author.id if author else None,
+                    'username': author.username if author else None,
+                    'full_name': author.full_name if author else None,
+                    'email': author.email if author else None,
+                    'avatar_url': author.avatar_url if author else None,
+                    'city': author.city if author else None,
+                    'country': author.country if author else None,
+                    'is_verified': author.is_verified if author else None,
+                } if author else None,
+                'reporter': {
+                    'id': reporter.id if reporter else None,
+                    'username': reporter.username if reporter else None,
+                    'full_name': reporter.full_name if reporter else None,
+                    'email': reporter.email if reporter else None,
+                    'avatar_url': reporter.avatar_url if reporter else None,
+                } if reporter else None,
+                'contest': {
+                    'id': contest.id if contest else None,
+                    'name': contest.name if contest else None,
+                } if contest else None,
+            })
+        
+        return result
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de la récupération des reports: {str(e)}"
+        )
+
+@router.get("/suggested-contests")
+async def get_suggested_contests(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    skip: int = 0,
+    limit: int = 100,
+    status: Optional[str] = Query(None, description="Filtrer par statut (pending, approved, rejected)"),
+):
+    """
+    Récupère toutes les suggestions de concours avec les informations de l'auteur
+    """
+    check_admin(current_user)
+    
+    try:
+        from app.models.contest import SuggestedContest, SuggestedContestStatus
+        
+        query = db.query(SuggestedContest)
+        
+        if status:
+            try:
+                status_enum = SuggestedContestStatus(status)
+                query = query.filter(SuggestedContest.status == status_enum)
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Statut invalide: {status}"
+                )
+        
+        suggestions = query.order_by(SuggestedContest.created_at.desc()).offset(skip).limit(limit).all()
+        
+        result = []
+        for suggestion in suggestions:
+            # Vérifier si le modèle a un user_id (peut être ajouté plus tard)
+            author = None
+            if hasattr(suggestion, 'user_id') and suggestion.user_id:
+                author_user = db.query(User).filter(User.id == suggestion.user_id).first()
+                if author_user:
+                    author = {
+                        'id': author_user.id,
+                        'username': author_user.username,
+                        'full_name': author_user.full_name,
+                        'email': author_user.email,
+                        'avatar_url': author_user.avatar_url,
+                        'city': author_user.city,
+                        'country': author_user.country,
+                        'is_verified': author_user.is_verified,
+                    }
+            
+            # SuggestedContest hérite de Base, donc il a id, created_at, updated_at
+            result.append({
+                'id': suggestion.id,
+                'name': suggestion.name,
+                'description': suggestion.description,
+                'category': suggestion.category,
+                'status': suggestion.status.value if hasattr(suggestion.status, 'value') else str(suggestion.status),
+                'created_at': suggestion.created_at.isoformat() if suggestion.created_at else None,
+                'updated_at': suggestion.updated_at.isoformat() if suggestion.updated_at else None,
+                'author': author,
+            })
+        
+        return result
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de la récupération des suggestions: {str(e)}"
+        )
+
 @router.get("/statistics/user-progress")
 async def get_user_progress_statistics(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    days: int = 7
+    days: int = 7,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None
 ):
     """
     Récupère les données de progression des utilisateurs pour le graphique
@@ -2464,16 +2836,21 @@ async def get_user_progress_statistics(
         from sqlalchemy import func, cast, Date
         from datetime import datetime, timedelta, date
         
-        # Calculer la date de début
-        end_date = date.today()
-        start_date = end_date - timedelta(days=days - 1)
+        # Calculer la date de début et de fin
+        if start_date and end_date:
+            start_date_obj = datetime.strptime(start_date, '%Y-%m-%d').date()
+            end_date_obj = datetime.strptime(end_date, '%Y-%m-%d').date()
+            days = (end_date_obj - start_date_obj).days + 1
+        else:
+            end_date_obj = date.today()
+            start_date_obj = end_date_obj - timedelta(days=days - 1)
         
         # Initialiser les données
         progress_data = []
         
         # Pour chaque jour dans la période
         for i in range(days):
-            current_date = start_date + timedelta(days=i)
+            current_date = start_date_obj + timedelta(days=i)
             next_date = current_date + timedelta(days=1)
             
             # Convertir current_date en datetime pour la comparaison
@@ -2514,6 +2891,153 @@ async def get_user_progress_statistics(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de la récupération des statistiques de progression: {str(e)}"
+        )
+
+@router.get("/statistics/deposits")
+async def get_deposits_statistics(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    days: int = 30,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None
+):
+    """
+    Récupère les statistiques des dépôts pour le graphique
+    """
+    check_admin(current_user)
+    
+    try:
+        from sqlalchemy import func, cast, Date
+        from datetime import datetime, timedelta, date
+        from app.models.payment import Deposit, DepositStatus
+        
+        # Calculer la date de début et de fin
+        if start_date and end_date:
+            start_date_obj = datetime.strptime(start_date, '%Y-%m-%d').date()
+            end_date_obj = datetime.strptime(end_date, '%Y-%m-%d').date()
+            days = (end_date_obj - start_date_obj).days + 1
+        else:
+            end_date_obj = date.today()
+            start_date_obj = end_date_obj - timedelta(days=days - 1)
+        
+        # Total des dépôts validés
+        total_amount = db.query(func.sum(Deposit.amount)).filter(
+            Deposit.status == DepositStatus.VALIDATED
+        ).scalar() or 0
+        
+        total_count = db.query(Deposit).filter(
+            Deposit.status == DepositStatus.VALIDATED
+        ).count()
+        
+        # Données pour le graphique (par jour)
+        chart_data = []
+        for i in range(days):
+            current_date = start_date_obj + timedelta(days=i)
+            next_date = current_date + timedelta(days=1)
+            
+            current_datetime_start = datetime.combine(current_date, datetime.min.time())
+            current_datetime_end = datetime.combine(current_date, datetime.max.time())
+            
+            # Dépôts validés ce jour-là
+            day_deposits = db.query(Deposit).filter(
+                Deposit.status == DepositStatus.VALIDATED,
+                Deposit.validated_at >= current_datetime_start,
+                Deposit.validated_at < current_datetime_end
+            ).all()
+            
+            day_amount = sum(float(d.amount) for d in day_deposits)
+            day_count = len(day_deposits)
+            
+            chart_data.append({
+                'date': current_date.strftime('%d/%m'),
+                'amount': float(day_amount),
+                'count': day_count
+            })
+        
+        return {
+            'total_amount': float(total_amount),
+            'total_count': total_count,
+            'chart_data': chart_data
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de la récupération des statistiques de dépôts: {str(e)}"
+        )
+
+@router.get("/statistics/withdrawals")
+async def get_withdrawals_statistics(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    days: int = 30,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None
+):
+    """
+    Récupère les statistiques des retraits pour le graphique
+    """
+    check_admin(current_user)
+    
+    try:
+        from sqlalchemy import func, cast, Date
+        from datetime import datetime, timedelta, date
+        from app.models.transaction import UserTransaction, TransactionType, TransactionStatus
+        
+        # Calculer la date de début et de fin
+        if start_date and end_date:
+            start_date_obj = datetime.strptime(start_date, '%Y-%m-%d').date()
+            end_date_obj = datetime.strptime(end_date, '%Y-%m-%d').date()
+            days = (end_date_obj - start_date_obj).days + 1
+        else:
+            end_date_obj = date.today()
+            start_date_obj = end_date_obj - timedelta(days=days - 1)
+        
+        # Total des retraits validés
+        total_amount = db.query(func.sum(UserTransaction.amount)).filter(
+            UserTransaction.transaction_type == TransactionType.WITHDRAWAL,
+            UserTransaction.status == TransactionStatus.COMPLETED
+        ).scalar() or 0
+        
+        total_count = db.query(UserTransaction).filter(
+            UserTransaction.transaction_type == TransactionType.WITHDRAWAL,
+            UserTransaction.status == TransactionStatus.COMPLETED
+        ).count()
+        
+        # Données pour le graphique (par jour)
+        chart_data = []
+        for i in range(days):
+            current_date = start_date_obj + timedelta(days=i)
+            next_date = current_date + timedelta(days=1)
+            
+            current_datetime_start = datetime.combine(current_date, datetime.min.time())
+            current_datetime_end = datetime.combine(current_date, datetime.max.time())
+            
+            # Retraits validés ce jour-là
+            day_withdrawals = db.query(UserTransaction).filter(
+                UserTransaction.transaction_type == TransactionType.WITHDRAWAL,
+                UserTransaction.status == TransactionStatus.COMPLETED,
+                UserTransaction.processed_at >= current_datetime_start,
+                UserTransaction.processed_at < current_datetime_end
+            ).all()
+            
+            day_amount = sum(float(w.amount) for w in day_withdrawals)
+            day_count = len(day_withdrawals)
+            
+            chart_data.append({
+                'date': current_date.strftime('%d/%m'),
+                'amount': float(day_amount),
+                'count': day_count
+            })
+        
+        return {
+            'total_amount': float(total_amount),
+            'total_count': total_count,
+            'chart_data': chart_data
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de la récupération des statistiques de retraits: {str(e)}"
         )
 
 @router.put("/users/{user_id}/kyc/verify")
@@ -2592,4 +3116,196 @@ async def unverify_user_kyc(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Erreur lors de la révocation du KYC: {str(e)}"
+        )
+
+
+# Modèles de réponse pour les transactions
+class TransactionEnriched(BaseModel):
+    id: int
+    type: str  # "deposit", "withdrawal", "entry_fee", "prize_payout", "commission", "refund"
+    amount: float
+    currency: str
+    status: str
+    description: Optional[str] = None
+    reference: Optional[str] = None
+    created_at: str
+    processed_at: Optional[str] = None
+    user: Optional[Dict[str, Any]] = None
+    contest: Optional[Dict[str, Any]] = None
+    payment_method: Optional[str] = None
+    # Pour les dépôts
+    product_type: Optional[str] = None
+    order_id: Optional[str] = None
+    external_payment_id: Optional[str] = None
+    tx_hash: Optional[str] = None
+    validated_at: Optional[str] = None
+    validated_by: Optional[int] = None
+
+
+@router.get("/transactions", response_model=List[TransactionEnriched])
+async def get_all_transactions(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    transaction_type: Optional[str] = Query(None, description="Filtrer par type (deposit, withdrawal, entry_fee, prize_payout, commission, refund)"),
+    status: Optional[str] = Query(None, description="Filtrer par statut"),
+    user_id: Optional[int] = Query(None, description="Filtrer par utilisateur"),
+    search: Optional[str] = Query(None, description="Rechercher par référence, description, email ou username"),
+    skip: int = 0,
+    limit: int = 100
+):
+    """
+    Récupère toutes les transactions (dépôts, retraits, et autres transactions) avec des informations enrichies (admin uniquement).
+    """
+    check_admin(current_user)
+    
+    try:
+        from sqlalchemy import or_, func
+        from app.models.payment import Deposit, DepositStatus, ProductType
+        from app.models.transaction import UserTransaction, TransactionType, TransactionStatus
+        
+        all_transactions = []
+        
+        # Récupérer les dépôts
+        deposits_query = db.query(Deposit).options(
+            joinedload(Deposit.user),
+            joinedload(Deposit.product_type),
+            joinedload(Deposit.payment_method)
+        )
+        
+        if transaction_type and transaction_type != "deposit":
+            pass  # Ne pas inclure les dépôts
+        elif transaction_type is None or transaction_type == "deposit":
+            if status:
+                try:
+                    deposit_status = DepositStatus(status)
+                    deposits_query = deposits_query.filter(Deposit.status == deposit_status)
+                except ValueError:
+                    pass
+            
+            if user_id:
+                deposits_query = deposits_query.filter(Deposit.user_id == user_id)
+            
+            if search:
+                search_term = f"%{search.lower()}%"
+                from app.models.user import User as UserModel
+                deposits_query = deposits_query.join(UserModel).filter(
+                    or_(
+                        func.lower(Deposit.order_id).like(search_term),
+                        func.lower(Deposit.external_payment_id).like(search_term),
+                        func.lower(UserModel.email).like(search_term),
+                        func.lower(UserModel.username).like(search_term)
+                    )
+                )
+            
+            deposits = deposits_query.order_by(Deposit.created_at.desc()).offset(skip).limit(limit).all()
+            
+            for deposit in deposits:
+                all_transactions.append({
+                    "id": deposit.id,
+                    "type": "deposit",
+                    "amount": float(deposit.amount),
+                    "currency": deposit.currency,
+                    "status": deposit.status.value,
+                    "description": f"Dépôt - {deposit.product_type.name if deposit.product_type else 'N/A'}",
+                    "reference": deposit.order_id,
+                    "created_at": deposit.created_at.isoformat() if deposit.created_at else None,
+                    "processed_at": deposit.validated_at.isoformat() if deposit.validated_at else None,
+                    "user": {
+                        "id": deposit.user.id,
+                        "username": deposit.user.username,
+                        "email": deposit.user.email,
+                        "full_name": deposit.user.full_name,
+                        "avatar_url": deposit.user.avatar_url
+                    } if deposit.user else None,
+                    "contest": None,
+                    "payment_method": deposit.payment_method.name if deposit.payment_method else None,
+                    "product_type": deposit.product_type.name if deposit.product_type else None,
+                    "order_id": deposit.order_id,
+                    "external_payment_id": deposit.external_payment_id,
+                    "tx_hash": deposit.tx_hash,
+                    "validated_at": deposit.validated_at.isoformat() if deposit.validated_at else None,
+                    "validated_by": deposit.validated_by
+                })
+        
+        # Récupérer les transactions utilisateur (retraits, frais d'entrée, etc.)
+        transactions_query = db.query(UserTransaction).options(
+            joinedload(UserTransaction.user),
+            joinedload(UserTransaction.contest)
+        )
+        
+        if transaction_type and transaction_type != "deposit":
+            try:
+                trans_type = TransactionType(transaction_type)
+                transactions_query = transactions_query.filter(UserTransaction.transaction_type == trans_type)
+            except ValueError:
+                pass
+        elif transaction_type is None:
+            # Inclure tous les types sauf deposit (déjà géré)
+            transactions_query = transactions_query.filter(UserTransaction.transaction_type != TransactionType.DEPOSIT)
+        
+        if status:
+            try:
+                trans_status = TransactionStatus(status)
+                transactions_query = transactions_query.filter(UserTransaction.status == trans_status)
+            except ValueError:
+                pass
+        
+        if user_id:
+            transactions_query = transactions_query.filter(UserTransaction.user_id == user_id)
+        
+        if search:
+            search_term = f"%{search.lower()}%"
+            from app.models.user import User as UserModel
+            transactions_query = transactions_query.join(UserModel).filter(
+                or_(
+                    func.lower(UserTransaction.reference).like(search_term),
+                    func.lower(UserTransaction.description).like(search_term),
+                    func.lower(UserModel.email).like(search_term),
+                    func.lower(UserModel.username).like(search_term)
+                )
+            )
+        
+        transactions = transactions_query.order_by(UserTransaction.created_at.desc()).offset(skip).limit(limit).all()
+        
+        for transaction in transactions:
+            all_transactions.append({
+                "id": transaction.id,
+                "type": transaction.transaction_type.value,
+                "amount": float(transaction.amount),
+                "currency": transaction.currency,
+                "status": transaction.status.value,
+                "description": transaction.description,
+                "reference": transaction.reference,
+                "created_at": transaction.created_at.isoformat() if transaction.created_at else None,
+                "processed_at": transaction.processed_at.isoformat() if transaction.processed_at else None,
+                "user": {
+                    "id": transaction.user.id,
+                    "username": transaction.user.username,
+                    "email": transaction.user.email,
+                    "full_name": transaction.user.full_name,
+                    "avatar_url": transaction.user.avatar_url
+                } if transaction.user else None,
+                "contest": {
+                    "id": transaction.contest.id,
+                    "name": transaction.contest.name
+                } if transaction.contest else None,
+                "payment_method": transaction.payment_method,
+                "product_type": None,
+                "order_id": None,
+                "external_payment_id": transaction.payment_reference,
+                "tx_hash": None,
+                "validated_at": None,
+                "validated_by": None
+            })
+        
+        # Trier toutes les transactions par date de création (plus récentes en premier)
+        all_transactions.sort(key=lambda x: x.get("created_at") or "1970-01-01T00:00:00", reverse=True)
+        
+        # Appliquer skip et limit sur le résultat final
+        return all_transactions[skip:skip + limit]
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de la récupération des transactions: {str(e)}"
         )

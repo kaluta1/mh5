@@ -2,8 +2,9 @@
 
 import * as React from "react"
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import { DashboardSidebar } from "@/components/dashboard/dashboard-sidebar"
+import { AdminSidebar } from "@/components/dashboard/admin-sidebar"
 import { DashboardNavbar } from "@/components/dashboard/dashboard-navbar"
 import { MobileMenu } from "@/components/dashboard/mobile-menu"
 import { useAuth } from "@/hooks/use-auth"
@@ -18,6 +19,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const { isLoading, isAuthenticated } = useAuth()
   const router = useRouter()
+  const pathname = usePathname()
+  
+  // Détecter si on est sur une page admin
+  const isAdminPage = pathname?.startsWith('/dashboard/admin') ?? false
 
   // Rediriger si non authentifié
   useEffect(() => {
@@ -83,8 +88,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Desktop Sidebar */}
-      <DashboardSidebar isCollapsed={isSidebarCollapsed} />
+      {/* Desktop Sidebar - Admin ou Normal selon la route */}
+      {isAdminPage ? (
+        <AdminSidebar isCollapsed={isSidebarCollapsed} />
+      ) : (
+        <DashboardSidebar isCollapsed={isSidebarCollapsed} />
+      )}
       
       {/* Mobile Menu */}
       <MobileMenu 

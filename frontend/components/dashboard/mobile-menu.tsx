@@ -20,7 +20,16 @@ import {
   Users,
   Hand,
   Globe,
-  Award
+  Award,
+  LayoutDashboard,
+  Calendar,
+  Zap,
+  Flag,
+  Tag,
+  Percent,
+  Lightbulb,
+  CreditCard,
+  FileCheck
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useLanguage } from "@/contexts/language-context"
@@ -33,7 +42,7 @@ const baseMenuSections = [
   {
     title: "dashboard.nav.main",
     items: [
-      { name: "dashboard.nav.overview", href: "/dashboard", icon: Home },
+      { name: "dashboard.nav.overview", href: "/dashboard", icon: LayoutDashboard },
       { name: "dashboard.nav.contests", href: "/dashboard/contests", icon: Trophy },
       { name: "dashboard.nav.myhigh5", href: "/dashboard/myhigh5", icon: Hand },
       // { name: "dashboard.nav.groups", href: "/dashboard/groups", icon: Users },
@@ -60,12 +69,34 @@ const baseMenuSections = [
   },
 ]
 
-const adminMenuSection = {
-  title: "dashboard.nav.admin",
-  items: [
-    { name: "dashboard.nav.admin_panel", href: "/dashboard/admin", icon: Shield },
-  ]
-}
+const adminMenuSections = [
+  {
+    title: "admin.nav.main",
+    items: [
+      { name: "admin.nav.dashboard", href: "/dashboard/admin", icon: LayoutDashboard },
+    ]
+  },
+  {
+    title: "admin.nav.management",
+    items: [
+      { name: "admin.nav.seasons", href: "/dashboard/admin/seasons", icon: Calendar },
+      { name: "admin.nav.contests", href: "/dashboard/admin/contests", icon: Zap },
+      { name: "admin.nav.contestants", href: "/dashboard/admin/contestants", icon: Users },
+      { name: "admin.nav.users", href: "/dashboard/admin/users", icon: Settings },
+      { name: "admin.nav.kyc", href: "/dashboard/admin/kyc", icon: FileCheck },
+      { name: "admin.nav.reports", href: "/dashboard/admin/reports", icon: Flag },
+    ]
+  },
+  {
+    title: "admin.nav.configuration",
+    items: [
+      { name: "admin.nav.categories", href: "/dashboard/admin/categories", icon: Tag },
+      { name: "admin.nav.commission_settings", href: "/dashboard/admin/commission-settings", icon: Percent },
+      { name: "admin.nav.suggested_contests", href: "/dashboard/admin/suggested-contests", icon: Lightbulb },
+      { name: "admin.nav.transactions", href: "/dashboard/admin/transactions", icon: CreditCard },
+    ]
+  },
+]
 
 interface MobileMenuProps {
   isOpen: boolean
@@ -78,9 +109,15 @@ export function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
   const router = useRouter()
   const pathname = usePathname()
 
-  const displayMenuSections = user?.is_admin 
-    ? [...baseMenuSections, adminMenuSection]
-    : baseMenuSections
+  // Détecter si on est sur une page admin
+  const isAdminPage = pathname?.startsWith('/dashboard/admin') ?? false
+  
+  // Utiliser le menu admin si on est sur une page admin, sinon le menu normal
+  const displayMenuSections = isAdminPage 
+    ? adminMenuSections
+    : (user?.is_admin 
+        ? [...baseMenuSections, { title: "dashboard.nav.admin", items: [{ name: "dashboard.nav.admin_panel", href: "/dashboard/admin", icon: Shield }] }]
+        : baseMenuSections)
 
   const handleLogout = async () => {
     await logout()
@@ -110,10 +147,14 @@ export function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
           <div className="flex items-center justify-between h-16 px-4 border-b border-gray-100 dark:border-gray-800">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary flex items-center justify-center shadow-lg shadow-myhigh5-primary/25">
-                <Heart className="w-5 h-5 text-white fill-white" />
+                {isAdminPage ? (
+                  <Shield className="w-5 h-5 text-white fill-white" />
+                ) : (
+                  <Heart className="w-5 h-5 text-white fill-white" />
+                )}
               </div>
               <span className="text-lg font-bold text-gray-900 dark:text-white">
-                MyHigh5
+                {isAdminPage ? 'Admin' : 'MyHigh5'}
               </span>
             </div>
             <button 
@@ -127,6 +168,24 @@ export function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
           {/* Navigation */}
           <nav className="flex-1 overflow-y-auto py-4 px-3">
             <div className="space-y-6">
+              {/* Bouton retour au dashboard utilisateur si on est en admin */}
+              {isAdminPage && (
+                <div>
+                  <button
+                    onClick={() => handleItemClick('/dashboard')}
+                    className={cn(
+                      "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
+                      "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800/50 hover:text-gray-900 dark:hover:text-white"
+                    )}
+                  >
+                    <Home className="h-5 w-5" />
+                    <span className="text-sm font-medium">
+                      {t('navigation.dashboard') || 'Dashboard'}
+                    </span>
+                  </button>
+                </div>
+              )}
+              
               {displayMenuSections.map((section, idx) => (
                 <div key={idx}>
                   <p className="px-3 mb-2 text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">

@@ -162,6 +162,14 @@ export interface TranslationKeys {
       invalid_token: string
     }
   }
+  not_found: {
+    title: string
+    description: string
+    go_back: string
+    go_home: string
+    quick_links: string
+    help_text: string
+  }
   common: {
     loading: string
     error: string
@@ -499,6 +507,22 @@ export interface TranslationKeys {
   admin: {
     title: string
     subtitle: string
+    nav: {
+      main: string
+      dashboard: string
+      management: string
+      seasons: string
+      contests: string
+      contestants: string
+      users: string
+      kyc: string
+      reports: string
+      configuration: string
+      categories: string
+      commission_settings: string
+      suggested_contests: string
+      transactions: string
+    }
     dashboard: {
       total_seasons: string
       active: string
@@ -534,6 +558,33 @@ export interface TranslationKeys {
         week: string
         month: string
         year: string
+      }
+      statistics: {
+        total_deposits: string
+        total_withdrawals: string
+        verified_users: string
+        reports: string
+        categories: string
+        deposits_chart: string
+        withdrawals_chart: string
+        categories_chart: string
+        reports_by_type: string
+        amount_eur: string
+        deposits_count: string
+        withdrawals_count: string
+        kyc_verified: string
+        reports_count: string
+        categories_total: string
+        amount: string
+        count: string
+        contests: string
+        uses: string
+        period: string
+        custom: string
+        apply: string
+        loading: string
+        refresh: string
+        no_data_available: string
       }
     }
     seasons: {
@@ -739,26 +790,109 @@ export interface TranslationKeys {
       seasons_load_error: string
       no_seasons_available: string
     }
-    kyc: {
-      title: string
-      description: string
-      search_placeholder: string
-      pending: string
-      approved: string
-      rejected: string
-      filter: string
-      approve: string
-      reject: string
-      view: string
-      no_kyc: string
-      verification_score: string
-      identity: string
-      document: string
-      address: string
-      face: string
-      confidence_score: string
-      rejection_reason: string
-    }
+      kyc: {
+        title: string
+        description: string
+        search_placeholder: string
+        pending: string
+        approved: string
+        rejected: string
+        filter: string
+        approve: string
+        reject: string
+        view: string
+        no_kyc: string
+        verification_score: string
+        identity: string
+        document: string
+        address: string
+        face: string
+        confidence_score: string
+        rejection_reason: string
+      }
+      reports: {
+        title: string
+        description: string
+        search_placeholder: string
+        all: string
+        pending: string
+        reviewed: string
+        resolved: string
+        no_reports: string
+        no_reports_found: string
+        report_number: string
+        reason: string
+        description_label: string
+        status: string
+        details: string
+        reported_contestant: string
+        contestant_author: string
+        reporter: string
+        contest: string
+        created_at: string
+        reviewed_at: string
+        moderator_notes: string
+        verification_status: string
+        verification_status_pending: string
+        verification_status_approved: string
+        verification_status_rejected: string
+        reason_spam: string
+        reason_inappropriate: string
+        reason_harassment: string
+        reason_fake: string
+        reason_copyright: string
+        reason_other: string
+        no_title: string
+        load_error: string
+        report_details: string
+        report_details_description: string
+        reason_label: string
+      }
+      transactions: {
+        title: string
+        description: string
+        search_placeholder: string
+        all_types: string
+        all_statuses: string
+        no_transactions: string
+        no_transactions_found: string
+        transaction: string
+        transaction_details: string
+        transaction_details_description: string
+        type: {
+          deposit: string
+          withdrawal: string
+          entry_fee: string
+          prize_payout: string
+          commission: string
+          refund: string
+        }
+        status: {
+          pending: string
+          completed: string
+          failed: string
+          cancelled: string
+        }
+        user: string
+        contest: string
+        payment_method: string
+        product_type: string
+        amount: string
+        currency: string
+        description: string
+        reference: string
+        order_id: string
+        external_payment_id: string
+        tx_hash: string
+        created_at: string
+        processed_at: string
+        validated_at: string
+        type_label: string
+        status_label: string
+        details: string
+        search: string
+        load_error: string
+      }
     users: {
       title: string
       description: string
@@ -1582,6 +1716,41 @@ export interface TranslationKeys {
       }
       categories: {
         title: string
+        description: string
+        add_category: string
+        search_placeholder: string
+        no_categories: string
+        no_categories_found: string
+        created_at: string
+        edit_category: string
+        create_category: string
+        edit_category_description: string
+        create_category_description: string
+        category_name: string
+        category_name_required: string
+        category_name_max_length: string
+        slug: string
+        slug_required: string
+        slug_max_length: string
+        slug_invalid: string
+        slug_auto_generated: string
+        description_label: string
+        description_placeholder: string
+        is_active: string
+        cancel: string
+        save: string
+        saving: string
+        edit: string
+        create: string
+        delete: string
+        delete_confirm: string
+        category_created: string
+        category_updated: string
+        category_deleted: string
+        category_create_error: string
+        category_update_error: string
+        category_delete_error: string
+        categories_load_error: string
       }
     }
   }
@@ -1589,9 +1758,33 @@ export interface TranslationKeys {
 
 export const translations: Record<Language, TranslationKeys> = {
   fr: {
+    not_found: {
+      title: "Page introuvable",
+      description: "Désolé, la page que vous recherchez n'existe pas ou a été déplacée.",
+      go_back: "Retour",
+      go_home: "Accueil",
+      quick_links: "Liens rapides",
+      help_text: "Si vous pensez qu'il s'agit d'une erreur, veuillez contacter notre support."
+    },
     admin: {
       title: "Panneau d'administration",
       subtitle: "Gérez votre plateforme",
+      nav: {
+        main: "Principal",
+        dashboard: "Tableau de bord",
+        management: "Gestion",
+        seasons: "Saisons",
+        contests: "Concours",
+        contestants: "Candidats",
+        users: "Utilisateurs",
+        kyc: "KYC",
+        reports: "Rapports",
+        configuration: "Configuration",
+        categories: "Catégories",
+        commission_settings: "Paramètres de commission",
+        suggested_contests: "Concours suggérés",
+        transactions: "Transactions"
+      },
       dashboard: {
         total_seasons: "Total des saisons",
         active: "actifs",
@@ -1627,6 +1820,33 @@ export const translations: Record<Language, TranslationKeys> = {
           week: "Semaine",
           month: "Mois",
           year: "Année"
+        },
+        statistics: {
+          total_deposits: "Total Dépôts",
+          total_withdrawals: "Total Retraits",
+          verified_users: "Utilisateurs Vérifiés",
+          reports: "Rapports",
+          categories: "Catégories",
+          deposits_chart: "Graphique des Dépôts",
+          withdrawals_chart: "Graphique des Retraits",
+          categories_chart: "Statistiques des Catégories",
+          reports_by_type: "Rapports par Type",
+          amount_eur: "Montant ($)",
+          deposits_count: "dépôts",
+          withdrawals_count: "retraits",
+          kyc_verified: "KYC validé",
+          reports_count: "Signalements",
+          categories_total: "Total",
+          amount: "Montant",
+          count: "Nombre",
+          contests: "Concours",
+          uses: "Utilisations",
+          period: "Période:",
+          custom: "Personnalisé",
+          apply: "Appliquer",
+          loading: "Chargement...",
+          refresh: "Actualiser",
+          no_data_available: "Aucune donnée disponible"
         }
       },
       seasons: {
@@ -1911,6 +2131,44 @@ export const translations: Record<Language, TranslationKeys> = {
         seasons_load_error: "Erreur lors du chargement des saisons",
         no_seasons_available: "Aucune saison disponible. Veuillez créer une saison d'abord."
       },
+      categories: {
+        title: "Gestion des Catégories",
+        description: "Créez et gérez les catégories de concours",
+        add_category: "Ajouter une catégorie",
+        search_placeholder: "Rechercher une catégorie...",
+        no_categories: "Aucune catégorie pour le moment",
+        no_categories_found: "Aucune catégorie trouvée",
+        created_at: "Créé le",
+        edit_category: "Modifier la catégorie",
+        create_category: "Créer une nouvelle catégorie",
+        edit_category_description: "Modifiez les informations de la catégorie",
+        create_category_description: "Remplissez les informations pour créer une nouvelle catégorie",
+        category_name: "Nom",
+        category_name_required: "Le nom est requis",
+        category_name_max_length: "Le nom ne peut pas dépasser 100 caractères",
+        slug: "Slug",
+        slug_required: "Le slug est requis",
+        slug_max_length: "Le slug ne peut pas dépasser 100 caractères",
+        slug_invalid: "Le slug ne peut contenir que des lettres minuscules, des chiffres et des tirets",
+        slug_auto_generated: "Le slug est généré automatiquement à partir du nom",
+        description_label: "Description",
+        description_placeholder: "Description de la catégorie (optionnel)",
+        is_active: "Catégorie active",
+        cancel: "Annuler",
+        save: "Enregistrer",
+        saving: "Enregistrement...",
+        edit: "Modifier",
+        create: "Créer",
+        delete: "Supprimer",
+        delete_confirm: "Êtes-vous sûr de vouloir supprimer la catégorie",
+        category_created: "Catégorie créée avec succès",
+        category_updated: "Catégorie mise à jour avec succès",
+        category_deleted: "Catégorie supprimée avec succès",
+        category_create_error: "Erreur lors de la création de la catégorie",
+        category_update_error: "Erreur lors de la mise à jour de la catégorie",
+        category_delete_error: "Erreur lors de la suppression de la catégorie",
+        categories_load_error: "Erreur lors du chargement des catégories"
+      },
       kyc: {
         title: "Gestion KYC",
         description: "Approuvez ou rejetez les vérifications d'identité",
@@ -1930,6 +2188,113 @@ export const translations: Record<Language, TranslationKeys> = {
         face: "Visage",
         confidence_score: "Score",
         rejection_reason: "Raison du rejet"
+      },
+      reports: {
+        title: "Gestion des Rapports",
+        description: "Gérez les signalements de contenus",
+        search_placeholder: "Rechercher un rapport...",
+        all: "Tous",
+        pending: "En attente",
+        reviewed: "Révisés",
+        resolved: "Résolus",
+        no_reports: "Aucun rapport pour le moment",
+        no_reports_found: "Aucun rapport trouvé",
+        report_number: "Rapport #",
+        reason: "Raison",
+        description_label: "Description",
+        status: "Statut",
+        details: "Détails",
+        reported_contestant: "Contestant signalé",
+        contestant_author: "Auteur du contestant",
+        reporter: "Signaleur",
+        contest: "Concours",
+        created_at: "Créé le",
+        reviewed_at: "Révisé le",
+        moderator_notes: "Notes du modérateur",
+        verification_status: "Statut de vérification",
+        verification_status_pending: "En attente",
+        verification_status_approved: "Approuvé",
+        verification_status_rejected: "Rejeté",
+        reason_spam: "Spam",
+        reason_inappropriate: "Contenu inapproprié",
+        reason_harassment: "Harcèlement",
+        reason_fake: "Compte faux",
+        reason_copyright: "Violation de droits d'auteur",
+        reason_other: "Autre",
+        no_title: "Sans titre",
+        load_error: "Erreur lors du chargement des rapports",
+        report_details: "Détails du rapport",
+        report_details_description: "Informations complètes sur le signalement",
+        reason_label: "Raison du signalement"
+      },
+      suggested_contests: {
+        title: "Suggestions de Concours",
+        description: "Gérez les suggestions de concours proposées par les utilisateurs",
+        search_placeholder: "Rechercher une suggestion...",
+        all: "Tous",
+        pending: "En attente",
+        approved: "Approuvés",
+        rejected: "Rejetés",
+        no_suggestions: "Aucune suggestion pour le moment",
+        no_suggestions_found: "Aucune suggestion trouvée",
+        author: "Auteur",
+        author_not_available: "Auteur non disponible",
+        unknown_date: "Date inconnue",
+        details: "Détails",
+        contest_suggestion_details: "Détails de la suggestion de concours",
+        status: "Statut",
+        category: "Catégorie",
+        description: "Description",
+        verified: "Vérifié",
+        dates: "Dates",
+        created_at: "Créé le",
+        updated_at: "Modifié le",
+        load_error: "Erreur lors du chargement des suggestions"
+      },
+      transactions: {
+        title: "Gestion des Transactions",
+        description: "Consultez toutes les transactions (dépôts, retraits, etc.)",
+        search_placeholder: "Rechercher par référence, description, utilisateur...",
+        all_types: "Tous les types",
+        all_statuses: "Tous les statuts",
+        no_transactions: "Aucune transaction pour le moment",
+        no_transactions_found: "Aucune transaction trouvée",
+        transaction: "Transaction",
+        transaction_details: "Détails de la transaction",
+        transaction_details_description: "Informations complètes sur la transaction",
+        type: {
+          deposit: "Dépôt",
+          withdrawal: "Retrait",
+          entry_fee: "Frais d'entrée",
+          prize_payout: "Gain",
+          commission: "Commission",
+          refund: "Remboursement"
+        },
+        status: {
+          pending: "En attente",
+          completed: "Complété",
+          failed: "Échoué",
+          cancelled: "Annulé"
+        },
+        user: "Utilisateur",
+        contest: "Concours",
+        payment_method: "Méthode de paiement",
+        product_type: "Type de produit",
+        amount: "Montant",
+        currency: "Devise",
+        description: "Description",
+        reference: "Référence",
+        order_id: "ID Commande",
+        external_payment_id: "ID Paiement Externe",
+        tx_hash: "Hash Transaction",
+        created_at: "Créé le",
+        processed_at: "Traité le",
+        validated_at: "Validé le",
+        type_label: "Type",
+        status_label: "Statut",
+        details: "Détails",
+        search: "Rechercher",
+        load_error: "Erreur lors du chargement des transactions"
       },
       users: {
         title: "Gestion des Utilisateurs",
@@ -4209,9 +4574,33 @@ export const translations: Record<Language, TranslationKeys> = {
     }
   },
   en: {
+    not_found: {
+      title: "Page Not Found",
+      description: "Sorry, the page you are looking for does not exist or has been moved.",
+      go_back: "Go Back",
+      go_home: "Home",
+      quick_links: "Quick Links",
+      help_text: "If you think this is an error, please contact our support."
+    },
     admin: {
       title: "Administration Panel",
       subtitle: "Manage your platform",
+      nav: {
+        main: "Main",
+        dashboard: "Dashboard",
+        management: "Management",
+        seasons: "Seasons",
+        contests: "Contests",
+        contestants: "Contestants",
+        users: "Users",
+        kyc: "KYC",
+        reports: "Reports",
+        configuration: "Configuration",
+        categories: "Categories",
+        commission_settings: "Commission Settings",
+        suggested_contests: "Suggested Contests",
+        transactions: "Transactions"
+      },
       dashboard: {
         total_seasons: "Total seasons",
         active: "active",
@@ -4247,6 +4636,33 @@ export const translations: Record<Language, TranslationKeys> = {
           week: "Week",
           month: "Month",
           year: "Year"
+        },
+        statistics: {
+          total_deposits: "Total Deposits",
+          total_withdrawals: "Total Withdrawals",
+          verified_users: "Verified Users",
+          reports: "Reports",
+          categories: "Categories",
+          deposits_chart: "Deposits Chart",
+          withdrawals_chart: "Withdrawals Chart",
+          categories_chart: "Categories Statistics",
+          reports_by_type: "Reports by Type",
+          amount_eur: "Amount ($)",
+          deposits_count: "deposits",
+          withdrawals_count: "withdrawals",
+          kyc_verified: "KYC verified",
+          reports_count: "Reports",
+          categories_total: "Total",
+          amount: "Amount",
+          count: "Count",
+          contests: "Contests",
+          uses: "Uses",
+          period: "Period:",
+          custom: "Custom",
+          apply: "Apply",
+          loading: "Loading...",
+          refresh: "Refresh",
+          no_data_available: "No data available"
         }
       },
       seasons: {
@@ -4531,6 +4947,44 @@ export const translations: Record<Language, TranslationKeys> = {
         seasons_load_error: "Error loading seasons",
         no_seasons_available: "No seasons available. Please create a season first."
       },
+      categories: {
+        title: "Category Management",
+        description: "Create and manage contest categories",
+        add_category: "Add category",
+        search_placeholder: "Search for a category...",
+        no_categories: "No categories yet",
+        no_categories_found: "No categories found",
+        created_at: "Created on",
+        edit_category: "Edit category",
+        create_category: "Create a new category",
+        edit_category_description: "Edit category information",
+        create_category_description: "Fill in the information to create a new category",
+        category_name: "Name",
+        category_name_required: "Name is required",
+        category_name_max_length: "Name cannot exceed 100 characters",
+        slug: "Slug",
+        slug_required: "Slug is required",
+        slug_max_length: "Slug cannot exceed 100 characters",
+        slug_invalid: "Slug can only contain lowercase letters, numbers and hyphens",
+        slug_auto_generated: "The slug is automatically generated from the name",
+        description_label: "Description",
+        description_placeholder: "Category description (optional)",
+        is_active: "Active category",
+        cancel: "Cancel",
+        save: "Save",
+        saving: "Saving...",
+        edit: "Edit",
+        create: "Create",
+        delete: "Delete",
+        delete_confirm: "Are you sure you want to delete the category",
+        category_created: "Category created successfully",
+        category_updated: "Category updated successfully",
+        category_deleted: "Category deleted successfully",
+        category_create_error: "Error creating category",
+        category_update_error: "Error updating category",
+        category_delete_error: "Error deleting category",
+        categories_load_error: "Error loading categories"
+      },
       kyc: {
         title: "Manage KYC",
         description: "Approve or reject identity verifications",
@@ -4550,6 +5004,113 @@ export const translations: Record<Language, TranslationKeys> = {
         face: "Face",
         confidence_score: "Score",
         rejection_reason: "Rejection Reason"
+      },
+      reports: {
+        title: "Report Management",
+        description: "Manage content reports",
+        search_placeholder: "Search for a report...",
+        all: "All",
+        pending: "Pending",
+        reviewed: "Reviewed",
+        resolved: "Resolved",
+        no_reports: "No reports yet",
+        no_reports_found: "No reports found",
+        report_number: "Report #",
+        reason: "Reason",
+        description_label: "Description",
+        status: "Status",
+        details: "Details",
+        reported_contestant: "Reported Contestant",
+        contestant_author: "Contestant Author",
+        reporter: "Reporter",
+        contest: "Contest",
+        created_at: "Created on",
+        reviewed_at: "Reviewed on",
+        moderator_notes: "Moderator Notes",
+        verification_status: "Verification Status",
+        verification_status_pending: "Pending",
+        verification_status_approved: "Approved",
+        verification_status_rejected: "Rejected",
+        reason_spam: "Spam",
+        reason_inappropriate: "Inappropriate content",
+        reason_harassment: "Harassment",
+        reason_fake: "Fake account",
+        reason_copyright: "Copyright violation",
+        reason_other: "Other",
+        no_title: "No title",
+        load_error: "Error loading reports",
+        report_details: "Report Details",
+        report_details_description: "Complete information about the report",
+        reason_label: "Report Reason"
+      },
+      suggested_contests: {
+        title: "Suggested Contests",
+        description: "Manage contest suggestions submitted by users",
+        search_placeholder: "Search for a suggestion...",
+        all: "All",
+        pending: "Pending",
+        approved: "Approved",
+        rejected: "Rejected",
+        no_suggestions: "No suggestions yet",
+        no_suggestions_found: "No suggestions found",
+        author: "Author",
+        author_not_available: "Author not available",
+        unknown_date: "Unknown date",
+        details: "Details",
+        contest_suggestion_details: "Contest suggestion details",
+        status: "Status",
+        category: "Category",
+        description: "Description",
+        verified: "Verified",
+        dates: "Dates",
+        created_at: "Created on",
+        updated_at: "Updated on",
+        load_error: "Error loading suggestions"
+      },
+      transactions: {
+        title: "Transaction Management",
+        description: "View all transactions (deposits, withdrawals, etc.)",
+        search_placeholder: "Search by reference, description, user...",
+        all_types: "All types",
+        all_statuses: "All statuses",
+        no_transactions: "No transactions yet",
+        no_transactions_found: "No transactions found",
+        transaction: "Transaction",
+        transaction_details: "Transaction Details",
+        transaction_details_description: "Complete information about the transaction",
+        type: {
+          deposit: "Deposit",
+          withdrawal: "Withdrawal",
+          entry_fee: "Entry Fee",
+          prize_payout: "Prize Payout",
+          commission: "Commission",
+          refund: "Refund"
+        },
+        status: {
+          pending: "Pending",
+          completed: "Completed",
+          failed: "Failed",
+          cancelled: "Cancelled"
+        },
+        user: "User",
+        contest: "Contest",
+        payment_method: "Payment Method",
+        product_type: "Product Type",
+        amount: "Amount",
+        currency: "Currency",
+        description: "Description",
+        reference: "Reference",
+        order_id: "Order ID",
+        external_payment_id: "External Payment ID",
+        tx_hash: "Transaction Hash",
+        created_at: "Created on",
+        processed_at: "Processed on",
+        validated_at: "Validated on",
+        type_label: "Type",
+        status_label: "Status",
+        details: "Details",
+        search: "Search",
+        load_error: "Error loading transactions"
       },
       users: {
         title: "Manage Users",
@@ -6510,9 +7071,33 @@ export const translations: Record<Language, TranslationKeys> = {
     }
   },
   es: {
+    not_found: {
+      title: "Página no encontrada",
+      description: "Lo sentimos, la página que buscas no existe o ha sido movida.",
+      go_back: "Volver",
+      go_home: "Inicio",
+      quick_links: "Enlaces rápidos",
+      help_text: "Si crees que esto es un error, por favor contacta con nuestro soporte."
+    },
     admin: {
       title: "Panel de Administración",
       subtitle: "Gestiona tu plataforma",
+      nav: {
+        main: "Principal",
+        dashboard: "Panel de control",
+        management: "Gestión",
+        seasons: "Temporadas",
+        contests: "Concursos",
+        contestants: "Participantes",
+        users: "Usuarios",
+        kyc: "KYC",
+        reports: "Informes",
+        configuration: "Configuración",
+        categories: "Categorías",
+        commission_settings: "Configuración de comisiones",
+        suggested_contests: "Concursos sugeridos",
+        transactions: "Transacciones"
+      },
       dashboard: {
         total_seasons: "Total de temporadas",
         active: "activos",
@@ -6548,6 +7133,33 @@ export const translations: Record<Language, TranslationKeys> = {
           week: "Semana",
           month: "Mes",
           year: "Año"
+        },
+        statistics: {
+          total_deposits: "Total Depósitos",
+          total_withdrawals: "Total Retiros",
+          verified_users: "Usuarios Verificados",
+          reports: "Informes",
+          categories: "Categorías",
+          deposits_chart: "Gráfico de Depósitos",
+          withdrawals_chart: "Gráfico de Retiros",
+          categories_chart: "Estadísticas de Categorías",
+          reports_by_type: "Informes por Tipo",
+          amount_eur: "Cantidad ($)",
+          deposits_count: "depósitos",
+          withdrawals_count: "retiros",
+          kyc_verified: "KYC verificado",
+          reports_count: "Informes",
+          categories_total: "Total",
+          amount: "Cantidad",
+          count: "Cantidad",
+          contests: "Concursos",
+          uses: "Usos",
+          period: "Período:",
+          custom: "Personalizado",
+          apply: "Aplicar",
+          loading: "Cargando...",
+          refresh: "Actualizar",
+          no_data_available: "No hay datos disponibles"
         }
       },
       seasons: {
@@ -6832,6 +7444,44 @@ export const translations: Record<Language, TranslationKeys> = {
         seasons_load_error: "Error al cargar las temporadas",
         no_seasons_available: "No hay temporadas disponibles. Por favor, cree una temporada primero."
       },
+      categories: {
+        title: "Gestión de Categorías",
+        description: "Cree y gestione las categorías de concursos",
+        add_category: "Agregar categoría",
+        search_placeholder: "Buscar una categoría...",
+        no_categories: "No hay categorías todavía",
+        no_categories_found: "No se encontraron categorías",
+        created_at: "Creado el",
+        edit_category: "Editar categoría",
+        create_category: "Crear una nueva categoría",
+        edit_category_description: "Edite la información de la categoría",
+        create_category_description: "Complete la información para crear una nueva categoría",
+        category_name: "Nombre",
+        category_name_required: "El nombre es obligatorio",
+        category_name_max_length: "El nombre no puede exceder 100 caracteres",
+        slug: "Slug",
+        slug_required: "El slug es obligatorio",
+        slug_max_length: "El slug no puede exceder 100 caracteres",
+        slug_invalid: "El slug solo puede contener letras minúsculas, números y guiones",
+        slug_auto_generated: "El slug se genera automáticamente a partir del nombre",
+        description_label: "Descripción",
+        description_placeholder: "Descripción de la categoría (opcional)",
+        is_active: "Categoría activa",
+        cancel: "Cancelar",
+        save: "Guardar",
+        saving: "Guardando...",
+        edit: "Editar",
+        create: "Crear",
+        delete: "Eliminar",
+        delete_confirm: "¿Está seguro de que desea eliminar la categoría",
+        category_created: "Categoría creada con éxito",
+        category_updated: "Categoría actualizada con éxito",
+        category_deleted: "Categoría eliminada con éxito",
+        category_create_error: "Error al crear la categoría",
+        category_update_error: "Error al actualizar la categoría",
+        category_delete_error: "Error al eliminar la categoría",
+        categories_load_error: "Error al cargar las categorías"
+      },
       kyc: {
         title: "Gestionar KYC",
         description: "Aprobar o rechazar verificaciones de identidad",
@@ -6851,6 +7501,113 @@ export const translations: Record<Language, TranslationKeys> = {
         face: "Cara",
         confidence_score: "Puntuación",
         rejection_reason: "Razón del Rechazo"
+      },
+      reports: {
+        title: "Gestión de Reportes",
+        description: "Gestione los reportes de contenido",
+        search_placeholder: "Buscar un reporte...",
+        all: "Todos",
+        pending: "Pendiente",
+        reviewed: "Revisado",
+        resolved: "Resuelto",
+        no_reports: "No hay reportes todavía",
+        no_reports_found: "No se encontraron reportes",
+        report_number: "Reporte #",
+        reason: "Razón",
+        description_label: "Descripción",
+        status: "Estado",
+        details: "Detalles",
+        reported_contestant: "Participante Reportado",
+        contestant_author: "Autor del Participante",
+        reporter: "Reportador",
+        contest: "Concurso",
+        created_at: "Creado el",
+        reviewed_at: "Revisado el",
+        moderator_notes: "Notas del Moderador",
+        verification_status: "Estado de Verificación",
+        verification_status_pending: "Pendiente",
+        verification_status_approved: "Aprobado",
+        verification_status_rejected: "Rechazado",
+        reason_spam: "Spam",
+        reason_inappropriate: "Contenido inapropiado",
+        reason_harassment: "Acoso",
+        reason_fake: "Cuenta falsa",
+        reason_copyright: "Violación de derechos de autor",
+        reason_other: "Otro",
+        no_title: "Sin título",
+        load_error: "Error al cargar los reportes",
+        report_details: "Detalles del Reporte",
+        report_details_description: "Información completa sobre el reporte",
+        reason_label: "Razón del Reporte"
+      },
+      suggested_contests: {
+        title: "Concursos Sugeridos",
+        description: "Gestione las sugerencias de concursos enviadas por los usuarios",
+        search_placeholder: "Buscar una sugerencia...",
+        all: "Todos",
+        pending: "Pendiente",
+        approved: "Aprobados",
+        rejected: "Rechazados",
+        no_suggestions: "No hay sugerencias todavía",
+        no_suggestions_found: "No se encontraron sugerencias",
+        author: "Autor",
+        author_not_available: "Autor no disponible",
+        unknown_date: "Fecha desconocida",
+        details: "Detalles",
+        contest_suggestion_details: "Detalles de la sugerencia de concurso",
+        status: "Estado",
+        category: "Categoría",
+        description: "Descripción",
+        verified: "Verificado",
+        dates: "Fechas",
+        created_at: "Creado el",
+        updated_at: "Modificado el",
+        load_error: "Error al cargar las sugerencias"
+      },
+      transactions: {
+        title: "Gestión de Transacciones",
+        description: "Consulte todas las transacciones (depósitos, retiros, etc.)",
+        search_placeholder: "Buscar por referencia, descripción, usuario...",
+        all_types: "Todos los tipos",
+        all_statuses: "Todos los estados",
+        no_transactions: "No hay transacciones todavía",
+        no_transactions_found: "No se encontraron transacciones",
+        transaction: "Transacción",
+        transaction_details: "Detalles de la Transacción",
+        transaction_details_description: "Información completa sobre la transacción",
+        type: {
+          deposit: "Depósito",
+          withdrawal: "Retiro",
+          entry_fee: "Tarifa de Entrada",
+          prize_payout: "Pago de Premio",
+          commission: "Comisión",
+          refund: "Reembolso"
+        },
+        status: {
+          pending: "Pendiente",
+          completed: "Completado",
+          failed: "Fallido",
+          cancelled: "Cancelado"
+        },
+        user: "Usuario",
+        contest: "Concurso",
+        payment_method: "Método de Pago",
+        product_type: "Tipo de Producto",
+        amount: "Monto",
+        currency: "Moneda",
+        description: "Descripción",
+        reference: "Referencia",
+        order_id: "ID de Pedido",
+        external_payment_id: "ID de Pago Externo",
+        tx_hash: "Hash de Transacción",
+        created_at: "Creado el",
+        processed_at: "Procesado el",
+        validated_at: "Validado el",
+        type_label: "Tipo",
+        status_label: "Estado",
+        details: "Detalles",
+        search: "Buscar",
+        load_error: "Error al cargar las transacciones"
       },
       users: {
         title: "Gestionar Usuarios",
@@ -8619,9 +9376,33 @@ export const translations: Record<Language, TranslationKeys> = {
     }
   },
   de: {
+    not_found: {
+      title: "Seite nicht gefunden",
+      description: "Entschuldigung, die Seite, die Sie suchen, existiert nicht oder wurde verschoben.",
+      go_back: "Zurück",
+      go_home: "Startseite",
+      quick_links: "Schnelllinks",
+      help_text: "Wenn Sie denken, dass dies ein Fehler ist, kontaktieren Sie bitte unseren Support."
+    },
     admin: {
       title: "Verwaltungsbereich",
       subtitle: "Verwalten Sie Ihre Plattform",
+      nav: {
+        main: "Haupt",
+        dashboard: "Dashboard",
+        management: "Verwaltung",
+        seasons: "Jahreszeiten",
+        contests: "Wettbewerbe",
+        contestants: "Teilnehmer",
+        users: "Benutzer",
+        kyc: "KYC",
+        reports: "Berichte",
+        configuration: "Konfiguration",
+        categories: "Kategorien",
+        commission_settings: "Provisionseinstellungen",
+        suggested_contests: "Vorgeschlagene Wettbewerbe",
+        transactions: "Transaktionen"
+      },
       dashboard: {
         total_seasons: "Gesamte Jahreszeiten",
         active: "aktiv",
@@ -8657,6 +9438,33 @@ export const translations: Record<Language, TranslationKeys> = {
           week: "Woche",
           month: "Monat",
           year: "Jahr"
+        },
+        statistics: {
+          total_deposits: "Gesamteinzahlungen",
+          total_withdrawals: "Gesamtabhebungen",
+          verified_users: "Verifizierte Benutzer",
+          reports: "Berichte",
+          categories: "Kategorien",
+          deposits_chart: "Einzahlungsdiagramm",
+          withdrawals_chart: "Abhebungsdiagramm",
+          categories_chart: "Kategoriestatistiken",
+          reports_by_type: "Berichte nach Typ",
+          amount_eur: "Betrag ($)",
+          deposits_count: "Einzahlungen",
+          withdrawals_count: "Abhebungen",
+          kyc_verified: "KYC verifiziert",
+          reports_count: "Berichte",
+          categories_total: "Gesamt",
+          amount: "Betrag",
+          count: "Anzahl",
+          contests: "Wettbewerbe",
+          uses: "Verwendungen",
+          period: "Zeitraum:",
+          custom: "Benutzerdefiniert",
+          apply: "Anwenden",
+          loading: "Laden...",
+          refresh: "Aktualisieren",
+          no_data_available: "Keine Daten verfügbar"
         }
       },
       seasons: {
@@ -8941,6 +9749,44 @@ export const translations: Record<Language, TranslationKeys> = {
         seasons_load_error: "Fehler beim Laden der Saisons",
         no_seasons_available: "Keine Saisons verfügbar. Bitte erstellen Sie zuerst eine Saison."
       },
+      categories: {
+        title: "Kategorieverwaltung",
+        description: "Erstellen und verwalten Sie Wettbewerbskategorien",
+        add_category: "Kategorie hinzufügen",
+        search_placeholder: "Nach einer Kategorie suchen...",
+        no_categories: "Noch keine Kategorien",
+        no_categories_found: "Keine Kategorien gefunden",
+        created_at: "Erstellt am",
+        edit_category: "Kategorie bearbeiten",
+        create_category: "Neue Kategorie erstellen",
+        edit_category_description: "Kategorieinformationen bearbeiten",
+        create_category_description: "Füllen Sie die Informationen aus, um eine neue Kategorie zu erstellen",
+        category_name: "Name",
+        category_name_required: "Name ist erforderlich",
+        category_name_max_length: "Name darf nicht mehr als 100 Zeichen enthalten",
+        slug: "Slug",
+        slug_required: "Slug ist erforderlich",
+        slug_max_length: "Slug darf nicht mehr als 100 Zeichen enthalten",
+        slug_invalid: "Slug darf nur Kleinbuchstaben, Zahlen und Bindestriche enthalten",
+        slug_auto_generated: "Der Slug wird automatisch aus dem Namen generiert",
+        description_label: "Beschreibung",
+        description_placeholder: "Kategoriebeschreibung (optional)",
+        is_active: "Aktive Kategorie",
+        cancel: "Abbrechen",
+        save: "Speichern",
+        saving: "Speichern...",
+        edit: "Bearbeiten",
+        create: "Erstellen",
+        delete: "Löschen",
+        delete_confirm: "Sind Sie sicher, dass Sie die Kategorie löschen möchten",
+        category_created: "Kategorie erfolgreich erstellt",
+        category_updated: "Kategorie erfolgreich aktualisiert",
+        category_deleted: "Kategorie erfolgreich gelöscht",
+        category_create_error: "Fehler beim Erstellen der Kategorie",
+        category_update_error: "Fehler beim Aktualisieren der Kategorie",
+        category_delete_error: "Fehler beim Löschen der Kategorie",
+        categories_load_error: "Fehler beim Laden der Kategorien"
+      },
       kyc: {
         title: "KYC verwalten",
         description: "Genehmigen oder lehnen Sie Identitätsüberprüfungen ab",
@@ -8960,6 +9806,113 @@ export const translations: Record<Language, TranslationKeys> = {
         face: "Gesicht",
         confidence_score: "Punktzahl",
         rejection_reason: "Ablehnungsgrund"
+      },
+      reports: {
+        title: "Berichtsverwaltung",
+        description: "Verwalten Sie Inhaltsberichte",
+        search_placeholder: "Nach einem Bericht suchen...",
+        all: "Alle",
+        pending: "Ausstehend",
+        reviewed: "Überprüft",
+        resolved: "Gelöst",
+        no_reports: "Noch keine Berichte",
+        no_reports_found: "Keine Berichte gefunden",
+        report_number: "Bericht #",
+        reason: "Grund",
+        description_label: "Beschreibung",
+        status: "Status",
+        details: "Details",
+        reported_contestant: "Gemeldeter Teilnehmer",
+        contestant_author: "Teilnehmerautor",
+        reporter: "Melder",
+        contest: "Wettbewerb",
+        created_at: "Erstellt am",
+        reviewed_at: "Überprüft am",
+        moderator_notes: "Moderatornotizen",
+        verification_status: "Verifizierungsstatus",
+        verification_status_pending: "Ausstehend",
+        verification_status_approved: "Genehmigt",
+        verification_status_rejected: "Abgelehnt",
+        reason_spam: "Spam",
+        reason_inappropriate: "Unangemessener Inhalt",
+        reason_harassment: "Belästigung",
+        reason_fake: "Falsches Konto",
+        reason_copyright: "Urheberrechtsverletzung",
+        reason_other: "Andere",
+        no_title: "Kein Titel",
+        load_error: "Fehler beim Laden der Berichte",
+        report_details: "Berichtsdetails",
+        report_details_description: "Vollständige Informationen über den Bericht",
+        reason_label: "Berichtsgrund"
+      },
+      suggested_contests: {
+        title: "Vorgeschlagene Wettbewerbe",
+        description: "Verwalten Sie von Benutzern eingereichte Wettbewerbsvorschläge",
+        search_placeholder: "Nach einem Vorschlag suchen...",
+        all: "Alle",
+        pending: "Ausstehend",
+        approved: "Genehmigt",
+        rejected: "Abgelehnt",
+        no_suggestions: "Noch keine Vorschläge",
+        no_suggestions_found: "Keine Vorschläge gefunden",
+        author: "Autor",
+        author_not_available: "Autor nicht verfügbar",
+        unknown_date: "Unbekanntes Datum",
+        details: "Details",
+        contest_suggestion_details: "Details zum Wettbewerbsvorschlag",
+        status: "Status",
+        category: "Kategorie",
+        description: "Beschreibung",
+        verified: "Verifiziert",
+        dates: "Daten",
+        created_at: "Erstellt am",
+        updated_at: "Aktualisiert am",
+        load_error: "Fehler beim Laden der Vorschläge"
+      },
+      transactions: {
+        title: "Transaktionsverwaltung",
+        description: "Alle Transaktionen anzeigen (Einzahlungen, Abhebungen, etc.)",
+        search_placeholder: "Nach Referenz, Beschreibung, Benutzer suchen...",
+        all_types: "Alle Typen",
+        all_statuses: "Alle Status",
+        no_transactions: "Noch keine Transaktionen",
+        no_transactions_found: "Keine Transaktionen gefunden",
+        transaction: "Transaktion",
+        transaction_details: "Transaktionsdetails",
+        transaction_details_description: "Vollständige Informationen über die Transaktion",
+        type: {
+          deposit: "Einzahlung",
+          withdrawal: "Abhebung",
+          entry_fee: "Eintrittsgebühr",
+          prize_payout: "Preisauszahlung",
+          commission: "Provision",
+          refund: "Rückerstattung"
+        },
+        status: {
+          pending: "Ausstehend",
+          completed: "Abgeschlossen",
+          failed: "Fehlgeschlagen",
+          cancelled: "Abgebrochen"
+        },
+        user: "Benutzer",
+        contest: "Wettbewerb",
+        payment_method: "Zahlungsmethode",
+        product_type: "Produkttyp",
+        amount: "Betrag",
+        currency: "Währung",
+        description: "Beschreibung",
+        reference: "Referenz",
+        order_id: "Bestell-ID",
+        external_payment_id: "Externe Zahlungs-ID",
+        tx_hash: "Transaktions-Hash",
+        created_at: "Erstellt am",
+        processed_at: "Verarbeitet am",
+        validated_at: "Validiert am",
+        type_label: "Typ",
+        status_label: "Status",
+        details: "Details",
+        search: "Suchen",
+        load_error: "Fehler beim Laden der Transaktionen"
       },
       users: {
         title: "Benutzer verwalten",

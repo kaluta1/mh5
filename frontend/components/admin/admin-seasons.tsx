@@ -11,6 +11,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Plus, Edit2, Trash2, Calendar, Loader2 } from 'lucide-react'
 import api from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { cacheService } from '@/lib/cache-service'
 
 interface Season {
   id: number
@@ -43,8 +44,24 @@ export default function AdminSeasons() {
   const fetchSeasons = async () => {
     try {
       setLoading(true)
-      const response = await api.get('/api/v1/admin/seasons')
-      setSeasons(response.data)
+      const endpoint = '/api/v1/admin/seasons'
+      const params = {}
+      
+      // Vérifier le cache
+      const cachedData = cacheService.get<Season[]>(endpoint, params)
+      if (cachedData) {
+        setSeasons(cachedData)
+        setLoading(false)
+        return
+      }
+      
+      // Si pas de cache, faire l'appel API
+      const response = await api.get(endpoint)
+      const data = response.data
+      setSeasons(data)
+      
+      // Mettre en cache (TTL de 5 minutes)
+      cacheService.set(endpoint, data, params, 5 * 60 * 1000)
     } catch (error) {
       console.error('Erreur lors du chargement des saisons:', error)
       addToast(t('admin.seasons.load_error'), 'error')
@@ -59,9 +76,13 @@ export default function AdminSeasons() {
     try {
       if (editingId) {
         await api.put(`/api/v1/admin/seasons/${editingId}`, formData)
+        // Invalider le cache des saisons
+        cacheService.invalidate('/api/v1/admin/seasons')
         addToast(t('admin.seasons.update_success'), 'success')
       } else {
         await api.post('/api/v1/admin/seasons', formData)
+        // Invalider le cache des saisons
+        cacheService.invalidate('/api/v1/admin/seasons')
         addToast(t('admin.seasons.create_success'), 'success')
       }
       fetchSeasons()
@@ -143,6 +164,8 @@ export default function AdminSeasons() {
     setIsDeleting(true)
     try {
       await api.delete(`/api/v1/admin/seasons/${seasonToDelete}`)
+      // Invalider le cache des saisons
+      cacheService.invalidate('/api/v1/admin/seasons')
       addToast(t('admin.seasons.delete_success'), 'success')
       fetchSeasons()
       setShowDeleteDialog(false)

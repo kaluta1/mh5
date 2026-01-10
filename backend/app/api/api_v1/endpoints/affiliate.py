@@ -613,7 +613,7 @@ def get_leaderboard(
     limit: int = 10
 ):
     """
-    Récupérer le classement des meilleurs sponsors (ceux avec le plus de référents directs).
+    Récupérer le classement des meilleurs sponsors (ceux avec le plus de référents directs qui ont un dépôt KYC validé).
     """
     top_sponsors = crud_user.get_top_sponsors(db=db, limit=limit)
     return top_sponsors

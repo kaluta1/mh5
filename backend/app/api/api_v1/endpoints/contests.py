@@ -47,10 +47,12 @@ def read_contests(
     voting_level: str = Query(None, description="Filtrer par niveau de vote (country pour Nomination)"),
     voting_type_id: int = Query(None, description="Filtrer par ID du type de vote (pour Nominations)"),
     has_voting_type: bool = Query(None, description="Filtrer les contests avec/sans voting_type (True = avec, False = sans)"),
+    current_user: Optional[Any] = Depends(get_current_active_user_optional),
 ) -> List[dict]:
     """
     Récupérer tous les concours avec filtrage optionnel et statistiques.
     Endpoint public - accessible sans authentification.
+    Le nombre de contestants affiché dépend de la saison du contest et de la localisation de l'utilisateur connecté (si authentifié).
     """
     # Construire les filtres
     filters = {}
@@ -78,15 +80,16 @@ def read_contests(
     # enrich_contest_with_stats retourne un dictionnaire avec toutes les valeurs converties
     enriched_contests = []
     for c in contests:
-        enriched = contest.enrich_contest_with_stats(db=db, contest=c)
-        if isinstance(enriched, dict):
-            enriched_contests.append(enriched)
-    
-    return enriched_contests
-    
-    # Stocker dans le cache si activé
-    if use_cache:
-        cache_service.set(cache_key, enriched_contests, ttl=3600)  # 1 heure
+        try:
+            enriched = contest.enrich_contest_with_stats(db=db, contest=c, current_user=current_user)
+            if isinstance(enriched, dict):
+                enriched_contests.append(enriched)
+        except Exception as e:
+            # Logger l'erreur mais continuer avec les autres contests
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Erreur lors de l'enrichissement du contest {c.id}: {str(e)}")
+            continue
     
     return enriched_contests
 
@@ -99,18 +102,24 @@ def read_contest(
     current_user: Optional[Any] = Depends(get_current_active_user_optional),
 ) -> Any:
     """
-    Récupérer un concours par ID avec tous ses contestants enrichis de toutes les informations :
-    - Commentaires avec utilisateurs
-    - Votes avec utilisateurs
-    - Réactions avec utilisateurs
-    - Favoris avec utilisateurs
-    - Partages avec utilisateurs
-    - Saison
+    Récupérer un concours par ID avec tous ses contestants enrichis.
+    
+    Les contestants sont filtrés selon la saison du contest et la localisation de l'utilisateur connecté :
+    - city: même ville et pays
+    - country: même pays
+    - regional: même région
+    - continent: même continent
+    - global: tous les contestants
+    
+    Les données géographiques (city, country, region, continent, author_gender) 
+    sont directement stockées dans la table contestants pour de meilleures performances.
+    
     Endpoint public - accessible sans authentification.
     """
     current_user_id = current_user.id if current_user else None
     
     # Récupérer le contest avec tous les contestants enrichis
+    # La méthode utilise maintenant directement les champs du Contestant
     enriched_data = contest.get_contest_with_enriched_contestants(
         db=db, 
         contest_id=contest_id,

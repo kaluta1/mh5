@@ -120,6 +120,15 @@ class Contestant(Base):
     image_media_ids: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)  # JSON array of up to 10 image media IDs
     video_media_ids: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)  # JSON array of video media IDs
     
+    # Geographic data (copied from user at creation time)
+    city: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    country: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    region: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    continent: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    
+    # Author gender (copied from user at creation time)
+    author_gender: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    
     registration_date: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     verification_status: Mapped[str] = mapped_column(String(50), default="pending")  # pending, verified, rejected
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)

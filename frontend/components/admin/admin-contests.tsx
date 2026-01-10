@@ -13,6 +13,7 @@ import { Plus, Edit2, Trash2, Eye, Calendar, Users, Clock, Zap, X, Trophy, MapPi
 import { UploadButton } from '@/components/ui/upload-button'
 import { contestService, type ContestResponse } from '@/lib/services/contest-service'
 import api from '@/lib/api'
+import { cacheService } from '@/lib/cache-service'
 
 interface Contest {
   id: number
@@ -178,8 +179,24 @@ export default function AdminContests() {
   const fetchSeasons = async () => {
     try {
       setLoadingSeasons(true)
-      const response = await api.get('/api/v1/admin/seasons')
-      setSeasons(response.data)
+      const endpoint = '/api/v1/admin/seasons'
+      const params = {}
+      
+      // Vérifier le cache
+      const cachedData = cacheService.get<Array<{ id: number; title: string; level: string }>>(endpoint, params)
+      if (cachedData) {
+        setSeasons(cachedData)
+        setLoadingSeasons(false)
+        return
+      }
+      
+      // Si pas de cache, faire l'appel API
+      const response = await api.get(endpoint)
+      const data = response.data
+      setSeasons(data)
+      
+      // Mettre en cache (TTL de 5 minutes)
+      cacheService.set(endpoint, data, params, 5 * 60 * 1000)
     } catch (error) {
       console.error('Erreur lors du chargement des saisons:', error)
     } finally {
@@ -215,12 +232,24 @@ export default function AdminContests() {
   const fetchCategories = async () => {
     try {
       setLoadingCategories(true)
-      const response = await api.get('/api/v1/categories/', { params: { active_only: true } })
-      if (response.data && Array.isArray(response.data)) {
-        setCategories(response.data)
-      } else {
-        setCategories([])
+      const endpoint = '/api/v1/categories'
+      const params = { active_only: true }
+      
+      // Vérifier le cache
+      const cachedData = cacheService.get<Array<{ id: number; name: string; slug: string; description?: string; is_active: boolean }>>(endpoint, params)
+      if (cachedData) {
+        setCategories(cachedData)
+        setLoadingCategories(false)
+        return
       }
+      
+      // Si pas de cache, faire l'appel API
+      const response = await api.get(`${endpoint}/`, { params })
+      const data = response.data && Array.isArray(response.data) ? response.data : []
+      setCategories(data)
+      
+      // Mettre en cache (TTL de 5 minutes)
+      cacheService.set(endpoint, data, params, 5 * 60 * 1000)
     } catch (error: any) {
       console.error('Erreur lors du chargement des catégories:', error)
       addToast(t('admin.contests.categories_load_error') || 'Erreur lors du chargement des catégories', 'error')
@@ -247,6 +276,9 @@ export default function AdminContests() {
         description: categoryFormData.description.trim() || null,
         is_active: categoryFormData.is_active
       })
+      
+      // Invalider le cache des catégories
+      cacheService.invalidate('/api/v1/categories')
       
       addToast(t('admin.contests.category_created') || 'Catégorie créée avec succès', 'success')
       setCategories([...categories, response.data])
@@ -360,6 +392,7 @@ export default function AdminContests() {
   const fetchContests = async () => {
     try {
       setLoading(true)
+      // Le contestService gère déjà le cache, donc on l'utilise directement
       const data = await contestService.getAllContests()
       console.log('Fetched contests data:', data)
       if (data && data.length > 0) {

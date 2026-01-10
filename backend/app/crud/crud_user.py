@@ -173,16 +173,29 @@ class CRUDUser:
         return db.query(User).filter(User.sponsor_id == user_id).count()
     
     def get_top_sponsors(self, db: Session, limit: int = 10) -> List[dict]:
-        """Récupère les meilleurs sponsors (ceux avec le plus de référents directs)."""
+        """Récupère les meilleurs sponsors (ceux avec le plus de référents directs qui ont un dépôt KYC validé)."""
         from sqlalchemy import func
+        from app.models.payment import Deposit, ProductType, DepositStatus
         
-        # Créer une sous-requête pour compter les référents par sponsor
-        referrals_subquery = db.query(
-            User.sponsor_id,
-            func.count(User.id).label('referrals_count')
+        # Créer une sous-requête pour obtenir les utilisateurs distincts qui ont un dépôt KYC validé
+        kyc_users_subquery = db.query(
+            User.id.label('user_id'),
+            User.sponsor_id
+        ).join(
+            Deposit, User.id == Deposit.user_id
+        ).join(
+            ProductType, Deposit.product_type_id == ProductType.id
         ).filter(
-            User.sponsor_id.isnot(None)
-        ).group_by(User.sponsor_id).subquery()
+            User.sponsor_id.isnot(None),
+            ProductType.code == 'kyc',
+            Deposit.status == DepositStatus.VALIDATED
+        ).distinct().subquery()
+        
+        # Compter les référents KYC par sponsor
+        referrals_subquery = db.query(
+            kyc_users_subquery.c.sponsor_id,
+            func.count(kyc_users_subquery.c.user_id).label('referrals_count')
+        ).group_by(kyc_users_subquery.c.sponsor_id).subquery()
         
         # Joindre avec la table User pour obtenir les informations des sponsors
         top_sponsors = db.query(

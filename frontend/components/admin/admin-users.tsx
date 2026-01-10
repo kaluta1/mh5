@@ -16,6 +16,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
 import api from '@/lib/api'
+import { cacheService } from '@/lib/cache-service'
 
 interface UserDetails {
   id: number
@@ -95,7 +96,27 @@ export default function AdminUsers() {
   const fetchUsers = async () => {
     try {
       setLoading(true)
-      let url = '/api/v1/admin/users'
+      const endpoint = '/api/v1/admin/users'
+      const params: any = {}
+      
+      if (filter === 'admins') {
+        params.is_admin = true
+      } else if (filter === 'inactive') {
+        params.is_active = false
+      } else if (filter === 'verified') {
+        params.is_verified = true
+      }
+      
+      // Vérifier le cache
+      const cachedData = cacheService.get<UserDetails[]>(endpoint, params)
+      if (cachedData) {
+        setUsers(cachedData)
+        setLoading(false)
+        return
+      }
+      
+      // Construire l'URL avec les paramètres
+      let url = endpoint
       if (filter === 'admins') {
         url += '?is_admin=true'
       } else if (filter === 'inactive') {
@@ -103,8 +124,14 @@ export default function AdminUsers() {
       } else if (filter === 'verified') {
         url += '?is_verified=true'
       }
+      
+      // Si pas de cache, faire l'appel API
       const response = await api.get(url)
-      setUsers(response.data)
+      const data = response.data
+      setUsers(data)
+      
+      // Mettre en cache (TTL de 5 minutes)
+      cacheService.set(endpoint, data, params, 5 * 60 * 1000)
     } catch (error) {
       console.error('Erreur lors du chargement des utilisateurs:', error)
       addToast(t('admin.users.load_error') || 'Erreur lors du chargement des utilisateurs', 'error')
@@ -131,6 +158,8 @@ export default function AdminUsers() {
       await api.put(`/api/v1/admin/users/${userId}/role`, {
         is_admin: !currentStatus
       })
+      // Invalider le cache des utilisateurs
+      cacheService.invalidate('/api/v1/admin/users')
       addToast(t('admin.users.toggle_admin_success') || 'Droits admin modifiés', 'success')
       fetchUsers()
     } catch (error) {
@@ -144,6 +173,8 @@ export default function AdminUsers() {
       await api.put(`/api/v1/admin/users/${userId}/status`, {
         is_active: !currentStatus
       })
+      // Invalider le cache des utilisateurs
+      cacheService.invalidate('/api/v1/admin/users')
       const message = currentStatus 
         ? t('admin.users.toggle_active_success_deactivate') || 'Utilisateur désactivé'
         : t('admin.users.toggle_active_success_activate') || 'Utilisateur activé'
@@ -166,6 +197,8 @@ export default function AdminUsers() {
     setIsDeleting(true)
     try {
       await api.delete(`/api/v1/admin/users/${deleteUserId}`)
+      // Invalider le cache des utilisateurs
+      cacheService.invalidate('/api/v1/admin/users')
       addToast(t('admin.users.delete_success') || 'Utilisateur supprimé avec succès', 'success')
       fetchUsers()
       setShowDeleteDialog(false)
@@ -181,6 +214,8 @@ export default function AdminUsers() {
   const handleVerifyKYC = async (userId: number) => {
     try {
       await api.put(`/api/v1/admin/users/${userId}/kyc/verify`)
+      // Invalider le cache des utilisateurs
+      cacheService.invalidate('/api/v1/admin/users')
       addToast(t('admin.users.kyc_verify_success') || 'KYC vérifié avec succès', 'success')
       fetchUsers()
     } catch (error) {
@@ -192,6 +227,8 @@ export default function AdminUsers() {
   const handleUnverifyKYC = async (userId: number) => {
     try {
       await api.put(`/api/v1/admin/users/${userId}/kyc/unverify`)
+      // Invalider le cache des utilisateurs
+      cacheService.invalidate('/api/v1/admin/users')
       addToast(t('admin.users.kyc_unverify_success') || 'Vérification KYC révoquée', 'success')
       fetchUsers()
     } catch (error) {

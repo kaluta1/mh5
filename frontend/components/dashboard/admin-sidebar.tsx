@@ -5,78 +5,60 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { useLanguage } from "@/contexts/language-context"
-import { useAuth } from "@/hooks/use-auth"
 import { 
   Heart, 
-  FileText, 
-  Wallet,
-  UserPlus,
-  DollarSign,
-  Shield,
-  Home,
-  Trophy,
-  Star,
-  BookOpen,
-  Network,
-  Users,
-  Hand,
-  Globe,
   LayoutDashboard,
-  Award
+  Shield,
+  Calendar,
+  Zap,
+  Users,
+  FileCheck,
+  Settings,
+  Flag,
+  Tag,
+  Percent,
+  Lightbulb,
+  CreditCard,
+  Home
 } from "lucide-react"
 
-const baseMenuSections = [
+const adminMenuSections = [
   {
-    title: "dashboard.nav.main",
+    title: "admin.nav.main",
     items: [
-      { name: "dashboard.nav.overview", href: "/dashboard", icon: LayoutDashboard },
-      { name: "dashboard.nav.contests", href: "/dashboard/contests", icon: Trophy },
-      { name: "dashboard.nav.myhigh5", href: "/dashboard/myhigh5", icon: Hand },
-      // { name: "dashboard.nav.groups", href: "/dashboard/groups", icon: Users },
-      { name: "dashboard.nav.favorites", href: "/dashboard/favorites", icon: Star },
-       { name: "dashboard.nav.my_applications", href: "/dashboard/my-applications", icon: FileText },
-    ]
-  },
- 
-  {
-    title: "dashboard.nav.business",
-    items: [
-      { name: "dashboard.nav.wallet", href: "/dashboard/wallet", icon: Wallet },
-      { name: "dashboard.nav.affiliates", href: "/dashboard/affiliates", icon: UserPlus },
-      { name: "dashboard.nav.commissions", href: "/dashboard/commissions", icon: DollarSign },
-      { name: "dashboard.nav.leaderboard", href: "/dashboard/leaderboard", icon: Award },
+      { name: "admin.nav.dashboard", href: "/dashboard/admin", icon: LayoutDashboard },
     ]
   },
   {
-    title: "dashboard.nav.resources",
+    title: "admin.nav.management",
     items: [
-      { name: "dashboard.nav.founding_member", href: "/dashboard/founding-member", icon: BookOpen },
-      { name: "dashboard.nav.affiliate_program", href: "/dashboard/affiliate-program", icon: Network },
-      { name: "dashboard.nav.affiliate_agreement", href: "/dashboard/affiliate-agreement", icon: FileText },
+      { name: "admin.nav.seasons", href: "/dashboard/admin/seasons", icon: Calendar },
+      { name: "admin.nav.contests", href: "/dashboard/admin/contests", icon: Zap },
+      { name: "admin.nav.contestants", href: "/dashboard/admin/contestants", icon: Users },
+      { name: "admin.nav.users", href: "/dashboard/admin/users", icon: Settings },
+      { name: "admin.nav.kyc", href: "/dashboard/admin/kyc", icon: FileCheck },
+      { name: "admin.nav.reports", href: "/dashboard/admin/reports", icon: Flag },
+    ]
+  },
+  {
+    title: "admin.nav.configuration",
+    items: [
+      { name: "admin.nav.categories", href: "/dashboard/admin/categories", icon: Tag },
+      { name: "admin.nav.commission_settings", href: "/dashboard/admin/commission-settings", icon: Percent },
+      { name: "admin.nav.suggested_contests", href: "/dashboard/admin/suggested-contests", icon: Lightbulb },
+      { name: "admin.nav.transactions", href: "/dashboard/admin/transactions", icon: CreditCard },
     ]
   },
 ]
 
-const adminMenuSection = {
-  title: "dashboard.nav.admin",
-  items: [
-    { name: "dashboard.nav.admin_panel", href: "/dashboard/admin", icon: Shield },
-  ]
-}
-
-interface DashboardSidebarProps {
+interface AdminSidebarProps {
   isCollapsed?: boolean
   onToggleCollapse?: () => void
 }
 
-export function DashboardSidebar({ isCollapsed = false, onToggleCollapse }: DashboardSidebarProps) {
+export function AdminSidebar({ isCollapsed = false, onToggleCollapse }: AdminSidebarProps) {
   const { t } = useLanguage()
   const pathname = usePathname()
-  const { user } = useAuth()
-
-  const displayMenuSections = user?.is_admin 
-    ? [...baseMenuSections, adminMenuSection]
-    : baseMenuSections
 
   return (
     <>
@@ -91,17 +73,16 @@ export function DashboardSidebar({ isCollapsed = false, onToggleCollapse }: Dash
           "flex items-center h-16 border-b border-gray-100 dark:border-gray-800",
           isCollapsed ? "justify-center px-2" : "justify-between px-4"
         )}>
-          <Link href="/dashboard" className="flex items-center gap-3">
+          <Link href="/dashboard/admin" className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary flex items-center justify-center shadow-lg shadow-myhigh5-primary/25">
-              <Heart className="w-5 h-5 text-white fill-white" />
+              <Shield className="w-5 h-5 text-white fill-white" />
             </div>
             {!isCollapsed && (
               <span className="text-lg font-bold text-gray-900 dark:text-white">
-                MyHigh5
+                Admin
               </span>
             )}
           </Link>
-          
         </div>
 
         {/* Navigation */}
@@ -110,14 +91,14 @@ export function DashboardSidebar({ isCollapsed = false, onToggleCollapse }: Dash
           isCollapsed ? "px-2" : "px-3"
         )}>
           <div className="space-y-6">
-            {/* Home Button */}
+            {/* Home Button - Retour au dashboard utilisateur */}
             <div>
               <Link
-                href="/"
+                href="/dashboard"
                 className={cn(
                   "group flex items-center gap-3 rounded-lg transition-all duration-200",
                   isCollapsed ? "justify-center p-3" : "px-3 py-2.5",
-                  pathname === "/"
+                  pathname === "/dashboard" && !pathname.startsWith("/dashboard/")
                     ? "bg-myhigh5-primary text-white shadow-lg shadow-myhigh5-primary/30"
                     : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800/50 hover:text-gray-900 dark:hover:text-white"
                 )}
@@ -125,18 +106,18 @@ export function DashboardSidebar({ isCollapsed = false, onToggleCollapse }: Dash
               >
                 <Home className={cn(
                   "h-5 w-5 flex-shrink-0 transition-transform duration-200",
-                  pathname !== "/" && "group-hover:scale-110"
+                  pathname !== "/dashboard" && "group-hover:scale-110"
                 )} />
                 
                 {!isCollapsed && (
                   <span className="text-sm font-medium">
-                    {t('navigation.home')}
+                    {t('navigation.home') || 'Home'}
                   </span>
                 )}
               </Link>
             </div>
 
-            {displayMenuSections.map((section, idx) => (
+            {adminMenuSections.map((section, idx) => (
               <div key={idx}>
                 {!isCollapsed && (
                   <p className="px-3 mb-2 text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
@@ -147,8 +128,8 @@ export function DashboardSidebar({ isCollapsed = false, onToggleCollapse }: Dash
                 <div className="space-y-1">
                   {section.items.map((item) => {
                     const Icon = item.icon
-                    const isActive = item.href === "/dashboard"
-                      ? pathname === "/dashboard"
+                    const isActive = item.href === "/dashboard/admin"
+                      ? pathname === "/dashboard/admin"
                       : pathname.startsWith(item.href)
 
                     return (
@@ -182,33 +163,6 @@ export function DashboardSidebar({ isCollapsed = false, onToggleCollapse }: Dash
             ))}
           </div>
         </nav>
-
-        {/* Footer - Landing Page Link */}
-        <div className={cn(
-          "border-t border-gray-100 dark:border-gray-800 p-4",
-          isCollapsed ? "px-2" : "px-3"
-        )}>
-          <Link
-            href="/"
-            className={cn(
-              "group flex items-center gap-3 rounded-lg transition-all duration-200",
-              isCollapsed ? "justify-center p-3" : "px-3 py-2.5",
-              "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800/50 hover:text-gray-900 dark:hover:text-white"
-            )}
-            title={isCollapsed ? t('navigation.landing') : undefined}
-          >
-            <Globe className={cn(
-              "h-5 w-5 flex-shrink-0 transition-transform duration-200",
-              "group-hover:scale-110"
-            )} />
-            
-            {!isCollapsed && (
-              <span className="text-sm font-medium">
-                {t('navigation.landing') || 'Accueil'}
-              </span>
-            )}
-          </Link>
-        </div>
       </aside>
     </>
   )
