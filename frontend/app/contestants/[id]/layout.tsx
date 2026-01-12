@@ -44,20 +44,22 @@ export async function generateMetadata({
     const description = contestant.description 
       ? contestant.description 
       : `Discover ${contestant.author_name || 'this participant'} on ${englishTranslations.siteName}. Vote and support!`
-    
-    // Extraire l'image depuis image_media_ids ou utiliser l'avatar
-    let image = contestant.author_avatar_url || `${appUrl}/thumbnails.png`
-    if (contestant.image_media_ids) {
-      try {
-        const imageIds = typeof contestant.image_media_ids === 'string' 
-          ? JSON.parse(contestant.image_media_ids) 
-          : contestant.image_media_ids
-        if (Array.isArray(imageIds) && imageIds.length > 0) {
-          image = typeof imageIds[0] === 'string' ? imageIds[0] : contestant.author_avatar_url || `${appUrl}/thumbnails.png`
+
+    // Image de partage : toujours l'image du concours (pas l'avatar de l'auteur)
+    let image = `${appUrl}/thumbnails.png`
+    try {
+      const contestId = contestant.contest_id || contestant.contestId
+      if (contestId) {
+        const contestResp = await fetch(`${apiUrl}/api/v1/contests/${contestId}`, {
+          next: { revalidate: 3600 },
+        })
+        if (contestResp.ok) {
+          const contestData = await contestResp.json()
+          image = contestData.cover_image_url || contestData.image_url || image
         }
-      } catch {
-        // Si l'image n'est pas un JSON valide, utiliser l'avatar
       }
+    } catch (err) {
+      console.error("Error loading contest for metadata:", err)
     }
     // S'assurer que l'image est une URL absolue
     if (!image.startsWith('http')) {

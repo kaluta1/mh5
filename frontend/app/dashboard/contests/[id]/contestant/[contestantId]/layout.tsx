@@ -63,33 +63,8 @@ export async function generateMetadata({
       ? contestant.description 
       : `Discover ${contestant.author_name || 'this participant'} on ${englishTranslations.siteName}. Vote and support!`
     
-    // Extraire l'image depuis image_media_ids
-    // Par défaut, utiliser l'image du concours (si le contestant n'a pas de photo)
+    // Image de partage : toujours l'image du concours (pas la photo auteur)
     let image = contestImage
-    
-    // Vérifier si le contestant a des images
-    if (contestant.image_media_ids) {
-      try {
-        const imageIds = typeof contestant.image_media_ids === 'string' 
-          ? JSON.parse(contestant.image_media_ids) 
-          : contestant.image_media_ids
-        
-        if (Array.isArray(imageIds) && imageIds.length > 0) {
-          // Le contestant a des images, utiliser la première URL directement
-          const firstImageUrl = imageIds[0]
-          if (firstImageUrl && typeof firstImageUrl === 'string') {
-            image = firstImageUrl
-          }
-        }
-        // Si pas d'images ou tableau vide, image reste = contestImage (image du concours)
-      } catch (error) {
-        console.error("Error parsing image_media_ids:", error)
-        // En cas d'erreur de parsing, utiliser l'image du concours
-        image = contestImage
-      }
-    }
-    // Si pas d'image_media_ids, image reste = contestImage (image du concours)
-    
     // S'assurer que l'image est une URL absolue
     if (!image.startsWith('http')) {
       image = image.startsWith('/') ? `${appUrl}${image}` : `${appUrl}/${image}`
