@@ -1,9 +1,9 @@
 import { Metadata } from "next"
-import { createMetadata } from "../../../../metadata"
+import { createMetadata } from "@/app/metadata"
 import { getMetadataTranslations, detectLanguageFromHeaders } from "@/lib/metadata-translations"
 import { headers } from "next/headers"
 
-const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myhigh5.com"
+const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://myhigh5.com";
 const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
 
 export async function generateMetadata({
