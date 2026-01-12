@@ -30,39 +30,39 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   // Translation function with nested key support (e.g., "hero.title")
   const t = (key: string): string => {
     try {
-      const keys = key.split('.')
-      let value: any = translations[language]
+    const keys = key.split('.')
+    let value: any = translations[language]
       
       if (!value) {
         console.warn(`Translations not found for language: ${language}, falling back to English`)
         value = translations.en
       }
-      
-      for (const k of keys) {
-        if (value && typeof value === 'object' && k in value) {
-          value = value[k]
-        } else {
-          // Fallback to English if key not found
-          let fallback: any = translations.en
-          for (const fk of keys) {
-            if (fallback && typeof fallback === 'object' && fk in fallback) {
-              fallback = fallback[fk]
-            } else {
+    
+    for (const k of keys) {
+      if (value && typeof value === 'object' && k in value) {
+        value = value[k]
+      } else {
+        // Fallback to English if key not found
+        let fallback: any = translations.en
+        for (const fk of keys) {
+          if (fallback && typeof fallback === 'object' && fk in fallback) {
+            fallback = fallback[fk]
+          } else {
               console.warn(`Translation key "${key}" not found in any language`)
-              return key // Return key if not found in any language
+            return key // Return key if not found in any language
             }
           }
           return typeof fallback === 'string' ? fallback : key
-        }
       }
-      
-      // Ensure we always return a string, never an object
-      if (typeof value === 'string') {
-        return value
-      } else if (typeof value === 'object' && value !== null) {
-        console.warn(`Translation key "${key}" returned an object instead of string:`, value)
-        return key // Return the key as fallback
-      } else {
+    }
+    
+    // Ensure we always return a string, never an object
+    if (typeof value === 'string') {
+      return value
+    } else if (typeof value === 'object' && value !== null) {
+      console.warn(`Translation key "${key}" returned an object instead of string:`, value)
+      return key // Return the key as fallback
+    } else {
         return key
       }
     } catch (error) {

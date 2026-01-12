@@ -92,7 +92,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       {isAdminPage ? (
         <AdminSidebar isCollapsed={isSidebarCollapsed} />
       ) : (
-        <DashboardSidebar isCollapsed={isSidebarCollapsed} />
+      <DashboardSidebar isCollapsed={isSidebarCollapsed} />
       )}
       
       {/* Mobile Menu */}

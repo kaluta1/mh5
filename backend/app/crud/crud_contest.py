@@ -902,8 +902,13 @@ class CRUDContest:
         if not contest_obj:
             return None
         
+        # Récupérer l'utilisateur si current_user_id est fourni
+        current_user = None
+        if current_user_id:
+            current_user = db.query(User).filter(User.id == current_user_id).first()
+        
         # Enrichir le contest avec les stats
-        contest_data = self.enrich_contest_with_stats(db, contest_obj)
+        contest_data = self.enrich_contest_with_stats(db, contest_obj, current_user=current_user)
         
         # Récupérer la saison active d'abord
         from app.models.contests import ContestantSeason
@@ -1053,14 +1058,14 @@ class CRUDContest:
                     # Même pays
                     if is_valid_location(user.country):
                         return Contestant.country.ilike(user.country)
-                    return None
+                        return None
                     
                 elif level in ("regional", "region"):
                     # Même région
                     user_region = getattr(user, "region", None)
                     if is_valid_location(user_region):
                         return Contestant.region.ilike(user_region)
-                    return None
+                        return None
                     
                 elif level == "continent":
                     # Même continent uniquement

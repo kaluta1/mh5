@@ -31,6 +31,9 @@ export function VoteButton({ contestantId, canVote, hasVoted, isVoting, onVote, 
     if (isVoting) {
       return t('contestant_detail.voting') || 'Voting...'
     }
+    if (isAuthor) {
+      return t('dashboard.contests.owner_cannot_vote') || 'Owner, cannot vote'
+    }
     if (hasVoted) {
       return t('dashboard.contests.already_voted') || 'Already voted'
     }
@@ -140,17 +143,19 @@ export function VoteButton({ contestantId, canVote, hasVoted, isVoting, onVote, 
       <button
         onClick={(e) => {
           e.stopPropagation()
-          if (canVote) onVote()
+          if (canVote && !isAuthor) onVote()
         }}
-        disabled={!canVote || isVoting}
+        disabled={!canVote || isVoting || isAuthor}
         className={`flex items-center justify-center gap-2 py-3 px-2 text-sm font-medium transition-colors ${
           hasVoted
             ? 'text-blue-600 dark:text-blue-400'
+            : isAuthor
+            ? 'text-gray-400 dark:text-gray-500'
             : canVote
             ? 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
             : 'text-gray-400 dark:text-gray-500'
-        } ${!canVote || isVoting ? 'opacity-50 cursor-not-allowed' : ''}`}
-        title={getVoteButtonTitle()}
+        } ${!canVote || isVoting || isAuthor ? 'opacity-50 cursor-not-allowed' : ''}`}
+        title={isAuthor ? (t('dashboard.contests.owner_cannot_vote') || 'Owner, cannot vote') : getVoteButtonTitle()}
       >
         <ThumbsUp className={`w-5 h-5 ${hasVoted ? 'fill-current' : ''}`} />
         <span className="hidden sm:inline">{getVoteButtonText()}</span>

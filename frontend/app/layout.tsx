@@ -49,7 +49,7 @@ async function getFeaturedContestImage(): Promise<string> {
   } catch (error) {
     // Ne pas logger l'erreur en production pour éviter le spam
     if (process.env.NODE_ENV === 'development') {
-      console.error('Error fetching contest image for metadata:', error)
+    console.error('Error fetching contest image for metadata:', error)
     }
   }
   return defaultImage

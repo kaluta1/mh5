@@ -1166,7 +1166,13 @@ export interface TranslationKeys {
         favorite_limit_reached: string
         top_participants: string
         top_5_description: string
+        view: string
+        contestant: string
         view_contestants: string
+        view_all_contestants: string
+        view_contestants_count: string
+        view_contestants_empty: string
+        view_contestants_description: string
         time_remaining: string
         time_remaining_to_participate: string
         time_unit_days: string
@@ -1179,6 +1185,7 @@ export interface TranslationKeys {
         view_details: string
         already_voted: string
         cannot_vote: string
+        owner_cannot_vote: string
         votes: string
         contest_info: string
         contest_dates: string
@@ -2601,6 +2608,8 @@ export const translations: Record<Language, TranslationKeys> = {
         favorite_limit_reached: "Limite de 5 favoris atteinte",
         top_participants: "Top Participants",
         top_5_description: "Les 5 meilleurs participants du concours",
+        view: "Voir",
+        contestant: "participant",
         view_contestants: "Voir les participants",
         time_remaining: "Temps restant",
         time_unit_days: "j",
@@ -2613,6 +2622,7 @@ export const translations: Record<Language, TranslationKeys> = {
         view_details: "Voir les détails",
         already_voted: "Déjà voté",
         cannot_vote: "Vous ne pouvez pas voter pour ce participant",
+        owner_cannot_vote: "Propriétaire, ne peut pas voter",
         restriction_different_city: "Ville différente",
         restriction_different_country: "Pays différent",
         restriction_different_region: "Région différente",
@@ -6403,7 +6413,13 @@ export const translations: Record<Language, TranslationKeys> = {
         favorite_limit_reached: "Favorite limit reached",
         top_participants: "Top Participants",
         top_5_description: "The 5 best participants in the contest",
+        view: "View",
+        contestant: "contestant",
         view_contestants: "View contestants",
+        view_all_contestants: "View all contestants",
+        view_contestants_count: "{count} contestant",
+        view_contestants_empty: "No contestants",
+        view_contestants_description: "Discover all contestants and vote for your favorites",
         time_remaining: "Time remaining",
         time_remaining_to_participate: "Time remaining to contest",
         time_unit_days: "d",
@@ -6416,6 +6432,7 @@ export const translations: Record<Language, TranslationKeys> = {
         view_details: "View Details",
         already_voted: "Already voted",
         cannot_vote: "You cannot vote for this contestant",
+        owner_cannot_vote: "Owner, cannot vote",
         restriction_different_city: "Different city",
         restriction_different_country: "Different country",
         restriction_different_region: "Different region",
@@ -8744,7 +8761,13 @@ export const translations: Record<Language, TranslationKeys> = {
         favorite_limit_reached: "Límite de favoritos alcanzado",
         top_participants: "Top Participantes",
         top_5_description: "Los 5 mejores participantes del concurso",
+        view: "Ver",
+        contestant: "participante",
         view_contestants: "Ver participantes",
+        view_all_contestants: "Ver todos los participantes",
+        view_contestants_count: "{count} participante",
+        view_contestants_empty: "Sin participantes",
+        view_contestants_description: "Descubre todos los participantes y vota por tus favoritos",
         time_remaining: "Tiempo restante",
         time_remaining_to_participate: "Tiempo restante para concursar",
         time_unit_days: "d",
@@ -8757,6 +8780,7 @@ export const translations: Record<Language, TranslationKeys> = {
         view_details: "Ver Detalles",
         already_voted: "Ya votado",
         cannot_vote: "No puedes votar por este participante",
+        owner_cannot_vote: "Propietario, no puede votar",
         votes: "votos",
         shares: "Compartidos",
         submission: "Envío",
@@ -11047,7 +11071,10 @@ export const translations: Record<Language, TranslationKeys> = {
         favorite_limit_reached: "Favoritenlimit erreicht",
         top_participants: "Top Teilnehmer",
         top_5_description: "Die 5 besten Teilnehmer des Wettbewerbs",
+        view: "Anzeigen",
+        contestant: "Teilnehmer",
         view_contestants: "Teilnehmer anzeigen",
+        view_all_contestants: "Alle Teilnehmer anzeigen",
         time_remaining: "Verbleibende Zeit",
         time_remaining_to_participate: "Verbleibende Zeit zur Teilnahme",
         time_unit_days: "T",
@@ -11068,6 +11095,7 @@ export const translations: Record<Language, TranslationKeys> = {
         view_details: "Details Anzeigen",
         already_voted: "Bereits abgestimmt",
         cannot_vote: "Sie können nicht für diesen Teilnehmer abstimmen",
+        owner_cannot_vote: "Eigentümer, kann nicht abstimmen",
         votes: "Stimmen",
         shares: "Geteilt",
         submission: "Einreichung",

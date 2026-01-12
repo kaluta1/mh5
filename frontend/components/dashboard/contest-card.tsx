@@ -248,8 +248,8 @@ export function ContestCard({
 
   return (
     <div 
-      className={`relative bg-gray-900 rounded-lg overflow-hidden shadow-lg flex flex-col ${
-        isFeatured ? 'md:scale-105 md:z-10' : ''
+      className={`relative bg-gray-900 rounded-xl overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-300 flex flex-col border border-gray-800 hover:border-gray-700 ${
+        isFeatured ? 'md:scale-105 md:z-10 ring-2 ring-myhigh5-primary/50' : ''
       }`}
     >
       {/* Cover Image Section */}
@@ -559,9 +559,10 @@ export function ContestCard({
       </div>
 
       {/* Bottom Section - Always visible details */}
-      <div className="p-3 bg-gray-900 flex flex-col gap-2.5">
+      <div className="p-4 bg-gradient-to-b from-gray-900 to-gray-950 flex flex-col gap-3 border-t border-gray-800">
         {/* Title */}
-        <h3 className="text-white font-semibold text-sm line-clamp-1">
+        <h3 className="text-white font-bold text-base line-clamp-2 leading-tight hover:text-myhigh5-secondary transition-colors cursor-pointer"
+            onClick={onOpenDetails ?? onViewContestants}>
           {title}
         </h3>
 
@@ -666,65 +667,56 @@ export function ContestCard({
           </TooltipProvider>
         </div>
 
-        {/* Action Button - Always visible */}
-        <div className="pt-0.5">
+        {/* Action Buttons - Always visible */}
+        <div className="pt-1 flex gap-2">
           {canParticipate() && onParticipate ? (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onParticipate()
-                    }}
-                    className="w-full bg-myhigh5-primary hover:bg-myhigh5-primary-dark text-white font-semibold py-2 text-xs shadow-lg shadow-myhigh5-primary/20 hover:shadow-myhigh5-primary/40 transition-all hover:scale-[1.02] rounded-lg group/btn relative overflow-hidden"
-                  >
-                    <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover/btn:translate-x-full transition-transform duration-700" />
-                    <Sparkles className="w-3.5 h-3.5 mr-1.5" />
-                    {isNomination 
-                      ? (t('dashboard.contests.nominate') || 'Nommer')
-                      : (t('dashboard.contests.participate') || 'Participer')
-                    }
-                    <ArrowRight className="w-3.5 h-3.5 ml-1.5 group-hover/btn:translate-x-1 transition-transform" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent className="bg-gray-800 text-white border-gray-700">
-                  <p className="text-xs">
-                    {isNomination
-                      ? (t('dashboard.contests.tooltip_nominate') || 'Cliquez pour nommer à ce concours et soumettre votre candidature')
-                      : (t('dashboard.contests.tooltip_participate') || 'Cliquez pour participer à ce concours et soumettre votre candidature')
-                    }
-                  </p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <>
+              <Button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onParticipate()
+                }}
+                className="flex-1 bg-myhigh5-primary hover:bg-myhigh5-primary-dark text-white font-semibold py-2.5 text-xs shadow-lg shadow-myhigh5-primary/20 hover:shadow-xl hover:shadow-myhigh5-primary/40 transition-all duration-300 hover:scale-[1.02] rounded-lg group/btn relative overflow-hidden"
+              >
+                <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover/btn:translate-x-full transition-transform duration-500" />
+                <Sparkles className="w-3.5 h-3.5 mr-1.5 group-hover/btn:scale-110 group-hover/btn:rotate-12 transition-all duration-300" />
+                {isNomination 
+                  ? (t('dashboard.contests.nominate') || 'Nommer')
+                  : (t('dashboard.contests.participate') || 'Participer')
+                }
+                <ArrowRight className="w-3.5 h-3.5 ml-1.5 group-hover/btn:translate-x-1 group-hover/btn:scale-110 transition-all duration-300" />
+              </Button>
+              <Button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onViewContestants()
+                }}
+                variant="outline"
+                className="flex-1 bg-gray-800/50 hover:bg-gray-800 text-white border-gray-700 hover:border-myhigh5-primary/50 font-medium py-2.5 text-xs rounded-lg transition-all duration-300 group/view relative overflow-hidden hover:shadow-lg hover:shadow-myhigh5-primary/20"
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-myhigh5-primary/10 via-myhigh5-primary/20 to-myhigh5-primary/10 opacity-0 group-hover/view:opacity-100 transition-opacity duration-300" />
+                <Eye className="w-4 h-4 mr-1.5 group-hover/view:scale-110 group-hover/view:text-myhigh5-secondary transition-all duration-300 relative z-10" />
+                <span className="relative z-10 group-hover/view:text-white transition-colors duration-300">
+                  {t('dashboard.contests.view') || 'Voir'} {contestants} {t('dashboard.contests.contestant') || 'participant'}{contestants > 1 ? 's' : ''}
+                </span>
+                <ArrowRight className="w-3.5 h-3.5 ml-1.5 group-hover/view:translate-x-1 group-hover/view:text-myhigh5-secondary transition-all duration-300 relative z-10" />
+              </Button>
+            </>
           ) : (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onViewContestants()
-                    }}
-                    variant="outline"
-                    className="w-full bg-gray-800 hover:bg-gray-700 text-white border-gray-700 hover:border-gray-600 font-medium py-2 text-xs rounded-lg transition-all"
-                  >
-                    <Trophy className="w-3.5 h-3.5 mr-1.5" />
-                    {t('dashboard.contests.view_contestants') || 'Voir les candidats'}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent className="bg-gray-800 text-white border-gray-700">
-                  <p className="text-xs">
-                    {!isOpen 
-                      ? (t('dashboard.contests.tooltip_view_contestants_closed') || 'Les inscriptions sont fermées. Voir les participants du concours')
-                      : !canParticipate()
-                      ? (t('dashboard.contests.tooltip_view_contestants_cannot_participate') || 'Vous ne pouvez pas participer pour le moment. Voir les participants du concours')
-                      : (t('dashboard.contests.tooltip_view_contestants') || 'Voir tous les participants de ce concours')}
-                  </p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <Button
+              onClick={(e) => {
+                e.stopPropagation()
+                onViewContestants()
+              }}
+              className="w-full bg-gradient-to-r from-myhigh5-primary to-purple-600 hover:from-myhigh5-primary-dark hover:to-purple-700 text-white font-semibold py-2.5 text-xs rounded-lg transition-all duration-300 group/view relative overflow-hidden shadow-lg shadow-myhigh5-primary/20 hover:shadow-xl hover:shadow-myhigh5-primary/40 hover:scale-[1.02]"
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover/view:translate-x-full transition-transform duration-500" />
+              <Eye className="w-4 h-4 mr-2 relative z-10 group-hover/view:scale-110 transition-transform duration-300" />
+              <span className="relative z-10 group-hover/view:drop-shadow-sm transition-all duration-300">
+                {t('dashboard.contests.view') || 'Voir'} {contestants} {t('dashboard.contests.contestant') || 'participant'}{contestants > 1 ? 's' : ''}
+              </span>
+              <ArrowRight className="w-3.5 h-3.5 ml-2 group-hover/view:translate-x-1 group-hover/view:scale-110 transition-all duration-300 relative z-10" />
+            </Button>
           )}
         </div>
       </div>

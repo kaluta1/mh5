@@ -102,37 +102,39 @@ def read_contest(
     current_user: Optional[Any] = Depends(get_current_active_user_optional),
 ) -> Any:
     """
-    Récupérer un concours par ID avec tous ses contestants enrichis.
+    Récupérer un concours spécifique avec ses contestants enrichis.
+    Le nombre de contestants affiché dépend de la saison du contest et de la localisation de l'utilisateur connecté (si authentifié).
     
-    Les contestants sont filtrés selon la saison du contest et la localisation de l'utilisateur connecté :
+    Filtrage géographique basé sur la saison active :
     - city: même ville et pays
     - country: même pays
     - regional: même région
     - continent: même continent
     - global: tous les contestants
-    
-    Les données géographiques (city, country, region, continent, author_gender) 
-    sont directement stockées dans la table contestants pour de meilleures performances.
-    
-    Endpoint public - accessible sans authentification.
     """
-    current_user_id = current_user.id if current_user else None
+    contest_obj = contest.get(db=db, id=contest_id)
+    if not contest_obj:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Concours non trouvé"
+        )
     
-    # Récupérer le contest avec tous les contestants enrichis
-    # La méthode utilise maintenant directement les champs du Contestant
-    enriched_data = contest.get_contest_with_enriched_contestants(
+    # Utiliser la méthode simplifiée qui utilise directement les champs du Contestant
+    current_user_id = current_user.id if current_user else None
+    enriched_contest = contest.get_contest_with_enriched_contestants(
         db=db, 
-        contest_id=contest_id,
+        contest_id=contest_id, 
         current_user_id=current_user_id
     )
     
-    if not enriched_data:
+    if not enriched_contest:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Contest not found"
+            detail="Concours non trouvé"
         )
     
-    return enriched_data
+    return enriched_contest
+
 
 @router.put("/{contest_id}", response_model=Contest)
 def update_contest(
@@ -145,35 +147,13 @@ def update_contest(
     """
     Mettre à jour un concours.
     """
-    contest_obj = contest.get(db=db, id=contest_id)
-    if not contest_obj:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Concours non trouvé"
-        )
+    # Seuls les administrateurs peuvent mettre à jour des concours
     if not current_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission insuffisante"
+            detail="Permission insuffisante pour mettre à jour un concours"
         )
-    contest_obj = contest.update(db=db, db_obj=contest_obj, obj_in=contest_in)
     
-    # Invalider le cache des contests
-    cache_service.invalidate_contest(contest_id)
-    
-    return contest_obj
-
-@router.post("/{contest_id}/entry", status_code=status.HTTP_201_CREATED)
-def create_contest_entry(
-    *,
-    db: Session = Depends(get_db),
-    contest_id: int,
-    media_id: int,
-    current_user: Any = Depends(get_current_active_user),
-) -> Any:
-    """
-    Participer à un concours avec un média.
-    """
     contest_obj = contest.get(db=db, id=contest_id)
     if not contest_obj:
         raise HTTPException(
@@ -181,24 +161,41 @@ def create_contest_entry(
             detail="Concours non trouvé"
         )
     
-    # Vérifier si les soumissions sont autorisées
-    from app.services.contest_status import contest_status_service
-    is_allowed, error_message = contest_status_service.check_submission_allowed(db, contest_id)
-    if not is_allowed:
+    updated_contest = contest.update(db=db, db_obj=contest_obj, obj_in=contest_in)
+    
+    # Invalider le cache des contests
+    cache_service.invalidate_contests()
+    
+    return updated_contest
+
+
+@router.delete("/{contest_id}", response_model=Contest)
+def delete_contest(
+    *,
+    db: Session = Depends(get_db),
+    contest_id: int,
+    current_user: Any = Depends(get_current_active_user),
+) -> Any:
+    """
+    Supprimer un concours (soft delete).
+    """
+    # Seuls les administrateurs peuvent supprimer des concours
+    if not current_user.is_admin:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error_message
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission insuffisante pour supprimer un concours"
         )
     
-    # Créer la participation
-    result = contest.create_entry(
-        db=db, contest_id=contest_id, media_id=media_id, user_id=current_user.id
-    )
-    
-    if not result["success"]:
+    contest_obj = contest.get(db=db, id=contest_id)
+    if not contest_obj:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=result["error"]
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Concours non trouvé"
         )
-        
-    return {"message": "Participation enregistrée avec succès"}
+    
+    deleted_contest = contest.remove(db=db, id=contest_id)
+    
+    # Invalider le cache des contests
+    cache_service.invalidate_contests()
+    
+    return deleted_contest

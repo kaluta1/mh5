@@ -89,12 +89,12 @@ const adminMenuSections = [
   },
   {
     title: "admin.nav.configuration",
-    items: [
+  items: [
       { name: "admin.nav.categories", href: "/dashboard/admin/categories", icon: Tag },
       { name: "admin.nav.commission_settings", href: "/dashboard/admin/commission-settings", icon: Percent },
       { name: "admin.nav.suggested_contests", href: "/dashboard/admin/suggested-contests", icon: Lightbulb },
       { name: "admin.nav.transactions", href: "/dashboard/admin/transactions", icon: CreditCard },
-    ]
+  ]
   },
 ]
 
@@ -150,7 +150,7 @@ export function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
                 {isAdminPage ? (
                   <Shield className="w-5 h-5 text-white fill-white" />
                 ) : (
-                  <Heart className="w-5 h-5 text-white fill-white" />
+                <Heart className="w-5 h-5 text-white fill-white" />
                 )}
               </div>
               <span className="text-lg font-bold text-gray-900 dark:text-white">
