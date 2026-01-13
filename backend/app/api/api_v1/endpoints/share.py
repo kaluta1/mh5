@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, status
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from fastapi import Depends
 from typing import Optional
@@ -12,6 +12,157 @@ from app.models.contests import Contestant
 from app.models.user import User
 
 router = APIRouter()
+
+
+# Routes courtes pour masquer l'API (utilisées dans les liens de partage)
+@router.get("/c/{contestant_id}", response_class=HTMLResponse)
+async def share_contestant_short(
+    contestant_id: int,
+    ref: Optional[str] = None,
+    db: Session = Depends(deps.get_db)
+):
+    """
+    Route courte pour le partage de contestant
+    Redirige vers l'endpoint complet avec métadonnées
+    """
+    return await share_contestant(contestant_id, ref, db)
+
+
+@router.get("/p/{username}", response_class=HTMLResponse)
+async def share_profile_short(
+    username: str,
+    ref: Optional[str] = None,
+    db: Session = Depends(deps.get_db)
+):
+    """
+    Route courte pour le partage de profil
+    Redirige vers l'endpoint complet avec métadonnées
+    """
+    return await share_profile(username, ref, db)
+
+
+@router.get("/r/{referral_code}", response_class=HTMLResponse)
+@router.get("/r", response_class=HTMLResponse)
+async def share_register(
+    referral_code: Optional[str] = None
+):
+    """
+    Route courte pour le partage du lien d'inscription
+    Génère une page avec métadonnées Open Graph puis redirige vers l'app
+    """
+    # URL de redirection vers l'app Flutter
+    flutter_url = f"https://myhigh5.com/register"
+    if referral_code:
+        flutter_url += f"/{referral_code}"
+    
+    # Titre et description
+    title = "Rejoignez MyHighFive"
+    description = "Participez à des concours, gagnez des prix et rejoignez une communauté passionnée !"
+    image_url = "https://myhigh5.com/icons/Icon-512.png"
+    
+    # Générer le HTML avec métadonnées Open Graph
+    html_content = f"""<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="{flutter_url}">
+    <meta property="og:title" content="{title}">
+    <meta property="og:description" content="{description}">
+    <meta property="og:image" content="{image_url}">
+    <meta property="og:image:width" content="512">
+    <meta property="og:image:height" content="512">
+    <meta property="og:site_name" content="MyHighFive">
+    
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:url" content="{flutter_url}">
+    <meta name="twitter:title" content="{title}">
+    <meta name="twitter:description" content="{description}">
+    <meta name="twitter:image" content="{image_url}">
+    
+    <title>{title} - MyHighFive</title>
+    
+    <!-- Redirection automatique -->
+    <meta http-equiv="refresh" content="0.5; url={flutter_url}">
+    
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-align: center;
+            padding: 20px;
+        }}
+        .container {{
+            max-width: 500px;
+        }}
+        .logo {{
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 20px;
+            background: white;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+        }}
+        h1 {{
+            font-size: 24px;
+            margin-bottom: 10px;
+        }}
+        p {{
+            font-size: 16px;
+            opacity: 0.9;
+            margin-bottom: 30px;
+        }}
+        .spinner {{
+            width: 40px;
+            height: 40px;
+            margin: 0 auto;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }}
+        @keyframes spin {{
+            to {{ transform: rotate(360deg); }}
+        }}
+        a {{
+            color: white;
+            text-decoration: underline;
+            font-size: 14px;
+        }}
+    </style>
+    
+    <script>
+        setTimeout(function() {{
+            window.location.href = "{flutter_url}";
+        }}, 500);
+    </script>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">🎉</div>
+        <h1>Bienvenue sur MyHighFive !</h1>
+        <p>Vous allez être redirigé vers la page d'inscription...</p>
+        <div class="spinner"></div>
+        <br><br>
+        <a href="{flutter_url}">Cliquez ici si vous n'êtes pas redirigé automatiquement</a>
+    </div>
+</body>
+</html>"""
+    
+    return HTMLResponse(content=html_content)
 
 
 @router.get("/contestant/{contestant_id}", response_class=HTMLResponse)
