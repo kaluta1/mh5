@@ -3,7 +3,7 @@
 import { useLanguage } from '@/contexts/language-context'
 import { ReactionsButton } from './reactions-button'
 import { Button } from '@/components/ui/button'
-import { ThumbsUp, Heart } from 'lucide-react'
+import { ThumbsUp, Heart, Share2 } from 'lucide-react'
 import Image from 'next/image'
 import { ReactionDetails } from '@/services/reactions-service'
 
@@ -21,6 +21,7 @@ interface ContestantInfoSidebarProps {
   isVoting: boolean
   onVote: () => void
   voteRestrictionReason?: string | null
+  onShare?: () => void
 }
 
 export function ContestantInfoSidebar({
@@ -36,7 +37,8 @@ export function ContestantInfoSidebar({
   canVote,
   isVoting,
   onVote,
-  voteRestrictionReason
+  voteRestrictionReason,
+  onShare
 }: ContestantInfoSidebarProps) {
   const { t } = useLanguage()
 
@@ -46,6 +48,9 @@ export function ContestantInfoSidebar({
     }
     if (hasVoted) {
       return t('dashboard.contests.already_voted') || 'Already voted'
+    }
+    if (isAuthor) {
+      return t('dashboard.contests.own_cannot_vote') || 'Own, cannot vote'
     }
     if (!canVote && voteRestrictionReason) {
       switch (voteRestrictionReason) {
@@ -60,7 +65,7 @@ export function ContestantInfoSidebar({
         case 'different_continent':
           return t('dashboard.contests.restriction_different_continent') || 'Different continent'
         case 'own_contestant':
-          return t('dashboard.contests.restriction_own_contestant') || 'Your own contestant'
+          return t('dashboard.contests.own_cannot_vote') || 'Own, cannot vote'
         case 'not_authenticated':
           return t('dashboard.contests.restriction_not_authenticated') || 'Please login to vote'
         case 'geographic_restriction':
@@ -113,7 +118,7 @@ export function ContestantInfoSidebar({
           <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 uppercase tracking-wider">
             {t('contestant_detail.candidate_info')}
           </h3>
-          
+
         </div>
 
         {candidateTitle && (
@@ -150,7 +155,7 @@ export function ContestantInfoSidebar({
               selectedReaction={selectedReaction}
               onReactionSelect={onReactionSelect}
             />
-            
+
             {/* Reaction Stats with Users - Improved Design */}
             {reactionDetails && (
               <div className="mt-4 space-y-3">
@@ -263,15 +268,23 @@ export function ContestantInfoSidebar({
       <Button
         onClick={onVote}
         disabled={!canVote || isVoting || hasVoted}
-        className={`w-full hidden md:block font-semibold py-3 text-sm rounded-xl hover:shadow-xl transition-all duration-300 ${
-          hasVoted
-            ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-            : 'bg-gradient-to-r from-myhigh5-primary via-myhigh5-primary-dark to-indigo-600 text-white hover:scale-[1.02] active:scale-[0.98]'
-        }`}
+        className={`w-full hidden md:block font-semibold py-3 text-sm rounded-xl hover:shadow-xl transition-all duration-300 ${hasVoted
+          ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+          : 'bg-gradient-to-r from-myhigh5-primary via-myhigh5-primary-dark to-indigo-600 text-white hover:scale-[1.02] active:scale-[0.98]'
+          }`}
       >
-        {isVoting ? t('contestant_detail.voting') : hasVoted ? (t('contestant_detail.voted') || 'Voted') : t('contestant_detail.vote')}
+        {getVoteButtonText()}
+      </Button>
+
+      {/* Desktop Share Button */}
+      <Button
+        onClick={onShare}
+        variant="outline"
+        className="w-full hidden md:flex items-center justify-center gap-2 font-semibold py-3 text-sm rounded-xl border-2 border-myhigh5-primary/20 hover:border-myhigh5-primary hover:bg-myhigh5-primary/5 dark:border-myhigh5-primary/30 dark:hover:bg-myhigh5-primary/10 transition-all duration-300 group"
+      >
+        <Share2 className="w-4 h-4 text-myhigh5-primary group-hover:scale-110 transition-transform" />
+        <span className="text-myhigh5-primary">{t('dashboard.contests.share') || 'Partager'}</span>
       </Button>
     </div>
   )
 }
-

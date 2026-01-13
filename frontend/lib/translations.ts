@@ -790,109 +790,109 @@ export interface TranslationKeys {
       seasons_load_error: string
       no_seasons_available: string
     }
-      kyc: {
-        title: string
-        description: string
-        search_placeholder: string
+    kyc: {
+      title: string
+      description: string
+      search_placeholder: string
+      pending: string
+      approved: string
+      rejected: string
+      filter: string
+      approve: string
+      reject: string
+      view: string
+      no_kyc: string
+      verification_score: string
+      identity: string
+      document: string
+      address: string
+      face: string
+      confidence_score: string
+      rejection_reason: string
+    }
+    reports: {
+      title: string
+      description: string
+      search_placeholder: string
+      all: string
+      pending: string
+      reviewed: string
+      resolved: string
+      no_reports: string
+      no_reports_found: string
+      report_number: string
+      reason: string
+      description_label: string
+      status: string
+      details: string
+      reported_contestant: string
+      contestant_author: string
+      reporter: string
+      contest: string
+      created_at: string
+      reviewed_at: string
+      moderator_notes: string
+      verification_status: string
+      verification_status_pending: string
+      verification_status_approved: string
+      verification_status_rejected: string
+      reason_spam: string
+      reason_inappropriate: string
+      reason_harassment: string
+      reason_fake: string
+      reason_copyright: string
+      reason_other: string
+      no_title: string
+      load_error: string
+      report_details: string
+      report_details_description: string
+      reason_label: string
+    }
+    transactions: {
+      title: string
+      description: string
+      search_placeholder: string
+      all_types: string
+      all_statuses: string
+      no_transactions: string
+      no_transactions_found: string
+      transaction: string
+      transaction_details: string
+      transaction_details_description: string
+      type: {
+        deposit: string
+        withdrawal: string
+        entry_fee: string
+        prize_payout: string
+        commission: string
+        refund: string
+      }
+      status: {
         pending: string
-        approved: string
-        rejected: string
-        filter: string
-        approve: string
-        reject: string
-        view: string
-        no_kyc: string
-        verification_score: string
-        identity: string
-        document: string
-        address: string
-        face: string
-        confidence_score: string
-        rejection_reason: string
+        completed: string
+        failed: string
+        cancelled: string
       }
-      reports: {
-        title: string
-        description: string
-        search_placeholder: string
-        all: string
-        pending: string
-        reviewed: string
-        resolved: string
-        no_reports: string
-        no_reports_found: string
-        report_number: string
-        reason: string
-        description_label: string
-        status: string
-        details: string
-        reported_contestant: string
-        contestant_author: string
-        reporter: string
-        contest: string
-        created_at: string
-        reviewed_at: string
-        moderator_notes: string
-        verification_status: string
-        verification_status_pending: string
-        verification_status_approved: string
-        verification_status_rejected: string
-        reason_spam: string
-        reason_inappropriate: string
-        reason_harassment: string
-        reason_fake: string
-        reason_copyright: string
-        reason_other: string
-        no_title: string
-        load_error: string
-        report_details: string
-        report_details_description: string
-        reason_label: string
-      }
-      transactions: {
-        title: string
-        description: string
-        search_placeholder: string
-        all_types: string
-        all_statuses: string
-        no_transactions: string
-        no_transactions_found: string
-        transaction: string
-        transaction_details: string
-        transaction_details_description: string
-        type: {
-          deposit: string
-          withdrawal: string
-          entry_fee: string
-          prize_payout: string
-          commission: string
-          refund: string
-        }
-        status: {
-          pending: string
-          completed: string
-          failed: string
-          cancelled: string
-        }
-        user: string
-        contest: string
-        payment_method: string
-        product_type: string
-        amount: string
-        currency: string
-        description: string
-        reference: string
-        order_id: string
-        external_payment_id: string
-        tx_hash: string
-        created_at: string
-        processed_at: string
-        validated_at: string
-        type_label: string
-        status_label: string
-        details: string
-        search: string
-        load_error: string
-      }
+      user: string
+      contest: string
+      payment_method: string
+      product_type: string
+      amount: string
+      currency: string
+      description: string
+      reference: string
+      order_id: string
+      external_payment_id: string
+      tx_hash: string
+      created_at: string
+      processed_at: string
+      validated_at: string
+      type_label: string
+      status_label: string
+      details: string
+      search: string
+      load_error: string
+    }
     users: {
       title: string
       description: string
@@ -1101,18 +1101,18 @@ export interface TranslationKeys {
       recent_activity: string
       no_activity: string
       position: {
-      title: string
-      no_contests: string
-      rank: string
-      points: string
-      contests: string
-      clubs: string
-      affiliates: string
-      status: string
-      members: string
-      referrals: string
-      commissions: string
-      active: string
+        title: string
+        no_contests: string
+        rank: string
+        points: string
+        contests: string
+        clubs: string
+        affiliates: string
+        status: string
+        members: string
+        referrals: string
+        commissions: string
+        active: string
       }
       contests: {
         title: string
@@ -1186,6 +1186,7 @@ export interface TranslationKeys {
         already_voted: string
         cannot_vote: string
         owner_cannot_vote: string
+        own_cannot_vote: string
         votes: string
         contest_info: string
         contest_dates: string
@@ -2446,7 +2447,7 @@ export const translations: Record<Language, TranslationKeys> = {
         recent_searches: "Recherches récentes",
         no_history: "Aucune recherche récente."
       },
-        nav: {
+      nav: {
         home: "Accueil",
         overview: "Vue d'ensemble",
         feed: "Feed",
@@ -2623,6 +2624,7 @@ export const translations: Record<Language, TranslationKeys> = {
         already_voted: "Déjà voté",
         cannot_vote: "Vous ne pouvez pas voter pour ce participant",
         owner_cannot_vote: "Propriétaire, ne peut pas voter",
+        own_cannot_vote: "Ma candidature, ne peut pas voter",
         restriction_different_city: "Ville différente",
         restriction_different_country: "Pays différent",
         restriction_different_region: "Région différente",
@@ -5946,7 +5948,7 @@ export const translations: Record<Language, TranslationKeys> = {
         recent_searches: "Recent searches",
         no_history: "No recent searches."
       },
-        nav: {
+      nav: {
         home: "Home",
         overview: "Overview",
         feed: "Feed",
@@ -6433,6 +6435,7 @@ export const translations: Record<Language, TranslationKeys> = {
         already_voted: "Already voted",
         cannot_vote: "You cannot vote for this contestant",
         owner_cannot_vote: "Owner, cannot vote",
+        own_cannot_vote: "Own, cannot vote",
         restriction_different_city: "Different city",
         restriction_different_country: "Different country",
         restriction_different_region: "Different region",
@@ -8781,6 +8784,7 @@ export const translations: Record<Language, TranslationKeys> = {
         already_voted: "Ya votado",
         cannot_vote: "No puedes votar por este participante",
         owner_cannot_vote: "Propietario, no puede votar",
+        own_cannot_vote: "Propia candidatura, no puede votar",
         votes: "votos",
         shares: "Compartidos",
         submission: "Envío",
@@ -11096,6 +11100,7 @@ export const translations: Record<Language, TranslationKeys> = {
         already_voted: "Bereits abgestimmt",
         cannot_vote: "Sie können nicht für diesen Teilnehmer abstimmen",
         owner_cannot_vote: "Eigentümer, kann nicht abstimmen",
+        own_cannot_vote: "Eigene Kandidatur, kann nicht abstimmen",
         votes: "Stimmen",
         shares: "Geteilt",
         submission: "Einreichung",

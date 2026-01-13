@@ -1,7 +1,7 @@
 'use client'
 
 import { Button } from '@/components/ui/button'
-import { MessageCircle } from 'lucide-react'
+import { MessageCircle, Share2 } from 'lucide-react'
 import { useLanguage } from '@/contexts/language-context'
 
 interface ContestantMobileActionsProps {
@@ -11,6 +11,8 @@ interface ContestantMobileActionsProps {
   isVoting: boolean
   onCommentsClick: () => void
   onVote: () => void
+  onShare?: () => void
+  isAuthor: boolean
   voteRestrictionReason?: string | null
 }
 
@@ -21,6 +23,8 @@ export function ContestantMobileActions({
   isVoting,
   onCommentsClick,
   onVote,
+  onShare,
+  isAuthor,
   voteRestrictionReason
 }: ContestantMobileActionsProps) {
   const { t } = useLanguage()
@@ -31,6 +35,9 @@ export function ContestantMobileActions({
     }
     if (hasVoted) {
       return t('dashboard.contests.already_voted') || 'Already voted'
+    }
+    if (isAuthor) {
+      return t('dashboard.contests.own_cannot_vote') || 'Own, cannot vote'
     }
     if (!canVote && voteRestrictionReason) {
       switch (voteRestrictionReason) {
@@ -45,7 +52,7 @@ export function ContestantMobileActions({
         case 'different_continent':
           return t('dashboard.contests.restriction_different_continent') || 'Different continent'
         case 'own_contestant':
-          return t('dashboard.contests.restriction_own_contestant') || 'Your own contestant'
+          return t('dashboard.contests.own_cannot_vote') || 'Own, cannot vote'
         case 'not_authenticated':
           return t('dashboard.contests.restriction_not_authenticated') || 'Please login to vote'
         case 'geographic_restriction':
@@ -91,7 +98,15 @@ export function ContestantMobileActions({
   }
 
   return (
-    <div className="md:hidden fixed bottom-0 left-0 right-0 p-4 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-t border-gray-200/50 dark:border-gray-700/50 shadow-2xl z-40 flex gap-3">
+    <div className="md:hidden fixed bottom-0 left-0 right-0 p-4 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-t border-gray-200/50 dark:border-gray-700/50 shadow-2xl z-40 flex items-center gap-3">
+      <Button
+        onClick={onShare}
+        variant="outline"
+        className="w-12 h-12 p-0 flex-shrink-0 border-gray-200 dark:border-gray-700 text-myhigh5-primary rounded-xl font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-all flex items-center justify-center"
+        title={t('dashboard.contests.share') || 'Partager'}
+      >
+        <Share2 className="w-5 h-5" />
+      </Button>
       <Button
         onClick={onCommentsClick}
         variant="outline"
@@ -104,13 +119,12 @@ export function ContestantMobileActions({
         onClick={onVote}
         disabled={!canVote || isVoting || hasVoted}
         title={getVoteButtonTitle()}
-        className={`flex-1 font-semibold py-3 text-base rounded-xl transition-all duration-300 ${
-          hasVoted
-            ? 'bg-gray-400 dark:bg-gray-700 text-white cursor-not-allowed'
-            : canVote
+        className={`flex-1 font-semibold py-3 text-base rounded-xl transition-all duration-300 ${hasVoted
+          ? 'bg-gray-400 dark:bg-gray-700 text-white cursor-not-allowed'
+          : canVote
             ? 'bg-gradient-to-r from-myhigh5-primary via-myhigh5-primary-dark to-indigo-600 text-white hover:shadow-lg active:scale-95'
             : 'bg-gray-400 dark:bg-gray-700 text-white cursor-not-allowed'
-        }`}
+          }`}
       >
         {getVoteButtonText()}
       </Button>

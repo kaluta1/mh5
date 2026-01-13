@@ -17,10 +17,12 @@ import { ContestantInfoSidebar } from '@/components/dashboard/contestant-info-si
 import { ContestantMobileActions } from '@/components/dashboard/contestant-mobile-actions'
 import { ContestantMobileInfoDialog } from '@/components/dashboard/contestant-mobile-info-dialog'
 import { ToastNotification } from '@/components/dashboard/toast-notification'
+import { ShareDialog } from '@/components/dashboard/share-dialog'
 import { Info } from 'lucide-react'
 import api from '@/lib/api'
 import { commentsService, Comment as ServiceComment } from '@/lib/services/comments-service'
 import { reactionsService, ReactionDetails } from '@/services/reactions-service'
+import { sharesService } from '@/services/shares-service'
 
 interface Media {
   id: string
@@ -96,6 +98,8 @@ export default function ContestantDetailPage() {
   const [sharesList, setSharesList] = useState<Array<{ id: number; user_id?: number; username?: string; full_name?: string; avatar_url?: string; platform?: string; created_at?: string }>>([])
   const [hoveredElement, setHoveredElement] = useState<{ type: 'votes' | 'reactions' | 'favorites' | 'shares'; data?: any } | null>(null)
   const [hoverTimeout, setHoverTimeout] = useState<NodeJS.Timeout | null>(null)
+  const [showShareDialog, setShowShareDialog] = useState(false)
+  const [shareLink, setShareLink] = useState('')
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -109,13 +113,13 @@ export default function ContestantDetailPage() {
       try {
         setPageLoading(true)
         setError(null)
-        
+
         // Appel API pour récupérer les détails du contestant
         const response = await api.get(`/api/v1/contestants/${contestantId}`)
         const data = response.data
-        
+
         setContestant(data)
-        
+
         // Vérifier si c'est un favori
         try {
           const favResponse = await api.get(`/api/v1/favorites/contestants/${contestantId}/is-favorite`)
@@ -240,7 +244,7 @@ export default function ContestantDetailPage() {
         await reactionsService.addReaction(Number(contestantId), reactionType as 'like' | 'love' | 'wow' | 'dislike')
         setSelectedReaction(reactionType)
       }
-      
+
       // Recharger les stats et détails
       const stats = await reactionsService.getReactionStats(Number(contestantId))
       setReactionStats(stats)
@@ -258,7 +262,7 @@ export default function ContestantDetailPage() {
   const handleAddComment = async (text: string, targetType: 'contest' | 'photo' | 'video', targetId?: string) => {
     try {
       let newComment: Comment
-      
+
       if (targetType === 'contest') {
         // Ajouter un commentaire au contestant
         const response = await commentsService.addContestantComment(contestantId, text)
@@ -306,15 +310,15 @@ export default function ContestantDetailPage() {
 
   const handleVote = async () => {
     if (!contestant?.can_vote || isVoting || contestant?.has_voted) return
-    
+
     setIsVoting(true)
     try {
       const response = await api.post(`/api/v1/contestants/${contestant?.id}/vote`)
-      
+
       // Recharger les données du contestant pour avoir les stats à jour
       const updatedResponse = await api.get(`/api/v1/contestants/${contestantId}`)
       setContestant(updatedResponse.data)
-      
+
       // Recharger les votants si l'utilisateur est l'auteur
       if (user?.id === contestant?.user_id) {
         try {
@@ -324,20 +328,20 @@ export default function ContestantDetailPage() {
           console.error('Error reloading voters:', err)
         }
       }
-      
+
       setToast({
         type: 'success',
         message: t('contestant_detail.vote_success') || 'Vote enregistré avec succès!'
       })
     } catch (error: any) {
       const errorDetail = error?.response?.data?.detail || ''
-      
+
       // Détecter le type d'erreur et utiliser les traductions appropriées
       let errorMessage = t('dashboard.contests.vote_error') || t('contestant_detail.vote_error')
-      
+
       if (errorDetail) {
         const errorLower = errorDetail.toLowerCase()
-        
+
         if (errorLower.includes('vote') && errorLower.includes('ouvert')) {
           errorMessage = t('dashboard.contests.voting_not_open') || 'Le vote n\'est pas encore ouvert pour ce concours.'
         } else if (errorLower.includes('déjà voté') || errorLower.includes('already voted')) {
@@ -355,13 +359,56 @@ export default function ContestantDetailPage() {
           errorMessage = errorDetail
         }
       }
-      
+
       setToast({
         type: 'error',
         message: errorMessage
       })
     } finally {
       setIsVoting(false)
+    }
+  }
+
+  const handleShare = async () => {
+    // Construire le lien de partage avec l'id du contestant
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
+    const shareUrl = new URL(`${baseUrl}/dashboard/contests/${contestId}/contestant/${contestantId}`)
+
+    // Ajouter uniquement le referral code (pas de fallback sur l'ID utilisateur)
+    const referralCode = user?.personal_referral_code
+    if (referralCode) {
+      shareUrl.searchParams.set('ref', referralCode)
+    }
+
+    const shareLinkStr = shareUrl.toString()
+    setShareLink(shareLinkStr)
+    setShowShareDialog(true)
+
+    // Enregistrer le partage dans la base de données avec le referral code
+    try {
+      await sharesService.shareContestant(
+        Number(contestantId),
+        shareLinkStr,
+        undefined, // platform sera détecté automatiquement si possible
+        user?.id,
+        referralCode || undefined
+      )
+
+      // Recharger les partages
+      const sharesResponse = await api.get(`/api/v1/contestants/${contestantId}/shares`)
+      const sharesData = sharesResponse.data.shares || []
+      setSharesList(sharesData)
+
+      // Mettre à jour le compteur de partages dans contestant
+      if (contestant) {
+        setContestant({
+          ...contestant,
+          shares_count: (contestant.shares_count || 0) + 1
+        })
+      }
+    } catch (error: any) {
+      console.error('Error recording share:', error)
+      // Ne pas bloquer l'utilisateur si l'enregistrement échoue
     }
   }
 
@@ -483,6 +530,8 @@ export default function ContestantDetailPage() {
         isVoting={isVoting}
         onCommentsClick={() => setShowCommentsDialog(true)}
         onVote={handleVote}
+        onShare={handleShare}
+        isAuthor={user?.id === contestant.user_id}
         voteRestrictionReason={contestant.vote_restriction_reason}
       />
 
@@ -490,73 +539,74 @@ export default function ContestantDetailPage() {
       <div className="py-8 md:py-12 pb-24 md:pb-12">
         <div>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-2 lg:gap-8">
-          {/* Left Column - Contest & Candidate Info (1/3) - Hidden on Mobile */}
-          <div className="hidden lg:block lg:col-span-1">
-            <ContestantInfoSidebar
-              candidateTitle={contestant.title}
-              registrationDate={contestant.registration_date}
-              isAuthor={user?.id === contestant.user_id}
-              contestantId={Number(contestantId)}
-              selectedReaction={selectedReaction}
-              onReactionSelect={handleReactionSelect}
-              reactionDetails={reactionDetails}
-              voters={voters}
-              hasVoted={contestant.has_voted || false}
-              canVote={contestant.can_vote || false}
-              isVoting={isVoting}
-              onVote={handleVote}
-              voteRestrictionReason={contestant.vote_restriction_reason}
-            />
-          </div>
-
-          {/* Center Column - Media & Description (Full on Mobile, 2/3 on Desktop) */}
-          <div className="col-span-1 lg:col-span-2 space-y-6">
-            {/* Description */}
-            <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-3xl p-6 md:p-8 shadow-lg border border-gray-100 dark:border-gray-700/50 hover:shadow-xl transition-all duration-300">
-              <div className="flex items-center justify-between gap-2 mb-4">
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                  {t('contestant_detail.about')}
-                </h2>
-                {/* Info Button on Mobile */}
-                <div className="lg:hidden">
-                  <button
-                    onClick={() => setShowInfoDialog(!showInfoDialog)}
-                    className="flex-shrink-0 w-9 h-9 p-0 bg-gray-100 dark:bg-gray-700/50 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-xl flex items-center justify-center transition-all duration-200"
-                    title="Détails"
-                  >
-                    <Info className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-              <ContestantDescription 
-                description={contestant.description || ''}
-                maxLength={200}
+            {/* Left Column - Contest & Candidate Info (1/3) - Hidden on Mobile */}
+            <div className="hidden lg:block lg:col-span-1">
+              <ContestantInfoSidebar
+                candidateTitle={contestant.title}
+                registrationDate={contestant.registration_date}
+                isAuthor={user?.id === contestant.user_id}
+                contestantId={Number(contestantId)}
+                selectedReaction={selectedReaction}
+                onReactionSelect={handleReactionSelect}
+                reactionDetails={reactionDetails}
+                voters={voters}
+                hasVoted={contestant.has_voted || false}
+                canVote={contestant.can_vote || false}
+                isVoting={isVoting}
+                onVote={handleVote}
+                onShare={handleShare}
+                voteRestrictionReason={contestant.vote_restriction_reason}
               />
             </div>
 
-            {/* Media Gallery */}
-            {allMedia.length > 0 && (
+            {/* Center Column - Media & Description (Full on Mobile, 2/3 on Desktop) */}
+            <div className="col-span-1 lg:col-span-2 space-y-6">
+              {/* Description */}
               <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-3xl p-6 md:p-8 shadow-lg border border-gray-100 dark:border-gray-700/50 hover:shadow-xl transition-all duration-300">
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
-                  {t('contestant_detail.gallery')}
-                </h2>
-                <MediaGallery
-                  images={images}
-                  videos={videos}
-                  onMediaSelect={setSelectedMedia}
+                <div className="flex items-center justify-between gap-2 mb-4">
+                  <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                    {t('contestant_detail.about')}
+                  </h2>
+                  {/* Info Button on Mobile */}
+                  <div className="lg:hidden">
+                    <button
+                      onClick={() => setShowInfoDialog(!showInfoDialog)}
+                      className="flex-shrink-0 w-9 h-9 p-0 bg-gray-100 dark:bg-gray-700/50 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-xl flex items-center justify-center transition-all duration-200"
+                      title="Détails"
+                    >
+                      <Info className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+                <ContestantDescription
+                  description={contestant.description || ''}
+                  maxLength={200}
                 />
               </div>
-            )}
 
-            {/* Comments Section - Desktop (Same width as gallery, below gallery) */}
-            <div className="hidden lg:block">
-              <CommentsSection
-                comments={comments}
-                onAddComment={(text) => handleAddComment(text, 'contest')}
-              />
+              {/* Media Gallery */}
+              {allMedia.length > 0 && (
+                <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-3xl p-6 md:p-8 shadow-lg border border-gray-100 dark:border-gray-700/50 hover:shadow-xl transition-all duration-300">
+                  <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
+                    {t('contestant_detail.gallery')}
+                  </h2>
+                  <MediaGallery
+                    images={images}
+                    videos={videos}
+                    onMediaSelect={setSelectedMedia}
+                  />
+                </div>
+              )}
+
+              {/* Comments Section - Desktop (Same width as gallery, below gallery) */}
+              <div className="hidden lg:block">
+                <CommentsSection
+                  comments={comments}
+                  onAddComment={(text) => handleAddComment(text, 'contest')}
+                />
+              </div>
             </div>
           </div>
-        </div>
         </div>
       </div>
 
@@ -608,6 +658,15 @@ export default function ContestantDetailPage() {
           message={toast.message}
         />
       )}
+
+      {/* Share Dialog */}
+      <ShareDialog
+        isOpen={showShareDialog}
+        onOpenChange={setShowShareDialog}
+        shareLink={shareLink}
+        title={contestant.title || contestant.author_name}
+        description={contestant.description}
+      />
     </div>
   )
 }

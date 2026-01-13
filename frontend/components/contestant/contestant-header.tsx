@@ -86,14 +86,14 @@ export function ContestantHeader({
           {/* Info */}
           <div className="flex-1 pb-2">
             <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">
-              {author_name || 'Contestant'}
+              Contestant :  {author_name || 'Contestant'}
             </h1>
 
             {/* Stats */}
             <div className="flex flex-wrap gap-4 text-white/90 text-sm md:text-base">
-              <div>⭐ {votes_count} {t('contestant_detail.votes')}</div>
+              <div> {votes_count} {t('contestant_detail.votes')} -</div>
               {rank && total_participants && (
-                <div>🏆 #{rank}/{total_participants}</div>
+                <div>#{rank}/{total_participants}</div>
               )}
             </div>
 

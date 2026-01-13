@@ -68,7 +68,7 @@ function DescriptionWithPopover({ description, maxLength = 150 }: { description:
   }
 
   return (
-    <div 
+    <div
       ref={containerRef}
       className="relative"
       onMouseEnter={handleMouseEnter}
@@ -77,7 +77,7 @@ function DescriptionWithPopover({ description, maxLength = 150 }: { description:
       <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words cursor-pointer hover:text-myhigh5-primary dark:hover:text-myhigh5-secondary transition-colors">
         {truncatedDescription}
       </p>
-      
+
       {/* Popover */}
       {isOpen && (
         <div
@@ -269,7 +269,7 @@ export function ContestantCard({
 
   const handleVote = async () => {
     if (!canVote || isVoting) return
-    
+
     try {
       setIsVoting(true)
       await contestService.voteForContestant(Number(id), 5)
@@ -280,12 +280,12 @@ export function ContestantCard({
     } catch (error: any) {
       console.error('Error voting:', error)
       const errorMessage = error.response?.data?.detail || ''
-      
+
       // Déterminer le message d'erreur approprié selon la réponse du backend
       let toastMessage = t('dashboard.contests.vote_error') || 'Erreur lors du vote. Veuillez réessayer.'
-      
+
       const errorLower = errorMessage.toLowerCase()
-      
+
       if (errorLower.includes('vote') && errorLower.includes('ouvert')) {
         toastMessage = t('dashboard.contests.voting_not_open') || 'Le vote n\'est pas encore ouvert pour ce concours.'
       } else if (errorLower.includes('déjà voté') || errorLower.includes('already voted')) {
@@ -302,7 +302,7 @@ export function ContestantCard({
         // Utiliser le message d'erreur du backend s'il est disponible
         toastMessage = errorMessage
       }
-      
+
       addToast(toastMessage, 'error')
     } finally {
       setIsVoting(false)
@@ -351,18 +351,18 @@ export function ContestantCard({
   const handleShare = async () => {
     // Construire le lien de partage avec l'id du contestant
     const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
-    const shareUrl = new URL(`${baseUrl}/contestants/${id}`)
-    
+    const shareUrl = new URL(`${baseUrl}/dashboard/contests/${contestId}/contestant/${id}`)
+
     // Ajouter uniquement le referral code (pas de fallback sur l'ID utilisateur)
     const referralCode = user?.personal_referral_code
     if (referralCode) {
       shareUrl.searchParams.set('ref', referralCode)
     }
-    
+
     const shareLinkStr = shareUrl.toString()
     setShareLink(shareLinkStr)
     setShowShareDialog(true)
-    
+
     // Enregistrer le partage dans la base de données avec le referral code
     try {
       await sharesService.shareContestant(
@@ -376,7 +376,7 @@ export function ContestantCard({
       console.error('Error recording share:', error)
       // Ne pas bloquer l'utilisateur si l'enregistrement échoue
     }
-    
+
     if (onShare) onShare()
   }
 
@@ -402,7 +402,7 @@ export function ContestantCard({
         <div className="p-5 pb-4 bg-gradient-to-r from-gray-50/50 to-transparent dark:from-gray-800/50 border-b border-gray-100 dark:border-gray-700/50">
           <div className="flex items-start justify-between">
             {participationTitle && (
-              <h4 
+              <h4
                 onClick={(e) => {
                   e.stopPropagation()
                   onViewDetails()
@@ -426,11 +426,11 @@ export function ContestantCard({
             />
           </div>
         </div>
-                
+
         {/* Media - Video or Image Carousel */}
         {firstVideo ? (
           <div className="w-full">
-            <div 
+            <div
               className="relative w-full bg-black overflow-hidden cursor-pointer group"
               onClick={() => handleVideoClick(firstVideo)}
             >
@@ -461,7 +461,7 @@ export function ContestantCard({
           </div>
         ) : images.length > 0 && (
           <div className="w-full">
-            <div 
+            <div
               className="relative w-full bg-gray-100 dark:bg-gray-900 overflow-hidden group cursor-pointer"
               onClick={() => handleMediaClick(images[currentImageIndex])}
             >
@@ -510,15 +510,14 @@ export function ContestantCard({
                           e.stopPropagation()
                           setCurrentImageIndex(idx)
                         }}
-                        className={`w-1.5 h-1.5 rounded-full transition-all ${
-                          idx === currentImageIndex
+                        className={`w-1.5 h-1.5 rounded-full transition-all ${idx === currentImageIndex
                             ? 'bg-white w-4'
                             : 'bg-white/50 hover:bg-white/75'
-                        }`}
+                          }`}
                         aria-label={`Aller à l'image ${idx + 1}`}
                       />
                     ))}
-              </div>
+                  </div>
                 )}
               </div>
             </div>
@@ -552,13 +551,13 @@ export function ContestantCard({
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                <h3 
+                      <h3
                         className="text-base font-bold text-gray-900 dark:text-white hover:text-myhigh5-primary dark:hover:text-myhigh5-blue-400 transition-colors cursor-help"
-                  onMouseEnter={onHoverAuthor}
-                  onMouseLeave={onHoverEnd}
-                >
-                    {name}
-                  </h3>
+                        onMouseEnter={onHoverAuthor}
+                        onMouseLeave={onHoverEnd}
+                      >
+                        {name}
+                      </h3>
                     </TooltipTrigger>
                     <TooltipContent className="bg-gray-800 text-white border-gray-700">
                       <p className="text-xs">{t('dashboard.contests.tooltip_author') || 'Voir le profil du participant'}</p>
@@ -570,8 +569,8 @@ export function ContestantCard({
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span className="text-xs font-bold bg-gradient-to-r from-myhigh5-primary to-myhigh5-secondary text-white px-2.5 py-1 rounded-full cursor-help shadow-sm">
-                    #{rank}
-                  </span>
+                          #{rank}
+                        </span>
                       </TooltipTrigger>
                       <TooltipContent className="bg-gray-800 text-white border-gray-700">
                         <p className="text-xs">
@@ -589,17 +588,17 @@ export function ContestantCard({
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-              <p 
+                    <p
                       className="text-xs text-gray-500 dark:text-gray-500 mt-1 cursor-help hover:text-myhigh5-primary"
-                onMouseEnter={currentUserId === userId ? onHoverVotes : undefined}
-                onMouseLeave={currentUserId === userId ? onHoverEnd : undefined}
-              >
-                {currentVotes} {t('dashboard.contests.votes')}
-              </p>
+                      onMouseEnter={currentUserId === userId ? onHoverVotes : undefined}
+                      onMouseLeave={currentUserId === userId ? onHoverEnd : undefined}
+                    >
+                      {currentVotes} {t('dashboard.contests.votes')}
+                    </p>
                   </TooltipTrigger>
                   <TooltipContent className="bg-gray-800 text-white border-gray-700">
                     <p className="text-xs">
-                      {currentUserId === userId 
+                      {currentUserId === userId
                         ? (t('dashboard.contests.tooltip_votes_author') || `${currentVotes} vote${currentVotes > 1 ? 's' : ''} reçu${currentVotes > 1 ? 's' : ''}. Survolez pour voir la liste.`)
                         : (t('dashboard.contests.tooltip_votes') || `${currentVotes} vote${currentVotes > 1 ? 's' : ''} reçu${currentVotes > 1 ? 's' : ''} au total`)}
                     </p>
@@ -639,10 +638,10 @@ export function ContestantCard({
               )}
             </div>
           </div>
-          
+
           {/* Description */}
           <div className="ml-[52px]">
-          <ContestantDescription description={description} maxLength={150} />
+            <ContestantDescription description={description} maxLength={150} />
           </div>
         </div>
 
@@ -653,18 +652,18 @@ export function ContestantCard({
               onMouseEnter={currentUserId === userId ? onHoverVotes : undefined}
               onMouseLeave={currentUserId === userId ? onHoverEnd : undefined}
             >
-            <VoteButton
-              contestantId={Number(id)}
-              canVote={canVote}
-              hasVoted={isLiked}
-              isVoting={isVoting}
-              onVote={handleVote}
-              isAuthor={currentUserId === userId}
-              votesCount={currentVotes}
-              voteRestrictionReason={voteRestrictionReason}
-            />
+              <VoteButton
+                contestantId={Number(id)}
+                canVote={canVote}
+                hasVoted={isLiked}
+                isVoting={isVoting}
+                onVote={handleVote}
+                isAuthor={currentUserId === userId}
+                votesCount={currentVotes}
+                voteRestrictionReason={voteRestrictionReason}
+              />
             </div>
-            <CommentsButton 
+            <CommentsButton
               onClick={handleOpenComments}
               commentsCount={currentComments}
             />
@@ -672,28 +671,28 @@ export function ContestantCard({
               onMouseEnter={currentUserId === userId ? onHoverReactions : undefined}
               onMouseLeave={currentUserId === userId ? onHoverEnd : undefined}
             >
-            <ReactionsButton
-              contestantId={Number(id)}
-              selectedReaction={selectedReaction}
-              onReactionSelect={handleReaction}
-              isAuthor={currentUserId === userId}
-              reactionsCount={reactionsCount}
-              onReactionSuccess={() => {
-                // Les stats sont déjà rechargées dans handleReaction
-              }}
-            />
+              <ReactionsButton
+                contestantId={Number(id)}
+                selectedReaction={selectedReaction}
+                onReactionSelect={handleReaction}
+                isAuthor={currentUserId === userId}
+                reactionsCount={reactionsCount}
+                onReactionSuccess={() => {
+                  // Les stats sont déjà rechargées dans handleReaction
+                }}
+              />
             </div>
             <div
               onMouseEnter={currentUserId === userId ? onHoverFavorites : undefined}
               onMouseLeave={currentUserId === userId ? onHoverEnd : undefined}
             >
-            <FavoriteButton
-              contestantId={Number(id)}
-              isFavorite={isFavorite}
-              onToggle={onToggleFavorite}
-              isAuthor={currentUserId === userId}
-              favoritesCount={favoritesCount}
-            />
+              <FavoriteButton
+                contestantId={Number(id)}
+                isFavorite={isFavorite}
+                onToggle={onToggleFavorite}
+                isAuthor={currentUserId === userId}
+                favoritesCount={favoritesCount}
+              />
             </div>
           </div>
         </div>
@@ -734,7 +733,7 @@ export function ContestantCard({
             if (found) handleMediaChange(found)
           }}
         />
-              )}
+      )}
 
       {/* Comments Dialog */}
       <CommentsSection
