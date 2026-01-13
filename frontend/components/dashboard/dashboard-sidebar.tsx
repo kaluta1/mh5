@@ -6,9 +6,9 @@ import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { useLanguage } from "@/contexts/language-context"
 import { useAuth } from "@/hooks/use-auth"
-import { 
-  Heart, 
-  FileText, 
+import {
+  Heart,
+  FileText,
   Wallet,
   UserPlus,
   DollarSign,
@@ -34,10 +34,10 @@ const baseMenuSections = [
       { name: "dashboard.nav.myhigh5", href: "/dashboard/myhigh5", icon: Hand },
       // { name: "dashboard.nav.groups", href: "/dashboard/groups", icon: Users },
       { name: "dashboard.nav.favorites", href: "/dashboard/favorites", icon: Star },
-       { name: "dashboard.nav.my_applications", href: "/dashboard/my-applications", icon: FileText },
+      { name: "dashboard.nav.my_applications", href: "/dashboard/my-applications", icon: FileText },
     ]
   },
- 
+
   {
     title: "dashboard.nav.business",
     items: [
@@ -74,7 +74,7 @@ export function DashboardSidebar({ isCollapsed = false, onToggleCollapse }: Dash
   const pathname = usePathname()
   const { user } = useAuth()
 
-  const displayMenuSections = user?.is_admin 
+  const displayMenuSections = user?.is_admin
     ? [...baseMenuSections, adminMenuSection]
     : baseMenuSections
 
@@ -85,7 +85,7 @@ export function DashboardSidebar({ isCollapsed = false, onToggleCollapse }: Dash
         "hidden lg:flex fixed inset-y-0 left-0 z-40 flex-col bg-white dark:bg-gray-950 border-r border-gray-100 dark:border-gray-800 transition-all duration-300 ease-in-out",
         isCollapsed ? "w-[72px]" : "w-64"
       )}>
-        
+
         {/* Header */}
         <div className={cn(
           "flex items-center h-16 border-b border-gray-100 dark:border-gray-800",
@@ -101,7 +101,7 @@ export function DashboardSidebar({ isCollapsed = false, onToggleCollapse }: Dash
               </span>
             )}
           </Link>
-          
+
         </div>
 
         {/* Navigation */}
@@ -127,7 +127,7 @@ export function DashboardSidebar({ isCollapsed = false, onToggleCollapse }: Dash
                   "h-5 w-5 flex-shrink-0 transition-transform duration-200",
                   pathname !== "/" && "group-hover:scale-110"
                 )} />
-                
+
                 {!isCollapsed && (
                   <span className="text-sm font-medium">
                     {t('navigation.home')}
@@ -143,7 +143,7 @@ export function DashboardSidebar({ isCollapsed = false, onToggleCollapse }: Dash
                     {t(section.title)}
                   </p>
                 )}
-                
+
                 <div className="space-y-1">
                   {section.items.map((item) => {
                     const Icon = item.icon
@@ -168,7 +168,7 @@ export function DashboardSidebar({ isCollapsed = false, onToggleCollapse }: Dash
                           "h-5 w-5 flex-shrink-0 transition-transform duration-200",
                           !isActive && "group-hover:scale-110"
                         )} />
-                        
+
                         {!isCollapsed && (
                           <span className="text-sm font-medium">
                             {t(item.name)}
@@ -183,32 +183,6 @@ export function DashboardSidebar({ isCollapsed = false, onToggleCollapse }: Dash
           </div>
         </nav>
 
-        {/* Footer - Landing Page Link */}
-        <div className={cn(
-          "border-t border-gray-100 dark:border-gray-800 p-4",
-          isCollapsed ? "px-2" : "px-3"
-        )}>
-          <Link
-            href="/"
-            className={cn(
-              "group flex items-center gap-3 rounded-lg transition-all duration-200",
-              isCollapsed ? "justify-center p-3" : "px-3 py-2.5",
-              "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800/50 hover:text-gray-900 dark:hover:text-white"
-            )}
-            title={isCollapsed ? t('navigation.landing') : undefined}
-          >
-            <Globe className={cn(
-              "h-5 w-5 flex-shrink-0 transition-transform duration-200",
-              "group-hover:scale-110"
-            )} />
-            
-            {!isCollapsed && (
-              <span className="text-sm font-medium">
-                {t('navigation.landing') || 'Accueil'}
-              </span>
-            )}
-          </Link>
-        </div>
       </aside>
     </>
   )

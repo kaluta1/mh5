@@ -121,6 +121,13 @@ class CRUDContestant:
             except (json.JSONDecodeError, TypeError):
                 videos_count = 0
         
+        # Récupérer l'URL de la première image pour le contestant
+        contestant_image_url = None
+        for submission in contestant.submissions:
+            if submission.media_type == "image" and (submission.file_url or submission.external_url):
+                contestant_image_url = submission.file_url or submission.external_url
+                break
+        
         # Calculer le rang dynamiquement en fonction des votes et du niveau de la saison
         # On applique les mêmes règles que pour get_contest_with_enriched_contestants :
         # - city    -> classement par ville + pays
@@ -355,6 +362,7 @@ class CRUDContestant:
         
         # Récupérer les infos du contest (saison)
         contest_title = None
+        contest_image_url = None
         
         if season:
             # Essayer d'abord de récupérer le titre du contest lié via ContestSeasonLink
@@ -372,6 +380,8 @@ class CRUDContestant:
                 ).first()
                 if contest:
                     contest_title = contest.name
+                    # Préférer image_url, puis cover_image_url
+                    contest_image_url = contest.image_url or contest.cover_image_url
                 else:
                     contest_title = season.title
             else:
@@ -416,6 +426,7 @@ class CRUDContestant:
             "description": contestant.description,
             "image_media_ids": contestant.image_media_ids,
             "video_media_ids": contestant.video_media_ids,
+            "contestant_image_url": contestant_image_url,
             "registration_date": contestant.registration_date,
             "is_qualified": contestant.is_qualified or False,
             # Infos auteur
@@ -435,6 +446,7 @@ class CRUDContestant:
             "shares_count": shares_count,
             # Infos du contest
             "contest_title": contest_title,
+            "contest_image_url": contest_image_url,
             "contest_id": contestant.season_id,
             "total_participants": total_participants,
             # Position dans les favoris

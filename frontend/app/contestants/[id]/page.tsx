@@ -19,7 +19,7 @@ export default function PublicContestantPage() {
   useEffect(() => {
     const loadContestant = async () => {
       if (!contestantId) return
-      
+
       try {
         const data = await contestService.getContestantById(Number(contestantId))
         setContestant(data)
@@ -82,18 +82,23 @@ export default function PublicContestantPage() {
           <meta property="og:description" content={contestant.description || `Découvrez ${contestant.author_name || 'ce participant'} sur MyHigh5`} />
           <meta property="og:type" content="profile" />
           <meta property="og:url" content={`${typeof window !== 'undefined' ? window.location.origin : ''}/contestants/${contestantId}`} />
-          {contestant.author_avatar_url && (
-            <meta property="og:image" content={contestant.author_avatar_url} />
-          )}
-          {contestant.image_media_ids && (
-            <meta property="og:image" content={contestant.image_media_ids} />
-          )}
+          {/* SEO Image Fallback Logic */}
+          {(() => {
+            const seoImage = contestant.contestant_image_url || contestant.contest_image_url || contestant.author_avatar_url;
+
+            return seoImage ? (
+              <>
+                <meta property="og:image" content={seoImage} />
+                <meta name="twitter:image" content={seoImage} />
+              </>
+            ) : null;
+          })()}
           <meta name="twitter:card" content="summary_large_image" />
           <meta name="twitter:title" content={contestant.title || `${contestant.author_name || 'Contestant'} - MyHigh5`} />
           <meta name="twitter:description" content={contestant.description || `Découvrez ${contestant.author_name || 'ce participant'} sur MyHigh5`} />
         </>
       )}
-      
+
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-myfav-primary mx-auto mb-4"></div>

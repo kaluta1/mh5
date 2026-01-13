@@ -3414,12 +3414,12 @@ export const translations: Record<Language, TranslationKeys> = {
         },
         club_memberships: {
           title: "Adhésions aux clubs",
-          description: "Gagnez des commissions sur les frais d'adhésion aux clubs payants. Le site ajoute une majoration de 10% aux frais spécifiés par le propriétaire du club, dont 10% sont versés au niveau 1, et 1% à chacun des niveaux 2 à 10.",
+          description: "Gagnez des commissions sur les frais d'adhésion aux clubs payants. Le site ajoute une majoration de 20% aux frais spécifiés par le propriétaire du club, dont 10% sont versés au niveau 1, et 1% à chacun des niveaux 2 à 10.",
           commission: "10% sur le niveau 1, 1% sur les niveaux 2-10"
         },
         shop_purchases: {
           title: "Achats en boutique",
-          description: "Gagnez des commissions sur les achats de contenu numérique dans la boutique MyHigh5. Le site ajoute une majoration de 10% aux frais spécifiés par le propriétaire du club, dont 10% sont versés au niveau 1, et 1% à chacun des niveaux 2 à 10.",
+          description: "Gagnez des commissions sur les achats de contenu numérique dans la boutique MyHigh5. Le site ajoute une majoration de 20% aux frais spécifiés par le propriétaire du club, dont 10% sont versés au niveau 1, et 1% à chacun des niveaux 2 à 10.",
           commission: "10% sur le niveau 1, 1% sur les niveaux 2-10"
         },
         ad_revenue: {
@@ -3440,7 +3440,7 @@ export const translations: Record<Language, TranslationKeys> = {
         question_1: "Comment puis-je gagner de l'argent sur MyHigh5 ?",
         answer_1: "Vous pouvez gagner de l'argent de plusieurs façons : en participant aux concours, en nommant des candidats, en rejoignant le programme d'affiliation pour gagner des commissions sur les membres que vous référez, et en devenant membre fondateur pour participer aux pools de revenus et de profits.",
         question_2: "Comment fonctionne le programme d'affiliation ?",
-        answer_2: "• Paiements de frais de vérification :\n  Vous gagnez une commission de 10% sur les paiements effectués par vos parrainages directs, et une commission de 1% sur les paiements effectués par chacun de vos parrainages indirects du niveau 2 au niveau 10.\n\n• Revenus publicitaires (Candidats participants) :\n  Les candidats participants reçoivent 40% des revenus publicitaires générés sur leurs pages de concours. Le parrain direct d'un candidat participant reçoit 5%, et chaque parrain indirect du niveau 2 au niveau 10 reçoit 1%.\n\n• Revenus publicitaires (Membres qui nomment) :\n  Les membres qui nomment reçoivent 10% des revenus publicitaires générés sur les pages de concours de leurs candidats nommés, 2.5% des revenus publicitaires générés sur les pages de concours des candidats nommés par leurs parrainages directs, et 1% des revenus publicitaires générés sur les pages de concours des candidats nommés par chacun de leurs parrainages indirects du niveau 2 au niveau 10.\n\n• Revenus publicitaires (Clubs) :\n  Les propriétaires de clubs reçoivent 20% des revenus publicitaires générés sur leurs pages de club ou de fans. Le parrain direct d'un propriétaire de club reçoit 5%, et chaque parrain indirect du niveau 2 au niveau 10 reçoit 0.5%.\n\n• Frais d'adhésion aux clubs :\n  MyHigh5 applique une majoration de 10% aux frais d'abonnement sélectionnés par le membre. De cette majoration, 10% est versé au parrain direct du payeur, et 1% est versé à chaque parrain indirect du niveau 2 au niveau 10.\n\n• Emplacements sur la page des Sponsors du Site Web :\n  Pour les emplacements payés sur la page des Sponsors du Site Web, 10% est versé au parrain de niveau 1, et 1% est versé à chacun des parrains des niveaux 2 à 10.",
+        answer_2: "• Paiements de frais de vérification :\n  Vous gagnez une commission de 10% sur les paiements effectués par vos parrainages directs, et une commission de 1% sur les paiements effectués par chacun de vos parrainages indirects du niveau 2 au niveau 10.\n\n• Revenus publicitaires (Candidats participants) :\n  Les candidats participants reçoivent 40% des revenus publicitaires générés sur leurs pages de concours. Le parrain direct d'un candidat participant reçoit 5%, et chaque parrain indirect du niveau 2 au niveau 10 reçoit 1%.\n\n• Revenus publicitaires (Membres qui nomment) :\n  Les membres qui nomment reçoivent 10% des revenus publicitaires générés sur les pages de concours de leurs candidats nommés, 2.5% des revenus publicitaires générés sur les pages de concours des candidats nommés par leurs parrainages directs, et 1% des revenus publicitaires générés sur les pages de concours des candidats nommés par chacun de leurs parrainages indirects du niveau 2 au niveau 10.\n\n• Revenus publicitaires (Clubs) :\n  Les propriétaires de clubs reçoivent 20% des revenus publicitaires générés sur leurs pages de club ou de fans. Le parrain direct d'un propriétaire de club reçoit 5%, et chaque parrain indirect du niveau 2 au niveau 10 reçoit 0.5%.\n\n• Frais d'adhésion aux clubs :\n  MyHigh5 applique une majoration de 20% aux frais d'abonnement sélectionnés par le membre. De cette majoration, 10% est versé au parrain direct du payeur, et 1% est versé à chaque parrain indirect du niveau 2 au niveau 10.\n\n• Emplacements sur la page des Sponsors du Site Web :\n  Pour les emplacements payés sur la page des Sponsors du Site Web, 10% est versé au parrain de niveau 1, et 1% est versé à chacun des parrains des niveaux 2 à 10.",
         question_3: "Qu'est-ce que le statut de Membre Fondateur ?",
         answer_3: "Le statut de Membre Fondateur (MFM) est une opportunité limitée qui nécessite la vérification du compte et le paiement de frais d'adhésion de 100$ et d'une cotisation annuelle de club de 50$ pour les 1 000 premiers MFM, et de frais d'adhésion de 200$ et d'une cotisation annuelle de club de 200$ par la suite. Les emplacements MFM cesseront d'exister une fois que le nombre total de MFM atteindra 10 000. Les Membres Fondateurs participent à des pools de commissions mensuelles équivalant à 5% des revenus nets et à un pool de profits annuels équivalant à 10% des profits après impôts, alloués en fonction de la proportion de leurs parrainages vérifiés de niveau 1 par rapport au nombre total de parrainages vérifiés de niveau 1.",
         question_4: "Comment puis-je participer aux concours ?",
@@ -5842,12 +5842,12 @@ export const translations: Record<Language, TranslationKeys> = {
         },
         club_memberships: {
           title: "Club Memberships",
-          description: "Earn commissions on paid club membership fees. The website adds a 10% markup to the club owner's specified fees, of which 10% is paid to Level 1, and 1% is paid to each of Levels 2 through 10.",
+          description: "Earn commissions on paid club membership fees. The website adds a 20% markup to the club owner's specified fees, of which 10% is paid to Level 1, and 1% is paid to each of Levels 2 through 10.",
           commission: "10% on Level 1, 1% on Levels 2-10"
         },
         shop_purchases: {
           title: "Shop Purchases",
-          description: "Earn commissions on digital content purchases in the MyHigh5 shop. The website adds a 10% markup to the club owner's specified fees, of which 10% is paid to Level 1, and 1% is paid to each of Levels 2 through 10.",
+          description: "Earn commissions on digital content purchases in the MyHigh5 shop. The website adds a 20% markup to the club owner's specified fees, of which 10% is paid to Level 1, and 1% is paid to each of Levels 2 through 10.",
           commission: "10% on Level 1, 1% on Levels 2-10"
         },
         ad_revenue: {
@@ -5868,7 +5868,7 @@ export const translations: Record<Language, TranslationKeys> = {
         question_1: "How can I earn money on MyHigh5?",
         answer_1: "You can earn money in several ways: by participating in contests, by nominating contestants, by joining the affiliate program to earn commissions on members you refer, and by becoming a founding member to participate in revenue and profit pools.",
         question_2: "How does the affiliate program work?",
-        answer_2: "• Verification Fee Payments:\n  You earn a 10% commission on payments made by your direct referrals, and a 1% commission on payments made by each of your indirect referrals from Level 2 to Level 10.\n\n• Ad Revenue (Participating Contestants):\n  Participating contestants receive 40% of the ad revenue generated on their contest pages. The direct sponsor of a participating contestant receives 5%, and each indirect sponsor from Level 2 to Level 10 receives 1%.\n\n• Ad Revenue (Nominating Members):\n  Nominating members receive 10% of the ad revenue generated on the contest pages of their nominated contestants, 2.5% of the ad revenue generated on the contest pages of contestants nominated by their direct referrals, and 1% of the ad revenue generated on the contest pages of contestants nominated by each of their indirect referrals from Level 2 to Level 10.\n\n• Ad Revenue (Clubs):\n  Club owners receive 20% of the ad revenue generated on their club or fan pages. The direct sponsor of a club owner receives 5%, and each indirect sponsor from Level 2 to Level 10 receives 0.5%.\n\n• Club Membership Fees:\n  MyHigh5 applies a 10% markup to the member's selected subscription fee. Of this markup, 10% is paid to the direct sponsor of the payer, and 1% is paid to each indirect sponsor from Level 2 to Level 10.\n\n• Website Sponsors Page Slots:\n  For slots paid for on the Website Sponsors page, 10% is paid to the Level 1 sponsor, and 1% is paid to each of the Level 2 through Level 10 sponsors.",
+        answer_2: "• Verification Fee Payments:\n  You earn a 10% commission on payments made by your direct referrals, and a 1% commission on payments made by each of your indirect referrals from Level 2 to Level 10.\n\n• Ad Revenue (Participating Contestants):\n  Participating contestants receive 40% of the ad revenue generated on their contest pages. The direct sponsor of a participating contestant receives 5%, and each indirect sponsor from Level 2 to Level 10 receives 1%.\n\n• Ad Revenue (Nominating Members):\n  Nominating members receive 10% of the ad revenue generated on the contest pages of their nominated contestants, 2.5% of the ad revenue generated on the contest pages of contestants nominated by their direct referrals, and 1% of the ad revenue generated on the contest pages of contestants nominated by each of their indirect referrals from Level 2 to Level 10.\n\n• Ad Revenue (Clubs):\n  Club owners receive 20% of the ad revenue generated on their club or fan pages. The direct sponsor of a club owner receives 5%, and each indirect sponsor from Level 2 to Level 10 receives 0.5%.\n\n• Club Membership Fees:\n  MyHigh5 applies a 20% markup to the member's selected subscription fee. Of this markup, 10% is paid to the direct sponsor of the payer, and 1% is paid to each indirect sponsor from Level 2 to Level 10.\n\n• Website Sponsors Page Slots:\n  For slots paid for on the Website Sponsors page, 10% is paid to the Level 1 sponsor, and 1% is paid to each of the Level 2 through Level 10 sponsors.",
         question_3: "What is the Founding Member status?",
         answer_3: "Founding Member (MFM) status is a limited opportunity that requires account verification and payment of a joining fee of $100 and an annual club membership fee of $50 for the first 1,000 MFMs, and a joining fee of $200 and an annual club membership fee of $200 thereafter. MFM slots will cease to exist once the total number of MFMs reaches 10,000. Founding Members participate in monthly commission pools equal to 5% of net revenues and an annual profit pool equal to 10% of profits after taxes, allocated based on the proportion of their Level 1 verified referrals relative to the total number of Level 1 verified referrals.",
         question_4: "How can I participate in contests?",
@@ -8249,12 +8249,12 @@ export const translations: Record<Language, TranslationKeys> = {
         },
         club_memberships: {
           title: "Membresías de clubes",
-          description: "Gana comisiones en las tarifas de membresía de clubes pagadas. El sitio web agrega un margen de beneficio del 10% a las tarifas especificadas por el propietario del club, de las cuales el 10% se paga al Nivel 1, y el 1% se paga a cada uno de los Niveles 2 a 10.",
+          description: "Gana comisiones en las tarifas de membresía de clubes pagadas. El sitio web agrega un margen de beneficio del 20% a las tarifas especificadas por el propietario del club, de las cuales el 10% se paga al Nivel 1, y el 1% se paga a cada uno de los Niveles 2 a 10.",
           commission: "10% en Nivel 1, 1% en Niveles 2-10"
         },
         shop_purchases: {
           title: "Compras en la tienda",
-          description: "Gana comisiones en compras de contenido digital en la tienda MyHigh5. El sitio web agrega un margen de beneficio del 10% a las tarifas especificadas por el propietario del club, de las cuales el 10% se paga al Nivel 1, y el 1% se paga a cada uno de los Niveles 2 a 10.",
+          description: "Gana comisiones en compras de contenido digital en la tienda MyHigh5. El sitio web agrega un margen de beneficio del 20% a las tarifas especificadas por el propietario del club, de las cuales el 10% se paga al Nivel 1, y el 1% se paga a cada uno de los Niveles 2 a 10.",
           commission: "10% en Nivel 1, 1% en Niveles 2-10"
         },
         ad_revenue: {
@@ -10561,12 +10561,12 @@ export const translations: Record<Language, TranslationKeys> = {
         },
         club_memberships: {
           title: "Club-Mitgliedschaften",
-          description: "Verdienen Sie Provisionen auf bezahlte Club-Mitgliedsgebühren. Die Website fügt einen Aufschlag von 10% zu den vom Clubeigentümer festgelegten Gebühren hinzu, wovon 10% an Stufe 1 und 1% an jede der Stufen 2 bis 10 gezahlt werden.",
+          description: "Verdienen Sie Provisionen auf bezahlte Club-Mitgliedsgebühren. Die Website fügt einen Aufschlag von 20% zu den vom Clubeigentümer festgelegten Gebühren hinzu, wovon 10% an Stufe 1 und 1% an jede der Stufen 2 bis 10 gezahlt werden.",
           commission: "10% auf Stufe 1, 1% auf Stufen 2-10"
         },
         shop_purchases: {
           title: "Einkäufe im Shop",
-          description: "Verdienen Sie Provisionen auf digitale Inhaltskäufe im MyHigh5-Shop. Die Website fügt einen Aufschlag von 10% zu den vom Clubeigentümer festgelegten Gebühren hinzu, wovon 10% an Stufe 1 und 1% an jede der Stufen 2 bis 10 gezahlt werden.",
+          description: "Verdienen Sie Provisionen auf digitale Inhaltskäufe im MyHigh5-Shop. Die Website fügt einen Aufschlag von 20% zu den vom Clubeigentümer festgelegten Gebühren hinzu, wovon 10% an Stufe 1 und 1% an jede der Stufen 2 bis 10 gezahlt werden.",
           commission: "10% auf Stufe 1, 1% auf Stufen 2-10"
         },
         ad_revenue: {
