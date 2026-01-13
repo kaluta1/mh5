@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  feed-microservice:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: feed-microservice
+    ports:
+      - "8001:8001"
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_KEY=${SUPABASE_KEY}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+      - SUPABASE_DB_URL=${SUPABASE_DB_URL}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION}
+      - AWS_S3_BUCKET=${AWS_S3_BUCKET}
+      - MAIN_PLATFORM_API_URL=${MAIN_PLATFORM_API_URL:-http://host.docker.internal:8000}
+      - MAIN_PLATFORM_API_KEY=${MAIN_PLATFORM_API_KEY}
+      - ENCRYPTION_KEY_DERIVATION_SALT=${ENCRYPTION_KEY_DERIVATION_SALT}
+      - HOST=0.0.0.0
+      - PORT=8001
+      - DEBUG=${DEBUG:-False}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:8000}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - ./media:/app/media
+    depends_on:
+      - redis
+    networks:
+      - myhigh5-network
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: feed-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - myhigh5-network
+    restart: unless-stopped
+
+volumes:
+  redis-data:
+
+networks:
+  myhigh5-network:
+    external: true
+    name: myhigh5-network
