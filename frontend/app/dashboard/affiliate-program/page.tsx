@@ -121,65 +121,7 @@ export default function AffiliateProgramPage() {
                 Commission Structure
               </h2>
             </div>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">
-              Our affiliate program offers a generous 10-level commission structure:
-            </p>
-
-            <div className="space-y-4">
-              {/* Level 1 */}
-              <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 rounded-full bg-myhigh5-primary flex items-center justify-center shadow-lg shadow-myhigh5-primary/25">
-                      <span className="text-xl font-bold text-white">1</span>
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                        Direct Referrals (Level 1)
-                      </h3>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
-                        People you directly refer to the platform
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-3xl font-bold text-myhigh5-primary">10%</p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Commission</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Levels 2-10 */}
-              <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                      Indirect Referrals (Levels 2-10)
-                    </h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      People referred by your network members
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-3xl font-bold text-gray-700 dark:text-gray-300">1%</p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Per Level</p>
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {[2, 3, 4, 5, 6, 7, 8, 9, 10].map((level) => (
-                    <div 
-                      key={level}
-                      className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-sm font-semibold text-gray-700 dark:text-gray-300"
-                    >
-                      {level}
-                    </div>
-                  ))}
-                </div>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-4">
-                  Maximum potential commission: <span className="font-semibold text-gray-900 dark:text-white">19%</span> (10% + 1% × 9 levels)
-                </p>
-              </div>
-            </div>
+           
           </section>
 
           {/* What You Can Earn On Section */}
@@ -223,7 +165,7 @@ export default function AffiliateProgramPage() {
                   </h3>
                 </div>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                  Earn commissions when network members join as Founding Members ($100 joining fee)
+                  Earn commissions when members in your network pay for Founding Member's joining fees
                 </p>
                 <p className="text-lg font-bold text-myhigh5-primary">
                   10% on Level 1, 1% on Levels 2-10
@@ -241,7 +183,7 @@ export default function AffiliateProgramPage() {
                   </h3>
                 </div>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                  Earn commissions when Founding Members pay their annual membership fee.
+                  Earn commissions when Founding Members in your referral network pay their annual membership fee.
                 </p>
                 <p className="text-lg font-bold text-myhigh5-primary">
                   10% on Level 1, 1% on Levels 2-10
@@ -259,7 +201,7 @@ export default function AffiliateProgramPage() {
                   </h3>
                 </div>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                  Earn commissions on paid club membership fees. The website charges 10% of membership fees, and you earn a share of that.
+                  Earn referral commissions from the 20% margin added to club membership fees.
                 </p>
                 <p className="text-lg font-bold text-myhigh5-primary">
                   10% on Level 1, 1% on Levels 2-10
@@ -277,7 +219,7 @@ export default function AffiliateProgramPage() {
                   </h3>
                 </div>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                  Earn commissions on digital content purchases in the MyHigh5 shop. The website charges 10% platform fees, and you earn a share of that.
+                  Earn referral commissions from the 20% margin added to the digital content price.
                 </p>
                 <p className="text-lg font-bold text-myhigh5-primary">
                   10% on Level 1, 1% on Levels 2-10
@@ -302,24 +244,7 @@ export default function AffiliateProgramPage() {
                   <p>Nominators: 10% for self, 2.5% for Level 1, 1% for each of Levels 2 to 10.</p>
                 </div>
               </div>
-
-              {/* Advertisement */}
-              <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-lg bg-myhigh5-primary/10 dark:bg-myhigh5-primary/20 flex items-center justify-center">
-                    <Megaphone className="w-5 h-5 text-myhigh5-primary" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                    Advertisement Campaigns
-                  </h3>
-                </div>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                  Earn commissions from advertising campaigns purchased by members in your network through the native ad platform
-                </p>
-                <p className="text-lg font-bold text-myhigh5-primary">
-                  Commission structure varies by campaign type
-                </p>
-              </div>
+             
             </div>
           </section>
 

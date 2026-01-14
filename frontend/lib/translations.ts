@@ -5744,7 +5744,7 @@ export const translations: Record<Language, TranslationKeys> = {
         explore_more: "Explore more contests",
         remaining_votes: "You can still vote for {count} more contestant(s)",
         votes_label: "votes",
-        hint_dnd: "Drag and drop to reorder your votes. 1st gets 5 points, 2nd gets 4 points, 3rd gets 3 points, 4th gets 2 points, and 5th gets 1 point. Votes are limited to 5 per season.",
+        hint_dnd: "Drag and drop to reorder your votes. 1st place gets 5 points, 2nd gets 4 points, 3rd gets 3 points, 4th gets 2 points, and 5th gets 1 point. You may vote for as many contestants as you wish, but only the top 5 are counted for voting credit. Any additional vote after the fifth will replace the contestant currently in 5th place..",
         rank: "Rank",
         points: "Points",
         contestant: "Contestant",
@@ -6685,7 +6685,7 @@ export const translations: Record<Language, TranslationKeys> = {
         explore_more: "Explore more contests",
         remaining_votes: "You can still vote for {count} more contestant(s)",
         votes_label: "votes",
-        hint_dnd: "Drag and drop to reorder your votes. 1st gets 5 points, 2nd gets 4 points, 3rd gets 3 points, 4th gets 2 points, and 5th gets 1 point. Votes are limited to 5 per season.",
+        hint_dnd: "Drag and drop to reorder your votes. 1st place gets 5 points, 2nd gets 4 points, 3rd gets 3 points, 4th gets 2 points, and 5th gets 1 point. You may vote for as many contestants as you wish, but only the top 5 are counted for voting credit. Any additional vote after the fifth will replace the contestant currently in 5th place.",
         rank: "Rank",
         points: "Points",
         contestant: "Contestant",
@@ -6704,8 +6704,8 @@ export const translations: Record<Language, TranslationKeys> = {
       },
       leaderboard: {
         title: "Sponsors Leaderboard",
-        subtitle: "Top 10 sponsors with the most direct referrals",
-        mfm_subtitle: "Top 10 MFM sponsors with the most direct referrals who purchased MFM",
+        subtitle: "Top 10 sponsors with the most verified direct referrals",
+        mfm_subtitle: "Top 10 MFM sponsors with the most direct referrals who are MFM",
         regular_tab: "General Leaderboard",
         mfm_tab: "MFM Leaderboard",
         referrals: "Referrals",
@@ -6713,7 +6713,7 @@ export const translations: Record<Language, TranslationKeys> = {
         champion: "Champion",
         no_data: "No sponsors found",
         info_title: "How does the leaderboard work?",
-        info_description: "The leaderboard is based on the number of direct referrals (level 1) each sponsor has. The more direct referrals you have, the higher your position in the leaderboard."
+        info_description: "The leaderboard is based on the number of direct referrals (level 1) who are MFMs. The more direct referred MFMs you have, the higher your position in the leaderboard.."
       }
     },
     kyc: {

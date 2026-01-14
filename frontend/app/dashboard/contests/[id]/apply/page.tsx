@@ -155,6 +155,9 @@ export default function ApplyToContestPage() {
           
           // Détecter si c'est une nomination (si voting_type existe)
           const isNominationContest = contestData.voting_type != null
+          console.log('Contest Data:', contestData)
+          console.log('voting_type:', contestData.voting_type)
+          console.log('isNominationContest:', isNominationContest)
           setIsNomination(isNominationContest)
           
           // Vérifier si des vérifications sont requises pour ce contest
@@ -406,10 +409,15 @@ export default function ApplyToContestPage() {
             {(!userAlreadyParticipating || isEditingParticipation) && !submitSuccess && (
               <>
                 <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-                  {t('dashboard.contests.participation_form.title')}
+                 
+                  {isNomination 
+                    ? 'Nominate a Contestant'
+                    : t('dashboard.contests.participation_form.title') || 'Participate in Contest '} 
                 </h2>
                 <p className="text-gray-600 dark:text-gray-400 mb-4 text-sm">
-                  {t('dashboard.contests.participation_form.description')}
+                  {isNomination
+                  ? 'Import your video from YouTube or Vimeo'
+                  : t('dashboard.contests.participation_form.description')}
                 </p>
 
                 {/* Profile Setup Alert */}
