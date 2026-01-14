@@ -48,6 +48,7 @@ class ContestCreateRequest(BaseModel):
     image_url: Optional[str] = None
     voting_restriction: str = "none"
     voting_type_id: Optional[int] = None
+    category_id: Optional[int] = None
     # Verification requirements
     requires_kyc: bool = False
     verification_type: str = "none"
@@ -89,6 +90,10 @@ class ContestResponse(BaseModel):
     image_url: Optional[str]
     cover_image_url: Optional[str] = None
     voting_restriction: str
+    voting_type_id: Optional[int] = None
+    voting_type: Optional[Dict[str, Any]] = None
+    category_id: Optional[int] = None
+    category: Optional[Dict[str, Any]] = None
     participant_count: int
     approved_count: int
     pending_count: int
@@ -222,7 +227,10 @@ async def get_all_contests(
         )
     
     try:
-        query = db.query(Contest).filter(Contest.is_deleted == False)
+        query = db.query(Contest).filter(Contest.is_deleted == False).options(
+            joinedload(Contest.voting_type),
+            joinedload(Contest.category)
+        )
         
         if level:
             query = query.filter(Contest.level == level)
@@ -265,6 +273,21 @@ async def get_all_contests(
                 'image_url': contest.image_url,
                 'cover_image_url': contest.cover_image_url,
                 'voting_restriction': contest.voting_restriction.value if contest.voting_restriction else 'none',
+                'voting_type_id': contest.voting_type_id,
+                'voting_type': {
+                    "id": contest.voting_type.id,
+                    "name": contest.voting_type.name,
+                    "voting_level": contest.voting_type.voting_level.value if hasattr(contest.voting_type.voting_level, 'value') else str(contest.voting_type.voting_level),
+                    "commission_source": contest.voting_type.commission_source.value if hasattr(contest.voting_type.commission_source, 'value') else str(contest.voting_type.commission_source),
+                } if contest.voting_type else None,
+                'category_id': contest.category_id,
+                'category': {
+                    "id": contest.category.id,
+                    "name": contest.category.name,
+                    "slug": contest.category.slug,
+                    "description": contest.category.description,
+                    "is_active": contest.category.is_active
+                } if contest.category else None,
                 'participant_count': total,
                 'approved_count': approved,
                 'pending_count': pending,
@@ -325,7 +348,10 @@ async def get_contest(
     """
     check_admin(current_user)
     
-    contest = db.query(Contest).filter(Contest.id == contest_id, Contest.is_deleted == False).first()
+    contest = db.query(Contest).filter(Contest.id == contest_id, Contest.is_deleted == False).options(
+        joinedload(Contest.voting_type),
+        joinedload(Contest.category)
+    ).first()
     if not contest:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -360,6 +386,21 @@ async def get_contest(
         'image_url': contest.image_url,
         'cover_image_url': contest.cover_image_url,
         'voting_restriction': contest.voting_restriction.value if contest.voting_restriction else 'none',
+        'voting_type_id': contest.voting_type_id,
+        'voting_type': {
+            "id": contest.voting_type.id,
+            "name": contest.voting_type.name,
+            "voting_level": contest.voting_type.voting_level.value if hasattr(contest.voting_type.voting_level, 'value') else str(contest.voting_type.voting_level),
+            "commission_source": contest.voting_type.commission_source.value if hasattr(contest.voting_type.commission_source, 'value') else str(contest.voting_type.commission_source),
+        } if contest.voting_type else None,
+        'category_id': contest.category_id,
+        'category': {
+            "id": contest.category.id,
+            "name": contest.category.name,
+            "slug": contest.category.slug,
+            "description": contest.category.description,
+            "is_active": contest.category.is_active
+        } if contest.category else None,
         'participant_count': total,
         'approved_count': approved,
         'pending_count': pending,
@@ -822,6 +863,15 @@ async def create_contest(
         
         # Convertir voting_type_id=0 en None pour éviter les violations de FK
         voting_type_id = contest_data.voting_type_id if contest_data.voting_type_id and contest_data.voting_type_id > 0 else None
+        category_id = contest_data.category_id if contest_data.category_id and contest_data.category_id > 0 else None
+        
+        # Si category_id est fourni, valider et récupérer la catégorie pour mettre à jour contest_type
+        contest_type = contest_data.contest_type
+        if category_id:
+            category = db.query(Category).filter(Category.id == category_id).first()
+            if category:
+                contest_type = category.slug
+        
         
         # Create contest with auto-generated values
         new_contest = Contest(
@@ -839,7 +889,9 @@ async def create_contest(
             image_url=contest_data.image_url,
             voting_restriction=contest_data.voting_restriction,
             voting_type_id=voting_type_id,
+            category_id=category_id,
             # Verification fields
+
             requires_kyc=contest_data.requires_kyc,
             verification_type=verification_type,
             participant_type=participant_type,
@@ -898,6 +950,10 @@ async def create_contest(
             'image_url': new_contest.image_url,
             'cover_image_url': new_contest.cover_image_url,
             'voting_restriction': new_contest.voting_restriction.value if new_contest.voting_restriction else 'none',
+            'voting_type_id': new_contest.voting_type_id,
+            'voting_type': None, # Newly created, relationship might not be loaded yet
+            'category_id': new_contest.category_id,
+            'category': None, # Newly created, relationship might not be loaded yet
             'participant_count': total,
             'approved_count': approved,
             'pending_count': pending,
@@ -977,6 +1033,16 @@ async def update_contest(
         contest.voting_restriction = contest_data.voting_restriction
         # Convertir voting_type_id=0 en None pour éviter les violations de FK
         contest.voting_type_id = contest_data.voting_type_id if contest_data.voting_type_id and contest_data.voting_type_id > 0 else None
+        
+        # Gestion de category_id
+        contest.category_id = contest_data.category_id if contest_data.category_id and contest_data.category_id > 0 else None
+        
+        # Si category_id est fourni, mettre à jour contest_type
+        if contest.category_id:
+            category = db.query(Category).filter(Category.id == contest.category_id).first()
+            if category:
+                contest.contest_type = category.slug
+
         
         # Update verification fields
         contest.requires_kyc = contest_data.requires_kyc
@@ -1177,6 +1243,21 @@ async def update_contest(
             'image_url': contest.image_url,
             'cover_image_url': contest.cover_image_url,
             'voting_restriction': contest.voting_restriction.value if contest.voting_restriction else 'none',
+            'voting_type_id': contest.voting_type_id,
+            'voting_type': {
+                "id": contest.voting_type.id,
+                "name": contest.voting_type.name,
+                "voting_level": contest.voting_type.voting_level.value if hasattr(contest.voting_type.voting_level, 'value') else str(contest.voting_type.voting_level),
+                "commission_source": contest.voting_type.commission_source.value if hasattr(contest.voting_type.commission_source, 'value') else str(contest.voting_type.commission_source),
+            } if contest.voting_type else None,
+            'category_id': contest.category_id,
+            'category': {
+                "id": contest.category.id,
+                "name": contest.category.name,
+                "slug": contest.category.slug,
+                "description": contest.category.description,
+                "is_active": contest.category.is_active
+            } if contest.category else None,
             'participant_count': total,
             'approved_count': approved,
             'pending_count': pending,

@@ -181,7 +181,7 @@ export default function AdminContests() {
       setLoadingSeasons(true)
       const endpoint = '/api/v1/admin/seasons'
       const params = {}
-      
+
       // Vérifier le cache
       const cachedData = cacheService.get<Array<{ id: number; title: string; level: string }>>(endpoint, params)
       if (cachedData) {
@@ -189,12 +189,12 @@ export default function AdminContests() {
         setLoadingSeasons(false)
         return
       }
-      
+
       // Si pas de cache, faire l'appel API
       const response = await api.get(endpoint)
       const data = response.data
       setSeasons(data)
-      
+
       // Mettre en cache (TTL de 5 minutes)
       cacheService.set(endpoint, data, params, 5 * 60 * 1000)
     } catch (error) {
@@ -234,7 +234,7 @@ export default function AdminContests() {
       setLoadingCategories(true)
       const endpoint = '/api/v1/categories'
       const params = { active_only: true }
-      
+
       // Vérifier le cache
       const cachedData = cacheService.get<Array<{ id: number; name: string; slug: string; description?: string; is_active: boolean }>>(endpoint, params)
       if (cachedData) {
@@ -242,12 +242,12 @@ export default function AdminContests() {
         setLoadingCategories(false)
         return
       }
-      
+
       // Si pas de cache, faire l'appel API
       const response = await api.get(`${endpoint}/`, { params })
       const data = response.data && Array.isArray(response.data) ? response.data : []
       setCategories(data)
-      
+
       // Mettre en cache (TTL de 5 minutes)
       cacheService.set(endpoint, data, params, 5 * 60 * 1000)
     } catch (error: any) {
@@ -264,22 +264,22 @@ export default function AdminContests() {
       addToast(t('admin.contests.category_name_required') || 'Le nom de la catégorie est requis', 'error')
       return
     }
-    
+
     setIsCreatingCategory(true)
     try {
       // Générer le slug à partir du nom si non fourni
       const slug = categoryFormData.slug.trim() || categoryFormData.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
-      
+
       const response = await api.post('/api/v1/categories/', {
         name: categoryFormData.name.trim(),
         slug: slug,
         description: categoryFormData.description.trim() || null,
         is_active: categoryFormData.is_active
       })
-      
+
       // Invalider le cache des catégories
       cacheService.invalidate('/api/v1/categories')
-      
+
       addToast(t('admin.contests.category_created') || 'Catégorie créée avec succès', 'success')
       setCategories([...categories, response.data])
       setFormData({ ...formData, category_id: response.data.id })
@@ -310,17 +310,17 @@ export default function AdminContests() {
       if (votingTypeFormData.commission_rules['L2-10'] !== undefined && votingTypeFormData.commission_rules['L2-10'] !== null) {
         commissionRules['L2-10'] = votingTypeFormData.commission_rules['L2-10']
       }
-      
+
       const dataToSend = {
         name: votingTypeFormData.name.trim(),
         voting_level: votingTypeFormData.voting_level,
         commission_source: votingTypeFormData.commission_source,
         commission_rules: Object.keys(commissionRules).length > 0 ? commissionRules : undefined
       }
-      
+
       console.log('Création de voting type avec les données:', dataToSend)
       console.log('URL complète:', `${api.defaults.baseURL}/api/v1/voting-types`)
-      
+
       const response = await api.post('/api/v1/voting-types', dataToSend)
       addToast(t('admin.contests.voting_type_created') || 'Type de vote créé avec succès', 'success')
       setVotingTypes([...votingTypes, response.data])
@@ -338,9 +338,9 @@ export default function AdminContests() {
       console.error('Status:', error.response?.status)
       console.error('Response data:', error.response?.data)
       console.error('Request data:', error.config?.data)
-      
+
       let errorMessage = t('admin.contests.voting_type_create_error') || 'Erreur lors de la création'
-      
+
       if (error.response) {
         // Erreur HTTP avec réponse
         if (error.response.status === 404) {
@@ -357,7 +357,7 @@ export default function AdminContests() {
         // Erreur lors de la configuration de la requête
         errorMessage = error.message || errorMessage
       }
-      
+
       addToast(errorMessage, 'error')
     } finally {
       setIsCreatingVotingType(false)
@@ -460,7 +460,7 @@ export default function AdminContests() {
         if (formData.submission_end_date) dataToSend.submission_end_date = formData.submission_end_date
         if (formData.voting_start_date) dataToSend.voting_start_date = formData.voting_start_date
         if (formData.voting_end_date) dataToSend.voting_end_date = formData.voting_end_date
-        
+
         // Dates des saisons (si modifiées)
         if (formData.city_season_start_date) dataToSend.city_season_start_date = formData.city_season_start_date
         if (formData.city_season_end_date) dataToSend.city_season_end_date = formData.city_season_end_date
@@ -528,20 +528,20 @@ export default function AdminContests() {
       requires_visual_verification: false,
       requires_voice_verification: false,
       requires_brand_verification: false,
-        requires_content_verification: false,
-        min_age: null,
-        max_age: null,
-        // Media requirements
-        requires_video: false,
-        max_videos: 1,
-        video_max_duration: 3000,
-        video_max_size_mb: 500,
-        min_images: 0,
-        max_images: 10,
-        verification_video_max_duration: 30,
-        verification_max_size_mb: 50,
-        voting_type_id: null,
-        category_id: null
+      requires_content_verification: false,
+      min_age: null,
+      max_age: null,
+      // Media requirements
+      requires_video: false,
+      max_videos: 1,
+      video_max_duration: 3000,
+      video_max_size_mb: 500,
+      min_images: 0,
+      max_images: 10,
+      verification_video_max_duration: 30,
+      verification_max_size_mb: 50,
+      voting_type_id: null,
+      category_id: null
     })
     setUploadedImage('')
   }
@@ -619,7 +619,7 @@ export default function AdminContests() {
 
   const handleConfirmDelete = async () => {
     if (!deleteContestId) return
-    
+
     setIsDeleting(true)
     try {
       await contestService.deleteContest(deleteContestId)
@@ -782,7 +782,7 @@ export default function AdminContests() {
                       />
                     </div>
                   </div>
-                  
+
                   {/* Dates des saisons - Affichées lors de l'édition */}
                   {editingId && (
                     <>
@@ -814,7 +814,7 @@ export default function AdminContests() {
                               className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                             />
                           </div>
-                          
+
                           {/* Country Season */}
                           <div>
                             <label className="block text-xs font-medium text-blue-700 dark:text-blue-300 mb-2">
@@ -838,7 +838,7 @@ export default function AdminContests() {
                               className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                             />
                           </div>
-                          
+
                           {/* Regional Season */}
                           <div>
                             <label className="block text-xs font-medium text-blue-700 dark:text-blue-300 mb-2">
@@ -862,7 +862,7 @@ export default function AdminContests() {
                               className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                             />
                           </div>
-                          
+
                           {/* Continental Season */}
                           <div>
                             <label className="block text-xs font-medium text-blue-700 dark:text-blue-300 mb-2">
@@ -886,7 +886,7 @@ export default function AdminContests() {
                               className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                             />
                           </div>
-                          
+
                           {/* Global Season */}
                           <div>
                             <label className="block text-xs font-medium text-blue-700 dark:text-blue-300 mb-2">
@@ -954,8 +954,8 @@ export default function AdminContests() {
                       onValueChange={(value) => {
                         const categoryId = value && value !== 'none' ? parseInt(value) : null
                         const selectedCategory = categories.find(c => c.id === categoryId)
-                        setFormData({ 
-                          ...formData, 
+                        setFormData({
+                          ...formData,
                           category_id: categoryId,
                           contest_type: selectedCategory ? selectedCategory.slug : formData.contest_type
                         })
@@ -1016,8 +1016,8 @@ export default function AdminContests() {
                       {t('common.loading') || 'Chargement...'}
                     </div>
                   ) : (
-                    <Select 
-                      value={formData.season_id} 
+                    <Select
+                      value={formData.season_id}
                       onValueChange={(value) => setFormData({ ...formData, season_id: value })}
                       required
                     >
@@ -1048,8 +1048,8 @@ export default function AdminContests() {
                     </div>
                   ) : (
                     <div className="flex gap-2">
-                      <Select 
-                        value={formData.voting_type_id?.toString() || 'none'} 
+                      <Select
+                        value={formData.voting_type_id?.toString() || 'none'}
                         onValueChange={(value) => setFormData({ ...formData, voting_type_id: value === 'none' ? null : parseInt(value) })}
                       >
                         <SelectTrigger className="flex-1 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
@@ -1080,7 +1080,7 @@ export default function AdminContests() {
                 {/* Nombre de participants */}
                 <div>
                   <label className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
-                    👥 {t('admin.contests.participant_count') || 'Nombre de participants'}
+                    👥 {t('admin.contests.participant_count') || 'Limit of Contestants'}
                   </label>
                   <Input
                     type="number"
@@ -1095,7 +1095,7 @@ export default function AdminContests() {
                 {/* Restriction de vote */}
                 <div>
                   <label className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
-                    {t('admin.contests.voting_restriction') || 'Restriction de vote'}
+                    {t('admin.contests.voting_restriction') || 'Who can Contest'}
                   </label>
                   <Select value={formData.voting_restriction} onValueChange={(value) => setFormData({ ...formData, voting_restriction: value })}>
                     <SelectTrigger className="dark:bg-gray-700 dark:border-gray-600 dark:text-white">
@@ -1117,7 +1117,7 @@ export default function AdminContests() {
                     <ShieldCheck className="h-4 w-4" />
                     {t('admin.contests.verification_requirements') || 'Exigences de vérification'}
                   </h4>
-                  
+
                   <div className="grid grid-cols-2 gap-4 mb-4">
                     {/* Type de participant */}
                     <div>
@@ -1267,7 +1267,7 @@ export default function AdminContests() {
                     <Upload className="h-4 w-4" />
                     {t('admin.contests.media_requirements') || 'Exigences Média'}
                   </h4>
-                  
+
                   {/* Video requirement checkbox */}
                   <div className="flex items-center gap-2 p-2 rounded-lg bg-white/50 dark:bg-gray-800/50 mb-4">
                     <input
@@ -1282,7 +1282,7 @@ export default function AdminContests() {
                       {t('admin.contests.requires_video') || 'Vidéo obligatoire'}
                     </label>
                   </div>
-                  
+
                   <div className="grid grid-cols-2 gap-3">
                     {/* Max videos */}
                     <div>
@@ -1298,7 +1298,7 @@ export default function AdminContests() {
                         className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                       />
                     </div>
-                    
+
                     {/* Video max duration */}
                     <div>
                       <label className="block text-xs font-medium text-purple-700 dark:text-purple-300 mb-1">
@@ -1313,7 +1313,7 @@ export default function AdminContests() {
                         className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                       />
                     </div>
-                    
+
                     {/* Min images */}
                     <div>
                       <label className="block text-xs font-medium text-purple-700 dark:text-purple-300 mb-1">
@@ -1328,7 +1328,7 @@ export default function AdminContests() {
                         className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                       />
                     </div>
-                    
+
                     {/* Max images */}
                     <div>
                       <label className="block text-xs font-medium text-purple-700 dark:text-purple-300 mb-1">
@@ -1683,7 +1683,7 @@ export default function AdminContests() {
                           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 line-clamp-1">{contest.description}</p>
                         )}
                       </div>
-                      
+
                       {/* Stats rapides */}
                       <div className="flex gap-3 text-center">
                         <div className="bg-blue-50 dark:bg-blue-900/30 rounded-lg px-3 py-2">
@@ -1709,29 +1709,27 @@ export default function AdminContests() {
                     <div className="flex flex-wrap gap-2 mb-4 pb-4 border-b border-gray-100 dark:border-gray-700">
                       {/* Type de participant */}
                       {contest.participant_type && (
-                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${
-                          contest.participant_type === 'individual' ? 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300' :
-                          contest.participant_type === 'pet' ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300' :
-                          contest.participant_type === 'club' ? 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300' :
-                          'bg-pink-100 dark:bg-pink-900/40 text-pink-700 dark:text-pink-300'
-                        }`}>
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${contest.participant_type === 'individual' ? 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300' :
+                            contest.participant_type === 'pet' ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300' :
+                              contest.participant_type === 'club' ? 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300' :
+                                'bg-pink-100 dark:bg-pink-900/40 text-pink-700 dark:text-pink-300'
+                          }`}>
                           {contest.participant_type === 'individual' && <><Users className="h-3.5 w-3.5" /> {t('admin.contests.participant_individual') || 'Individuel'}</>}
                           {contest.participant_type === 'pet' && <><PawPrint className="h-3.5 w-3.5" /> {t('admin.contests.participant_pet') || 'Animal'}</>}
                           {contest.participant_type === 'club' && <><Users2 className="h-3.5 w-3.5" /> {t('admin.contests.participant_club') || 'Club'}</>}
                           {contest.participant_type === 'content' && <><Music className="h-3.5 w-3.5" /> {t('admin.contests.participant_content') || 'Contenu'}</>}
                         </span>
                       )}
-                      
+
                       {/* KYC */}
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${
-                        contest.requires_kyc 
-                          ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' 
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${contest.requires_kyc
+                          ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'
                           : 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500'
-                      }`} title={contest.requires_kyc ? t('admin.contests.kyc_required') || 'KYC requis' : t('admin.contests.kyc_not_required') || 'KYC non requis'}>
+                        }`} title={contest.requires_kyc ? t('admin.contests.kyc_required') || 'KYC requis' : t('admin.contests.kyc_not_required') || 'KYC non requis'}>
                         <ShieldCheck className="h-3.5 w-3.5" />
                         {contest.requires_kyc ? t('admin.contests.kyc_required') || 'KYC requis' : t('admin.contests.kyc_not_required') || 'Sans KYC'}
                       </span>
-                      
+
                       {/* Vérifications spécifiques */}
                       {contest.requires_visual_verification && (
                         <span className="inline-flex items-center gap-1.5 bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 px-2.5 py-1 rounded-lg text-xs font-semibold" title={t('admin.contests.requires_visual') || 'Vérification visuelle requise'}>
@@ -1855,8 +1853,8 @@ export default function AdminContests() {
                   <label className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
                     {t('admin.contests.voting_level') || 'Niveau de vote'} <span className="text-red-500">*</span>
                   </label>
-                  <Select 
-                    value={votingTypeFormData.voting_level} 
+                  <Select
+                    value={votingTypeFormData.voting_level}
                     onValueChange={(value: any) => setVotingTypeFormData({ ...votingTypeFormData, voting_level: value })}
                   >
                     <SelectTrigger className="dark:bg-gray-700 dark:border-gray-600 dark:text-white">
@@ -1877,8 +1875,8 @@ export default function AdminContests() {
                   <label className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
                     {t('admin.contests.commission_source') || 'Source de commission'} <span className="text-red-500">*</span>
                   </label>
-                  <Select 
-                    value={votingTypeFormData.commission_source} 
+                  <Select
+                    value={votingTypeFormData.commission_source}
                     onValueChange={(value: any) => setVotingTypeFormData({ ...votingTypeFormData, commission_source: value })}
                   >
                     <SelectTrigger className="dark:bg-gray-700 dark:border-gray-600 dark:text-white">
