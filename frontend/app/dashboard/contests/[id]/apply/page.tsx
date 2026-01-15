@@ -8,9 +8,9 @@ import { useToast } from '@/components/ui/toast'
 import { ParticipateFormSkeleton } from '@/components/ui/skeleton'
 import { ParticipationForm } from '@/components/dashboard/participation-form'
 import { contestService } from '@/services/contest-service'
-import { 
-  VerificationRequirementsDialog, 
-  SelfieVerificationDialog, 
+import {
+  VerificationRequirementsDialog,
+  SelfieVerificationDialog,
   VoiceVerificationDialog,
   ContentVerificationDialog,
   BrandVerificationDialog
@@ -23,7 +23,7 @@ export default function ApplyToContestPage() {
   const searchParams = useSearchParams()
   const { user, isAuthenticated, isLoading } = useAuth()
   const { addToast } = useToast()
-  
+
   const contestId = params?.id as string
   const isEditMode = searchParams.get('edit') === 'true'
   const [pageLoading, setPageLoading] = useState(true)
@@ -39,7 +39,7 @@ export default function ApplyToContestPage() {
   const [timeValues, setTimeValues] = useState<{ days: number; hours: number; minutes: number; seconds: number; isClosed: boolean; isNA: boolean } | null>(null)
   const [existingParticipationData, setExistingParticipationData] = useState<any>(null)
   const [participantId, setParticipantId] = useState<number | null>(null)
-  
+
   // Verification states
   const [showVerificationDialog, setShowVerificationDialog] = useState(false)
   const [showSelfieDialog, setShowSelfieDialog] = useState(false)
@@ -79,7 +79,7 @@ export default function ApplyToContestPage() {
 
     // Mettre à jour immédiatement
     updateTimeRemaining()
-    
+
     // Mettre à jour chaque seconde pour un décompteur en temps réel
     const interval = setInterval(updateTimeRemaining, 1000)
 
@@ -152,22 +152,22 @@ export default function ApplyToContestPage() {
         if (contestId) {
           const contestData = await contestService.getContestById(contestId)
           setContest(contestData)
-          
+
           // Détecter si c'est une nomination (si voting_type existe)
           const isNominationContest = contestData.voting_type != null
           console.log('Contest Data:', contestData)
           console.log('voting_type:', contestData.voting_type)
           console.log('isNominationContest:', isNominationContest)
           setIsNomination(isNominationContest)
-          
+
           // Vérifier si des vérifications sont requises pour ce contest
-          const needsVerification = 
-            contestData.requires_kyc || 
-            contestData.requires_visual_verification || 
+          const needsVerification =
+            contestData.requires_kyc ||
+            contestData.requires_visual_verification ||
             contestData.requires_voice_verification ||
             contestData.requires_brand_verification ||
             contestData.requires_content_verification
-          
+
           // Si des vérifications sont requises et pas encore complétées, afficher le dialog
           if (needsVerification && !isEditMode) {
             // Vérifier quelles vérifications sont déjà faites
@@ -176,13 +176,13 @@ export default function ApplyToContestPage() {
             const voiceDone = !contestData.requires_voice_verification || hasVoiceVerification
             const brandDone = !contestData.requires_brand_verification || hasBrandVerification
             const contentDone = !contestData.requires_content_verification || hasContentVerification
-            
+
             // Afficher le dialog si au moins une vérification est requise
             if (!kycDone || !visualDone || !voiceDone || !brandDone || !contentDone) {
               setShowVerificationDialog(true)
             }
           }
-          
+
           // Vérifier si l'utilisateur a déjà une candidature
           const userContestants = await contestService.getContestantsByContest(contestId)
           const userParticipation = userContestants.find((c: any) => c.user_id === user?.id)
@@ -191,7 +191,7 @@ export default function ApplyToContestPage() {
             setParticipantId(userParticipation.id)
             // Charger les données existantes pour l'édition
             console.log('Participation data:', userParticipation)
-            
+
             // Parser les image_media_ids (JSON string)
             let imageUrls: string[] = []
             if (userParticipation.image_media_ids) {
@@ -203,7 +203,7 @@ export default function ApplyToContestPage() {
                 imageUrls = []
               }
             }
-            
+
             // Parser les video_media_ids (JSON string)
             let videoUrl = ''
             if (userParticipation.video_media_ids) {
@@ -215,14 +215,16 @@ export default function ApplyToContestPage() {
                 videoUrl = ''
               }
             }
-            
+
             setExistingParticipationData({
               title: userParticipation.title || '',
               description: userParticipation.description || '',
               imageUrls: imageUrls,
-              videoUrl: videoUrl
+              videoUrl: videoUrl,
+              nominatorCity: (userParticipation as any).nominator_city || '',
+              nominatorCountry: (userParticipation as any).nominator_country || ''
             })
-            
+
             // Si le mode édition est activé, afficher directement le formulaire
             if (isEditMode) {
               setIsEditingParticipation(true)
@@ -256,13 +258,15 @@ export default function ApplyToContestPage() {
     title: string,
     description: string,
     imageMediaIds?: string,
-    videoMediaIds?: string
+    videoMediaIds?: string,
+    nominatorCity?: string,
+    nominatorCountry?: string
   ) => {
     setIsSubmitting(true)
 
     try {
       let response
-      
+
       if (isEditingParticipation && participantId) {
         // Mettre à jour la candidature existante
         response = await contestService.updateContestant(
@@ -270,7 +274,9 @@ export default function ApplyToContestPage() {
           title,
           description,
           imageMediaIds,
-          videoMediaIds
+          videoMediaIds,
+          nominatorCity,
+          nominatorCountry
         )
       } else {
         // Créer une nouvelle candidature
@@ -279,30 +285,32 @@ export default function ApplyToContestPage() {
           title,
           description,
           imageMediaIds,
-          videoMediaIds
+          videoMediaIds,
+          nominatorCity,
+          nominatorCountry
         )
       }
 
       setSubmitSuccess(true)
       setUserAlreadyParticipating(true)
-      
+
       // Afficher un toast de succès
       addToast(
-        isEditingParticipation 
-          ? t('dashboard.contests.participation_form.success') 
+        isEditingParticipation
+          ? t('dashboard.contests.participation_form.success')
           : t('dashboard.contests.participation_form.success'),
         'success'
       )
     } catch (err: any) {
       console.error('Erreur lors de la soumission:', err)
       const errorDetail = err?.response?.data?.detail || err?.message || ''
-      
+
       // Détecter le type d'erreur et utiliser les traductions appropriées
       let errorMessage = t('dashboard.contests.participation_form.error.submit_error')
-      
+
       if (errorDetail) {
         const errorLower = errorDetail.toLowerCase()
-        
+
         // Détecter les erreurs de genre
         if (errorLower.includes('masculin') || errorLower.includes('male') || errorLower.includes('male participants only')) {
           errorMessage = t('dashboard.contests.participation_form.error.gender_restriction_male')
@@ -310,7 +318,7 @@ export default function ApplyToContestPage() {
           errorMessage = t('dashboard.contests.participation_form.error.gender_restriction_female')
         } else if (errorLower.includes('genre') || errorLower.includes('gender') || errorLower.includes('gender information')) {
           errorMessage = t('dashboard.contests.participation_form.error.gender_not_set')
-        } 
+        }
         // Détecter les erreurs de soumission déjà effectuée
         else if (errorLower.includes('already') && (errorLower.includes('submission') || errorLower.includes('candidature'))) {
           errorMessage = t('dashboard.contests.participation_form.error.already_submitted')
@@ -323,12 +331,12 @@ export default function ApplyToContestPage() {
         else if (errorLower.includes('deadline') || errorLower.includes('date limite') || errorLower.includes('dépassée') || errorLower.includes('passed')) {
           errorMessage = t('dashboard.contests.participation_form.error.deadline_passed')
         }
-          // Utiliser le message d'erreur du backend s'il est disponible
+        // Utiliser le message d'erreur du backend s'il est disponible
         else {
           errorMessage = errorDetail
         }
       }
-      
+
       // Afficher l'erreur dans un toast
       addToast(errorMessage, 'error')
     } finally {
@@ -364,7 +372,7 @@ export default function ApplyToContestPage() {
                       {t('dashboard.contests.participation_form.success_title') || '✅ Candidature soumise avec succès !'}
                     </p>
                     <p className="text-green-700 dark:text-green-300 text-sm mt-1">
-                      {isEditingParticipation 
+                      {isEditingParticipation
                         ? t('dashboard.contests.participation_form.success_edit') || 'Votre candidature a été mise à jour avec succès.'
                         : t('dashboard.contests.participation_form.success') || 'Votre candidature a été soumise avec succès. Elle sera examinée par notre équipe.'}
                     </p>
@@ -409,15 +417,15 @@ export default function ApplyToContestPage() {
             {(!userAlreadyParticipating || isEditingParticipation) && !submitSuccess && (
               <>
                 <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-                 
-                  {isNomination 
+
+                  {isNomination
                     ? 'Nominate a Contestant'
-                    : t('dashboard.contests.participation_form.title') || 'Participate in Contest '} 
+                    : t('dashboard.contests.participation_form.title') || 'Participate in Contest '}
                 </h2>
                 <p className="text-gray-600 dark:text-gray-400 mb-4 text-sm">
                   {isNomination
-                  ? 'Import your video from YouTube or Vimeo'
-                  : t('dashboard.contests.participation_form.description')}
+                    ? 'Import your video from YouTube or Vimeo'
+                    : t('dashboard.contests.participation_form.description')}
                 </p>
 
                 {/* Profile Setup Alert */}
@@ -492,7 +500,7 @@ export default function ApplyToContestPage() {
               <p className="text-gray-600 dark:text-gray-400 mb-4 text-sm">
                 {contest.description}
               </p>
-              
+
               {/* Contest Details Grid */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-myfav-blue-50 dark:bg-myfav-blue-900/20 rounded-lg p-3">
@@ -503,7 +511,7 @@ export default function ApplyToContestPage() {
                     {contest.entries_count || 0}
                   </p>
                 </div>
-                
+
                 <div className="bg-myfav-blue-50 dark:bg-myfav-blue-900/20 rounded-lg p-3">
                   <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
                     {t('dashboard.contests.received')}
@@ -512,7 +520,7 @@ export default function ApplyToContestPage() {
                     {contest.total_votes || 0}
                   </p>
                 </div>
-                
+
                 <div className="bg-myfav-blue-50 dark:bg-myfav-blue-900/20 rounded-lg p-3">
                   <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
                     {t('dashboard.contests.status')}
@@ -521,16 +529,16 @@ export default function ApplyToContestPage() {
                     {contest.is_submission_open ? t('dashboard.contests.open') : t('dashboard.contests.closed')}
                   </p>
                 </div>
-                
+
                 <div className="bg-myfav-blue-50 dark:bg-myfav-blue-900/20 rounded-lg p-3">
                   <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
                     {t('dashboard.contests.level')}
                   </p>
                   <p className="text-sm font-bold text-gray-900 dark:text-white capitalize">
-                    {contest.level === 'country' ? t('dashboard.contests.country') : 
-                     contest.level === 'continental' ? t('dashboard.contests.continental') :
-                     contest.level === 'regional' ? t('dashboard.contests.regional') :
-                     contest.level}
+                    {contest.level === 'country' ? t('dashboard.contests.country') :
+                      contest.level === 'continental' ? t('dashboard.contests.continental') :
+                        contest.level === 'regional' ? t('dashboard.contests.regional') :
+                          contest.level}
                   </p>
                 </div>
 

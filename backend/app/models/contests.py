@@ -129,6 +129,10 @@ class Contestant(Base):
     # Author gender (copied from user at creation time)
     author_gender: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     
+    # Nominator location (for nomination contests)
+    nominator_city: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    nominator_country: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    
     registration_date: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     verification_status: Mapped[str] = mapped_column(String(50), default="pending")  # pending, verified, rejected
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)

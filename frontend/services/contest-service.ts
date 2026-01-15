@@ -293,14 +293,18 @@ class ContestService {
     title: string,
     description: string,
     imageMediaIds?: string,
-    videoMediaIds?: string
+    videoMediaIds?: string,
+    nominatorCity?: string,
+    nominatorCountry?: string
   ): Promise<any> {
     try {
       const response = await api.post(`/api/v1/contestants/${contestId}`, {
         title: title,
         description: description,
         image_media_ids: imageMediaIds,
-        video_media_ids: videoMediaIds
+        video_media_ids: videoMediaIds,
+        nominator_city: nominatorCity,
+        nominator_country: nominatorCountry
       })
 
       // Invalider le cache des contestants et du contest
@@ -323,14 +327,18 @@ class ContestService {
     title: string,
     description: string,
     imageMediaIds?: string,
-    videoMediaIds?: string
+    videoMediaIds?: string,
+    nominatorCity?: string,
+    nominatorCountry?: string
   ): Promise<any> {
     try {
       const response = await api.put(`/api/v1/contestants/${contestantId}`, {
         title: title,
         description: description,
         image_media_ids: imageMediaIds,
-        video_media_ids: videoMediaIds
+        video_media_ids: videoMediaIds,
+        nominator_city: nominatorCity,
+        nominator_country: nominatorCountry
       })
 
       // Invalider le cache du contestant, de la liste des contestants et du contest

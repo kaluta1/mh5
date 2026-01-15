@@ -732,6 +732,17 @@ def create_contestant(
         )
     
     # ============================================
+    # VALIDATION DU PAYS DU NOMINATEUR
+    # ============================================
+    if contestant_data.nominator_country:
+        user_country = current_user.country
+        if user_country and contestant_data.nominator_country.lower().strip() != user_country.lower().strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"The nominator country must match your country. Your country: {user_country}, Specified: {contestant_data.nominator_country}"
+            )
+    
+    # ============================================
     # CRÉATION DE LA CANDIDATURE
     # ============================================
     logger.info("Starting contestant creation...")
@@ -756,7 +767,9 @@ def create_contestant(
             title=contestant_data.title,
             description=contestant_data.description,
             image_media_ids=contestant_data.image_media_ids,
-            video_media_ids=contestant_data.video_media_ids
+            video_media_ids=contestant_data.video_media_ids,
+            nominator_city=contestant_data.nominator_city,
+            nominator_country=contestant_data.nominator_country
         )
         
         # Vérifier si le lien existe déjà
@@ -1111,6 +1124,17 @@ def update_contestant(
             detail=f"Submission not relevant for this contest. {suggestions_text}"
         )
     
+    # ============================================
+    # VALIDATION DU PAYS DU NOMINATEUR
+    # ============================================
+    if contestant_data.nominator_country:
+        user_country = current_user.country
+        if user_country and contestant_data.nominator_country.lower().strip() != user_country.lower().strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"The nominator country must match your country. Your country: {user_country}, Specified: {contestant_data.nominator_country}"
+            )
+    
     # Mettre à jour la candidature
     updated_contestant = crud_contestant.update(
         db,
@@ -1118,7 +1142,9 @@ def update_contestant(
         title=contestant_data.title,
         description=contestant_data.description,
         image_media_ids=contestant_data.image_media_ids,
-        video_media_ids=contestant_data.video_media_ids
+        video_media_ids=contestant_data.video_media_ids,
+        nominator_city=contestant_data.nominator_city,
+        nominator_country=contestant_data.nominator_country
     )
     
     return ContestantResponse.model_validate(updated_contestant)

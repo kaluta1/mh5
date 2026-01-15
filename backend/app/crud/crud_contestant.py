@@ -578,6 +578,8 @@ class CRUDContestant:
                 "description": contestant.description,
                 "image_media_ids": contestant.image_media_ids,
                 "video_media_ids": contestant.video_media_ids,
+                "nominator_city": contestant.nominator_city,
+                "nominator_country": contestant.nominator_country,
                 "registration_date": contestant.registration_date,
                 "is_qualified": contestant.is_qualified,
                 # Infos auteur
@@ -630,7 +632,9 @@ class CRUDContestant:
         title: Optional[str] = None,
         description: Optional[str] = None,
         image_media_ids: Optional[str] = None,
-        video_media_ids: Optional[str] = None
+        video_media_ids: Optional[str] = None,
+        nominator_city: Optional[str] = None,
+        nominator_country: Optional[str] = None
     ) -> Contestant:
         """Crée une nouvelle candidature"""
         # Vérifier qu'il n'existe pas déjà une candidature pour cet utilisateur
@@ -660,6 +664,8 @@ class CRUDContestant:
             region=user.region,
             continent=user.continent,
             author_gender=author_gender_value,
+            nominator_city=nominator_city,
+            nominator_country=nominator_country,
             registration_date=datetime.utcnow(),
             verification_status="pending",
             is_active=True
@@ -740,7 +746,9 @@ class CRUDContestant:
         title: Optional[str] = None,
         description: Optional[str] = None,
         image_media_ids: Optional[str] = None,
-        video_media_ids: Optional[str] = None
+        video_media_ids: Optional[str] = None,
+        nominator_city: Optional[str] = None,
+        nominator_country: Optional[str] = None
     ) -> Optional[Contestant]:
         """Met à jour une candidature"""
         db_obj = db.query(Contestant).filter(Contestant.id == id).first()
@@ -756,6 +764,10 @@ class CRUDContestant:
             db_obj.image_media_ids = image_media_ids
         if video_media_ids is not None:
             db_obj.video_media_ids = video_media_ids
+        if nominator_city is not None:
+            db_obj.nominator_city = nominator_city
+        if nominator_country is not None:
+            db_obj.nominator_country = nominator_country
         
         db.add(db_obj)
         db.commit()
