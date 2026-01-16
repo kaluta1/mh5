@@ -551,10 +551,10 @@ function KYCPageContent() {
             <Shield className="w-8 h-8 text-myhigh5-primary" />
           </div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-            {t('kyc.verification_required') || 'Vérification d\'identité requise'}
+            {t('kyc.verification_required') || 'Identity verification required'}
           </h1>
           <p className="text-gray-600 dark:text-gray-400 max-w-xl mx-auto">
-            {t('kyc.verification_required_description') || 'Pour participer aux concours et retirer vos gains, vous devez vérifier votre identité.'}
+            {t('kyc.verification_required_description') || 'To participate in contests and withdraw your earnings, you must verify your identity.'}
           </p>
         </div>
 

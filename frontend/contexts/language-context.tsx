@@ -12,13 +12,21 @@ interface LanguageContextType {
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined)
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
+  // Always default to English - never use browser language or any other default
   const [language, setLanguage] = useState<Language>('en')
 
-  // Load saved language from localStorage on mount
+  // Load saved language from localStorage on mount ONLY if user explicitly set it
+  // Default is always English
   useEffect(() => {
     const savedLanguage = localStorage.getItem('myhigh5-language') as Language
+    // Only use saved language if it's explicitly set and valid
+    // Default to English if no preference or invalid value
     if (savedLanguage && ['en', 'fr', 'es', 'de'].includes(savedLanguage)) {
       setLanguage(savedLanguage)
+    } else {
+      // Ensure English is set and saved if no preference exists
+      setLanguage('en')
+      localStorage.setItem('myhigh5-language', 'en')
     }
   }, [])
 

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { UserAvatar } from '@/components/user/user-avatar'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
+import { useLanguage } from '@/contexts/language-context'
 
 interface SuggestedGroup {
   id: number
@@ -27,38 +28,26 @@ interface SuggestedGroupsProps {
 }
 
 export function SuggestedGroups({ currentUserId }: SuggestedGroupsProps) {
+  const { t } = useLanguage()
   const [groups, setGroups] = useState<SuggestedGroup[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    // TODO: Récupérer les groupes suggérés depuis l'API
-    // Pour l'instant, on simule des données
-    setTimeout(() => {
-      setGroups([
-        { 
-          id: 1, 
-          name: 'Groupe Tech', 
-          description: 'Discussions sur les nouvelles technologies',
-          is_private: false,
-          members_count: 1234
-        },
-        { 
-          id: 2, 
-          name: 'Groupe Art', 
-          description: 'Partagez vos créations artistiques',
-          is_private: true,
-          members_count: 567
-        },
-        { 
-          id: 3, 
-          name: 'Groupe Sport', 
-          description: 'Passionnés de sport',
-          is_private: false,
-          members_count: 890
-        },
-      ])
-      setIsLoading(false)
-    }, 500)
+    // Fetch suggested groups from API
+    const fetchSuggestedGroups = async () => {
+      try {
+        // TODO: Replace with actual API call when endpoint is available
+        // const data = await socialService.getSuggestedGroups()
+        // setGroups(data)
+        setGroups([]) // No hardcoded data - will be populated from API
+      } catch (error) {
+        console.error('Error fetching suggested groups:', error)
+        setGroups([])
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    fetchSuggestedGroups()
   }, [])
 
   const handleJoin = async (groupId: number) => {
@@ -69,7 +58,7 @@ export function SuggestedGroups({ currentUserId }: SuggestedGroupsProps) {
   if (isLoading) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-2xl p-4">
-        <h3 className="text-xl font-bold mb-4">Groupes suggérés</h3>
+        <h3 className="text-xl font-bold mb-4">{t('dashboard.feed.suggested_groups') || 'Suggested groups'}</h3>
         <div className="space-y-3">
           {[...Array(3)].map((_, i) => (
             <div key={i} className="animate-pulse">
@@ -81,10 +70,15 @@ export function SuggestedGroups({ currentUserId }: SuggestedGroupsProps) {
     )
   }
 
+  // Don't render if no groups
+  if (groups.length === 0) {
+    return null
+  }
+
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 sticky top-4">
-      <h3 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">
-        Groupes suggérés
+    <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm sticky top-4">
+      <h3 className="text-lg font-bold mb-4 text-gray-900 dark:text-white">
+        {t('dashboard.feed.suggested_groups') || 'Suggested groups'}
       </h3>
       <div className="space-y-4">
         {groups.map((group) => (
@@ -112,7 +106,7 @@ export function SuggestedGroups({ currentUserId }: SuggestedGroupsProps) {
                 </p>
               )}
               <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                {group.members_count} membres
+                {group.members_count} {t('dashboard.groups.members') || 'members'}
               </p>
               <Button
                 variant="outline"
@@ -120,7 +114,7 @@ export function SuggestedGroups({ currentUserId }: SuggestedGroupsProps) {
                 onClick={() => handleJoin(group.id)}
                 className="rounded-full px-4 h-8 text-sm font-semibold w-full"
               >
-                Rejoindre
+                {t('dashboard.groups.join') || 'Join'}
               </Button>
             </div>
           </div>
@@ -130,7 +124,7 @@ export function SuggestedGroups({ currentUserId }: SuggestedGroupsProps) {
         variant="ghost"
         className="w-full mt-4 text-myhigh5-primary hover:text-myhigh5-primary/80"
       >
-        Voir plus
+        {t('dashboard.feed.see_more') || 'See more'}
       </Button>
     </div>
   )

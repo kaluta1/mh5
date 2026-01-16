@@ -11,10 +11,9 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Create engine for PostgreSQL (Neon or Supabase)
-# Use database_url property which prefers DATABASE_URL over SUPABASE_DB_URL
+# Create engine for Supabase PostgreSQL
 engine = create_engine(
-    settings.database_url,
+    settings.SUPABASE_DB_URL,
     pool_pre_ping=True,
     pool_recycle=3600,
     pool_size=10,

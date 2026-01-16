@@ -9,7 +9,7 @@ from app.models.message import MessageType, MessageStatus
 
 class SendMessageRequest(BaseModel):
     """Schema for sending a message"""
-    recipient_id: Optional[int] = Field(None, gt=0)  # Optional for group messages
+    recipient_id: int = Field(..., gt=0)
     content: str = Field(..., min_length=1)
     message_type: MessageType = MessageType.TEXT
     media_url: Optional[str] = None

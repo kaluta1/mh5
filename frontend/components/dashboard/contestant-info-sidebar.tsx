@@ -10,6 +10,7 @@ import { ReactionDetails } from '@/services/reactions-service'
 interface ContestantInfoSidebarProps {
   candidateTitle?: string
   registrationDate?: string
+  followersCount?: number | null
   isAuthor: boolean
   contestantId: number
   selectedReaction: string | null
@@ -21,11 +22,18 @@ interface ContestantInfoSidebarProps {
   isVoting: boolean
   onVote: () => void
   voteRestrictionReason?: string | null
+  showActions?: boolean
+  isSelf?: boolean
+  isFollowing?: boolean
+  isFollowLoading?: boolean
+  onFollowToggle?: () => void
+  onMessage?: () => void
 }
 
 export function ContestantInfoSidebar({
   candidateTitle,
   registrationDate,
+  followersCount = null,
   isAuthor,
   contestantId,
   selectedReaction,
@@ -36,7 +44,13 @@ export function ContestantInfoSidebar({
   canVote,
   isVoting,
   onVote,
-  voteRestrictionReason
+  voteRestrictionReason,
+  showActions = false,
+  isSelf = false,
+  isFollowing = false,
+  isFollowLoading = false,
+  onFollowToggle,
+  onMessage
 }: ContestantInfoSidebarProps) {
   const { t } = useLanguage()
 
@@ -134,7 +148,48 @@ export function ContestantInfoSidebar({
             <div className="text-lg">📅</div>
           </div>
         )}
+
+        {followersCount !== null && (
+          <div className="rounded-2xl border border-blue-100 dark:border-blue-900/40 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-900/30 p-4 shadow-inner flex items-center justify-between">
+            <div>
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                {t('dashboard.following.followers') || 'Followers'}
+              </p>
+              <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                {followersCount}
+              </p>
+            </div>
+            <div className="text-lg">👥</div>
+          </div>
+        )}
       </div>
+
+      <div className="border-t border-gray-200/40 dark:border-gray-700/40"></div>
+
+      {/* Follow / Message Actions */}
+      {showActions && !isSelf && (
+        <div className="space-y-2">
+          <Button
+            onClick={onFollowToggle}
+            disabled={isFollowLoading || !onFollowToggle}
+            className="w-full rounded-full bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white"
+          >
+            {isFollowLoading
+              ? (t('common.loading') || 'Loading...')
+              : isFollowing
+                ? (t('dashboard.following.unfollow') || 'Unfollow')
+                : (t('dashboard.following.follow') || 'Follow')}
+          </Button>
+          <Button
+            onClick={onMessage}
+            disabled={!onMessage}
+            variant="outline"
+            className="w-full rounded-full"
+          >
+            {t('dashboard.messages.message_button') || 'Message'}
+          </Button>
+        </div>
+      )}
 
       <div className="border-t border-gray-200/40 dark:border-gray-700/40"></div>
 

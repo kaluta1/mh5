@@ -27,12 +27,9 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("🚀 Starting Feed Microservice...")
     
-    # Initialize database connection (optional - won't crash if fails)
-    try:
-        await init_db()
-        logger.info("✅ Database connection initialized")
-    except Exception as e:
-        logger.warning(f"⚠️ Database initialization skipped: {e}")
+    # Initialize database connection
+    await init_db()
+    logger.info("✅ Database connection initialized")
     
     # Initialize encryption service
     init_encryption_service()

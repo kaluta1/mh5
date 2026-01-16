@@ -110,6 +110,7 @@ class PrivateMessage(Base):
     
     # Contenu
     content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    sender_encrypted_content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     message_type: Mapped[str] = mapped_column(String(20), default="text", nullable=False)  # text, image, video, file, audio
     
     # Média associé

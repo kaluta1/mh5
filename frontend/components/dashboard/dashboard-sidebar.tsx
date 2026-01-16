@@ -22,7 +22,8 @@ import {
   Hand,
   Globe,
   LayoutDashboard,
-  Award
+  Award,
+  Rss
 } from "lucide-react"
 
 const baseMenuSections = [
@@ -32,9 +33,15 @@ const baseMenuSections = [
       { name: "dashboard.nav.overview", href: "/dashboard", icon: LayoutDashboard },
       { name: "dashboard.nav.contests", href: "/dashboard/contests", icon: Trophy },
       { name: "dashboard.nav.myhigh5", href: "/dashboard/myhigh5", icon: Hand },
-      // { name: "dashboard.nav.groups", href: "/dashboard/groups", icon: Users },
       { name: "dashboard.nav.favorites", href: "/dashboard/favorites", icon: Star },
        { name: "dashboard.nav.my_applications", href: "/dashboard/my-applications", icon: FileText },
+    ]
+  },
+  {
+    title: "dashboard.nav.social",
+    items: [
+      { name: "dashboard.nav.feed", href: "/dashboard/feed", icon: Rss },
+      { name: "dashboard.nav.groups", href: "/dashboard/groups", icon: Users },
     ]
   },
  

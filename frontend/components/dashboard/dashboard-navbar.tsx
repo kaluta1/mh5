@@ -3,7 +3,7 @@
 import * as React from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { 
-  Search, Menu, ShoppingBag, Command, MessageSquare
+  Search, Menu, ShoppingBag, Command, MessageSquare, Bell
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { UserDropdown } from "@/components/user/user-dropdown"

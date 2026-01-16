@@ -101,8 +101,9 @@ def run_app(host="0.0.0.0", port=8000, reload=True, workers=1):
     """Démarrage de l'application FastAPI avec Uvicorn"""
     logger.info(f"Démarrage de l'application sur {host}:{port}...")
     
+    # Utiliser python -m uvicorn pour s'assurer qu'il trouve uvicorn
     cmd = [
-        "uvicorn", 
+        sys.executable, "-m", "uvicorn", 
         "main:app", 
         "--host", host, 
         "--port", str(port),

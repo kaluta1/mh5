@@ -12,9 +12,9 @@ import app.models
 
 def init_db():
     """Crée toutes les tables définies dans les modèles."""
-    print("Création des tables...")
+    print("Creating tables...")
     Base.metadata.create_all(bind=engine)
-    print("✅ Tables créées avec succès!")
+    print("Tables created successfully!")
 
 if __name__ == "__main__":
     init_db()

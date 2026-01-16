@@ -40,13 +40,20 @@ export function FloatingActionButton({
         onClick={onClick}
         size="lg"
         className={cn(
-          'rounded-full h-14 w-14 md:h-16 md:w-16 flex items-center justify-center transition-all duration-300 hover:scale-110 shadow-2xl',
+          label 
+            ? 'rounded-full h-auto px-4 md:px-6 py-3 md:py-4 flex items-center gap-2 transition-all duration-300 hover:scale-105 shadow-2xl'
+            : 'rounded-full h-14 w-14 md:h-16 md:w-16 flex items-center justify-center transition-all duration-300 hover:scale-110 shadow-2xl',
           variantClasses[variant],
           className
         )}
         aria-label={label || 'Action'}
       >
-        {icon || <Plus className="h-6 w-6 md:h-7 md:w-7" />}
+        {icon || <Plus className="h-5 w-5 md:h-6 md:w-6 flex-shrink-0" />}
+        {label && (
+          <span className="text-sm md:text-base font-semibold whitespace-nowrap">
+            {label}
+          </span>
+        )}
       </Button>
     </div>
   )

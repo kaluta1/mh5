@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { formatDistanceToNow } from 'date-fns'
-import { fr } from 'date-fns/locale'
+import { enUS, fr } from 'date-fns/locale'
 import { 
   Heart, 
   MessageCircle, 
@@ -20,6 +20,14 @@ import { PostMediaGallery } from './post-media-gallery'
 import { PostPoll } from './post-poll'
 import { LinkPreview } from './link-preview'
 import { cn } from '@/lib/utils'
+import { useLanguage } from '@/contexts/language-context'
+
+const localeMap: Record<string, any> = {
+  en: enUS,
+  fr: fr,
+  es: enUS,
+  de: enUS
+}
 
 interface PostCardProps {
   post: Post
@@ -40,6 +48,8 @@ export function PostCard({
   onDelete,
   showFullContent = false 
 }: PostCardProps) {
+  const { t, language } = useLanguage()
+  const dateLocale = localeMap[language] || enUS
   const [isLiked, setIsLiked] = useState(post.is_liked)
   const [likesCount, setLikesCount] = useState(post.likes_count)
 
@@ -54,8 +64,8 @@ export function PostCard({
   const hasLink = post.content.includes('http')
 
   return (
-    <article className="hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors px-4 py-3">
-      <div className="flex gap-3">
+    <article className="hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors border-b border-gray-100 dark:border-gray-700 last:border-b-0 px-4 md:px-6 py-4 md:py-5">
+      <div className="flex gap-3 md:gap-4">
         {/* Avatar */}
         <div className="flex-shrink-0">
           <Link href={`/profile/${post.author_id}`}>
@@ -82,7 +92,7 @@ export function PostCard({
               </span>
               <span className="text-gray-500 dark:text-gray-400">·</span>
               <span className="text-gray-500 dark:text-gray-400 text-[15px]">
-                {formatDistanceToNow(new Date(post.created_at), { addSuffix: true, locale: fr })}
+                {formatDistanceToNow(new Date(post.created_at), { addSuffix: true, locale: dateLocale })}
               </span>
             </div>
             <DropdownMenu>
@@ -101,10 +111,10 @@ export function PostCard({
                     onClick={() => onDelete(post.id)}
                     className="text-red-600 dark:text-red-400"
                   >
-                    Supprimer
+                    {t('dashboard.feed.delete') || 'Delete'}
                   </DropdownMenuItem>
                 )}
-                <DropdownMenuItem>Signaler</DropdownMenuItem>
+                <DropdownMenuItem>{t('dashboard.feed.report') || 'Report'}</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -139,7 +149,7 @@ export function PostCard({
           )}
 
           {/* Actions - Twitter style */}
-          <div className="flex items-center justify-between max-w-md mt-3">
+          <div className="flex items-center justify-between max-w-md mt-4 pt-2">
             {/* Comment */}
             <button
               onClick={() => onComment?.(post.id)}

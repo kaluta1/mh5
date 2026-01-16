@@ -1,10 +1,9 @@
-version: '3.8'
-
 services:
   app:
     build:
       context: .
       dockerfile: Dockerfile
+    container_name: backend-app
     ports:
       - "8000:8000"
     depends_on:
@@ -22,7 +21,9 @@ services:
     volumes:
       - ./:/app
       - media_data:/app/storage
-    command: python start.py --host 0.0.0.0 --port 8000
+    command: python start.py --host 0.0.0.0 --port 8000 --no-reload
+    networks:
+      - myhigh5-network
 
   db:
     image: postgres:13
@@ -31,9 +32,11 @@ services:
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=myfav
+      - POSTGRES_DB=myhigh5
     ports:
       - "5432:5432"
+    networks:
+      - myhigh5-network
 
   redis:
     image: redis:6
@@ -41,8 +44,15 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    networks:
+      - myhigh5-network
 
 volumes:
   postgres_data:
   redis_data:
   media_data:
+
+networks:
+  myhigh5-network:
+    external: true
+    name: myhigh5-network

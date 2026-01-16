@@ -19,7 +19,8 @@ import {
   Percent,
   Lightbulb,
   CreditCard,
-  Home
+  Home,
+  Server
 } from "lucide-react"
 
 const adminMenuSections = [
@@ -47,6 +48,7 @@ const adminMenuSections = [
       { name: "admin.nav.commission_settings", href: "/dashboard/admin/commission-settings", icon: Percent },
       { name: "admin.nav.suggested_contests", href: "/dashboard/admin/suggested-contests", icon: Lightbulb },
       { name: "admin.nav.transactions", href: "/dashboard/admin/transactions", icon: CreditCard },
+      { name: "admin.nav.microservices", href: "/dashboard/admin/microservices", icon: Server },
     ]
   },
 ]
