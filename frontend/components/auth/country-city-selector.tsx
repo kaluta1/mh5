@@ -25,7 +25,7 @@ const GEOGRAPHY_DATA: Record<string, Record<string, Record<string, string[]>>> =
     'West Africa': {
       'Senegal': ['Dakar', 'Thiès', 'Kaolack', 'Tambacounda', 'Saint-Louis'],
       'Mali': ['Bamako', 'Ségou', 'Mopti', 'Gao', 'Koulikoro'],
-      'Ivory Coast': ['Abidjan', 'Yamoussoukro', 'Bouaké', 'Daloa', 'San-Pédro'],
+      "Côte d'Ivoire": ['Abidjan', 'Yamoussoukro', 'Bouaké', 'Daloa', 'San-Pédro'],
       'Ghana': ['Accra', 'Kumasi', 'Tamale', 'Sekondi', 'Cape Coast'],
       'Nigeria': ['Lagos', 'Abuja', 'Kano', 'Ibadan', 'Port Harcourt'],
       'Benin': ['Cotonou', 'Porto-Novo', 'Parakou', 'Djougou', 'Abomey'],
