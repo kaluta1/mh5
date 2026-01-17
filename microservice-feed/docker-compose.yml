@@ -17,7 +17,7 @@ services:
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - AWS_REGION=${AWS_REGION}
       - AWS_S3_BUCKET=${AWS_S3_BUCKET}
-      - MAIN_PLATFORM_API_URL=${MAIN_PLATFORM_API_URL:-http://host.docker.internal:8000}
+      - MAIN_PLATFORM_API_URL=${MAIN_PLATFORM_API_URL:-http://backend-app:8000}
       - MAIN_PLATFORM_API_KEY=${MAIN_PLATFORM_API_KEY}
       - ENCRYPTION_KEY_DERIVATION_SALT=${ENCRYPTION_KEY_DERIVATION_SALT}
       - HOST=0.0.0.0
@@ -37,8 +37,6 @@ services:
   redis:
     image: redis:7-alpine
     container_name: feed-redis
-    ports:
-      - "6379:6379"
     volumes:
       - redis-data:/data
     networks:

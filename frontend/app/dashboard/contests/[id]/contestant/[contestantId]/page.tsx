@@ -22,7 +22,7 @@ import { Info } from 'lucide-react'
 import api from '@/lib/api'
 import { commentsService, Comment as ServiceComment } from '@/lib/services/comments-service'
 import { reactionsService, ReactionDetails } from '@/services/reactions-service'
-import { sharesService } from '@/services/shares-service'
+import { followService } from '@/services/follow-service'
 
 interface Media {
   id: string
@@ -90,6 +90,9 @@ export default function ContestantDetailPage() {
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [comments, setComments] = useState<Comment[]>([])
+  const [isFollowing, setIsFollowing] = useState(false)
+  const [isFollowLoading, setIsFollowLoading] = useState(false)
+  const [followersCount, setFollowersCount] = useState<number | null>(null)
   const [voters, setVoters] = useState<Array<{ id?: number; user_id: number; username?: string; full_name?: string; avatar_url?: string; vote_date?: string; contest_id?: number; season_id?: number }>>([])
   const [reactionDetails, setReactionDetails] = useState<ReactionDetails | null>(null)
   const [selectedReaction, setSelectedReaction] = useState<string | null>(null)
@@ -139,6 +142,34 @@ export default function ContestantDetailPage() {
       loadContestant()
     }
   }, [isLoading, isAuthenticated, user, contestantId])
+
+  useEffect(() => {
+    const loadFollowStatus = async () => {
+      try {
+        if (user?.id && contestant?.user_id && user.id !== contestant.user_id) {
+          const following = await followService.getFollowing(user.id, 0, 100)
+          setIsFollowing(following.some(f => f.id === contestant.user_id))
+        }
+      } catch (err) {
+        console.error('Error loading follow status:', err)
+      }
+
+      if (!contestant?.user_id) {
+        return
+      }
+
+      try {
+        const followers = await followService.getFollowers(contestant.user_id, 0, 100)
+        setFollowersCount(followers.length)
+      } catch (err) {
+        console.error('Error loading followers count:', err)
+      }
+    }
+
+    if (contestant?.user_id && user?.id) {
+      loadFollowStatus()
+    }
+  }, [contestant?.user_id, user?.id])
 
   // Charger les commentaires du contestant
   useEffect(() => {
@@ -369,47 +400,40 @@ export default function ContestantDetailPage() {
     }
   }
 
-  const handleShare = async () => {
-    // Construire le lien de partage avec l'id du contestant
-    const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
-    const shareUrl = new URL(`${baseUrl}/dashboard/contests/${contestId}/contestant/${contestantId}`)
+  const handleFollowToggle = async () => {
+    if (!contestant?.user_id || !user?.id || contestant.user_id === user.id) return
 
-    // Ajouter uniquement le referral code (pas de fallback sur l'ID utilisateur)
-    const referralCode = user?.personal_referral_code
-    if (referralCode) {
-      shareUrl.searchParams.set('ref', referralCode)
-    }
-
-    const shareLinkStr = shareUrl.toString()
-    setShareLink(shareLinkStr)
-    setShowShareDialog(true)
-
-    // Enregistrer le partage dans la base de données avec le referral code
+    setIsFollowLoading(true)
     try {
-      await sharesService.shareContestant(
-        Number(contestantId),
-        shareLinkStr,
-        undefined, // platform sera détecté automatiquement si possible
-        user?.id,
-        referralCode || undefined
-      )
-
-      // Recharger les partages
-      const sharesResponse = await api.get(`/api/v1/contestants/${contestantId}/shares`)
-      const sharesData = sharesResponse.data.shares || []
-      setSharesList(sharesData)
-
-      // Mettre à jour le compteur de partages dans contestant
-      if (contestant) {
-        setContestant({
-          ...contestant,
-          shares_count: (contestant.shares_count || 0) + 1
+      if (isFollowing) {
+        await followService.unfollowUser(contestant.user_id)
+        setIsFollowing(false)
+        setToast({
+          type: 'success',
+          message: t('dashboard.following.unfollow') || 'Unfollowed'
+        })
+      } else {
+        await followService.followUser(contestant.user_id)
+        setIsFollowing(true)
+        setToast({
+          type: 'success',
+          message: t('dashboard.following.follow') || 'Followed'
         })
       }
     } catch (error: any) {
-      console.error('Error recording share:', error)
-      // Ne pas bloquer l'utilisateur si l'enregistrement échoue
+      console.error('Error updating follow status:', error)
+      setToast({
+        type: 'error',
+        message: error?.response?.data?.detail || t('common.error') || 'Error'
+      })
+    } finally {
+      setIsFollowLoading(false)
     }
+  }
+
+  const handleMessage = () => {
+    if (!contestant?.user_id || contestant.user_id === user?.id) return
+    router.push(`/dashboard/messages?user=${contestant.user_id}`)
   }
 
   useEffect(() => {
@@ -457,6 +481,7 @@ export default function ContestantDetailPage() {
         author_continent={contestant.author_continent}
         author_avatar_url={contestant.author_avatar_url}
         votes_count={contestant.votes_count}
+        followersCount={followersCount}
         rank={contestant.rank}
         total_participants={contestant.total_participants}
         isFavorite={isFavorite}
@@ -487,6 +512,12 @@ export default function ContestantDetailPage() {
             })
           }
         }}
+        showActions={!!contestant.user_id}
+        isSelf={user?.id === contestant.user_id}
+        isFollowing={isFollowing}
+        isFollowLoading={isFollowLoading}
+        onFollowToggle={handleFollowToggle}
+        onMessage={handleMessage}
       />
 
       {/* Stats Bar */}
@@ -533,6 +564,12 @@ export default function ContestantDetailPage() {
         onShare={handleShare}
         isAuthor={user?.id === contestant.user_id}
         voteRestrictionReason={contestant.vote_restriction_reason}
+        showActions={!!contestant.user_id}
+        isSelf={user?.id === contestant.user_id}
+        isFollowing={isFollowing}
+        isFollowLoading={isFollowLoading}
+        onFollowToggle={handleFollowToggle}
+        onMessage={handleMessage}
       />
 
       {/* Main Content */}
@@ -544,6 +581,7 @@ export default function ContestantDetailPage() {
               <ContestantInfoSidebar
                 candidateTitle={contestant.title}
                 registrationDate={contestant.registration_date}
+                followersCount={followersCount}
                 isAuthor={user?.id === contestant.user_id}
                 contestantId={Number(contestantId)}
                 selectedReaction={selectedReaction}
@@ -554,8 +592,13 @@ export default function ContestantDetailPage() {
                 canVote={contestant.can_vote || false}
                 isVoting={isVoting}
                 onVote={handleVote}
-                onShare={handleShare}
                 voteRestrictionReason={contestant.vote_restriction_reason}
+                showActions={!!contestant.user_id}
+                isSelf={user?.id === contestant.user_id}
+                isFollowing={isFollowing}
+                isFollowLoading={isFollowLoading}
+                onFollowToggle={handleFollowToggle}
+                onMessage={handleMessage}
               />
             </div>
 
@@ -639,6 +682,7 @@ export default function ContestantDetailPage() {
         totalParticipants={contestant.total_participants}
         candidateTitle={contestant.title}
         registrationDate={contestant.registration_date}
+        followersCount={followersCount}
         isQualified={contestant.is_qualified}
       />
 

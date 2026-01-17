@@ -44,6 +44,7 @@ export interface TranslationKeys {
   }
   navigation: {
     home: string
+    landing: string
     dashboard: string
     contests: string
     clubs: string
@@ -453,6 +454,7 @@ export interface TranslationKeys {
       latest_hits: string
       pets: string
       sports_clubs: string
+      no_categories: string
     }
     legal: {
       title: string
@@ -532,6 +534,7 @@ export interface TranslationKeys {
       commission_settings: string
       suggested_contests: string
       transactions: string
+      microservices: string
     }
     dashboard: {
       total_seasons: string
@@ -1087,6 +1090,68 @@ export interface TranslationKeys {
         affiliates_desc?: string
         commissions_desc?: string
         prize_desc?: string
+        messages?: string
+        following?: string
+        social?: string
+      }
+      feed?: {
+        welcome: string
+        welcome_description: string
+        create_first_post: string
+        loading: string
+        load_more: string
+        create_post: string
+        delete_confirm: string
+      }
+      messages?: {
+        title: string
+        subtitle: string
+        no_conversations: string
+        start_conversation: string
+        encrypted_message: string
+        end_to_end_encrypted: string
+        type_message: string
+        select_conversation: string
+        select_conversation_desc: string
+      }
+      groups?: {
+        title: string
+        subtitle: string
+        search_placeholder: string
+        no_groups_found: string
+        no_groups_available: string
+        try_keywords: string
+        be_first: string
+        create_group: string
+        members: string
+        created_by: string
+        leave: string
+        join: string
+        create_new_group: string
+        group_name: string
+        group_name_placeholder: string
+        description: string
+        description_placeholder: string
+        group_type: string
+        public: string
+        private: string
+        cancel: string
+        creating: string
+        create_group_button: string
+      }
+      following?: {
+        title: string
+        subtitle: string
+        following_tab: string
+        followers_tab: string
+        suggested_tab: string
+        search_placeholder: string
+        no_users_found: string
+        no_users: string
+        followers: string
+        posts: string
+        unfollow: string
+        follow: string
       }
       leaderboard?: {
         title: string
@@ -1801,7 +1866,8 @@ export const translations: Record<Language, TranslationKeys> = {
         categories: "Catégories",
         commission_settings: "Paramètres de commission",
         suggested_contests: "Concours suggérés",
-        transactions: "Transactions"
+        transactions: "Transactions",
+        microservices: "Microservices"
       },
       dashboard: {
         total_seasons: "Total des saisons",
@@ -2488,7 +2554,114 @@ export const translations: Record<Language, TranslationKeys> = {
         admin_panel: "Panneau Admin",
         admin_panel_desc: "Gérer la plateforme",
         notifications: "Notifications",
-        notifications_desc: "Voir toutes vos notifications"
+        notifications_desc: "Voir toutes vos notifications",
+        messages: "Messages",
+        following: "Abonnements",
+        social: "Social",
+        feed: "Feed"
+      },
+      feed: {
+        welcome: "Bienvenue sur votre feed !",
+        welcome_description: "Commencez à suivre des personnes pour voir leurs posts ici.",
+        create_first_post: "Créer votre premier post",
+        loading: "Chargement...",
+        load_more: "Charger plus",
+        create_post: "Créer un post",
+        delete_confirm: "Êtes-vous sûr de vouloir supprimer ce post ?",
+        create_post_placeholder: "Quoi de neuf ?",
+        media: "Médias",
+        video: "Vidéo",
+        poll: "Sondage",
+        emoji: "Emoji",
+        schedule: "Planifier",
+        location: "Localisation",
+        publish: "Publier",
+        delete: "Supprimer",
+        report: "Signaler",
+        suggested_users: "Suggestions pour vous",
+        suggested_groups: "Groupes suggérés",
+        see_more: "Voir plus",
+        ad_title: "Découvrez nos fonctionnalités premium",
+        ad_description: "Accédez à des fonctionnalités exclusives et boostez votre visibilité",
+        ad_cta: "En savoir plus",
+        create_post_dialog_title: "Créer une publication",
+        publishing: "Publication...",
+        post_tab: "Publication",
+        poll_tab: "Sondage",
+        post_placeholder: "Quoi de neuf ?",
+        files_selected: "fichier(s) sélectionné(s)",
+        poll_question_placeholder: "Posez votre question...",
+        poll_options_label: "Options du sondage",
+        poll_option_placeholder: "Option",
+        add_poll_option: "Ajouter une option",
+        public_visibility: "Public",
+        followers_visibility: "Abonnés",
+        private_visibility: "Privé",
+        comments: "Commentaires",
+        no_comments: "Aucun commentaire",
+        add_comment_placeholder: "Ajouter un commentaire...",
+        comment_shortcut: "Ctrl+Entrée pour publier",
+        posting: "Publication...",
+        post: "Publier",
+        comment_success: "Commentaire publié avec succès !",
+        comment_error: "Échec de la publication du commentaire. Veuillez réessayer.",
+        post_success: "Publication créée avec succès !",
+        post_error: "Échec de la création de la publication. Veuillez réessayer."
+      },
+      messages: {
+        title: "Messages",
+        subtitle: "Messages chiffrés de bout en bout",
+        no_conversations: "Aucune conversation",
+        start_conversation: "Commencez une nouvelle conversation",
+        encrypted_message: "Message chiffré",
+        end_to_end_encrypted: "Chiffré de bout en bout",
+        type_message: "Tapez un message...",
+        select_conversation: "Sélectionnez une conversation",
+        select_conversation_desc: "Choisissez une conversation pour commencer à discuter",
+        message_button: "Message",
+        new_message: "Commencer un nouveau message"
+      },
+      groups: {
+        title: "Groupes",
+        subtitle: "Rejoignez des groupes et partagez avec votre communauté",
+        search_placeholder: "Rechercher un groupe...",
+        no_groups_found: "Aucun groupe trouvé",
+        no_groups_available: "Aucun groupe disponible",
+        try_keywords: "Essayez avec d'autres mots-clés",
+        be_first: "Soyez le premier à créer un groupe !",
+        create_group: "Créer un groupe",
+        members: "membres",
+        no_members: "Aucun membre pour le moment",
+        no_messages: "Aucun message pour le moment",
+        join_to_chat: "Rejoignez le groupe pour discuter",
+        created_by: "Créé par",
+        leave: "Quitter",
+        join: "Rejoindre",
+        create_new_group: "Créer un nouveau groupe",
+        group_name: "Nom du groupe",
+        group_name_placeholder: "Nom du groupe",
+        description: "Description",
+        description_placeholder: "Description du groupe (optionnel)",
+        group_type: "Type de groupe",
+        public: "Public",
+        private: "Privé",
+        cancel: "Annuler",
+        creating: "Création...",
+        create_group_button: "Créer le groupe"
+      },
+      following: {
+        title: "Réseau Social",
+        subtitle: "Gérez vos abonnements et découvrez de nouveaux utilisateurs",
+        following_tab: "Abonnements",
+        followers_tab: "Abonnés",
+        suggested_tab: "Suggestions",
+        search_placeholder: "Rechercher...",
+        no_users_found: "Aucun utilisateur trouvé",
+        no_users: "Aucun utilisateur",
+        followers: "abonnés",
+        posts: "posts",
+        unfollow: "Ne plus suivre",
+        follow: "Suivre"
       },
       stats: {
         contests: "Mes Concours",
@@ -2920,6 +3093,7 @@ export const translations: Record<Language, TranslationKeys> = {
     },
     navigation: {
       home: "Accueil",
+      landing: "Accueil",
       dashboard: "Tableau de bord",
       contests: "Concours",
       clubs: "Clubs",
@@ -3513,7 +3687,8 @@ export const translations: Record<Language, TranslationKeys> = {
         handsome: "Concours Charme",
         latest_hits: "Derniers Hits",
         pets: "Animaux de Compagnie",
-        sports_clubs: "Clubs Sportifs"
+        sports_clubs: "Clubs Sportifs",
+        no_categories: "Aucune catégorie disponible"
       },
       legal: {
         title: "Légal",
@@ -4630,7 +4805,8 @@ export const translations: Record<Language, TranslationKeys> = {
         categories: "Categories",
         commission_settings: "Commission Settings",
         suggested_contests: "Suggested Contests",
-        transactions: "Transactions"
+        transactions: "Transactions",
+        microservices: "Microservices"
       },
       dashboard: {
         total_seasons: "Total seasons",
@@ -5306,6 +5482,7 @@ export const translations: Record<Language, TranslationKeys> = {
     },
     navigation: {
       home: "Home",
+      landing: "Landing",
       dashboard: "Dashboard",
       contests: "Contests",
       clubs: "Clubs",
@@ -5950,7 +6127,8 @@ export const translations: Record<Language, TranslationKeys> = {
         handsome: "Handsome Contests",
         latest_hits: "Latest Hits",
         pets: "Pets",
-        sports_clubs: "Sports Clubs"
+        sports_clubs: "Sports Clubs",
+        no_categories: "No categories available"
       },
       legal: {
         title: "Legal",
@@ -5986,6 +6164,9 @@ export const translations: Record<Language, TranslationKeys> = {
         clubs: "Clubs",
         myhigh5: "MyHigh5",
         favorites: "Favorites",
+        messages: "Messages",
+        following: "Following",
+        social: "Social",
         search: "Search",
         pages: "Pages",
         wallet: "Wallet",
@@ -6008,6 +6189,109 @@ export const translations: Record<Language, TranslationKeys> = {
         admin_panel_desc: "Manage the platform",
         notifications: "Notifications",
         notifications_desc: "View all your notifications"
+      },
+      feed: {
+        welcome: "Welcome to your feed!",
+        welcome_description: "Start following people to see their posts here.",
+        create_first_post: "Create your first post",
+        loading: "Loading...",
+        load_more: "Load more",
+        create_post: "Create a post",
+        delete_confirm: "Are you sure you want to delete this post?",
+        create_post_placeholder: "What's on your mind?",
+        media: "Media",
+        video: "Video",
+        poll: "Poll",
+        emoji: "Emoji",
+        schedule: "Schedule",
+        location: "Location",
+        publish: "Publish",
+        delete: "Delete",
+        report: "Report",
+        suggested_users: "Suggestions for you",
+        suggested_groups: "Suggested groups",
+        see_more: "See more",
+        ad_title: "Discover premium features",
+        ad_description: "Access exclusive features and boost your visibility",
+        ad_cta: "Learn more",
+        create_post_dialog_title: "Create a post",
+        publishing: "Publishing...",
+        post_tab: "Post",
+        poll_tab: "Poll",
+        post_placeholder: "What's on your mind?",
+        files_selected: "file(s) selected",
+        poll_question_placeholder: "Ask your question...",
+        poll_options_label: "Poll options",
+        poll_option_placeholder: "Option",
+        add_poll_option: "Add an option",
+        public_visibility: "Public",
+        followers_visibility: "Followers",
+        private_visibility: "Private",
+        comments: "Comments",
+        no_comments: "No comments",
+        add_comment_placeholder: "Add a comment...",
+        comment_shortcut: "Ctrl+Enter to post",
+        posting: "Posting...",
+        post: "Post",
+        comment_success: "Comment posted successfully!",
+        comment_error: "Failed to post comment. Please try again.",
+        post_success: "Post created successfully!",
+        post_error: "Failed to create post. Please try again."
+      },
+      messages: {
+        title: "Messages",
+        subtitle: "End-to-end encrypted messages",
+        no_conversations: "No conversations",
+        start_conversation: "Start a new conversation",
+        encrypted_message: "Encrypted message",
+        end_to_end_encrypted: "End-to-end encrypted",
+        type_message: "Type a message...",
+        select_conversation: "Select a conversation",
+        select_conversation_desc: "Choose a conversation to start chatting",
+        message_button: "Message",
+        new_message: "Start a new message"
+      },
+      groups: {
+        title: "Groups",
+        subtitle: "Join groups and share with your community",
+        search_placeholder: "Search for a group...",
+        no_groups_found: "No groups found",
+        no_groups_available: "No groups available",
+        try_keywords: "Try different keywords",
+        be_first: "Be the first to create a group!",
+        create_group: "Create a group",
+        members: "members",
+        no_members: "No members yet",
+        no_messages: "No messages yet",
+        join_to_chat: "Join the group to start chatting",
+        created_by: "Created by",
+        leave: "Leave",
+        join: "Join",
+        create_new_group: "Create a new group",
+        group_name: "Group name",
+        group_name_placeholder: "Group name",
+        description: "Description",
+        description_placeholder: "Group description (optional)",
+        group_type: "Group type",
+        public: "Public",
+        private: "Private",
+        cancel: "Cancel",
+        creating: "Creating...",
+        create_group_button: "Create group"
+      },
+      following: {
+        title: "Social Network",
+        subtitle: "Manage your following and discover new users",
+        following_tab: "Following",
+        followers_tab: "Followers",
+        suggested_tab: "Suggested",
+        search_placeholder: "Search...",
+        no_users_found: "No users found",
+        no_users: "No users",
+        followers: "followers",
+        posts: "posts",
+        unfollow: "Unfollow",
+        follow: "Follow"
       },
       stats: {
         contests: "My Contests",
@@ -7144,7 +7428,8 @@ export const translations: Record<Language, TranslationKeys> = {
         categories: "Categorías",
         commission_settings: "Configuración de comisiones",
         suggested_contests: "Concursos sugeridos",
-        transactions: "Transacciones"
+        transactions: "Transacciones",
+        microservices: "Microservicios"
       },
       dashboard: {
         total_seasons: "Total de temporadas",
@@ -7819,6 +8104,7 @@ export const translations: Record<Language, TranslationKeys> = {
     },
     navigation: {
       home: "Inicio",
+      landing: "Inicio",
       dashboard: "Panel de control",
       contests: "Concursos",
       clubs: "Clubes",
@@ -8367,7 +8653,8 @@ export const translations: Record<Language, TranslationKeys> = {
         handsome: "Concursos de Atractivo",
         latest_hits: "Últimos Éxitos",
         pets: "Mascotas",
-        sports_clubs: "Clubes Deportivos"
+        sports_clubs: "Clubes Deportivos",
+        no_categories: "No hay categorías disponibles"
       },
       legal: {
         title: "Legal",
@@ -9466,7 +9753,8 @@ export const translations: Record<Language, TranslationKeys> = {
         categories: "Kategorien",
         commission_settings: "Provisionseinstellungen",
         suggested_contests: "Vorgeschlagene Wettbewerbe",
-        transactions: "Transaktionen"
+        transactions: "Transaktionen",
+        microservices: "Microservices"
       },
       dashboard: {
         total_seasons: "Gesamte Jahreszeiten",
@@ -10141,6 +10429,7 @@ export const translations: Record<Language, TranslationKeys> = {
     },
     navigation: {
       home: "Startseite",
+      landing: "Startseite",
       dashboard: "Dashboard",
       contests: "Wettbewerbe",
       clubs: "Clubs",
@@ -10689,7 +10978,8 @@ export const translations: Record<Language, TranslationKeys> = {
         handsome: "Attraktivitätswettbewerbe",
         latest_hits: "Neueste Hits",
         pets: "Haustiere",
-        sports_clubs: "Sportvereine"
+        sports_clubs: "Sportvereine",
+        no_categories: "Keine Kategorien verfügbar"
       },
       legal: {
         title: "Rechtliches",

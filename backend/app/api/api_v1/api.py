@@ -4,7 +4,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    from app.api.api_v1.endpoints import auth, users, media, contests, votes, kyc, contestant, geography, favorites, search, search_history, comments, admin, season_migration, notifications, analytics, affiliate, payments, roles, verifications, wallet, voting_types, suggested_contests, social, private_messages, contact, categories, newsletter, share
+    from app.api.api_v1.endpoints import auth, users, media, contests, votes, kyc, contestant, geography, favorites, search, search_history, comments, admin, season_migration, notifications, analytics, affiliate, payments, roles, verifications, wallet, voting_types, suggested_contests, social, private_messages, contact, categories, newsletter, share, follow
+    from app.api.api_v1.endpoints import feed_groups, feed_messages, feed_posts, feed, feed_keys
     logger.info("All endpoints imported successfully")
 except ImportError as e:
     logger.error(f"Error importing endpoints: {e}", exc_info=True)
@@ -48,3 +49,11 @@ api_router.include_router(private_messages.router, prefix="/messages", tags=["Me
 api_router.include_router(contact.router, tags=["Contact"])
 api_router.include_router(newsletter.router, prefix="/newsletter", tags=["Newsletter"])
 api_router.include_router(share.router, prefix="/share", tags=["Partage Social"])
+api_router.include_router(follow.router, prefix="/follow", tags=["Follow"])
+
+# Feed System Endpoints (merged from microservice)
+api_router.include_router(feed_groups.router, prefix="/feed/groups", tags=["Feed Groups"])
+api_router.include_router(feed_messages.router, prefix="/feed/messages", tags=["Feed Messages"])
+api_router.include_router(feed_posts.router, prefix="/feed/posts", tags=["Feed Posts"])
+api_router.include_router(feed.router, prefix="/feed", tags=["Feed"])
+api_router.include_router(feed_keys.router, prefix="/feed/keys", tags=["Feed Encryption Keys"])

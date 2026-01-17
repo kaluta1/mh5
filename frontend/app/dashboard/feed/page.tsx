@@ -7,17 +7,16 @@ import { PostCard } from '@/components/feed/post-card'
 import { PostDialog } from '@/components/feed/post-dialog'
 import { CommentDialog } from '@/components/feed/comment-dialog'
 import { CreatePostBox } from '@/components/feed/create-post-box'
-import { SuggestedUsers } from '@/components/feed/suggested-users'
-import { SuggestedGroups } from '@/components/feed/suggested-groups'
-import { Advertisement } from '@/components/feed/advertisement'
 import { FloatingActionButton } from '@/components/ui/floating-action-button'
 import { socialService, Post } from '@/services/social-service'
 import { useAuth } from '@/hooks/use-auth'
 import { useRouter } from 'next/navigation'
+import { useLanguage } from '@/contexts/language-context'
 
 export default function FeedPage() {
   const { isAuthenticated, user } = useAuth()
   const router = useRouter()
+  const { t } = useLanguage()
   const [posts, setPosts] = useState<Post[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isPostDialogOpen, setIsPostDialogOpen] = useState(false)
@@ -36,6 +35,7 @@ export default function FeedPage() {
   const loadFeed = async () => {
     setIsLoading(true)
     try {
+      // Use new feed endpoint
       const data = await socialService.getFeed(skip, 20)
       if (skip === 0) {
         setPosts(data)
@@ -43,8 +43,12 @@ export default function FeedPage() {
         setPosts(prev => [...prev, ...data])
       }
       setHasMore(data.length === 20)
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading feed:', error)
+      // Don't show alert for feed loading errors, just log
+      if (error?.response?.status === 401) {
+        router.push('/login')
+      }
     } finally {
       setIsLoading(false)
     }
@@ -103,7 +107,7 @@ export default function FeedPage() {
   }
 
   const handleDelete = async (postId: number) => {
-    if (confirm('Êtes-vous sûr de vouloir supprimer ce post ?')) {
+    if (confirm(t('dashboard.feed.delete_confirm'))) {
       try {
         await socialService.deletePost(postId)
         setPosts(prev => prev.filter(p => p.id !== postId))
@@ -118,19 +122,12 @@ export default function FeedPage() {
   }
 
   return (
-    <div className="space-y-6 pt-6 pb-24">
-      {/* Main Content - 3 columns layout */}
-      <div className="grid grid-cols-12 gap-6">
-        {/* Left Sidebar - Suggested Users & Ads */}
-        <aside className="hidden lg:block lg:col-span-3 space-y-6">
-          <SuggestedUsers currentUserId={user?.id} />
-          <Advertisement />
-        </aside>
-
-        {/* Main Feed */}
-        <main className="col-span-12 lg:col-span-6 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-4 md:py-6">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Main Feed - Standalone, centered */}
+        <main className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
             {/* Create Post Box */}
-            <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+            <div className="p-4 md:p-6 border-b border-gray-200 dark:border-gray-700">
               <CreatePostBox
                 user={user}
                 onPostCreated={handlePostCreated}
@@ -144,18 +141,18 @@ export default function FeedPage() {
                 <Loader2 className="h-8 w-8 animate-spin text-myhigh5-primary" />
               </div>
             ) : posts.length === 0 ? (
-              <div className="text-center py-12 px-4">
-                <p className="text-gray-500 dark:text-gray-400 mb-4 text-lg">
-                  Bienvenue sur votre feed !
+              <div className="text-center py-8 md:py-12 px-4">
+                <p className="text-gray-500 dark:text-gray-400 mb-3 md:mb-4 text-base md:text-lg">
+                  {t('dashboard.feed.welcome')}
                 </p>
-                <p className="text-gray-400 dark:text-gray-500 mb-6 text-sm">
-                  Commencez à suivre des personnes pour voir leurs posts ici.
+                <p className="text-gray-400 dark:text-gray-500 mb-4 md:mb-6 text-xs md:text-sm px-2">
+                  {t('dashboard.feed.welcome_description')}
                 </p>
                 <Button 
                   onClick={() => setIsPostDialogOpen(true)}
-                  className="rounded-full bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white font-semibold px-6"
+                  className="rounded-full bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white font-semibold px-4 md:px-6 text-sm md:text-base"
                 >
-                  Créer votre premier post
+                  {t('dashboard.feed.create_first_post')}
                 </Button>
               </div>
             ) : (
@@ -172,7 +169,7 @@ export default function FeedPage() {
                   />
                 ))}
                 {hasMore && (
-                  <div className="text-center py-8">
+                  <div className="text-center py-6 px-4 border-t border-gray-100 dark:border-gray-700">
                     <Button
                       variant="ghost"
                       onClick={loadMore}
@@ -182,28 +179,23 @@ export default function FeedPage() {
                       {isLoading ? (
                         <>
                           <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Chargement...
+                          {t('dashboard.feed.loading')}
                         </>
                       ) : (
-                        'Charger plus'
+                        t('dashboard.feed.load_more')
                       )}
                     </Button>
                   </div>
                 )}
               </div>
             )}
-          </main>
-
-        {/* Right Sidebar - Suggested Groups */}
-        <aside className="hidden lg:block lg:col-span-3">
-          <SuggestedGroups currentUserId={user?.id} />
-        </aside>
+        </main>
       </div>
 
       {/* Floating Action Button */}
       <FloatingActionButton
         onClick={() => setIsPostDialogOpen(true)}
-        label="Créer un post"
+        label={t('dashboard.feed.create_post')}
         variant="primary"
         position="bottom-right"
       />

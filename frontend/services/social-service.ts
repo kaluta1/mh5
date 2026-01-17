@@ -97,6 +97,43 @@ export interface SocialGroup {
   created_at: string
 }
 
+export interface GroupMember {
+  id: number
+  group_id: number
+  user_id: number
+  role: string
+  joined_at: string
+  is_muted: boolean
+  is_banned: boolean
+  user?: {
+    id: number
+    username: string
+    full_name?: string
+    avatar_url?: string
+  }
+}
+
+export interface GroupMessage {
+  id: number
+  group_id: number
+  sender_id: number
+  content?: string
+  message_type: 'text' | 'image' | 'video' | 'file' | 'audio' | 'system'
+  media_id?: number
+  reply_to_id?: number
+  status: string
+  is_edited: boolean
+  is_deleted: boolean
+  created_at: string
+  updated_at: string
+  sender?: {
+    id: number
+    username: string
+    full_name?: string
+    avatar_url?: string
+  }
+}
+
 export interface PrivateConversation {
   id: number
   user1_id: number
@@ -164,9 +201,11 @@ export interface CreateGroupRequest {
 }
 
 export const socialService = {
-  // Posts
+  // Posts - Legacy endpoints (keeping for backward compatibility)
+  // For new feed system, use feedService from './feed-service'
   async getFeed(skip: number = 0, limit: number = 20): Promise<Post[]> {
-    return apiService.get(`/api/v1/social/posts/feed?skip=${skip}&limit=${limit}`)
+    // Use new feed endpoint
+    return apiService.get(`/api/v1/feed?skip=${skip}&limit=${limit}`)
   },
 
   async getPost(postId: number): Promise<Post> {
@@ -227,25 +266,65 @@ export const socialService = {
     return apiService.post(`/api/v1/social/polls/${pollId}/vote`, { option_id: optionId })
   },
 
-  // Groups
+  // Groups - Updated to use new feed endpoints
   async getGroups(skip: number = 0, limit: number = 20): Promise<SocialGroup[]> {
-    return apiService.get(`/api/v1/social/groups?skip=${skip}&limit=${limit}`)
+    const groups = await apiService.get(`/api/v1/feed/groups?skip=${skip}&limit=${limit}`)
+    // Map backend response to frontend format
+    return groups.map((g: any) => ({
+      ...g,
+      is_private: g.group_type === 'private',
+      members_count: g.member_count || 0,
+    })) as SocialGroup[]
   },
 
   async getGroup(groupId: number): Promise<SocialGroup> {
-    return apiService.get(`/api/v1/social/groups/${groupId}`)
+    const group = await apiService.get(`/api/v1/feed/groups/${groupId}`)
+    // Map backend response to frontend format
+    return {
+      ...group,
+      is_private: group.group_type === 'private',
+      members_count: group.member_count || 0,
+    } as SocialGroup
   },
 
   async createGroup(data: CreateGroupRequest): Promise<SocialGroup> {
-    return apiService.post('/api/v1/social/groups', data)
+    // Map old format to new format
+    const newData = {
+      name: data.name,
+      description: data.description,
+      group_type: data.is_private ? 'private' : 'public' as 'public' | 'private' | 'secret',
+    }
+    const response = await apiService.post('/api/v1/feed/groups', newData)
+    // Map backend response to frontend format
+    return {
+      ...response,
+      is_private: response.group_type === 'private',
+      members_count: response.member_count || 0,
+    } as SocialGroup
   },
 
-  async joinGroup(groupId: number): Promise<void> {
-    return apiService.post(`/api/v1/social/groups/${groupId}/join`)
+  async joinGroup(groupId: number, inviteCode?: string): Promise<void> {
+    const url = inviteCode 
+      ? `/api/v1/feed/groups/${groupId}/join?invite_code=${encodeURIComponent(inviteCode)}`
+      : `/api/v1/feed/groups/${groupId}/join`
+    return apiService.post(url)
   },
 
   async leaveGroup(groupId: number): Promise<void> {
-    return apiService.delete(`/api/v1/social/groups/${groupId}/leave`)
+    return apiService.delete(`/api/v1/feed/groups/${groupId}/leave`)
+  },
+
+  async getGroupMembers(groupId: number): Promise<GroupMember[]> {
+    return apiService.get(`/api/v1/feed/groups/${groupId}/members`)
+  },
+
+  async getGroupMessages(groupId: number, skip: number = 0, limit: number = 50): Promise<GroupMessage[]> {
+    const response = await apiService.get(`/api/v1/social/groups/${groupId}/messages?skip=${skip}&limit=${limit}`)
+    return response?.messages || []
+  },
+
+  async sendGroupMessage(groupId: number, data: { content: string; message_type?: string; media_id?: number; reply_to_id?: number }): Promise<GroupMessage> {
+    return apiService.post(`/api/v1/social/groups/${groupId}/messages`, data)
   },
 
   // Private Messages

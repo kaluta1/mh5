@@ -25,6 +25,14 @@ async def lifespan(app: FastAPI):
     print("Starting season migration scheduler...")
     await season_migration_scheduler.start()
     
+    # Initialize encryption service for E2E messaging
+    try:
+        from app.services.feed_encryption import init_encryption_service
+        init_encryption_service()
+        print("✅ Encryption service initialized")
+    except Exception as e:
+        print(f"⚠️ Encryption service initialization failed: {e}")
+    
     yield
     
     # Shutdown
@@ -74,9 +82,10 @@ print(f"CORS Origins configured: {cors_origins}")
 # Permettre tous les CORS sans restriction pour le développement
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
+    allow_origins=cors_origins,  # Use explicit origins list
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+    allow_credentials=True,  # Allow credentials for authentication cookies/tokens
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
     expose_headers=["*"],
     max_age=86400,
@@ -116,4 +125,4 @@ def debug_cors():
     }
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="127.1.1.1", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

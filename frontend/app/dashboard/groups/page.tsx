@@ -13,10 +13,14 @@ import { useAuth } from '@/hooks/use-auth'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
+import { useLanguage } from '@/contexts/language-context'
+import { useToast } from '@/components/ui/toast'
 
 export default function GroupsPage() {
   const { isAuthenticated, user } = useAuth()
   const router = useRouter()
+  const { t } = useLanguage()
+  const { addToast } = useToast()
   const [groups, setGroups] = useState<SocialGroup[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
@@ -57,8 +61,11 @@ export default function GroupsPage() {
       setGroups(prev => [createdGroup, ...prev])
       setIsCreateDialogOpen(false)
       setNewGroup({ name: '', description: '', is_private: false })
-    } catch (error) {
+      addToast('Group created successfully!', 'success')
+    } catch (error: any) {
       console.error('Error creating group:', error)
+      const errorMessage = error?.response?.data?.detail || error?.message || 'Failed to create group. Please try again.'
+      addToast(errorMessage, 'error')
     } finally {
       setIsCreating(false)
     }
@@ -68,17 +75,25 @@ export default function GroupsPage() {
     try {
       await socialService.joinGroup(groupId)
       await loadGroups()
-    } catch (error) {
+      addToast('Successfully joined the group!', 'success')
+    } catch (error: any) {
       console.error('Error joining group:', error)
+      const errorMessage = error?.response?.data?.detail || error?.message || 'Failed to join group. Please try again.'
+      addToast(errorMessage, 'error')
     }
   }
 
   const handleLeaveGroup = async (groupId: number) => {
+    if (!confirm('Are you sure you want to leave this group?')) return
+    
     try {
       await socialService.leaveGroup(groupId)
       await loadGroups()
-    } catch (error) {
+      addToast('Successfully left the group.', 'success')
+    } catch (error: any) {
       console.error('Error leaving group:', error)
+      const errorMessage = error?.response?.data?.detail || error?.message || 'Failed to leave group. Please try again.'
+      addToast(errorMessage, 'error')
     }
   }
 
@@ -92,24 +107,24 @@ export default function GroupsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6 px-2 sm:px-4 md:px-6 pb-20 md:pb-24 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-100 dark:border-gray-700 shadow-sm">
+      <div className="bg-white dark:bg-gray-800 rounded-xl md:rounded-2xl p-4 md:p-6 border border-gray-100 dark:border-gray-700 shadow-sm">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Groupes</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              Rejoignez des groupes et partagez avec votre communauté
+            <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">{t('dashboard.groups.title')}</h1>
+            <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400 mt-1">
+              {t('dashboard.groups.subtitle')}
             </p>
           </div>
           <div className="flex items-center gap-3">
             <div className="relative flex-1 md:flex-initial md:w-64">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input
-                placeholder="Rechercher un groupe..."
+                placeholder={t('dashboard.groups.search_placeholder')}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
+                className="pl-10 text-sm md:text-base"
               />
             </div>
           </div>
@@ -125,12 +140,12 @@ export default function GroupsPage() {
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-12 border border-gray-100 dark:border-gray-700 shadow-sm text-center">
           <Users className="h-16 w-16 text-gray-400 mx-auto mb-4" />
           <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-            {searchQuery ? 'Aucun groupe trouvé' : 'Aucun groupe disponible'}
+            {searchQuery ? t('dashboard.groups.no_groups_found') : t('dashboard.groups.no_groups_available')}
           </h3>
           <p className="text-gray-500 dark:text-gray-400 mb-6">
             {searchQuery 
-              ? 'Essayez avec d\'autres mots-clés'
-              : 'Soyez le premier à créer un groupe !'
+              ? t('dashboard.groups.try_keywords')
+              : t('dashboard.groups.be_first')
             }
           </p>
           {!searchQuery && (
@@ -139,19 +154,19 @@ export default function GroupsPage() {
               className="rounded-full bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white"
             >
               <Plus className="h-4 w-4 mr-2" />
-              Créer un groupe
+              {t('dashboard.groups.create_group')}
             </Button>
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
           {filteredGroups.map((group) => (
             <div
               key={group.id}
-              className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow overflow-hidden"
+              className="bg-white dark:bg-gray-800 rounded-xl md:rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow overflow-hidden"
             >
               {/* Group Header */}
-              <div className="p-6">
+              <div className="p-4 md:p-6">
                 <div className="flex items-start justify-between mb-4">
                   <div className="w-16 h-16 rounded-full bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary flex items-center justify-center flex-shrink-0">
                     {group.avatar_url ? (
@@ -170,7 +185,7 @@ export default function GroupsPage() {
                 </div>
 
                 <Link href={`/dashboard/groups/${group.id}`}>
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2 hover:text-myhigh5-primary transition-colors">
+                  <h3 className="text-lg md:text-xl font-bold text-gray-900 dark:text-white mb-2 hover:text-myhigh5-primary transition-colors line-clamp-1">
                     {group.name}
                   </h3>
                 </Link>
@@ -185,14 +200,14 @@ export default function GroupsPage() {
                   <div className="flex items-center gap-4">
                     <span className="flex items-center gap-1">
                       <Users className="h-4 w-4" />
-                      {group.members_count} membres
+                      {group.members_count} {t('dashboard.groups.members')}
                     </span>
                   </div>
                 </div>
 
                 {group.creator && (
                   <div className="flex items-center gap-2 mb-4 text-sm text-gray-500 dark:text-gray-400">
-                    <span>Créé par</span>
+                    <span>{t('dashboard.groups.created_by')}</span>
                     <UserAvatar user={group.creator} className="w-5 h-5" />
                     <span>{group.creator.full_name || group.creator.username}</span>
                   </div>
@@ -208,7 +223,7 @@ export default function GroupsPage() {
                       : "bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white"
                   )}
                 >
-                  {group.is_member ? 'Quitter' : 'Rejoindre'}
+                  {group.is_member ? t('dashboard.groups.leave') : t('dashboard.groups.join')}
                 </Button>
               </div>
             </div>
@@ -219,25 +234,28 @@ export default function GroupsPage() {
       {/* Floating Action Button */}
       <FloatingActionButton
         onClick={() => setIsCreateDialogOpen(true)}
-        label="Créer un groupe"
+        label={t('dashboard.groups.create_group')}
         variant="primary"
         position="bottom-right"
       />
 
       {/* Create Group Dialog */}
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg mx-4 max-h-[90vh] overflow-y-auto" aria-describedby="create-group-description">
           <DialogHeader>
-            <DialogTitle>Créer un nouveau groupe</DialogTitle>
+            <DialogTitle>{t('dashboard.groups.create_new_group')}</DialogTitle>
           </DialogHeader>
+          <p id="create-group-description" className="sr-only">
+            {t('dashboard.groups.create_new_group')}
+          </p>
 
           <div className="space-y-4">
             <div>
               <label className="text-sm font-medium mb-2 block text-gray-700 dark:text-gray-300">
-                Nom du groupe *
+                {t('dashboard.groups.group_name')} *
               </label>
               <Input
-                placeholder="Nom du groupe"
+                placeholder={t('dashboard.groups.group_name_placeholder')}
                 value={newGroup.name}
                 onChange={(e) => setNewGroup({ ...newGroup, name: e.target.value })}
                 className="w-full"
@@ -246,10 +264,10 @@ export default function GroupsPage() {
 
             <div>
               <label className="text-sm font-medium mb-2 block text-gray-700 dark:text-gray-300">
-                Description
+                {t('dashboard.groups.description')}
               </label>
               <Textarea
-                placeholder="Description du groupe (optionnel)"
+                placeholder={t('dashboard.groups.description_placeholder')}
                 value={newGroup.description}
                 onChange={(e) => setNewGroup({ ...newGroup, description: e.target.value })}
                 className="min-h-[100px]"
@@ -258,7 +276,7 @@ export default function GroupsPage() {
 
             <div className="flex items-center gap-3">
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Type de groupe
+                {t('dashboard.groups.group_type')}
               </label>
               <div className="flex items-center gap-4">
                 <button
@@ -271,7 +289,7 @@ export default function GroupsPage() {
                   )}
                 >
                   <Globe className="h-4 w-4" />
-                  Public
+                  {t('dashboard.groups.public')}
                 </button>
                 <button
                   onClick={() => setNewGroup({ ...newGroup, is_private: true })}
@@ -283,7 +301,7 @@ export default function GroupsPage() {
                   )}
                 >
                   <Lock className="h-4 w-4" />
-                  Privé
+                  {t('dashboard.groups.private')}
                 </button>
               </div>
             </div>
@@ -294,14 +312,14 @@ export default function GroupsPage() {
               variant="outline"
               onClick={() => setIsCreateDialogOpen(false)}
             >
-              Annuler
+              {t('dashboard.groups.cancel')}
             </Button>
             <Button
               onClick={handleCreateGroup}
               disabled={!newGroup.name.trim() || isCreating}
               className="bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white"
             >
-              {isCreating ? 'Création...' : 'Créer le groupe'}
+              {isCreating ? t('dashboard.groups.creating') : t('dashboard.groups.create_group_button')}
             </Button>
           </DialogFooter>
         </DialogContent>

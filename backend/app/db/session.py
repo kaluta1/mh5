@@ -6,41 +6,45 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Convertir la chaîne de connexion psycopg2 en psycopg3
+# Use psycopg2-binary (already in requirements.txt)
+# Do not convert to psycopg3 as psycopg2-binary is installed
 database_url = settings.SQLALCHEMY_DATABASE_URI
-if database_url.startswith("postgresql://"):
-    database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+# Keep postgresql:// for psycopg2-binary (no need to change)
 
-# Configuration du moteur avec gestion améliorée des connexions SSL
-# Augmentation du pool pour éviter les timeouts
+# Engine configuration optimized for Neon PostgreSQL with SSL
+# Reduced timeouts to avoid blocking
 engine = create_engine(
     database_url,
-    pool_pre_ping=True,  # Vérifie la connexion avant utilisation
-    pool_recycle=1800,   # Recycle les connexions après 30 minutes (réduit pour éviter les connexions mortes)
-    pool_size=10,        # Taille du pool de connexions (augmenté de 5 à 10)
-    max_overflow=20,     # Nombre maximum de connexions supplémentaires (augmenté de 10 à 20)
-    pool_timeout=60,     # Timeout pour obtenir une connexion du pool (augmenté de 30 à 60 secondes)
+    pool_pre_ping=True,  # Check connection before use
+    pool_recycle=300,    # Recycle connections after 5 minutes (Neon timeout ~10 min)
+    pool_size=5,         # Connection pool size
+    max_overflow=10,     # Maximum number of additional connections
+    pool_timeout=10,     # Timeout to get a connection from the pool (10 seconds)
+    connect_args={
+        "connect_timeout": 10,  # Initial connection timeout (10 seconds)
+    },
     echo=False
 )
 
-# Gestionnaire d'événements pour les erreurs de connexion
+# Event handler for connection errors
 @event.listens_for(engine, "connect")
 def set_ssl_mode(dbapi_conn, connection_record):
-    """Configure le mode SSL pour les connexions PostgreSQL"""
+    """Configure SSL mode for PostgreSQL connections (Neon)"""
     try:
-        # Si la connexion utilise SSL, s'assurer qu'elle est correctement configurée
+        # Neon PostgreSQL requires SSL
+        # SSL configuration is managed via connection URL (sslmode=require)
         if hasattr(dbapi_conn, 'info'):
-            logger.debug("Connexion SSL configurée")
+            logger.debug("Database connection established")
     except Exception as e:
-        logger.warning(f"Erreur lors de la configuration SSL: {e}")
+        logger.warning(f"Error configuring connection: {e}")
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def get_db():
     """
-    Dependency pour obtenir une session de base de données.
-    S'assure que la session est toujours fermée, même en cas d'erreur.
-    Les commits doivent être gérés explicitement dans les endpoints/CRUD.
+    Dependency to get a database session.
+    Ensures the session is always closed, even in case of error.
+    Commits must be managed explicitly in endpoints/CRUD.
     """
     from fastapi import HTTPException
     from sqlalchemy.exc import OperationalError
@@ -49,25 +53,25 @@ def get_db():
     try:
         yield db
     except HTTPException:
-        # Ne pas logger les erreurs HTTP (401, 403, etc.) comme des erreurs de base de données
-        # Les propager telles quelles
+        # Do not log HTTP errors (401, 403, etc.) as database errors
+        # Propagate them as is
         raise
     except OperationalError as e:
-        # Erreur de connexion réseau/DNS - logger avec plus de détails
+        # Network/DNS connection error - log with more details
         error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
-        logger.error(f"Erreur de connexion à la base de données: {error_msg}")
-        logger.error("Vérifiez votre connexion internet et la configuration DATABASE_URL")
+        logger.error(f"Database connection error: {error_msg}")
+        logger.error("Please check your internet connection and DATABASE_URL configuration")
         db.rollback()
         raise
     except Exception as e:
-        # Logger uniquement les vraies erreurs de base de données
-        logger.error(f"Erreur de base de données: {e}", exc_info=True)
+        # Log only real database errors
+        logger.error(f"Database error: {e}", exc_info=True)
         db.rollback()
         raise
     finally:
-        # Toujours fermer la session pour libérer la connexion du pool
-        # C'est crucial pour éviter l'épuisement du pool de connexions
+        # Always close the session to release the connection from the pool
+        # This is crucial to avoid connection pool exhaustion
         try:
             db.close()
         except Exception as close_error:
-            logger.error(f"Erreur lors de la fermeture de la session: {close_error}", exc_info=True) 
+            logger.error(f"Error closing session: {close_error}", exc_info=True) 

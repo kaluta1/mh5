@@ -78,9 +78,12 @@ class CRUDUser:
             if sponsor:
                 sponsor_id = sponsor.id
         
-        # Récupérer le rôle par défaut 'user'
+        # Récupérer le rôle par défaut 'user', créer s'il n'existe pas
         default_role = self.get_role_by_name(db, 'user')
-        role_id = default_role.id if default_role else None
+        if not default_role:
+            # Créer le rôle 'user' s'il n'existe pas
+            default_role = self.create_role(db, name='user', description='Default user role')
+        role_id = default_role.id
         
         db_obj = User(
             email=obj_in.email,
@@ -519,7 +522,8 @@ class CRUDUser:
         if not role:
             role = self.create_role(db=db, name=role_name)
         
-        user.roles.append(role)
+        # User has a single role (role_id), not a list of roles
+        user.role_id = role.id
         db.commit()
         db.refresh(user)
         return user

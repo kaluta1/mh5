@@ -14,6 +14,12 @@ interface ContestantMobileActionsProps {
   onShare?: () => void
   isAuthor: boolean
   voteRestrictionReason?: string | null
+  showActions?: boolean
+  isSelf?: boolean
+  isFollowing?: boolean
+  isFollowLoading?: boolean
+  onFollowToggle?: () => void
+  onMessage?: () => void
 }
 
 export function ContestantMobileActions({
@@ -23,9 +29,13 @@ export function ContestantMobileActions({
   isVoting,
   onCommentsClick,
   onVote,
-  onShare,
-  isAuthor,
-  voteRestrictionReason
+  voteRestrictionReason,
+  showActions = false,
+  isSelf = false,
+  isFollowing = false,
+  isFollowLoading = false,
+  onFollowToggle,
+  onMessage
 }: ContestantMobileActionsProps) {
   const { t } = useLanguage()
 
@@ -98,36 +108,53 @@ export function ContestantMobileActions({
   }
 
   return (
-    <div className="md:hidden fixed bottom-0 left-0 right-0 p-4 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-t border-gray-200/50 dark:border-gray-700/50 shadow-2xl z-40 flex items-center gap-3">
-      <Button
-        onClick={onShare}
-        variant="outline"
-        className="w-12 h-12 p-0 flex-shrink-0 border-gray-200 dark:border-gray-700 text-myhigh5-primary rounded-xl font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-all flex items-center justify-center"
-        title={t('dashboard.contests.share') || 'Partager'}
-      >
-        <Share2 className="w-5 h-5" />
-      </Button>
-      <Button
-        onClick={onCommentsClick}
-        variant="outline"
-        className="flex-1 border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white rounded-xl font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-all"
-      >
-        <MessageCircle className="w-5 h-5 mr-2" />
-        {t('contestant_detail.comments')} ({commentsCount})
-      </Button>
-      <Button
-        onClick={onVote}
-        disabled={!canVote || isVoting || hasVoted}
-        title={getVoteButtonTitle()}
-        className={`flex-1 font-semibold py-3 text-base rounded-xl transition-all duration-300 ${hasVoted
-          ? 'bg-gray-400 dark:bg-gray-700 text-white cursor-not-allowed'
-          : canVote
-            ? 'bg-gradient-to-r from-myhigh5-primary via-myhigh5-primary-dark to-indigo-600 text-white hover:shadow-lg active:scale-95'
-            : 'bg-gray-400 dark:bg-gray-700 text-white cursor-not-allowed'
-          }`}
-      >
-        {getVoteButtonText()}
-      </Button>
+    <div className="md:hidden fixed bottom-0 left-0 right-0 p-4 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-t border-gray-200/50 dark:border-gray-700/50 shadow-2xl z-40 space-y-3">
+      {showActions && !isSelf && (
+        <div className="flex gap-3">
+          <Button
+            onClick={onFollowToggle}
+            disabled={isFollowLoading || !onFollowToggle}
+            className="flex-1 rounded-xl bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white"
+          >
+            {isFollowLoading
+              ? (t('common.loading') || 'Loading...')
+              : isFollowing
+                ? (t('dashboard.following.unfollow') || 'Unfollow')
+                : (t('dashboard.following.follow') || 'Follow')}
+          </Button>
+          <Button
+            onClick={onMessage}
+            disabled={!onMessage}
+            variant="outline"
+            className="flex-1 rounded-xl"
+          >
+            {t('dashboard.messages.message_button') || 'Message'}
+          </Button>
+        </div>
+      )}
+      <div className="flex gap-3">
+        <Button
+          onClick={onCommentsClick}
+          variant="outline"
+          className="flex-1 border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white rounded-xl font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-all"
+        >
+          <MessageCircle className="w-5 h-5 mr-2" />
+          {t('contestant_detail.comments')} ({commentsCount})
+        </Button>
+        <Button
+          onClick={onVote}
+          disabled={!canVote || isVoting || hasVoted}
+          title={getVoteButtonTitle()}
+          className={`flex-1 font-semibold py-3 text-base rounded-xl transition-all duration-300 ${hasVoted
+              ? 'bg-gray-400 dark:bg-gray-700 text-white cursor-not-allowed'
+              : canVote
+                ? 'bg-gradient-to-r from-myhigh5-primary via-myhigh5-primary-dark to-indigo-600 text-white hover:shadow-lg active:scale-95'
+                : 'bg-gray-400 dark:bg-gray-700 text-white cursor-not-allowed'
+            }`}
+        >
+          {getVoteButtonText()}
+        </Button>
+      </div>
     </div>
   )
 }

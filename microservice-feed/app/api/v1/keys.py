@@ -43,14 +43,14 @@ async def generate_keys(
     encryption_service = get_encryption_service()
     public_key, private_key = encryption_service.generate_key_pair()
     
-    # Encrypt private key at rest
+    # Encrypt private key at rest using master key (if configured)
     encrypted_private_key = encryption_service.encrypt_private_key_at_rest(private_key)
     
     # Store keys
     user_keys = UserEncryptionKeys(
         user_id=user_id,
         public_key=public_key,
-        encrypted_private_key=encrypted_private_key,  # Encrypted at rest
+        encrypted_private_key=encrypted_private_key,
         is_active=True
     )
     

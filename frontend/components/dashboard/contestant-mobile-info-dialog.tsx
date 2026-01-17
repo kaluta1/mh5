@@ -9,6 +9,7 @@ interface ContestantMobileInfoDialogProps {
   totalParticipants?: number
   candidateTitle?: string
   registrationDate?: string
+  followersCount?: number | null
   isQualified?: boolean
 }
 
@@ -19,6 +20,7 @@ export function ContestantMobileInfoDialog({
   totalParticipants,
   candidateTitle,
   registrationDate,
+  followersCount = null,
   isQualified
 }: ContestantMobileInfoDialogProps) {
   const { t } = useLanguage()
@@ -87,6 +89,16 @@ export function ContestantMobileInfoDialog({
                   </p>
                   <p className="text-sm font-medium text-gray-900 dark:text-white">
                     {new Date(registrationDate).toLocaleDateString('fr-FR')}
+                  </p>
+                </div>
+              )}
+              {followersCount !== null && (
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">
+                    {t('dashboard.following.followers') || 'Followers'}
+                  </p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                    {followersCount}
                   </p>
                 </div>
               )}

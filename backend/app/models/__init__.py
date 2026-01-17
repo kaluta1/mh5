@@ -27,6 +27,7 @@ from .private_message import PrivateConversation, ConversationParticipant, Priva
 from .contact_message import ContactMessage
 from .newsletter import NewsletterSubscription
 from .login_log import LoginLog
+from .user_encryption_keys import UserEncryptionKeys
 
 __all__ = [
     "User", "Role", "Permission", "role_permissions", "UserTransaction", "Wallet",
@@ -55,4 +56,5 @@ __all__ = [
     "ContactMessage",
     "NewsletterSubscription",
     "LoginLog",
+    "UserEncryptionKeys",
 ]

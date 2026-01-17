@@ -76,7 +76,7 @@ export function CommentsSection({
       if (onCountChange) onCountChange(response.total)
     } catch (error) {
       console.error('Error loading comments:', error)
-      addToast('Erreur lors du chargement des commentaires', 'error')
+      addToast(t('dashboard.contests.comments_load_error') || 'Error loading comments', 'error')
     } finally {
       setLoading(false)
     }
@@ -143,7 +143,7 @@ export function CommentsSection({
       console.error('Error adding comment:', error)
       // Restaurer le texte en cas d'erreur
       setNewComment(commentText)
-      addToast(error.response?.data?.detail || 'Erreur lors de l\'ajout du commentaire', 'error')
+      addToast(error.response?.data?.detail || (t('dashboard.contests.comment_add_error') || 'Error adding comment'), 'error')
     } finally {
       setIsSubmitting(false)
     }
@@ -179,7 +179,7 @@ export function CommentsSection({
       addToast(t('dashboard.contests.reply_added') || 'Réponse ajoutée', 'success')
     } catch (error: any) {
       console.error('Error adding reply:', error)
-      addToast(error.response?.data?.detail || 'Erreur lors de l\'ajout de la réponse', 'error')
+      addToast(error.response?.data?.detail || (t('dashboard.contests.reply_add_error') || 'Error adding reply'), 'error')
       throw error
     }
   }

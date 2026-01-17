@@ -11,6 +11,8 @@ import { socialService, CreatePostRequest } from '@/services/social-service'
 import { useAuth } from '@/hooks/use-auth'
 import { UserAvatar } from '@/components/user/user-avatar'
 import { cn } from '@/lib/utils'
+import { useLanguage } from '@/contexts/language-context'
+import { useToast } from '@/components/ui/toast'
 
 interface PostDialogProps {
   open: boolean
@@ -20,6 +22,8 @@ interface PostDialogProps {
 
 export function PostDialog({ open, onOpenChange, onPostCreated }: PostDialogProps) {
   const { user } = useAuth()
+  const { t } = useLanguage()
+  const { addToast } = useToast()
   const [content, setContent] = useState('')
   const [visibility, setVisibility] = useState<'public' | 'followers' | 'private'>('public')
   const [mediaIds, setMediaIds] = useState<number[]>([])
@@ -55,8 +59,11 @@ export function PostDialog({ open, onOpenChange, onPostCreated }: PostDialogProp
       await socialService.createPost(postData)
       onPostCreated?.()
       handleClose()
+      // Show success message
+      addToast(t('dashboard.feed.post_success') || 'Post created successfully!', 'success')
     } catch (error) {
       console.error('Error creating post:', error)
+      addToast(t('dashboard.feed.post_error') || 'Failed to create post. Please try again.', 'error')
     } finally {
       setIsLoading(false)
     }
@@ -109,14 +116,14 @@ export function PostDialog({ open, onOpenChange, onPostCreated }: PostDialogProp
             >
               <X className="h-5 w-5" />
             </Button>
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white">Créer une publication</h2>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white">{t('dashboard.feed.create_post_dialog_title') || 'Create a post'}</h2>
           </div>
           <Button
             onClick={handleSubmit}
             disabled={!canPost || isLoading}
             className="rounded-full bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white font-semibold px-6 h-9 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isLoading ? 'Publication...' : 'Publier'}
+            {isLoading ? (t('dashboard.feed.posting') || 'Posting...') : (t('dashboard.feed.post') || 'Post')}
           </Button>
         </div>
 
@@ -128,13 +135,13 @@ export function PostDialog({ open, onOpenChange, onPostCreated }: PostDialogProp
                 value="post" 
                 className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 data-[state=active]:shadow-sm"
               >
-                Publication
+                {t('dashboard.feed.post_tab') || 'Post'}
               </TabsTrigger>
               <TabsTrigger 
                 value="poll"
                 className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 data-[state=active]:shadow-sm"
               >
-                Sondage
+                {t('dashboard.feed.poll_tab') || 'Poll'}
               </TabsTrigger>
             </TabsList>
 
@@ -144,7 +151,7 @@ export function PostDialog({ open, onOpenChange, onPostCreated }: PostDialogProp
                 <div className="flex-1 space-y-4">
                   <div>
                     <Textarea
-                      placeholder="Quoi de neuf ?"
+                      placeholder={t('dashboard.feed.post_placeholder') || "What's on your mind?"}
                       value={content}
                       onChange={handleContentChange}
                       className="min-h-[150px] resize-none border-0 text-lg p-0 focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent placeholder:text-gray-400 dark:placeholder:text-gray-500"
@@ -155,7 +162,7 @@ export function PostDialog({ open, onOpenChange, onPostCreated }: PostDialogProp
                     {mediaIds.length > 0 && (
                       <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
                         <p className="text-sm text-gray-600 dark:text-gray-400">
-                          {mediaIds.length} fichier{mediaIds.length > 1 ? 's' : ''} sélectionné{mediaIds.length > 1 ? 's' : ''}
+                          {mediaIds.length} {t('dashboard.feed.files_selected') || 'file(s) selected'}
                         </p>
                       </div>
                     )}
@@ -189,25 +196,25 @@ export function PostDialog({ open, onOpenChange, onPostCreated }: PostDialogProp
                       <button 
                         onClick={() => setActiveTab('poll')}
                         className="p-2.5 rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors group"
-                        title="Sondage"
+                        title={t('dashboard.feed.poll') || 'Poll'}
                       >
                         <BarChart3 className="h-5 w-5 text-blue-500 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" />
                       </button>
                       <button 
                         className="p-2.5 rounded-full hover:bg-yellow-50 dark:hover:bg-yellow-900/20 transition-colors group"
-                        title="Emoji"
+                        title={t('dashboard.feed.emoji') || 'Emoji'}
                       >
                         <Smile className="h-5 w-5 text-yellow-500 group-hover:text-yellow-600 dark:group-hover:text-yellow-400 transition-colors" />
                       </button>
                       <button 
                         className="p-2.5 rounded-full hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors group"
-                        title="Planifier"
+                        title={t('dashboard.feed.schedule') || 'Schedule'}
                       >
                         <Calendar className="h-5 w-5 text-green-500 group-hover:text-green-600 dark:group-hover:text-green-400 transition-colors" />
                       </button>
                       <button 
                         className="p-2.5 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors group"
-                        title="Localisation"
+                        title={t('dashboard.feed.location') || 'Location'}
                       >
                         <MapPin className="h-5 w-5 text-red-500 group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors" />
                       </button>
@@ -232,10 +239,10 @@ export function PostDialog({ open, onOpenChange, onPostCreated }: PostDialogProp
                               ? "bg-white dark:bg-gray-700 text-myhigh5-primary shadow-sm" 
                               : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                           )}
-                          title="Public"
+                          title={t('dashboard.feed.public_visibility') || 'Public'}
                         >
                           <Globe className="h-3.5 w-3.5 mr-1.5" />
-                          Public
+                          {t('dashboard.feed.public_visibility') || 'Public'}
                         </Button>
                         <Button
                           variant="ghost"
@@ -247,10 +254,10 @@ export function PostDialog({ open, onOpenChange, onPostCreated }: PostDialogProp
                               ? "bg-white dark:bg-gray-700 text-myhigh5-primary shadow-sm" 
                               : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                           )}
-                          title="Abonnés"
+                          title={t('dashboard.feed.followers_visibility') || 'Followers'}
                         >
                           <Users className="h-3.5 w-3.5 mr-1.5" />
-                          Abonnés
+                          {t('dashboard.feed.followers_visibility') || 'Followers'}
                         </Button>
                         <Button
                           variant="ghost"
@@ -262,10 +269,10 @@ export function PostDialog({ open, onOpenChange, onPostCreated }: PostDialogProp
                               ? "bg-white dark:bg-gray-700 text-myhigh5-primary shadow-sm" 
                               : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                           )}
-                          title="Privé"
+                          title={t('dashboard.feed.private_visibility') || 'Private'}
                         >
                           <Lock className="h-3.5 w-3.5 mr-1.5" />
-                          Privé
+                          {t('dashboard.feed.private_visibility') || 'Private'}
                         </Button>
                       </div>
                     </div>
@@ -280,7 +287,7 @@ export function PostDialog({ open, onOpenChange, onPostCreated }: PostDialogProp
                 <div className="flex-1 space-y-4">
                   <div>
                     <Textarea
-                      placeholder="Posez votre question..."
+                      placeholder={t('dashboard.feed.poll_question_placeholder') || 'Ask your question...'}
                       value={poll?.question || ''}
                       onChange={(e) => setPoll(poll ? { ...poll, question: e.target.value } : { question: e.target.value, options: ['', ''] })}
                       className="min-h-[100px] resize-none border-0 text-lg p-0 focus-visible:ring-0 bg-transparent placeholder:text-gray-400 dark:placeholder:text-gray-500"
@@ -290,14 +297,14 @@ export function PostDialog({ open, onOpenChange, onPostCreated }: PostDialogProp
 
                   <div className="space-y-3">
                     <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 block">
-                      Options du sondage
+                      {t('dashboard.feed.poll_options_label') || 'Poll options'}
                     </label>
                     <div className="space-y-2">
                       {poll?.options.map((option, index) => (
                         <div key={index} className="flex items-center gap-2">
                           <input
                             type="text"
-                            placeholder={`Option ${index + 1}`}
+                            placeholder={`${t('dashboard.feed.poll_option_placeholder') || 'Option'} ${index + 1}`}
                             value={option}
                             onChange={(e) => updatePollOption(index, e.target.value)}
                             className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myhigh5-primary focus:border-transparent"
@@ -320,7 +327,7 @@ export function PostDialog({ open, onOpenChange, onPostCreated }: PostDialogProp
                         className="w-full rounded-full border-dashed hover:border-myhigh5-primary hover:text-myhigh5-primary"
                       >
                         <Plus className="h-4 w-4 mr-2" />
-                        Ajouter une option
+                        {t('dashboard.feed.add_poll_option') || 'Add an option'}
                       </Button>
                     </div>
                   </div>

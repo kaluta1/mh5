@@ -11,7 +11,7 @@ export const COUNTRIES_DATA: CountryData[] = [
   // Afrique - West Africa
   { name: 'Senegal', code: 'SN', continent: 'Africa', region: 'West Africa', cities: ['Dakar', 'Thiès', 'Kaolack', 'Tambacounda', 'Saint-Louis'] },
   { name: 'Mali', code: 'ML', continent: 'Africa', region: 'West Africa', cities: ['Bamako', 'Ségou', 'Mopti', 'Gao', 'Koulikoro'] },
-  { name: 'Ivory Coast', code: 'CI', continent: 'Africa', region: 'West Africa', cities: ['Abidjan', 'Yamoussoukro', 'Bouaké', 'Daloa', 'San-Pédro'] },
+  { name: "Côte d'Ivoire", code: 'CI', continent: 'Africa', region: 'West Africa', cities: ['Abidjan', 'Yamoussoukro', 'Bouaké', 'Daloa', 'San-Pédro'] },
   { name: 'Ghana', code: 'GH', continent: 'Africa', region: 'West Africa', cities: ['Accra', 'Kumasi', 'Tamale', 'Sekondi', 'Cape Coast'] },
   { name: 'Nigeria', code: 'NG', continent: 'Africa', region: 'West Africa', cities: ['Lagos', 'Abuja', 'Kano', 'Ibadan', 'Port Harcourt'] },
   { name: 'Benin', code: 'BJ', continent: 'Africa', region: 'West Africa', cities: ['Cotonou', 'Porto-Novo', 'Parakou', 'Djougou', 'Abomey'] },

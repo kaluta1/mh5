@@ -11,12 +11,19 @@ export interface ContestantHeaderProps {
   author_continent?: string
   author_avatar_url?: string
   votes_count?: number
+  followersCount?: number | null
   rank?: number
   total_participants?: number
   isFavorite: boolean
   coverImage?: string
   onBack: () => void
   onFavoriteToggle: () => void
+  showActions?: boolean
+  isSelf?: boolean
+  isFollowing?: boolean
+  isFollowLoading?: boolean
+  onFollowToggle?: () => void
+  onMessage?: () => void
 }
 
 export function ContestantHeader({
@@ -26,12 +33,19 @@ export function ContestantHeader({
   author_continent,
   author_avatar_url,
   votes_count = 0,
+  followersCount = null,
   rank,
   total_participants,
   isFavorite,
   coverImage,
   onBack,
-  onFavoriteToggle
+  onFavoriteToggle,
+  showActions = false,
+  isSelf = false,
+  isFollowing = false,
+  isFollowLoading = false,
+  onFollowToggle,
+  onMessage
 }: ContestantHeaderProps) {
   const { t } = useLanguage()
 
@@ -91,11 +105,39 @@ export function ContestantHeader({
 
             {/* Stats */}
             <div className="flex flex-wrap gap-4 text-white/90 text-sm md:text-base">
-              <div> {votes_count} {t('contestant_detail.votes')} -</div>
+              <div>⭐ {votes_count} {t('contestant_detail.votes')}</div>
+              {followersCount !== null && (
+                <div>👥 {followersCount} {t('dashboard.following.followers') || 'Followers'}</div>
+              )}
               {rank && total_participants && (
                 <div>#{rank}/{total_participants}</div>
               )}
             </div>
+
+            {/* Actions */}
+            {showActions && !isSelf && (
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button
+                  onClick={onFollowToggle}
+                  disabled={isFollowLoading || !onFollowToggle}
+                  className="bg-white text-gray-900 hover:bg-gray-100 rounded-full px-4 py-2 text-sm font-semibold"
+                >
+                  {isFollowLoading
+                    ? (t('common.loading') || 'Loading...')
+                    : isFollowing
+                      ? (t('dashboard.following.unfollow') || 'Unfollow')
+                      : (t('dashboard.following.follow') || 'Follow')}
+                </Button>
+                <Button
+                  onClick={onMessage}
+                  disabled={!onMessage}
+                  variant="ghost"
+                  className="bg-white/10 hover:bg-white/20 text-white border border-white/30 rounded-full px-4 py-2 text-sm font-semibold"
+                >
+                  {t('dashboard.messages.message_button') || 'Message'}
+                </Button>
+              </div>
+            )}
 
             {/* Location Info */}
             <div className="mt-3 space-y-1">

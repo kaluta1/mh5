@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { formatDistanceToNow } from 'date-fns'
-import { fr } from 'date-fns/locale'
+import { fr, enUS } from 'date-fns/locale'
 import { Send, Heart } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -10,6 +10,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { UserAvatar } from '@/components/user/user-avatar'
 import { socialService, PostComment } from '@/services/social-service'
 import { cn } from '@/lib/utils'
+import { useLanguage } from '@/contexts/language-context'
+import { useToast } from '@/components/ui/toast'
 
 interface CommentDialogProps {
   open: boolean
@@ -19,10 +21,15 @@ interface CommentDialogProps {
 }
 
 export function CommentDialog({ open, onOpenChange, postId, onCommentAdded }: CommentDialogProps) {
+  const { t, language } = useLanguage()
+  const { addToast } = useToast()
   const [comments, setComments] = useState<PostComment[]>([])
   const [content, setContent] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  
+  // Get date-fns locale based on current language
+  const dateLocale = language === 'fr' ? fr : enUS
 
   useEffect(() => {
     if (open && postId) {
@@ -51,8 +58,11 @@ export function CommentDialog({ open, onOpenChange, postId, onCommentAdded }: Co
       setContent('')
       await loadComments()
       onCommentAdded?.()
+      // Show success message
+      addToast(t('dashboard.feed.comment_success') || 'Comment posted successfully!', 'success')
     } catch (error) {
       console.error('Error creating comment:', error)
+      addToast(t('dashboard.feed.comment_error') || 'Failed to post comment. Please try again.', 'error')
     } finally {
       setIsSubmitting(false)
     }
@@ -71,14 +81,14 @@ export function CommentDialog({ open, onOpenChange, postId, onCommentAdded }: Co
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>Commentaires</DialogTitle>
+          <DialogTitle>{t('dashboard.feed.comments') || 'Comments'}</DialogTitle>
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto space-y-4 min-h-0">
           {isLoading ? (
-            <div className="text-center py-8 text-gray-500">Chargement...</div>
+            <div className="text-center py-8 text-gray-500">{t('dashboard.feed.loading') || 'Loading...'}</div>
           ) : comments.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">Aucun commentaire</div>
+            <div className="text-center py-8 text-gray-500">{t('dashboard.feed.no_comments') || 'No comments'}</div>
           ) : (
             comments.map((comment) => (
               <div key={comment.id} className="flex gap-3">
@@ -90,7 +100,7 @@ export function CommentDialog({ open, onOpenChange, postId, onCommentAdded }: Co
                         {comment.author?.full_name || comment.author?.username}
                       </span>
                       <span className="text-xs text-gray-500 dark:text-gray-400">
-                        {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true, locale: fr })}
+                        {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true, locale: dateLocale })}
                       </span>
                     </div>
                     <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
@@ -117,7 +127,7 @@ export function CommentDialog({ open, onOpenChange, postId, onCommentAdded }: Co
 
         <div className="border-t pt-4 space-y-2">
           <Textarea
-            placeholder="Ajouter un commentaire..."
+            placeholder={t('dashboard.feed.add_comment_placeholder') || 'Add a comment...'}
             value={content}
             onChange={(e) => setContent(e.target.value)}
             className="min-h-[80px] resize-none"
@@ -128,14 +138,14 @@ export function CommentDialog({ open, onOpenChange, postId, onCommentAdded }: Co
             }}
           />
           <div className="flex items-center justify-between">
-            <span className="text-xs text-gray-500">Ctrl+Entrée pour publier</span>
+            <span className="text-xs text-gray-500">{t('dashboard.feed.comment_shortcut') || 'Ctrl+Enter to post'}</span>
             <Button
               onClick={handleSubmit}
               disabled={!content.trim() || isSubmitting}
               size="sm"
             >
               <Send className="h-4 w-4 mr-2" />
-              {isSubmitting ? 'Publication...' : 'Publier'}
+              {isSubmitting ? (t('dashboard.feed.posting') || 'Posting...') : (t('dashboard.feed.post') || 'Post')}
             </Button>
           </div>
         </div>

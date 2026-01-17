@@ -50,16 +50,17 @@ async def create_post(
     )
     
     db.add(post)
-    db.commit()
-    db.refresh(post)
     
-    # Update group post count if in group
+    # Update group post count if in group (before commit for atomicity)
     if post_data.group_id:
         from app.models.group import SocialGroup
         group = db.query(SocialGroup).filter(SocialGroup.id == post_data.group_id).first()
         if group:
             group.post_count += 1
-            db.commit()
+    
+    # Single commit for atomicity
+    db.commit()
+    db.refresh(post)
     
     return PostResponse.from_orm(post)
 
@@ -264,131 +265,3 @@ async def toggle_reaction(
     db.commit()
     
     return {"message": "Reaction updated"}
-
-
-@router.put("/{post_id}", response_model=PostResponse)
-async def update_post(
-    post_id: int,
-    post_data: PostCreate,
-    db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
-):
-    """Update a post"""
-    user_id = current_user["user_id"]
-    
-    # Verify post ownership
-    post = db.query(Post).filter(
-        Post.id == post_id,
-        Post.author_id == user_id,
-        Post.is_deleted == False
-    ).first()
-    
-    if not post:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Post not found or you don't have permission to edit it"
-        )
-    
-    # Update post
-    post.content = post_data.content
-    post.post_type = post_data.post_type
-    post.visibility = post_data.visibility
-    post.location = post_data.location
-    post.tags = post_data.tags
-    
-    db.commit()
-    db.refresh(post)
-    
-    return PostResponse.from_orm(post)
-
-
-@router.delete("/{post_id}", status_code=status.HTTP_200_OK)
-async def delete_post(
-    post_id: int,
-    db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
-):
-    """Delete a post (soft delete)"""
-    user_id = current_user["user_id"]
-    
-    # Verify post ownership
-    post = db.query(Post).filter(
-        Post.id == post_id,
-        Post.author_id == user_id,
-        Post.is_deleted == False
-    ).first()
-    
-    if not post:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Post not found or you don't have permission to delete it"
-        )
-    
-    # Soft delete
-    post.is_deleted = True
-    
-    # Delete media from S3
-    for media in post.media:
-        try:
-            # Extract key from S3 URL
-            if media.media_url:
-                # Assuming URL format: https://bucket.s3.region.amazonaws.com/path
-                key = media.media_url.split('.amazonaws.com/')[-1] if '.amazonaws.com/' in media.media_url else None
-                if key:
-                    s3_service.delete_file(key)
-        except Exception as e:
-            # Log error but continue deletion
-            pass
-    
-    # Update group post count if in group
-    if post.group_id:
-        from app.models.group import SocialGroup
-        group = db.query(SocialGroup).filter(SocialGroup.id == post.group_id).first()
-        if group:
-            group.post_count = max(0, group.post_count - 1)
-    
-    db.commit()
-    
-    return {"message": "Post deleted successfully"}
-
-
-@router.post("/{post_id}/share", response_model=PostResponse, status_code=status.HTTP_201_CREATED)
-async def share_post(
-    post_id: int,
-    db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
-):
-    """Share a post (create a new post referencing the original)"""
-    user_id = current_user["user_id"]
-    
-    # Get original post
-    original_post = db.query(Post).filter(
-        Post.id == post_id,
-        Post.is_deleted == False
-    ).first()
-    
-    if not original_post:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Post not found"
-        )
-    
-    # Create shared post
-    shared_post = Post(
-        author_id=user_id,
-        content=f"Shared: {original_post.content[:100]}...",  # Truncate if long
-        post_type=original_post.post_type,
-        visibility=PostVisibility.PUBLIC,  # Shared posts are public by default
-        location=original_post.location,
-        tags=original_post.tags
-    )
-    
-    db.add(shared_post)
-    
-    # Update original post share count
-    original_post.share_count += 1
-    
-    db.commit()
-    db.refresh(shared_post)
-    
-    return PostResponse.from_orm(shared_post)

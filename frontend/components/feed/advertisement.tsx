@@ -4,6 +4,7 @@ import { X } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { useLanguage } from '@/contexts/language-context'
 
 interface AdvertisementProps {
   title?: string
@@ -14,12 +15,20 @@ interface AdvertisementProps {
 }
 
 export function Advertisement({ 
-  title = "Découvrez nos fonctionnalités premium",
-  description = "Accédez à des fonctionnalités exclusives et boostez votre visibilité",
+  title,
+  description,
   imageUrl,
-  ctaText = "En savoir plus",
+  ctaText,
   onDismiss
 }: AdvertisementProps) {
+  const { t } = useLanguage()
+  const defaultTitle = t('dashboard.feed.ad_title') || 'Discover premium features'
+  const defaultDescription = t('dashboard.feed.ad_description') || 'Access exclusive features and boost your visibility'
+  const defaultCta = t('dashboard.feed.ad_cta') || 'Learn more'
+  
+  const adTitle = title || defaultTitle
+  const adDescription = description || defaultDescription
+  const adCta = ctaText || defaultCta
   const [isVisible, setIsVisible] = useState(true)
 
   if (!isVisible) return null
@@ -45,16 +54,16 @@ export function Advertisement({
         <div className="w-full h-32 bg-gray-200 dark:bg-gray-700 rounded-lg mb-3" />
       )}
       <h4 className="font-semibold text-gray-900 dark:text-white mb-1">
-        {title}
+        {adTitle}
       </h4>
       <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-        {description}
+        {adDescription}
       </p>
       <Button
         className="w-full rounded-full bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white font-semibold"
         size="sm"
       >
-        {ctaText}
+        {adCta}
       </Button>
     </div>
   )

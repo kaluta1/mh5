@@ -602,7 +602,8 @@ def create_message(
     db: Session = Depends(get_db),
     group_id: int,
     message_in: GroupMessageCreate,
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
+    background_tasks: BackgroundTasks
 ) -> Any:
     """Envoyer un message dans un groupe"""
     # Vérifier que l'utilisateur est membre du groupe
