@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useLanguage } from '@/contexts/language-context'
 import { useToast } from '@/components/ui/toast'
 import { Button } from '@/components/ui/button'
-import { SimpleLocationSelector } from '@/components/auth/simple-location-selector'
+import { LocationSelectorSimple } from '@/components/auth/location-selector-simple'
 import { MapPin, AlertCircle } from 'lucide-react'
 
 interface SettingsLocationTabProps {
@@ -248,9 +248,9 @@ export function SettingsLocationTab({ user, onUpdate }: SettingsLocationTabProps
             </div>
           </div>
         ) : (
-          // Use SimpleLocationSelector if no participation
+          // Use LocationSelectorSimple if no participation
           <div className="space-y-4">
-            <SimpleLocationSelector
+            <LocationSelectorSimple
               onCountryChange={(value) => handleLocationChange('country', value)}
               onCityChange={(value) => handleLocationChange('city', value)}
               onRegionChange={(value) => handleLocationChange('region', value)}
@@ -258,6 +258,24 @@ export function SettingsLocationTab({ user, onUpdate }: SettingsLocationTabProps
               selectedCountry={country}
               selectedCity={city}
             />
+            
+            {/* City Input */}
+            {country && (
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+                  <MapPin className="inline mr-2 h-4 w-4" />
+                  {t('auth.register.city') || 'Ville'} *
+                </label>
+                <input
+                  type="text"
+                  value={city}
+                  onChange={(e) => handleLocationChange('city', e.target.value)}
+                  placeholder={t('auth.register.city_placeholder') || 'Entrez votre ville'}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myhigh5-primary"
+                  required
+                />
+              </div>
+            )}
             
             {/* Error Messages */}
             {(errors.continent || errors.region || errors.country || errors.city) && (
