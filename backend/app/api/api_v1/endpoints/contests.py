@@ -39,7 +39,7 @@ def read_contests(
     *,
     db: Session = Depends(get_db),
     skip: int = 0,
-    limit: int = 100,
+    limit: int = 12,
     location_id: int = None,
     contest_type: str = None,
     active: bool = Query(None),

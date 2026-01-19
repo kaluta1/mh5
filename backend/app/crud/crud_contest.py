@@ -573,6 +573,16 @@ class CRUDContest:
         
         entries_count = entries_query.scalar() or 0
         
+        # Vérifier si l'utilisateur connecté participe à ce concours
+        current_user_contesting = False
+        if current_user:
+            user_contestant = db.query(Contestant).filter(
+                Contestant.season_id == contest.id,
+                Contestant.user_id == current_user.id,
+                Contestant.is_deleted == False
+            ).first()
+            current_user_contesting = user_contestant is not None
+        
         # Récupérer les top 5 contestants par votes
         top_contestants = []
         import logging
@@ -896,6 +906,8 @@ class CRUDContest:
             "max_age": getattr(contest, 'max_age', None),
             # Top contestants preview
             "top_contestants": top_contestants,
+            # Vérifier si l'utilisateur connecté participe
+            "current_user_contesting": current_user_contesting,
         }
         
         # Log pour vérifier que category_id est bien dans le résultat
