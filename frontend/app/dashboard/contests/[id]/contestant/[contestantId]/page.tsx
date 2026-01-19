@@ -436,6 +436,15 @@ export default function ContestantDetailPage() {
     router.push(`/dashboard/messages?user=${contestant.user_id}`)
   }
 
+  const handleShare = () => {
+    // Générer le lien de partage avec referral
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
+    const refCode = (user as any)?.referral_code || ''
+    const link = `${baseUrl}/dashboard/contests/${contestId}/contestant/${contestantId}${refCode ? `?ref=${refCode}` : ''}`
+    setShareLink(link)
+    setShowShareDialog(true)
+  }
+
   useEffect(() => {
     if (toast) {
       const timer = setTimeout(() => setToast(null), 3000)
