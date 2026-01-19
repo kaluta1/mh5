@@ -115,6 +115,11 @@ def read_root():
         "documentation": "/docs"
     }
 
+# Route health check pour Docker
+@app.get("/health", tags=["Status"])
+def health_check():
+    return {"status": "healthy"}
+
 # Route de debug CORS
 @app.get("/debug/cors", tags=["Debug"])
 def debug_cors():
