@@ -28,7 +28,7 @@ class CRUDFavorite:
             return True
         return False
     
-    def get_contest_favorites(self, db: Session, user_id: int, skip: int = 0, limit: int = 100) -> List[ContestFavorite]:
+    def get_contest_favorites(self, db: Session, user_id: int, skip: int = 0, limit: int = 10) -> List[ContestFavorite]:
         """Get user's favorite contests"""
         return db.query(ContestFavorite).filter(
             ContestFavorite.user_id == user_id
@@ -75,7 +75,7 @@ class CRUDFavorite:
             return True
         return False
     
-    def get_contestant_favorites(self, db: Session, user_id: int, skip: int = 0, limit: int = 100) -> List[MyFavorites]:
+    def get_contestant_favorites(self, db: Session, user_id: int, skip: int = 0, limit: int = 10) -> List[MyFavorites]:
         """Get user's favorite contestants sorted by position"""
         return db.query(MyFavorites).filter(
             MyFavorites.user_id == user_id

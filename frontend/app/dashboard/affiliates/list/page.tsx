@@ -7,8 +7,8 @@ import { useLanguage } from '@/contexts/language-context'
 import { useToast } from '@/components/ui/toast'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { 
-  Users, 
+import {
+  Users,
   Search,
   Filter,
   ChevronLeft,
@@ -64,7 +64,7 @@ export default function AffiliatesListPage() {
   const router = useRouter()
   const { user, isAuthenticated, isLoading } = useAuth()
   const { addToast } = useToast()
-  
+
   const [affiliates, setAffiliates] = useState<Affiliate[]>([])
   const [filteredAffiliates, setFilteredAffiliates] = useState<Affiliate[]>([])
   const [pageLoading, setPageLoading] = useState(true)
@@ -109,7 +109,7 @@ export default function AffiliatesListPage() {
 
       // Build query params
       const params = new URLSearchParams()
-      params.append('limit', '100') // Get more to have full list for client-side pagination
+      params.append('limit', '10') // Get more to have full list for client-side pagination
       if (levelFilter !== null) params.append('level', levelFilter.toString())
       if (statusFilter) params.append('status', statusFilter)
       if (kycStatusFilter) params.append('kyc_status', kycStatusFilter)
@@ -127,7 +127,7 @@ export default function AffiliatesListPage() {
 
       if (response.ok) {
         const data = await response.json()
-        
+
         // Transform API data to match Affiliate interface
         const transformedAffiliates: Affiliate[] = data.referrals.map((r: any) => ({
           id: r.id?.toString() || '',
@@ -163,15 +163,15 @@ export default function AffiliatesListPage() {
 
   const filterAffiliates = () => {
     let filtered = [...affiliates]
-    
+
     // Filtrage local uniquement pour la recherche (niveau et statut sont gérés côté serveur)
     if (searchQuery) {
-      filtered = filtered.filter(a => 
+      filtered = filtered.filter(a =>
         a.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         a.email.toLowerCase().includes(searchQuery.toLowerCase())
       )
     }
-    
+
     setFilteredAffiliates(filtered)
     setCurrentPage(1)
   }
@@ -183,36 +183,36 @@ export default function AffiliatesListPage() {
 
   const getKycStatusBadge = (status: KYCStatusType | undefined) => {
     const statusConfig: Record<string, { label: string; className: string }> = {
-      none: { 
-        label: t('dashboard.affiliates.kyc_none') || 'Non initié', 
-        className: 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400' 
+      none: {
+        label: t('dashboard.affiliates.kyc_none') || 'Non initié',
+        className: 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
       },
-      pending: { 
-        label: t('dashboard.affiliates.kyc_pending') || 'En attente', 
-        className: 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400' 
+      pending: {
+        label: t('dashboard.affiliates.kyc_pending') || 'En attente',
+        className: 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400'
       },
-      in_progress: { 
-        label: t('dashboard.affiliates.kyc_in_progress') || 'En cours', 
-        className: 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' 
+      in_progress: {
+        label: t('dashboard.affiliates.kyc_in_progress') || 'En cours',
+        className: 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
       },
-      approved: { 
-        label: t('dashboard.affiliates.kyc_approved') || 'Vérifié', 
-        className: 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' 
+      approved: {
+        label: t('dashboard.affiliates.kyc_approved') || 'Vérifié',
+        className: 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400'
       },
-      rejected: { 
-        label: t('dashboard.affiliates.kyc_rejected') || 'Rejeté', 
-        className: 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400' 
+      rejected: {
+        label: t('dashboard.affiliates.kyc_rejected') || 'Rejeté',
+        className: 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
       },
-      expired: { 
-        label: t('dashboard.affiliates.kyc_expired') || 'Expiré', 
-        className: 'bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400' 
+      expired: {
+        label: t('dashboard.affiliates.kyc_expired') || 'Expiré',
+        className: 'bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400'
       },
-      requires_review: { 
-        label: t('dashboard.affiliates.kyc_requires_review') || 'À revoir', 
-        className: 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400' 
+      requires_review: {
+        label: t('dashboard.affiliates.kyc_requires_review') || 'À revoir',
+        className: 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400'
       }
     }
-    
+
     const config = statusConfig[status || 'none'] || statusConfig.none
     return config
   }
@@ -429,7 +429,7 @@ export default function AffiliatesListPage() {
               {t('dashboard.affiliates.commission_structure') || 'Structure des commissions KYC'}
             </p>
             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-              <span className="font-semibold text-myhigh5-primary">10%</span> {t('dashboard.affiliates.level')} 1 (direct) • 
+              <span className="font-semibold text-myhigh5-primary">10%</span> {t('dashboard.affiliates.level')} 1 (direct) •
               <span className="font-semibold text-purple-600 dark:text-purple-400 ml-1">1%</span> {t('dashboard.affiliates.levels')} 2-10 (indirect)
             </p>
           </div>
@@ -448,7 +448,7 @@ export default function AffiliatesListPage() {
               className="pl-10 rounded-lg"
             />
           </div>
-          
+
           {/* Level Filter */}
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-gray-400" />
@@ -463,7 +463,7 @@ export default function AffiliatesListPage() {
               ))}
             </select>
           </div>
-          
+
           {/* Status Filter */}
           <select
             value={statusFilter ?? ''}
@@ -540,12 +540,12 @@ export default function AffiliatesListPage() {
             </div>
           </div>
         </div>
-        
+
         {/* Table Body */}
         <div className="divide-y divide-gray-100 dark:divide-gray-700">
           {paginatedAffiliates.map((affiliate) => (
-            <div 
-              key={affiliate.id} 
+            <div
+              key={affiliate.id}
               className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
             >
               <div className="md:grid md:grid-cols-7 md:gap-4 md:items-center space-y-3 md:space-y-0">
@@ -567,7 +567,7 @@ export default function AffiliatesListPage() {
                     </div>
                   </div>
                 </div>
-                
+
                 {/* Level */}
                 <div className="flex md:justify-center">
                   <span className={`text-xs font-medium px-3 py-1 rounded-full ${getLevelBadge(affiliate.level)}`}>
@@ -582,13 +582,13 @@ export default function AffiliatesListPage() {
                     {getKycStatusBadge(affiliate.kyc_status).label}
                   </span>
                 </div>
-                
+
                 {/* Referrals */}
                 <div className="flex md:justify-center items-center gap-2">
                   <span className="md:hidden text-sm text-gray-500">{t('dashboard.affiliates.referrals_count') || 'Parrainages'}:</span>
                   <span className="font-medium text-gray-900 dark:text-white">{affiliate.referrals}</span>
                 </div>
-                
+
                 {/* Earnings */}
                 <div className="flex md:justify-center items-center gap-2">
                   <span className="md:hidden text-sm text-gray-500">{t('dashboard.affiliates.earnings')}:</span>
@@ -596,7 +596,7 @@ export default function AffiliatesListPage() {
                     {formatCurrency(affiliate.totalEarnings)}
                   </span>
                 </div>
-                
+
                 {/* Status */}
                 <div className="flex md:justify-center">
                   {affiliate.status === 'active' ? (
@@ -614,7 +614,7 @@ export default function AffiliatesListPage() {
             </div>
           ))}
         </div>
-        
+
         {/* Empty State */}
         {paginatedAffiliates.length === 0 && (
           <div className="p-12 text-center">
@@ -629,7 +629,7 @@ export default function AffiliatesListPage() {
             </p>
           </div>
         )}
-        
+
         {/* Pagination */}
         {totalPages > 1 && (
           <div className="flex items-center justify-between p-4 border-t border-gray-100 dark:border-gray-700">
@@ -651,11 +651,10 @@ export default function AffiliatesListPage() {
                   <button
                     key={page}
                     onClick={() => setCurrentPage(page)}
-                    className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
-                      page === currentPage
+                    className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${page === currentPage
                         ? 'bg-myhigh5-primary text-white'
                         : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400'
-                    }`}
+                      }`}
                   >
                     {page}
                   </button>

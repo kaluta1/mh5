@@ -59,7 +59,7 @@ class CRUDInvitation:
         user_id: int,
         status: Optional[str] = None,
         skip: int = 0,
-        limit: int = 50
+        limit: int = 10
     ) -> List[Invitation]:
         """Récupérer les invitations envoyées par un utilisateur"""
         query = db.query(Invitation).filter(Invitation.inviter_id == user_id)
@@ -75,7 +75,7 @@ class CRUDInvitation:
         *,
         user_id: int,
         skip: int = 0,
-        limit: int = 50
+        limit: int = 10
     ) -> List[Invitation]:
         """Récupérer les invitations en attente"""
         return self.get_user_invitations(
@@ -88,7 +88,7 @@ class CRUDInvitation:
         *,
         user_id: int,
         skip: int = 0,
-        limit: int = 50
+        limit: int = 10
     ) -> List[Invitation]:
         """Récupérer les invitations acceptées"""
         return self.get_user_invitations(

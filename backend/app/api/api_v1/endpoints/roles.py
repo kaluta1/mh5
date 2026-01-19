@@ -23,7 +23,7 @@ router = APIRouter()
 def get_permissions(
     db: Session = Depends(get_db),
     skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=500),
+    limit: int = Query(10, ge=1, le=10),
     category: Optional[str] = Query(None, description="Filter by category (user, moderator, admin)"),
     current_user: User = Depends(require_permission("manage_permissions"))
 ):
@@ -98,7 +98,7 @@ def delete_permission(
 def get_roles(
     db: Session = Depends(get_db),
     skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=500),
+    limit: int = Query(10, ge=1, le=100),
     current_user: User = Depends(require_permission("manage_roles"))
 ):
     """Get all roles. Requires 'manage_roles' permission."""

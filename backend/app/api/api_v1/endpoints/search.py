@@ -142,7 +142,7 @@ def search(
 def search_contests(
     q: str = Query(..., min_length=1, max_length=100),
     skip: int = Query(0, ge=0),
-    limit: int = Query(10, ge=1, le=100),
+    limit: int = Query(10, ge=1, le=10),
     db: Session = Depends(deps.get_db),
     current_user = Depends(deps.get_current_user),
 ):
@@ -171,7 +171,7 @@ def search_contests(
 def search_contestants(
     q: str = Query(..., min_length=1, max_length=100),
     skip: int = Query(0, ge=0),
-    limit: int = Query(10, ge=1, le=100),
+    limit: int = Query(10, ge=1, le=10),
     db: Session = Depends(deps.get_db),
     current_user = Depends(deps.get_current_user),
 ):
@@ -237,7 +237,7 @@ def search_contestants(
 def search_clubs(
     q: str = Query(..., min_length=1, max_length=100),
     skip: int = Query(0, ge=0),
-    limit: int = Query(10, ge=1, le=100),
+    limit: int = Query(10, ge=1, le=10),
     db: Session = Depends(deps.get_db),
     current_user = Depends(deps.get_current_user),
 ):

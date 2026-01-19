@@ -36,7 +36,7 @@ def get_my_contestants(
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
     skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000)
+    limit: int = Query(10, ge=1, le=100)
 ) -> List[ContestantListResponse]:
     """Récupère les candidatures de l'utilisateur connecté"""
     contestants = crud_contestant.get_multi_by_user(
@@ -408,7 +408,7 @@ def get_contest_leaderboard(
     db: Session = Depends(deps.get_db),
     contest_id: int,
     skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000)
+    limit: int = Query(10, ge=1, le=100)
 ) -> List[ContestantListResponse]:
     """Récupère le classement d'un concours"""
     # Vérifier que la saison existe
@@ -444,7 +444,7 @@ def get_contest_contestants(
     db: Session = Depends(deps.get_db),
     contest_id: int,
     skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
+    limit: int = Query(10, ge=1, le=100),
     filter_country: str = Query(None, description="Filtrer par pays"),
     filter_region: str = Query(None, description="Filtrer par région"),
     filter_continent: str = Query(None, description="Filtrer par continent"),

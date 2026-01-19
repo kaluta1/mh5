@@ -73,7 +73,7 @@ class CRUDNewsletter:
         db: Session,
         *,
         skip: int = 0,
-        limit: int = 100,
+        limit: int = 10,
         is_active: Optional[bool] = None,
         is_verified: Optional[bool] = None
     ) -> List[NewsletterSubscription]:

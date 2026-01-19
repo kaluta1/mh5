@@ -523,7 +523,7 @@ def list_kyc_verifications(
     current_user: User = Depends(deps.get_current_admin_user),
     status_filter: Optional[KYCStatus] = None,
     skip: int = 0,
-    limit: int = 100
+    limit: int = 10
 ) -> List[KYCVerification]:
     """
     Lister toutes les vérifications KYC (admin seulement)
@@ -542,7 +542,7 @@ def get_pending_verifications(
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_admin_user),
     skip: int = 0,
-    limit: int = 100
+    limit: int = 10
 ) -> List[KYCVerification]:
     """
     Récupérer les vérifications en attente (admin seulement)

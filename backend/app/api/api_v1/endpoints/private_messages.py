@@ -28,7 +28,7 @@ def get_conversations(
     *,
     db: Session = Depends(get_db),
     skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=100),
+    limit: int = Query(50, ge=1, le=10),
     current_user: User = Depends(get_current_active_user)
 ) -> Any:
     """Récupérer toutes les conversations de l'utilisateur"""
@@ -249,7 +249,7 @@ def get_conversation_messages(
     db: Session = Depends(get_db),
     conversation_id: int,
     skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=100),
+    limit: int = Query(50, ge=1, le=10),
     current_user: User = Depends(get_current_active_user)
 ) -> Any:
     """Récupérer les messages d'une conversation"""

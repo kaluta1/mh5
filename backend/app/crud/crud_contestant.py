@@ -472,7 +472,7 @@ class CRUDContestant:
             .first()
     
     def get_multi_by_season(
-        self, db: Session, season_id: int, *, skip: int = 0, limit: int = 100
+        self, db: Session, season_id: int, *, skip: int = 0, limit: int = 10
     ) -> List[Contestant]:
         """Récupère les candidatures d'une saison"""
         return db.query(Contestant)\
@@ -488,7 +488,7 @@ class CRUDContestant:
     
     def get_multi_by_season_with_stats(
         self, db: Session, season_id: int, current_user_id: Optional[int] = None, 
-        *, skip: int = 0, limit: int = 100,
+        *, skip: int = 0, limit: int = 10,
         filter_country: Optional[str] = None,
         filter_region: Optional[str] = None,
         filter_continent: Optional[str] = None,
@@ -659,7 +659,7 @@ class CRUDContestant:
         return result
     
     def get_multi_by_user(
-        self, db: Session, user_id: int, *, skip: int = 0, limit: int = 100
+        self, db: Session, user_id: int, *, skip: int = 0, limit: int = 10
     ) -> List[Contestant]:
         """Récupère les candidatures d'un utilisateur"""
         return db.query(Contestant)\
@@ -773,7 +773,7 @@ class CRUDContestant:
         return submission
     
     def get_leaderboard(
-        self, db: Session, season_id: int, *, skip: int = 0, limit: int = 100
+        self, db: Session, season_id: int, *, skip: int = 0, limit: int = 10
     ) -> List[Contestant]:
         """Récupère le classement d'une saison"""
         return db.query(Contestant)\

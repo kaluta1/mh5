@@ -22,7 +22,7 @@ class CRUDUser:
     def get_by_email(self, db: Session, email: str) -> Optional[User]:
         return db.query(User).filter(User.email == email).first()
 
-    def get_multi(self, db: Session, skip: int = 0, limit: int = 100) -> List[User]:
+    def get_multi(self, db: Session, skip: int = 0, limit: int = 10) -> List[User]:
         return db.query(User).offset(skip).limit(limit).all()
 
     def create(self, db: Session, obj_in: UserCreate) -> User:
@@ -301,7 +301,7 @@ class CRUDUser:
     
     def get_all_referrals_multilevel(
         self, db: Session, user_id: int, 
-        skip: int = 0, limit: int = 50,
+        skip: int = 0, limit: int = 10,
         level_filter: int = None, status_filter: str = None,
         search_query: str = None, kyc_status_filter: str = None
     ) -> dict:

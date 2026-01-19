@@ -19,7 +19,7 @@ class CRUDContinent:
         """Récupérer un continent par son ID"""
         return db.query(Continent).filter(Continent.id == id).first()
     
-    def get_multi(self, db: Session, *, skip: int = 0, limit: int = 100) -> List[Continent]:
+    def get_multi(self, db: Session, *, skip: int = 0, limit: int = 10) -> List[Continent]:
         """Récupérer plusieurs continents"""
         return db.query(Continent).offset(skip).limit(limit).all()
     
@@ -90,7 +90,7 @@ class CRUDRegion:
         """Récupérer une région par son ID"""
         return db.query(Region).filter(Region.id == id).first()
     
-    def get_multi(self, db: Session, *, skip: int = 0, limit: int = 100) -> List[Region]:
+    def get_multi(self, db: Session, *, skip: int = 0, limit: int = 10) -> List[Region]:
         """Récupérer plusieurs régions"""
         return db.query(Region).offset(skip).limit(limit).all()
     
@@ -149,7 +149,7 @@ class CRUDCountry:
         """Récupérer un pays par son ID"""
         return db.query(Country).filter(Country.id == id).first()
     
-    def get_multi(self, db: Session, *, skip: int = 0, limit: int = 100) -> List[Country]:
+    def get_multi(self, db: Session, *, skip: int = 0, limit: int = 10) -> List[Country]:
         """Récupérer plusieurs pays"""
         return db.query(Country).offset(skip).limit(limit).all()
     
@@ -214,7 +214,7 @@ class CRUDCity:
         """Récupérer une ville par son ID"""
         return db.query(City).filter(City.id == id).first()
     
-    def get_multi(self, db: Session, *, skip: int = 0, limit: int = 100) -> List[City]:
+    def get_multi(self, db: Session, *, skip: int = 0, limit: int = 10) -> List[City]:
         """Récupérer plusieurs villes"""
         return db.query(City).offset(skip).limit(limit).all()
     
@@ -322,7 +322,7 @@ def search_locations(
     *, 
     query: str, 
     location_type: Optional[str] = None,
-    limit: int = 20
+    limit: int = 10
 ) -> List[dict]:
     """Recherche globale dans toutes les entités géographiques"""
     results = []

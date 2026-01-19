@@ -53,7 +53,7 @@ class CRUDAffiliateTree:
         }
     
     def get_direct_referrals(
-        self, db: Session, sponsor_id: int, skip: int = 0, limit: int = 50
+        self, db: Session, sponsor_id: int, skip: int = 0, limit: int = 10
     ) -> List[dict]:
         """Récupère les parrainages directs avec informations utilisateur."""
         trees = db.query(AffiliateTree).filter(
@@ -351,7 +351,7 @@ class CRUDAffiliateCommission:
         return commissions_created
     
     def get_user_commissions(
-        self, db: Session, user_id: int, skip: int = 0, limit: int = 50,
+        self, db: Session, user_id: int, skip: int = 0, limit: int = 10,
         commission_type: Optional[str] = None
     ) -> List[AffiliateCommission]:
         query = db.query(AffiliateCommission).filter(
@@ -449,7 +449,7 @@ class CRUDAffiliateCommission:
         }
     
     def get_user_commissions_detailed(
-        self, db: Session, user_id: int, skip: int = 0, limit: int = 50,
+        self, db: Session, user_id: int, skip: int = 0, limit: int = 10,
         commission_type: Optional[str] = None, product_type_code: Optional[str] = None,
         sort_by: Optional[str] = "date", status: Optional[str] = None
     ) -> List[dict]:
@@ -610,7 +610,7 @@ class CRUDReferralClick:
 
 class CRUDRevenueShare:
     def get_user_shares(
-        self, db: Session, user_id: int, skip: int = 0, limit: int = 50
+        self, db: Session, user_id: int, skip: int = 0, limit: int = 10
     ) -> List[RevenueShare]:
         return db.query(RevenueShare).filter(
             RevenueShare.user_id == user_id

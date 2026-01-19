@@ -59,7 +59,7 @@ class CRUDDeposit:
         *, 
         user_id: int, 
         skip: int = 0, 
-        limit: int = 100
+        limit: int = 10
     ) -> List[Deposit]:
         """Récupère les dépôts d'un utilisateur"""
         return db.query(Deposit).filter(
@@ -170,7 +170,7 @@ class CRUDDeposit:
         db: Session, 
         *, 
         skip: int = 0, 
-        limit: int = 100
+        limit: int = 10
     ) -> List[Deposit]:
         """Récupère les dépôts en attente de validation (pour admin)"""
         return db.query(Deposit).filter(

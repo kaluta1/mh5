@@ -44,7 +44,7 @@ def read_voting_types(
     *,
     db: Session = Depends(get_db),
     skip: int = 0,
-    limit: int = 100,
+    limit: int = 10,
     voting_level: Optional[str] = Query(None, description="Filtrer par niveau de vote"),
     commission_source: Optional[str] = Query(None, description="Filtrer par source de commission"),
 ) -> Any:

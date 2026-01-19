@@ -107,12 +107,12 @@ class CRUDContest:
             .options(joinedload(Contest.entries).joinedload(ContestEntry.media))\
             .first()
 
-    def get_multi(self, db: Session, *, skip: int = 0, limit: int = 100) -> List[Contest]:
+    def get_multi(self, db: Session, *, skip: int = 0, limit: int = 10) -> List[Contest]:
         """Récupère une liste de concours"""
         return db.query(Contest).filter(Contest.is_deleted == False).offset(skip).limit(limit).all()
 
     def get_multi_with_filters(self,
-        db: Session, *, skip: int = 0, limit: int = 100, filters: Dict[str, Any] = {}
+        db: Session, *, skip: int = 0, limit: int = 10, filters: Dict[str, Any] = {}
     ) -> List[Contest]:
         """Récupère une liste de concours avec filtres"""
         # Note: On ne fait plus de joinedload sur voting_type ici car la table peut ne pas exister

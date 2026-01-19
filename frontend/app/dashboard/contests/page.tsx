@@ -183,7 +183,7 @@ export default function ContestsPage() {
         const hasVotingType = categoryTab === 'nomination' ? true : categoryTab === 'participations' ? false : undefined
         const apiContests = await contestService.getContests(
           0,
-          100,
+          ITEMS_PER_PAGE,
           activeSearchTerm || undefined,
           undefined, // votingLevel n'est plus utilisé, on utilise has_voting_type à la place
           undefined, // votingTypeId
@@ -260,8 +260,9 @@ export default function ContestsPage() {
                 return contest.votingType == null
               }
             })
-            setDisplayedContests(categoryFiltered.slice(0, ITEMS_PER_PAGE))
-            setHasMore(categoryFiltered.length > ITEMS_PER_PAGE)
+            setDisplayedContests(categoryFiltered)
+            // Si on a reçu le nombre max demandé, il y a probablement plus de données
+            setHasMore(sortedContests.length >= ITEMS_PER_PAGE)
             setCurrentPage(1) // Réinitialiser la page
           }
         }
@@ -380,64 +381,53 @@ export default function ContestsPage() {
     }
   }, [hasMore, isLoadingMore, searchTerm, activeTab, allContests.length])
 
-  const loadMore = React.useCallback(() => {
+  const loadMore = React.useCallback(async () => {
     if (isLoadingMore || !hasMore || activeSearchTerm !== '' || activeTab !== 'all') return
 
     setIsLoadingMore(true)
     try {
-      // Filtrer selon la catégorie active
-      // Le filtrage est maintenant fait côté backend via has_voting_type
-      let categoryFiltered = allContests.filter(contest => {
-        if (categoryTab === 'nomination') {
-          return contest.votingType != null
-        } else {
-          return contest.votingType == null
-        }
-      })
+      // Calculer le skip pour la prochaine page
+      const skip = displayedContests.length
+      const hasVotingType = categoryTab === 'nomination' ? true : categoryTab === 'participations' ? false : undefined
 
-      // Appliquer le tri
-      const sorted = [...categoryFiltered].sort((a, b) => {
-        switch (sortBy) {
-          case 'participants':
-            if (b.contestants !== a.contestants) {
-              return b.contestants - a.contestants
-            }
-            return b.received - a.received
-          case 'votes':
-            if (b.received !== a.received) {
-              return b.received - a.received
-            }
-            return b.contestants - a.contestants
-          case 'date':
-            return new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
-          case 'name':
-            return a.title.localeCompare(b.title)
-          default:
-            if (b.contestants !== a.contestants) {
-              return b.contestants - a.contestants
-            }
-            return b.received - a.received
-        }
-      })
+      // Faire une requête API pour charger plus de contests
+      const apiContests = await contestService.getContests(
+        skip,
+        ITEMS_PER_PAGE,
+        activeSearchTerm || undefined,
+        undefined,
+        undefined,
+        hasVotingType,
+        filterCountry || undefined,
+        undefined,
+        filterContinent && filterContinent !== 'all' ? filterContinent : undefined
+      )
 
-      const nextPage = currentPage + 1
-      const startIndex = currentPage * ITEMS_PER_PAGE
-      const endIndex = startIndex + ITEMS_PER_PAGE
-      const newContests = sorted.slice(startIndex, endIndex)
+      if (!isMountedRef.current) return
 
-      if (newContests.length > 0) {
-        setDisplayedContests(prev => [...prev, ...newContests])
-        setCurrentPage(nextPage)
-        setHasMore(endIndex < sorted.length)
-      } else {
+      if (!apiContests || apiContests.length === 0) {
         setHasMore(false)
+      } else {
+        // Convertir les réponses API en objets Contest
+        const newContests: Contest[] = apiContests.map(apiContest =>
+          contestService.mapResponseToContest(apiContest)
+        )
+
+        // Ajouter aux listes existantes
+        setAllContests(prev => [...prev, ...newContests])
+        setDisplayedContests(prev => [...prev, ...newContests])
+        setCurrentPage(prev => prev + 1)
+
+        // S'il y a moins de résultats que demandé, c'est qu'on a tout chargé
+        setHasMore(newContests.length >= ITEMS_PER_PAGE)
       }
     } catch (error) {
       console.error('Error loading more contests:', error)
+      setHasMore(false)
     } finally {
       setIsLoadingMore(false)
     }
-  }, [currentPage, allContests, hasMore, isLoadingMore, searchTerm, activeTab, categoryTab, sortBy])
+  }, [displayedContests.length, hasMore, isLoadingMore, activeSearchTerm, activeTab, categoryTab, filterCountry, filterContinent])
 
 
   // Filtrer et trier les contests selon la catégorie (Nomination/Participations), la recherche et l'onglet actif

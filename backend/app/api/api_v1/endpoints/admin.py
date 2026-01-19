@@ -2750,7 +2750,7 @@ async def get_reports(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     skip: int = 0,
-    limit: int = 100,
+    limit: int = 10,
     status: Optional[str] = Query(None, description="Filtrer par statut (pending, reviewed, resolved)"),
 ):
     """
@@ -2837,7 +2837,7 @@ async def get_suggested_contests(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     skip: int = 0,
-    limit: int = 100,
+    limit: int = 10,
     status: Optional[str] = Query(None, description="Filtrer par statut (pending, approved, rejected)"),
 ):
     """
@@ -3232,7 +3232,7 @@ async def get_all_transactions(
     user_id: Optional[int] = Query(None, description="Filtrer par utilisateur"),
     search: Optional[str] = Query(None, description="Rechercher par référence, description, email ou username"),
     skip: int = 0,
-    limit: int = 100
+    limit: int = 10
 ):
     """
     Récupère toutes les transactions (dépôts, retraits, et autres transactions) avec des informations enrichies (admin uniquement).

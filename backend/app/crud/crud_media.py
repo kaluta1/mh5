@@ -11,11 +11,11 @@ class CRUDMedia:
         """Récupère un média par son ID"""
         return db.query(Media).filter(Media.id == id).first()
 
-    def get_multi(self, db: Session, *, skip: int = 0, limit: int = 100) -> List[Media]:
+    def get_multi(self, db: Session, *, skip: int = 0, limit: int = 10) -> List[Media]:
         """Récupère une liste de médias"""
         return db.query(Media).offset(skip).limit(limit).all()
 
-    def get_multi_by_user(self, db: Session, *, user_id: int, skip: int = 0, limit: int = 100) -> List[Media]:
+    def get_multi_by_user(self, db: Session, *, user_id: int, skip: int = 0, limit: int = 10) -> List[Media]:
         """Récupère les médias d'un utilisateur spécifique"""
         return db.query(Media).filter(Media.user_id == user_id).offset(skip).limit(limit).all()
 

@@ -183,7 +183,7 @@ class ContestService {
    */
   async getContests(
     skip: number = 0,
-    limit: number = 100,
+    limit: number = 10,
     search?: string,
     votingLevel?: string,
     votingTypeId?: number | null,
@@ -422,7 +422,7 @@ class ContestService {
   async getContestantsByContest(
     contestId: string,
     skip: number = 0,
-    limit: number = 100,
+    limit: number = 10,
     filterCountry?: string,
     filterRegion?: string,
     filterContinent?: string,
@@ -669,7 +669,7 @@ class ContestService {
   async getContestLeaderboard(
     contestId: string,
     skip: number = 0,
-    limit: number = 100
+    limit: number = 10
   ): Promise<any[]> {
     try {
       const cacheKey = `/api/v1/contestants/leaderboard/contest/${contestId}`
@@ -739,7 +739,7 @@ class ContestService {
       active?: boolean
     },
     skip: number = 0,
-    limit: number = 100
+    limit: number = 10
   ): Promise<ContestResponse[]> {
     try {
       const cacheKey = '/api/v1/contests'

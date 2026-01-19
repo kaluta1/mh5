@@ -11,7 +11,7 @@ class CRUDVotingType:
         return db.query(VotingType).filter(VotingType.id == id).first()
 
     def get_multi(
-        self, db: Session, *, skip: int = 0, limit: int = 100
+        self, db: Session, *, skip: int = 0, limit: int = 10
     ) -> List[VotingType]:
         """Récupère une liste de types de vote"""
         return db.query(VotingType).offset(skip).limit(limit).all()

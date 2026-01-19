@@ -16,7 +16,7 @@ class CRUDPermission:
         return db.query(Permission).filter(Permission.name == name).first()
     
     def get_multi(
-        self, db: Session, *, skip: int = 0, limit: int = 100, category: Optional[str] = None
+        self, db: Session, *, skip: int = 0, limit: int = 10, category: Optional[str] = None
     ) -> List[Permission]:
         query = db.query(Permission)
         if category:
@@ -67,7 +67,7 @@ class CRUDRole:
     def get_by_name(self, db: Session, name: str) -> Optional[Role]:
         return db.query(Role).filter(Role.name == name).first()
     
-    def get_multi(self, db: Session, *, skip: int = 0, limit: int = 100) -> List[Role]:
+    def get_multi(self, db: Session, *, skip: int = 0, limit: int = 10) -> List[Role]:
         return db.query(Role).offset(skip).limit(limit).all()
     
     def get_all(self, db: Session) -> List[Role]:

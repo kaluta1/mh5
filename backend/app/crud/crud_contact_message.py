@@ -46,7 +46,7 @@ class CRUDContactMessage:
         db: Session,
         *,
         skip: int = 0,
-        limit: int = 100,
+        limit: int = 10,
         is_read: Optional[bool] = None,
         is_archived: Optional[bool] = None
     ) -> List[ContactMessage]:
