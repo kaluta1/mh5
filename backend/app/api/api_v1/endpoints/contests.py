@@ -47,12 +47,19 @@ def read_contests(
     voting_level: str = Query(None, description="Filtrer par niveau de vote (country pour Nomination)"),
     voting_type_id: int = Query(None, description="Filtrer par ID du type de vote (pour Nominations)"),
     has_voting_type: bool = Query(None, description="Filtrer les contests avec/sans voting_type (True = avec, False = sans)"),
+    filter_country: str = Query(None, description="Filtrer par pays (pour compter les contestants de ce pays)"),
+    filter_region: str = Query(None, description="Filtrer par région (pour compter les contestants de cette région)"),
+    filter_continent: str = Query(None, description="Filtrer par continent (pour compter les contestants de ce continent)"),
     current_user: Optional[Any] = Depends(get_current_active_user_optional),
 ) -> List[dict]:
     """
     Récupérer tous les concours avec filtrage optionnel et statistiques.
     Endpoint public - accessible sans authentification.
     Le nombre de contestants affiché dépend de la saison du contest et de la localisation de l'utilisateur connecté (si authentifié).
+    
+    Paramètres de filtrage géographique (filter_country, filter_region, filter_continent):
+    - Si fournis, le comptage des contestants sera basé sur ces filtres plutôt que sur la localisation de l'utilisateur
+    - Par défaut (aucun filtre), utilise la localisation de l'utilisateur connecté
     """
     # Construire les filtres
     filters = {}
@@ -81,7 +88,14 @@ def read_contests(
     enriched_contests = []
     for c in contests:
         try:
-            enriched = contest.enrich_contest_with_stats(db=db, contest=c, current_user=current_user)
+            enriched = contest.enrich_contest_with_stats(
+                db=db, 
+                contest=c, 
+                current_user=current_user,
+                filter_country=filter_country,
+                filter_region=filter_region,
+                filter_continent=filter_continent
+            )
             if isinstance(enriched, dict):
                 enriched_contests.append(enriched)
         except Exception as e:

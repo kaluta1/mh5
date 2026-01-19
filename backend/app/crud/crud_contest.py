@@ -482,8 +482,21 @@ class CRUDContest:
         
         return {"success": True, "entry_id": entry.id}
 
-    def enrich_contest_with_stats(self, db: Session, contest: Contest, current_user: Optional['User'] = None) -> Dict[str, Any]:
-        """Enrichit un contest avec les statistiques (nombre de participants et votes)"""
+    def enrich_contest_with_stats(
+        self, db: Session, contest: Contest, current_user: Optional['User'] = None,
+        filter_country: Optional[str] = None,
+        filter_region: Optional[str] = None,
+        filter_continent: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Enrichit un contest avec les statistiques (nombre de participants et votes).
+        
+        Paramètres de filtrage géographique:
+        - filter_country: Si fourni, compte les contestants de ce pays
+        - filter_region: Si fourni, compte les contestants de cette région
+        - filter_continent: Si fourni, compte les contestants de ce continent
+        - Par défaut (aucun filtre), utilise la localisation de l'utilisateur connecté
+        """
         from app.models.contests import ContestSeasonLink, ContestSeason, SeasonLevel
         from app.models.user import User
         
@@ -506,15 +519,33 @@ class CRUDContest:
         if not season_level:
             season_level = contest.level.lower() if contest.level else None
         
-        # Compter le nombre de participants selon la saison et la localisation de l'utilisateur
+        # Compter le nombre de participants selon la saison et la localisation
         entries_query = db.query(func.count(Contestant.id.distinct()))\
             .filter(
                 Contestant.season_id == contest.id,
                 Contestant.is_deleted == False
             )
         
-        # Filtrer par localisation selon le niveau de la saison et l'utilisateur connecté
-        if current_user and season_level:
+        # Appliquer les filtres géographiques
+        # Priorité: filtres explicites > localisation de l'utilisateur
+        has_location_filter = filter_country or filter_region or filter_continent
+        
+        if has_location_filter:
+            # Utiliser les filtres fournis par l'utilisateur
+            if filter_country:
+                entries_query = entries_query.filter(
+                    func.lower(Contestant.country) == func.lower(filter_country)
+                )
+            if filter_region:
+                entries_query = entries_query.filter(
+                    func.lower(Contestant.region) == func.lower(filter_region)
+                )
+            if filter_continent:
+                entries_query = entries_query.filter(
+                    func.lower(Contestant.continent) == func.lower(filter_continent)
+                )
+        elif current_user and season_level:
+            # Filtrer par localisation selon le niveau de la saison et l'utilisateur connecté
             season_level_lower = season_level.lower()
             
             if season_level_lower == "city":

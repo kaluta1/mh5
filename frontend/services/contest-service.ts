@@ -177,6 +177,9 @@ export interface ContestantWithAuthorAndStats {
 class ContestService {
   /**
    * Récupère tous les contests avec pagination et recherche (avec cache)
+   * @param filterCountry - Filtrer par pays (pour compter les contestants de ce pays)
+   * @param filterRegion - Filtrer par région (pour compter les contestants de cette région)
+   * @param filterContinent - Filtrer par continent (pour compter les contestants de ce continent)
    */
   async getContests(
     skip: number = 0,
@@ -184,7 +187,10 @@ class ContestService {
     search?: string,
     votingLevel?: string,
     votingTypeId?: number | null,
-    hasVotingType?: boolean
+    hasVotingType?: boolean,
+    filterCountry?: string,
+    filterRegion?: string,
+    filterContinent?: string
   ): Promise<ContestResponse[]> {
     try {
       const params: any = { skip, limit }
@@ -199,6 +205,15 @@ class ContestService {
       }
       if (hasVotingType !== undefined) {
         params.has_voting_type = hasVotingType
+      }
+      if (filterCountry) {
+        params.filter_country = filterCountry
+      }
+      if (filterRegion) {
+        params.filter_region = filterRegion
+      }
+      if (filterContinent) {
+        params.filter_continent = filterContinent
       }
 
       // Vérifier le cache
@@ -400,15 +415,35 @@ class ContestService {
 
   /**
    * Récupère les candidatures d'un contest avec infos auteur et stats enrichies
+   * @param filterCountry - Filtrer par pays
+   * @param filterRegion - Filtrer par région
+   * @param filterContinent - Filtrer par continent
    */
   async getContestantsByContest(
     contestId: string,
     skip: number = 0,
-    limit: number = 100
+    limit: number = 100,
+    filterCountry?: string,
+    filterRegion?: string,
+    filterContinent?: string,
+    filterCity?: string
   ): Promise<ContestantWithAuthorAndStats[]> {
     try {
       const cacheKey = `/api/v1/contestants/contest/${contestId}`
-      const params = { skip, limit }
+      const params: any = { skip, limit }
+
+      if (filterCountry) {
+        params.filter_country = filterCountry
+      }
+      if (filterRegion) {
+        params.filter_region = filterRegion
+      }
+      if (filterContinent) {
+        params.filter_continent = filterContinent
+      }
+      if (filterCity) {
+        params.filter_city = filterCity
+      }
 
       // Vérifier le cache
       const cached = cacheService.get<ContestantWithAuthorAndStats[]>(cacheKey, params)
