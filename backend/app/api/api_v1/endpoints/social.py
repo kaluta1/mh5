@@ -69,7 +69,7 @@ def get_posts(
     *,
     db: Session = Depends(get_db),
     skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=10),
+    limit: int = Query(20, ge=1, le=100),
     author_id: Optional[int] = None,
     group_id: Optional[int] = None,
     current_user: Optional[User] = Depends(get_current_active_user)
