@@ -61,20 +61,21 @@ const nextConfig = {
   async rewrites() {
     return [
       {
+        // https://mh5-hbjp.onrender.com
         source: '/s/c/:id',
-        destination: 'https://mh5-sbe4.onrender.com/api/v1/share/c/:id',
+        destination: 'https://mh5-hbjp.onrender.com/api/v1/share/c/:id',
       },
       {
         source: '/s/p/:username',
-        destination: 'https://mh5-sbe4.onrender.com/api/v1/share/p/:username',
+        destination: 'https://mh5-hbjp.onrender.com/api/v1/share/p/:username',
       },
       {
         source: '/s/r/:code',
-        destination: 'https://mh5-sbe4.onrender.com/api/v1/share/r/:code',
+        destination: 'https://mh5-hbjp.onrender.com/api/v1/share/r/:code',
       },
       {
         source: '/s/r',
-        destination: 'https://mh5-sbe4.onrender.com/api/v1/share/r',
+        destination: 'https://mh5-hbjp.onrender.com/api/v1/share/r',
       },
     ];
   },

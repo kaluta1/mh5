@@ -29,6 +29,8 @@ export function ContestantMobileActions({
   isVoting,
   onCommentsClick,
   onVote,
+  onShare,
+  isAuthor,
   voteRestrictionReason,
   showActions = false,
   isSelf = false,
@@ -146,10 +148,10 @@ export function ContestantMobileActions({
           disabled={!canVote || isVoting || hasVoted}
           title={getVoteButtonTitle()}
           className={`flex-1 font-semibold py-3 text-base rounded-xl transition-all duration-300 ${hasVoted
-              ? 'bg-gray-400 dark:bg-gray-700 text-white cursor-not-allowed'
-              : canVote
-                ? 'bg-gradient-to-r from-myhigh5-primary via-myhigh5-primary-dark to-indigo-600 text-white hover:shadow-lg active:scale-95'
-                : 'bg-gray-400 dark:bg-gray-700 text-white cursor-not-allowed'
+            ? 'bg-gray-400 dark:bg-gray-700 text-white cursor-not-allowed'
+            : canVote
+              ? 'bg-gradient-to-r from-myhigh5-primary via-myhigh5-primary-dark to-indigo-600 text-white hover:shadow-lg active:scale-95'
+              : 'bg-gray-400 dark:bg-gray-700 text-white cursor-not-allowed'
             }`}
         >
           {getVoteButtonText()}

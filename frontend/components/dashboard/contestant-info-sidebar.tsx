@@ -46,6 +46,7 @@ export function ContestantInfoSidebar({
   isVoting,
   onVote,
   voteRestrictionReason,
+  onShare,
   showActions = false,
   isSelf = false,
   isFollowing = false,

@@ -95,7 +95,7 @@ export default function MessagesPage() {
 
   const checkAndGenerateKeys = async () => {
     if (!user?.id) return
-    
+
     try {
       // Try to get public key - if it fails, generate keys
       await messagingService.getPublicKey(user.id)
@@ -126,9 +126,9 @@ export default function MessagesPage() {
       setConversations(Array.isArray(data) ? data : [])
       const ids = Array.isArray(data)
         ? data
-            .map((conversation) => getConversationPartner(conversation).id)
-            .filter((id): id is number => Boolean(id))
-            .filter((id) => !usersById[id])
+          .map((conversation) => getConversationPartner(conversation).id)
+          .filter((id): id is number => Boolean(id))
+          .filter((id) => !usersById[id])
         : []
       if (ids.length > 0) {
         await loadUsers(ids)
@@ -147,7 +147,7 @@ export default function MessagesPage() {
       )
       setUsersById((prev) => {
         const next = { ...prev }
-        responses.forEach((userData) => {
+        responses.forEach((userData: any) => {
           if (userData?.id) {
             next[userData.id] = userData
           }
@@ -284,8 +284,8 @@ export default function MessagesPage() {
           <div className="flex-1 overflow-y-auto">
             {conversations.map((conversation) => {
               const partner = getConversationPartner(conversation)
-              const unreadCount = conversation.user1_id === user?.id 
-                ? conversation.unread_count_user1 
+              const unreadCount = conversation.user1_id === user?.id
+                ? conversation.unread_count_user1
                 : conversation.unread_count_user2
 
               return (
@@ -309,9 +309,9 @@ export default function MessagesPage() {
                         </p>
                         {conversation.last_message_at && (
                           <span className="text-xs text-gray-500 dark:text-gray-400">
-                            {formatDistanceToNow(parseApiDate(conversation.last_message_at), { 
-                              addSuffix: true, 
-                              locale: dateLocale 
+                            {formatDistanceToNow(parseApiDate(conversation.last_message_at), {
+                              addSuffix: true,
+                              locale: dateLocale
                             })}
                           </span>
                         )}
@@ -396,9 +396,9 @@ export default function MessagesPage() {
                           : "text-gray-500 dark:text-gray-400"
                       )}>
                         <span>
-                          {formatDistanceToNow(parseApiDate(message.created_at), { 
-                            addSuffix: true, 
-                            locale: dateLocale 
+                          {formatDistanceToNow(parseApiDate(message.created_at), {
+                            addSuffix: true,
+                            locale: dateLocale
                           })}
                         </span>
                         {message.sender_id === user?.id && (

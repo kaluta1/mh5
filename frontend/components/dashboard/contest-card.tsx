@@ -159,35 +159,35 @@ export function ContestCard({
     // Le backend est l'autorité principale via isOpen (is_submission_open)
     // Si isOpen est false, les inscriptions sont fermées
     if (!isOpen) return false
-    
+
     // Si isOpen est true, on peut aussi vérifier les dates côté client pour le décompte
     // mais le backend a déjà vérifié, donc on fait confiance
     return true
   }
-  
+
   const isEligibleForContest = () => {
     // Vérifier que la participation est en cours
     if (!isParticipationOngoing()) {
       return false
     }
-    
+
     // Vérifier les restrictions de genre
     if (genderRestriction) {
       // Si l'utilisateur n'a pas de genre défini, il ne peut pas participer
       if (!userGender) {
         return false
       }
-      
+
       // Vérifier que le genre de l'utilisateur correspond à la restriction
       if (genderRestriction === 'male' && userGender !== 'male') {
         return false
       }
-      
+
       if (genderRestriction === 'female' && userGender !== 'female') {
         return false
       }
     }
-    
+
     return true
   }
 
@@ -201,38 +201,38 @@ export function ContestCard({
 
   const getCountdownText = () => {
     const now = currentTime
-    
+
     if (votingStartDate) {
       const votingStart = new Date(votingStartDate)
       if (now >= votingStart) return ''
     }
-    
+
     let endDate: Date | null = null
-    
+
     if (participationEndDate) {
       endDate = new Date(participationEndDate)
     }
-    
+
     if (votingStartDate) {
       const votingStart = new Date(votingStartDate)
       if (!endDate || votingStart < endDate) {
         endDate = votingStart
       }
     }
-    
+
     if (!endDate || now > endDate) return ''
-    
+
     const diffMs = endDate.getTime() - now.getTime()
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
     const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
     const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
     const diffSeconds = Math.floor((diffMs % (1000 * 60)) / 1000)
-    
+
     const daysUnit = t('dashboard.contests.time_unit_days') || 'j'
     const hoursUnit = t('dashboard.contests.time_unit_hours') || 'h'
     const minutesUnit = t('dashboard.contests.time_unit_minutes') || 'm'
     const secondsUnit = t('dashboard.contests.time_unit_seconds') || 's'
-    
+
     if (diffDays > 0) {
       return `${diffDays}${daysUnit} ${diffHours}${hoursUnit}`
     } else if (diffHours > 0) {
@@ -247,14 +247,13 @@ export function ContestCard({
   }
 
   return (
-    <div 
-      className={`relative bg-gray-900 rounded-xl overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-300 flex flex-col border border-gray-800 hover:border-gray-700 ${
-        isFeatured ? 'md:scale-105 md:z-10 ring-2 ring-myhigh5-primary/50' : ''
-      }`}
+    <div
+      className={`relative bg-gray-900 rounded-xl overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-300 flex flex-col border border-gray-800 hover:border-gray-700 ${isFeatured ? 'md:scale-105 md:z-10 ring-2 ring-myhigh5-primary/50' : ''
+        }`}
     >
       {/* Cover Image Section */}
       <div className="relative w-full aspect-[4/3] bg-gradient-to-br from-myhigh5-primary via-myhigh5-primary-dark to-purple-600 overflow-hidden cursor-pointer"
-           onClick={onOpenDetails ?? onViewContestants}>
+        onClick={onOpenDetails ?? onViewContestants}>
         {coverImage && !imageError && (coverImage.startsWith('http') || coverImage.startsWith('/') || coverImage.startsWith('data:')) ? (
           <Image
             src={coverImage}
@@ -296,7 +295,7 @@ export function ContestCard({
                 </TooltipTrigger>
                 <TooltipContent className="bg-gray-800 text-white border-gray-700 max-w-xs">
                   <p className="text-xs">
-                    {participationEndDate 
+                    {participationEndDate
                       ? `${t('dashboard.contests.tooltip_time_remaining') || 'Temps restant avant la fin des inscriptions'}: ${new Date(participationEndDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`
                       : t('dashboard.contests.tooltip_time_remaining') || 'Temps restant pour participer au concours'}
                   </p>
@@ -371,15 +370,15 @@ export function ContestCard({
                           <p className="text-gray-400 text-xs mb-1">{t('dashboard.contests.voting_type') || 'Type de vote'}</p>
                           <p className="text-white font-medium text-sm">{votingType.name}</p>
                           <p className="text-gray-500 text-xs mt-0.5">
-                            {votingType.voting_level === 'country' 
+                            {votingType.voting_level === 'country'
                               ? (t('dashboard.contests.voting_level_country') || 'National')
                               : votingType.voting_level === 'city'
-                              ? (t('dashboard.contests.voting_level_city') || 'Ville')
-                              : votingType.voting_level === 'regional'
-                              ? (t('dashboard.contests.voting_level_regional') || 'Régional')
-                              : votingType.voting_level === 'continent'
-                              ? (t('dashboard.contests.voting_level_continent') || 'Continental')
-                              : (t('dashboard.contests.voting_level_global') || 'Global')
+                                ? (t('dashboard.contests.voting_level_city') || 'Ville')
+                                : votingType.voting_level === 'regional'
+                                  ? (t('dashboard.contests.voting_level_regional') || 'Régional')
+                                  : votingType.voting_level === 'continent'
+                                    ? (t('dashboard.contests.voting_level_continent') || 'Continental')
+                                    : (t('dashboard.contests.voting_level_global') || 'Global')
                             }
                           </p>
                         </div>
@@ -392,13 +391,13 @@ export function ContestCard({
                         <div>
                           <p className="text-gray-400 text-xs mb-1">{t('dashboard.contests.participant_type') || 'Type de participant'}</p>
                           <p className="text-white font-medium text-sm">
-                            {participantType === 'individual' 
+                            {participantType === 'individual'
                               ? (t('dashboard.contests.participant_individual') || 'Individuel')
                               : participantType === 'pet'
-                              ? (t('dashboard.contests.participant_pet') || 'Animal')
-                              : participantType === 'club'
-                              ? (t('dashboard.contests.participant_club') || 'Club')
-                              : (t('dashboard.contests.participant_content') || 'Contenu')
+                                ? (t('dashboard.contests.participant_pet') || 'Animal')
+                                : participantType === 'club'
+                                  ? (t('dashboard.contests.participant_club') || 'Club')
+                                  : (t('dashboard.contests.participant_content') || 'Contenu')
                             }
                           </p>
                         </div>
@@ -521,8 +520,8 @@ export function ContestCard({
                           <span className="text-2xl">{genderRestriction === 'female' ? '♀' : '♂'}</span>
                           <div>
                             <p className="text-pink-300 font-medium text-sm">
-                              {genderRestriction === 'female' 
-                                ? (t('dashboard.contests.female_only') || 'Femmes uniquement') 
+                              {genderRestriction === 'female'
+                                ? (t('dashboard.contests.female_only') || 'Femmes uniquement')
                                 : (t('dashboard.contests.male_only') || 'Hommes uniquement')}
                             </p>
                             <p className="text-gray-400 text-xs">
@@ -538,9 +537,9 @@ export function ContestCard({
                           <Calendar className="w-5 h-5 text-orange-300" />
                           <div>
                             <p className="text-orange-300 font-medium text-sm">
-                              {minAge && maxAge 
+                              {minAge && maxAge
                                 ? `${minAge}-${maxAge} ${t('dashboard.contests.years') || 'ans'}`
-                                : minAge 
+                                : minAge
                                   ? `${minAge}+ ${t('dashboard.contests.years') || 'ans'}`
                                   : `< ${maxAge} ${t('dashboard.contests.years') || 'ans'}`
                               }
@@ -562,7 +561,7 @@ export function ContestCard({
       <div className="p-4 bg-gradient-to-b from-gray-900 to-gray-950 flex flex-col gap-3 border-t border-gray-800">
         {/* Title */}
         <h3 className="text-white font-bold text-base line-clamp-2 leading-tight hover:text-myhigh5-secondary transition-colors cursor-pointer"
-            onClick={onOpenDetails ?? onViewContestants}>
+          onClick={onOpenDetails ?? onViewContestants}>
           {title}
         </h3>
 
@@ -574,8 +573,8 @@ export function ContestCard({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span className="text-pink-400 text-xs font-medium whitespace-nowrap cursor-help">
-                    {genderRestriction === 'female' ? '♀' : '♂'} {genderRestriction === 'female' 
-                      ? (t('dashboard.contests.female_only') || 'Femmes uniquement') 
+                    {genderRestriction === 'female' ? '♀' : '♂'} {genderRestriction === 'female'
+                      ? (t('dashboard.contests.female_only') || 'Femmes uniquement')
                       : (t('dashboard.contests.male_only') || 'Hommes uniquement')}
                   </span>
                 </TooltipTrigger>
@@ -601,15 +600,15 @@ export function ContestCard({
               </TooltipTrigger>
               <TooltipContent className="bg-gray-800 text-white border-gray-700">
                 <p className="text-xs">
-                  {status === 'city' 
+                  {status === 'city'
                     ? (t('dashboard.contests.tooltip_level_city') || 'Concours au niveau de la ville')
                     : status === 'country'
-                    ? (t('dashboard.contests.tooltip_level_country') || 'Concours au niveau national')
-                    : status === 'regional'
-                    ? (t('dashboard.contests.tooltip_level_regional') || 'Concours au niveau régional')
-                    : status === 'continental'
-                    ? (t('dashboard.contests.tooltip_level_continental') || 'Concours au niveau continental')
-                    : (t('dashboard.contests.tooltip_level_global') || 'Concours au niveau mondial')}
+                      ? (t('dashboard.contests.tooltip_level_country') || 'Concours au niveau national')
+                      : status === 'regional'
+                        ? (t('dashboard.contests.tooltip_level_regional') || 'Concours au niveau régional')
+                        : status === 'continental'
+                          ? (t('dashboard.contests.tooltip_level_continental') || 'Concours au niveau continental')
+                          : (t('dashboard.contests.tooltip_level_global') || 'Concours au niveau mondial')}
                 </p>
               </TooltipContent>
             </Tooltip>
@@ -680,7 +679,7 @@ export function ContestCard({
               >
                 <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover/btn:translate-x-full transition-transform duration-500" />
                 <Sparkles className="w-3.5 h-3.5 mr-1.5 group-hover/btn:scale-110 group-hover/btn:rotate-12 transition-all duration-300" />
-                {isNomination 
+                {isNomination
                   ? (t('dashboard.contests.nominate') || 'Nommer')
                   : (t('dashboard.contests.participate') || 'Participer')
                 }
@@ -697,7 +696,7 @@ export function ContestCard({
                 <div className="absolute inset-0 bg-gradient-to-r from-myhigh5-primary/10 via-myhigh5-primary/20 to-myhigh5-primary/10 opacity-0 group-hover/view:opacity-100 transition-opacity duration-300" />
                 <Eye className="w-4 h-4 mr-1.5 group-hover/view:scale-110 group-hover/view:text-myhigh5-secondary transition-all duration-300 relative z-10" />
                 <span className="relative z-10 group-hover/view:text-white transition-colors duration-300">
-                  {t('dashboard.contests.view') || 'Voir'} {contestants} {t('dashboard.contests.contestant') || 'participant'}{contestants > 1 ? 's' : ''}
+                  {t('dashboard.contests.view') || 'Voir'} {t('dashboard.contests.contestant') || 'participant'}{contestants > 1 ? 's' : ''}
                 </span>
                 <ArrowRight className="w-3.5 h-3.5 ml-1.5 group-hover/view:translate-x-1 group-hover/view:text-myhigh5-secondary transition-all duration-300 relative z-10" />
               </Button>

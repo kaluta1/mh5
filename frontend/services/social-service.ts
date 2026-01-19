@@ -268,7 +268,7 @@ export const socialService = {
 
   // Groups - Updated to use new feed endpoints
   async getGroups(skip: number = 0, limit: number = 20): Promise<SocialGroup[]> {
-    const groups = await apiService.get(`/api/v1/feed/groups?skip=${skip}&limit=${limit}`)
+    const groups = await apiService.get(`/api/v1/feed/groups?skip=${skip}&limit=${limit}`) as any[]
     // Map backend response to frontend format
     return groups.map((g: any) => ({
       ...g,
@@ -278,7 +278,7 @@ export const socialService = {
   },
 
   async getGroup(groupId: number): Promise<SocialGroup> {
-    const group = await apiService.get(`/api/v1/feed/groups/${groupId}`)
+    const group = await apiService.get(`/api/v1/feed/groups/${groupId}`) as any
     // Map backend response to frontend format
     return {
       ...group,
@@ -294,7 +294,7 @@ export const socialService = {
       description: data.description,
       group_type: data.is_private ? 'private' : 'public' as 'public' | 'private' | 'secret',
     }
-    const response = await apiService.post('/api/v1/feed/groups', newData)
+    const response = await apiService.post('/api/v1/feed/groups', newData) as any
     // Map backend response to frontend format
     return {
       ...response,
@@ -304,7 +304,7 @@ export const socialService = {
   },
 
   async joinGroup(groupId: number, inviteCode?: string): Promise<void> {
-    const url = inviteCode 
+    const url = inviteCode
       ? `/api/v1/feed/groups/${groupId}/join?invite_code=${encodeURIComponent(inviteCode)}`
       : `/api/v1/feed/groups/${groupId}/join`
     return apiService.post(url)
@@ -319,7 +319,7 @@ export const socialService = {
   },
 
   async getGroupMessages(groupId: number, skip: number = 0, limit: number = 50): Promise<GroupMessage[]> {
-    const response = await apiService.get(`/api/v1/social/groups/${groupId}/messages?skip=${skip}&limit=${limit}`)
+    const response = await apiService.get(`/api/v1/social/groups/${groupId}/messages?skip=${skip}&limit=${limit}`) as any
     return response?.messages || []
   },
 
