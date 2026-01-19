@@ -61,7 +61,6 @@ const nextConfig = {
   async rewrites() {
     return [
       {
-        // https://mh5-hbjp.onrender.com
         source: '/s/c/:id',
         destination: 'https://mh5-hbjp.onrender.com/api/v1/share/c/:id',
       },

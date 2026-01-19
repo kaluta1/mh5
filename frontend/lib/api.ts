@@ -1,7 +1,7 @@
 import axios from 'axios'
 import { cacheService } from './cache-service'
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://mh5-hbjp.onrender.com'
 
 // Créer une instance axios avec la configuration de base
 const api = axios.create({
@@ -39,7 +39,7 @@ api.interceptors.response.use(
       // Ne pas rediriger si c'est une tentative de connexion (erreur normale)
       const isLoginAttempt = error.config?.url?.includes('/auth/login')
       const isRegisterAttempt = error.config?.url?.includes('/auth/register')
-      
+
       // Si ce n'est pas une tentative de connexion/inscription, c'est un token expiré
       if (!isLoginAttempt && !isRegisterAttempt) {
         // Token expiré, supprimer le token et le cache
@@ -118,14 +118,14 @@ export const authService = {
     const params = new URLSearchParams()
     params.append('username', credentials.email_or_username)
     params.append('password', credentials.password)
-    
+
     const response = await api.post('/api/v1/auth/login', params.toString(), {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
     })
     const data = response.data
-    
+
     // Sauvegarder les tokens
     if (data.access_token) {
       localStorage.setItem('access_token', data.access_token)
@@ -133,19 +133,19 @@ export const authService = {
     if (data.refresh_token) {
       localStorage.setItem('refresh_token', data.refresh_token)
     }
-    
+
     return data
   },
 
   // Inscription
   async register(userData: RegisterRequest): Promise<LoginResponse> {
     const { sponsor_code, ...userDataWithoutSponsor } = userData
-    
+
     // Construire l'URL avec le code de parrainage en query param si présent
-    const url = sponsor_code 
+    const url = sponsor_code
       ? `/api/v1/auth/register?sponsor_code=${encodeURIComponent(sponsor_code)}`
       : '/api/v1/auth/register'
-    
+
     const response = await api.post(url, userDataWithoutSponsor)
     return response.data
   },
