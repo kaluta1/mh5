@@ -1133,6 +1133,9 @@ export interface TranslationKeys {
         nomination: string
         participations: string
         nominate: string
+        edit_nomination: string
+        edit_participation: string
+        edit: string
         tooltip_nominate: string
         time_remaining_to_nominate: string
         search_placeholder: string
@@ -2524,6 +2527,9 @@ export const translations: Record<Language, TranslationKeys> = {
         nomination_hint: "Nominez d'autres personnes pour les faire participer aux compétitions. Votez pour les candidats nominés par leurs fans.",
         participations_hint: "Participez vous-même aux compétitions. Les candidats s'inscrivent directement pour concourir.",
         nominate: "Nommer",
+        edit_nomination: "Modifier votre Nomination",
+        edit_participation: "Modifier votre Participation",
+        edit: "Modifier",
         tooltip_nominate: "Cliquez pour nommer à ce concours et soumettre votre candidature",
         time_remaining_to_nominate: "Temps restant pour nommer",
         search_placeholder: "Rechercher un concours...",
@@ -3951,6 +3957,9 @@ export const translations: Record<Language, TranslationKeys> = {
         nomination_hint: "Nominez d'autres personnes pour les faire participer aux compétitions. Votez pour les candidats nominés par leurs fans.",
         participations_hint: "Participez vous-même aux compétitions. Les candidats s'inscrivent directement pour concourir.",
         nominate: "Nommer",
+        edit_nomination: "Modifier votre Nomination",
+        edit_participation: "Modifier votre Participation",
+        edit: "Modifier",
         tooltip_nominate: "Cliquez pour nommer à ce concours et soumettre votre candidature",
         time_remaining_to_nominate: "Temps restant pour nommer",
         search_placeholder: "Rechercher un concours...",
@@ -6336,6 +6345,9 @@ export const translations: Record<Language, TranslationKeys> = {
         nomination_hint: "Nominate others to enter into competitions. Vote for contestants who have been nominated by their fans.",
         participations_hint: "Participate yourself in competitions. Contestants sign up directly to compete.",
         nominate: "Nominate",
+        edit_nomination: "Edit your Nomination",
+        edit_participation: "Edit your Participation",
+        edit: "Edit",
         tooltip_nominate: "Click to nominate in this contest and submit your entry",
         time_remaining_to_nominate: "Time remaining to nominate",
         search_placeholder: "Search for a contest...",
@@ -8695,6 +8707,9 @@ export const translations: Record<Language, TranslationKeys> = {
         nomination_hint: "Nomina a otras personas para que participen en competencias. Vota por los concursantes nominados por sus fans.",
         participations_hint: "Participa tú mismo en competencias. Los concursantes se inscriben directamente para competir.",
         nominate: "Nominar",
+        edit_nomination: "Editar tu Nominación",
+        edit_participation: "Editar tu Participación",
+        edit: "Editar",
         tooltip_nominate: "Haz clic para nominar en este concurso y enviar tu candidatura",
         time_remaining_to_nominate: "Tiempo restante para nominar",
         search_placeholder: "Buscar un concurso...",
@@ -11014,6 +11029,9 @@ export const translations: Record<Language, TranslationKeys> = {
         nomination_hint: "Nominieren Sie andere zur Teilnahme an Wettbewerben. Stimmen Sie für Teilnehmer ab, die von ihren Fans nominiert wurden.",
         participations_hint: "Nehmen Sie selbst an Wettbewerben teil. Teilnehmer melden sich direkt an, um zu konkurrieren.",
         nominate: "Nominieren",
+        edit_nomination: "Bearbeite deine Nominierung",
+        edit_participation: "Bearbeite deine Teilnahme",
+        edit: "Bearbeiten",
         tooltip_nominate: "Klicken Sie, um an diesem Wettbewerb zu nominieren und Ihren Beitrag einzureichen",
         time_remaining_to_nominate: "Verbleibende Zeit zur Nominierung",
         search_placeholder: "Nach einem Wettbewerb suchen...",

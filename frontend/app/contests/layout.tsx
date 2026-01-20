@@ -5,10 +5,16 @@ import { headers } from "next/headers"
 
 async function getFeaturedContestImage(): Promise<string | undefined> {
   try {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://mh5-sbe4.onrender.com'
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 5000)
+    
     const response = await fetch(`${apiUrl}/api/v1/contests?limit=1&skip=0`, {
-      next: { revalidate: 3600 } // Cache pour 1 heure
+      next: { revalidate: 3600 },
+      signal: controller.signal,
     })
+    
+    clearTimeout(timeoutId)
     
     if (response.ok) {
       const data = await response.json()
@@ -29,7 +35,7 @@ async function getFeaturedContestImage(): Promise<string | undefined> {
       }
     }
   } catch (error) {
-    console.error('Error fetching contest image for metadata:', error)
+    // Silently fail and use default image
   }
   return undefined
 }

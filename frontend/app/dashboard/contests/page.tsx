@@ -820,6 +820,7 @@ export default function ContestsPage() {
               maxAge={contest.maxAge}
               isNomination={categoryTab === 'nomination'}
               votingType={contest.votingType}
+              currentUserContesting={contest.currentUserContesting}
               onToggleFavorite={() => handleToggleFavorite(contest.id)}
               onViewContestants={() => handleViewContestants(contest.id)}
               onParticipate={() => handleParticipate(contest.id)}

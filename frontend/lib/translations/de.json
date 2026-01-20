@@ -80,5 +80,14 @@
         "description": "Gewinne Preise und verdiene durch unser Partnerprogramm"
       }
     }
+  },
+  "dashboard": {
+    "contests": {
+      "edit_nomination": "Bearbeite deine Nominierung",
+      "edit_participation": "Bearbeite deine Teilnahme",
+      "nominate": "Nominieren",
+      "participate": "Teilnehmen",
+      "edit": "Bearbeiten"
+    }
   }
 }

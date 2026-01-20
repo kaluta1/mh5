@@ -224,6 +224,15 @@
     },
     "copyright": " 2024 MyHigh5. Tous droits réservés."
   },
+  "dashboard": {
+    "contests": {
+      "edit_nomination": "Modifier votre Nomination",
+      "edit_participation": "Modifier votre Participation",
+      "nominate": "Nommer",
+      "participate": "Participer",
+      "edit": "Modifier"
+    }
+  },
   "pages": {
     "contests": {
       "title": "Découvrez nos Concours",

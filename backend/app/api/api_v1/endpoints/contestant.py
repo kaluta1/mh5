@@ -445,9 +445,21 @@ def get_contest_contestants(
     contest_id: int,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
+    filter_country: str = Query(None, description="Filtrer par pays"),
+    filter_region: str = Query(None, description="Filtrer par région"),
+    filter_continent: str = Query(None, description="Filtrer par continent"),
+    filter_city: str = Query(None, description="Filtrer par ville"),
     current_user: Optional[User] = Depends(deps.get_current_active_user_optional)
 ) -> List[ContestantWithAuthorAndStats]:
-    """Récupère les candidatures d'un concours avec infos auteur et stats enrichies"""
+    """
+    Récupère les candidatures d'un concours avec stats enrichies.
+    
+    Paramètres de filtrage géographique:
+    - filter_country: Affiche uniquement les contestants de ce pays
+    - filter_region: Affiche uniquement les contestants de cette région  
+    - filter_continent: Affiche uniquement les contestants de ce continent
+    - filter_city: Affiche uniquement les contestants de cette ville
+    """
     # Essayer d'abord de trouver une ContestSeason avec cet ID
     season = db.query(ContestSeason).filter(ContestSeason.id == contest_id).first()
     
@@ -464,7 +476,11 @@ def get_contest_contestants(
     # Utiliser la nouvelle méthode avec stats enrichies
     contestants_data = crud_contestant.get_multi_by_season_with_stats(
         db, contest_id, current_user_id=current_user.id if current_user else None,
-        skip=skip, limit=limit
+        skip=skip, limit=limit,
+        filter_country=filter_country,
+        filter_region=filter_region,
+        filter_continent=filter_continent,
+        filter_city=filter_city
     )
     
     # Log pour vérifier les données

@@ -80,5 +80,14 @@
         "description": "Gana premios y obtén ingresos a través de nuestro programa de afiliados"
       }
     }
+  },
+  "dashboard": {
+    "contests": {
+      "edit_nomination": "Editar tu Nominación",
+      "edit_participation": "Editar tu Participación",
+      "nominate": "Nominar",
+      "participate": "Participar",
+      "edit": "Editar"
+    }
   }
 }
