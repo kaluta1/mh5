@@ -1,11 +1,7 @@
 import axios from 'axios'
 import { cacheService } from './cache-service'
 
-<<<<<<< Updated upstream
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-=======
-const API_BASE_URL =  'https://mh5-sbe4.onrender.com'//process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'
->>>>>>> Stashed changes
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://mh5-hbjp.onrender.com'
 
 // Créer une instance axios avec la configuration de base
 const api = axios.create({

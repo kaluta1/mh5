@@ -230,7 +230,13 @@
       "edit_participation": "Modifier votre Participation",
       "nominate": "Nommer",
       "participate": "Participer",
-      "edit": "Modifier"
+      "edit": "Modifier",
+      "participation_form": {
+        "edit_title": "Modifier un Candidat",
+        "edit_description": "Mettez à jour les détails de votre soumission",
+        "nominate_title": "Nommer un Candidat",
+        "nominate_description": "Importez votre vidéo depuis YouTube ou Vimeo"
+      }
     }
   },
   "pages": {

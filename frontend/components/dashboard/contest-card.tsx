@@ -686,8 +686,8 @@ export function ContestCard({
                 <Sparkles className="w-3.5 h-3.5 mr-1.5 group-hover/btn:scale-110 group-hover/btn:rotate-12 transition-all duration-300" />
                 {currentUserContesting
                   ? isNomination
-                    ? (t('dashboard.contests.edit_nomination') || 'Modifier votre Nomination')
-                    : (t('dashboard.contests.edit_participation') || 'Modifier votre Participation')
+                    ? (t('dashboard.contests.edit') || 'Modifier')
+                    : (t('dashboard.contests.edit') || 'Modifier')
                   : isNomination 
                     ? (t('dashboard.contests.nominate') || 'Nommer')
                     : (t('dashboard.contests.participate') || 'Participer')

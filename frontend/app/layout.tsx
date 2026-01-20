@@ -17,7 +17,7 @@ const defaultImage = `${appUrl}/thumbnails.png` // Image par défaut pour le par
 // Récupérer une image de contest pour le thumbnail
 async function getFeaturedContestImage(): Promise<string> {
   try {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://mh5-sbe4.onrender.com'
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 5000)
     

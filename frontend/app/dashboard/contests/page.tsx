@@ -497,8 +497,11 @@ export default function ContestsPage() {
     router.push(`/dashboard/contests/${contestId}`)
   }
 
-  const handleParticipate = (contestId: string) => {
-    router.push(`/dashboard/contests/${contestId}/apply`)
+  const handleParticipate = (contestId: string, isEditing: boolean = false) => {
+    const url = isEditing 
+      ? `/dashboard/contests/${contestId}/apply?edit=true`
+      : `/dashboard/contests/${contestId}/apply`
+    router.push(url)
   }
 
   // Fonction pour déclencher la recherche
@@ -823,7 +826,7 @@ export default function ContestsPage() {
               currentUserContesting={contest.currentUserContesting}
               onToggleFavorite={() => handleToggleFavorite(contest.id)}
               onViewContestants={() => handleViewContestants(contest.id)}
-              onParticipate={() => handleParticipate(contest.id)}
+              onParticipate={() => handleParticipate(contest.id, contest.currentUserContesting)}
               onOpenDetails={() => handleViewContestants(contest.id)}
             />
           ))}

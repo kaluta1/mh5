@@ -87,7 +87,13 @@
       "edit_participation": "Bearbeite deine Teilnahme",
       "nominate": "Nominieren",
       "participate": "Teilnehmen",
-      "edit": "Bearbeiten"
+      "edit": "Bearbeiten",
+      "participation_form": {
+        "edit_title": "Kandidat bearbeiten",
+        "edit_description": "Aktualisiere deine Einreichungsdetails",
+        "nominate_title": "Kandidat nominieren",
+        "nominate_description": "Importiere dein Video von YouTube oder Vimeo"
+      }
     }
   }
 }

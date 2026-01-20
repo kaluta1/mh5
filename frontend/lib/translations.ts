@@ -1378,6 +1378,10 @@ export interface TranslationKeys {
         participation_form: {
           title: string
           description: string
+          edit_title: string
+          edit_description: string
+          nominate_title: string
+          nominate_description: string
           select_media: string
           drag_drop: string
           file_info: string
@@ -2814,6 +2818,10 @@ export const translations: Record<Language, TranslationKeys> = {
         participation_form: {
           title: "Participer au concours",
           description: "Sélectionnez votre meilleure photo ou vidéo pour participer à ce concours",
+          edit_title: "Modifier un Candidat",
+          edit_description: "Mettez à jour les détails de votre soumission",
+          nominate_title: "Nommer un Candidat",
+          nominate_description: "Importez votre vidéo depuis YouTube ou Vimeo",
           select_media: "Sélectionner votre média",
           drag_drop: "Glissez-déposez votre fichier ici",
           file_info: "ou cliquez pour sélectionner (Images: JPG, PNG, GIF | Vidéos: MP4, WebM | Max: 100MB)",
@@ -4176,6 +4184,10 @@ export const translations: Record<Language, TranslationKeys> = {
         participation_form: {
           title: "Participer au concours",
           description: "Sélectionnez votre meilleure photo ou vidéo pour participer à ce concours",
+          edit_title: "Modifier un Candidat",
+          edit_description: "Mettez à jour les détails de votre soumission",
+          nominate_title: "Nommer un Candidat",
+          nominate_description: "Importez votre vidéo depuis YouTube ou Vimeo",
           select_media: "Sélectionner votre média",
           drag_drop: "Glissez-déposez votre fichier ici",
           file_info: "ou cliquez pour sélectionner (Images: JPG, PNG, GIF | Vidéos: MP4, WebM | Max: 100MB)",
@@ -6623,6 +6635,10 @@ export const translations: Record<Language, TranslationKeys> = {
         participation_form: {
           title: "Participate in Contest",
           description: "Select your best photo or video to participate in this contest",
+          edit_title: "Edit a Contestant",
+          edit_description: "Update your submission details",
+          nominate_title: "Nominate a Contestant",
+          nominate_description: "Import your video from YouTube or Vimeo",
           select_media: "Select your media",
           drag_drop: "Drag and drop your file here",
           file_info: "or click to select (Images: JPG, PNG, GIF | Videos: MP4, WebM | Max: 100MB)",
@@ -8947,6 +8963,10 @@ export const translations: Record<Language, TranslationKeys> = {
         participation_form: {
           title: "Participar en el Concurso",
           description: "Selecciona tu mejor foto o video para participar en este concurso",
+          edit_title: "Editar un Candidato",
+          edit_description: "Actualiza los detalles de tu envío",
+          nominate_title: "Nominar un Candidato",
+          nominate_description: "Importa tu video desde YouTube o Vimeo",
           select_media: "Selecciona tu media",
           drag_drop: "Arrastra y suelta tu archivo aquí",
           file_info: "o haz clic para seleccionar (Imágenes: JPG, PNG, GIF | Videos: MP4, WebM | Máx: 100MB)",
@@ -11268,6 +11288,10 @@ export const translations: Record<Language, TranslationKeys> = {
         participation_form: {
           title: "Am Wettbewerb teilnehmen",
           description: "Wählen Sie Ihr bestes Foto oder Video aus, um an diesem Wettbewerb teilzunehmen",
+          edit_title: "Kandidat bearbeiten",
+          edit_description: "Aktualisiere deine Einreichungsdetails",
+          nominate_title: "Kandidat nominieren",
+          nominate_description: "Importiere dein Video von YouTube oder Vimeo",
           select_media: "Wählen Sie Ihre Medien",
           drag_drop: "Ziehen Sie Ihre Datei hierher",
           file_info: "oder klicken Sie zum Auswählen (Bilder: JPG, PNG, GIF | Videos: MP4, WebM | Max: 100MB)",
