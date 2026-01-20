@@ -6,10 +6,12 @@ import { ArrowRight, Play, Star, Trophy, Users, Globe, Sparkles, CheckCircle2 } 
 import { useLanguage } from "@/contexts/language-context"
 import { InteractiveCarousel } from "@/components/ui/interactive-carousel"
 import { useRouter } from "next/navigation"
+import { useAuth } from "@/hooks/use-auth"
 
 export function Hero() {
   const { t } = useLanguage()
   const router = useRouter()
+  const { isAuthenticated } = useAuth()
 
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-gradient-to-br from-white via-blue-50/30 to-purple-50/30 dark:from-gray-900 dark:via-gray-800/50 dark:to-gray-900 pt-20 md:pt-16">
@@ -63,7 +65,7 @@ export function Hero() {
               <Button
                 size="lg"
                 variant="outline"
-                onClick={() => router.push('/contests')}
+                onClick={() => router.push(isAuthenticated ? '/dashboard/contests' : '/contests')}
                 className="text-base sm:text-lg px-8 sm:px-10 py-6 sm:py-7 border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white font-semibold rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-all duration-300 hover:-translate-y-1 hover:border-myhigh5-primary dark:hover:border-myhigh5-primary"
               >
                 <Trophy className="mr-2 h-5 w-5" />

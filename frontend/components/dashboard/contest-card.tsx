@@ -1,5 +1,6 @@
 'use client'
 
+import * as React from 'react'
 import Image from 'next/image'
 import { Heart, Users, Clock, ArrowRight, Eye, Mic, ShieldCheck, FileCheck, PawPrint, Users2, Music, Trophy, Calendar, Vote, Sparkles, MapPin, Info } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -11,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 
 interface TopContestant {
   id: number
+  user_id?: number  // ID de l'utilisateur qui a créé cette participation
   author_name?: string
   author_avatar_url?: string
   image_url?: string  // Image de soumission du contestant
@@ -59,6 +61,7 @@ interface ContestCardProps {
     commission_source: string
     commission_rules?: any
   } | null
+  currentUserContesting?: boolean  // Indique si l'utilisateur connecté a déjà participé
   onViewContestants: () => void
   onToggleFavorite: () => void
   onParticipate?: () => void
@@ -99,6 +102,7 @@ export function ContestCard({
   maxAge = null,
   isNomination = false,
   votingType = null,
+  currentUserContesting = false,
   onViewContestants,
   onToggleFavorite,
   onParticipate,
@@ -679,9 +683,11 @@ export function ContestCard({
               >
                 <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover/btn:translate-x-full transition-transform duration-500" />
                 <Sparkles className="w-3.5 h-3.5 mr-1.5 group-hover/btn:scale-110 group-hover/btn:rotate-12 transition-all duration-300" />
-                {isNomination
-                  ? (t('dashboard.contests.nominate') || 'Nommer')
-                  : (t('dashboard.contests.participate') || 'Participer')
+                {currentUserContesting
+                  ? (t('dashboard.contests.edit') || 'Modifier')
+                  : isNomination
+                    ? (t('dashboard.contests.nominate') || 'Nommer')
+                    : (t('dashboard.contests.participate') || 'Participer')
                 }
                 <ArrowRight className="w-3.5 h-3.5 ml-1.5 group-hover/btn:translate-x-1 group-hover/btn:scale-110 transition-all duration-300" />
               </Button>

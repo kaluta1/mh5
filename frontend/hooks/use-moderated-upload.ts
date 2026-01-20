@@ -25,6 +25,7 @@ interface UseModeratedUploadOptions {
   onProgress?: (progress: number) => void
   verificationImageUrl?: string
   accessToken?: string
+  maxSizeMB?: number
 }
 
 interface UploadState {
@@ -52,7 +53,28 @@ export function useModeratedUpload(options: UseModeratedUploadOptions = {}) {
 
     try {
       // ============================================
-      // VÉRIFIER LE CACHE D'ABORD
+      // VÉRIFIER LA TAILLE DU FICHIER D'ABORD
+      // ============================================
+      if (options.maxSizeMB) {
+        const maxSizeBytes = options.maxSizeMB * 1024 * 1024
+        if (file.size > maxSizeBytes) {
+          const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2)
+          const errorMessage = `Le fichier est trop volumineux (${fileSizeMB}MB). Taille maximale autorisée: ${options.maxSizeMB}MB`
+          
+          setState({
+            isUploading: false,
+            progress: 0,
+            error: errorMessage,
+            moderationFlags: []
+          })
+          
+          options.onError?.(errorMessage)
+          return null
+        }
+      }
+
+      // ============================================
+      // VÉRIFIER LE CACHE
       // ============================================
       const cachedFile = await getCachedFile(file)
       if (cachedFile) {

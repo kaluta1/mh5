@@ -80,5 +80,20 @@
         "description": "Gewinne Preise und verdiene durch unser Partnerprogramm"
       }
     }
+  },
+  "dashboard": {
+    "contests": {
+      "edit_nomination": "Bearbeite deine Nominierung",
+      "edit_participation": "Bearbeite deine Teilnahme",
+      "nominate": "Nominieren",
+      "participate": "Teilnehmen",
+      "edit": "Bearbeiten",
+      "participation_form": {
+        "edit_title": "Kandidat bearbeiten",
+        "edit_description": "Aktualisiere deine Einreichungsdetails",
+        "nominate_title": "Kandidat nominieren",
+        "nominate_description": "Importiere dein Video von YouTube oder Vimeo"
+      }
+    }
   }
 }

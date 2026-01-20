@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { UploadButton as UTUploadButton } from '@uploadthing/react'
 import type { OurFileRouter } from '@/app/api/uploadthing/core'
+import { useLanguage } from '@/contexts/language-context'
 
 interface UploadButtonProps {
   endpoint: keyof OurFileRouter
@@ -24,6 +25,7 @@ export function UploadButton({
   content,
   headers: customHeaders
 }: UploadButtonProps) {
+  const { t } = useLanguage()
   const [token, setToken] = useState<string | null>(null)
   const [isReady, setIsReady] = useState(false)
 
@@ -33,6 +35,40 @@ export function UploadButton({
     setToken(accessToken)
     setIsReady(true)
   }, [])
+
+  // Map endpoint to max file sizes based on core.ts configuration
+  const getMaxFileSize = (endpoint: keyof OurFileRouter): string => {
+    const sizes: Record<string, string> = {
+      'kycDocumentUploader': '1MB',
+      'profileImageUploader': '1MB',
+      'profileAvatar': '2MB',
+      'participationDocumentUploader': '8MB',
+      'contestantMedia': '8MB',
+      'verificationMedia': '8MB',
+      'imageUploader': '8MB',
+      'videoUploader': '32MB'
+    }
+    return sizes[endpoint] || '10MB'
+  }
+
+  const handleUploadError = (error: Error) => {
+    let errorMessage = error.message
+
+    // Handle FileSizeMismatch error with clear message
+    if (errorMessage.includes('FileSizeMismatch') || errorMessage.includes('Invalid config')) {
+      const maxSize = getMaxFileSize(endpoint)
+      errorMessage = `${t('verification.file_too_large_with_size') || 'File is too large. Maximum size allowed'}: ${maxSize}`
+    }
+    // Handle other file size errors
+    else if (errorMessage.toLowerCase().includes('file') && errorMessage.toLowerCase().includes('large')) {
+      const maxSize = getMaxFileSize(endpoint)
+      errorMessage = `${t('verification.file_too_large_with_size') || 'File is too large. Maximum size allowed'}: ${maxSize}`
+    }
+
+    // Create a new error with the improved message
+    const enhancedError = new Error(errorMessage)
+    onUploadError?.(enhancedError)
+  }
 
   if (!isReady || !token) {
     return (
@@ -46,7 +82,7 @@ export function UploadButton({
     <UTUploadButton<OurFileRouter, typeof endpoint>
       endpoint={endpoint}
       onClientUploadComplete={onClientUploadComplete}
-      onUploadError={onUploadError}
+      onUploadError={handleUploadError}
       className={className}
       content={content}
       headers={{

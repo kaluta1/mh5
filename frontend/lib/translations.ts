@@ -1198,6 +1198,9 @@ export interface TranslationKeys {
         nomination: string
         participations: string
         nominate: string
+        edit_nomination: string
+        edit_participation: string
+        edit: string
         tooltip_nominate: string
         time_remaining_to_nominate: string
         search_placeholder: string
@@ -1440,6 +1443,10 @@ export interface TranslationKeys {
         participation_form: {
           title: string
           description: string
+          edit_title: string
+          edit_description: string
+          nominate_title: string
+          nominate_description: string
           select_media: string
           drag_drop: string
           file_info: string
@@ -2697,6 +2704,9 @@ export const translations: Record<Language, TranslationKeys> = {
         nomination_hint: "Nominez d'autres personnes pour les faire participer aux compétitions. Votez pour les candidats nominés par leurs fans.",
         participations_hint: "Participez vous-même aux compétitions. Les candidats s'inscrivent directement pour concourir.",
         nominate: "Nommer",
+        edit_nomination: "Modifier votre Nomination",
+        edit_participation: "Modifier votre Participation",
+        edit: "Modifier",
         tooltip_nominate: "Cliquez pour nommer à ce concours et soumettre votre candidature",
         time_remaining_to_nominate: "Temps restant pour nommer",
         search_placeholder: "Rechercher un concours...",
@@ -2996,6 +3006,10 @@ export const translations: Record<Language, TranslationKeys> = {
         participation_form: {
           title: "Participer au concours",
           description: "Sélectionnez votre meilleure photo ou vidéo pour participer à ce concours",
+          edit_title: "Modifier un Candidat",
+          edit_description: "Mettez à jour les détails de votre soumission",
+          nominate_title: "Nommer un Candidat",
+          nominate_description: "Importez votre vidéo depuis YouTube ou Vimeo",
           select_media: "Sélectionner votre média",
           drag_drop: "Glissez-déposez votre fichier ici",
           file_info: "ou cliquez pour sélectionner (Images: JPG, PNG, GIF | Vidéos: MP4, WebM | Max: 100MB)",
@@ -4141,6 +4155,9 @@ export const translations: Record<Language, TranslationKeys> = {
         nomination_hint: "Nominez d'autres personnes pour les faire participer aux compétitions. Votez pour les candidats nominés par leurs fans.",
         participations_hint: "Participez vous-même aux compétitions. Les candidats s'inscrivent directement pour concourir.",
         nominate: "Nommer",
+        edit_nomination: "Modifier votre Nomination",
+        edit_participation: "Modifier votre Participation",
+        edit: "Modifier",
         tooltip_nominate: "Cliquez pour nommer à ce concours et soumettre votre candidature",
         time_remaining_to_nominate: "Temps restant pour nommer",
         search_placeholder: "Rechercher un concours...",
@@ -4357,6 +4374,10 @@ export const translations: Record<Language, TranslationKeys> = {
         participation_form: {
           title: "Participer au concours",
           description: "Sélectionnez votre meilleure photo ou vidéo pour participer à ce concours",
+          edit_title: "Modifier un Candidat",
+          edit_description: "Mettez à jour les détails de votre soumission",
+          nominate_title: "Nommer un Candidat",
+          nominate_description: "Importez votre vidéo depuis YouTube ou Vimeo",
           select_media: "Sélectionner votre média",
           drag_drop: "Glissez-déposez votre fichier ici",
           file_info: "ou cliquez pour sélectionner (Images: JPG, PNG, GIF | Vidéos: MP4, WebM | Max: 100MB)",
@@ -4780,6 +4801,7 @@ export const translations: Record<Language, TranslationKeys> = {
       camera_error: "Impossible d'accéder à la caméra",
       microphone_error: "Impossible d'accéder au microphone",
       file_too_large: "Le fichier est trop volumineux",
+      file_too_large_with_size: "Le fichier est trop volumineux. Taille maximale autorisée",
       invalid_file_type: "Type de fichier invalide",
       upload_error: "Erreur lors de l'envoi",
       capture: "Capturer",
@@ -6634,6 +6656,9 @@ export const translations: Record<Language, TranslationKeys> = {
         nomination_hint: "Nominate others to enter into competitions. Vote for contestants who have been nominated by their fans.",
         participations_hint: "Participate yourself in competitions. Contestants sign up directly to compete.",
         nominate: "Nominate",
+        edit_nomination: "Edit your Nomination",
+        edit_participation: "Edit your Participation",
+        edit: "Edit",
         tooltip_nominate: "Click to nominate in this contest and submit your entry",
         time_remaining_to_nominate: "Time remaining to nominate",
         search_placeholder: "Search for a contest...",
@@ -6924,6 +6949,10 @@ export const translations: Record<Language, TranslationKeys> = {
         participation_form: {
           title: "Participate in Contest",
           description: "Select your best photo or video to participate in this contest",
+          edit_title: "Edit a Contestant",
+          edit_description: "Update your submission details",
+          nominate_title: "Nominate a Contestant",
+          nominate_description: "Import your video from YouTube or Vimeo",
           select_media: "Select your media",
           drag_drop: "Drag and drop your file here",
           file_info: "or click to select (Images: JPG, PNG, GIF | Videos: MP4, WebM | Max: 100MB)",
@@ -7418,6 +7447,7 @@ export const translations: Record<Language, TranslationKeys> = {
       camera_error: "Unable to access camera",
       microphone_error: "Unable to access microphone",
       file_too_large: "File is too large",
+      file_too_large_with_size: "File is too large. Maximum size allowed",
       invalid_file_type: "Invalid file type",
       upload_error: "Upload error",
       capture: "Capture",
@@ -9010,6 +9040,9 @@ export const translations: Record<Language, TranslationKeys> = {
         nomination_hint: "Nomina a otras personas para que participen en competencias. Vota por los concursantes nominados por sus fans.",
         participations_hint: "Participa tú mismo en competencias. Los concursantes se inscriben directamente para competir.",
         nominate: "Nominar",
+        edit_nomination: "Editar tu Nominación",
+        edit_participation: "Editar tu Participación",
+        edit: "Editar",
         tooltip_nominate: "Haz clic para nominar en este concurso y enviar tu candidatura",
         time_remaining_to_nominate: "Tiempo restante para nominar",
         search_placeholder: "Buscar un concurso...",
@@ -9247,6 +9280,10 @@ export const translations: Record<Language, TranslationKeys> = {
         participation_form: {
           title: "Participar en el Concurso",
           description: "Selecciona tu mejor foto o video para participar en este concurso",
+          edit_title: "Editar un Candidato",
+          edit_description: "Actualiza los detalles de tu envío",
+          nominate_title: "Nominar un Candidato",
+          nominate_description: "Importa tu video desde YouTube o Vimeo",
           select_media: "Selecciona tu media",
           drag_drop: "Arrastra y suelta tu archivo aquí",
           file_info: "o haz clic para seleccionar (Imágenes: JPG, PNG, GIF | Videos: MP4, WebM | Máx: 100MB)",
@@ -9743,6 +9780,7 @@ export const translations: Record<Language, TranslationKeys> = {
       camera_error: "No se puede acceder a la cámara",
       microphone_error: "No se puede acceder al micrófono",
       file_too_large: "El archivo es demasiado grande",
+      file_too_large_with_size: "El archivo es demasiado grande. Tamaño máximo permitido",
       invalid_file_type: "Tipo de archivo inválido",
       upload_error: "Error al subir",
       capture: "Capturar",
@@ -11331,6 +11369,9 @@ export const translations: Record<Language, TranslationKeys> = {
         nomination_hint: "Nominieren Sie andere zur Teilnahme an Wettbewerben. Stimmen Sie für Teilnehmer ab, die von ihren Fans nominiert wurden.",
         participations_hint: "Nehmen Sie selbst an Wettbewerben teil. Teilnehmer melden sich direkt an, um zu konkurrieren.",
         nominate: "Nominieren",
+        edit_nomination: "Bearbeite deine Nominierung",
+        edit_participation: "Bearbeite deine Teilnahme",
+        edit: "Bearbeiten",
         tooltip_nominate: "Klicken Sie, um an diesem Wettbewerb zu nominieren und Ihren Beitrag einzureichen",
         time_remaining_to_nominate: "Verbleibende Zeit zur Nominierung",
         search_placeholder: "Nach einem Wettbewerb suchen...",
@@ -11567,6 +11608,10 @@ export const translations: Record<Language, TranslationKeys> = {
         participation_form: {
           title: "Am Wettbewerb teilnehmen",
           description: "Wählen Sie Ihr bestes Foto oder Video aus, um an diesem Wettbewerb teilzunehmen",
+          edit_title: "Kandidat bearbeiten",
+          edit_description: "Aktualisiere deine Einreichungsdetails",
+          nominate_title: "Kandidat nominieren",
+          nominate_description: "Importiere dein Video von YouTube oder Vimeo",
           select_media: "Wählen Sie Ihre Medien",
           drag_drop: "Ziehen Sie Ihre Datei hierher",
           file_info: "oder klicken Sie zum Auswählen (Bilder: JPG, PNG, GIF | Videos: MP4, WebM | Max: 100MB)",
@@ -12061,6 +12106,7 @@ export const translations: Record<Language, TranslationKeys> = {
       camera_error: "Kamera nicht erreichbar",
       microphone_error: "Mikrofon nicht erreichbar",
       file_too_large: "Datei ist zu groß",
+      file_too_large_with_size: "Datei ist zu groß. Maximal zulässige Größe",
       invalid_file_type: "Ungültiger Dateityp",
       upload_error: "Upload-Fehler",
       capture: "Aufnehmen",

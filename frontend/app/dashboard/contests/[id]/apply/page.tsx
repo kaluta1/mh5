@@ -417,15 +417,20 @@ export default function ApplyToContestPage() {
             {(!userAlreadyParticipating || isEditingParticipation) && !submitSuccess && (
               <>
                 <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-
-                  {isNomination
-                    ? 'Nominate a Contestant'
-                    : t('dashboard.contests.participation_form.title') || 'Participate in Contest '}
+                  {isEditingParticipation
+                    ? (t('dashboard.contests.participation_form.edit_title') || 'Edit a Contestant')
+                    : isNomination
+                      ? (t('dashboard.contests.participation_form.nominate_title') || 'Nominate a Contestant')
+                      : (t('dashboard.contests.participation_form.title') || 'Participate in Contest')
+                  }
                 </h2>
                 <p className="text-gray-600 dark:text-gray-400 mb-4 text-sm">
-                  {isNomination
-                    ? 'Import your video from YouTube or Vimeo'
-                    : t('dashboard.contests.participation_form.description')}
+                  {isEditingParticipation
+                    ? (t('dashboard.contests.participation_form.edit_description') || 'Update your submission details')
+                    : isNomination
+                      ? (t('dashboard.contests.participation_form.nominate_description') || 'Import your video from YouTube or Vimeo')
+                      : t('dashboard.contests.participation_form.description')
+                  }
                 </p>
 
                 {/* Profile Setup Alert */}

@@ -3,6 +3,7 @@ import { cacheService } from '@/lib/cache-service'
 
 export interface TopContestant {
   id: number
+  user_id?: number  // ID de l'utilisateur qui a créé cette participation
   author_name?: string
   author_avatar_url?: string
   image_url?: string  // Image de soumission du contestant
@@ -59,6 +60,8 @@ export interface Contest {
     commission_source: string
     commission_rules?: any
   } | null
+  // Indique si l'utilisateur connecté a déjà participé à ce concours
+  currentUserContesting?: boolean
 }
 
 export interface ContestResponse {
@@ -130,6 +133,8 @@ export interface ContestResponse {
     votes_count?: number
     rank?: number
   }>
+  // Indique si l'utilisateur connecté a déjà participé à ce concours
+  current_user_contesting?: boolean
 }
 
 export interface ContestantWithAuthorAndStats {
@@ -963,7 +968,9 @@ class ContestService {
         image_url: c.image_url,
         votes_count: c.votes_count,
         rank: c.rank ?? (index + 1)
-      })) || []
+      })) || [],
+      // Indique si l'utilisateur connecté a déjà participé
+      currentUserContesting: response.current_user_contesting ?? false
     }
   }
 

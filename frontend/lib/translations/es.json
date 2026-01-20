@@ -80,5 +80,20 @@
         "description": "Gana premios y obtén ingresos a través de nuestro programa de afiliados"
       }
     }
+  },
+  "dashboard": {
+    "contests": {
+      "edit_nomination": "Editar tu Nominación",
+      "edit_participation": "Editar tu Participación",
+      "nominate": "Nominar",
+      "participate": "Participar",
+      "edit": "Editar",
+      "participation_form": {
+        "edit_title": "Editar un Candidato",
+        "edit_description": "Actualiza los detalles de tu envío",
+        "nominate_title": "Nominar un Candidato",
+        "nominate_description": "Importa tu video desde YouTube o Vimeo"
+      }
+    }
   }
 }

@@ -18,12 +18,18 @@ const defaultImage = `${appUrl}/thumbnails.png` // Image par défaut pour le par
 async function getFeaturedContestImage(): Promise<string> {
   try {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 5000)
+    
     const response = await fetch(`${apiUrl}/api/v1/contests?limit=1&skip=0`, {
       next: { revalidate: 3600 }, // Cache pour 1 heure
       headers: {
         'Accept': 'application/json',
-      }
+      },
+      signal: controller.signal,
     })
+    
+    clearTimeout(timeoutId)
     
     if (response.ok) {
       const data = await response.json()
@@ -47,10 +53,7 @@ async function getFeaturedContestImage(): Promise<string> {
       console.warn('Contests endpoint not found, using default image')
     }
   } catch (error) {
-    // Ne pas logger l'erreur en production pour éviter le spam
-    if (process.env.NODE_ENV === 'development') {
-    console.error('Error fetching contest image for metadata:', error)
-    }
+    // Silently fail and use default image
   }
   return defaultImage
 }
