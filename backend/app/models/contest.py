@@ -4,6 +4,9 @@ from sqlalchemy.orm import relationship, Mapped, mapped_column
 from datetime import datetime, date
 import enum
 
+if TYPE_CHECKING:
+    from app.models.round import Round
+
 from app.db.base_class import Base
 
 class VotingRestriction(str, enum.Enum):
@@ -89,24 +92,6 @@ class Contest(Base):
     # Template de référence
     template_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("contest_template.id"), nullable=True)
     
-    # Dates
-    submission_start_date: Mapped[date] = mapped_column(Date, nullable=False, default=date.today)
-    submission_end_date: Mapped[date] = mapped_column(Date, nullable=False)
-    voting_start_date: Mapped[date] = mapped_column(Date, nullable=False)
-    voting_end_date: Mapped[date] = mapped_column(Date, nullable=False)
-    
-    # Dates des saisons
-    city_season_start_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    city_season_end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    country_season_start_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    country_season_end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    regional_start_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    regional_end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    continental_start_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    continental_end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    global_start_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    global_end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    
     # État
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_submission_open: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
@@ -131,6 +116,7 @@ class Contest(Base):
     transactions: Mapped[List["UserTransaction"]] = relationship("UserTransaction", back_populates="contest")
     prizes: Mapped[List["Prize"]] = relationship("Prize", back_populates="contest")
     seasons: Mapped[List["ContestSeasonLink"]] = relationship("ContestSeasonLink", back_populates="contest")
+    rounds: Mapped[List["Round"]] = relationship("Round", back_populates="contest")
     
     # Règles du concours
     gender_restriction: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # male, female, ou null si pas de restriction
@@ -294,11 +280,13 @@ class ContestVote(Base):
     
     entry_id: Mapped[int] = mapped_column(Integer, ForeignKey("contest_entry.id"), nullable=False)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    round_id: Mapped[int] = mapped_column(Integer, ForeignKey("rounds.id"), nullable=True) # Optional for backward compatibility/migration
     score: Mapped[int] = mapped_column(Integer, nullable=False)  # 1-5 pour MyHigh5
     
     # Relations
     entry: Mapped["ContestEntry"] = relationship("ContestEntry", back_populates="votes")
     user: Mapped["User"] = relationship("User")
+    round: Mapped["Round"] = relationship("Round")
 
 
 class ContestFavorite(Base):

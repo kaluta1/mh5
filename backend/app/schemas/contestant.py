@@ -11,6 +11,7 @@ class ContestantCreate(BaseModel):
     video_media_ids: Optional[str] = None  # JSON array of video media IDs
     nominator_city: Optional[str] = None
     nominator_country: Optional[str] = None
+    round_id: Optional[int] = None
 
 
 class ContestantResponse(BaseModel):
@@ -24,6 +25,7 @@ class ContestantResponse(BaseModel):
     video_media_ids: Optional[str] = None
     nominator_city: Optional[str] = None
     nominator_country: Optional[str] = None
+    round_id: Optional[int] = None
     registration_date: datetime
     verification_status: str
     is_active: bool
@@ -43,6 +45,7 @@ class ContestantListResponse(BaseModel):
     video_media_ids: Optional[str] = None
     nominator_city: Optional[str] = None
     nominator_country: Optional[str] = None
+    round_id: Optional[int] = None
     is_qualified: bool
     registration_date: datetime
 
@@ -56,6 +59,7 @@ class ContestantSubmissionResponse(BaseModel):
     user_id: int
     title: str
     description: str
+    round_id: Optional[int] = None
     registration_date: datetime
     message: str
 
@@ -73,6 +77,7 @@ class ContestantWithAuthorAndStats(BaseModel):
     video_media_ids: Optional[str] = None
     nominator_city: Optional[str] = None
     nominator_country: Optional[str] = None
+    round_id: Optional[int] = None
     contestant_image_url: Optional[str] = None
     registration_date: Optional[datetime] = None
     is_qualified: bool = False

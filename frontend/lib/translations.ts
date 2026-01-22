@@ -204,6 +204,7 @@ export interface TranslationKeys {
     refresh: string
     network_error: string
     optional: string
+    save: string
   }
   settings: {
     title: string
@@ -600,6 +601,33 @@ export interface TranslationKeys {
         no_data_available: string
       }
     }
+    rounds: {
+      title: string
+      description: string
+      new_round: string
+      edit: string
+      create: string
+      contest: string
+      select_contest: string
+      name: string
+      status: string
+      load_error: string
+      delete_success: string
+      delete_error: string
+      update_success: string
+      create_success: string
+      search: string
+      confirm_delete: string
+      delete_warning: string
+      // Season dates labels
+      city_season: string
+      country_season: string
+      regional_season: string
+      continental_season: string
+      global_season: string
+      start_date: string
+      end_date: string
+    }
     seasons: {
       title: string
       description: string
@@ -648,6 +676,8 @@ export interface TranslationKeys {
     }
     contests: {
       title: string
+      tab_contests: string
+      tab_rounds: string
       description: string
       new_contest: string
       edit_contest: string
@@ -700,6 +730,9 @@ export interface TranslationKeys {
       submission_end: string
       voting_start: string
       voting_end: string
+      season: string
+      select_season: string
+      delete_warning: string
       contest_dates: string
       approved: string
       rejected: string
@@ -749,6 +782,29 @@ export interface TranslationKeys {
       slug_help: string
       category_description_placeholder: string
       contest_type_auto_filled: string
+      verification_requirements: string
+      media_requirements: string
+      participant_individual: string
+      participant_pet: string
+      participant_club: string
+      verification_video_max_duration: string
+
+      verification_max_size_mb: string
+      new_participation: string
+      new_nomination: string
+      min_images: string
+      max_images: string
+      min_age: string
+      max_age: string
+      max_videos: string
+      video_max_duration: string
+      video_max_size_mb: string
+      requires_video: string
+      kyc_required: string
+      verification_visual: string
+      verification_voice: string
+      verification_brand: string
+      verification_content: string
     }
     contestants: {
       title: string
@@ -1856,6 +1912,41 @@ export const translations: Record<Language, TranslationKeys> = {
       quick_links: "Liens rapides",
       help_text: "Si vous pensez qu'il s'agit d'une erreur, veuillez contacter notre support."
     },
+    common: {
+      loading: "Chargement...",
+      error: "Une erreur est survenue",
+      success: "Opération réussie",
+      cancel: "Annuler",
+      confirm: "Confirmer",
+      continue: "Continuer",
+      or: "ou",
+      redirecting: "Redirection...",
+      please_wait: "Veuillez patienter...",
+      back: "Retour",
+      back_to_dashboard: "Retour au tableau de bord",
+      previous: "Précédent",
+      next: "Suivant",
+      submitting: "Envoi...",
+      no_documents: "Aucun document",
+      profile_setup: "Configuration du profil",
+      profile_setup_description: "Complétez votre profil pour continuer",
+      edit: "Modifier",
+      delete: "Supprimer",
+      deleting: "Suppression...",
+      confirm_delete: "Confirmer la suppression",
+      deleted_successfully: "Supprimé avec succès",
+      likes: "J'aime",
+      comments: "Commentaires",
+      search: "Rechercher",
+      clear: "Effacer",
+      welcome: "Bienvenue",
+      access_denied: "Accès refusé",
+      no_permission: "Vous n'avez pas la permission d'effectuer cette action",
+      refresh: "Actualiser",
+      network_error: "Erreur réseau",
+      optional: "(optionnel)",
+      save: "Enregistrer"
+    },
     admin: {
       title: "Panneau d'administration",
       subtitle: "Gérez votre plateforme",
@@ -1940,6 +2031,33 @@ export const translations: Record<Language, TranslationKeys> = {
           no_data_available: "Aucune donnée disponible"
         }
       },
+      rounds: {
+        title: "Gestion des Rounds",
+        description: "Gérez les rounds de concours",
+        new_round: "Nouveau Round",
+        edit: "Modifier le Round",
+        create: "Créer un Round",
+        contest: "Concours",
+        select_contest: "Sélectionner un concours",
+        name: "Nom du Round",
+        status: "Statut",
+        load_error: "Erreur lors du chargement des rounds",
+        delete_success: "Round supprimé avec succès",
+        delete_error: "Erreur lors de la suppression",
+        update_success: "Round mis à jour avec succès",
+        create_success: "Round créé avec succès",
+        search: "Rechercher un round...",
+        confirm_delete: "Supprimer le round",
+        confirm_delete: "Supprimer le round",
+        delete_warning: "Êtes-vous sûr de vouloir supprimer ce round ?",
+        city_season: "Saison Ville",
+        country_season: "Saison Pays",
+        regional_season: "Saison Régionale",
+        continental_season: "Saison Continentale",
+        global_season: "Saison Mondiale",
+        start_date: "Date de début",
+        end_date: "Date de fin"
+      },
       seasons: {
         title: "Gestion des Saisons",
         description: "Créez, modifiez et gérez les saisons de concours",
@@ -1988,12 +2106,14 @@ export const translations: Record<Language, TranslationKeys> = {
       },
       contests: {
         title: "Gestion des Concours",
+        tab_contests: "Concours",
+        tab_rounds: "Rounds",
         description: "Créez, modifiez et gérez les concours",
         new_contest: "Nouveau concours",
         edit_contest: "Modifier le concours",
         create_contest: "Créer un concours",
         name: "Nom du concours",
-        contest_description: "Description",
+        contest_description: "Description du concours",
         contest_type: "Type de concours",
         level: "Niveau",
         city: "Ville",
@@ -2021,6 +2141,9 @@ export const translations: Record<Language, TranslationKeys> = {
         end_date: "Date de fin",
         search_placeholder: "Rechercher des concours...",
         sort: "Trier par",
+        season: "Saison",
+        select_season: "Sélectionner une saison",
+        delete_warning: "Cette action est irréversible. Voulez-vous vraiment supprimer ce concours ?",
         create_success: "Concours créé avec succès",
         create_error: "Erreur lors de la création du concours",
         update_success: "Concours mis à jour avec succès",
@@ -2123,6 +2246,9 @@ export const translations: Record<Language, TranslationKeys> = {
         max_age_placeholder: "Ex: 35",
         search_input_placeholder: "Nom, type, description...",
         sort: "Trier par",
+        season: "Saison",
+        select_season: "Sélectionner une saison",
+        delete_warning: "Cette action est irréversible. Voulez-vous vraiment supprimer ce concours ?",
         // Season dates
         season_dates: "Dates des saisons",
         season_dates_description_edit: "Ces dates sont calculées automatiquement à partir de la date de début de vote. Vous pouvez les modifier manuellement si nécessaire.",
@@ -2135,8 +2261,8 @@ export const translations: Record<Language, TranslationKeys> = {
         start_date: "Date de début",
         end_date: "Date de fin",
         // Voting type translations
-        voting_type: "Type de vote",
-        select_voting_type: "Sélectionner un type de vote",
+        voting_type: "Type de compétition",
+        select_voting_type: "Sélectionner un type de compétition",
         new_voting_type: "Nouveau type de vote",
         voting_types_load_error: "Erreur lors du chargement des types de vote",
         voting_type_created: "Type de vote créé avec succès",
@@ -2152,6 +2278,15 @@ export const translations: Record<Language, TranslationKeys> = {
         commission_kyc: "KYC",
         commission_mfm: "MFM",
         create: "Créer",
+        // Dialog titles
+        create_nomination_contest: "Créer un nouveau (Concours Nomination)",
+        create_participation_contest: "Créer un nouveau (Concours Participation)",
+        // Error messages
+        error_name_required: "Le nom du concours est obligatoire",
+        error_category_required: "La catégorie est obligatoire",
+        error_description_required: "La description est obligatoire",
+        error_image_required: "L'image du concours est obligatoire",
+        error_contest_type_required: "Le type de compétition est obligatoire pour les nominations",
         // Category translations
         category: "Catégorie",
         select_category: "Sélectionner une catégorie",
@@ -2167,7 +2302,29 @@ export const translations: Record<Language, TranslationKeys> = {
         slug_placeholder: "Ex: pop, rock, hip-hop",
         slug_help: "Le slug est généré automatiquement à partir du nom. Vous pouvez le modifier si nécessaire.",
         category_description_placeholder: "Description de la catégorie (optionnel)",
-        contest_type_auto_filled: "Le type de concours est automatiquement rempli à partir de la catégorie"
+        contest_type_auto_filled: "Le type de concours est automatiquement rempli à partir de la catégorie",
+        verification_requirements: "Exigences de vérification",
+        media_requirements: "Exigences Média",
+        participant_individual: "Individuel",
+        participant_pet: "Animal",
+        participant_club: "Club",
+        verification_video_max_duration: "Durée max vidéo vérif (sec)",
+        verification_max_size_mb: "Taille max vérif (MB)",
+        new_participation: "Nouveau (Participation)",
+        new_nomination: "Nouveau (Nomination)",
+        min_images: "Min Images",
+        max_images: "Max Images",
+        min_age: "Age Minimum",
+        max_age: "Age Maximum",
+        max_videos: "Max Vidéos",
+        video_max_duration: "Durée max vidéo (sec)",
+        video_max_size_mb: "Taille max vidéo (MB)",
+        requires_video: "Vidéo Requise",
+        kyc_required: "KYC Requis",
+        verification_visual: "Vérification Visuelle",
+        verification_voice: "Vérification Vocale",
+        verification_brand: "Vérification de Marque",
+        verification_content: "Vérification de Contenu"
       },
       contestants: {
         title: "Gestion des Candidats",
@@ -4825,6 +4982,41 @@ export const translations: Record<Language, TranslationKeys> = {
       quick_links: "Quick Links",
       help_text: "If you think this is an error, please contact our support."
     },
+    common: {
+      loading: "Loading...",
+      error: "An error occurred",
+      success: "Success",
+      cancel: "Cancel",
+      confirm: "Confirm",
+      continue: "Continue",
+      or: "or",
+      redirecting: "Redirecting...",
+      please_wait: "Please wait...",
+      back: "Back",
+      back_to_dashboard: "Back to dashboard",
+      previous: "Previous",
+      next: "Next",
+      submitting: "Submitting...",
+      no_documents: "No documents",
+      profile_setup: "Profile Setup",
+      profile_setup_description: "Complete your profile to continue",
+      edit: "Edit",
+      delete: "Delete",
+      deleting: "Deleting...",
+      confirm_delete: "Confirm delete",
+      deleted_successfully: "Deleted successfully",
+      likes: "Likes",
+      comments: "Comments",
+      search: "Search",
+      clear: "Clear",
+      welcome: "Welcome",
+      access_denied: "Access denied",
+      no_permission: "You do not have permission to perform this action",
+      refresh: "Refresh",
+      network_error: "Network error",
+      optional: "(optional)",
+      save: "Save"
+    },
     admin: {
       title: "Administration Panel",
       subtitle: "Manage your platform",
@@ -4909,6 +5101,33 @@ export const translations: Record<Language, TranslationKeys> = {
           no_data_available: "No data available"
         }
       },
+      rounds: {
+        title: "Manage Rounds",
+        description: "Manage contest rounds",
+        new_round: "New Round",
+        edit: "Edit Round",
+        create: "Create Round",
+        contest: "Contest",
+        select_contest: "Select a contest",
+        name: "Round Name",
+        status: "Status",
+        load_error: "Error loading rounds",
+        delete_success: "Round deleted successfully",
+        delete_error: "Error deleting round",
+        update_success: "Round updated successfully",
+        create_success: "Round created successfully",
+        search: "Search rounds...",
+        confirm_delete: "Delete round",
+
+        delete_warning: "Are you sure you want to delete this round?",
+        city_season: "City Season",
+        country_season: "Country Season",
+        regional_season: "Regional Season",
+        continental_season: "Continental Season",
+        global_season: "Global Season",
+        start_date: "Start Date",
+        end_date: "End Date"
+      },
       seasons: {
         title: "Manage Seasons",
         description: "Create, edit and manage contest seasons",
@@ -4957,12 +5176,15 @@ export const translations: Record<Language, TranslationKeys> = {
       },
       contests: {
         title: "Manage Contests",
+        tab_contests: "Contests",
+        tab_rounds: "Rounds",
         description: "Create, edit and manage contests",
         new_contest: "New Contest",
         edit_contest: "Edit Contest",
+
         create_contest: "Create Contest",
         name: "Contest Name",
-        contest_description: "Description",
+        contest_description: "Contest description",
         contest_type: "Contest Type",
         level: "Level",
         city: "City",
@@ -4990,6 +5212,9 @@ export const translations: Record<Language, TranslationKeys> = {
         end_date: "End Date",
         search_placeholder: "Search contests...",
         sort: "Sort by",
+        season: "Season",
+        select_season: "Select a season",
+        delete_warning: "This action is irreversible. Are you sure you want to delete this contest?",
         create_success: "Contest created successfully",
         create_error: "Error creating contest",
         update_success: "Contest updated successfully",
@@ -5104,8 +5329,8 @@ export const translations: Record<Language, TranslationKeys> = {
         start_date: "Start Date",
         end_date: "End Date",
         // Voting type translations
-        voting_type: "Voting Type",
-        select_voting_type: "Select a voting type",
+        voting_type: "Contesting Type",
+        select_voting_type: "Select a contesting type",
         new_voting_type: "New voting type",
         voting_types_load_error: "Error loading voting types",
         voting_type_created: "Voting type created successfully",
@@ -5121,6 +5346,15 @@ export const translations: Record<Language, TranslationKeys> = {
         commission_kyc: "KYC",
         commission_mfm: "MFM",
         create: "Create",
+        // Dialog titles
+        create_nomination_contest: "Create a new (Nomination Contest)",
+        create_participation_contest: "Create a new (Participation Contest)",
+        // Error messages
+        error_name_required: "Contest name is required",
+        error_category_required: "Category is required",
+        error_description_required: "Description is required",
+        error_image_required: "Contest image is required",
+        error_contest_type_required: "Contesting type is required for nominations",
         // Category translations
         category: "Category",
         select_category: "Select a category",
@@ -5136,7 +5370,29 @@ export const translations: Record<Language, TranslationKeys> = {
         slug_placeholder: "Ex: pop, rock, hip-hop",
         slug_help: "The slug is automatically generated from the name. You can modify it if necessary.",
         category_description_placeholder: "Category description (optional)",
-        contest_type_auto_filled: "The contest type is automatically filled from the category"
+        contest_type_auto_filled: "The contest type is automatically filled from the category",
+        verification_requirements: "Verification Requirements",
+        media_requirements: "Media Requirements",
+        participant_individual: "Individual",
+        participant_pet: "Pet",
+        participant_club: "Club",
+        verification_video_max_duration: "Max verification video duration (sec)",
+        verification_max_size_mb: "Max verification size (MB)",
+        new_participation: "New (Participation)",
+        new_nomination: "New (Nomination)",
+        min_images: "Min Images",
+        max_images: "Max Images",
+        min_age: "Min Age",
+        max_age: "Max Age",
+        max_videos: "Max Videos",
+        video_max_duration: "Max video duration (sec)",
+        video_max_size_mb: "Max video size (MB)",
+        requires_video: "Video Required",
+        kyc_required: "KYC Required",
+        verification_visual: "Visual Verification",
+        verification_voice: "Voice Verification",
+        verification_brand: "Brand Verification",
+        verification_content: "Content Verification"
       },
       contestants: {
         title: "Manage Contestants",

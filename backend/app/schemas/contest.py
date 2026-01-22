@@ -7,6 +7,7 @@ from enum import Enum
 
 from app.schemas.media import Media
 from app.schemas.voting import VoteUserDetail, ReactionUserDetail, FavoriteUserDetail
+from app.schemas.round import Round
 
 
 # Enums pour les schémas
@@ -52,10 +53,10 @@ class ContestBase(BaseModel):
     description: Optional[str] = None
     contest_type: str
     cover_image_url: Optional[str] = None
-    submission_start_date: date
-    submission_end_date: date
-    voting_start_date: date
-    voting_end_date: date
+    contest_type: str
+    cover_image_url: Optional[str] = None
+    # Dates are now managed via Rounds
+    is_active: bool = True
     is_active: bool = True
     is_submission_open: bool = True
     is_voting_open: bool = False
@@ -206,17 +207,7 @@ class Contest(ContestBase):
     top_contestants: List[TopContestantPreview] = []  # Top contestants preview
     voting_type: Optional["VotingType"] = None  # Type de vote associé
     category: Optional[Dict[str, Any]] = None  # Catégorie associée (id, name, slug, description, is_active)
-    # Dates des saisons (calculées automatiquement)
-    city_season_start_date: Optional[date] = None
-    city_season_end_date: Optional[date] = None
-    country_season_start_date: Optional[date] = None
-    country_season_end_date: Optional[date] = None
-    regional_start_date: Optional[date] = None
-    regional_end_date: Optional[date] = None
-    continental_start_date: Optional[date] = None
-    continental_end_date: Optional[date] = None
-    global_start_date: Optional[date] = None
-    global_end_date: Optional[date] = None
+    rounds: List[Round] = []
     
     class Config:
         from_attributes = True

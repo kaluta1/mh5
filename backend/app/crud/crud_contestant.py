@@ -687,7 +687,8 @@ class CRUDContestant:
         image_media_ids: Optional[str] = None,
         video_media_ids: Optional[str] = None,
         nominator_city: Optional[str] = None,
-        nominator_country: Optional[str] = None
+        nominator_country: Optional[str] = None,
+        round_id: Optional[int] = None
     ) -> Contestant:
         """Crée une nouvelle candidature"""
         # Vérifier qu'il n'existe pas déjà une candidature pour cet utilisateur
@@ -719,6 +720,7 @@ class CRUDContestant:
             author_gender=author_gender_value,
             nominator_city=nominator_city,
             nominator_country=nominator_country,
+            round_id=round_id,
             registration_date=datetime.utcnow(),
             verification_status="pending",
             is_active=True
@@ -874,20 +876,35 @@ class CRUDContestant:
                     "reason": "Les inscriptions sont fermées pour ce concours"
                 }
             
-            # Vérifier les dates de soumission
+            # Vérifier les dates de soumission via le Round actif
             today = date.today()
             
-            if contest.submission_start_date and today < contest.submission_start_date:
-                return {
-                    "eligible": False,
-                    "reason": "La période d'inscription n'a pas encore commencé"
-                }
+            # Récupérer le round actif
+            from app.crud import crud_round
+            active_round = crud_round.round.get_active_round_for_contest(db, contest_id=contest.id)
             
-            if contest.submission_end_date and today > contest.submission_end_date:
-                return {
-                    "eligible": False,
-                    "reason": "La période d'inscription est terminée"
-                }
+            submission_start_date = active_round.submission_start_date if active_round else None
+            submission_end_date = active_round.submission_end_date if active_round else None
+
+            if submission_start_date:
+                start_date = submission_start_date
+                if isinstance(start_date, datetime):
+                    start_date = start_date.date()
+                if today < start_date:
+                    return {
+                        "eligible": False,
+                        "reason": "La période d'inscription n'a pas encore commencé"
+                    }
+            
+            if submission_end_date:
+                end_date = submission_end_date
+                if isinstance(end_date, datetime):
+                    end_date = end_date.date()
+                if today > end_date:
+                    return {
+                        "eligible": False,
+                        "reason": "La période d'inscription est terminée"
+                    }
             
             return {
                 "eligible": True,
@@ -932,14 +949,29 @@ class CRUDContestant:
             if not contest.is_active:
                 return False
             
-            # Vérifier les dates
+            # Vérifier les dates via le Round actif
             today = date.today()
             
-            if contest.submission_start_date and today < contest.submission_start_date:
-                return False
+            # Récupérer le round actif
+            from app.crud import crud_round
+            active_round = crud_round.round.get_active_round_for_contest(db, contest_id=contest.id)
             
-            if contest.submission_end_date and today > contest.submission_end_date:
-                return False
+            submission_start_date = active_round.submission_start_date if active_round else None
+            submission_end_date = active_round.submission_end_date if active_round else None
+            
+            if submission_start_date:
+                start_date = submission_start_date
+                if isinstance(start_date, datetime):
+                    start_date = start_date.date()
+                if today < start_date:
+                    return False
+            
+            if submission_end_date:
+                end_date = submission_end_date
+                if isinstance(end_date, datetime):
+                    end_date = end_date.date()
+                if today > end_date:
+                    return False
             
             return True
         

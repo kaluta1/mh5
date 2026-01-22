@@ -4,6 +4,10 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime
 import enum
 from app.db.base_class import Base
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.models.round import Round
 
 
 class ContestStageLevel(str, enum.Enum):
@@ -69,8 +73,13 @@ class ContestCategory(Base):
     contest_type: Mapped["ContestType"] = relationship("ContestType", back_populates="categories")
 
 
+    GLOBAL = "global"
+
+    
 class ContestSeason(Base):
     __tablename__ = "contest_seasons"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    round_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("rounds.id"), nullable=True)
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     level: Mapped[SeasonLevel] = mapped_column(SQLEnum(SeasonLevel, values_callable=lambda obj: [e.value for e in obj]), nullable=False)
     
@@ -78,6 +87,7 @@ class ContestSeason(Base):
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     
     # Relations
+    round: Mapped[Optional["Round"]] = relationship("Round", back_populates="seasons")
     stages: Mapped[List["ContestStage"]] = relationship("ContestStage", back_populates="season")
     contestants: Mapped[List["ContestantSeason"]] = relationship("ContestantSeason", back_populates="season")
     contests: Mapped[List["ContestSeasonLink"]] = relationship("ContestSeasonLink", back_populates="season")
@@ -112,7 +122,10 @@ class ContestStage(Base):
 class Contestant(Base):
     __tablename__ = "contestants"
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
-    season_id: Mapped[int] = mapped_column(Integer, nullable=False)  # Can be Contest ID or ContestSeason ID
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    # contest_id: Mapped[int] = mapped_column(Integer, ForeignKey("contest.id"), nullable=True)  # Optional if linked via round
+    round_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("rounds.id"), nullable=True)
+    season_id: Mapped[int] = mapped_column(Integer, nullable=True)  # Legacy/Transition: Can be Contest ID or ContestSeason ID
     
     # Submission details
     title: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
@@ -145,7 +158,9 @@ class Contestant(Base):
     rankings: Mapped[List["ContestantRanking"]] = relationship("ContestantRanking", back_populates="contestant")
     comments: Mapped[List["Comment"]] = relationship("Comment", back_populates="contestant")
     seasons: Mapped[List["ContestantSeason"]] = relationship("ContestantSeason", back_populates="contestant")
+    seasons: Mapped[List["ContestantSeason"]] = relationship("ContestantSeason", back_populates="contestant")
     verifications: Mapped[List["ContestantVerification"]] = relationship("ContestantVerification", back_populates="contestant")
+    round: Mapped[Optional["Round"]] = relationship("Round", back_populates="contestants")
 
 
 class ContestSubmission(Base):

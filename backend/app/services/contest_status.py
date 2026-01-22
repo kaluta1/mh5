@@ -18,14 +18,14 @@ class ContestStatusService:
     def update_contest_statuses(db: Session) -> dict:
         """
         Met à jour automatiquement les statuts is_submission_open et is_voting_open
-        pour tous les contests actifs basés sur les dates.
+        pour tous les contests actifs basés sur les dates des rounds actifs.
         
         Règles:
-        - is_submission_open = True si aujourd'hui est entre submission_start_date et submission_end_date
-        - is_voting_open = True si aujourd'hui est >= submission_end_date ET <= voting_end_date
-        - Quand submission_end_date arrive, is_submission_open devient False et is_voting_open devient True
-        - Si le vote est ouvert (is_voting_open = True), les soumissions doivent être fermées (is_submission_open = False)
+        - is_submission_open = True si AU MOINS UN round actif accepte les soumissions
+        - is_voting_open = True si AU MOINS UN round actif est en phase de vote
         """
+        from app.models.round import Round, RoundStatus
+        
         today = date.today()
         updated_count = 0
         results = []
@@ -40,19 +40,30 @@ class ContestStatusService:
             old_submission_open = contest.is_submission_open
             old_voting_open = contest.is_voting_open
             
-            # Déterminer l'état de vote en premier
-            # Vote ouvert si aujourd'hui est >= submission_end_date ET <= voting_end_date
-            is_voting_open = (
-                contest.submission_end_date <= today <= contest.voting_end_date
-            )
+            # Récupérer les rounds actifs pour ce contest
+            active_rounds = db.query(Round).filter(
+                Round.contest_id == contest.id,
+                Round.status != RoundStatus.CANCELLED
+            ).all()
             
-            # Déterminer l'état de soumission
-            # Soumission ouverte si aujourd'hui est entre submission_start_date et submission_end_date
-            # MAIS seulement si le vote n'est pas encore ouvert
-            is_submission_open = (
-                contest.submission_start_date <= today <= contest.submission_end_date
-                and not is_voting_open  # Les soumissions sont fermées si le vote est ouvert
-            )
+            # Par défaut, tout est fermé
+            is_submission_open = False
+            is_voting_open = False
+            
+            for round_obj in active_rounds:
+                # Vérifier soumission
+                if round_obj.submission_start_date and round_obj.submission_end_date:
+                    if round_obj.submission_start_date <= today <= round_obj.submission_end_date:
+                        is_submission_open = True
+                
+                # Vérifier vote
+                if round_obj.voting_start_date and round_obj.voting_end_date:
+                    if round_obj.voting_start_date <= today <= round_obj.voting_end_date:
+                        is_voting_open = True
+                
+                # Si les deux sont ouverts, on peut arrêter de chercher (optimisation)
+                if is_submission_open and is_voting_open:
+                    break
             
             # Mettre à jour si nécessaire
             if (contest.is_submission_open != is_submission_open or 
@@ -82,11 +93,13 @@ class ContestStatusService:
     @staticmethod
     def check_submission_allowed(db: Session, contest_id: int) -> tuple[bool, str]:
         """
-        Vérifie si les soumissions sont autorisées pour un contest.
+        Vérifie si les soumissions sont autorisées pour un contest (i.e., il y a un round actif en phase de soumission).
         
         Returns:
             (is_allowed, error_message)
         """
+        from app.models.round import Round, RoundStatus
+        
         contest = db.query(Contest).filter(
             Contest.id == contest_id,
             Contest.is_deleted == False
@@ -98,33 +111,42 @@ class ContestStatusService:
         # Vérifier si le contest est actif
         if not contest.is_active:
             return False, "This contest is not active"
-        
-        # Vérifier si les soumissions sont ouvertes
-        if not contest.is_submission_open:
-            return False, "Submissions are closed for this contest"
-        
-        # Vérifier si le voting est déjà ouvert (on ne peut plus soumettre si le vote est ouvert)
-        if contest.is_voting_open:
-            return False, "Submissions are closed because voting is already open"
-        
-        # Vérifier les dates
+            
+        # Vérifier si un round permet la soumission aujourd'hui
         today = date.today()
-        if today < contest.submission_start_date:
-            return False, f"Submissions will start on {contest.submission_start_date}"
         
-        if today > contest.submission_end_date:
-            return False, f"Submissions ended on {contest.submission_end_date}"
+        active_submission_round = db.query(Round).filter(
+            Round.contest_id == contest_id,
+            Round.status != RoundStatus.CANCELLED,
+            Round.submission_start_date <= today,
+            Round.submission_end_date >= today
+        ).first()
         
-        return True, ""
+        if active_submission_round:
+            return True, ""
+            
+        # Si aucun round n'est ouvert, on essaie de trouver le prochain pour donner un message utile
+        next_round = db.query(Round).filter(
+            Round.contest_id == contest_id,
+            Round.status != RoundStatus.CANCELLED,
+            Round.submission_start_date > today
+        ).order_by(Round.submission_start_date.asc()).first()
+        
+        if next_round:
+            return False, f"Submissions for the next round ({next_round.name}) will start on {next_round.submission_start_date}"
+        
+        return False, "No active rounds accepting submissions at this time"
     
     @staticmethod
     def check_voting_allowed(db: Session, contest_id: int) -> tuple[bool, str]:
         """
-        Vérifie si le vote est autorisé pour un contest.
+        Vérifie si le vote est autorisé pour un contest (i.e., il y a un round actif en phase de vote).
         
         Returns:
             (is_allowed, error_message)
         """
+        from app.models.round import Round, RoundStatus
+        
         contest = db.query(Contest).filter(
             Contest.id == contest_id,
             Contest.is_deleted == False
@@ -137,19 +159,30 @@ class ContestStatusService:
         if not contest.is_active:
             return False, "This contest is not active"
         
-        # Vérifier si le vote est ouvert
-        if not contest.is_voting_open:
-            return False, "Voting is not open for this contest"
-        
-        # Vérifier les dates
+        # Vérifier si un round permet le vote aujourd'hui
         today = date.today()
-        if today < contest.submission_end_date:
-            return False, f"Voting will start after {contest.submission_end_date}"
         
-        if today > contest.voting_end_date:
-            return False, f"Voting ended on {contest.voting_end_date}"
+        active_voting_round = db.query(Round).filter(
+            Round.contest_id == contest_id,
+            Round.status != RoundStatus.CANCELLED,
+            Round.voting_start_date <= today,
+            Round.voting_end_date >= today
+        ).first()
         
-        return True, ""
+        if active_voting_round:
+            return True, ""
+            
+        # Message utile si pas de vote
+        next_voting_round = db.query(Round).filter(
+            Round.contest_id == contest_id,
+            Round.status != RoundStatus.CANCELLED,
+            Round.voting_start_date > today
+        ).order_by(Round.voting_start_date.asc()).first()
+        
+        if next_voting_round:
+            return False, f"Voting for the next round ({next_voting_round.name}) will start on {next_voting_round.voting_start_date}"
+            
+        return False, "Voting is not open for any round at this time"
 
 
 # Instance du service
