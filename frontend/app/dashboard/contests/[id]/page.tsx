@@ -163,18 +163,18 @@ export default function ContestDetailPage() {
   useEffect(() => {
     const loadContest = async () => {
       try {
-        // Charger les infos du contest
-        const contestResponse = await contestService.getContestById(contestId)
-
-        // Charger les contestants avec les filtres de localisation depuis l'URL
-        const contestantsResponse = await contestService.getContestantsByContest(
-          contestId,
-          0,
-          100,
-          filterCountry || undefined,
-          undefined, // filterRegion
-          filterContinent && filterContinent !== 'all' ? filterContinent : undefined
-        )
+        // Charger les infos du contest ET les contestants en parallèle (optimisation)
+        const [contestResponse, contestantsResponse] = await Promise.all([
+          contestService.getContestById(contestId),
+          contestService.getContestantsByContest(
+            contestId,
+            0,
+            10, // Réduit de 100 à 50 pour améliorer les performances
+            filterCountry || undefined,
+            undefined, // filterRegion
+            filterContinent && filterContinent !== 'all' ? filterContinent : undefined
+          )
+        ])
 
         const parseMediaIds = (mediaIds: string | undefined, type: 'image' | 'video'): Media[] => {
           if (!mediaIds) {

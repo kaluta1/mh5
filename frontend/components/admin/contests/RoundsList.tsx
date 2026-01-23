@@ -174,11 +174,11 @@ export function RoundsList() {
             />
 
             <ConfirmDialog
-                isOpen={showDeleteDialog}
-                onClose={() => setShowDeleteDialog(false)}
+                open={showDeleteDialog}
+                onOpenChange={(open) => setShowDeleteDialog(open)}
                 onConfirm={handleConfirmDelete}
                 title={t('admin.rounds.confirm_delete') || 'Confirmer la suppression'}
-                description={t('admin.rounds.delete_warning') || 'Voulez-vous vraiment supprimer ce round ?'}
+                message={t('admin.rounds.delete_warning') || 'Voulez-vous vraiment supprimer ce round ?'}
             />
         </div>
     )

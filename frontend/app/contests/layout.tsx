@@ -3,42 +3,8 @@ import { createMetadata } from "../metadata"
 import { getMetadataTranslations, detectLanguageFromHeaders } from "@/lib/metadata-translations"
 import { headers } from "next/headers"
 
-async function getFeaturedContestImage(): Promise<string | undefined> {
-  try {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://mh5-sbe4.onrender.com'
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 5000)
-    
-    const response = await fetch(`${apiUrl}/api/v1/contests?limit=1&skip=0`, {
-      next: { revalidate: 3600 },
-      signal: controller.signal,
-    })
-    
-    clearTimeout(timeoutId)
-    
-    if (response.ok) {
-      const data = await response.json()
-      if (data && data.length > 0) {
-        const contest = data[0]
-        // Utiliser image_url ou cover_image_url
-        const imageUrl = contest.image_url || contest.cover_image_url
-        if (imageUrl) {
-          // Si c'est une URL relative, construire l'URL complète
-          if (imageUrl.startsWith('/')) {
-            return `${apiUrl}${imageUrl}`
-          } else if (imageUrl.startsWith('http')) {
-            return imageUrl
-          } else {
-            return `${apiUrl}/${imageUrl}`
-          }
-        }
-      }
-    }
-  } catch (error) {
-    // Silently fail and use default image
-  }
-  return undefined
-}
+const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myhigh5.com"
+const defaultImage = `${appUrl}/thumbnails.png`
 
 export async function generateMetadata(): Promise<Metadata> {
   let lang: import("@/lib/translations").Language = 'en'
@@ -52,22 +18,14 @@ export async function generateMetadata(): Promise<Metadata> {
   const translations = getMetadataTranslations(lang)
   // Traductions en anglais pour les partages sociaux
   const englishTranslations = getMetadataTranslations('en')
-  
-  // Récupérer l'image d'un contest pour le thumbnail
-  const contestImage = await getFeaturedContestImage()
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myhigh5.com"
-  const defaultImage = `${appUrl}/thumbnails.png`
-  let ogImage = contestImage || defaultImage
-  
-  // S'assurer que l'image est une URL absolue
-  if (!ogImage.startsWith('http')) {
-    ogImage = ogImage.startsWith('/') ? `${appUrl}${ogImage}` : `${appUrl}/${ogImage}`
-  }
+
+  // Utiliser directement l'image par défaut (pas d'appel API bloquant)
+  const ogImage = defaultImage
 
   // Utiliser le titre et la description en anglais pour les partages
   const englishTitle = englishTranslations.pages.contests.title || 'Contests - High5'
   const englishDescription = englishTranslations.pages.contests.description || 'Join exciting competitions from local to global level. Participate, nominate, or vote in exciting competitions that progress from the local level to the global level.'
-  
+
   return createMetadata({
     title: englishTitle, // Titre en anglais pour les partages
     description: englishDescription, // Description en anglais pour les partages
@@ -84,4 +42,3 @@ export default function ContestsLayout({
 }) {
   return <>{children}</>
 }
-

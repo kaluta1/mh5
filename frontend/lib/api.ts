@@ -6,7 +6,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://mh5-hbjp.onrend
 // Créer une instance axios avec la configuration de base
 const api = axios.create({
   baseURL: API_BASE_URL,
-  // timeout: 10000,
+  timeout: 15000, // 15 secondes de timeout
   headers: {
     'Content-Type': 'application/json',
   },

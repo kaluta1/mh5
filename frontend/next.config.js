@@ -36,12 +36,6 @@ const nextConfig = {
         pathname: '/**',
       },
     ],
-    domains: [
-      'localhost',
-      '127.0.0.1',
-      'zlz3wbxsni.ufs.sh',
-      'utfs.io',
-    ],
     unoptimized: false,
   },
 
