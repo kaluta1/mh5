@@ -492,7 +492,8 @@ class CRUDContestant:
         filter_country: Optional[str] = None,
         filter_region: Optional[str] = None,
         filter_continent: Optional[str] = None,
-        filter_city: Optional[str] = None
+        filter_city: Optional[str] = None,
+        filter_user_id: Optional[int] = None
     ) -> List[Dict[str, Any]]:
         """
         Récupère les candidatures d'une saison avec stats enrichies (votes, rang, infos auteur).
@@ -502,6 +503,7 @@ class CRUDContestant:
         - filter_region: Affiche uniquement les contestants de cette région
         - filter_continent: Affiche uniquement les contestants de ce continent
         - filter_city: Affiche uniquement les contestants de cette ville
+        - filter_user_id: Affiche uniquement les contestants de cet utilisateur
         """
         # Récupérer tous les contestants de la saison avec leurs relations (exclure les supprimés)
         contestants_query = db.query(Contestant)\
@@ -526,6 +528,12 @@ class CRUDContestant:
         if filter_city:
             contestants_query = contestants_query.filter(
                 func.lower(Contestant.city) == func.lower(filter_city)
+            )
+        
+        # Filtre par user_id
+        if filter_user_id:
+            contestants_query = contestants_query.filter(
+                Contestant.user_id == filter_user_id
             )
         
         contestants = contestants_query\

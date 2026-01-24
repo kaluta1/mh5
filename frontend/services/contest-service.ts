@@ -489,7 +489,8 @@ class ContestService {
     filterCountry?: string,
     filterRegion?: string,
     filterContinent?: string,
-    filterCity?: string
+    filterCity?: string,
+    userId?: number | string
   ): Promise<ContestantWithAuthorAndStats[]> {
     try {
       const cacheKey = `/api/v1/contestants/contest/${contestId}`
@@ -507,6 +508,9 @@ class ContestService {
       if (filterCity) {
         params.filter_city = filterCity
       }
+      if (userId) {
+        params.user_id = userId
+      }
 
       // Vérifier le cache
       const cached = cacheService.get<ContestantWithAuthorAndStats[]>(cacheKey, params)
@@ -521,8 +525,11 @@ class ContestService {
       cacheService.set(cacheKey, response.data, params)
 
       return response.data
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Error fetching contestants for contest ${contestId}:`, error)
+      if (error.response) {
+        console.error('Response error detail:', error.response.data)
+      }
       throw error
     }
   }

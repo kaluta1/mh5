@@ -213,78 +213,57 @@ class CRUDContest:
         # --- AUTOMATION: Link to Active Round ---
         # Note: We purposely don't wrap this in a broad try/except that swallows errors
         # so we can debug why linking fails.
-        from datetime import datetime, date
-        import calendar
-        from sqlalchemy import insert
-        from app.models.round import Round, RoundStatus, round_contests
-        
-        # 1. Determine current month round name
-        now = date.today()
-        month_name = calendar.month_name[now.month]
-        round_name = f"Round {month_name} {now.year}"
-        
-        # 2. Find existing round or create it
-        # We look for a round with this name OR an active round covering today (if name differs)
-        active_round = db.query(Round).filter(
-            Round.name == round_name
-        ).first()
-        
-        if not active_round:
-            # Try finding any active submission round if specific named one doesn't exist
+        try:
+            # 1. Determine current month round name
+            import calendar
+            from sqlalchemy import insert
+            from app.models.round import Round, RoundStatus, round_contests
+    
+            now = date.today()
+            month_name = calendar.month_name[now.month]
+            round_name = f"Round {month_name} {now.year}"
+            
+            # 2. Find existing round
+            # Priority 1: Match Name (e.g. "Round January 2026")
             active_round = db.query(Round).filter(
-                Round.submission_start_date <= now,
-                Round.submission_end_date >= now,
-                Round.status != RoundStatus.CANCELLED
+                Round.name == round_name
             ).first()
             
-        if not active_round:
-            # Create the round for this month if it doesn't exist
-            from app.crud.crud_round import round as crud_round
-            from app.schemas.round import RoundCreate
-            
-            # Dates will be auto-calculated 
-            computed_dates = crud_round.calculate_dates_for_month(now.month, now.year, is_nomination=bool(voting_type_id))
-            
-            active_round = Round(
-                name=round_name,
-                status=RoundStatus.ACTIVE,
-                is_submission_open=True,
-                is_voting_open=False,
-                # Dates
-                submission_start_date=computed_dates["submission_start_date"],
-                submission_end_date=computed_dates["submission_end_date"],
-                voting_start_date=computed_dates["voting_start_date"],
-                voting_end_date=computed_dates["voting_end_date"],
-                city_season_start_date=computed_dates["city_season_start_date"],
-                city_season_end_date=computed_dates["city_season_end_date"],
-                country_season_start_date=computed_dates["country_season_start_date"],
-                country_season_end_date=computed_dates["country_season_end_date"],
-                regional_start_date=computed_dates["regional_start_date"],
-                regional_end_date=computed_dates["regional_end_date"],
-                continental_start_date=computed_dates["continental_start_date"],
-                continental_end_date=computed_dates["continental_end_date"],
-                global_start_date=computed_dates["global_start_date"],
-                global_end_date=computed_dates["global_end_date"]
-            )
-            db.add(active_round)
-            db.commit()
-            db.refresh(active_round)
-        
-        # 3. Link Contest to Round
-        # Check if link exists (should not since contest is new, but safe check)
-        link_exists = db.query(round_contests).filter(
-            round_contests.c.round_id == active_round.id,
-            round_contests.c.contest_id == db_obj.id
-        ).first()
-        
-        if not link_exists:
-            stmt = insert(round_contests).values(
-                round_id=active_round.id,
-                contest_id=db_obj.id,
-                created_at=datetime.utcnow()
-            )
-            db.execute(stmt)
-            db.commit()
+            if not active_round:
+                # Priority 2: Match Active Date Coverage
+                active_round = db.query(Round).filter(
+                    Round.submission_start_date <= now,
+                    Round.submission_end_date >= now,
+                    Round.status != RoundStatus.CANCELLED
+                ).first()
+                
+            if not active_round:
+                # Priority 3: Fallback to LAST created round (User Request)
+                active_round = db.query(Round).filter(
+                    Round.status != RoundStatus.CANCELLED
+                ).order_by(Round.id.desc()).first()
+                
+            # 3. Link Contest to Round
+            if active_round:
+                # Check if link exists
+                link_exists = db.query(round_contests).filter(
+                    round_contests.c.round_id == active_round.id,
+                    round_contests.c.contest_id == db_obj.id
+                ).first()
+                
+                if not link_exists:
+                    stmt = insert(round_contests).values(
+                        round_id=active_round.id,
+                        contest_id=db_obj.id,
+                        created_at=datetime.utcnow()
+                    )
+                    db.execute(stmt)
+                    db.commit()
+                 
+        except Exception as e:
+            print(f"ERROR in auto-link logic: {e}")
+            import traceback
+            traceback.print_exc()
         
         return db_obj
 

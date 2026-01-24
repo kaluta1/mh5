@@ -9,6 +9,8 @@ import { ContestDetailSkeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, Sparkles, Users, Video, Image, Globe, Lightbulb, Youtube, ExternalLink } from 'lucide-react'
 import { contestService, ContestResponse } from '@/services/contest-service'
+import { useQuery } from '@apollo/client'
+import { GET_CONTEST_DETAILS } from '@/graphql/queries'
 import { StickyPageHeader } from '@/components/ui/sticky-page-header'
 import { ContestInfoDialog } from '@/components/dashboard/contest-info-dialog'
 import { ContestantsList } from '@/components/dashboard/contestants-list'
@@ -129,6 +131,13 @@ export default function ContestDetailPage() {
   const [selectedContestantId, setSelectedContestantId] = useState<number | null>(null)
   const [selectedContestantTitle, setSelectedContestantTitle] = useState<string>('')
 
+  // Apollo Query
+  const { data: qData, loading: qLoading, error: qError, refetch: qRefetch } = useQuery(GET_CONTEST_DETAILS, {
+    variables: { id: parseInt(contestId) },
+    skip: !contestId,
+    notifyOnNetworkStatusChange: true
+  })
+
   // Lire les filtres de localisation depuis l'URL
   const searchParams = useSearchParams()
   const [filterCountry, setFilterCountry] = React.useState<string>(() => {
@@ -159,153 +168,80 @@ export default function ContestDetailPage() {
     }
   }, [isAuthenticated, isLoading, router])
 
-  // Charger les détails du contest depuis le backend
+  // Transformer les données GraphQL vers le format attendu par la page
   useEffect(() => {
-    const loadContest = async () => {
-      try {
-        // Charger les infos du contest ET les contestants en parallèle (optimisation)
-        const [contestResponse, contestantsResponse] = await Promise.all([
-          contestService.getContestById(contestId),
-          contestService.getContestantsByContest(
-            contestId,
-            0,
-            10, // Réduit de 100 à 50 pour améliorer les performances
-            filterCountry || undefined,
-            undefined, // filterRegion
-            filterContinent && filterContinent !== 'all' ? filterContinent : undefined
-          )
-        ])
+    if (qData?.contest) {
+      const c = qData.contest;
 
-        const parseMediaIds = (mediaIds: string | undefined, type: 'image' | 'video'): Media[] => {
-          if (!mediaIds) {
-            return []
-          }
-
-          if (Array.isArray(mediaIds)) {
-            const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-            return mediaIds
-              .filter((url: string) => url && url.trim() !== '')
-              .map((url: string, index: number) => {
-                let fullUrl = url
-                if (url && !url.startsWith('http') && !url.startsWith('data:')) {
-                  if (url.startsWith('/')) {
-                    fullUrl = `${API_BASE_URL}${url}`
-                  } else {
-                    fullUrl = `${API_BASE_URL}/${url}`
-                  }
-                }
-                return {
-                  id: `${type}-${index}`,
-                  type,
-                  url: fullUrl,
-                  thumbnail: type === 'video' ? fullUrl : undefined
-                }
-              })
-          }
-
-          try {
-            const parsed = typeof mediaIds === 'string' ? JSON.parse(mediaIds) : mediaIds
-            if (!Array.isArray(parsed)) {
-              return []
+      const parseMediaIds = (mediaIds: string | undefined, type: 'image' | 'video'): Media[] => {
+        if (!mediaIds) return []
+        try {
+          const parsed = typeof mediaIds === 'string' ? JSON.parse(mediaIds) : mediaIds
+          if (!Array.isArray(parsed)) return []
+          const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+          return parsed.filter((url: string) => url && url.trim() !== '').map((url: string, index: number) => {
+            let fullUrl = url
+            if (url && !url.startsWith('http') && !url.startsWith('data:')) {
+              fullUrl = url.startsWith('/') ? `${API_BASE_URL}${url}` : `${API_BASE_URL}/${url}`
             }
-
-            const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-
-            return parsed
-              .filter((url: string) => url && url.trim() !== '')
-              .map((url: string, index: number) => {
-                let fullUrl = url
-                if (url && !url.startsWith('http') && !url.startsWith('data:')) {
-                  if (url.startsWith('/')) {
-                    fullUrl = `${API_BASE_URL}${url}`
-                  } else {
-                    fullUrl = `${API_BASE_URL}/${url}`
-                  }
-                }
-                return {
-                  id: `${type}-${index}`,
-                  type,
-                  url: fullUrl,
-                  thumbnail: type === 'video' ? fullUrl : undefined
-                }
-              })
-          } catch (error) {
-            console.error(`Error parsing ${type} media IDs:`, error, 'Raw value:', mediaIds)
-            return []
-          }
-        }
-
-        const mappedContestants: Contestant[] = contestantsResponse.map((c: any, index: number) => {
-          const images = parseMediaIds(c.image_media_ids, 'image')
-          const videos = parseMediaIds(c.video_media_ids, 'video')
-          const allMedia = [...images, ...videos]
-
-          return {
-            id: String(c.id ?? index),
-            userId: c.user_id,
-            name: c.author_name ?? `Contestant #${index + 1}`,
-            // Utiliser les champs directs du contestant avec fallback sur les champs auteur
-            country: c.country || c.author_country,
-            city: c.city || c.author_city,
-            continent: c.continent || c.author_continent,
-            region: c.region || c.author_region,
-            avatar: c.author_avatar_url ?? '👤',
-            participationTitle: c.title,
-            description: c.description ?? '',
-            votes: c.votes_count ?? 0,
-            rank: c.rank,
-            imagesCount: c.images_count ?? images.length,
-            videosCount: c.videos_count ?? videos.length,
-            canVote: c.can_vote ?? false,
-            hasVoted: c.has_voted ?? false,
-            voteRestrictionReason: c.vote_restriction_reason ?? null,
-            media: allMedia,
-            comments: c.comments_count ?? 0,
-            reactions: c.reactions_count ?? 0,
-            favorites: c.favorites_count ?? 0,
-            shares: c.shares_count ?? 0,
-            isFavorite: c.is_in_favorites ?? false,
-            votesList: c.votes || [],
-            commentsList: c.comments || [],
-            reactionsList: c.reactions || {},
-            favoritesList: c.favorites || [],
-            sharesList: c.shares || [],
-            season: c.season,
-          }
-        })
-
-        mappedContestants.sort((a, b) => {
-          if (a.rank && b.rank) {
-            return a.rank - b.rank
-          }
-          if (a.rank && !b.rank) return -1
-          if (!a.rank && b.rank) return 1
-          if (b.votes !== a.votes) {
-            return b.votes - a.votes
-          }
-          return Number(a.id) - Number(b.id)
-        })
-
-        setContest({
-          contest: contestResponse,
-          contestants: mappedContestants,
-        })
-
-        const favoriteIds = mappedContestants
-          .filter(c => c.isFavorite)
-          .map(c => c.id)
-        setFavorites(favoriteIds)
-      } catch (error) {
-        console.error('Error loading contest:', error)
-      } finally {
-        setPageLoading(false)
+            return { id: `${type}-${index}`, type, url: fullUrl, thumbnail: type === 'video' ? fullUrl : undefined }
+          })
+        } catch (e) { return [] }
       }
-    }
 
-    if (!isLoading && isAuthenticated && user) {
-      loadContest()
+      const mappedContestants: Contestant[] = (c.contestants || []).map((ct: any, index: number) => {
+        const images = parseMediaIds(ct.imageMediaIds, 'image')
+        const videos = parseMediaIds(ct.videoMediaIds, 'video')
+        return {
+          id: String(ct.id ?? index),
+          userId: ct.userId,
+          name: ct.author?.fullName || ct.author?.username || `Contestant #${index + 1}`,
+          country: ct.author?.country,
+          city: ct.author?.city,
+          continent: ct.author?.continent,
+          avatar: ct.author?.avatarUrl || '👤',
+          participationTitle: ct.title,
+          description: ct.description ?? '',
+          votes: ct.votesCount ?? 0,
+          rank: ct.rank,
+          imagesCount: ct.images_count ?? images.length,
+          videosCount: ct.videos_count ?? videos.length,
+          canVote: ct.can_vote ?? false,
+          hasVoted: ct.has_voted ?? false,
+          media: [...images, ...videos],
+          comments: ct.comments_count ?? 0,
+          reactions: ct.reactions_count ?? 0,
+          favorites: ct.favorites_count ?? 0,
+          shares: ct.shares_count ?? 0,
+          isFavorite: ct.is_in_favorites ?? false,
+          votesList: ct.votes || [],
+          commentsList: ct.comments || [],
+        }
+      })
+
+      // Sort logic
+      mappedContestants.sort((a, b) => {
+        if (a.rank && b.rank) return a.rank - b.rank
+        if (a.rank && !b.rank) return -1
+        if (!a.rank && b.rank) return 1
+        if (b.votes !== a.votes) return b.votes - a.votes
+        return Number(a.id) - Number(b.id)
+      })
+
+      setContest({
+        contest: {
+          ...c,
+          entries_count: c.entriesCount,
+          total_votes: c.totalVotes,
+          cover_image_url: c.coverImageUrl
+        },
+        contestants: mappedContestants
+      })
+
+      setFavorites(mappedContestants.filter(ct => ct.isFavorite).map(ct => ct.id))
+      setPageLoading(false)
     }
-  }, [isLoading, isAuthenticated, user, contestId, filterCountry, filterContinent])
+  }, [qData, t])
 
   const handleReportClick = (contestantId: string) => {
     const contestant = contest?.contestants.find(c => c.id === contestantId)
@@ -319,124 +255,8 @@ export default function ContestDetailPage() {
   const handleDeleteContestant = async (contestantId: string) => {
     try {
       await contestService.deleteContestant(Number(contestantId))
-
-      const contestResponse = await contestService.getContestById(contestId)
-      const contestantsResponse = (contestResponse as any).contestants || []
-
-      const parseMediaIds = (mediaIds: string | undefined, type: 'image' | 'video'): Media[] => {
-        if (!mediaIds) return []
-
-        if (Array.isArray(mediaIds)) {
-          const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-          return mediaIds
-            .filter((url: string) => url && url.trim() !== '')
-            .map((url: string, index: number) => {
-              let fullUrl = url
-              if (url && !url.startsWith('http') && !url.startsWith('data:')) {
-                if (url.startsWith('/')) {
-                  fullUrl = `${API_BASE_URL}${url}`
-                } else {
-                  fullUrl = `${API_BASE_URL}/${url}`
-                }
-              }
-              return {
-                id: `${type}-${index}`,
-                type,
-                url: fullUrl,
-                thumbnail: type === 'video' ? fullUrl : undefined
-              }
-            })
-        }
-
-        try {
-          const parsed = typeof mediaIds === 'string' ? JSON.parse(mediaIds) : mediaIds
-          if (!Array.isArray(parsed)) {
-            return []
-          }
-
-          const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-
-          return parsed
-            .filter((url: string) => url && url.trim() !== '')
-            .map((url: string, index: number) => {
-              let fullUrl = url
-              if (url && !url.startsWith('http') && !url.startsWith('data:')) {
-                if (url.startsWith('/')) {
-                  fullUrl = `${API_BASE_URL}${url}`
-                } else {
-                  fullUrl = `${API_BASE_URL}/${url}`
-                }
-              }
-              return {
-                id: `${type}-${index}`,
-                type,
-                url: fullUrl,
-                thumbnail: type === 'video' ? fullUrl : undefined
-              }
-            })
-        } catch (error) {
-          console.error(`Error parsing ${type} media IDs:`, error)
-          return []
-        }
-      }
-
-      const mappedContestants: Contestant[] = contestantsResponse.map((c: any) => {
-        const images = parseMediaIds(c.image_media_ids, 'image')
-        const videos = parseMediaIds(c.video_media_ids, 'video')
-        const allMedia = [...images, ...videos]
-
-        return {
-          id: String(c.id),
-          userId: c.user_id,
-          name: c.author_name || 'Utilisateur inconnu',
-          country: c.author_country,
-          city: c.author_city,
-          continent: c.author_continent,
-          region: c.author_region,
-          avatar: c.author_avatar_url || '',
-          participationTitle: c.title || '',
-          description: c.description || '',
-          votes: c.votes_count || 0,
-          rank: c.rank,
-          imagesCount: c.images_count ?? images.length,
-          videosCount: c.videos_count ?? videos.length,
-          canVote: c.can_vote || false,
-          hasVoted: c.has_voted || false,
-          isFavorite: c.is_in_favorites ?? false,
-          media: allMedia,
-          comments: c.comments_count || 0,
-          reactions: c.reactions_count || 0,
-          favorites: c.favorites_count || 0,
-          shares: c.shares_count || 0,
-          votesList: c.votes || [],
-          commentsList: c.comments || [],
-          reactionsList: c.reactions || {},
-          favoritesList: c.favorites || [],
-          sharesList: c.shares || [],
-          season: c.season,
-        }
-      })
-
-      mappedContestants.sort((a, b) => {
-        if (a.rank && b.rank) {
-          return a.rank - b.rank
-        }
-        if (a.rank && !b.rank) return -1
-        if (!a.rank && b.rank) return 1
-        if (b.votes !== a.votes) {
-          return b.votes - a.votes
-        }
-        return Number(a.id) - Number(b.id)
-      })
-
-      setContest((prev) => {
-        if (!prev) return null
-        return {
-          ...prev,
-          contestants: mappedContestants
-        }
-      })
-
+      // Refetch GraphQL data instead of REST
+      await qRefetch()
       showToast(t('common.deleted_successfully') || 'Candidature supprimée avec succès', 'success')
     } catch (err: any) {
       console.error('Erreur lors de la suppression:', err)

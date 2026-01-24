@@ -8,6 +8,8 @@ import { useToast } from '@/components/ui/toast'
 import { ParticipateFormSkeleton } from '@/components/ui/skeleton'
 import { ParticipationForm } from '@/components/dashboard/participation-form'
 import { contestService } from '@/services/contest-service'
+import { useQuery } from '@apollo/client'
+import { GET_CONTEST_PARTICIPATION_DETAILS } from '@/graphql/queries'
 import {
   VerificationRequirementsDialog,
   SelfieVerificationDialog,
@@ -40,6 +42,13 @@ export default function ApplyToContestPage() {
   const [existingParticipationData, setExistingParticipationData] = useState<any>(null)
   const [participantId, setParticipantId] = useState<number | null>(null)
 
+  // Apollo Query
+  const { data: qData, loading: qLoading, error: qError } = useQuery(GET_CONTEST_PARTICIPATION_DETAILS, {
+    variables: { id: parseInt(contestId) },
+    skip: !contestId,
+    notifyOnNetworkStatusChange: true
+  })
+
   // Verification states
   const [showVerificationDialog, setShowVerificationDialog] = useState(false)
   const [showSelfieDialog, setShowSelfieDialog] = useState(false)
@@ -54,14 +63,15 @@ export default function ApplyToContestPage() {
 
   // Calculer le temps restant
   useEffect(() => {
-    if (!contest?.submission_end_date) {
+    const submissionEndDate = qData?.contest?.submissionEndDate || contest?.submission_end_date
+    if (!submissionEndDate) {
       setTimeValues({ days: 0, hours: 0, minutes: 0, seconds: 0, isClosed: false, isNA: true })
       return
     }
 
     const updateTimeRemaining = () => {
       const now = new Date().getTime()
-      const endDate = new Date(contest.submission_end_date).getTime()
+      const endDate = new Date(submissionEndDate).getTime()
       const difference = endDate - now
 
       if (difference <= 0) {
@@ -77,14 +87,10 @@ export default function ApplyToContestPage() {
       setTimeValues({ days, hours, minutes, seconds, isClosed: false, isNA: false })
     }
 
-    // Mettre à jour immédiatement
     updateTimeRemaining()
-
-    // Mettre à jour chaque seconde pour un décompteur en temps réel
     const interval = setInterval(updateTimeRemaining, 1000)
-
     return () => clearInterval(interval)
-  }, [contest?.submission_end_date])
+  }, [qData?.contest?.submissionEndDate, contest?.submission_end_date])
 
   // Formater le temps restant avec les traductions
   useEffect(() => {
@@ -127,122 +133,102 @@ export default function ApplyToContestPage() {
     }
   }, [isAuthenticated, isLoading, router])
 
-  // Vérifier le KYC et charger les données du contest
+
+  // Data Mapping & Profile Check
   useEffect(() => {
-    const checkKYCAndLoadContest = async () => {
-      try {
-        setPageLoading(true)
+    if (qData?.contest) {
+      const c = qData.contest;
 
-        // Vérifier si l'utilisateur a complété son profil (first_name, last_name, country, city, continent)
-        if (!(user as any)?.first_name || !(user as any)?.last_name || !(user as any)?.country || !(user as any)?.city || !(user as any)?.continent) {
-          // Sauvegarder le contestId pour redirection après setup
-          if (contestId) {
-            sessionStorage.setItem('contestId', contestId)
-          }
-          setNeedsProfileSetup(true)
-          return
-        }
-
-        // Vérifier si l'utilisateur a complété son KYC (optionnel, juste pour notification)
-        if (!user?.is_verified) {
-          setNeedsKYC(true)
-        }
-
-        // Charger les données du contest
-        if (contestId) {
-          const contestData = await contestService.getContestById(contestId)
-          setContest(contestData)
-
-          // Détecter si c'est une nomination (si voting_type existe)
-          const isNominationContest = contestData.voting_type != null
-          console.log('Contest Data:', contestData)
-          console.log('voting_type:', contestData.voting_type)
-          console.log('isNominationContest:', isNominationContest)
-          setIsNomination(isNominationContest)
-
-          // Vérifier si des vérifications sont requises pour ce contest
-          const needsVerification =
-            contestData.requires_kyc ||
-            contestData.requires_visual_verification ||
-            contestData.requires_voice_verification ||
-            contestData.requires_brand_verification ||
-            contestData.requires_content_verification
-
-          // Si des vérifications sont requises et pas encore complétées, afficher le dialog
-          if (needsVerification && !isEditMode) {
-            // Vérifier quelles vérifications sont déjà faites
-            const kycDone = !contestData.requires_kyc || user?.identity_verified
-            const visualDone = !contestData.requires_visual_verification || hasVisualVerification
-            const voiceDone = !contestData.requires_voice_verification || hasVoiceVerification
-            const brandDone = !contestData.requires_brand_verification || hasBrandVerification
-            const contentDone = !contestData.requires_content_verification || hasContentVerification
-
-            // Afficher le dialog si au moins une vérification est requise
-            if (!kycDone || !visualDone || !voiceDone || !brandDone || !contentDone) {
-              setShowVerificationDialog(true)
-            }
-          }
-
-          // Vérifier si l'utilisateur a déjà une candidature
-          const userContestants = await contestService.getContestantsByContest(contestId)
-          const userParticipation = userContestants.find((c: any) => c.user_id === user?.id)
-          if (userParticipation) {
-            setUserAlreadyParticipating(true)
-            setParticipantId(userParticipation.id)
-            // Charger les données existantes pour l'édition
-            console.log('Participation data:', userParticipation)
-
-            // Parser les image_media_ids (JSON string)
-            let imageUrls: string[] = []
-            if (userParticipation.image_media_ids) {
-              try {
-                const parsed = JSON.parse(userParticipation.image_media_ids)
-                imageUrls = Array.isArray(parsed) ? parsed : []
-              } catch (e) {
-                console.error('Erreur parsing image_media_ids:', e)
-                imageUrls = []
-              }
-            }
-
-            // Parser les video_media_ids (JSON string)
-            let videoUrl = ''
-            if (userParticipation.video_media_ids) {
-              try {
-                const parsed = JSON.parse(userParticipation.video_media_ids)
-                videoUrl = Array.isArray(parsed) && parsed.length > 0 ? parsed[0] : ''
-              } catch (e) {
-                console.error('Erreur parsing video_media_ids:', e)
-                videoUrl = ''
-              }
-            }
-
-            setExistingParticipationData({
-              title: userParticipation.title || '',
-              description: userParticipation.description || '',
-              imageUrls: imageUrls,
-              videoUrl: videoUrl,
-              nominatorCity: (userParticipation as any).nominator_city || '',
-              nominatorCountry: (userParticipation as any).nominator_country || ''
-            })
-
-            // Si le mode édition est activé, afficher directement le formulaire
-            if (isEditMode) {
-              setIsEditingParticipation(true)
-            }
-          }
-        }
-      } catch (err) {
-        console.error('Erreur lors du chargement:', err)
-        // Ne pas afficher d'erreur générique au chargement
-      } finally {
-        setPageLoading(false)
+      // 1. Check Profile Completeness
+      if (user && (!(user as any)?.first_name || !(user as any)?.last_name || !(user as any)?.country || !(user as any)?.city || !(user as any)?.continent)) {
+        if (contestId) sessionStorage.setItem('contestId', contestId)
+        setNeedsProfileSetup(true)
+      } else {
+        setNeedsProfileSetup(false)
       }
-    }
 
-    if (!isLoading && isAuthenticated && user) {
-      checkKYCAndLoadContest()
+      // Check KYC status
+      if (user && !user?.is_verified) {
+        setNeedsKYC(true)
+      }
+
+      // 2. Set Contest Data
+      setContest({
+        ...c,
+        submission_end_date: c.submissionEndDate,
+        is_submission_open: c.isSubmissionOpen,
+        requires_kyc: c.requiresKyc,
+        requires_visual_verification: c.requiresVisualVerification,
+        requires_voice_verification: c.requiresVoiceVerification,
+        requires_brand_verification: c.requiresBrandVerification,
+        requires_content_verification: c.requiresContentVerification,
+        requires_video: c.requiresVideo,
+        max_videos: c.maxVideos,
+        video_max_duration: c.videoMaxDuration,
+        video_max_size_mb: c.videoMaxSizeMb,
+        min_images: c.minImages,
+        max_images: c.maxImages,
+        verification_video_max_duration: c.verificationVideoMaxDuration,
+        verification_max_size_mb: c.verificationMaxSizeMb,
+        voting_type: c.votingType,
+        participant_type: c.participantType
+      })
+
+      setIsNomination(c.votingType != null)
+
+      // 3. User Participation check
+      const up = c.currentUserParticipation;
+      if (up) {
+        setUserAlreadyParticipating(true)
+        setParticipantId(up.id)
+
+        let imageUrls: string[] = []
+        try {
+          imageUrls = up.imageMediaIds ? JSON.parse(up.imageMediaIds) : []
+        } catch (e) { imageUrls = [] }
+
+        let videoUrl = ''
+        try {
+          const vids = up.videoMediaIds ? JSON.parse(up.videoMediaIds) : []
+          videoUrl = Array.isArray(vids) && vids.length > 0 ? vids[0] : ''
+        } catch (e) { videoUrl = '' }
+
+        setExistingParticipationData({
+          title: up.title || '',
+          description: up.description || '',
+          imageUrls: imageUrls,
+          videoUrl: videoUrl,
+          nominatorCity: up.nominatorCity || '',
+          nominatorCountry: up.nominatorCountry || ''
+        })
+
+        if (isEditMode) setIsEditingParticipation(true)
+      }
+
+      // 4. Verification Check
+      const needsVerification =
+        c.requiresKyc ||
+        c.requiresVisualVerification ||
+        c.requiresVoiceVerification ||
+        c.requiresBrandVerification ||
+        c.requiresContentVerification
+
+      if (needsVerification && !isEditMode) {
+        const kycDone = !c.requiresKyc || user?.identity_verified
+        const visualDone = !c.requiresVisualVerification || hasVisualVerification
+        const voiceDone = !c.requiresVoiceVerification || hasVoiceVerification
+        const brandDone = !c.requiresBrandVerification || hasBrandVerification
+        const contentDone = !c.requiresContentVerification || hasContentVerification
+
+        if (!kycDone || !visualDone || !voiceDone || !brandDone || !contentDone) {
+          setShowVerificationDialog(true)
+        }
+      }
+
+      setPageLoading(false)
     }
-  }, [isLoading, isAuthenticated, user, contestId, isEditMode])
+  }, [qData, user, isEditMode, contestId, hasVisualVerification, hasVoiceVerification, hasBrandVerification, hasContentVerification])
+
 
   const handleCancel = () => {
     // Si en mode édition, retourner à My Applications
@@ -336,15 +322,15 @@ export default function ApplyToContestPage() {
           errorMessage = errorDetail
         }
       }
-
-      // Afficher l'erreur dans un toast
-      addToast(errorMessage, 'error')
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  if (isLoading || pageLoading) {
+  // Only block full page for initial AUTH check. 
+  // Once auth loaded, we use skeletons inside the layout.
+  if (isLoading) {
+    // Keep full skeleton for auth check to avoid redirect flash
     return <ParticipateFormSkeleton />
   }
 
@@ -352,211 +338,149 @@ export default function ApplyToContestPage() {
     return null
   }
 
+
   return (
     <div className="min-h-[calc(100vh-10rem)] flex items-start justify-center py-8 overflow-hidden">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 relative">
-        {/* Left Column - Participation Form */}
-        <div className="lg:col-span-2">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-1 md:p-1 sticky top-4 space-y-6">
-            {/* Success Message */}
-            {submitSuccess && (
-              <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg space-y-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center">
-                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
+      <div className="w-full max-w-3xl relative px-4">
+        {/* Participation Form */}
+        <div>
+          {pageLoading ? (
+            <ParticipateFormSkeleton />
+          ) : (
+            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-1 md:p-1 sticky top-4 space-y-6">
+              {/* Success Message */}
+              {submitSuccess && (
+                <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center">
+                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-green-900 dark:text-green-200 font-semibold">
+                        {t('dashboard.contests.participation_form.success_title') || '✅ Candidature soumise avec succès !'}
+                      </p>
+                      <p className="text-green-700 dark:text-green-300 text-sm mt-1">
+                        {isEditingParticipation
+                          ? t('dashboard.contests.participation_form.success_edit') || 'Votre candidature a été mise à jour avec succès.'
+                          : t('dashboard.contests.participation_form.success') || 'Votre candidature a été soumise avec succès. Elle sera examinée par notre équipe.'}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-green-900 dark:text-green-200 font-semibold">
-                      {t('dashboard.contests.participation_form.success_title') || '✅ Candidature soumise avec succès !'}
-                    </p>
-                    <p className="text-green-700 dark:text-green-300 text-sm mt-1">
-                      {isEditingParticipation
-                        ? t('dashboard.contests.participation_form.success_edit') || 'Votre candidature a été mise à jour avec succès.'
-                        : t('dashboard.contests.participation_form.success') || 'Votre candidature a été soumise avec succès. Elle sera examinée par notre équipe.'}
-                    </p>
-                  </div>
-                </div>
-                {contest?.is_submission_open && (
-                  <button
-                    onClick={() => {
-                      // Permettre de modifier à nouveau
-                      setIsEditingParticipation(true)
-                      setSubmitSuccess(false)
-                    }}
-                    className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition text-sm"
-                  >
-                    ✏️ {t('dashboard.contests.participation_form.edit_participation') || 'Modifier ma candidature'}
-                  </button>
-                )}
-              </div>
-            )}
-
-            {/* Already Participating Alert */}
-            {userAlreadyParticipating && !isEditingParticipation && !submitSuccess && (
-              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg space-y-3">
-                <p className="text-blue-900 dark:text-blue-200">
-                  {t('dashboard.contests.participation_form.already_participating')}
-                </p>
-                {contest?.is_submission_open && (
-                  <button
-                    onClick={() => {
-                      // Afficher le formulaire en mode édition
-                      setIsEditingParticipation(true)
-                    }}
-                    className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition text-sm"
-                  >
-                    ✏️ {t('dashboard.contests.participation_form.edit_participation') || 'Modifier ma candidature'}
-                  </button>
-                )}
-              </div>
-            )}
-
-            {/* Header */}
-            {(!userAlreadyParticipating || isEditingParticipation) && !submitSuccess && (
-              <>
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-                  {isEditingParticipation
-                    ? (t('dashboard.contests.participation_form.edit_title') || 'Edit a Contestant')
-                    : isNomination
-                      ? (t('dashboard.contests.participation_form.nominate_title') || 'Nominate a Contestant')
-                      : (t('dashboard.contests.participation_form.title') || 'Participate in Contest')
-                  }
-                </h2>
-                <p className="text-gray-600 dark:text-gray-400 mb-4 text-sm">
-                  {isEditingParticipation
-                    ? (t('dashboard.contests.participation_form.edit_description') || 'Update your submission details')
-                    : isNomination
-                      ? (t('dashboard.contests.participation_form.nominate_description') || 'Import your video from YouTube or Vimeo')
-                      : t('dashboard.contests.participation_form.description')
-                  }
-                </p>
-
-                {/* Profile Setup Alert */}
-                {needsProfileSetup && (
-                  <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg mb-4">
-                    <p className="text-yellow-900 dark:text-yellow-200 mb-3 text-sm">
-                      {t('participation.profile_incomplete_title')} {t('participation.profile_incomplete_message')}
-                    </p>
+                  {contest?.is_submission_open && (
                     <button
-                      onClick={() => router.push('/settings')}
-                      className="w-full px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg font-medium transition text-sm"
+                      onClick={() => {
+                        // Permettre de modifier à nouveau
+                        setIsEditingParticipation(true)
+                        setSubmitSuccess(false)
+                      }}
+                      className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition text-sm"
                     >
-                      {t('participation.complete_profile_button')}
+                      ✏️ {t('dashboard.contests.participation_form.edit_participation') || 'Modifier ma candidature'}
                     </button>
-                  </div>
-                )}
-
-                {/* KYC Notification (optionnel) - Ne pas afficher pour les nominations */}
-                {needsKYC && !isNomination && (
-                  <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg mb-4">
-                    <p className="text-amber-900 dark:text-amber-200 text-sm">
-                      {t('participation.kyc_notification') || '⚠️ Votre identité n\'a pas été vérifiée. Nous vous recommandons de compléter votre vérification KYC pour une meilleure expérience.'}
-                    </p>
-                  </div>
-                )}
-
-                {/* Submission Closed Alert */}
-                {contest && !contest.is_submission_open && (
-                  <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg mb-4">
-                    <p className="text-red-900 dark:text-red-200 font-medium">
-                      🚫 {t('dashboard.contests.submission_closed') || 'Les inscriptions sont fermées pour ce concours.'}
-                    </p>
-                    <p className="text-red-700 dark:text-red-300 text-sm mt-1">
-                      {t('dashboard.contests.submission_closed_message') || 'La date limite de soumission est dépassée.'}
-                    </p>
-                  </div>
-                )}
-
-                {/* Participation Form */}
-                {!needsProfileSetup && contest?.is_submission_open && (
-                  <ParticipationForm
-                    contestId={contestId}
-                    onSubmit={handleParticipationSubmit}
-                    onCancel={handleCancel}
-                    isSubmitting={isSubmitting}
-                    isEditing={isEditingParticipation}
-                    initialData={existingParticipationData}
-                    isNomination={isNomination}
-                    mediaRequirements={{
-                      requiresVideo: isNomination ? true : contest?.requires_video,
-                      maxVideos: contest?.max_videos,
-                      videoMaxDuration: contest?.video_max_duration,
-                      videoMaxSizeMb: contest?.video_max_size_mb,
-                      minImages: isNomination ? 0 : contest?.min_images,
-                      maxImages: contest?.max_images
-                    }}
-                  />
-                )}
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Right Column - Contest Info & Leaderboard */}
-        <div className="lg:col-span-1 space-y-6">
-          {/* Contest Info */}
-          {contest && (
-            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 md:p-8  top-4 z-100">
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
-                {contest.name}
-              </h1>
-              <p className="text-gray-600 dark:text-gray-400 mb-4 text-sm">
-                {contest.description}
-              </p>
-
-              {/* Contest Details Grid */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-myfav-blue-50 dark:bg-myfav-blue-900/20 rounded-lg p-3">
-                  <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
-                    {t('dashboard.contests.contestants')}
-                  </p>
-                  <p className="text-xl font-bold text-gray-900 dark:text-white">
-                    {contest.entries_count || 0}
-                  </p>
+                  )}
                 </div>
+              )}
 
-                <div className="bg-myfav-blue-50 dark:bg-myfav-blue-900/20 rounded-lg p-3">
-                  <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
-                    {t('dashboard.contests.received')}
+              {/* Already Participating Alert */}
+              {userAlreadyParticipating && !isEditingParticipation && !submitSuccess && (
+                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg space-y-3">
+                  <p className="text-blue-900 dark:text-blue-200">
+                    {t('dashboard.contests.participation_form.already_participating')}
                   </p>
-                  <p className="text-xl font-bold text-gray-900 dark:text-white">
-                    {contest.total_votes || 0}
-                  </p>
+                  {contest?.is_submission_open && (
+                    <button
+                      onClick={() => {
+                        // Afficher le formulaire en mode édition
+                        setIsEditingParticipation(true)
+                      }}
+                      className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition text-sm"
+                    >
+                      ✏️ {t('dashboard.contests.participation_form.edit_participation') || 'Modifier ma candidature'}
+                    </button>
+                  )}
                 </div>
+              )}
 
-                <div className="bg-myfav-blue-50 dark:bg-myfav-blue-900/20 rounded-lg p-3">
-                  <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
-                    {t('dashboard.contests.status')}
+              {/* Header */}
+              {(!userAlreadyParticipating || isEditingParticipation) && !submitSuccess && (
+                <>
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                    {isEditingParticipation
+                      ? (t('dashboard.contests.participation_form.edit_title') || 'Edit a Contestant')
+                      : isNomination
+                        ? (t('dashboard.contests.participation_form.nominate_title') || 'Nominate a Contestant')
+                        : (t('dashboard.contests.participation_form.title') || 'Participate in Contest')
+                    }
+                  </h2>
+                  <p className="text-gray-600 dark:text-gray-400 mb-4 text-sm">
+                    {isEditingParticipation
+                      ? (t('dashboard.contests.participation_form.edit_description') || 'Update your submission details')
+                      : isNomination
+                        ? (t('dashboard.contests.participation_form.nominate_description') || 'Import your video from YouTube or Vimeo')
+                        : t('dashboard.contests.participation_form.description')
+                    }
                   </p>
-                  <p className="text-sm font-bold text-myfav-primary">
-                    {contest.is_submission_open ? t('dashboard.contests.open') : t('dashboard.contests.closed')}
-                  </p>
-                </div>
 
-                <div className="bg-myfav-blue-50 dark:bg-myfav-blue-900/20 rounded-lg p-3">
-                  <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
-                    {t('dashboard.contests.level')}
-                  </p>
-                  <p className="text-sm font-bold text-gray-900 dark:text-white capitalize">
-                    {contest.level === 'country' ? t('dashboard.contests.country') :
-                      contest.level === 'continental' ? t('dashboard.contests.continental') :
-                        contest.level === 'regional' ? t('dashboard.contests.regional') :
-                          contest.level}
-                  </p>
-                </div>
+                  {/* Profile Setup Alert */}
+                  {needsProfileSetup && (
+                    <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg mb-4">
+                      <p className="text-yellow-900 dark:text-yellow-200 mb-3 text-sm">
+                        {t('participation.profile_incomplete_title')} {t('participation.profile_incomplete_message')}
+                      </p>
+                      <button
+                        onClick={() => router.push('/settings')}
+                        className="w-full px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg font-medium transition text-sm"
+                      >
+                        {t('participation.complete_profile_button')}
+                      </button>
+                    </div>
+                  )}
 
-                {/* Time Remaining */}
-                <div className="col-span-2 bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-900/20 dark:to-red-900/20 rounded-lg p-3 border border-orange-200 dark:border-orange-800">
-                  <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
-                    ⏱️ {t('dashboard.contests.time_remaining')}
-                  </p>
-                  <p className="text-lg font-bold text-orange-600 dark:text-orange-400">
-                    {timeRemaining || t('common.loading') || 'Chargement...'}
-                  </p>
-                </div>
-              </div>
+                  {/* KYC Notification (optionnel) - Ne pas afficher pour les nominations */}
+                  {needsKYC && !isNomination && (
+                    <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg mb-4">
+                      <p className="text-amber-900 dark:text-amber-200 text-sm">
+                        {t('participation.kyc_notification') || '⚠️ Votre identité n\'a pas été vérifiée. Nous vous recommandons de compléter votre vérification KYC pour une meilleure expérience.'}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Submission Closed Alert */}
+                  {contest && !contest.is_submission_open && (
+                    <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg mb-4">
+                      <p className="text-red-900 dark:text-red-200 font-medium">
+                        🚫 {t('dashboard.contests.submission_closed') || 'Les inscriptions sont fermées pour ce concours.'}
+                      </p>
+                      <p className="text-red-700 dark:text-red-300 text-sm mt-1">
+                        {t('dashboard.contests.submission_closed_message') || 'La date limite de soumission est dépassée.'}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Participation Form */}
+                  {!needsProfileSetup && contest?.is_submission_open && (
+                    <ParticipationForm
+                      contestId={contestId}
+                      onSubmit={handleParticipationSubmit}
+                      onCancel={handleCancel}
+                      isSubmitting={isSubmitting}
+                      isEditing={isEditingParticipation}
+                      initialData={existingParticipationData}
+                      isNomination={isNomination}
+                      mediaRequirements={{
+                        requiresVideo: isNomination ? true : contest?.requires_video,
+                        maxVideos: contest?.max_videos,
+                        videoMaxDuration: contest?.video_max_duration,
+                        videoMaxSizeMb: contest?.video_max_size_mb,
+                        minImages: isNomination ? 0 : contest?.min_images,
+                        maxImages: contest?.max_images
+                      }}
+                    />
+                  )}
+                </>
+              )}
             </div>
           )}
         </div>

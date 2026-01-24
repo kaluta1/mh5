@@ -80,13 +80,20 @@ export function LocationFilterBar({
 
     // Options de continents avec "Mon continent" si disponible
     const continentOptions = React.useMemo(() => {
-        const options = [...CONTINENTS]
+        // Filter out the user's continent from the standard list to avoid duplicates
+        const options = CONTINENTS.filter(c => c.value !== user?.continent)
+
         if (user?.continent) {
-            // Vérifier si le continent de l'utilisateur est déjà dans la liste pour éviter les doublons
-            // Mais on veut une option explicite "Mon continent"
-            options.push({
+            // Add explicit "My continent" option at the beginning (after 'all')
+            // Find the original label to reuse or use user.continent
+            const original = CONTINENTS.find(c => c.value === user.continent)
+            const label = original ? original.label : user.continent
+
+            // Insert after 'all' (index 1) or at end?
+            // Let's put it as second option (after 'all')
+            options.splice(1, 0, {
                 value: user.continent,
-                label: `${t('dashboard.contests.my_continent') || 'Mon continent'} (${user.continent})`
+                label: `${t('dashboard.contests.my_continent') || 'Mon continent'} (${label})`
             })
         }
         return options

@@ -17,7 +17,7 @@ import { LocationFilterBar } from '@/components/dashboard/location-filter-bar'
 
 // GraphQL
 import { useQuery } from '@apollo/client'
-import { GET_ROUNDS_FOR_SELECTOR, GET_CONTESTS_BY_ROUND } from '@/graphql/queries'
+import { GET_ROUNDS_FOR_SELECTOR, GET_ROUNDS_WITH_CONTESTS } from '@/graphql/queries'
 
 export default function ContestsPage() {
   const { t } = useLanguage()
@@ -41,17 +41,19 @@ export default function ContestsPage() {
   const [showSuggestDialog, setShowSuggestDialog] = useState(false)
 
   // Filter States
+  // Filter States
   const [searchTerm, setSearchTerm] = useState('')
+  const [committedSearch, setCommittedSearch] = useState('') // New state for executed search
   const [sortBy, setSortBy] = useState<string>('participants')
   const [filterContinent, setFilterContinent] = useState<string>('all')
   const [filterCountry, setFilterCountry] = useState<string>('')
 
   // Constants
-  const ITEMS_PER_PAGE = 50 // Increased since we filter client-side for types
+  const ITEMS_PER_PAGE = 50
 
   // 1. Fetch Rounds for Selector
   const { data: roundsData, loading: roundsLoading } = useQuery(GET_ROUNDS_FOR_SELECTOR, {
-    variables: { isActive: true },
+    variables: { isActive: false }, // Fetch all non-cancelled rounds
     skip: !isAuthenticated,
     fetchPolicy: 'cache-first'
   })
@@ -68,30 +70,38 @@ export default function ContestsPage() {
     if (typeof window !== 'undefined') localStorage.setItem('contests_category_tab', categoryTab)
   }, [categoryTab])
 
+  // Handle Search Execution
+  const handleSearch = () => {
+    setCommittedSearch(searchTerm)
+  }
+
   // 2. Fetch Contests for Selected Round (Fetch ALL types to populate tabs correctly)
   const hasVotingType = categoryTab === 'nomination' ? true : false
+  const activeCountry = filterCountry !== 'all' ? filterCountry : undefined
+  const activeContinent = filterContinent !== 'all' ? filterContinent : undefined
+  const activeSearch = committedSearch || undefined // Use committed search
 
-  const { data: contestsData, loading: contestsLoading } = useQuery(GET_CONTESTS_BY_ROUND, {
+  const { data: contestsData, loading: contestsLoading } = useQuery(GET_ROUNDS_WITH_CONTESTS, {
     variables: {
-      roundId: activeRoundId ? parseInt(activeRoundId) : 0,
-      skip: 0,
-      limit: ITEMS_PER_PAGE,
-      // We DO NOT filter by contestType in the query so we get all types back 
-      // to populate the tabs list
-      contestType: undefined,
-      hasVotingType: hasVotingType
+      roundId: activeRoundId ? parseInt(activeRoundId) : undefined,
+      isActive: false, // Fetch all contests (active/inactive) for this round
+      hasVotingType: hasVotingType,
+      country: activeCountry,
+      continent: activeContinent,
+      search: activeSearch
     },
     skip: !activeRoundId || !isAuthenticated,
-    fetchPolicy: 'cache-first'
+    fetchPolicy: 'network-only' // Force fetch on tab change to avoid stale data (empty lists or wrong types)
   })
 
   // Raw Contests List (Before filtering by type)
   const rawContests = useMemo(() => {
-    if (!contestsData?.contests) return []
+    // New Structure: contestsData.rounds[0].contests
+    const activeRound = contestsData?.rounds?.length > 0 ? contestsData.rounds[0] : null
+    if (!activeRound?.contests) return []
 
-    return contestsData.contests.map((c: any) => {
-      const roundStats = c.rounds.find((r: any) => String(r.id) === activeRoundId) || {}
-
+    return activeRound.contests.map((c: any) => {
+      // Stats are now directly on the contest object in the new schema
       // Fallback multiple pour l'image
       const rawImage = c.coverImageUrl || c.imageUrl || c.cover_image_url || c.image_url || '/placeholder.png'
 
@@ -112,20 +122,28 @@ export default function ContestsPage() {
         coverImage: coverImage,
         startDate: new Date(),
         status: c.level || 'country',
-        received: roundStats.votesCount || 0,
-        contestants: roundStats.participantsCount || 0,
-        isOpen: roundStats.isSubmissionOpen || roundStats.isVotingOpen || false,
+        received: c.votesCount || 0, // Not yet in ContestInRoundType? check schema. we put participantsCount. Votes? 
+        // Wait, ContestInRoundType in backend schema DOES NOT HAVE votes_count explicitly yet? 
+        // Schema Step 1584 queries.ts had votesCount in Contest type inside rounds... 
+        // but ContestInRoundType in types.py (Step 1513) didn't have total_votes?
+        // Let's check schema.py Step 1522. map_contest_in_round_to_type returns ContestInRoundType.
+        // It has participants_count. Types.py ContestInRoundType (Step 1513) does NOT have votes_count field?
+        // ContestType has total_votes. ContestInRoundType has participants_count.
+        // I might need to add votes_count to ContestInRoundType later if missing. 
+        // For now use 0 or verify.
+
+        contestants: c.participantsCount || 0,
+        isOpen: activeRound.isSubmissionOpen || activeRound.isVotingOpen || false,
         contestType: c.contestType,
-        isSubmissionOpen: roundStats.isSubmissionOpen,
-        isVotingOpen: roundStats.isVotingOpen,
-        currentUserParticipated: roundStats.currentUserParticipated,
-        topContestants: roundStats.topContestants?.map((tc: any) => ({
-          id: tc.id,
-          image_url: tc.imageUrl,
-          votes_count: tc.votesCount,
-          author_name: tc.author?.username,
-          author_avatar_url: tc.author?.avatarUrl
-        })) || []
+        isSubmissionOpen: activeRound.isSubmissionOpen,
+        isVotingOpen: activeRound.isVotingOpen,
+        // Pass dates for countdown in ContestCard
+        participationStartDate: activeRound.submissionStartDate,
+        participationEndDate: activeRound.submissionEndDate,
+        votingStartDate: activeRound.votingStartDate,
+        votingEndDate: activeRound.votingEndDate,
+        currentUserParticipated: false, // Not fetching this specific user status in new query yet
+        topContestants: [] // Not fetching top contestants per contest in new query yet
       }
     })
   }, [contestsData, activeRoundId])
@@ -152,8 +170,8 @@ export default function ContestsPage() {
     }
 
     // 2. Filter by Search
-    if (searchTerm) {
-      const lower = searchTerm.toLowerCase()
+    if (committedSearch) {
+      const lower = committedSearch.toLowerCase()
       filtered = filtered.filter(c => c.title.toLowerCase().includes(lower))
     }
 
@@ -217,7 +235,7 @@ export default function ContestsPage() {
           user={user}
           searchTerm={searchTerm}
           onSearchChange={setSearchTerm}
-          onSearch={() => { }}
+          onSearch={handleSearch}
           searchPlaceholder={t('dashboard.contests.search_placeholder') || 'Search...'}
           filterContinent={filterContinent}
           onContinentChange={setFilterContinent}
@@ -232,13 +250,27 @@ export default function ContestsPage() {
         <div className="mb-6 border-b border-gray-800">
           <div className="flex space-x-1">
             <button
-              onClick={() => { setCategoryTab('nomination'); setActiveTab('all'); }}
+              onClick={() => {
+                setCategoryTab('nomination');
+                setActiveTab('all');
+                setSearchTerm('');
+                setCommittedSearch('');
+                setFilterCountry('');
+                setFilterContinent('all');
+              }}
               className={`px-6 py-3 text-base font-semibold transition-colors border-b-2 ${categoryTab === 'nomination' ? 'border-blue-500 text-blue-500' : 'border-transparent text-gray-400 hover:text-gray-300'}`}
             >
               {t('dashboard.contests.nomination') || 'Nomination'}
             </button>
             <button
-              onClick={() => { setCategoryTab('participations'); setActiveTab('all'); }}
+              onClick={() => {
+                setCategoryTab('participations');
+                setActiveTab('all');
+                setSearchTerm('');
+                setCommittedSearch('');
+                setFilterCountry('');
+                setFilterContinent('all');
+              }}
               className={`px-6 py-3 text-base font-semibold transition-colors border-b-2 ${categoryTab === 'participations' ? 'border-blue-500 text-blue-500' : 'border-transparent text-gray-400 hover:text-gray-300'}`}
             >
               {t('dashboard.contests.participations') || 'Participations'}

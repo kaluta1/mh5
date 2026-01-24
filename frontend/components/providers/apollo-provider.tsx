@@ -1,20 +1,51 @@
 "use client";
 
 import { ApolloClient, ApolloProvider, InMemoryCache, HttpLink } from "@apollo/client";
-import { PropsWithChildren } from "react";
+import { PropsWithChildren, useEffect, useState } from "react";
+import { persistCache, LocalStorageWrapper } from 'apollo3-cache-persist';
 
-// Création du client côté client uniquement pour éviter les problèmes de SSR/Hydration mismatch
-// ou utiliser une stratégie plus complexe si SSR est requis plus tard.
+const cache = new InMemoryCache();
+
 const client = new ApolloClient({
     link: new HttpLink({
-        // Utiliser une URL relative ou absolue selon l'env
         uri: process.env.NEXT_PUBLIC_API_URL
             ? `${process.env.NEXT_PUBLIC_API_URL.replace('/api/v1', '')}/graphql`
             : "http://localhost:8000/graphql",
     }),
-    cache: new InMemoryCache(),
+    cache,
+    defaultOptions: {
+        watchQuery: {
+            fetchPolicy: 'cache-and-network',
+            nextFetchPolicy: 'cache-first',
+        },
+        query: {
+            fetchPolicy: 'cache-first',
+        },
+    },
 });
 
 export const ApolloWrapper = ({ children }: PropsWithChildren) => {
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        async function initCache() {
+            try {
+                await persistCache({
+                    cache,
+                    storage: new LocalStorageWrapper(window.localStorage),
+                });
+            } catch (error) {
+                console.error('Error persisting Apollo cache', error);
+            } finally {
+                setLoading(false);
+            }
+        }
+        initCache();
+    }, []);
+
+    if (loading) {
+        return null; // Or a local loading spinner if preferred, but usually sync/fast
+    }
+
     return <ApolloProvider client={client}>{children}</ApolloProvider>;
 };
