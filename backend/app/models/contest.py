@@ -116,7 +116,8 @@ class Contest(Base):
     transactions: Mapped[List["UserTransaction"]] = relationship("UserTransaction", back_populates="contest")
     prizes: Mapped[List["Prize"]] = relationship("Prize", back_populates="contest")
     seasons: Mapped[List["ContestSeasonLink"]] = relationship("ContestSeasonLink", back_populates="contest")
-    rounds: Mapped[List["Round"]] = relationship("Round", back_populates="contest")
+    legacy_rounds: Mapped[List["Round"]] = relationship("Round", back_populates="contest")
+    rounds: Mapped[List["Round"]] = relationship("Round", secondary="round_contests", back_populates="contests")
     
     # Règles du concours
     gender_restriction: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # male, female, ou null si pas de restriction
@@ -128,6 +129,24 @@ class Contest(Base):
     # Image du concours
     image_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     
+    # Dates du concours (gestion centralisée ou override des rounds)
+    submission_start_date: Mapped[Optional[datetime]] = mapped_column(Date, nullable=True)
+    submission_end_date: Mapped[Optional[datetime]] = mapped_column(Date, nullable=True)
+    voting_start_date: Mapped[Optional[datetime]] = mapped_column(Date, nullable=True)
+    voting_end_date: Mapped[Optional[datetime]] = mapped_column(Date, nullable=True)
+    
+    # Dates des saisons (optionnel)
+    city_season_start_date: Mapped[Optional[datetime]] = mapped_column(Date, nullable=True)
+    city_season_end_date: Mapped[Optional[datetime]] = mapped_column(Date, nullable=True)
+    country_season_start_date: Mapped[Optional[datetime]] = mapped_column(Date, nullable=True)
+    country_season_end_date: Mapped[Optional[datetime]] = mapped_column(Date, nullable=True)
+    regional_start_date: Mapped[Optional[datetime]] = mapped_column(Date, nullable=True)
+    regional_end_date: Mapped[Optional[datetime]] = mapped_column(Date, nullable=True)
+    continental_start_date: Mapped[Optional[datetime]] = mapped_column(Date, nullable=True)
+    continental_end_date: Mapped[Optional[datetime]] = mapped_column(Date, nullable=True)
+    global_start_date: Mapped[Optional[datetime]] = mapped_column(Date, nullable=True)
+    global_end_date: Mapped[Optional[datetime]] = mapped_column(Date, nullable=True)
+
     # Nombre de participants
     participant_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     

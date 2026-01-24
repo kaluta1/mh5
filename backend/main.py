@@ -94,6 +94,12 @@ app.add_middleware(
 # Inclusion des routes API
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
+# GraphQL endpoint
+from app.graphql.schema import graphql_app
+app.include_router(graphql_app, prefix="/graphql")
+print("✅ GraphQL endpoint available at /graphql")
+
+
 # Servir les fichiers statiques (médias)
 if os.path.exists(settings.LOCAL_STORAGE_PATH):
     app.mount("/media", StaticFiles(directory=settings.LOCAL_STORAGE_PATH), name="media")

@@ -163,6 +163,7 @@ class CRUDContest:
             voting_type_id=voting_type_id,
             category_id=category_id,
             # Verification requirements
+            # Verification requirements
             requires_kyc=obj_in.requires_kyc,
             verification_type=verification_type,
             participant_type=participant_type,
@@ -171,11 +172,120 @@ class CRUDContest:
             requires_brand_verification=obj_in.requires_brand_verification,
             requires_content_verification=obj_in.requires_content_verification,
             min_age=obj_in.min_age,
-            max_age=obj_in.max_age
+            max_age=obj_in.max_age,
+            
+            # Dates mandataires pour la BD (Not Null constraints)
+            # On initialise avec les dates du mois courant par défaut
+            submission_start_date=date(date.today().year, date.today().month, 1),
+            submission_end_date=date(date.today().year, date.today().month, 28), # simplified
+            voting_start_date=date(date.today().year, date.today().month, 1) + timedelta(days=30), # next month
+            voting_end_date=date(date.today().year, date.today().month, 1) + timedelta(days=60), # next 2 months
         )
+        
+        # Calculate better dates if possible using logic similar to rounds
+        try:
+            from app.crud.crud_round import round as crud_round
+            now = date.today()
+            computed_dates = crud_round.calculate_dates_for_month(now.month, now.year, is_nomination=bool(voting_type_id))
+            db_obj.submission_start_date = computed_dates["submission_start_date"]
+            db_obj.submission_end_date = computed_dates["submission_end_date"]
+            db_obj.voting_start_date = computed_dates["voting_start_date"]
+            db_obj.voting_end_date = computed_dates["voting_end_date"]
+            # Populate season dates if needed
+            db_obj.city_season_start_date = computed_dates["city_season_start_date"]
+            db_obj.city_season_end_date = computed_dates["city_season_end_date"]
+            db_obj.country_season_start_date = computed_dates["country_season_start_date"]
+            db_obj.country_season_end_date = computed_dates["country_season_end_date"]
+            db_obj.regional_start_date = computed_dates["regional_start_date"]
+            db_obj.regional_end_date = computed_dates["regional_end_date"]
+            db_obj.continental_start_date = computed_dates["continental_start_date"]
+            db_obj.continental_end_date = computed_dates["continental_end_date"]
+            db_obj.global_start_date = computed_dates["global_start_date"]
+            db_obj.global_end_date = computed_dates["global_end_date"]
+        except Exception as e:
+            # Fallback already set in constructor
+            pass
         db.add(db_obj)
         db.commit()
         db.refresh(db_obj)
+        
+        # --- AUTOMATION: Link to Active Round ---
+        # --- AUTOMATION: Link to Active Round ---
+        # Note: We purposely don't wrap this in a broad try/except that swallows errors
+        # so we can debug why linking fails.
+        from datetime import datetime, date
+        import calendar
+        from sqlalchemy import insert
+        from app.models.round import Round, RoundStatus, round_contests
+        
+        # 1. Determine current month round name
+        now = date.today()
+        month_name = calendar.month_name[now.month]
+        round_name = f"Round {month_name} {now.year}"
+        
+        # 2. Find existing round or create it
+        # We look for a round with this name OR an active round covering today (if name differs)
+        active_round = db.query(Round).filter(
+            Round.name == round_name
+        ).first()
+        
+        if not active_round:
+            # Try finding any active submission round if specific named one doesn't exist
+            active_round = db.query(Round).filter(
+                Round.submission_start_date <= now,
+                Round.submission_end_date >= now,
+                Round.status != RoundStatus.CANCELLED
+            ).first()
+            
+        if not active_round:
+            # Create the round for this month if it doesn't exist
+            from app.crud.crud_round import round as crud_round
+            from app.schemas.round import RoundCreate
+            
+            # Dates will be auto-calculated 
+            computed_dates = crud_round.calculate_dates_for_month(now.month, now.year, is_nomination=bool(voting_type_id))
+            
+            active_round = Round(
+                name=round_name,
+                status=RoundStatus.ACTIVE,
+                is_submission_open=True,
+                is_voting_open=False,
+                # Dates
+                submission_start_date=computed_dates["submission_start_date"],
+                submission_end_date=computed_dates["submission_end_date"],
+                voting_start_date=computed_dates["voting_start_date"],
+                voting_end_date=computed_dates["voting_end_date"],
+                city_season_start_date=computed_dates["city_season_start_date"],
+                city_season_end_date=computed_dates["city_season_end_date"],
+                country_season_start_date=computed_dates["country_season_start_date"],
+                country_season_end_date=computed_dates["country_season_end_date"],
+                regional_start_date=computed_dates["regional_start_date"],
+                regional_end_date=computed_dates["regional_end_date"],
+                continental_start_date=computed_dates["continental_start_date"],
+                continental_end_date=computed_dates["continental_end_date"],
+                global_start_date=computed_dates["global_start_date"],
+                global_end_date=computed_dates["global_end_date"]
+            )
+            db.add(active_round)
+            db.commit()
+            db.refresh(active_round)
+        
+        # 3. Link Contest to Round
+        # Check if link exists (should not since contest is new, but safe check)
+        link_exists = db.query(round_contests).filter(
+            round_contests.c.round_id == active_round.id,
+            round_contests.c.contest_id == db_obj.id
+        ).first()
+        
+        if not link_exists:
+            stmt = insert(round_contests).values(
+                round_id=active_round.id,
+                contest_id=db_obj.id,
+                created_at=datetime.utcnow()
+            )
+            db.execute(stmt)
+            db.commit()
+        
         return db_obj
 
 
@@ -195,20 +305,9 @@ class CRUDContest:
                 category_id_value = getattr(obj_in, 'category_id', None)
                 update_data['category_id'] = category_id_value
         
-        # Suppression des champs de date qui n'existent plus dans le modèle Contest
-        date_fields_to_remove = [
-            'submission_start_date', 'submission_end_date', 
-            'voting_start_date', 'voting_end_date',
-            'city_season_start_date', 'city_season_end_date',
-            'country_season_start_date', 'country_season_end_date',
-            'regional_start_date', 'regional_end_date',
-            'continental_start_date', 'continental_end_date',
-            'global_start_date', 'global_end_date'
-        ]
-        
-        for field in date_fields_to_remove:
-            if field in update_data:
-                del update_data[field]
+        # Date fields are now supported in the model, so we don't remove them.
+        # But we ensures they are not None if they are required (though update handles partials)
+        pass
         
         for field in update_data:
             if field in update_data:

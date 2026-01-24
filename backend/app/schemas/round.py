@@ -8,6 +8,11 @@ class RoundBase(BaseModel):
     name: str
     status: Optional[RoundStatus] = RoundStatus.UPCOMING
     
+    # État du round
+    is_submission_open: Optional[bool] = True
+    is_voting_open: Optional[bool] = False
+    current_season_level: Optional[str] = None  # city, country, regional, continental, global
+    
     # Dates
     submission_start_date: Optional[date] = None
     submission_end_date: Optional[date] = None
@@ -41,7 +46,7 @@ class RoundUpdate(RoundBase):
 
 class RoundInDBBase(RoundBase):
     id: int
-    contest_id: int
+    contest_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
 
@@ -52,3 +57,11 @@ class RoundInDBBase(RoundBase):
 # Additional properties to return via API
 class Round(RoundInDBBase):
     pass
+
+
+# Round with statistics for frontend display
+class RoundWithStats(Round):
+    participants_count: int = 0
+    current_user_participated: bool = False
+    is_completed: bool = False  # True if global_end_date passed
+

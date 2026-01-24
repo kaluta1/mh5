@@ -8,6 +8,7 @@ import { ToastProvider } from "@/components/ui/toast"
 import { CookieConsent } from "@/components/ui/cookie-consent"
 import { getMetadataTranslations, detectLanguageFromHeaders, getKeywords } from "@/lib/metadata-translations"
 import { headers } from "next/headers"
+import { ApolloWrapper } from "@/components/providers/apollo-provider"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -124,8 +125,10 @@ export default function RootLayout({
           <ToastProvider>
             <LanguageProvider>
               <AuthProvider>
-                {children}
-                <CookieConsent />
+                <ApolloWrapper>
+                  {children}
+                  <CookieConsent />
+                </ApolloWrapper>
               </AuthProvider>
             </LanguageProvider>
           </ToastProvider>

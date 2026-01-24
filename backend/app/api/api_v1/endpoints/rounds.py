@@ -1,30 +1,114 @@
-from typing import Any, List
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Any, List, Optional
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from datetime import date
 
 from app import crud, models
 from app.schemas import round as round_schema
 from app.api import deps
 from app.models.round import Round
+from app.scripts.generate_monthly_rounds import generate_monthly_round
 
 router = APIRouter()
 
-@router.get("/", response_model=List[round_schema.Round])
+@router.get("/", response_model=List[round_schema.RoundWithStats])
 def read_rounds(
     db: Session = Depends(deps.get_db),
     skip: int = 0,
     limit: int = 100,
-    contest_id: int = None
+    contest_id: Optional[int] = Query(None, description="ID du contest pour récupérer ses rounds"),
+    current_user: Optional[models.User] = Depends(deps.get_current_active_user_optional),
 ) -> Any:
     """
-    Retrieve rounds.
+    Récupère les rounds (optionnellement filtrés par contest) avec leurs statistiques.
+    Inclut le nombre de participants et si l'utilisateur actuel a participé.
     """
+    user_id = current_user.id if current_user else None
+    
     if contest_id:
-        rounds = db.query(Round).filter(Round.contest_id == contest_id).offset(skip).limit(limit).all()
+        rounds_with_stats = crud.round.get_rounds_with_stats(
+            db=db, contest_id=contest_id, user_id=user_id
+        )
     else:
-        # CRUDRound does not have get_multi, implement it or use raw query
-        rounds = db.query(Round).offset(skip).limit(limit).all()
-    return rounds
+        # Fallback: get all active rounds or recent ones if no contest specified
+        # For now, let's use a new CRUD method or just get all rounds
+        rounds_with_stats = []
+        # TODO: Implement get_all_rounds_with_stats if needed
+        # For now, return empty or implement simple fetch
+        pass 
+       
+    # If no contest_id provided, we might want to return all rounds or filter differently.
+    # Given the previous error, the client might be calling this without contest_id.
+    # Let's support fetching all rounds if contest_id is missing.
+    if not contest_id:
+        db_rounds = db.query(Round).filter(Round.status != "cancelled").order_by(Round.submission_start_date.desc()).offset(skip).limit(limit).all()
+        rounds_with_stats = []
+        for r in db_rounds:
+             # Calculate stats manually here re-using logic or refactor CRUD
+             # For brevity/safety, let's reuse the logic from get_rounds_with_stats but per round
+             participants_count = crud.round.count_participants_for_round(db, r.id)
+             current_user_participated = False
+             if user_id:
+                 current_user_participated = crud.round.user_participated_in_round(db, r.id, user_id)
+             
+             current_season_level = crud.round.calculate_current_season_level(r)
+             is_completed = crud.round.is_round_completed(r)
+             
+             rounds_with_stats.append({
+                "id": r.id,
+                "contest_id": r.contest_id,
+                "name": r.name,
+                "status": r.status.value if hasattr(r.status, 'value') else str(r.status),
+                "is_submission_open": r.is_submission_open,
+                "is_voting_open": r.is_voting_open,
+                "current_season_level": current_season_level or r.current_season_level,
+                "submission_start_date": r.submission_start_date,
+                "submission_end_date": r.submission_end_date,
+                "voting_start_date": r.voting_start_date,
+                "voting_end_date": r.voting_end_date,
+                "city_season_start_date": r.city_season_start_date,
+                "city_season_end_date": r.city_season_end_date,
+                "country_season_start_date": r.country_season_start_date,
+                "country_season_end_date": r.country_season_end_date,
+                "regional_start_date": r.regional_start_date,
+                "regional_end_date": r.regional_end_date,
+                "continental_start_date": r.continental_start_date,
+                "continental_end_date": r.continental_end_date,
+                "global_start_date": r.global_start_date,
+                "global_end_date": r.global_end_date,
+                "created_at": r.created_at,
+                "updated_at": r.updated_at,
+                "participants_count": participants_count,
+                "current_user_participated": current_user_participated,
+                "is_completed": is_completed,
+            })
+            
+    return rounds_with_stats[skip:skip+limit] if contest_id else rounds_with_stats # slicing managed above for no-contest case? No, slicing on list.
+
+
+@router.post("/generate-monthly", response_model=round_schema.Round)
+def generate_monthly(
+    *,
+    db: Session = Depends(deps.get_db),
+    year: Optional[int] = Query(None, description="Année cible (défaut: année courante)"),
+    month: Optional[int] = Query(None, ge=1, le=12, description="Mois cible (défaut: mois courant)"),
+    current_user: models.User = Depends(deps.get_current_admin_user),
+) -> Any:
+    """
+    Génère un round mensuel pour tous les contests actifs.
+    Admin uniquement.
+    """
+    try:
+        if year and month:
+            target_date = date(year, month, 1)
+        else:
+            target_date = date.today()
+        
+        new_round = generate_monthly_round(db=db, target_date=target_date)
+        return new_round
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur lors de la génération: {str(e)}")
+
 
 @router.post("/", response_model=round_schema.Round)
 def create_round(
@@ -74,3 +158,4 @@ def delete_round(
     db.delete(round)
     db.commit()
     return round
+

@@ -636,6 +636,35 @@ export function ContestCard({
           )}
         </div>
 
+        {/* Top Contestants (Round) */}
+        {topContestants && topContestants.length > 0 && (
+          <div className="flex items-center gap-2 mb-1 pl-1">
+            <div className="flex -space-x-2">
+              {topContestants.slice(0, 3).map((contestant) => (
+                <div key={contestant.id} className="relative w-6 h-6 rounded-full border border-gray-900 overflow-hidden ring-1 ring-gray-700 bg-gray-800">
+                  {(contestant.image_url || contestant.author_avatar_url) ? (
+                    <Image
+                      src={contestant.image_url || contestant.author_avatar_url || ''}
+                      alt="Contestant"
+                      fill
+                      className="object-cover"
+                      sizes="24px"
+                      unoptimized={true}
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-gray-700 text-[8px] text-white">
+                      {contestant.author_name?.charAt(0) || '?'}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            {topContestants.length > 0 && (
+              <span className="text-[10px] text-gray-500 font-medium">Top Entries</span>
+            )}
+          </div>
+        )}
+
         {/* Stats - Simplified: just icon + number */}
         <div className="flex items-center gap-3">
           <TooltipProvider>
