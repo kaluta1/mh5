@@ -22,33 +22,13 @@ logger = logging.getLogger(__name__)
 
 
 # Configuration des commissions par type de produit
-COMMISSION_CONFIG = {
+# REMARQUE: Cette configuration est maintenue comme fallback si la règle n'est pas en BD
+DEFAULT_COMMISSION_CONFIG = {
     # KYC Service (10$)
     "kyc": {
         "commission_type": CommissionType.KYC_PAYMENT,
-        "direct_amount": Decimal("2.00"),      # 2$ pour le parrain direct
-        "indirect_amount": Decimal("0.20"),    # 0.20$ pour N2-10
-        "max_levels": 10
-    },
-    # MFM / Founding Membership (100$)
-    "mfm_membership": {
-        "commission_type": CommissionType.FOUNDING_MEMBERSHIP_FEE,
-        "direct_amount": Decimal("20.00"),     # 20$ pour le parrain direct
-        "indirect_amount": Decimal("2.00"),    # 2$ pour N2-10
-        "max_levels": 10
-    },
-    # Annual Membership (50$)
-    "annual_membership": {
-        "commission_type": CommissionType.ANNUAL_MEMBERSHIP_FEE,
-        "direct_amount": Decimal("10.00"),     # 10$ pour le parrain direct
-        "indirect_amount": Decimal("1.00"),    # 1$ pour N2-10
-        "max_levels": 10
-    },
-    # EFM Membership (legacy, same as MFM)
-    "efm_membership": {
-        "commission_type": CommissionType.EFM_MEMBERSHIP,
-        "direct_amount": Decimal("20.00"),
-        "indirect_amount": Decimal("2.00"),
+        "direct_amount": Decimal("1.00"),    # Legacy values as fallback
+        "indirect_amount": Decimal("0.10"),
         "max_levels": 10
     }
 }
@@ -61,6 +41,7 @@ def distribute_commissions(
 ) -> List[AffiliateCommission]:
     """
     Distribue les commissions d'affiliation pour un dépôt validé.
+    Utilise les règles définies en base de données (CommissionRule).
     
     Args:
         db: Session de base de données
@@ -72,11 +53,45 @@ def distribute_commissions(
     """
     commissions_created = []
     
-    # Vérifier la configuration du produit
-    config = COMMISSION_CONFIG.get(product_code)
-    if not config:
-        logger.warning(f"No commission config for product: {product_code}")
-        return commissions_created
+    # 1. Chercher la règle de commission dynamique
+    # Import local pour éviter les cycles
+    from app.models.affiliate import CommissionRule
+    
+    rule = db.query(CommissionRule).filter(
+        CommissionRule.product_code == product_code,
+        CommissionRule.is_active == True
+    ).first()
+    
+    # Configuration extraite de la règle ou fallback
+    config = {}
+    
+    if rule:
+        # Calcul dynamique basé sur des pourcentages
+        # Le montant du dépôt est utilisé comme base
+        deposit_amount = Decimal(str(deposit.amount))
+        
+        # Calculer les montants absolus à partir des pourcentages
+        # rule.direct_percentage est en % (ex: 10.0 pour 10%)
+        direct_amount = (deposit_amount * Decimal(str(rule.direct_percentage))) / Decimal("100.0")
+        indirect_amount = (deposit_amount * Decimal(str(rule.indirect_percentage))) / Decimal("100.0")
+        
+        config = {
+            "commission_type": rule.commission_type,
+            "direct_amount": direct_amount,
+            "indirect_amount": indirect_amount,
+            "max_levels": rule.max_levels
+        }
+        logger.info(f"Using dynamic commission rule for {product_code}: {rule.direct_percentage}% / {rule.indirect_percentage}%")
+        
+    else:
+        # Tenter le fallback legacy (si existant)
+        legacy_config = DEFAULT_COMMISSION_CONFIG.get(product_code)
+        if legacy_config:
+            config = legacy_config
+            logger.warning(f"Using legacy fallback commission config for: {product_code}")
+        else:
+            logger.warning(f"No commission rule found for product: {product_code}")
+            return commissions_created
     
     # Trouver l'utilisateur qui a payé
     source_user = db.query(User).filter(User.id == deposit.user_id).first()
@@ -92,38 +107,44 @@ def distribute_commissions(
     current_sponsor_id = source_user.sponsor_id
     level = 1
     
-    while current_sponsor_id and level <= config["max_levels"]:
+    max_levels = config["max_levels"]
+    
+    while current_sponsor_id and level <= max_levels:
         # Déterminer le montant de la commission
         if level == 1:
             commission_amount = config["direct_amount"]
         else:
             commission_amount = config["indirect_amount"]
         
+        # Ignorer les montants nuls ou négatifs
         if commission_amount <= 0:
             break
         
         # Créer la commission
-        commission = AffiliateCommission(
-            user_id=current_sponsor_id,
-            source_user_id=deposit.user_id,
-            product_type_id=deposit.product_type_id,
-            deposit_id=deposit.id,
-            commission_type=config["commission_type"],
-            level=level,
-            base_amount=float(deposit.amount),
-            commission_amount=float(commission_amount),
-            status=CommissionStatus.APPROVED,
-            transaction_date=datetime.utcnow()
-        )
-        
-        db.add(commission)
-        commissions_created.append(commission)
-        
-        logger.info(
-            f"Commission created: user={current_sponsor_id}, "
-            f"level={level}, amount={commission_amount}, "
-            f"type={config['commission_type'].value}"
-        )
+        try:
+            commission = AffiliateCommission(
+                user_id=current_sponsor_id,
+                source_user_id=deposit.user_id,
+                product_type_id=deposit.product_type_id,
+                deposit_id=deposit.id,
+                commission_type=config["commission_type"],
+                level=level,
+                base_amount=float(deposit.amount),
+                commission_amount=float(commission_amount),
+                status=CommissionStatus.APPROVED,
+                transaction_date=datetime.utcnow()
+            )
+            
+            db.add(commission)
+            commissions_created.append(commission)
+            
+            logger.info(
+                f"Commission created: user={current_sponsor_id}, "
+                f"level={level}, amount={commission_amount}, "
+                f"type={config['commission_type'].value}"
+            )
+        except Exception as e:
+            logger.error(f"Error creating commission object: {e}")
         
         # Trouver le parrain du parrain
         sponsor = db.query(User).filter(User.id == current_sponsor_id).first()
@@ -131,10 +152,14 @@ def distribute_commissions(
         level += 1
     
     if commissions_created:
-        db.commit()
-        for c in commissions_created:
-            db.refresh(c)
-        logger.info(f"Created {len(commissions_created)} commissions for deposit {deposit.id}")
+        try:
+            db.commit()
+            for c in commissions_created:
+                db.refresh(c)
+            logger.info(f"Created {len(commissions_created)} commissions for deposit {deposit.id}")
+        except Exception as e:
+            logger.error(f"Error saving commissions: {e}")
+            db.rollback()
     
     return commissions_created
 
@@ -164,7 +189,26 @@ def process_payment_validation(db: Session, deposit: Deposit) -> bool:
         # Distribuer les commissions
         commissions = distribute_commissions(db, deposit, product_code)
         
-        # Activer le service pour l'utilisateur
+        # -------------------------------------------------------------------------
+        # INTÉGRATION COMPTABLE (Accounting)
+        # -------------------------------------------------------------------------
+        try:
+            from app.services.payment_accounting import payment_accounting
+            
+            logger.info(f"Processing accounting for deposit {deposit.id} (Product: {product_code})")
+            
+            if product_code == "kyc":
+                payment_accounting.process_kyc_payment_accounting(db, deposit, commissions)
+            elif product_code in ["mfm_membership", "annual_membership", "efm_membership"]:
+                # Tous les memberships suivent la même logique comptable pour l'instant
+                payment_accounting.process_membership_payment_accounting(db, deposit, commissions)
+                
+        except Exception as e:
+            logger.error(f"Failed to process accounting for deposit {deposit.id}: {e}")
+            # On ne bloque pas la validation du paiement pour une erreur comptable, 
+            # mais on loggue l'erreur pour correction manuelle.
+        
+        # Acitver le service pour l'utilisateur
         user = db.query(User).filter(User.id == deposit.user_id).first()
         if user:
             if product_code == "kyc":

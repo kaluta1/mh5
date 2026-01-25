@@ -7,17 +7,20 @@ from typing import List, Optional
 from strawberry.fastapi import GraphQLRouter
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+from datetime import datetime
 import os
 
 from app.graphql.types import (
     ContestType, RoundType, ContestantType, VoteType, 
-    UserType, SeasonType, VotingTypeType, ContestInRoundType
+    UserType, SeasonType, VotingTypeType, ContestInRoundType,
+    AccountTypeEnum, EntryStatusEnum, ChartOfAccountsType, JournalEntryType, JournalLineType
 )
 from app.db.session import SessionLocal
 from app.models.contest import Contest, VotingType
 from app.models.round import Round, round_contests
 from app.models.contests import Contestant, ContestantRanking, ContestSeasonLink, ContestSeason, SeasonLevel
 from app.models.user import User
+from app.models.accounting import ChartOfAccounts, JournalEntry, JournalLine, AccountType
 from app.api import deps # To get user logic if needed, or just types
 
 
@@ -477,6 +480,57 @@ def map_contest_to_type(contest: Contest, db: Session, include_rounds: bool = Tr
     )
 
 
+def map_chart_of_accounts_to_type(account: ChartOfAccounts) -> ChartOfAccountsType:
+    return ChartOfAccountsType(
+        id=account.id,
+        account_code=account.account_code,
+        account_name=account.account_name,
+        account_type=AccountTypeEnum(account.account_type.value),
+        parent_id=account.parent_id,
+        description=account.description,
+        is_active=account.is_active,
+        total_liabilities=float(account.total_liabilities or 0),
+        credit_balance=float(account.credit_balance or 0)
+    )
+
+
+def map_journal_line_to_type(line: JournalLine) -> JournalLineType:
+    # Notice we don't pass DB here because we assume eager loading or simple relationship access
+    return JournalLineType(
+        id=line.id,
+        account_id=line.account_id,
+        debit_amount=float(line.debit_amount or 0),
+        credit_amount=float(line.credit_amount or 0),
+        description=line.description,
+        account=map_chart_of_accounts_to_type(line.account) if line.account else None
+    )
+
+
+def map_journal_entry_to_type(entry: JournalEntry, db: Session) -> JournalEntryType:
+    lines = [map_journal_line_to_type(line) for line in entry.lines]
+    
+    creator = None
+    if entry.created_by:
+         user = db.query(User).filter(User.id == entry.created_by).first()
+         if user:
+             creator = map_user_to_type(user)
+
+    return JournalEntryType(
+        id=entry.id,
+        entry_number=entry.entry_number,
+        entry_date=entry.entry_date,
+        description=entry.description,
+        threshold=float(entry.threshold) if entry.threshold else None,
+        total_debit=float(entry.total_debit or 0),
+        total_credit=float(entry.total_credit or 0),
+        status=EntryStatusEnum(entry.status.value),
+        created_at=entry.created_at,
+        posted_at=entry.posted_at,
+        lines=lines,
+        created_by_user=creator
+    )
+
+
 @strawberry.type
 class Query:
     """GraphQL Queries"""
@@ -630,6 +684,43 @@ class Query:
             return map_round_to_type(round_obj, db, include_contestants=True)
         finally:
             db.close()
+
+
+    @strawberry.field
+    def chart_of_accounts(self) -> List[ChartOfAccountsType]:
+        """Get flattened chart of accounts"""
+        db = get_db()
+        try:
+             accounts = db.query(ChartOfAccounts).filter(ChartOfAccounts.is_active == True).order_by(ChartOfAccounts.account_code).all()
+             return [map_chart_of_accounts_to_type(a) for a in accounts]
+        finally:
+             db.close()
+
+    @strawberry.field
+    def journal_entries(
+        self, 
+        skip: int = 0, 
+        limit: int = 20,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        min_amount: Optional[float] = None
+    ) -> List[JournalEntryType]:
+        """Get journal entries with pagination and filters"""
+        db = get_db()
+        try:
+             query = db.query(JournalEntry).order_by(JournalEntry.entry_date.desc())
+             
+             if start_date:
+                 query = query.filter(JournalEntry.entry_date >= start_date)
+             if end_date:
+                 query = query.filter(JournalEntry.entry_date <= end_date)
+             if min_amount:
+                 query = query.filter(JournalEntry.total_debit >= min_amount)
+                 
+             entries = query.offset(skip).limit(limit).all()
+             return [map_journal_entry_to_type(e, db) for e in entries]
+        finally:
+             db.close()
 
 
 from fastapi import Depends, Request, Response

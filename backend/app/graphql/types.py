@@ -6,6 +6,7 @@ Defines all GraphQL types: Contest, Round, Contestant, Vote, User, Season
 import strawberry
 from typing import List, Optional, Annotated, TYPE_CHECKING
 from datetime import datetime
+import enum
 
 # Forward reference for circular dependency
 if TYPE_CHECKING:
@@ -177,5 +178,77 @@ class ContestType:
 # Update RoundType to use ContestInRoundType
 # We need to redefine it or inject it. Since types.py is simple, we just update class definition.
 # However, RoundType content is earlier in file. I need to update it there.
+
+# -------------------------------------------------------------------------
+# ACCOUNTING TYPES
+# -------------------------------------------------------------------------
+
+@strawberry.enum
+class AccountTypeEnum(enum.Enum):
+    ASSET = "asset"
+    LIABILITY = "liability"
+    EQUITY = "equity"
+    REVENUE = "revenue"
+    EXPENSE = "expense"
+
+
+@strawberry.enum
+class EntryStatusEnum(enum.Enum):
+    DRAFT = "draft"
+    POSTED = "posted"
+    REVERSED = "reversed"
+
+
+@strawberry.type
+class ChartOfAccountsType:
+    """Compte comptable du plan comptable"""
+    id: int
+    account_code: str
+    account_name: str
+    account_type: AccountTypeEnum
+    parent_id: Optional[int] = None
+    description: Optional[str] = None
+    is_active: bool = True
+    
+    # Soldes
+    total_liabilities: float = 0.0
+    credit_balance: float = 0.0
+    
+    # Note: Circular dependency with parent/children handled by Optional ID or separate resolver if needed
+    
+    # Relations
+    # lines: List["JournalLineType"] = strawberry.field(default_factory=list)
+
+
+@strawberry.type
+class JournalLineType:
+    """Ligne d'écriture comptable"""
+    id: int
+    account_id: int
+    debit_amount: float
+    credit_amount: float
+    description: Optional[str] = None
+    
+    # Relations
+    account: ChartOfAccountsType
+
+
+@strawberry.type
+class JournalEntryType:
+    """Écriture comptable (Journal Entry)"""
+    id: int
+    entry_number: str
+    entry_date: datetime
+    description: str
+    threshold: Optional[float] = None
+    total_debit: float
+    total_credit: float
+    status: EntryStatusEnum
+    created_at: datetime
+    posted_at: Optional[datetime] = None
+    
+    # Relations
+    lines: List[JournalLineType] = strawberry.field(default_factory=list)
+    created_by_user: Optional[UserType] = None
 
 

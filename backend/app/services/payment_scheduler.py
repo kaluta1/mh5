@@ -23,7 +23,7 @@ class PaymentScheduler:
     Background service that periodically checks pending payment statuses
     """
     
-    def __init__(self, check_interval_seconds: int = 120):  # 2 minutes default
+    def __init__(self, check_interval_seconds: int = 3600):  # 1 hour default
         self.check_interval = check_interval_seconds
         self.running = False
         self._task = None
@@ -195,7 +195,7 @@ async def check_payment_now(db: Session, deposit_id: int) -> dict:
         return {"error": "No external payment ID", "status": str(deposit.status)}
     
     # Check if expired (older than 1 hour)
-    expiration_time = datetime.utcnow() - timedelta(hours=1)
+    expiration_time = datetime.utcnow() - timedelta(hours=2)
     if deposit.created_at < expiration_time:
         deposit.status = DepositStatus.EXPIRED
         db.commit()

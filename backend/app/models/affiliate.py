@@ -32,6 +32,23 @@ class CommissionStatus(str, enum.Enum):
     CANCELLED = "CANCELLED"
 
 
+class CommissionRule(Base):
+    __tablename__ = "commission_rules"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    product_code: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
+    commission_type: Mapped[CommissionType] = mapped_column(SQLEnum(CommissionType), nullable=False)
+    
+    # Configuration des pourcentages
+    direct_percentage: Mapped[float] = mapped_column(Numeric(5, 2), default=10.0)    # Ex: 10.0 pour 10%
+    indirect_percentage: Mapped[float] = mapped_column(Numeric(5, 2), default=1.0)   # Ex: 1.0 pour 1%
+    max_levels: Mapped[int] = mapped_column(Integer, default=10)
+    
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class AffiliateTree(Base):
     __tablename__ = "affiliate_tree"
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, unique=True)

@@ -572,6 +572,7 @@ export interface TranslationKeys {
       suggested_contests: string
       transactions: string
       microservices: string
+      accounting: string
     }
     dashboard: {
       total_seasons: string
@@ -997,6 +998,33 @@ export interface TranslationKeys {
       details: string
       search: string
       load_error: string
+    }
+    accounting: {
+      title: string
+      subtitle: string
+      refresh: string
+      total_revenue: string
+      ytd: string
+      journal_tab: string
+      coa_tab: string
+      journal_title: string
+      journal_desc: string
+      coa_title: string
+      coa_desc: string
+      table: {
+        date: string
+        ref: string
+        description: string
+        debit: string
+        credit: string
+        status: string
+        code: string
+        account: string
+        type: string
+        balance: string
+      }
+      error_loading: string
+      retry: string
     }
     users: {
       title: string
@@ -2001,7 +2029,8 @@ export const translations: Record<Language, TranslationKeys> = {
         commission_settings: "Paramètres de commission",
         suggested_contests: "Concours suggérés",
         transactions: "Transactions",
-        microservices: "Microservices"
+        microservices: "Microservices",
+        accounting: "Comptabilité"
       },
       dashboard: {
         total_seasons: "Total des saisons",

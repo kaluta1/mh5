@@ -5,8 +5,8 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { useLanguage } from "@/contexts/language-context"
-import { 
-  Heart, 
+import {
+  Heart,
   LayoutDashboard,
   Shield,
   Calendar,
@@ -20,7 +20,8 @@ import {
   Lightbulb,
   CreditCard,
   Home,
-  Server
+  Server,
+  Banknote
 } from "lucide-react"
 
 const adminMenuSections = [
@@ -37,6 +38,7 @@ const adminMenuSections = [
       { name: "admin.nav.contests", href: "/dashboard/admin/contests", icon: Zap },
       { name: "admin.nav.contestants", href: "/dashboard/admin/contestants", icon: Users },
       { name: "admin.nav.users", href: "/dashboard/admin/users", icon: Settings },
+      { name: "admin.nav.accounting", href: "/dashboard/admin/accounting", icon: Banknote },
       { name: "admin.nav.kyc", href: "/dashboard/admin/kyc", icon: FileCheck },
       { name: "admin.nav.reports", href: "/dashboard/admin/reports", icon: Flag },
     ]
@@ -69,7 +71,7 @@ export function AdminSidebar({ isCollapsed = false, onToggleCollapse }: AdminSid
         "hidden lg:flex fixed inset-y-0 left-0 z-40 flex-col bg-white dark:bg-gray-950 border-r border-gray-100 dark:border-gray-800 transition-all duration-300 ease-in-out",
         isCollapsed ? "w-[72px]" : "w-64"
       )}>
-        
+
         {/* Header */}
         <div className={cn(
           "flex items-center h-16 border-b border-gray-100 dark:border-gray-800",
@@ -110,7 +112,7 @@ export function AdminSidebar({ isCollapsed = false, onToggleCollapse }: AdminSid
                   "h-5 w-5 flex-shrink-0 transition-transform duration-200",
                   pathname !== "/dashboard" && "group-hover:scale-110"
                 )} />
-                
+
                 {!isCollapsed && (
                   <span className="text-sm font-medium">
                     {t('navigation.home') || 'Home'}
@@ -126,7 +128,7 @@ export function AdminSidebar({ isCollapsed = false, onToggleCollapse }: AdminSid
                     {t(section.title)}
                   </p>
                 )}
-                
+
                 <div className="space-y-1">
                   {section.items.map((item) => {
                     const Icon = item.icon
@@ -151,7 +153,7 @@ export function AdminSidebar({ isCollapsed = false, onToggleCollapse }: AdminSid
                           "h-5 w-5 flex-shrink-0 transition-transform duration-200",
                           !isActive && "group-hover:scale-110"
                         )} />
-                        
+
                         {!isCollapsed && (
                           <span className="text-sm font-medium">
                             {t(item.name)}
