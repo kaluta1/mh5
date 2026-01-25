@@ -35,7 +35,6 @@ export const ApolloWrapper = ({ children }: PropsWithChildren) => {
                     storage: new LocalStorageWrapper(window.localStorage),
                 });
             } catch (error) {
-                console.error('Error persisting Apollo cache', error);
             } finally {
                 setLoading(false);
             }
