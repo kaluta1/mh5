@@ -113,6 +113,9 @@ export function PaymentDialog({
   // Get payment methods with translations
   const paymentMethods = getPaymentMethods(t)
   
+  // Ref for polling interval
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  
   // Steps: 'recipients' | 'method' | 'payment' | 'success'
   const [step, setStep] = useState<'recipients' | 'method' | 'payment' | 'success'>('recipients')
   const [recipients, setRecipients] = useState<Recipient[]>([])

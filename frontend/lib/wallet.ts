@@ -4,9 +4,9 @@
 import { EthereumProvider } from '@walletconnect/ethereum-provider'
 import { REOWN_PROJECT_ID } from './config'
 
-let walletConnectProvider: EthereumProvider | null = null
+let walletConnectProvider: InstanceType<typeof EthereumProvider> | null = null
 
-export const initReownProvider = async (): Promise<EthereumProvider> => {
+export const initReownProvider = async (): Promise<InstanceType<typeof EthereumProvider>> => {
   if (!REOWN_PROJECT_ID) {
     throw new Error('REOWN_PROJECT_ID is not configured. Please set NEXT_PUBLIC_REOWN_PROJECT_ID in your .env.local file.')
   }
@@ -37,6 +37,6 @@ export const initReownProvider = async (): Promise<EthereumProvider> => {
   return walletConnectProvider
 }
 
-export const getReownProvider = (): EthereumProvider | null => {
+export const getReownProvider = (): InstanceType<typeof EthereumProvider> | null => {
   return walletConnectProvider
 }

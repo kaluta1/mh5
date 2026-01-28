@@ -218,6 +218,27 @@ export function PaymentDialog({
     }
   }
 
+  const handleWalletPayment = async () => {
+    if (!payment) {
+      setPaymentError(t('payment.no_payment_order') || 'Aucun ordre de paiement')
+      return
+    }
+
+    const token = localStorage.getItem('access_token')
+    if (!token) {
+      setPaymentError(t('common.login_required') || 'Veuillez vous connecter')
+      return
+    }
+
+    try {
+      const hash = await executePayment(payment, token)
+      setTxHash(hash)
+    } catch (error) {
+      console.error('Wallet payment error:', error)
+      setPaymentError(error instanceof Error ? error.message : 'Erreur lors du paiement')
+    }
+  }
+
   const handleBack = () => {
     if (step === 'instructions') {
       setStep('select')

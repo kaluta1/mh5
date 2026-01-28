@@ -1,4 +1,4 @@
-import axios from 'axios'
+import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios'
 import { cacheService } from './cache-service'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://mh5-hbjp.onrender.com'
@@ -6,7 +6,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://mh5-hbjp.onrend
 // Créer une instance axios avec la configuration de base
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000, // 15 secondes de timeout
+  timeout: 30000, // 30 secondes de timeout (augmenté pour gérer les cold starts Render.com)
   headers: {
     'Content-Type': 'application/json',
   },
@@ -31,14 +31,43 @@ api.interceptors.request.use(
   }
 )
 
-// Intercepteur pour gérer les réponses et erreurs
+// Intercepteur pour gérer les réponses et erreurs avec retry logic
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error: AxiosError) => {
+    const config = error.config as InternalAxiosRequestConfig & { _retry?: boolean; _retryCount?: number }
+    
+    // Retry logic pour les erreurs de timeout ou réseau
+    if (
+      config &&
+      !config._retry &&
+      (error.code === 'ECONNABORTED' || 
+       error.message?.includes('timeout') ||
+       error.message?.includes('Network Error') ||
+       !error.response)
+    ) {
+      const retryCount = config._retryCount || 0
+      const maxRetries = 2 // Maximum 2 retries (3 tentatives au total)
+      
+      if (retryCount < maxRetries) {
+        config._retry = true
+        config._retryCount = retryCount + 1
+        
+        // Exponential backoff: attendre 1s, puis 2s
+        const delay = 1000 * (retryCount + 1)
+        console.warn(`Request timeout/error, retrying (${retryCount + 1}/${maxRetries}) after ${delay}ms...`)
+        
+        await new Promise(resolve => setTimeout(resolve, delay))
+        
+        return api(config)
+      }
+    }
+    
+    // Gestion des erreurs 401 (non autorisé)
     if (error.response?.status === 401) {
       // Ne pas rediriger si c'est une tentative de connexion (erreur normale)
-      const isLoginAttempt = error.config?.url?.includes('/auth/login')
-      const isRegisterAttempt = error.config?.url?.includes('/auth/register')
+      const isLoginAttempt = config?.url?.includes('/auth/login')
+      const isRegisterAttempt = config?.url?.includes('/auth/register')
 
       // Si ce n'est pas une tentative de connexion/inscription, c'est un token expiré
       if (!isLoginAttempt && !isRegisterAttempt) {
@@ -51,6 +80,7 @@ api.interceptors.response.use(
         // window.location.href = '/login'
       }
     }
+    
     return Promise.reject(error)
   }
 )

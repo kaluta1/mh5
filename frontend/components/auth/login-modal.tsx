@@ -119,7 +119,10 @@ export function LoginModal({ open, onOpenChange, onSwitchToRegister, onLoginSucc
       
       let errorMessage = t('auth.login.errors.invalid_credentials')
       
-      if (err.response?.data) {
+      // Gérer les erreurs de timeout spécifiquement
+      if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+        errorMessage = t('auth.login.errors.timeout') || 'Connection timeout. The server is taking too long to respond. Please try again.'
+      } else if (err.response?.data) {
         const errorData = err.response.data
         if (typeof errorData === 'string') {
           errorMessage = mapErrorToTranslation(errorData)
@@ -137,6 +140,9 @@ export function LoginModal({ open, onOpenChange, onSwitchToRegister, onLoginSucc
         }
       } else if (err.message) {
         errorMessage = mapErrorToTranslation(err.message)
+      } else if (!err.response && err.request) {
+        // Pas de réponse du serveur (réseau ou serveur down)
+        errorMessage = t('auth.login.errors.network_error') || 'Network error. Please check your connection and try again.'
       }
       
       // Afficher l'erreur en haut du formulaire
