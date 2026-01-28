@@ -135,14 +135,25 @@ export function Footer() {
       try {
         setCategoriesLoading(true)
         const response = await api.get('/api/v1/categories/', {
-          params: { active_only: true }
+          params: { active_only: true },
+          timeout: 30000, // Timeout spécifique pour cette requête
         })
         if (response.data && Array.isArray(response.data)) {
           setCategories(response.data)
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Erreur lors du chargement des catégories:', error)
-        // En cas d'erreur, on garde un tableau vide
+        
+        // Log plus détaillé pour le debugging
+        if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+          console.warn('Categories loading timed out - server may be slow or unreachable')
+        } else if (error.response) {
+          console.error('Server responded with error:', error.response.status, error.response.data)
+        } else if (error.request) {
+          console.error('No response received from server:', error.request)
+        }
+        
+        // En cas d'erreur, on garde un tableau vide (l'UI gère déjà ce cas)
         setCategories([])
       } finally {
         setCategoriesLoading(false)

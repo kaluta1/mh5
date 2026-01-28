@@ -7541,7 +7541,7 @@ export const translations: Record<Language, TranslationKeys> = {
       add_recipients: "Add recipients",
       recipients_description: "Add users you want to pay for",
       method_description: "Choose your payment method",
-      instructions_description: "Send the exact amount to the address shown",
+      instructions_description: "complete payment within your wallet",
       recipient: "Recipient",
       username_or_email: "Username or email",
       user_not_found: "User not found",
@@ -7690,9 +7690,9 @@ export const translations: Record<Language, TranslationKeys> = {
         cta: {
           title: "Create your own Club",
           subtitle: "Monetize your content, manage your community and earn through the affiliate program.",
-          feature1: "Secure payments via DSP",
+          feature1: "Get paid your specified subscription fee, minus transaction costs",
           feature2: "Multi-administrator management",
-          feature3: "10% commission on sales",
+          feature3: "Affiliate commissions are paid to members from 20% of the website margin added on top of your specified subscription fee, distributed up to 10 generations deep.",
           button: "Create my Club"
         }
       },

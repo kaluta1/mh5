@@ -17,6 +17,7 @@ from app.models.user import User
 from app.models.affiliate import AffiliateCommission, CommissionType, CommissionStatus
 from app.models.payment import Deposit, ProductType
 from app.services.email import email_service
+from app.services.accounting_integration import record_payment_in_accounting
 
 logger = logging.getLogger(__name__)
 
@@ -189,26 +190,26 @@ def process_payment_validation(db: Session, deposit: Deposit) -> bool:
         # Distribuer les commissions
         commissions = distribute_commissions(db, deposit, product_code)
         
-        # -------------------------------------------------------------------------
-        # INTÉGRATION COMPTABLE (Accounting)
-        # -------------------------------------------------------------------------
+        # Record payment and commissions in accounting system
         try:
-            from app.services.payment_accounting import payment_accounting
-            
-            logger.info(f"Processing accounting for deposit {deposit.id} (Product: {product_code})")
-            
-            if product_code == "kyc":
-                payment_accounting.process_kyc_payment_accounting(db, deposit, commissions)
-            elif product_code in ["mfm_membership", "annual_membership", "efm_membership"]:
-                # Tous les memberships suivent la même logique comptable pour l'instant
-                payment_accounting.process_membership_payment_accounting(db, deposit, commissions)
-                
+            journal_entry = record_payment_in_accounting(
+                db=db,
+                deposit=deposit,
+                commissions=commissions,
+                created_by=deposit.user_id  # User who made the payment
+            )
+            if journal_entry:
+                logger.info(
+                    f"Accounting entry created for deposit {deposit.id}: "
+                    f"Journal Entry #{journal_entry.entry_number}"
+                )
+            else:
+                logger.warning(f"Failed to create accounting entry for deposit {deposit.id}")
         except Exception as e:
-            logger.error(f"Failed to process accounting for deposit {deposit.id}: {e}")
-            # On ne bloque pas la validation du paiement pour une erreur comptable, 
-            # mais on loggue l'erreur pour correction manuelle.
+            # Don't fail payment processing if accounting fails
+            logger.error(f"Error creating accounting entry for deposit {deposit.id}: {e}", exc_info=True)
         
-        # Acitver le service pour l'utilisateur
+        # Activer le service pour l'utilisateur
         user = db.query(User).filter(User.id == deposit.user_id).first()
         if user:
             if product_code == "kyc":
