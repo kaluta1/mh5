@@ -179,22 +179,31 @@ def login_access_token(
     """
     OAuth2 compatible token login, get an access token for future requests.
     """
-    user = crud_user.authenticate(
-        db, email_or_username=form_data.username, password=form_data.password
-    )
+    try:
+        user = crud_user.authenticate(
+            db, email_or_username=form_data.username, password=form_data.password
+        )
+    except Exception as e:
+        # Log database or other errors
+        logger.error(f"Error during authentication for '{form_data.username}': {e}", exc_info=True)
+        # Re-raise to be handled by get_db() dependency or FastAPI error handler
+        raise
     
     if not user:
         # Log failed login attempt in background (non-blocking)
         if request and background_tasks:
-            background_tasks.add_task(
-                log_login_attempt,
-                db=db,
-                user_id=0,  # No user for a failure
-                request=request,
-                is_successful=False,
-                failure_reason="Email/Username or password incorrect"
-            )
-        # Do not log directly if no background_tasks to avoid blocking
+            try:
+                background_tasks.add_task(
+                    log_login_attempt,
+                    db=db,
+                    user_id=0,  # No user for a failure
+                    request=request,
+                    is_successful=False,
+                    failure_reason="Email/Username or password incorrect"
+                )
+            except Exception as log_error:
+                # Don't fail login if logging fails
+                logger.warning(f"Failed to log login attempt: {log_error}")
         
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -212,14 +221,17 @@ def login_access_token(
     
     # Log successful login in background (non-blocking)
     if request and background_tasks:
-        background_tasks.add_task(
-            log_login_attempt,
-            db=db,
-            user_id=user.id,
-            request=request,
-            is_successful=True
-        )
-    # Do not log directly if no background_tasks to avoid blocking
+        try:
+            background_tasks.add_task(
+                log_login_attempt,
+                db=db,
+                user_id=user.id,
+                request=request,
+                is_successful=True
+            )
+        except Exception as log_error:
+            # Don't fail login if logging fails
+            logger.warning(f"Failed to log successful login: {log_error}")
     
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     return {

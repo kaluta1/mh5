@@ -129,8 +129,9 @@ class Deposit(Base):
     currency: Mapped[str] = mapped_column(String(10), default="USD")
     
     # Montant en crypto (si paiement crypto)
+    # crypto_amount stores wei amounts as string (e.g., "10000000000000000000" for 10 USDT)
     crypto_currency: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # BTC, ETH, USDT
-    crypto_amount: Mapped[Optional[float]] = mapped_column(Numeric(18, 8), nullable=True)
+    crypto_amount: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # Wei amount as string
     payment_address: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # Adresse de paiement
     
     # Statut

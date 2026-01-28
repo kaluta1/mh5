@@ -91,15 +91,21 @@ class Settings(BaseModel):
     SHUFTI_CALLBACK_URL: str = os.getenv("SHUFTI_CALLBACK_URL", "")  # Webhook URL
     SHUFTI_REDIRECT_URL: str = os.getenv("SHUFTI_REDIRECT_URL", "")  # Redirect URL après vérification
     
-    # CRYPTO PAYMENT
-    CRYPTO_PAYMENT_API_KEY: str = os.getenv("CRYPTO_DEPOSIT_API_KEY", "")
-    CRYPTO_PAYMENT_PUBLIC_KEY: str = os.getenv("CRYPTO_DEPOSIT_PUBLIC_KEY", "")
-    CRYPTO_PAYMENT_IPN_SECRET: str = os.getenv("CRYPTO_PAYMENT_IPN_SECRET", "")  # Pour vérifier les webhooks
-    CRYPTO_PAYMENT_API_URL: str = "https://api.nowpayments.io/v1"
+    # ============================================
+    # Reown/WalletConnect Configuration
+    # ============================================
+    REOWN_PROJECT_ID: str = os.getenv("REOWN_PROJECT_ID", "")
     
-    # Legacy crypto deposit keys (for backward compatibility)
-    CRYPTO_DEPOSIT_API_KEY: str = os.getenv("CRYPTO_DEPOSIT_API_KEY", "")
-    CRYPTO_DEPOSIT_PUBLIC_KEY: str = os.getenv("CRYPTO_DEPOSIT_PUBLIC_KEY", "")
+    # ============================================
+    # BSC On-chain Payment Configuration
+    # ============================================
+    BSC_RPC_URL: str = os.getenv("BSC_RPC_URL", "https://bsc-dataseed.binance.org")
+    BSC_CHAIN_ID: int = int(os.getenv("BSC_CHAIN_ID", "56"))
+    BSC_PAYMENT_CONTRACT: str = os.getenv("BSC_PAYMENT_CONTRACT", "0xed8cbdFEB6104A49edCe79666Aae66Eda0d3b622")
+    BSC_CONFIRMATIONS: int = int(os.getenv("BSC_CONFIRMATIONS", "1"))
+    BSC_EXPLORER_URL: str = os.getenv("BSC_EXPLORER_URL", "https://bscscan.com")
+    BSC_USDT_ADDRESS: str = os.getenv("BSC_USDT_ADDRESS", "0x55d398326f99059fF775485246999027B3197955")
+    BSC_USDT_DECIMALS: int = int(os.getenv("BSC_USDT_DECIMALS", "18"))
     
     # CONTENT MODERATION (Sightengine)
     ENABLE_CONTENT_MODERATION: bool = os.getenv("ENABLE_CONTENT_MODERATION", "false").lower() == "true"

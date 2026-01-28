@@ -12,7 +12,8 @@ from app.db.session import SessionLocal
 from app.models.payment import Deposit, DepositStatus, ProductType
 from app.models.affiliate import CommissionType
 from app.crud.crud_affiliate import affiliate_commission
-from app.services.crypto_payment import crypto_payment_service, CryptoPaymentError
+# Note: Smart contract payments are verified on-demand via /verify endpoint
+# This scheduler only handles expiration of pending payments
 from app.services.commission_distribution import process_payment_validation
 
 logger = logging.getLogger(__name__)
@@ -106,48 +107,10 @@ class PaymentScheduler:
     
     async def _check_single_payment(self, db: Session, deposit: Deposit):
         """Check and update a single payment"""
-        try:
-            # Get status from crypto payment provider
-            payment_id = int(deposit.external_payment_id)
-            print(f"[PaymentScheduler] Checking deposit {deposit.id} (ext: {payment_id})")
-            status_response = await crypto_payment_service.get_payment_status(payment_id)
-            
-            payment_status = status_response.get("payment_status")
-            print(f"[PaymentScheduler] Deposit {deposit.id} status: {payment_status}")
-            
-            if not payment_status:
-                return
-            
-            old_status = deposit.status
-            
-            # Map payment provider status to deposit status
-            if payment_status in ["finished", "confirmed"]:
-                deposit.status = DepositStatus.VALIDATED
-                deposit.validated_at = datetime.utcnow()
-                logger.info(f"Deposit {deposit.id} marked as VALIDATED")
-                
-                # Créer les commissions pour le parrain si le paiement est validé
-                if old_status != DepositStatus.VALIDATED:
-                    self._create_sponsor_commission(db, deposit)
-                    
-            elif payment_status == "partially_paid":
-                deposit.status = DepositStatus.PARTIALLY_PAID
-            elif payment_status in ["failed", "expired", "refunded"]:
-                deposit.status = DepositStatus.EXPIRED
-                logger.info(f"Deposit {deposit.id} marked as EXPIRED ({payment_status})")
-            elif payment_status in ["waiting", "confirming", "sending"]:
-                # Still pending, no change
-                pass
-            
-            # Update crypto amount if available
-            if status_response.get("actually_paid"):
-                deposit.crypto_amount = status_response.get("actually_paid")
-            
-            if old_status != deposit.status:
-                logger.info(f"Deposit {deposit.id} status changed: {old_status} -> {deposit.status}")
-                
-        except CryptoPaymentError as e:
-            logger.warning(f"Could not check payment {deposit.external_payment_id}: {e.message}")
+        # For smart contract payments, verification is done on-demand
+        # This function only handles expiration
+        # If deposit has a tx_hash (external_payment_id), it should be verified via /verify endpoint
+        pass
     
     def _create_sponsor_commission(self, db: Session, deposit: Deposit):
         """Crée les commissions pour les parrains quand un paiement est validé"""
@@ -174,28 +137,15 @@ payment_scheduler = PaymentScheduler()
 
 async def check_payment_now(db: Session, deposit_id: int) -> dict:
     """
-    Manually check a single payment status
-    Returns the updated status
-    Only checks PENDING payments, and expires them after 1 hour
+    Check payment status (for smart contracts, verification is done via /verify endpoint)
+    This function only checks expiration
     """
     deposit = db.query(Deposit).filter(Deposit.id == deposit_id).first()
     if not deposit:
         return {"error": "Deposit not found", "status": None}
     
-    # Only check pending payments
-    if deposit.status != DepositStatus.PENDING:
-        return {
-            "status": str(deposit.status.value),
-            "payment_status": deposit.status.value,
-            "is_confirmed": deposit.status == DepositStatus.VALIDATED,
-            "message": "Payment is not pending"
-        }
-    
-    if not deposit.external_payment_id:
-        return {"error": "No external payment ID", "status": str(deposit.status)}
-    
     # Check if expired (older than 1 hour)
-    expiration_time = datetime.utcnow() - timedelta(hours=2)
+    expiration_time = datetime.utcnow() - timedelta(hours=1)
     if deposit.created_at < expiration_time:
         deposit.status = DepositStatus.EXPIRED
         db.commit()
@@ -206,39 +156,11 @@ async def check_payment_now(db: Session, deposit_id: int) -> dict:
             "message": "Payment expired after 1 hour"
         }
     
-    try:
-        payment_id = int(deposit.external_payment_id)
-        status_response = await crypto_payment_service.get_payment_status(payment_id)
-        
-        payment_status = status_response.get("payment_status")
-        old_status = deposit.status
-        
-        if payment_status in ["finished", "confirmed"]:
-            deposit.status = DepositStatus.VALIDATED
-            deposit.validated_at = datetime.utcnow()
-            
-            # Créer les commissions si c'est une nouvelle validation
-            if old_status != DepositStatus.VALIDATED:
-                _create_commission_for_deposit(db, deposit)
-                
-        elif payment_status == "partially_paid":
-            deposit.status = DepositStatus.PARTIALLY_PAID
-        elif payment_status in ["failed", "expired", "refunded"]:
-            deposit.status = DepositStatus.EXPIRED
-        
-        if status_response.get("actually_paid"):
-            deposit.crypto_amount = status_response.get("actually_paid")
-        
-        db.commit()
-        
-        return {
-            "status": str(deposit.status.value),
-            "payment_status": payment_status,
-            "is_confirmed": deposit.status == DepositStatus.VALIDATED
-        }
-        
-    except CryptoPaymentError as e:
-        return {"error": str(e.message), "status": str(deposit.status.value)}
+    return {
+        "status": str(deposit.status.value),
+        "payment_status": deposit.status.value,
+        "is_confirmed": deposit.status == DepositStatus.VALIDATED
+    }
 
 
 def _create_commission_for_deposit(db: Session, deposit: Deposit):
