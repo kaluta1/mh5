@@ -2,7 +2,7 @@
  * Payment Service - Crypto payments integration
  */
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://mh5-sbe4.onrender.com'
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://mh5-hbjp.onrender.com'
 
 export interface PaymentRecipient {
   username_or_email: string

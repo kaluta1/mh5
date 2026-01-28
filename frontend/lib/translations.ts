@@ -203,6 +203,8 @@ export interface TranslationKeys {
     no_permission: string
     refresh: string
     network_error: string
+    optional: string
+    save: string
   }
   settings: {
     title: string
@@ -349,6 +351,14 @@ export interface TranslationKeys {
     content_video_optional: string
     min_characters: string
     important_errors: string
+    // Nominator location fields
+    nominator_location: string
+    nominator_location_description: string
+    nominator_country: string
+    select_country: string
+    nominator_city: string
+    nominator_city_placeholder: string
+    ad_revenue_warning: string
     errors: {
       content_title_required: string
       content_title_min_length: string
@@ -361,6 +371,7 @@ export interface TranslationKeys {
       content_video_required: string
       video_required_for_contest: string
       fill_all_fields: string
+      nominator_country_required: string
     }
   }
   features: {
@@ -590,6 +601,33 @@ export interface TranslationKeys {
         no_data_available: string
       }
     }
+    rounds: {
+      title: string
+      description: string
+      new_round: string
+      edit: string
+      create: string
+      contest: string
+      select_contest: string
+      name: string
+      status: string
+      load_error: string
+      delete_success: string
+      delete_error: string
+      update_success: string
+      create_success: string
+      search: string
+      confirm_delete: string
+      delete_warning: string
+      // Season dates labels
+      city_season: string
+      country_season: string
+      regional_season: string
+      continental_season: string
+      global_season: string
+      start_date: string
+      end_date: string
+    }
     seasons: {
       title: string
       description: string
@@ -638,6 +676,8 @@ export interface TranslationKeys {
     }
     contests: {
       title: string
+      tab_contests: string
+      tab_rounds: string
       description: string
       new_contest: string
       edit_contest: string
@@ -690,6 +730,9 @@ export interface TranslationKeys {
       submission_end: string
       voting_start: string
       voting_end: string
+      season: string
+      select_season: string
+      delete_warning: string
       contest_dates: string
       approved: string
       rejected: string
@@ -739,6 +782,29 @@ export interface TranslationKeys {
       slug_help: string
       category_description_placeholder: string
       contest_type_auto_filled: string
+      verification_requirements: string
+      media_requirements: string
+      participant_individual: string
+      participant_pet: string
+      participant_club: string
+      verification_video_max_duration: string
+
+      verification_max_size_mb: string
+      new_participation: string
+      new_nomination: string
+      min_images: string
+      max_images: string
+      min_age: string
+      max_age: string
+      max_videos: string
+      video_max_duration: string
+      video_max_size_mb: string
+      requires_video: string
+      kyc_required: string
+      verification_visual: string
+      verification_voice: string
+      verification_brand: string
+      verification_content: string
     }
     contestants: {
       title: string
@@ -793,109 +859,109 @@ export interface TranslationKeys {
       seasons_load_error: string
       no_seasons_available: string
     }
-      kyc: {
-        title: string
-        description: string
-        search_placeholder: string
+    kyc: {
+      title: string
+      description: string
+      search_placeholder: string
+      pending: string
+      approved: string
+      rejected: string
+      filter: string
+      approve: string
+      reject: string
+      view: string
+      no_kyc: string
+      verification_score: string
+      identity: string
+      document: string
+      address: string
+      face: string
+      confidence_score: string
+      rejection_reason: string
+    }
+    reports: {
+      title: string
+      description: string
+      search_placeholder: string
+      all: string
+      pending: string
+      reviewed: string
+      resolved: string
+      no_reports: string
+      no_reports_found: string
+      report_number: string
+      reason: string
+      description_label: string
+      status: string
+      details: string
+      reported_contestant: string
+      contestant_author: string
+      reporter: string
+      contest: string
+      created_at: string
+      reviewed_at: string
+      moderator_notes: string
+      verification_status: string
+      verification_status_pending: string
+      verification_status_approved: string
+      verification_status_rejected: string
+      reason_spam: string
+      reason_inappropriate: string
+      reason_harassment: string
+      reason_fake: string
+      reason_copyright: string
+      reason_other: string
+      no_title: string
+      load_error: string
+      report_details: string
+      report_details_description: string
+      reason_label: string
+    }
+    transactions: {
+      title: string
+      description: string
+      search_placeholder: string
+      all_types: string
+      all_statuses: string
+      no_transactions: string
+      no_transactions_found: string
+      transaction: string
+      transaction_details: string
+      transaction_details_description: string
+      type: {
+        deposit: string
+        withdrawal: string
+        entry_fee: string
+        prize_payout: string
+        commission: string
+        refund: string
+      }
+      status: {
         pending: string
-        approved: string
-        rejected: string
-        filter: string
-        approve: string
-        reject: string
-        view: string
-        no_kyc: string
-        verification_score: string
-        identity: string
-        document: string
-        address: string
-        face: string
-        confidence_score: string
-        rejection_reason: string
+        completed: string
+        failed: string
+        cancelled: string
       }
-      reports: {
-        title: string
-        description: string
-        search_placeholder: string
-        all: string
-        pending: string
-        reviewed: string
-        resolved: string
-        no_reports: string
-        no_reports_found: string
-        report_number: string
-        reason: string
-        description_label: string
-        status: string
-        details: string
-        reported_contestant: string
-        contestant_author: string
-        reporter: string
-        contest: string
-        created_at: string
-        reviewed_at: string
-        moderator_notes: string
-        verification_status: string
-        verification_status_pending: string
-        verification_status_approved: string
-        verification_status_rejected: string
-        reason_spam: string
-        reason_inappropriate: string
-        reason_harassment: string
-        reason_fake: string
-        reason_copyright: string
-        reason_other: string
-        no_title: string
-        load_error: string
-        report_details: string
-        report_details_description: string
-        reason_label: string
-      }
-      transactions: {
-        title: string
-        description: string
-        search_placeholder: string
-        all_types: string
-        all_statuses: string
-        no_transactions: string
-        no_transactions_found: string
-        transaction: string
-        transaction_details: string
-        transaction_details_description: string
-        type: {
-          deposit: string
-          withdrawal: string
-          entry_fee: string
-          prize_payout: string
-          commission: string
-          refund: string
-        }
-        status: {
-          pending: string
-          completed: string
-          failed: string
-          cancelled: string
-        }
-        user: string
-        contest: string
-        payment_method: string
-        product_type: string
-        amount: string
-        currency: string
-        description: string
-        reference: string
-        order_id: string
-        external_payment_id: string
-        tx_hash: string
-        created_at: string
-        processed_at: string
-        validated_at: string
-        type_label: string
-        status_label: string
-        details: string
-        search: string
-        load_error: string
-      }
+      user: string
+      contest: string
+      payment_method: string
+      product_type: string
+      amount: string
+      currency: string
+      description: string
+      reference: string
+      order_id: string
+      external_payment_id: string
+      tx_hash: string
+      created_at: string
+      processed_at: string
+      validated_at: string
+      type_label: string
+      status_label: string
+      details: string
+      search: string
+      load_error: string
+    }
     users: {
       title: string
       description: string
@@ -1166,18 +1232,18 @@ export interface TranslationKeys {
       recent_activity: string
       no_activity: string
       position: {
-      title: string
-      no_contests: string
-      rank: string
-      points: string
-      contests: string
-      clubs: string
-      affiliates: string
-      status: string
-      members: string
-      referrals: string
-      commissions: string
-      active: string
+        title: string
+        no_contests: string
+        rank: string
+        points: string
+        contests: string
+        clubs: string
+        affiliates: string
+        status: string
+        members: string
+        referrals: string
+        commissions: string
+        active: string
       }
       contests: {
         title: string
@@ -1188,6 +1254,9 @@ export interface TranslationKeys {
         nomination: string
         participations: string
         nominate: string
+        edit_nomination: string
+        edit_participation: string
+        edit: string
         tooltip_nominate: string
         time_remaining_to_nominate: string
         search_placeholder: string
@@ -1251,6 +1320,7 @@ export interface TranslationKeys {
         already_voted: string
         cannot_vote: string
         owner_cannot_vote: string
+        own_cannot_vote: string
         votes: string
         contest_info: string
         contest_dates: string
@@ -1429,6 +1499,10 @@ export interface TranslationKeys {
         participation_form: {
           title: string
           description: string
+          edit_title: string
+          edit_description: string
+          nominate_title: string
+          nominate_description: string
           select_media: string
           drag_drop: string
           file_info: string
@@ -1838,6 +1912,41 @@ export const translations: Record<Language, TranslationKeys> = {
       quick_links: "Liens rapides",
       help_text: "Si vous pensez qu'il s'agit d'une erreur, veuillez contacter notre support."
     },
+    common: {
+      loading: "Chargement...",
+      error: "Une erreur est survenue",
+      success: "Opération réussie",
+      cancel: "Annuler",
+      confirm: "Confirmer",
+      continue: "Continuer",
+      or: "ou",
+      redirecting: "Redirection...",
+      please_wait: "Veuillez patienter...",
+      back: "Retour",
+      back_to_dashboard: "Retour au tableau de bord",
+      previous: "Précédent",
+      next: "Suivant",
+      submitting: "Envoi...",
+      no_documents: "Aucun document",
+      profile_setup: "Configuration du profil",
+      profile_setup_description: "Complétez votre profil pour continuer",
+      edit: "Modifier",
+      delete: "Supprimer",
+      deleting: "Suppression...",
+      confirm_delete: "Confirmer la suppression",
+      deleted_successfully: "Supprimé avec succès",
+      likes: "J'aime",
+      comments: "Commentaires",
+      search: "Rechercher",
+      clear: "Effacer",
+      welcome: "Bienvenue",
+      access_denied: "Accès refusé",
+      no_permission: "Vous n'avez pas la permission d'effectuer cette action",
+      refresh: "Actualiser",
+      network_error: "Erreur réseau",
+      optional: "(optionnel)",
+      save: "Enregistrer"
+    },
     admin: {
       title: "Panneau d'administration",
       subtitle: "Gérez votre plateforme",
@@ -1922,6 +2031,33 @@ export const translations: Record<Language, TranslationKeys> = {
           no_data_available: "Aucune donnée disponible"
         }
       },
+      rounds: {
+        title: "Gestion des Rounds",
+        description: "Gérez les rounds de concours",
+        new_round: "Nouveau Round",
+        edit: "Modifier le Round",
+        create: "Créer un Round",
+        contest: "Concours",
+        select_contest: "Sélectionner un concours",
+        name: "Nom du Round",
+        status: "Statut",
+        load_error: "Erreur lors du chargement des rounds",
+        delete_success: "Round supprimé avec succès",
+        delete_error: "Erreur lors de la suppression",
+        update_success: "Round mis à jour avec succès",
+        create_success: "Round créé avec succès",
+        search: "Rechercher un round...",
+        confirm_delete: "Supprimer le round",
+        confirm_delete: "Supprimer le round",
+        delete_warning: "Êtes-vous sûr de vouloir supprimer ce round ?",
+        city_season: "Saison Ville",
+        country_season: "Saison Pays",
+        regional_season: "Saison Régionale",
+        continental_season: "Saison Continentale",
+        global_season: "Saison Mondiale",
+        start_date: "Date de début",
+        end_date: "Date de fin"
+      },
       seasons: {
         title: "Gestion des Saisons",
         description: "Créez, modifiez et gérez les saisons de concours",
@@ -1970,12 +2106,14 @@ export const translations: Record<Language, TranslationKeys> = {
       },
       contests: {
         title: "Gestion des Concours",
+        tab_contests: "Concours",
+        tab_rounds: "Rounds",
         description: "Créez, modifiez et gérez les concours",
         new_contest: "Nouveau concours",
         edit_contest: "Modifier le concours",
         create_contest: "Créer un concours",
         name: "Nom du concours",
-        contest_description: "Description",
+        contest_description: "Description du concours",
         contest_type: "Type de concours",
         level: "Niveau",
         city: "Ville",
@@ -2003,6 +2141,9 @@ export const translations: Record<Language, TranslationKeys> = {
         end_date: "Date de fin",
         search_placeholder: "Rechercher des concours...",
         sort: "Trier par",
+        season: "Saison",
+        select_season: "Sélectionner une saison",
+        delete_warning: "Cette action est irréversible. Voulez-vous vraiment supprimer ce concours ?",
         create_success: "Concours créé avec succès",
         create_error: "Erreur lors de la création du concours",
         update_success: "Concours mis à jour avec succès",
@@ -2105,6 +2246,9 @@ export const translations: Record<Language, TranslationKeys> = {
         max_age_placeholder: "Ex: 35",
         search_input_placeholder: "Nom, type, description...",
         sort: "Trier par",
+        season: "Saison",
+        select_season: "Sélectionner une saison",
+        delete_warning: "Cette action est irréversible. Voulez-vous vraiment supprimer ce concours ?",
         // Season dates
         season_dates: "Dates des saisons",
         season_dates_description_edit: "Ces dates sont calculées automatiquement à partir de la date de début de vote. Vous pouvez les modifier manuellement si nécessaire.",
@@ -2117,8 +2261,8 @@ export const translations: Record<Language, TranslationKeys> = {
         start_date: "Date de début",
         end_date: "Date de fin",
         // Voting type translations
-        voting_type: "Type de vote",
-        select_voting_type: "Sélectionner un type de vote",
+        voting_type: "Type de compétition",
+        select_voting_type: "Sélectionner un type de compétition",
         new_voting_type: "Nouveau type de vote",
         voting_types_load_error: "Erreur lors du chargement des types de vote",
         voting_type_created: "Type de vote créé avec succès",
@@ -2134,6 +2278,15 @@ export const translations: Record<Language, TranslationKeys> = {
         commission_kyc: "KYC",
         commission_mfm: "MFM",
         create: "Créer",
+        // Dialog titles
+        create_nomination_contest: "Créer un nouveau (Concours Nomination)",
+        create_participation_contest: "Créer un nouveau (Concours Participation)",
+        // Error messages
+        error_name_required: "Le nom du concours est obligatoire",
+        error_category_required: "La catégorie est obligatoire",
+        error_description_required: "La description est obligatoire",
+        error_image_required: "L'image du concours est obligatoire",
+        error_contest_type_required: "Le type de compétition est obligatoire pour les nominations",
         // Category translations
         category: "Catégorie",
         select_category: "Sélectionner une catégorie",
@@ -2149,7 +2302,29 @@ export const translations: Record<Language, TranslationKeys> = {
         slug_placeholder: "Ex: pop, rock, hip-hop",
         slug_help: "Le slug est généré automatiquement à partir du nom. Vous pouvez le modifier si nécessaire.",
         category_description_placeholder: "Description de la catégorie (optionnel)",
-        contest_type_auto_filled: "Le type de concours est automatiquement rempli à partir de la catégorie"
+        contest_type_auto_filled: "Le type de concours est automatiquement rempli à partir de la catégorie",
+        verification_requirements: "Exigences de vérification",
+        media_requirements: "Exigences Média",
+        participant_individual: "Individuel",
+        participant_pet: "Animal",
+        participant_club: "Club",
+        verification_video_max_duration: "Durée max vidéo vérif (sec)",
+        verification_max_size_mb: "Taille max vérif (MB)",
+        new_participation: "Nouveau (Participation)",
+        new_nomination: "Nouveau (Nomination)",
+        min_images: "Min Images",
+        max_images: "Max Images",
+        min_age: "Age Minimum",
+        max_age: "Age Maximum",
+        max_videos: "Max Vidéos",
+        video_max_duration: "Durée max vidéo (sec)",
+        video_max_size_mb: "Taille max vidéo (MB)",
+        requires_video: "Vidéo Requise",
+        kyc_required: "KYC Requis",
+        verification_visual: "Vérification Visuelle",
+        verification_voice: "Vérification Vocale",
+        verification_brand: "Vérification de Marque",
+        verification_content: "Vérification de Contenu"
       },
       contestants: {
         title: "Gestion des Candidats",
@@ -2512,7 +2687,7 @@ export const translations: Record<Language, TranslationKeys> = {
         recent_searches: "Recherches récentes",
         no_history: "Aucune recherche récente."
       },
-        nav: {
+      nav: {
         home: "Accueil",
         overview: "Vue d'ensemble",
         feed: "Feed",
@@ -2686,6 +2861,9 @@ export const translations: Record<Language, TranslationKeys> = {
         nomination_hint: "Nominez d'autres personnes pour les faire participer aux compétitions. Votez pour les candidats nominés par leurs fans.",
         participations_hint: "Participez vous-même aux compétitions. Les candidats s'inscrivent directement pour concourir.",
         nominate: "Nommer",
+        edit_nomination: "Modifier votre Nomination",
+        edit_participation: "Modifier votre Participation",
+        edit: "Modifier",
         tooltip_nominate: "Cliquez pour nommer à ce concours et soumettre votre candidature",
         time_remaining_to_nominate: "Temps restant pour nommer",
         search_placeholder: "Rechercher un concours...",
@@ -2695,6 +2873,21 @@ export const translations: Record<Language, TranslationKeys> = {
         sort_votes: "Plus de votes",
         sort_date: "Plus récent",
         sort_name: "Nom (A-Z)",
+        filter_continent: "Continent",
+        filter_country: "Pays",
+        all_countries: "Tous les pays",
+        continents: {
+          all: "Tous les continents",
+          africa: "Afrique",
+          asia: "Asie",
+          europe: "Europe",
+          north_america: "Amérique du Nord",
+          south_america: "Amérique du Sud",
+          oceania: "Océanie",
+          antarctica: "Antarctique"
+        },
+        my_continent: "Mon continent",
+        my_country: "Mon pays",
         voting_type: "Type de vote",
         voting_level_country: "National",
         voting_level_city: "Ville",
@@ -2796,6 +2989,7 @@ export const translations: Record<Language, TranslationKeys> = {
         already_voted: "Déjà voté",
         cannot_vote: "Vous ne pouvez pas voter pour ce participant",
         owner_cannot_vote: "Propriétaire, ne peut pas voter",
+        own_cannot_vote: "Ma candidature, ne peut pas voter",
         restriction_different_city: "Ville différente",
         restriction_different_country: "Pays différent",
         restriction_different_region: "Région différente",
@@ -2969,6 +3163,10 @@ export const translations: Record<Language, TranslationKeys> = {
         participation_form: {
           title: "Participer au concours",
           description: "Sélectionnez votre meilleure photo ou vidéo pour participer à ce concours",
+          edit_title: "Modifier un Candidat",
+          edit_description: "Mettez à jour les détails de votre soumission",
+          nominate_title: "Nommer un Candidat",
+          nominate_description: "Importez votre vidéo depuis YouTube ou Vimeo",
           select_media: "Sélectionner votre média",
           drag_drop: "Glissez-déposez votre fichier ici",
           file_info: "ou cliquez pour sélectionner (Images: JPG, PNG, GIF | Vidéos: MP4, WebM | Max: 100MB)",
@@ -3414,6 +3612,14 @@ export const translations: Record<Language, TranslationKeys> = {
       content_video_optional: "Vidéo du contenu (optionnel)",
       min_characters: "Minimum",
       important_errors: "Erreurs importantes à corriger",
+      // Nominator location fields
+      nominator_location: "Localisation du candidat",
+      nominator_location_description: "Veuillez indiquer la localisation de la personne que vous nominez.",
+      nominator_country: "Pays",
+      select_country: "Sélectionnez un pays",
+      nominator_city: "Ville",
+      nominator_city_placeholder: "Entrez le nom de la ville",
+      ad_revenue_warning: "Attention : Vous ne serez pas rémunéré sur les revenus publicitaires générés par votre contenu si nous détectons que le contenu ne provient pas de votre pays.",
       // Errors
       errors: {
         content_title_required: "Titre du contenu",
@@ -3426,7 +3632,8 @@ export const translations: Record<Language, TranslationKeys> = {
         at_least_one_image: "Au moins une image est requise",
         content_video_required: "Vidéo du contenu",
         video_required_for_contest: "Une vidéo est requise pour ce concours",
-        fill_all_fields: "Veuillez remplir tous les champs requis avant de soumettre"
+        fill_all_fields: "Veuillez remplir tous les champs requis avant de soumettre",
+        nominator_country_required: "Le pays du candidat est requis"
       }
     },
     moderation: {
@@ -3588,12 +3795,12 @@ export const translations: Record<Language, TranslationKeys> = {
         },
         club_memberships: {
           title: "Adhésions aux clubs",
-          description: "Gagnez des commissions sur les frais d'adhésion aux clubs payants. Le site ajoute une majoration de 10% aux frais spécifiés par le propriétaire du club, dont 10% sont versés au niveau 1, et 1% à chacun des niveaux 2 à 10.",
+          description: "Gagnez des commissions sur les frais d'adhésion aux clubs payants. Le site ajoute une majoration de 20% aux frais spécifiés par le propriétaire du club, dont 10% sont versés au niveau 1, et 1% à chacun des niveaux 2 à 10.",
           commission: "10% sur le niveau 1, 1% sur les niveaux 2-10"
         },
         shop_purchases: {
           title: "Achats en boutique",
-          description: "Gagnez des commissions sur les achats de contenu numérique dans la boutique MyHigh5. Le site ajoute une majoration de 10% aux frais spécifiés par le propriétaire du club, dont 10% sont versés au niveau 1, et 1% à chacun des niveaux 2 à 10.",
+          description: "Gagnez des commissions sur les achats de contenu numérique dans la boutique MyHigh5. Le site ajoute une majoration de 20% aux frais spécifiés par le propriétaire du club, dont 10% sont versés au niveau 1, et 1% à chacun des niveaux 2 à 10.",
           commission: "10% sur le niveau 1, 1% sur les niveaux 2-10"
         },
         ad_revenue: {
@@ -3614,7 +3821,7 @@ export const translations: Record<Language, TranslationKeys> = {
         question_1: "Comment puis-je gagner de l'argent sur MyHigh5 ?",
         answer_1: "Vous pouvez gagner de l'argent de plusieurs façons : en participant aux concours, en nommant des candidats, en rejoignant le programme d'affiliation pour gagner des commissions sur les membres que vous référez, et en devenant membre fondateur pour participer aux pools de revenus et de profits.",
         question_2: "Comment fonctionne le programme d'affiliation ?",
-        answer_2: "• Paiements de frais de vérification :\n  Vous gagnez une commission de 10% sur les paiements effectués par vos parrainages directs, et une commission de 1% sur les paiements effectués par chacun de vos parrainages indirects du niveau 2 au niveau 10.\n\n• Revenus publicitaires (Candidats participants) :\n  Les candidats participants reçoivent 40% des revenus publicitaires générés sur leurs pages de concours. Le parrain direct d'un candidat participant reçoit 5%, et chaque parrain indirect du niveau 2 au niveau 10 reçoit 1%.\n\n• Revenus publicitaires (Membres qui nomment) :\n  Les membres qui nomment reçoivent 10% des revenus publicitaires générés sur les pages de concours de leurs candidats nommés, 2.5% des revenus publicitaires générés sur les pages de concours des candidats nommés par leurs parrainages directs, et 1% des revenus publicitaires générés sur les pages de concours des candidats nommés par chacun de leurs parrainages indirects du niveau 2 au niveau 10.\n\n• Revenus publicitaires (Clubs) :\n  Les propriétaires de clubs reçoivent 20% des revenus publicitaires générés sur leurs pages de club ou de fans. Le parrain direct d'un propriétaire de club reçoit 5%, et chaque parrain indirect du niveau 2 au niveau 10 reçoit 0.5%.\n\n• Frais d'adhésion aux clubs :\n  MyHigh5 applique une majoration de 10% aux frais d'abonnement sélectionnés par le membre. De cette majoration, 10% est versé au parrain direct du payeur, et 1% est versé à chaque parrain indirect du niveau 2 au niveau 10.\n\n• Emplacements sur la page des Sponsors du Site Web :\n  Pour les emplacements payés sur la page des Sponsors du Site Web, 10% est versé au parrain de niveau 1, et 1% est versé à chacun des parrains des niveaux 2 à 10.",
+        answer_2: "• Paiements de frais de vérification :\n  Vous gagnez une commission de 10% sur les paiements effectués par vos parrainages directs, et une commission de 1% sur les paiements effectués par chacun de vos parrainages indirects du niveau 2 au niveau 10.\n\n• Revenus publicitaires (Candidats participants) :\n  Les candidats participants reçoivent 40% des revenus publicitaires générés sur leurs pages de concours. Le parrain direct d'un candidat participant reçoit 5%, et chaque parrain indirect du niveau 2 au niveau 10 reçoit 1%.\n\n• Revenus publicitaires (Membres qui nomment) :\n  Les membres qui nomment reçoivent 10% des revenus publicitaires générés sur les pages de concours de leurs candidats nommés, 2.5% des revenus publicitaires générés sur les pages de concours des candidats nommés par leurs parrainages directs, et 1% des revenus publicitaires générés sur les pages de concours des candidats nommés par chacun de leurs parrainages indirects du niveau 2 au niveau 10.\n\n• Revenus publicitaires (Clubs) :\n  Les propriétaires de clubs reçoivent 20% des revenus publicitaires générés sur leurs pages de club ou de fans. Le parrain direct d'un propriétaire de club reçoit 5%, et chaque parrain indirect du niveau 2 au niveau 10 reçoit 0.5%.\n\n• Frais d'adhésion aux clubs :\n  MyHigh5 applique une majoration de 20% aux frais d'abonnement sélectionnés par le membre. De cette majoration, 10% est versé au parrain direct du payeur, et 1% est versé à chaque parrain indirect du niveau 2 au niveau 10.\n\n• Emplacements sur la page des Sponsors du Site Web :\n  Pour les emplacements payés sur la page des Sponsors du Site Web, 10% est versé au parrain de niveau 1, et 1% est versé à chacun des parrains des niveaux 2 à 10.",
         question_3: "Qu'est-ce que le statut de Membre Fondateur ?",
         answer_3: "Le statut de Membre Fondateur (MFM) est une opportunité limitée qui nécessite la vérification du compte et le paiement de frais d'adhésion de 100$ et d'une cotisation annuelle de club de 50$ pour les 1 000 premiers MFM, et de frais d'adhésion de 200$ et d'une cotisation annuelle de club de 200$ par la suite. Les emplacements MFM cesseront d'exister une fois que le nombre total de MFM atteindra 10 000. Les Membres Fondateurs participent à des pools de commissions mensuelles équivalant à 5% des revenus nets et à un pool de profits annuels équivalant à 10% des profits après impôts, alloués en fonction de la proportion de leurs parrainages vérifiés de niveau 1 par rapport au nombre total de parrainages vérifiés de niveau 1.",
         question_4: "Comment puis-je participer aux concours ?",
@@ -4105,6 +4312,9 @@ export const translations: Record<Language, TranslationKeys> = {
         nomination_hint: "Nominez d'autres personnes pour les faire participer aux compétitions. Votez pour les candidats nominés par leurs fans.",
         participations_hint: "Participez vous-même aux compétitions. Les candidats s'inscrivent directement pour concourir.",
         nominate: "Nommer",
+        edit_nomination: "Modifier votre Nomination",
+        edit_participation: "Modifier votre Participation",
+        edit: "Modifier",
         tooltip_nominate: "Cliquez pour nommer à ce concours et soumettre votre candidature",
         time_remaining_to_nominate: "Temps restant pour nommer",
         search_placeholder: "Rechercher un concours...",
@@ -4321,6 +4531,10 @@ export const translations: Record<Language, TranslationKeys> = {
         participation_form: {
           title: "Participer au concours",
           description: "Sélectionnez votre meilleure photo ou vidéo pour participer à ce concours",
+          edit_title: "Modifier un Candidat",
+          edit_description: "Mettez à jour les détails de votre soumission",
+          nominate_title: "Nommer un Candidat",
+          nominate_description: "Importez votre vidéo depuis YouTube ou Vimeo",
           select_media: "Sélectionner votre média",
           drag_drop: "Glissez-déposez votre fichier ici",
           file_info: "ou cliquez pour sélectionner (Images: JPG, PNG, GIF | Vidéos: MP4, WebM | Max: 100MB)",
@@ -4744,6 +4958,7 @@ export const translations: Record<Language, TranslationKeys> = {
       camera_error: "Impossible d'accéder à la caméra",
       microphone_error: "Impossible d'accéder au microphone",
       file_too_large: "Le fichier est trop volumineux",
+      file_too_large_with_size: "Le fichier est trop volumineux. Taille maximale autorisée",
       invalid_file_type: "Type de fichier invalide",
       upload_error: "Erreur lors de l'envoi",
       capture: "Capturer",
@@ -4766,6 +4981,41 @@ export const translations: Record<Language, TranslationKeys> = {
       go_home: "Home",
       quick_links: "Quick Links",
       help_text: "If you think this is an error, please contact our support."
+    },
+    common: {
+      loading: "Loading...",
+      error: "An error occurred",
+      success: "Success",
+      cancel: "Cancel",
+      confirm: "Confirm",
+      continue: "Continue",
+      or: "or",
+      redirecting: "Redirecting...",
+      please_wait: "Please wait...",
+      back: "Back",
+      back_to_dashboard: "Back to dashboard",
+      previous: "Previous",
+      next: "Next",
+      submitting: "Submitting...",
+      no_documents: "No documents",
+      profile_setup: "Profile Setup",
+      profile_setup_description: "Complete your profile to continue",
+      edit: "Edit",
+      delete: "Delete",
+      deleting: "Deleting...",
+      confirm_delete: "Confirm delete",
+      deleted_successfully: "Deleted successfully",
+      likes: "Likes",
+      comments: "Comments",
+      search: "Search",
+      clear: "Clear",
+      welcome: "Welcome",
+      access_denied: "Access denied",
+      no_permission: "You do not have permission to perform this action",
+      refresh: "Refresh",
+      network_error: "Network error",
+      optional: "(optional)",
+      save: "Save"
     },
     admin: {
       title: "Administration Panel",
@@ -4851,6 +5101,33 @@ export const translations: Record<Language, TranslationKeys> = {
           no_data_available: "No data available"
         }
       },
+      rounds: {
+        title: "Manage Rounds",
+        description: "Manage contest rounds",
+        new_round: "New Round",
+        edit: "Edit Round",
+        create: "Create Round",
+        contest: "Contest",
+        select_contest: "Select a contest",
+        name: "Round Name",
+        status: "Status",
+        load_error: "Error loading rounds",
+        delete_success: "Round deleted successfully",
+        delete_error: "Error deleting round",
+        update_success: "Round updated successfully",
+        create_success: "Round created successfully",
+        search: "Search rounds...",
+        confirm_delete: "Delete round",
+
+        delete_warning: "Are you sure you want to delete this round?",
+        city_season: "City Season",
+        country_season: "Country Season",
+        regional_season: "Regional Season",
+        continental_season: "Continental Season",
+        global_season: "Global Season",
+        start_date: "Start Date",
+        end_date: "End Date"
+      },
       seasons: {
         title: "Manage Seasons",
         description: "Create, edit and manage contest seasons",
@@ -4899,12 +5176,15 @@ export const translations: Record<Language, TranslationKeys> = {
       },
       contests: {
         title: "Manage Contests",
+        tab_contests: "Contests",
+        tab_rounds: "Rounds",
         description: "Create, edit and manage contests",
         new_contest: "New Contest",
         edit_contest: "Edit Contest",
+
         create_contest: "Create Contest",
         name: "Contest Name",
-        contest_description: "Description",
+        contest_description: "Contest description",
         contest_type: "Contest Type",
         level: "Level",
         city: "City",
@@ -4922,7 +5202,7 @@ export const translations: Record<Language, TranslationKeys> = {
         confirm_delete: "Are you sure you want to delete this contest?",
         image: "Contest Image",
         no_contests: "No contests found",
-        voting_restriction: "Voting Restriction",
+        voting_restriction: "Who can Contest",
         none: "None",
         male_only: "Male Only",
         female_only: "Female Only",
@@ -4932,6 +5212,9 @@ export const translations: Record<Language, TranslationKeys> = {
         end_date: "End Date",
         search_placeholder: "Search contests...",
         sort: "Sort by",
+        season: "Season",
+        select_season: "Select a season",
+        delete_warning: "This action is irreversible. Are you sure you want to delete this contest?",
         create_success: "Contest created successfully",
         create_error: "Error creating contest",
         update_success: "Contest updated successfully",
@@ -4941,7 +5224,7 @@ export const translations: Record<Language, TranslationKeys> = {
         sort_date: "Date (Recent)",
         sort_name: "Name (A-Z)",
         sort_status: "Status",
-        participant_count: "Number of Participants",
+        participant_count: "Limit of Contestants",
         creating: "Creating...",
         updating: "Updating...",
         candidates: "Candidates",
@@ -5046,8 +5329,8 @@ export const translations: Record<Language, TranslationKeys> = {
         start_date: "Start Date",
         end_date: "End Date",
         // Voting type translations
-        voting_type: "Voting Type",
-        select_voting_type: "Select a voting type",
+        voting_type: "Contesting Type",
+        select_voting_type: "Select a contesting type",
         new_voting_type: "New voting type",
         voting_types_load_error: "Error loading voting types",
         voting_type_created: "Voting type created successfully",
@@ -5063,6 +5346,15 @@ export const translations: Record<Language, TranslationKeys> = {
         commission_kyc: "KYC",
         commission_mfm: "MFM",
         create: "Create",
+        // Dialog titles
+        create_nomination_contest: "Create a new (Nomination Contest)",
+        create_participation_contest: "Create a new (Participation Contest)",
+        // Error messages
+        error_name_required: "Contest name is required",
+        error_category_required: "Category is required",
+        error_description_required: "Description is required",
+        error_image_required: "Contest image is required",
+        error_contest_type_required: "Contesting type is required for nominations",
         // Category translations
         category: "Category",
         select_category: "Select a category",
@@ -5078,7 +5370,29 @@ export const translations: Record<Language, TranslationKeys> = {
         slug_placeholder: "Ex: pop, rock, hip-hop",
         slug_help: "The slug is automatically generated from the name. You can modify it if necessary.",
         category_description_placeholder: "Category description (optional)",
-        contest_type_auto_filled: "The contest type is automatically filled from the category"
+        contest_type_auto_filled: "The contest type is automatically filled from the category",
+        verification_requirements: "Verification Requirements",
+        media_requirements: "Media Requirements",
+        participant_individual: "Individual",
+        participant_pet: "Pet",
+        participant_club: "Club",
+        verification_video_max_duration: "Max verification video duration (sec)",
+        verification_max_size_mb: "Max verification size (MB)",
+        new_participation: "New (Participation)",
+        new_nomination: "New (Nomination)",
+        min_images: "Min Images",
+        max_images: "Max Images",
+        min_age: "Min Age",
+        max_age: "Max Age",
+        max_videos: "Max Videos",
+        video_max_duration: "Max video duration (sec)",
+        video_max_size_mb: "Max video size (MB)",
+        requires_video: "Video Required",
+        kyc_required: "KYC Required",
+        verification_visual: "Visual Verification",
+        verification_voice: "Voice Verification",
+        verification_brand: "Brand Verification",
+        verification_content: "Content Verification"
       },
       contestants: {
         title: "Manage Contestants",
@@ -5790,6 +6104,14 @@ export const translations: Record<Language, TranslationKeys> = {
       content_video_optional: "Content Video (optional)",
       min_characters: "Minimum",
       important_errors: "Important Errors to Fix",
+      // Nominator location fields
+      nominator_location: "Contestant Location",
+      nominator_location_description: "Please provide the location of the person you are nominating.",
+      nominator_country: "Country",
+      select_country: "Select a country",
+      nominator_city: "City",
+      nominator_city_placeholder: "Enter the city name",
+      ad_revenue_warning: "Warning: You will not be paid for ad revenue generated by your content if we detect that the content does not originate from your country.",
       // Errors
       errors: {
         content_title_required: "Content Title",
@@ -5802,7 +6124,8 @@ export const translations: Record<Language, TranslationKeys> = {
         at_least_one_image: "At least one image is required",
         content_video_required: "Content Video",
         video_required_for_contest: "A video is required for this contest",
-        fill_all_fields: "Please fill in all required fields before submitting"
+        fill_all_fields: "Please fill in all required fields before submitting",
+        nominator_country_required: "Country is required"
       }
     },
     moderation: {
@@ -5919,7 +6242,7 @@ export const translations: Record<Language, TranslationKeys> = {
         explore_more: "Explore more contests",
         remaining_votes: "You can still vote for {count} more contestant(s)",
         votes_label: "votes",
-        hint_dnd: "Drag and drop to reorder your votes. 1st gets 5 points, 2nd gets 4 points, 3rd gets 3 points, 4th gets 2 points, and 5th gets 1 point. Votes are limited to 5 per season.",
+        hint_dnd: "Drag and drop to reorder your votes. 1st place gets 5 points, 2nd gets 4 points, 3rd gets 3 points, 4th gets 2 points, and 5th gets 1 point. You may vote for as many contestants as you wish, but only the top 5 are counted for voting credit. Any additional vote after the fifth will replace the contestant currently in 5th place..",
         rank: "Rank",
         points: "Points",
         contestant: "Contestant",
@@ -6019,12 +6342,12 @@ export const translations: Record<Language, TranslationKeys> = {
         },
         club_memberships: {
           title: "Club Memberships",
-          description: "Earn commissions on paid club membership fees. The website adds a 10% markup to the club owner's specified fees, of which 10% is paid to Level 1, and 1% is paid to each of Levels 2 through 10.",
+          description: "Earn commissions on paid club membership fees. The website adds a 20% markup to the club owner's specified fees, of which 10% is paid to Level 1, and 1% is paid to each of Levels 2 through 10.",
           commission: "10% on Level 1, 1% on Levels 2-10"
         },
         shop_purchases: {
           title: "Shop Purchases",
-          description: "Earn commissions on digital content purchases in the MyHigh5 shop. The website adds a 10% markup to the club owner's specified fees, of which 10% is paid to Level 1, and 1% is paid to each of Levels 2 through 10.",
+          description: "Earn commissions on digital content purchases in the MyHigh5 shop. The website adds a 20% markup to the club owner's specified fees, of which 10% is paid to Level 1, and 1% is paid to each of Levels 2 through 10.",
           commission: "10% on Level 1, 1% on Levels 2-10"
         },
         ad_revenue: {
@@ -6045,7 +6368,7 @@ export const translations: Record<Language, TranslationKeys> = {
         question_1: "How can I earn money on MyHigh5?",
         answer_1: "You can earn money in several ways: by participating in contests, by nominating contestants, by joining the affiliate program to earn commissions on members you refer, and by becoming a founding member to participate in revenue and profit pools.",
         question_2: "How does the affiliate program work?",
-        answer_2: "• Verification Fee Payments:\n  You earn a 10% commission on payments made by your direct referrals, and a 1% commission on payments made by each of your indirect referrals from Level 2 to Level 10.\n\n• Ad Revenue (Participating Contestants):\n  Participating contestants receive 40% of the ad revenue generated on their contest pages. The direct sponsor of a participating contestant receives 5%, and each indirect sponsor from Level 2 to Level 10 receives 1%.\n\n• Ad Revenue (Nominating Members):\n  Nominating members receive 10% of the ad revenue generated on the contest pages of their nominated contestants, 2.5% of the ad revenue generated on the contest pages of contestants nominated by their direct referrals, and 1% of the ad revenue generated on the contest pages of contestants nominated by each of their indirect referrals from Level 2 to Level 10.\n\n• Ad Revenue (Clubs):\n  Club owners receive 20% of the ad revenue generated on their club or fan pages. The direct sponsor of a club owner receives 5%, and each indirect sponsor from Level 2 to Level 10 receives 0.5%.\n\n• Club Membership Fees:\n  MyHigh5 applies a 10% markup to the member's selected subscription fee. Of this markup, 10% is paid to the direct sponsor of the payer, and 1% is paid to each indirect sponsor from Level 2 to Level 10.\n\n• Website Sponsors Page Slots:\n  For slots paid for on the Website Sponsors page, 10% is paid to the Level 1 sponsor, and 1% is paid to each of the Level 2 through Level 10 sponsors.",
+        answer_2: "• Verification Fee Payments:\n  You earn a 10% commission on payments made by your direct referrals, and a 1% commission on payments made by each of your indirect referrals from Level 2 to Level 10.\n\n• Ad Revenue (Participating Contestants):\n  Participating contestants receive 40% of the ad revenue generated on their contest pages. The direct sponsor of a participating contestant receives 5%, and each indirect sponsor from Level 2 to Level 10 receives 1%.\n\n• Ad Revenue (Nominating Members):\n  Nominating members receive 10% of the ad revenue generated on the contest pages of their nominated contestants, 2.5% of the ad revenue generated on the contest pages of contestants nominated by their direct referrals, and 1% of the ad revenue generated on the contest pages of contestants nominated by each of their indirect referrals from Level 2 to Level 10.\n\n• Ad Revenue (Clubs):\n  Club owners receive 20% of the ad revenue generated on their club or fan pages. The direct sponsor of a club owner receives 5%, and each indirect sponsor from Level 2 to Level 10 receives 0.5%.\n\n• Club Membership Fees:\n  MyHigh5 applies a 20% markup to the member's selected subscription fee. Of this markup, 10% is paid to the direct sponsor of the payer, and 1% is paid to each indirect sponsor from Level 2 to Level 10.\n\n• Website Sponsors Page Slots:\n  For slots paid for on the Website Sponsors page, 10% is paid to the Level 1 sponsor, and 1% is paid to each of the Level 2 through Level 10 sponsors.",
         question_3: "What is the Founding Member status?",
         answer_3: "Founding Member (MFM) status is a limited opportunity that requires account verification and payment of a joining fee of $100 and an annual club membership fee of $50 for the first 1,000 MFMs, and a joining fee of $200 and an annual club membership fee of $200 thereafter. MFM slots will cease to exist once the total number of MFMs reaches 10,000. Founding Members participate in monthly commission pools equal to 5% of net revenues and an annual profit pool equal to 10% of profits after taxes, allocated based on the proportion of their Level 1 verified referrals relative to the total number of Level 1 verified referrals.",
         question_4: "How can I participate in contests?",
@@ -6124,7 +6447,7 @@ export const translations: Record<Language, TranslationKeys> = {
         recent_searches: "Recent searches",
         no_history: "No recent searches."
       },
-        nav: {
+      nav: {
         home: "Home",
         overview: "Overview",
         feed: "Feed",
@@ -6589,6 +6912,9 @@ export const translations: Record<Language, TranslationKeys> = {
         nomination_hint: "Nominate others to enter into competitions. Vote for contestants who have been nominated by their fans.",
         participations_hint: "Participate yourself in competitions. Contestants sign up directly to compete.",
         nominate: "Nominate",
+        edit_nomination: "Edit your Nomination",
+        edit_participation: "Edit your Participation",
+        edit: "Edit",
         tooltip_nominate: "Click to nominate in this contest and submit your entry",
         time_remaining_to_nominate: "Time remaining to nominate",
         search_placeholder: "Search for a contest...",
@@ -6598,6 +6924,21 @@ export const translations: Record<Language, TranslationKeys> = {
         sort_votes: "Most votes",
         sort_date: "Most recent",
         sort_name: "Name (A-Z)",
+        filter_continent: "Continent",
+        filter_country: "Country",
+        all_countries: "All countries",
+        continents: {
+          all: "All continents",
+          africa: "Africa",
+          asia: "Asia",
+          europe: "Europe",
+          north_america: "North America",
+          south_america: "South America",
+          oceania: "Oceania",
+          antarctica: "Antarctica"
+        },
+        my_continent: "My continent",
+        my_country: "My country",
         voting_type: "Voting type",
         voting_level_country: "National",
         voting_level_city: "City",
@@ -6701,7 +7042,7 @@ export const translations: Record<Language, TranslationKeys> = {
         contestant: "contestant",
         view_contestants: "View contestants",
         view_all_contestants: "View all contestants",
-        view_contestants_count: "{count} contestant",
+        view_contestants_count: "contestant",
         view_contestants_empty: "No contestants",
         view_contestants_description: "Discover all contestants and vote for your favorites",
         time_remaining: "Time remaining",
@@ -6717,6 +7058,7 @@ export const translations: Record<Language, TranslationKeys> = {
         already_voted: "Already voted",
         cannot_vote: "You cannot vote for this contestant",
         owner_cannot_vote: "Owner, cannot vote",
+        own_cannot_vote: "Own, cannot vote",
         restriction_different_city: "Different city",
         restriction_different_country: "Different country",
         restriction_different_region: "Different region",
@@ -6863,6 +7205,10 @@ export const translations: Record<Language, TranslationKeys> = {
         participation_form: {
           title: "Participate in Contest",
           description: "Select your best photo or video to participate in this contest",
+          edit_title: "Edit a Contestant",
+          edit_description: "Update your submission details",
+          nominate_title: "Nominate a Contestant",
+          nominate_description: "Import your video from YouTube or Vimeo",
           select_media: "Select your media",
           drag_drop: "Drag and drop your file here",
           file_info: "or click to select (Images: JPG, PNG, GIF | Videos: MP4, WebM | Max: 100MB)",
@@ -6966,7 +7312,7 @@ export const translations: Record<Language, TranslationKeys> = {
         explore_more: "Explore more contests",
         remaining_votes: "You can still vote for {count} more contestant(s)",
         votes_label: "votes",
-        hint_dnd: "Drag and drop to reorder your votes. 1st gets 5 points, 2nd gets 4 points, 3rd gets 3 points, 4th gets 2 points, and 5th gets 1 point. Votes are limited to 5 per season.",
+        hint_dnd: "Drag and drop to reorder your votes. 1st place gets 5 points, 2nd gets 4 points, 3rd gets 3 points, 4th gets 2 points, and 5th gets 1 point. You may vote for as many contestants as you wish, but only the top 5 are counted for voting credit. Any additional vote after the fifth will replace the contestant currently in 5th place.",
         rank: "Rank",
         points: "Points",
         contestant: "Contestant",
@@ -6985,8 +7331,8 @@ export const translations: Record<Language, TranslationKeys> = {
       },
       leaderboard: {
         title: "Sponsors Leaderboard",
-        subtitle: "Top 10 sponsors with the most direct referrals",
-        mfm_subtitle: "Top 10 MFM sponsors with the most direct referrals who purchased MFM",
+        subtitle: "Top 10 sponsors with the most verified direct referrals",
+        mfm_subtitle: "Top 10 MFM sponsors with the most direct referrals who are MFM",
         regular_tab: "General Leaderboard",
         mfm_tab: "MFM Leaderboard",
         referrals: "Referrals",
@@ -6994,7 +7340,7 @@ export const translations: Record<Language, TranslationKeys> = {
         champion: "Champion",
         no_data: "No sponsors found",
         info_title: "How does the leaderboard work?",
-        info_description: "The leaderboard is based on the number of direct referrals (level 1) each sponsor has. The more direct referrals you have, the higher your position in the leaderboard."
+        info_description: "The leaderboard is based on the number of direct referrals (level 1) who are MFMs. The more direct referred MFMs you have, the higher your position in the leaderboard.."
       }
     },
     kyc: {
@@ -7279,9 +7625,9 @@ export const translations: Record<Language, TranslationKeys> = {
         cta: {
           title: "Create your own Club",
           subtitle: "Monetize your content, manage your community and earn through the affiliate program.",
-          feature1: "Secure payments via DSP",
+          feature1: "Get paid your specified subscription fee, minus transaction costs",
           feature2: "Multi-administrator management",
-          feature3: "10% commission on sales",
+          feature3: "Affiliate commissions are paid to members from 20% of the website margin added on top of your specified subscription fee, distributed up to 10 generations deep.",
           button: "Create my Club"
         }
       },
@@ -7357,6 +7703,7 @@ export const translations: Record<Language, TranslationKeys> = {
       camera_error: "Unable to access camera",
       microphone_error: "Unable to access microphone",
       file_too_large: "File is too large",
+      file_too_large_with_size: "File is too large. Maximum size allowed",
       invalid_file_type: "Invalid file type",
       upload_error: "Upload error",
       capture: "Capture",
@@ -8361,6 +8708,14 @@ export const translations: Record<Language, TranslationKeys> = {
       content_video_optional: "Video del Contenido (opcional)",
       min_characters: "Mínimo",
       important_errors: "Errores Importantes a Corregir",
+      // Nominator location fields
+      nominator_location: "Ubicación del Candidato",
+      nominator_location_description: "Por favor proporcione la ubicación de la persona que está nominando.",
+      nominator_country: "País",
+      select_country: "Seleccione un país",
+      nominator_city: "Ciudad",
+      nominator_city_placeholder: "Ingrese el nombre de la ciudad",
+      ad_revenue_warning: "Advertencia: No recibirá el pago de los ingresos publicitarios generados por su contenido si detectamos que el contenido no proviene de su país.",
       // Errors
       errors: {
         content_title_required: "Título del Contenido",
@@ -8373,7 +8728,8 @@ export const translations: Record<Language, TranslationKeys> = {
         at_least_one_image: "Se requiere al menos una imagen",
         content_video_required: "Video del Contenido",
         video_required_for_contest: "Se requiere un video para este concurso",
-        fill_all_fields: "Por favor complete todos los campos requeridos antes de enviar"
+        fill_all_fields: "Por favor complete todos los campos requeridos antes de enviar",
+        nominator_country_required: "El país es requerido"
       }
     },
     moderation: {
@@ -8535,12 +8891,12 @@ export const translations: Record<Language, TranslationKeys> = {
         },
         club_memberships: {
           title: "Membresías de clubes",
-          description: "Gana comisiones en las tarifas de membresía de clubes pagadas. El sitio web agrega un margen de beneficio del 10% a las tarifas especificadas por el propietario del club, de las cuales el 10% se paga al Nivel 1, y el 1% se paga a cada uno de los Niveles 2 a 10.",
+          description: "Gana comisiones en las tarifas de membresía de clubes pagadas. El sitio web agrega un margen de beneficio del 20% a las tarifas especificadas por el propietario del club, de las cuales el 10% se paga al Nivel 1, y el 1% se paga a cada uno de los Niveles 2 a 10.",
           commission: "10% en Nivel 1, 1% en Niveles 2-10"
         },
         shop_purchases: {
           title: "Compras en la tienda",
-          description: "Gana comisiones en compras de contenido digital en la tienda MyHigh5. El sitio web agrega un margen de beneficio del 10% a las tarifas especificadas por el propietario del club, de las cuales el 10% se paga al Nivel 1, y el 1% se paga a cada uno de los Niveles 2 a 10.",
+          description: "Gana comisiones en compras de contenido digital en la tienda MyHigh5. El sitio web agrega un margen de beneficio del 20% a las tarifas especificadas por el propietario del club, de las cuales el 10% se paga al Nivel 1, y el 1% se paga a cada uno de los Niveles 2 a 10.",
           commission: "10% en Nivel 1, 1% en Niveles 2-10"
         },
         ad_revenue: {
@@ -8940,6 +9296,9 @@ export const translations: Record<Language, TranslationKeys> = {
         nomination_hint: "Nomina a otras personas para que participen en competencias. Vota por los concursantes nominados por sus fans.",
         participations_hint: "Participa tú mismo en competencias. Los concursantes se inscriben directamente para competir.",
         nominate: "Nominar",
+        edit_nomination: "Editar tu Nominación",
+        edit_participation: "Editar tu Participación",
+        edit: "Editar",
         tooltip_nominate: "Haz clic para nominar en este concurso y enviar tu candidatura",
         time_remaining_to_nominate: "Tiempo restante para nominar",
         search_placeholder: "Buscar un concurso...",
@@ -9052,7 +9411,7 @@ export const translations: Record<Language, TranslationKeys> = {
         contestant: "participante",
         view_contestants: "Ver participantes",
         view_all_contestants: "Ver todos los participantes",
-        view_contestants_count: "{count} participante",
+        view_contestants_count: "participante",
         view_contestants_empty: "Sin participantes",
         view_contestants_description: "Descubre todos los participantes y vota por tus favoritos",
         time_remaining: "Tiempo restante",
@@ -9068,6 +9427,7 @@ export const translations: Record<Language, TranslationKeys> = {
         already_voted: "Ya votado",
         cannot_vote: "No puedes votar por este participante",
         owner_cannot_vote: "Propietario, no puede votar",
+        own_cannot_vote: "Propia candidatura, no puede votar",
         votes: "votos",
         shares: "Compartidos",
         submission: "Envío",
@@ -9176,6 +9536,10 @@ export const translations: Record<Language, TranslationKeys> = {
         participation_form: {
           title: "Participar en el Concurso",
           description: "Selecciona tu mejor foto o video para participar en este concurso",
+          edit_title: "Editar un Candidato",
+          edit_description: "Actualiza los detalles de tu envío",
+          nominate_title: "Nominar un Candidato",
+          nominate_description: "Importa tu video desde YouTube o Vimeo",
           select_media: "Selecciona tu media",
           drag_drop: "Arrastra y suelta tu archivo aquí",
           file_info: "o haz clic para seleccionar (Imágenes: JPG, PNG, GIF | Videos: MP4, WebM | Máx: 100MB)",
@@ -9672,6 +10036,7 @@ export const translations: Record<Language, TranslationKeys> = {
       camera_error: "No se puede acceder a la cámara",
       microphone_error: "No se puede acceder al micrófono",
       file_too_large: "El archivo es demasiado grande",
+      file_too_large_with_size: "El archivo es demasiado grande. Tamaño máximo permitido",
       invalid_file_type: "Tipo de archivo inválido",
       upload_error: "Error al subir",
       capture: "Capturar",
@@ -10676,6 +11041,14 @@ export const translations: Record<Language, TranslationKeys> = {
       content_video_optional: "Inhaltsvideo (optional)",
       min_characters: "Minimum",
       important_errors: "Wichtige Fehler zu Beheben",
+      // Nominator location fields
+      nominator_location: "Standort des Kandidaten",
+      nominator_location_description: "Bitte geben Sie den Standort der Person an, die Sie nominieren.",
+      nominator_country: "Land",
+      select_country: "Land auswählen",
+      nominator_city: "Stadt",
+      nominator_city_placeholder: "Geben Sie den Stadtnamen ein",
+      ad_revenue_warning: "Warnung: Sie werden nicht für Werbeeinnahmen bezahlt, die durch Ihren Inhalt generiert werden, wenn wir feststellen, dass der Inhalt nicht aus Ihrem Land stammt.",
       // Errors
       errors: {
         content_title_required: "Inhaltstitel",
@@ -10688,7 +11061,8 @@ export const translations: Record<Language, TranslationKeys> = {
         at_least_one_image: "Mindestens ein Bild ist erforderlich",
         content_video_required: "Inhaltsvideo",
         video_required_for_contest: "Ein Video ist für diesen Wettbewerb erforderlich",
-        fill_all_fields: "Bitte füllen Sie alle erforderlichen Felder aus, bevor Sie absenden"
+        fill_all_fields: "Bitte füllen Sie alle erforderlichen Felder aus, bevor Sie absenden",
+        nominator_country_required: "Das Land ist erforderlich"
       }
     },
     moderation: {
@@ -10850,12 +11224,12 @@ export const translations: Record<Language, TranslationKeys> = {
         },
         club_memberships: {
           title: "Club-Mitgliedschaften",
-          description: "Verdienen Sie Provisionen auf bezahlte Club-Mitgliedsgebühren. Die Website fügt einen Aufschlag von 10% zu den vom Clubeigentümer festgelegten Gebühren hinzu, wovon 10% an Stufe 1 und 1% an jede der Stufen 2 bis 10 gezahlt werden.",
+          description: "Verdienen Sie Provisionen auf bezahlte Club-Mitgliedsgebühren. Die Website fügt einen Aufschlag von 20% zu den vom Clubeigentümer festgelegten Gebühren hinzu, wovon 10% an Stufe 1 und 1% an jede der Stufen 2 bis 10 gezahlt werden.",
           commission: "10% auf Stufe 1, 1% auf Stufen 2-10"
         },
         shop_purchases: {
           title: "Einkäufe im Shop",
-          description: "Verdienen Sie Provisionen auf digitale Inhaltskäufe im MyHigh5-Shop. Die Website fügt einen Aufschlag von 10% zu den vom Clubeigentümer festgelegten Gebühren hinzu, wovon 10% an Stufe 1 und 1% an jede der Stufen 2 bis 10 gezahlt werden.",
+          description: "Verdienen Sie Provisionen auf digitale Inhaltskäufe im MyHigh5-Shop. Die Website fügt einen Aufschlag von 20% zu den vom Clubeigentümer festgelegten Gebühren hinzu, wovon 10% an Stufe 1 und 1% an jede der Stufen 2 bis 10 gezahlt werden.",
           commission: "10% auf Stufe 1, 1% auf Stufen 2-10"
         },
         ad_revenue: {
@@ -11251,6 +11625,9 @@ export const translations: Record<Language, TranslationKeys> = {
         nomination_hint: "Nominieren Sie andere zur Teilnahme an Wettbewerben. Stimmen Sie für Teilnehmer ab, die von ihren Fans nominiert wurden.",
         participations_hint: "Nehmen Sie selbst an Wettbewerben teil. Teilnehmer melden sich direkt an, um zu konkurrieren.",
         nominate: "Nominieren",
+        edit_nomination: "Bearbeite deine Nominierung",
+        edit_participation: "Bearbeite deine Teilnahme",
+        edit: "Bearbeiten",
         tooltip_nominate: "Klicken Sie, um an diesem Wettbewerb zu nominieren und Ihren Beitrag einzureichen",
         time_remaining_to_nominate: "Verbleibende Zeit zur Nominierung",
         search_placeholder: "Nach einem Wettbewerb suchen...",
@@ -11386,6 +11763,7 @@ export const translations: Record<Language, TranslationKeys> = {
         already_voted: "Bereits abgestimmt",
         cannot_vote: "Sie können nicht für diesen Teilnehmer abstimmen",
         owner_cannot_vote: "Eigentümer, kann nicht abstimmen",
+        own_cannot_vote: "Eigene Kandidatur, kann nicht abstimmen",
         votes: "Stimmen",
         shares: "Geteilt",
         submission: "Einreichung",
@@ -11486,6 +11864,10 @@ export const translations: Record<Language, TranslationKeys> = {
         participation_form: {
           title: "Am Wettbewerb teilnehmen",
           description: "Wählen Sie Ihr bestes Foto oder Video aus, um an diesem Wettbewerb teilzunehmen",
+          edit_title: "Kandidat bearbeiten",
+          edit_description: "Aktualisiere deine Einreichungsdetails",
+          nominate_title: "Kandidat nominieren",
+          nominate_description: "Importiere dein Video von YouTube oder Vimeo",
           select_media: "Wählen Sie Ihre Medien",
           drag_drop: "Ziehen Sie Ihre Datei hierher",
           file_info: "oder klicken Sie zum Auswählen (Bilder: JPG, PNG, GIF | Videos: MP4, WebM | Max: 100MB)",
@@ -11980,6 +12362,7 @@ export const translations: Record<Language, TranslationKeys> = {
       camera_error: "Kamera nicht erreichbar",
       microphone_error: "Mikrofon nicht erreichbar",
       file_too_large: "Datei ist zu groß",
+      file_too_large_with_size: "Datei ist zu groß. Maximal zulässige Größe",
       invalid_file_type: "Ungültiger Dateityp",
       upload_error: "Upload-Fehler",
       capture: "Aufnehmen",

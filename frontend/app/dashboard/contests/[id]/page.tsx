@@ -4,10 +4,10 @@ import * as React from "react"
 import { useState, useEffect } from "react"
 import { useLanguage } from '@/contexts/language-context'
 import { useAuth } from '@/hooks/use-auth'
-import { useRouter, useParams } from 'next/navigation'
+import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { ContestDetailSkeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, Sparkles, Users, Video, Image, Globe, Lightbulb, Youtube, ExternalLink, Search } from 'lucide-react'
+import { ArrowLeft, Sparkles, Users, Video, Image, Globe, Lightbulb, Youtube, ExternalLink } from 'lucide-react'
 import { contestService, ContestResponse } from '@/services/contest-service'
 import { StickyPageHeader } from '@/components/ui/sticky-page-header'
 import { ContestInfoDialog } from '@/components/dashboard/contest-info-dialog'
@@ -15,6 +15,7 @@ import { ContestantsList } from '@/components/dashboard/contestants-list'
 import { ContestantsSidebar } from '@/components/dashboard/contestants-sidebar'
 import { HoverInfoDialog } from '@/components/dashboard/hover-info-dialog'
 import { ReportContestantDialog } from '@/components/dashboard/report-contestant-dialog'
+import { LocationFilterBar } from '@/components/dashboard/location-filter-bar'
 
 interface Media {
   id: string
@@ -115,7 +116,7 @@ export default function ContestDetailPage() {
   const router = useRouter()
   const params = useParams()
   const contestId = params.id as string
-  
+
   const [contest, setContest] = useState<ContestDetail | null>(null)
   const [favorites, setFavorites] = useState<string[]>([])
   const [pageLoading, setPageLoading] = useState(true)
@@ -128,6 +129,29 @@ export default function ContestDetailPage() {
   const [selectedContestantId, setSelectedContestantId] = useState<number | null>(null)
   const [selectedContestantTitle, setSelectedContestantTitle] = useState<string>('')
 
+  // Lire les filtres de localisation depuis l'URL
+  const searchParams = useSearchParams()
+  const [filterCountry, setFilterCountry] = React.useState<string>(() => {
+    return searchParams.get('country') || ''
+  })
+  const [filterContinent, setFilterContinent] = React.useState<string>(() => {
+    return searchParams.get('continent') || 'all'
+  })
+
+  // Mettre à jour l'URL quand les filtres changent
+  const updateUrlWithFilters = React.useCallback((continent: string, country: string) => {
+    const params = new URLSearchParams()
+    if (continent && continent !== 'all') {
+      params.set('continent', continent)
+    }
+    if (country) {
+      params.set('country', country)
+    }
+    const queryString = params.toString()
+    const newUrl = `/dashboard/contests/${contestId}${queryString ? `?${queryString}` : ''}`
+    router.replace(newUrl, { scroll: false })
+  }, [router, contestId])
+
   // Redirection si non authentifié
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -139,14 +163,24 @@ export default function ContestDetailPage() {
   useEffect(() => {
     const loadContest = async () => {
       try {
-        const contestResponse = await contestService.getContestById(contestId)
-        const contestantsResponse = (contestResponse as any).contestants || []
+        // Charger les infos du contest ET les contestants en parallèle (optimisation)
+        const [contestResponse, contestantsResponse] = await Promise.all([
+          contestService.getContestById(contestId),
+          contestService.getContestantsByContest(
+            contestId,
+            0,
+            10, // Réduit de 100 à 50 pour améliorer les performances
+            filterCountry || undefined,
+            undefined, // filterRegion
+            filterContinent && filterContinent !== 'all' ? filterContinent : undefined
+          )
+        ])
 
         const parseMediaIds = (mediaIds: string | undefined, type: 'image' | 'video'): Media[] => {
           if (!mediaIds) {
             return []
           }
-          
+
           if (Array.isArray(mediaIds)) {
             const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
             return mediaIds
@@ -168,15 +202,15 @@ export default function ContestDetailPage() {
                 }
               })
           }
-          
+
           try {
             const parsed = typeof mediaIds === 'string' ? JSON.parse(mediaIds) : mediaIds
             if (!Array.isArray(parsed)) {
               return []
             }
-            
+
             const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-            
+
             return parsed
               .filter((url: string) => url && url.trim() !== '')
               .map((url: string, index: number) => {
@@ -210,10 +244,11 @@ export default function ContestDetailPage() {
             id: String(c.id ?? index),
             userId: c.user_id,
             name: c.author_name ?? `Contestant #${index + 1}`,
-            country: c.author_country,
-            city: c.author_city,
-            continent: c.author_continent,
-            region: c.author_region,
+            // Utiliser les champs directs du contestant avec fallback sur les champs auteur
+            country: c.country || c.author_country,
+            city: c.city || c.author_city,
+            continent: c.continent || c.author_continent,
+            region: c.region || c.author_region,
             avatar: c.author_avatar_url ?? '👤',
             participationTitle: c.title,
             description: c.description ?? '',
@@ -259,7 +294,7 @@ export default function ContestDetailPage() {
         const favoriteIds = mappedContestants
           .filter(c => c.isFavorite)
           .map(c => c.id)
-          setFavorites(favoriteIds)
+        setFavorites(favoriteIds)
       } catch (error) {
         console.error('Error loading contest:', error)
       } finally {
@@ -270,7 +305,7 @@ export default function ContestDetailPage() {
     if (!isLoading && isAuthenticated && user) {
       loadContest()
     }
-  }, [isLoading, isAuthenticated, user, contestId])
+  }, [isLoading, isAuthenticated, user, contestId, filterCountry, filterContinent])
 
   const handleReportClick = (contestantId: string) => {
     const contestant = contest?.contestants.find(c => c.id === contestantId)
@@ -284,13 +319,13 @@ export default function ContestDetailPage() {
   const handleDeleteContestant = async (contestantId: string) => {
     try {
       await contestService.deleteContestant(Number(contestantId))
-      
+
       const contestResponse = await contestService.getContestById(contestId)
       const contestantsResponse = (contestResponse as any).contestants || []
-      
+
       const parseMediaIds = (mediaIds: string | undefined, type: 'image' | 'video'): Media[] => {
         if (!mediaIds) return []
-        
+
         if (Array.isArray(mediaIds)) {
           const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
           return mediaIds
@@ -312,15 +347,15 @@ export default function ContestDetailPage() {
               }
             })
         }
-        
+
         try {
           const parsed = typeof mediaIds === 'string' ? JSON.parse(mediaIds) : mediaIds
           if (!Array.isArray(parsed)) {
             return []
           }
-          
+
           const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-          
+
           return parsed
             .filter((url: string) => url && url.trim() !== '')
             .map((url: string, index: number) => {
@@ -420,11 +455,11 @@ export default function ContestDetailPage() {
     if (hoverTimeout) {
       clearTimeout(hoverTimeout)
     }
-    
+
     const timeout = setTimeout(() => {
       setHoveredElement({ type, id, data })
     }, 2000)
-    
+
     setHoverTimeout(timeout)
   }
 
@@ -437,7 +472,7 @@ export default function ContestDetailPage() {
 
   const handleToggleFavorite = async (contestantId: string) => {
     const isFavorite = favorites.includes(contestantId)
-    
+
     try {
       if (isFavorite) {
         await contestService.removeFromFavorites(parseInt(contestantId))
@@ -446,7 +481,7 @@ export default function ContestDetailPage() {
           if (!prev) return null
           return {
             ...prev,
-            contestants: prev.contestants.map(c => 
+            contestants: prev.contestants.map(c =>
               c.id === contestantId ? { ...c, isFavorite: false } : c
             )
           }
@@ -457,14 +492,14 @@ export default function ContestDetailPage() {
           showToast(t('dashboard.contests.favorite_limit_reached'), 'error')
           return
         }
-        
+
         await contestService.addToFavorites(parseInt(contestantId))
         setFavorites(prevFavorites => [...prevFavorites, contestantId])
         setContest((prev) => {
           if (!prev) return null
           return {
             ...prev,
-            contestants: prev.contestants.map(c => 
+            contestants: prev.contestants.map(c =>
               c.id === contestantId ? { ...c, isFavorite: true } : c
             )
           }
@@ -552,7 +587,7 @@ export default function ContestDetailPage() {
               {t('common.back')}
             </Button>
           </div>
-          
+
           {/* Sticky Page Header - Desktop: se cache à droite, Mobile: se fixe en haut */}
           <StickyPageHeader
             title={contest.contest.name}
@@ -561,36 +596,41 @@ export default function ContestDetailPage() {
             infoTooltip={t('dashboard.contests.tooltip_info') || 'Voir les détails et les conditions du concours'}
           />
 
-          {/* Search Bar - Déplacée ici pour être accessible */}
-          <div className="mb-6 lg:mb-8">
-            <div className="relative w-full max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
-              <input
-                type="text"
-                placeholder={t('dashboard.contests.search_contestant') || 'Rechercher un participant...'}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-300 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800/50 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myhigh5-primary/50 focus:border-myhigh5-primary/50 transition-all shadow-sm hover:shadow-md"
-              />
-            </div>
-          </div>
+          {/* Barre de recherche et filtres */}
+          <LocationFilterBar
+            user={user}
+            searchTerm={searchQuery}
+            onSearchChange={setSearchQuery}
+            searchPlaceholder={t('dashboard.contests.search_contestant') || 'Rechercher un participant...'}
+            filterContinent={filterContinent}
+            onContinentChange={(value) => {
+              setFilterContinent(value)
+              updateUrlWithFilters(value, filterCountry)
+            }}
+            filterCountry={filterCountry}
+            onCountryChange={(value) => {
+              setFilterCountry(value)
+              updateUrlWithFilters(filterContinent, value)
+            }}
+            showSort={false}
+            showSearchButton={false}
+            className="mb-6 lg:mb-8"
+          />
 
-        {/* Toast Notification */}
-        {toast && (
-          <div className={`fixed bottom-4 right-4 rounded-xl shadow-xl p-4 z-50 animate-in fade-in slide-in-from-bottom-2 backdrop-blur-sm ${
-            toast.type === 'success'
+          {/* Toast Notification */}
+          {toast && (
+            <div className={`fixed bottom-4 right-4 rounded-xl shadow-xl p-4 z-50 animate-in fade-in slide-in-from-bottom-2 backdrop-blur-sm ${toast.type === 'success'
               ? 'bg-green-50/95 dark:bg-green-900/30 border border-green-200 dark:border-green-800'
               : 'bg-red-50/95 dark:bg-red-900/30 border border-red-200 dark:border-red-800'
-          }`}>
-            <p className={`text-sm font-medium ${
-              toast.type === 'success'
+              }`}>
+              <p className={`text-sm font-medium ${toast.type === 'success'
                 ? 'text-green-700 dark:text-green-300'
                 : 'text-red-700 dark:text-red-300'
-            }`}>
-              {toast.type === 'success' ? '✅' : '❌'} {toast.message}
-            </p>
-          </div>
-        )}
+                }`}>
+                {toast.type === 'success' ? '✅' : '❌'} {toast.message}
+              </p>
+            </div>
+          )}
 
           {/* Contest Info Dialog */}
           <ContestInfoDialog
@@ -598,7 +638,7 @@ export default function ContestDetailPage() {
             onOpenChange={setShowInfoDialog}
             contest={contest.contest}
             participantsCount={participantsCount}
-                    />
+          />
 
           {/* Hover Info Dialog */}
           {hoveredElement && (
@@ -614,7 +654,7 @@ export default function ContestDetailPage() {
               type={hoveredElement.type}
               data={hoveredElement.data}
             />
-              )}
+          )}
 
           {/* Main Content Layout: Contestants with Sidebar */}
           <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
@@ -638,7 +678,7 @@ export default function ContestDetailPage() {
                     {/* Title */}
                     <div className="space-y-2">
                       <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">
-                        {isNomination 
+                        {isNomination
                           ? (t('dashboard.contests.be_first_to_nominate') || 'Soyez le premier à nommer !')
                           : (t('dashboard.contests.be_first_to_participate') || 'Soyez le premier à participer !')
                         }
@@ -656,7 +696,7 @@ export default function ContestDetailPage() {
                       onClick={() => router.push(`/dashboard/contests/${contestId}/apply`)}
                       className="bg-myhigh5-primary hover:bg-myhigh5-blue-700 text-white font-semibold px-8 py-6 text-lg rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
                     >
-                      {isNomination 
+                      {isNomination
                         ? (t('dashboard.contests.nominate') || 'Nommer')
                         : (t('dashboard.contests.participate') || 'Participer')
                       }
@@ -671,7 +711,7 @@ export default function ContestDetailPage() {
                           {t('dashboard.contests.tips') || 'Astuces'}
                         </h3>
                       </div>
-                      
+
                       <div className="grid md:grid-cols-2 gap-4 text-left">
                         {isNomination ? (
                           <>
@@ -813,46 +853,46 @@ export default function ContestDetailPage() {
                   </div>
                 </div>
               ) : (
-              <ContestantsList
-                contestants={filteredContestants}
-                contestId={contestId}
-                    currentUserId={user?.id}
-                favorites={favorites}
-                searchQuery={searchQuery}
-                onToggleFavorite={handleToggleFavorite}
-                onViewDetails={(contestantId) => router.push(`/dashboard/contests/${contestId}/contestant/${contestantId}`)}
-                onVote={() => {
-                  // Le vote est géré dans ContestantCard, pas de redirection nécessaire
-                }}
-                onComment={() => {}}
-                onShare={() => {}}
-                onReport={handleReportClick}
-                onEdit={() => router.push(`/dashboard/contests/${contestId}/apply?edit=true`)}
-                onDelete={handleDeleteContestant}
-                onHoverAuthor={(contestantId, data) => handleHoverStart('author', contestantId, data)}
-                onHoverEnd={handleHoverEnd}
-                onHoverDescription={(contestantId, description) => handleHoverStart('description', contestantId, description)}
-                onHoverVotes={(contestantId, votes) => {
-                  const contestant = contest.contestants.find(c => c.id === contestantId)
-                  // Seul l'auteur peut voir la liste des votes
-                  if (user?.id === contestant?.userId) {
-                    handleHoverStart('votes', contestantId, votes)
-                  }
-                }}
-                onHoverReactions={(contestantId, reactions) => {
-                  const contestant = contest.contestants.find(c => c.id === contestantId)
-                  if (user?.id === contestant?.userId) {
-                    handleHoverStart('reactions', contestantId, reactions)
-                  }
-                }}
-                onHoverFavorites={(contestantId, favorites) => {
-                  const contestant = contest.contestants.find(c => c.id === contestantId)
-                  // Seul l'auteur peut voir la liste des favoris
-                  if (user?.id === contestant?.userId) {
-                    handleHoverStart('favorites', contestantId, favorites)
-                  }
-                }}
-              />
+                <ContestantsList
+                  contestants={filteredContestants}
+                  contestId={contestId}
+                  currentUserId={user?.id}
+                  favorites={favorites}
+                  searchQuery={searchQuery}
+                  onToggleFavorite={handleToggleFavorite}
+                  onViewDetails={(contestantId) => router.push(`/dashboard/contests/${contestId}/contestant/${contestantId}`)}
+                  onVote={() => {
+                    // Le vote est géré dans ContestantCard, pas de redirection nécessaire
+                  }}
+                  onComment={() => { }}
+                  onShare={() => { }}
+                  onReport={handleReportClick}
+                  onEdit={() => router.push(`/dashboard/contests/${contestId}/apply?edit=true`)}
+                  onDelete={handleDeleteContestant}
+                  onHoverAuthor={(contestantId, data) => handleHoverStart('author', contestantId, data)}
+                  onHoverEnd={handleHoverEnd}
+                  onHoverDescription={(contestantId, description) => handleHoverStart('description', contestantId, description)}
+                  onHoverVotes={(contestantId, votes) => {
+                    const contestant = contest.contestants.find(c => c.id === contestantId)
+                    // Seul l'auteur peut voir la liste des votes
+                    if (user?.id === contestant?.userId) {
+                      handleHoverStart('votes', contestantId, votes)
+                    }
+                  }}
+                  onHoverReactions={(contestantId, reactions) => {
+                    const contestant = contest.contestants.find(c => c.id === contestantId)
+                    if (user?.id === contestant?.userId) {
+                      handleHoverStart('reactions', contestantId, reactions)
+                    }
+                  }}
+                  onHoverFavorites={(contestantId, favorites) => {
+                    const contestant = contest.contestants.find(c => c.id === contestantId)
+                    // Seul l'auteur peut voir la liste des favoris
+                    if (user?.id === contestant?.userId) {
+                      handleHoverStart('favorites', contestantId, favorites)
+                    }
+                  }}
+                />
               )}
             </div>
 
@@ -873,7 +913,7 @@ export default function ContestDetailPage() {
               contestId={contestId}
               onShowToast={showToast}
             />
-            </div>
+          </div>
         </div>
       </div>
     </div>

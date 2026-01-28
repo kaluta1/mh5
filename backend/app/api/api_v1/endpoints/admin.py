@@ -16,7 +16,8 @@ from app.models.category import Category
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any, Dict, Any
 from datetime import datetime, timedelta, date
-from app.crud.crud_contest import calculate_season_dates
+from app.crud.crud_round import round as crud_round
+from app.schemas.round import RoundCreate
 
 router = APIRouter()
 
@@ -48,6 +49,7 @@ class ContestCreateRequest(BaseModel):
     image_url: Optional[str] = None
     voting_restriction: str = "none"
     voting_type_id: Optional[int] = None
+    category_id: Optional[int] = None
     # Verification requirements
     requires_kyc: bool = False
     verification_type: str = "none"
@@ -82,16 +84,20 @@ class ContestResponse(BaseModel):
     is_active: bool
     is_submission_open: bool
     is_voting_open: bool
-    submission_start_date: datetime
-    submission_end_date: datetime
-    voting_start_date: datetime
-    voting_end_date: datetime
-    image_url: Optional[str]
+    submission_start_date: Optional[datetime] = None
+    submission_end_date: Optional[datetime] = None
+    voting_start_date: Optional[datetime] = None
+    voting_end_date: Optional[datetime] = None
+    image_url: Optional[str] = None
     cover_image_url: Optional[str] = None
     voting_restriction: str
-    participant_count: int
-    approved_count: int
-    pending_count: int
+    voting_type_id: Optional[int] = None
+    voting_type: Optional[Dict[str, Any]] = None
+    category_id: Optional[int] = None
+    category: Optional[Dict[str, Any]] = None
+    participant_count: int = 0
+    approved_count: int = 0
+    pending_count: int = 0
     created_at: datetime
     updated_at: datetime
     # Season dates
@@ -222,7 +228,10 @@ async def get_all_contests(
         )
     
     try:
-        query = db.query(Contest).filter(Contest.is_deleted == False)
+        query = db.query(Contest).filter(Contest.is_deleted == False).options(
+            joinedload(Contest.voting_type),
+            joinedload(Contest.category)
+        )
         
         if level:
             query = query.filter(Contest.level == level)
@@ -243,11 +252,53 @@ async def get_all_contests(
             ).all()
             for link in links:
                 season_links[link.contest_id] = link.season_id
+
+        # Fetch active rounds for all contests to get dates
+        # This is a bit expensive but necessary since dates are no longer on Contest
+        # Optimization: Fetch all active rounds for these contests in one query
+        from app.models.round import Round, RoundStatus
+        from datetime import date
+        today = date.today()
+        
+        # We try to get the "current" active round. Since multiple rounds can exist, 
+        # we specifically look for one that covers "now" or is the latest created?
+        # For display in admin list, we probably want the one that is currently relevant.
+        # Let's fetch the round that is strictly active or otherwise just the latest one string.
+        
+        # For now, let's just fetch all rounds for these contests and filter in python to find "active" one
+        all_rounds = db.query(Round).filter(
+            Round.contest_id.in_(contest_ids),
+            Round.status != RoundStatus.CANCELLED
+        ).all()
+        
+        contest_rounds = {}
+        for r in all_rounds:
+            if r.contest_id not in contest_rounds:
+                contest_rounds[r.contest_id] = []
+            contest_rounds[r.contest_id].append(r)
+            
+        def get_display_round(rounds):
+             # Find one that is active now
+             for r in rounds:
+                 if r.submission_start_date and r.submission_end_date:
+                     if r.submission_start_date <= today <= r.submission_end_date:
+                         return r
+                 if r.voting_start_date and r.voting_end_date:
+                     if r.voting_start_date <= today <= r.voting_end_date:
+                         return r
+             # If none active, return the last created
+             if rounds:
+                 return sorted(rounds, key=lambda x: x.created_at, reverse=True)[0]
+             return None
+
         
         # Ajouter les statistiques pour chaque concours
         result = []
         for contest in contests:
             total, approved, pending = get_contest_stats(db, contest.id)
+            
+            active_round = get_display_round(contest_rounds.get(contest.id, []))
+            
             contest_dict = {
                 'id': contest.id,
                 'name': contest.name,
@@ -258,29 +309,28 @@ async def get_all_contests(
                 'is_active': contest.is_active,
                 'is_submission_open': contest.is_submission_open,
                 'is_voting_open': contest.is_voting_open,
-                'submission_start_date': contest.submission_start_date,
-                'submission_end_date': contest.submission_end_date,
-                'voting_start_date': contest.voting_start_date,
-                'voting_end_date': contest.voting_end_date,
+                # Fetch active round date if available
+                'submission_start_date': active_round.submission_start_date if active_round else None,
+                'submission_end_date': active_round.submission_end_date if active_round else None,
+                'voting_start_date': active_round.voting_start_date if active_round else None,
+                'voting_end_date': active_round.voting_end_date if active_round else None,
+                'city_season_start_date': active_round.city_season_start_date if active_round else None,
+                'city_season_end_date': active_round.city_season_end_date if active_round else None,
+                'country_season_start_date': active_round.country_season_start_date if active_round else None,
+                'country_season_end_date': active_round.country_season_end_date if active_round else None,
+                'regional_start_date': active_round.regional_start_date if active_round else None,
+                'regional_end_date': active_round.regional_end_date if active_round else None,
+                'continental_start_date': active_round.continental_start_date if active_round else None,
+                'continental_end_date': active_round.continental_end_date if active_round else None,
+                'global_start_date': active_round.global_start_date if active_round else None,
+                'global_end_date': active_round.global_end_date if active_round else None,
                 'image_url': contest.image_url,
-                'cover_image_url': contest.cover_image_url,
                 'voting_restriction': contest.voting_restriction.value if contest.voting_restriction else 'none',
                 'participant_count': total,
                 'approved_count': approved,
                 'pending_count': pending,
                 'created_at': contest.created_at,
                 'updated_at': contest.updated_at,
-                # Season dates
-                'city_season_start_date': contest.city_season_start_date,
-                'city_season_end_date': contest.city_season_end_date,
-                'country_season_start_date': contest.country_season_start_date,
-                'country_season_end_date': contest.country_season_end_date,
-                'regional_start_date': contest.regional_start_date,
-                'regional_end_date': contest.regional_end_date,
-                'continental_start_date': contest.continental_start_date,
-                'continental_end_date': contest.continental_end_date,
-                'global_start_date': contest.global_start_date,
-                'global_end_date': contest.global_end_date,
                 # Verification fields
                 'requires_kyc': contest.requires_kyc,
                 'verification_type': contest.verification_type.value if contest.verification_type else 'none',
@@ -325,7 +375,10 @@ async def get_contest(
     """
     check_admin(current_user)
     
-    contest = db.query(Contest).filter(Contest.id == contest_id, Contest.is_deleted == False).first()
+    contest = db.query(Contest).filter(Contest.id == contest_id, Contest.is_deleted == False).options(
+        joinedload(Contest.voting_type),
+        joinedload(Contest.category)
+    ).first()
     if not contest:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -341,6 +394,16 @@ async def get_contest(
         ContestSeasonLink.is_active == True
     ).first()
     season_id = season_link.season_id if season_link else None
+
+    # Fetch active round for this contest
+    active_round = crud_round.get_active_round_for_contest(db, contest.id)
+    # Fallback to latest round if no active round
+    if not active_round:
+        # Check simple query for latest
+        from app.models.round import Round
+        latest = db.query(Round).filter(Round.contest_id == contest.id).order_by(Round.created_at.desc()).first()
+        if latest:
+             active_round = latest
     
     # Return contest with statistics
     return {
@@ -353,13 +416,29 @@ async def get_contest(
         'is_active': contest.is_active,
         'is_submission_open': contest.is_submission_open,
         'is_voting_open': contest.is_voting_open,
-        'submission_start_date': contest.submission_start_date,
-        'submission_end_date': contest.submission_end_date,
-        'voting_start_date': contest.voting_start_date,
-        'voting_end_date': contest.voting_end_date,
+        # Dates from active round
+        'submission_start_date': active_round.submission_start_date if active_round else None,
+        'submission_end_date': active_round.submission_end_date if active_round else None,
+        'voting_start_date': active_round.voting_start_date if active_round else None,
+        'voting_end_date': active_round.voting_end_date if active_round else None,
         'image_url': contest.image_url,
         'cover_image_url': contest.cover_image_url,
         'voting_restriction': contest.voting_restriction.value if contest.voting_restriction else 'none',
+        'voting_type_id': contest.voting_type_id,
+        'voting_type': {
+            "id": contest.voting_type.id,
+            "name": contest.voting_type.name,
+            "voting_level": contest.voting_type.voting_level.value if hasattr(contest.voting_type.voting_level, 'value') else str(contest.voting_type.voting_level),
+            "commission_source": contest.voting_type.commission_source.value if hasattr(contest.voting_type.commission_source, 'value') else str(contest.voting_type.commission_source),
+        } if contest.voting_type else None,
+        'category_id': contest.category_id,
+        'category': {
+            "id": contest.category.id,
+            "name": contest.category.name,
+            "slug": contest.category.slug,
+            "description": contest.category.description,
+            "is_active": contest.category.is_active
+        } if contest.category else None,
         'participant_count': total,
         'approved_count': approved,
         'pending_count': pending,
@@ -376,16 +455,16 @@ async def get_contest(
         'min_age': contest.min_age,
         'max_age': contest.max_age,
         # Season dates
-        'city_season_start_date': contest.city_season_start_date,
-        'city_season_end_date': contest.city_season_end_date,
-        'country_season_start_date': contest.country_season_start_date,
-        'country_season_end_date': contest.country_season_end_date,
-        'regional_start_date': contest.regional_start_date,
-        'regional_end_date': contest.regional_end_date,
-        'continental_start_date': contest.continental_start_date,
-        'continental_end_date': contest.continental_end_date,
-        'global_start_date': contest.global_start_date,
-        'global_end_date': contest.global_end_date,
+        'city_season_start_date': active_round.city_season_start_date if active_round else None,
+        'city_season_end_date': active_round.city_season_end_date if active_round else None,
+        'country_season_start_date': active_round.country_season_start_date if active_round else None,
+        'country_season_end_date': active_round.country_season_end_date if active_round else None,
+        'regional_start_date': active_round.regional_start_date if active_round else None,
+        'regional_end_date': active_round.regional_end_date if active_round else None,
+        'continental_start_date': active_round.continental_start_date if active_round else None,
+        'continental_end_date': active_round.continental_end_date if active_round else None,
+        'global_start_date': active_round.global_start_date if active_round else None,
+        'global_end_date': active_round.global_end_date if active_round else None,
         # Media requirements
         'requires_video': getattr(contest, 'requires_video', False),
         'max_videos': getattr(contest, 'max_videos', 1),
@@ -807,7 +886,9 @@ async def create_contest(
         # - continental_end_date = 1 mois après continental_start_date
         # - global_start_date = continental_end_date
         # - global_end_date = 1 mois après global_start_date
-        season_dates = calculate_season_dates(voting_start_date_for_calc) if voting_start_date_for_calc else {}
+        # season_dates calculation removed as it is now handled by Round
+        # season_dates = calculate_season_dates(voting_start_date_for_calc) if voting_start_date_for_calc else {}
+        season_dates = {}
         
         # Handle enum conversions for verification_type and participant_type
         from app.models.contest import VerificationType, ParticipantType
@@ -822,6 +903,15 @@ async def create_contest(
         
         # Convertir voting_type_id=0 en None pour éviter les violations de FK
         voting_type_id = contest_data.voting_type_id if contest_data.voting_type_id and contest_data.voting_type_id > 0 else None
+        category_id = contest_data.category_id if contest_data.category_id and contest_data.category_id > 0 else None
+        
+        # Si category_id est fourni, valider et récupérer la catégorie pour mettre à jour contest_type
+        contest_type = contest_data.contest_type
+        if category_id:
+            category = db.query(Category).filter(Category.id == category_id).first()
+            if category:
+                contest_type = category.slug
+        
         
         # Create contest with auto-generated values
         new_contest = Contest(
@@ -832,14 +922,12 @@ async def create_contest(
             is_active=contest_data.is_active,
             is_submission_open=contest_data.is_submission_open,
             is_voting_open=contest_data.is_voting_open,
-            submission_start_date=submission_start,
-            submission_end_date=submission_end,
-            voting_start_date=voting_start,
-            voting_end_date=voting_end,
             image_url=contest_data.image_url,
             voting_restriction=contest_data.voting_restriction,
             voting_type_id=voting_type_id,
+            category_id=category_id,
             # Verification fields
+
             requires_kyc=contest_data.requires_kyc,
             verification_type=verification_type,
             participant_type=participant_type,
@@ -857,13 +945,40 @@ async def create_contest(
             min_images=contest_data.min_images,
             max_images=contest_data.max_images,
             verification_video_max_duration=contest_data.verification_video_max_duration,
-            verification_max_size_mb=contest_data.verification_max_size_mb,
-            # Season dates
-            **season_dates
+            verification_max_size_mb=contest_data.verification_max_size_mb
+            # Season dates removed from Contest, handled by Round
         )
         
         db.add(new_contest)
         db.flush()  # Pour obtenir l'ID du contest
+        
+        # Create initial Round with the generated/provided dates
+        # Use existing dates or calculate season dates if needed
+        round_dates = {}
+        
+        # If we have season_dates calculated (from local cache if logic existed, but it's removed now)
+        # We should use crud_round to calculate defaults if voting_start is present
+        
+        if voting_start and isinstance(voting_start, (date, datetime)):
+            v_date = voting_start.date() if isinstance(voting_start, datetime) else voting_start
+            calculated_dates = crud_round.calculate_dates_for_month(v_date.month, v_date.year)
+            round_dates.update(calculated_dates)
+        
+        # Override with specific dates if provided
+        if submission_start: round_dates['submission_start_date'] = submission_start
+        if submission_end: round_dates['submission_end_date'] = submission_end
+        if voting_start: round_dates['voting_start_date'] = voting_start
+        if voting_end: round_dates['voting_end_date'] = voting_end
+        
+        # Create the round
+        round_name = f"Round {voting_start.strftime('%B %Y')}" if voting_start else "Initial Round"
+        
+        round_in = RoundCreate(
+            contest_id=new_contest.id,
+            name=round_name,
+            **round_dates
+        )
+        crud_round.create_with_contest(db, obj_in=round_in, contest_id=new_contest.id)
         
         # Créer la liaison avec la saison via ContestSeasonLink si season_id est fourni
         if contest_data.season_id:
@@ -891,13 +1006,19 @@ async def create_contest(
             'is_active': new_contest.is_active,
             'is_submission_open': new_contest.is_submission_open,
             'is_voting_open': new_contest.is_voting_open,
-            'submission_start_date': new_contest.submission_start_date,
-            'submission_end_date': new_contest.submission_end_date,
-            'voting_start_date': new_contest.voting_start_date,
-            'voting_end_date': new_contest.voting_end_date,
+            'is_submission_open': new_contest.is_submission_open,
+            'is_voting_open': new_contest.is_voting_open,
+            'submission_start_date': round_dates.get('submission_start_date'),
+            'submission_end_date': round_dates.get('submission_end_date'),
+            'voting_start_date': round_dates.get('voting_start_date'),
+            'voting_end_date': round_dates.get('voting_end_date'),
             'image_url': new_contest.image_url,
             'cover_image_url': new_contest.cover_image_url,
             'voting_restriction': new_contest.voting_restriction.value if new_contest.voting_restriction else 'none',
+            'voting_type_id': new_contest.voting_type_id,
+            'voting_type': None, # Newly created, relationship might not be loaded yet
+            'category_id': new_contest.category_id,
+            'category': None, # Newly created, relationship might not be loaded yet
             'participant_count': total,
             'approved_count': approved,
             'pending_count': pending,
@@ -977,6 +1098,16 @@ async def update_contest(
         contest.voting_restriction = contest_data.voting_restriction
         # Convertir voting_type_id=0 en None pour éviter les violations de FK
         contest.voting_type_id = contest_data.voting_type_id if contest_data.voting_type_id and contest_data.voting_type_id > 0 else None
+        
+        # Gestion de category_id
+        contest.category_id = contest_data.category_id if contest_data.category_id and contest_data.category_id > 0 else None
+        
+        # Si category_id est fourni, mettre à jour contest_type
+        if contest.category_id:
+            category = db.query(Category).filter(Category.id == contest.category_id).first()
+            if category:
+                contest.contest_type = category.slug
+
         
         # Update verification fields
         contest.requires_kyc = contest_data.requires_kyc
@@ -1058,93 +1189,63 @@ async def update_contest(
             except (ValueError, TypeError):
                 return None
         
-        # Update main dates if provided
-        voting_start_changed = False
+        # Get active round
+        active_round = crud_round.get_active_round_for_contest(db, contest_id=contest.id)
         
-        # Mettre à jour les dates individuellement si elles sont fournies
-        if contest_data.submission_start_date is not None:
-            parsed_date = parse_date(contest_data.submission_start_date)
-            if parsed_date:
-                contest.submission_start_date = parsed_date
-                # Si seulement submission_start_date est fourni, générer les autres dates automatiquement
-                if not contest_data.submission_end_date and not contest_data.voting_start_date and not contest_data.voting_end_date:
-                    submission_start, submission_end, voting_start, voting_end = generate_contest_dates(
-                        contest_data.submission_start_date
-                    )
-                    contest.submission_end_date = submission_end
-                    if contest.voting_start_date != voting_start:
-                        voting_start_changed = True
-                    contest.voting_start_date = voting_start
-                    contest.voting_end_date = voting_end
+        # If no active round, we might need to create one if dates are provided, 
+        # or just fail/ignore. For now, let's assume if dates are updated, we want to update the active round.
         
-        if contest_data.submission_end_date is not None:
-            parsed_date = parse_date(contest_data.submission_end_date)
-            if parsed_date:
-                contest.submission_end_date = parsed_date
-        
-        if contest_data.voting_start_date is not None:
-            parsed_date = parse_date(contest_data.voting_start_date)
-            if parsed_date:
-                old_voting_start = contest.voting_start_date
-                if isinstance(old_voting_start, datetime):
-                    old_voting_start = old_voting_start.date()
-                if old_voting_start != parsed_date:
-                    voting_start_changed = True
-                contest.voting_start_date = parsed_date
-        
-        if contest_data.voting_end_date is not None:
-            parsed_date = parse_date(contest_data.voting_end_date)
-            if parsed_date:
-                contest.voting_end_date = parsed_date
-        
-        # Recalculer les dates des saisons si voting_start_date a changé
-        if voting_start_changed:
-            voting_start_for_calc = contest.voting_start_date
-            if isinstance(voting_start_for_calc, datetime):
-                voting_start_for_calc = voting_start_for_calc.date()
-            elif isinstance(voting_start_for_calc, str):
-                try:
-                    if 'T' in voting_start_for_calc:
-                        voting_start_for_calc = datetime.fromisoformat(voting_start_for_calc.replace('Z', '+00:00')).date()
-                    else:
-                        voting_start_for_calc = datetime.strptime(voting_start_for_calc, '%Y-%m-%d').date()
-                except (ValueError, TypeError):
-                    voting_start_for_calc = None
+        if active_round:
+            from app.schemas.round import RoundUpdate
+            round_update_data = {}
             
-            if voting_start_for_calc:
-                calculated_dates = calculate_season_dates(voting_start_for_calc)
-                contest.city_season_start_date = calculated_dates.get('city_season_start_date')
-                contest.city_season_end_date = calculated_dates.get('city_season_end_date')
-                contest.country_season_start_date = calculated_dates.get('country_season_start_date')
-                contest.country_season_end_date = calculated_dates.get('country_season_end_date')
-                contest.regional_start_date = calculated_dates.get('regional_start_date')
-                contest.regional_end_date = calculated_dates.get('regional_end_date')
-                contest.continental_start_date = calculated_dates.get('continental_start_date')
-                contest.continental_end_date = calculated_dates.get('continental_end_date')
-                contest.global_start_date = calculated_dates.get('global_start_date')
-                contest.global_end_date = calculated_dates.get('global_end_date')
+            # Update main dates if provided
+            if contest_data.submission_start_date is not None:
+                parsed = parse_date(contest_data.submission_start_date)
+                if parsed: round_update_data['submission_start_date'] = parsed
+            
+            if contest_data.submission_end_date is not None:
+                parsed = parse_date(contest_data.submission_end_date)
+                if parsed: round_update_data['submission_end_date'] = parsed
+                
+            if contest_data.voting_start_date is not None:
+                parsed = parse_date(contest_data.voting_start_date)
+                if parsed: round_update_data['voting_start_date'] = parsed
+                
+            if contest_data.voting_end_date is not None:
+                parsed = parse_date(contest_data.voting_end_date)
+                if parsed: round_update_data['voting_end_date'] = parsed
+
+            # Update season dates if provided
+            if contest_data.city_season_start_date is not None:
+                round_update_data['city_season_start_date'] = parse_date(contest_data.city_season_start_date)
+            if contest_data.city_season_end_date is not None:
+                round_update_data['city_season_end_date'] = parse_date(contest_data.city_season_end_date)
+            if contest_data.country_season_start_date is not None:
+                round_update_data['country_season_start_date'] = parse_date(contest_data.country_season_start_date)
+            if contest_data.country_season_end_date is not None:
+                round_update_data['country_season_end_date'] = parse_date(contest_data.country_season_end_date)
+            if contest_data.regional_start_date is not None:
+                round_update_data['regional_start_date'] = parse_date(contest_data.regional_start_date)
+            if contest_data.regional_end_date is not None:
+                round_update_data['regional_end_date'] = parse_date(contest_data.regional_end_date)
+            if contest_data.continental_start_date is not None:
+                round_update_data['continental_start_date'] = parse_date(contest_data.continental_start_date)
+            if contest_data.continental_end_date is not None:
+                round_update_data['continental_end_date'] = parse_date(contest_data.continental_end_date)
+            if contest_data.global_start_date is not None:
+                round_update_data['global_start_date'] = parse_date(contest_data.global_start_date)
+            if contest_data.global_end_date is not None:
+                round_update_data['global_end_date'] = parse_date(contest_data.global_end_date)
+
+            if round_update_data:
+                crud_round.update(db, db_obj=active_round, obj_in=RoundUpdate(**round_update_data))
+
         
-        # Mettre à jour les dates des saisons si elles sont fournies explicitement
-        if contest_data.city_season_start_date is not None:
-            contest.city_season_start_date = parse_date(contest_data.city_season_start_date)
-        if contest_data.city_season_end_date is not None:
-            contest.city_season_end_date = parse_date(contest_data.city_season_end_date)
-        if contest_data.country_season_start_date is not None:
-            contest.country_season_start_date = parse_date(contest_data.country_season_start_date)
-        if contest_data.country_season_end_date is not None:
-            contest.country_season_end_date = parse_date(contest_data.country_season_end_date)
-        if contest_data.regional_start_date is not None:
-            contest.regional_start_date = parse_date(contest_data.regional_start_date)
-        if contest_data.regional_end_date is not None:
-            contest.regional_end_date = parse_date(contest_data.regional_end_date)
-        if contest_data.continental_start_date is not None:
-            contest.continental_start_date = parse_date(contest_data.continental_start_date)
-        if contest_data.continental_end_date is not None:
-            contest.continental_end_date = parse_date(contest_data.continental_end_date)
-        if contest_data.global_start_date is not None:
-            contest.global_start_date = parse_date(contest_data.global_start_date)
-        if contest_data.global_end_date is not None:
-            contest.global_end_date = parse_date(contest_data.global_end_date)
+        # Old date fields update logic removed
+        
+        # Mettre à jour les dates des saisons si elles sont fournies explicitement (legacy fields on Contest are gone)
+        # We already handled these in active_round update above.
         
         db.commit()
         db.refresh(contest)
@@ -1170,13 +1271,30 @@ async def update_contest(
             'is_active': contest.is_active,
             'is_submission_open': contest.is_submission_open,
             'is_voting_open': contest.is_voting_open,
-            'submission_start_date': contest.submission_start_date,
-            'submission_end_date': contest.submission_end_date,
-            'voting_start_date': contest.voting_start_date,
-            'voting_end_date': contest.voting_end_date,
+            'is_submission_open': contest.is_submission_open,
+            'is_voting_open': contest.is_voting_open,
+            'submission_start_date': active_round.submission_start_date if active_round else None,
+            'submission_end_date': active_round.submission_end_date if active_round else None,
+            'voting_start_date': active_round.voting_start_date if active_round else None,
+            'voting_end_date': active_round.voting_end_date if active_round else None,
             'image_url': contest.image_url,
             'cover_image_url': contest.cover_image_url,
             'voting_restriction': contest.voting_restriction.value if contest.voting_restriction else 'none',
+            'voting_type_id': contest.voting_type_id,
+            'voting_type': {
+                "id": contest.voting_type.id,
+                "name": contest.voting_type.name,
+                "voting_level": contest.voting_type.voting_level.value if hasattr(contest.voting_type.voting_level, 'value') else str(contest.voting_type.voting_level),
+                "commission_source": contest.voting_type.commission_source.value if hasattr(contest.voting_type.commission_source, 'value') else str(contest.voting_type.commission_source),
+            } if contest.voting_type else None,
+            'category_id': contest.category_id,
+            'category': {
+                "id": contest.category.id,
+                "name": contest.category.name,
+                "slug": contest.category.slug,
+                "description": contest.category.description,
+                "is_active": contest.category.is_active
+            } if contest.category else None,
             'participant_count': total,
             'approved_count': approved,
             'pending_count': pending,
@@ -1193,16 +1311,16 @@ async def update_contest(
             'min_age': contest.min_age,
             'max_age': contest.max_age,
             # Season dates
-            'city_season_start_date': getattr(contest, 'city_season_start_date', None),
-            'city_season_end_date': getattr(contest, 'city_season_end_date', None),
-            'country_season_start_date': getattr(contest, 'country_season_start_date', None),
-            'country_season_end_date': getattr(contest, 'country_season_end_date', None),
-            'regional_start_date': getattr(contest, 'regional_start_date', None),
-            'regional_end_date': getattr(contest, 'regional_end_date', None),
-            'continental_start_date': getattr(contest, 'continental_start_date', None),
-            'continental_end_date': getattr(contest, 'continental_end_date', None),
-            'global_start_date': getattr(contest, 'global_start_date', None),
-            'global_end_date': getattr(contest, 'global_end_date', None),
+            'city_season_start_date': active_round.city_season_start_date if active_round else None,
+            'city_season_end_date': active_round.city_season_end_date if active_round else None,
+            'country_season_start_date': active_round.country_season_start_date if active_round else None,
+            'country_season_end_date': active_round.country_season_end_date if active_round else None,
+            'regional_start_date': active_round.regional_start_date if active_round else None,
+            'regional_end_date': active_round.regional_end_date if active_round else None,
+            'continental_start_date': active_round.continental_start_date if active_round else None,
+            'continental_end_date': active_round.continental_end_date if active_round else None,
+            'global_start_date': active_round.global_start_date if active_round else None,
+            'global_end_date': active_round.global_end_date if active_round else None,
             # Media requirements
             'requires_video': getattr(contest, 'requires_video', False),
             'max_videos': getattr(contest, 'max_videos', 1),
@@ -2669,7 +2787,7 @@ async def get_reports(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     skip: int = 0,
-    limit: int = 100,
+    limit: int = 10,
     status: Optional[str] = Query(None, description="Filtrer par statut (pending, reviewed, resolved)"),
 ):
     """
@@ -2756,7 +2874,7 @@ async def get_suggested_contests(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     skip: int = 0,
-    limit: int = 100,
+    limit: int = 10,
     status: Optional[str] = Query(None, description="Filtrer par statut (pending, approved, rejected)"),
 ):
     """
@@ -3151,7 +3269,7 @@ async def get_all_transactions(
     user_id: Optional[int] = Query(None, description="Filtrer par utilisateur"),
     search: Optional[str] = Query(None, description="Rechercher par référence, description, email ou username"),
     skip: int = 0,
-    limit: int = 100
+    limit: int = 10
 ):
     """
     Récupère toutes les transactions (dépôts, retraits, et autres transactions) avec des informations enrichies (admin uniquement).

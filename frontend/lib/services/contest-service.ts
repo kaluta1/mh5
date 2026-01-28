@@ -59,11 +59,27 @@ export interface ContestResponse {
   image_url?: string
   cover_image_url?: string
   voting_restriction: string
-  participant_count?: number
-  approved_count?: number
-  pending_count?: number
+  participant_count: number
+  approved_count: number
+  pending_count: number
   created_at: string
   updated_at: string
+  voting_type_id?: number | null
+  voting_type?: {
+    id: number
+    name: string
+    voting_level: string
+    commission_source: string
+    commission_rules?: any
+  }
+  category_id?: number | null
+  category?: {
+    id: number
+    name: string
+    slug: string
+    description?: string
+    is_active: boolean
+  }
   // Verification requirements
   requires_kyc?: boolean
   verification_type?: string
@@ -93,19 +109,19 @@ class ContestService {
   async getAllContests(): Promise<ContestResponse[]> {
     try {
       const cacheKey = '/api/v1/admin/contests'
-      
+
       // Vérifier le cache
       const cached = cacheService.get<ContestResponse[]>(cacheKey)
       if (cached) {
         return cached
       }
-      
+
       // Si pas en cache, faire la requête
       const response = await api.get(cacheKey)
-      
+
       // Mettre en cache
       cacheService.set(cacheKey, response.data)
-      
+
       return response.data
     } catch (error) {
       console.error('Erreur lors de la récupération des concours:', error)
@@ -119,19 +135,19 @@ class ContestService {
   async getContestById(id: number): Promise<ContestResponse> {
     try {
       const cacheKey = `/api/v1/admin/contests/${id}`
-      
+
       // Vérifier le cache
       const cached = cacheService.get<ContestResponse>(cacheKey)
       if (cached) {
         return cached
       }
-      
+
       // Si pas en cache, faire la requête
       const response = await api.get(cacheKey)
-      
+
       // Mettre en cache
       cacheService.set(cacheKey, response.data)
-      
+
       return response.data
     } catch (error) {
       console.error(`Erreur lors de la récupération du concours ${id}:`, error)
@@ -145,11 +161,11 @@ class ContestService {
   async createContest(data: CreateContestData): Promise<ContestResponse> {
     try {
       const response = await api.post('/api/v1/admin/contests', data)
-      
+
       // Invalider les caches admin et publics
       cacheService.invalidate('/api/v1/admin/contests')
       cacheService.invalidate('/api/v1/contests/')
-      
+
       return response.data
     } catch (error) {
       console.error('Erreur lors de la création du concours:', error)
@@ -163,19 +179,19 @@ class ContestService {
   async updateContest(id: number, data: Partial<CreateContestData>): Promise<ContestResponse> {
     try {
       const response = await api.put(`/api/v1/admin/contests/${id}`, data)
-      
+
       // Invalider les caches admin et publics pour ce contest spécifique
       cacheService.invalidate(`/api/v1/admin/contests/${id}`)
       cacheService.invalidate(`/api/v1/contests/${id}`)
-      
+
       // Invalider les listes de contests
       cacheService.invalidate('/api/v1/admin/contests')
       cacheService.invalidate('/api/v1/contests/')
-      
+
       // Mettre à jour le cache avec les nouvelles données
       cacheService.set(`/api/v1/admin/contests/${id}`, response.data)
       cacheService.set(`/api/v1/contests/${id}`, response.data)
-      
+
       return response.data
     } catch (error) {
       console.error(`Erreur lors de la mise à jour du concours ${id}:`, error)
@@ -189,7 +205,7 @@ class ContestService {
   async deleteContest(id: number): Promise<void> {
     try {
       await api.delete(`/api/v1/admin/contests/${id}`)
-      
+
       // Invalider les caches admin et publics
       cacheService.invalidate(`/api/v1/admin/contests/${id}`)
       cacheService.invalidate(`/api/v1/contests/${id}`)
@@ -221,7 +237,7 @@ class ContestService {
         is_active: filters.is_active,
         contest_type: filters.contest_type
       }
-      
+
       // Vérifier le cache
       const cached = cacheService.get<ContestResponse[]>(cacheKey, paramsObj)
       if (cached) {
@@ -230,10 +246,10 @@ class ContestService {
 
       // Si pas en cache, faire la requête
       const response = await api.get(`/api/v1/admin/contests?${params.toString()}`)
-      
+
       // Mettre en cache
       cacheService.set(cacheKey, response.data, paramsObj)
-      
+
       return response.data
     } catch (error) {
       console.error('Erreur lors de la récupération des concours filtrés:', error)

@@ -73,7 +73,7 @@ def get_contest_favorites(
     db: Session = Depends(get_db),
     current_user: User = Depends(deps.get_current_active_user),
     skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
+    limit: int = Query(10, ge=1, le=100),
 ) -> Any:
     """Get user's favorite contests"""
     favorites = crud_favorite.get_contest_favorites(db, current_user.id, skip, limit)
@@ -218,7 +218,7 @@ def get_contestant_favorites(
     db: Session = Depends(get_db),
     current_user: User = Depends(deps.get_current_active_user),
     skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
+    limit: int = Query(10, ge=1, le=100),
 ) -> Any:
     """Get user's favorite contestants"""
     favorites = crud_favorite.get_contestant_favorites(db, current_user.id, skip, limit)

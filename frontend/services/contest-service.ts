@@ -3,6 +3,7 @@ import { cacheService } from '@/lib/cache-service'
 
 export interface TopContestant {
   id: number
+  user_id?: number  // ID de l'utilisateur qui a créé cette participation
   author_name?: string
   author_avatar_url?: string
   image_url?: string  // Image de soumission du contestant
@@ -59,6 +60,8 @@ export interface Contest {
     commission_source: string
     commission_rules?: any
   } | null
+  // Indique si l'utilisateur connecté a déjà participé à ce concours
+  currentUserContesting?: boolean
 }
 
 export interface ContestResponse {
@@ -130,6 +133,8 @@ export interface ContestResponse {
     votes_count?: number
     rank?: number
   }>
+  // Indique si l'utilisateur connecté a déjà participé à ce concours
+  current_user_contesting?: boolean
 }
 
 export interface ContestantWithAuthorAndStats {
@@ -140,16 +145,17 @@ export interface ContestantWithAuthorAndStats {
   description?: string
   image_media_ids?: string
   video_media_ids?: string
+  contestant_image_url?: string
   registration_date: string
   is_qualified: boolean
-  
+
   // Infos auteur
   author_name?: string
   author_country?: string
   author_city?: string
   author_continent?: string
   author_avatar_url?: string
-  
+
   // Stats
   rank?: number
   votes_count: number
@@ -158,15 +164,16 @@ export interface ContestantWithAuthorAndStats {
   favorites_count?: number
   reactions_count?: number
   comments_count?: number
-  
+
   // Infos du contest
   contest_title?: string
+  contest_image_url?: string
   contest_id?: number
   total_participants?: number
-  
+
   // Position dans les favoris
   position?: number
-  
+
   // État du vote
   has_voted: boolean
   can_vote: boolean
@@ -175,14 +182,20 @@ export interface ContestantWithAuthorAndStats {
 class ContestService {
   /**
    * Récupère tous les contests avec pagination et recherche (avec cache)
+   * @param filterCountry - Filtrer par pays (pour compter les contestants de ce pays)
+   * @param filterRegion - Filtrer par région (pour compter les contestants de cette région)
+   * @param filterContinent - Filtrer par continent (pour compter les contestants de ce continent)
    */
   async getContests(
-    skip: number = 0, 
-    limit: number = 100,
+    skip: number = 0,
+    limit: number = 10,
     search?: string,
     votingLevel?: string,
     votingTypeId?: number | null,
-    hasVotingType?: boolean
+    hasVotingType?: boolean,
+    filterCountry?: string,
+    filterRegion?: string,
+    filterContinent?: string
   ): Promise<ContestResponse[]> {
     try {
       const params: any = { skip, limit }
@@ -198,20 +211,29 @@ class ContestService {
       if (hasVotingType !== undefined) {
         params.has_voting_type = hasVotingType
       }
-      
+      if (filterCountry) {
+        params.filter_country = filterCountry
+      }
+      if (filterRegion) {
+        params.filter_region = filterRegion
+      }
+      if (filterContinent) {
+        params.filter_continent = filterContinent
+      }
+
       // Vérifier le cache
       const cacheKey = '/api/v1/contests/'
       const cached = cacheService.get<ContestResponse[]>(cacheKey, params)
       if (cached) {
         return cached
       }
-      
+
       // Si pas en cache, faire la requête
       const data = await apiService.get<ContestResponse[]>('/api/v1/contests/', params)
-      
+
       // Mettre en cache
       cacheService.set(cacheKey, data, params)
-      
+
       return data
     } catch (error) {
       console.error('Error fetching contests:', error)
@@ -238,10 +260,10 @@ class ContestService {
   async createContest(contestData: Partial<ContestResponse>): Promise<ContestResponse> {
     try {
       const result = await apiService.post<ContestResponse>('/api/v1/contests/', contestData, '/api/v1/contests/')
-      
+
       // Invalider le cache des contests
       cacheService.invalidate('/api/v1/contests/')
-      
+
       return result
     } catch (error) {
       console.error('Error creating contest:', error)
@@ -255,11 +277,11 @@ class ContestService {
   async updateContest(contestId: string, contestData: Partial<ContestResponse>): Promise<ContestResponse> {
     try {
       const result = await apiService.put<ContestResponse>(`/api/v1/contests/${contestId}`, contestData, '/api/v1/contests/')
-      
+
       // Invalider le cache du contest spécifique et de la liste
       cacheService.invalidate(`/api/v1/contests/${contestId}`)
       cacheService.invalidate('/api/v1/contests/')
-      
+
       return result
     } catch (error) {
       console.error(`Error updating contest ${contestId}:`, error)
@@ -273,7 +295,7 @@ class ContestService {
   async deleteContest(contestId: string): Promise<void> {
     try {
       await apiService.delete<void>(`/api/v1/contests/${contestId}`, '/api/v1/contests/')
-      
+
       // Invalider le cache du contest spécifique et de la liste
       cacheService.invalidate(`/api/v1/contests/${contestId}`)
       cacheService.invalidate('/api/v1/contests/')
@@ -291,21 +313,25 @@ class ContestService {
     title: string,
     description: string,
     imageMediaIds?: string,
-    videoMediaIds?: string
+    videoMediaIds?: string,
+    nominatorCity?: string,
+    nominatorCountry?: string
   ): Promise<any> {
     try {
       const response = await api.post(`/api/v1/contestants/${contestId}`, {
         title: title,
         description: description,
         image_media_ids: imageMediaIds,
-        video_media_ids: videoMediaIds
+        video_media_ids: videoMediaIds,
+        nominator_city: nominatorCity,
+        nominator_country: nominatorCountry
       })
-      
+
       // Invalider le cache des contestants et du contest
       cacheService.invalidate(`/api/v1/contestants/contest/${contestId}`)
       cacheService.invalidate(`/api/v1/contests/${contestId}`)
       cacheService.invalidate('/api/v1/contests/')
-      
+
       return response.data
     } catch (error) {
       console.error(`Error submitting contestant for contest ${contestId}:`, error)
@@ -321,21 +347,25 @@ class ContestService {
     title: string,
     description: string,
     imageMediaIds?: string,
-    videoMediaIds?: string
+    videoMediaIds?: string,
+    nominatorCity?: string,
+    nominatorCountry?: string
   ): Promise<any> {
     try {
       const response = await api.put(`/api/v1/contestants/${contestantId}`, {
         title: title,
         description: description,
         image_media_ids: imageMediaIds,
-        video_media_ids: videoMediaIds
+        video_media_ids: videoMediaIds,
+        nominator_city: nominatorCity,
+        nominator_country: nominatorCountry
       })
-      
+
       // Invalider le cache du contestant, de la liste des contestants et du contest
       cacheService.invalidate(`/api/v1/contestants/${contestantId}`)
       cacheService.invalidate('/api/v1/contestants/contest/')
       cacheService.invalidate('/api/v1/contests/')
-      
+
       return response.data
     } catch (error) {
       console.error(`Error updating contestant ${contestantId}:`, error)
@@ -362,11 +392,11 @@ class ContestService {
           description
         }
       })
-      
+
       // Invalider le cache du contestant et de la liste des contestants
       cacheService.invalidate(`/api/v1/contestants/${contestantId}`)
       cacheService.invalidate('/api/v1/contestants/contest/')
-      
+
       return response.data
     } catch (error) {
       console.error(`Error adding submission for contestant ${contestantId}:`, error)
@@ -390,28 +420,48 @@ class ContestService {
 
   /**
    * Récupère les candidatures d'un contest avec infos auteur et stats enrichies
+   * @param filterCountry - Filtrer par pays
+   * @param filterRegion - Filtrer par région
+   * @param filterContinent - Filtrer par continent
    */
   async getContestantsByContest(
     contestId: string,
     skip: number = 0,
-    limit: number = 100
+    limit: number = 10,
+    filterCountry?: string,
+    filterRegion?: string,
+    filterContinent?: string,
+    filterCity?: string
   ): Promise<ContestantWithAuthorAndStats[]> {
     try {
       const cacheKey = `/api/v1/contestants/contest/${contestId}`
-      const params = { skip, limit }
-      
+      const params: any = { skip, limit }
+
+      if (filterCountry) {
+        params.filter_country = filterCountry
+      }
+      if (filterRegion) {
+        params.filter_region = filterRegion
+      }
+      if (filterContinent) {
+        params.filter_continent = filterContinent
+      }
+      if (filterCity) {
+        params.filter_city = filterCity
+      }
+
       // Vérifier le cache
       const cached = cacheService.get<ContestantWithAuthorAndStats[]>(cacheKey, params)
       if (cached) {
         return cached
       }
-      
+
       // Si pas en cache, faire la requête
       const response = await api.get(cacheKey, { params })
-      
+
       // Mettre en cache
       cacheService.set(cacheKey, response.data, params)
-      
+
       return response.data
     } catch (error) {
       console.error(`Error fetching contestants for contest ${contestId}:`, error)
@@ -425,7 +475,7 @@ class ContestService {
   async addToFavorites(contestantId: number): Promise<void> {
     try {
       await api.post(`/api/v1/contestants/${contestantId}/favorite`)
-      
+
       // Invalider le cache des favoris et du contestant
       cacheService.invalidate('/api/v1/contestants/favorites')
       cacheService.invalidate(`/api/v1/contestants/${contestantId}`)
@@ -441,7 +491,7 @@ class ContestService {
   async removeFromFavorites(contestantId: number): Promise<void> {
     try {
       await api.delete(`/api/v1/contestants/${contestantId}/favorite`)
-      
+
       // Invalider le cache des favoris et du contestant
       cacheService.invalidate('/api/v1/contestants/favorites')
       cacheService.invalidate(`/api/v1/contestants/${contestantId}`)
@@ -457,7 +507,7 @@ class ContestService {
   async deleteContestant(contestantId: number): Promise<void> {
     try {
       await api.delete(`/api/v1/contestants/${contestantId}`)
-      
+
       // Invalider le cache du contestant et de la liste des contestants
       cacheService.invalidate(`/api/v1/contestants/${contestantId}`)
       cacheService.invalidate('/api/v1/contestants/contest/')
@@ -474,19 +524,19 @@ class ContestService {
   async getUserFavorites(): Promise<number[]> {
     try {
       const cacheKey = '/api/v1/contestants/favorites'
-      
+
       // Vérifier le cache
       const cached = cacheService.get<number[]>(cacheKey)
       if (cached) {
         return cached
       }
-      
+
       // Si pas en cache, faire la requête
       const response = await api.get(cacheKey)
-      
+
       // Mettre en cache
       cacheService.set(cacheKey, response.data)
-      
+
       return response.data
     } catch (error) {
       console.error('Error fetching user favorites:', error)
@@ -514,19 +564,19 @@ class ContestService {
   async getMyHigh5Votes(): Promise<any> {
     try {
       const cacheKey = '/api/v1/contestants/user/my-votes'
-      
+
       // Vérifier le cache
       const cached = cacheService.get<any>(cacheKey)
       if (cached) {
         return cached
       }
-      
+
       // Si pas en cache, faire la requête
       const response = await api.get(cacheKey)
-      
+
       // Mettre en cache
       cacheService.set(cacheKey, response.data)
-      
+
       return response.data
     } catch (error) {
       console.error('Error fetching MyHigh5 votes:', error)
@@ -542,19 +592,19 @@ class ContestService {
     try {
       const cacheKey = '/api/v1/contestants/user/my-votes/history'
       const params = contestId ? { contest_id: contestId } : {}
-      
+
       // Vérifier le cache
       const cached = cacheService.get<any>(cacheKey, params)
       if (cached) {
         return cached
       }
-      
+
       // Si pas en cache, faire la requête
       const response = await api.get(cacheKey, { params })
-      
+
       // Mettre en cache
       cacheService.set(cacheKey, response.data, params)
-      
+
       return response.data
     } catch (error) {
       console.error('Error fetching MyHigh5 votes history:', error)
@@ -567,15 +617,15 @@ class ContestService {
    * Le 1er reçoit 5 points, le 2ème 4 points, etc.
    */
   async reorderMyHigh5Votes(
-    votes: Array<{ contestant_id: number; position: number }>, 
+    votes: Array<{ contestant_id: number; position: number }>,
     seasonId: number
   ): Promise<void> {
     try {
-      await api.put('/api/v1/contestants/user/my-votes/reorder', { 
+      await api.put('/api/v1/contestants/user/my-votes/reorder', {
         votes,
         season_id: seasonId
       })
-      
+
       // Invalider le cache des votes MyHigh5
       cacheService.invalidate('/api/v1/contestants/user/my-votes')
       cacheService.invalidate('/api/v1/contestants/user/my-votes/history')
@@ -609,7 +659,7 @@ class ContestService {
       })
       console.log('[REORDER] Response:', response.data)
       console.log('Favorites reordered successfully')
-      
+
       // Invalider le cache des favoris
       cacheService.invalidate('/api/v1/contestants/favorites')
     } catch (error) {
@@ -624,24 +674,24 @@ class ContestService {
   async getContestLeaderboard(
     contestId: string,
     skip: number = 0,
-    limit: number = 100
+    limit: number = 10
   ): Promise<any[]> {
     try {
       const cacheKey = `/api/v1/contestants/leaderboard/contest/${contestId}`
       const params = { skip, limit }
-      
+
       // Vérifier le cache
       const cached = cacheService.get<any[]>(cacheKey, params)
       if (cached) {
         return cached
       }
-      
+
       // Si pas en cache, faire la requête
       const response = await api.get(cacheKey, { params })
-      
+
       // Mettre en cache
       cacheService.set(cacheKey, response.data, params)
-      
+
       return response.data
     } catch (error) {
       console.error(`Error fetching leaderboard for contest ${contestId}:`, error)
@@ -655,13 +705,13 @@ class ContestService {
   async voteForContestant(contestantId: number, score: number = 5): Promise<any> {
     try {
       const response = await api.post(`/api/v1/contestants/${contestantId}/vote`)
-      
+
       // Invalider le cache du contestant, du leaderboard et du contest
       cacheService.invalidate(`/api/v1/contestants/${contestantId}`)
       cacheService.invalidate('/api/v1/contestants/leaderboard/')
       cacheService.invalidate('/api/v1/contestants/contest/')
       cacheService.invalidate('/api/v1/contests/')
-      
+
       return response.data
     } catch (error: any) {
       console.error(`Error voting for contestant ${contestantId}:`, error)
@@ -694,24 +744,24 @@ class ContestService {
       active?: boolean
     },
     skip: number = 0,
-    limit: number = 100
+    limit: number = 10
   ): Promise<ContestResponse[]> {
     try {
       const cacheKey = '/api/v1/contests'
       const params = { ...filters, skip, limit }
-      
+
       // Vérifier le cache
       const cached = cacheService.get<ContestResponse[]>(cacheKey, params)
       if (cached) {
         return cached
       }
-      
+
       // Si pas en cache, faire la requête
       const response = await api.get(cacheKey, { params })
-      
+
       // Mettre en cache
       cacheService.set(cacheKey, response.data, params)
-      
+
       return response.data
     } catch (error) {
       console.error('Error fetching filtered contests:', error)
@@ -725,7 +775,7 @@ class ContestService {
   async addContestFavorite(contestId: string): Promise<void> {
     try {
       await api.post(`/api/v1/favorites/contests/${contestId}`)
-      
+
       // Invalider le cache des favoris de contests
       cacheService.invalidate('/api/v1/favorites/contests')
       cacheService.invalidate(`/api/v1/favorites/contests/${contestId}/is-favorite`)
@@ -741,7 +791,7 @@ class ContestService {
   async removeContestFavorite(contestId: string): Promise<void> {
     try {
       await api.delete(`/api/v1/favorites/contests/${contestId}`)
-      
+
       // Invalider le cache des favoris de contests
       cacheService.invalidate('/api/v1/favorites/contests')
       cacheService.invalidate(`/api/v1/favorites/contests/${contestId}/is-favorite`)
@@ -758,19 +808,19 @@ class ContestService {
     try {
       const cacheKey = '/api/v1/favorites/contests'
       const params = { skip, limit }
-      
+
       // Vérifier le cache
       const cached = cacheService.get<ContestResponse[]>(cacheKey, params)
       if (cached) {
         return cached
       }
-      
+
       // Si pas en cache, faire la requête
       const response = await api.get(cacheKey, { params })
-      
+
       // Mettre en cache
       cacheService.set(cacheKey, response.data, params)
-      
+
       return response.data
     } catch (error) {
       console.error('Erreur lors du chargement des contests favoris:', error)
@@ -784,19 +834,19 @@ class ContestService {
   async isContestFavorite(contestId: string): Promise<boolean> {
     try {
       const cacheKey = `/api/v1/favorites/contests/${contestId}/is-favorite`
-      
+
       // Vérifier le cache
       const cached = cacheService.get<{ is_favorite: boolean }>(cacheKey)
       if (cached) {
         return cached.is_favorite
       }
-      
+
       // Si pas en cache, faire la requête
       const response = await api.get(cacheKey)
-      
+
       // Mettre en cache
       cacheService.set(cacheKey, response.data)
-      
+
       return response.data.is_favorite
     } catch (error) {
       console.error('Erreur lors de la vérification du favori:', error)
@@ -810,26 +860,26 @@ class ContestService {
   mapResponseToContest(response: ContestResponse): Contest {
     // Utiliser season_level si disponible, sinon utiliser level
     const level = response.season_level || response.level || 'country'
-    
+
     // Le contest est ouvert pour candidater si le backend dit is_submission_open: true
     // On fait confiance au backend pour gérer les dates
     const now = new Date()
     const submissionStart = response.submission_start_date ? new Date(response.submission_start_date) : null
     const submissionEnd = response.submission_end_date ? new Date(response.submission_end_date) : null
     const votingStart = response.voting_start_date ? new Date(response.voting_start_date) : null
-    
+
     // Faire confiance au backend pour la valeur de is_submission_open
     const isOpen = response.is_submission_open || false
-    
+
     // Gérer la couverture : utiliser image_url en priorité, puis cover_image_url, sinon emoji
     let coverImage = response.image_url || response.cover_image_url || ''
-    
+
     // Si l'image existe, s'assurer qu'elle est une URL valide
     if (coverImage && coverImage.trim() !== '') {
       // Vérifier si c'est un emoji (caractère unicode haut)
       const firstCodePoint = coverImage.codePointAt(0) || 0
       const isEmoji = coverImage.length <= 4 && firstCodePoint > 0x1F000
-      
+
       // Si ce n'est pas un emoji et que ce n'est pas déjà une URL complète
       if (!isEmoji && !coverImage.startsWith('http') && !coverImage.startsWith('data:')) {
         // Si c'est un chemin relatif, construire l'URL complète
@@ -843,12 +893,12 @@ class ContestService {
         }
       }
     }
-    
+
     // Si toujours pas d'image valide, utiliser l'emoji
     if (!coverImage || coverImage.trim() === '' || (!coverImage.startsWith('http') && !coverImage.startsWith('/') && !coverImage.startsWith('data:'))) {
       coverImage = this.getEmojiForType(response.contest_type)
     }
-    
+
     return {
       id: String(response.id),
       title: response.name,
@@ -864,7 +914,7 @@ class ContestService {
       genderRestriction: (() => {
         // Priorité: gender_restriction, puis voting_restriction
         let restriction = response.gender_restriction
-        
+
         // Si pas de gender_restriction, essayer de l'extraire de voting_restriction
         if (!restriction && response.voting_restriction) {
           const votingRestriction = String(response.voting_restriction).toLowerCase().trim()
@@ -874,7 +924,7 @@ class ContestService {
             restriction = 'female'
           }
         }
-        
+
         // Vérifier aussi si gender_restriction est directement 'male' ou 'female'
         if (restriction && typeof restriction === 'string' && restriction.trim() !== '') {
           const normalized = restriction.toLowerCase().trim()
@@ -918,7 +968,9 @@ class ContestService {
         image_url: c.image_url,
         votes_count: c.votes_count,
         rank: c.rank ?? (index + 1)
-      })) || []
+      })) || [],
+      // Indique si l'utilisateur connecté a déjà participé
+      currentUserContesting: response.current_user_contesting ?? false
     }
   }
 
@@ -952,10 +1004,10 @@ class ContestService {
         category: data.category.trim(),
         status: 'pending'
       })
-      
+
       // Invalider le cache des suggestions si nécessaire
       cacheService.invalidate('/api/v1/suggested-contests')
-      
+
       return response.data
     } catch (error: any) {
       console.error('Error creating suggested contest:', error)
@@ -979,10 +1031,10 @@ class ContestService {
         reason: data.reason.trim(),
         description: data.description.trim()
       })
-      
+
       // Invalider le cache du contestant signalé
       cacheService.invalidate(`/api/v1/contestants/${contestantId}`)
-      
+
       return response.data
     } catch (error: any) {
       console.error('Error reporting contestant:', error)

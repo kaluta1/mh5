@@ -177,7 +177,7 @@ def read_user_by_id(
 def read_users(
     db: Session = Depends(get_db),
     skip: int = 0,
-    limit: int = 100,
+    limit: int = 10,
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
     """

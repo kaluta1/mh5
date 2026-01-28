@@ -10,7 +10,9 @@ from .crud_geography import continent, region, country, city
 from .crud_kyc import kyc_verification, kyc_document, kyc_audit_log
 from .crud_contestant import crud_contestant as contestant, contest_submission
 from .crud_favorite import favorite
+from .crud_favorite import favorite
 from .crud_report import report
+from .crud_round import round
 # Modules affiliés
 from .crud_affiliate import (
     affiliate_tree, affiliate_commission, referral_link, 

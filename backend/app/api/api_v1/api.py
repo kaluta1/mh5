@@ -4,7 +4,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    from app.api.api_v1.endpoints import auth, users, media, contests, votes, kyc, contestant, geography, favorites, search, search_history, comments, admin, season_migration, notifications, analytics, affiliate, payments, roles, verifications, wallet, voting_types, suggested_contests, social, private_messages, contact, categories, newsletter, share, follow
+    from app.api.api_v1.endpoints import auth, users, media, contests, votes, kyc, contestant, geography, favorites, search, search_history, comments, admin, season_migration, notifications, analytics, affiliate, payments, roles, verifications, wallet, voting_types, suggested_contests, social, private_messages, contact, categories, newsletter, share, follow, rounds
     from app.api.api_v1.endpoints import feed_groups, feed_messages, feed_posts, feed, feed_keys
     logger.info("All endpoints imported successfully")
 except ImportError as e:
@@ -16,6 +16,7 @@ api_router.include_router(auth.router, prefix="/auth", tags=["Authentification"]
 api_router.include_router(users.router, prefix="/users", tags=["Utilisateurs"])
 api_router.include_router(media.router, prefix="/media", tags=["Médias"])
 api_router.include_router(contests.router, prefix="/contests", tags=["Concours"])
+api_router.include_router(rounds.router, prefix="/rounds", tags=["Rounds"])
 
 # Enregistrer le router categories avec logging
 try:

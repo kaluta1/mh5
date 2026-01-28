@@ -16,7 +16,7 @@ class CRUDKYCVerification:
         """Récupérer une vérification KYC par son ID"""
         return db.query(KYCVerification).filter(KYCVerification.id == id).first()
     
-    def get_multi(self, db: Session, *, skip: int = 0, limit: int = 100) -> List[KYCVerification]:
+    def get_multi(self, db: Session, *, skip: int = 0, limit: int = 10) -> List[KYCVerification]:
         """Récupérer plusieurs vérifications KYC"""
         return db.query(KYCVerification).offset(skip).limit(limit).all()
     
@@ -62,13 +62,13 @@ class CRUDKYCVerification:
             KYCVerification.external_verification_id == external_id
         ).first()
 
-    def get_by_status(self, db: Session, *, status: KYCStatus, skip: int = 0, limit: int = 100) -> List[KYCVerification]:
+    def get_by_status(self, db: Session, *, status: KYCStatus, skip: int = 0, limit: int = 10) -> List[KYCVerification]:
         """Récupérer les vérifications par statut"""
         return db.query(KYCVerification).filter(
             KYCVerification.status == status
         ).offset(skip).limit(limit).all()
 
-    def get_pending_verifications(self, db: Session, *, skip: int = 0, limit: int = 100) -> List[KYCVerification]:
+    def get_pending_verifications(self, db: Session, *, skip: int = 0, limit: int = 10) -> List[KYCVerification]:
         """Récupérer les vérifications en attente"""
         return db.query(KYCVerification).filter(
             KYCVerification.status.in_([KYCStatus.PENDING, KYCStatus.IN_PROGRESS])
@@ -215,7 +215,7 @@ class CRUDKYCDocument:
         """Récupérer un document KYC par son ID"""
         return db.query(KYCDocument).filter(KYCDocument.id == id).first()
     
-    def get_multi(self, db: Session, *, skip: int = 0, limit: int = 100) -> List[KYCDocument]:
+    def get_multi(self, db: Session, *, skip: int = 0, limit: int = 10) -> List[KYCDocument]:
         """Récupérer plusieurs documents KYC"""
         return db.query(KYCDocument).offset(skip).limit(limit).all()
     
@@ -264,7 +264,7 @@ class CRUDKYCAuditLog:
         """Récupérer un log d'audit par son ID"""
         return db.query(KYCAuditLog).filter(KYCAuditLog.id == id).first()
     
-    def get_multi(self, db: Session, *, skip: int = 0, limit: int = 100) -> List[KYCAuditLog]:
+    def get_multi(self, db: Session, *, skip: int = 0, limit: int = 10) -> List[KYCAuditLog]:
         """Récupérer plusieurs logs d'audit"""
         return db.query(KYCAuditLog).offset(skip).limit(limit).all()
     
@@ -282,7 +282,7 @@ class CRUDKYCAuditLog:
             KYCAuditLog.verification_id == verification_id
         ).order_by(desc(KYCAuditLog.timestamp)).all()
 
-    def get_by_user(self, db: Session, *, user_id: int, skip: int = 0, limit: int = 100) -> List[KYCAuditLog]:
+    def get_by_user(self, db: Session, *, user_id: int, skip: int = 0, limit: int = 10) -> List[KYCAuditLog]:
         """Récupérer les logs d'un utilisateur"""
         return db.query(KYCAuditLog).filter(
             KYCAuditLog.performed_by_user_id == user_id

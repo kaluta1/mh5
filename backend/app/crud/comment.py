@@ -41,7 +41,7 @@ class CommentCRUD:
         db: Session,
         media_id: int,
         skip: int = 0,
-        limit: int = 50,
+        limit: int = 10,
         parent_id: Optional[int] = None
     ) -> tuple[List[Comment], int]:
         """Récupérer les commentaires d'un média"""
@@ -62,7 +62,7 @@ class CommentCRUD:
         db: Session,
         contestant_id: int,
         skip: int = 0,
-        limit: int = 50,
+        limit: int = 10,
         parent_id: Optional[int] = None
     ) -> tuple[List[Comment], int]:
         """Récupérer les commentaires d'un contestant"""
@@ -83,7 +83,7 @@ class CommentCRUD:
         db: Session,
         parent_id: int,
         skip: int = 0,
-        limit: int = 50
+        limit: int = 10
     ) -> tuple[List[Comment], int]:
         """Récupérer les réponses à un commentaire"""
         query = db.query(Comment).filter(
@@ -193,7 +193,7 @@ class CommentCRUD:
         db: Session,
         user_id: int,
         skip: int = 0,
-        limit: int = 50
+        limit: int = 10
     ) -> tuple[List[Comment], int]:
         """Récupérer tous les commentaires d'un utilisateur"""
         query = db.query(Comment).filter(

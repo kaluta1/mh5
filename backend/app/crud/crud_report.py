@@ -16,7 +16,7 @@ class CRUDReport:
         db: Session,
         *,
         skip: int = 0,
-        limit: int = 100,
+        limit: int = 10,
         status: Optional[str] = None,
         contestant_id: Optional[int] = None,
         contest_id: Optional[int] = None

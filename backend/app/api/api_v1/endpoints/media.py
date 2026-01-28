@@ -50,7 +50,7 @@ def read_medias(
     *,
     db: Session = Depends(get_db),
     skip: int = 0,
-    limit: int = 100,
+    limit: int = 10,
     current_user: Any = Depends(get_current_active_user),
 ) -> Any:
     """

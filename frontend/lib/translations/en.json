@@ -224,6 +224,21 @@
     },
     "copyright": " 2024 MyHigh5. All rights reserved."
   },
+  "dashboard": {
+    "contests": {
+      "edit_nomination": "Edit your Nomination",
+      "edit_participation": "Edit your Participation",
+      "nominate": "Nominate",
+      "participate": "Participate",
+      "edit": "Edit",
+      "participation_form": {
+        "edit_title": "Edit a Contestant",
+        "edit_description": "Update your submission details",
+        "nominate_title": "Nominate a Contestant",
+        "nominate_description": "Import your video from YouTube or Vimeo"
+      }
+    }
+  },
   "pages": {
     "contests": {
       "title": "Discover Our Contests",

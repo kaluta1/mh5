@@ -168,7 +168,7 @@ def get_stage_leaderboard(
     stage_id: int,
     db: Session = Depends(deps.get_db),
     skip: int = 0,
-    limit: int = 50
+    limit: int = 10
 ):
     """
     Récupérer le classement complet d'une étape de concours.

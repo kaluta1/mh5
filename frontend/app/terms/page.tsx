@@ -28,12 +28,12 @@ export default function TermsPage() {
     title: string
     lastUpdated: string
     intro: string
-    sections: { title: string; icon: React.ElementType; content: string | string[] }[]
+    sections: { title: string; icon: React.ElementType; content: string | string[]; items?: string[] }[]
     contact: string
   }> = {
     en: {
       title: "Terms of Service",
-      lastUpdated: "Last Updated: December 2024",
+      lastUpdated: "Last Updated: January 2026",
       intro: "Welcome to MyHigh5.com! By using our platform, you agree to comply with these Terms of Service. Please read them carefully.",
       sections: [
         {
@@ -78,13 +78,15 @@ export default function TermsPage() {
           icon: Image,
           content: [
             "By submitting content (photos, videos, etc.), you grant us a worldwide, royalty-free license to use, display, and promote your content.",
-            "You must own or have the right to use any content you upload."
+            "You must own or have the right to use any content you upload.",
+            "You are solely responsible for the content you submit. Any copyright infringement, intellectual property violation, or legal claim arising from your content shall be your exclusive responsibility, and you agree to indemnify and hold the platform harmless from any related claims, damages, or liabilities."
           ]
         },
         {
           title: "7. User Conduct",
           icon: XCircle,
-          content: [
+          content: "Users must not:",
+          items: [
             "Violate any laws or third-party rights.",
             "Post harmful, offensive, or inappropriate content.",
             "Attempt to manipulate contest outcomes unfairly."
@@ -98,7 +100,8 @@ export default function TermsPage() {
         {
           title: "9. Limitation of Liability",
           icon: AlertTriangle,
-          content: [
+          content: "We are not liable for damages resulting from:",
+          items: [
             "Technical errors or interruptions.",
             "User actions or content posted by participants.",
             "Contest cancellations or modifications."
@@ -425,9 +428,21 @@ export default function TermsPage() {
                             ))}
                           </ul>
                         ) : (
-                          <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
-                            {section.content}
-                          </p>
+                          <>
+                            <p className="text-gray-600 dark:text-gray-400 leading-relaxed mb-2">
+                              {section.content}
+                            </p>
+                            {(section as any).items && (
+                              <ul className="space-y-2 mt-2">
+                                {(section as any).items.map((item: string, i: number) => (
+                                  <li key={i} className="flex items-start gap-2 text-gray-600 dark:text-gray-400">
+                                    <span className="text-myhigh5-primary mt-1">•</span>
+                                    <span>{item}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </>
                         )}
                       </div>
                     </div>

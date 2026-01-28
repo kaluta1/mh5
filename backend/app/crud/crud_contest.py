@@ -14,86 +14,6 @@ if TYPE_CHECKING:
     from app.models.user import User
 
 
-def calculate_season_dates(voting_start_date: date) -> Dict[str, Optional[date]]:
-    """
-    Calcule les dates des différentes saisons à partir de voting_start_date.
-    
-    Logique:
-    - city_season_start_date = voting_start_date
-    - city_season_end_date = 1 mois après voting_start_date
-    - country_season_start_date = city_season_end_date
-    - country_season_end_date = 1 mois après country_season_start_date
-    - regional_start_date = country_season_end_date
-    - regional_end_date = 1 mois après regional_start_date
-    - continental_start_date = regional_end_date
-    - continental_end_date = 1 mois après continental_start_date
-    - global_start_date = continental_end_date
-    - global_end_date = 1 mois après global_start_date
-    """
-    if not voting_start_date:
-        return {
-            'city_season_start_date': None,
-            'city_season_end_date': None,
-            'country_season_start_date': None,
-            'country_season_end_date': None,
-            'regional_start_date': None,
-            'regional_end_date': None,
-            'continental_start_date': None,
-            'continental_end_date': None,
-            'global_start_date': None,
-            'global_end_date': None,
-        }
-    
-    # Helper pour ajouter 1 mois à une date
-    def add_month(d: date) -> date:
-        """Ajoute 1 mois à une date en gérant les cas limites (ex: 31 janvier -> 28/29 février)"""
-        if d.month == 12:
-            # Décembre -> Janvier de l'année suivante
-            try:
-                return d.replace(year=d.year + 1, month=1)
-            except ValueError:
-                # Si le jour n'existe pas (ex: 31), utiliser le dernier jour du mois
-                return d.replace(year=d.year + 1, month=1, day=31)
-        else:
-            # Autres mois
-            try:
-                return d.replace(month=d.month + 1)
-            except ValueError:
-                # Si le jour n'existe pas dans le mois suivant (ex: 31 janvier -> 31 février),
-                # utiliser le dernier jour du mois suivant
-                from calendar import monthrange
-                next_month = d.month + 1
-                last_day = monthrange(d.year, next_month)[1]
-                return d.replace(month=next_month, day=last_day)
-    
-    city_season_start_date = voting_start_date
-    city_season_end_date = add_month(city_season_start_date)
-    
-    country_season_start_date = city_season_end_date
-    country_season_end_date = add_month(country_season_start_date)
-    
-    regional_start_date = country_season_end_date
-    regional_end_date = add_month(regional_start_date)
-    
-    continental_start_date = regional_end_date
-    continental_end_date = add_month(continental_start_date)
-    
-    global_start_date = continental_end_date
-    global_end_date = add_month(global_start_date)
-    
-    return {
-        'city_season_start_date': city_season_start_date,
-        'city_season_end_date': city_season_end_date,
-        'country_season_start_date': country_season_start_date,
-        'country_season_end_date': country_season_end_date,
-        'regional_start_date': regional_start_date,
-        'regional_end_date': regional_end_date,
-        'continental_start_date': continental_start_date,
-        'continental_end_date': continental_end_date,
-        'global_start_date': global_start_date,
-        'global_end_date': global_end_date,
-    }
-
 
 class CRUDContest:
     def get(self, db: Session, id: int) -> Optional[Contest]:
@@ -107,12 +27,12 @@ class CRUDContest:
             .options(joinedload(Contest.entries).joinedload(ContestEntry.media))\
             .first()
 
-    def get_multi(self, db: Session, *, skip: int = 0, limit: int = 100) -> List[Contest]:
+    def get_multi(self, db: Session, *, skip: int = 0, limit: int = 10) -> List[Contest]:
         """Récupère une liste de concours"""
         return db.query(Contest).filter(Contest.is_deleted == False).offset(skip).limit(limit).all()
 
     def get_multi_with_filters(self,
-        db: Session, *, skip: int = 0, limit: int = 100, filters: Dict[str, Any] = {}
+        db: Session, *, skip: int = 0, limit: int = 10, filters: Dict[str, Any] = {}
     ) -> List[Contest]:
         """Récupère une liste de concours avec filtres"""
         # Note: On ne fait plus de joinedload sur voting_type ici car la table peut ne pas exister
@@ -202,17 +122,13 @@ class CRUDContest:
         voting_type_id = obj_in.voting_type_id if obj_in.voting_type_id and obj_in.voting_type_id > 0 else None
         category_id = obj_in.category_id if obj_in.category_id and obj_in.category_id > 0 else None
         
-        # Si category_id est fourni, récupérer la catégorie et mettre à jour contest_type
+        # Si category_id est fourni, récupération de la catégorie (inchangé)
         contest_type = obj_in.contest_type
         if category_id:
             from app.models.category import Category
             category = db.query(Category).filter(Category.id == category_id).first()
             if category:
-                # Utiliser le slug de la catégorie comme contest_type
                 contest_type = category.slug
-            else:
-                # Si la catégorie n'existe pas, garder le contest_type fourni
-                pass
         
         # Convertir les strings en enums si nécessaire
         verification_type = obj_in.verification_type
@@ -229,38 +145,13 @@ class CRUDContest:
             except ValueError:
                 participant_type = ParticipantType.INDIVIDUAL
         
-        # Convertir voting_start_date en date si c'est une string
-        voting_start_date_for_calc = obj_in.voting_start_date
-        if isinstance(voting_start_date_for_calc, str):
-            from datetime import datetime
-            try:
-                # Essayer de parser la date depuis le format ISO (YYYY-MM-DD)
-                voting_start_date_for_calc = datetime.strptime(voting_start_date_for_calc, '%Y-%m-%d').date()
-            except (ValueError, TypeError):
-                try:
-                    # Si le parsing échoue, essayer avec datetime.fromisoformat
-                    if 'T' in voting_start_date_for_calc:
-                        voting_start_date_for_calc = datetime.fromisoformat(voting_start_date_for_calc.replace('Z', '+00:00')).date()
-                    else:
-                        voting_start_date_for_calc = datetime.fromisoformat(voting_start_date_for_calc).date()
-                except (ValueError, TypeError):
-                    # Si tout échoue, utiliser None
-                    voting_start_date_for_calc = None
-        elif isinstance(voting_start_date_for_calc, datetime):
-            voting_start_date_for_calc = voting_start_date_for_calc.date()
-        
-        # Calculer les dates des saisons à partir de voting_start_date
-        season_dates = calculate_season_dates(voting_start_date_for_calc)
-        
         db_obj = Contest(
             name=contest_name,
             description=obj_in.description,
-            contest_type=contest_type,  # Utiliser le contest_type mis à jour si category_id est fourni
+            contest_type=contest_type,
             cover_image_url=obj_in.cover_image_url,
-            submission_start_date=obj_in.submission_start_date,
-            submission_end_date=obj_in.submission_end_date,
-            voting_start_date=obj_in.voting_start_date,
-            voting_end_date=obj_in.voting_end_date,
+            # Les dates sont maintenant gérées par les Rounds
+            # On conserve les indicateurs d'état
             is_active=obj_in.is_active,
             is_submission_open=obj_in.is_submission_open,
             is_voting_open=obj_in.is_voting_open,
@@ -280,9 +171,7 @@ class CRUDContest:
             requires_brand_verification=obj_in.requires_brand_verification,
             requires_content_verification=obj_in.requires_content_verification,
             min_age=obj_in.min_age,
-            max_age=obj_in.max_age,
-            # Dates des saisons
-            **season_dates
+            max_age=obj_in.max_age
         )
         db.add(db_obj)
         db.commit()
@@ -293,37 +182,21 @@ class CRUDContest:
     def update(self, db: Session, *, db_obj: Contest, obj_in: Union[ContestUpdate, Dict[str, Any]]) -> Contest:
         """Met à jour un concours existant"""
         from app.models.contest import VerificationType, ParticipantType
-        from datetime import datetime, date
         
         if isinstance(obj_in, dict):
-            update_data = obj_in.copy()  # Faire une copie pour éviter de modifier l'original
+            update_data = obj_in.copy()
         else:
-            # Gérer Pydantic v1 et v2
             if hasattr(obj_in, 'model_dump'):
-                # Pydantic v2
                 update_data = obj_in.model_dump(exclude_unset=True)
             else:
-                # Pydantic v1
                 update_data = obj_in.dict(exclude_unset=True)
             
-            # S'assurer que category_id est toujours inclus s'il est présent dans la requête
-            # même s'il est None (pour permettre de désassigner une catégorie)
             if hasattr(obj_in, 'category_id'):
                 category_id_value = getattr(obj_in, 'category_id', None)
                 update_data['category_id'] = category_id_value
         
-        # Log pour débogage
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.info(f"Update contest - category_id in update_data: {'category_id' in update_data}, value: {update_data.get('category_id')}")
-        
-        # Si category_id est dans update_data (même si None), s'assurer qu'il est traité
-        if 'category_id' in update_data:
-            # La valeur sera traitée dans la boucle for plus bas
-            pass
-        
-        # Liste des champs de dates à convertir
-        date_fields = [
+        # Suppression des champs de date qui n'existent plus dans le modèle Contest
+        date_fields_to_remove = [
             'submission_start_date', 'submission_end_date', 
             'voting_start_date', 'voting_end_date',
             'city_season_start_date', 'city_season_end_date',
@@ -333,87 +206,40 @@ class CRUDContest:
             'global_start_date', 'global_end_date'
         ]
         
-        # Vérifier si voting_start_date est modifié pour recalculer les dates des saisons
-        voting_start_date_updated = False
-        new_voting_start_date = None
-        
-        if 'voting_start_date' in update_data:
-            value = update_data['voting_start_date']
-            # Convertir la date si c'est une string
-            if isinstance(value, str):
-                try:
-                    new_voting_start_date = datetime.strptime(value, '%Y-%m-%d').date()
-                except (ValueError, TypeError):
-                    try:
-                        if 'T' in value:
-                            new_voting_start_date = datetime.fromisoformat(value.replace('Z', '+00:00')).date()
-                        else:
-                            new_voting_start_date = datetime.fromisoformat(value).date()
-                    except (ValueError, TypeError):
-                        pass
-            elif isinstance(value, datetime):
-                new_voting_start_date = value.date()
-            elif isinstance(value, date):
-                new_voting_start_date = value
-            
-            # Vérifier si la date a changé
-            if new_voting_start_date and new_voting_start_date != db_obj.voting_start_date:
-                voting_start_date_updated = True
+        for field in date_fields_to_remove:
+            if field in update_data:
+                del update_data[field]
         
         for field in update_data:
             if field in update_data:
                 value = update_data[field]
                 
-                # S'assurer que le nom commence par "High5" si c'est le champ name
+                # S'assurer que le nom commence par "High5"
                 if field == 'name' and value is not None:
                     value = str(value).strip()
                     if not value.startswith("High5"):
                         value = f"High5 {value}"
                 
-                # Convertir les dates depuis les strings si nécessaire
-                elif field in date_fields and value is not None:
-                    if isinstance(value, str):
-                        try:
-                            # Essayer de parser la date depuis le format ISO (YYYY-MM-DD)
-                            value = datetime.strptime(value, '%Y-%m-%d').date()
-                        except (ValueError, TypeError) as e:
-                            # Si le parsing échoue, essayer avec datetime.fromisoformat
-                            try:
-                                if 'T' in value:
-                                    value = datetime.fromisoformat(value.replace('Z', '+00:00')).date()
-                                else:
-                                    value = datetime.fromisoformat(value).date()
-                            except (ValueError, TypeError):
-                                # Si tout échoue, logger l'erreur et ignorer la valeur
-                                import logging
-                                logger = logging.getLogger(__name__)
-                                logger.warning(f"Impossible de convertir la date pour {field}: {value}")
-                                continue
-                    elif isinstance(value, datetime):
-                        # Si c'est un datetime, extraire la date
-                        value = value.date()
-                
-                # Convertir les IDs 0 en None pour éviter les violations de FK
+                # Convertir les IDs 0 en None
                 elif field in ('location_id', 'template_id', 'voting_type_id', 'category_id') and value == 0:
                     value = None
-                # Si category_id est fourni, récupérer la catégorie et mettre à jour contest_type
+                    
+                # Si category_id est fourni
                 elif field == 'category_id':
                     if value is not None and value != 0:
                         from app.models.category import Category
                         category = db.query(Category).filter(Category.id == value).first()
                         if category:
-                            # Mettre à jour contest_type avec le slug de la catégorie
                             update_data['contest_type'] = category.slug
-                    # S'assurer que category_id est bien assigné (même si None)
-                    # value est déjà défini, il sera assigné via setattr plus bas
-                # Convertir les strings en enums pour verification_type
+                
+                # Enums
                 elif field == 'verification_type' and value is not None:
                     if isinstance(value, str):
                         try:
                             value = VerificationType(value)
                         except ValueError:
                             value = VerificationType.NONE
-                # Convertir les strings en enums pour participant_type
+                            
                 elif field == 'participant_type' and value is not None:
                     if isinstance(value, str):
                         try:
@@ -421,13 +247,8 @@ class CRUDContest:
                         except ValueError:
                             value = ParticipantType.INDIVIDUAL
                 
-                setattr(db_obj, field, value)
-        
-        # Si voting_start_date a été modifié, recalculer toutes les dates des saisons
-        if voting_start_date_updated and new_voting_start_date:
-            season_dates = calculate_season_dates(new_voting_start_date)
-            for field, date_value in season_dates.items():
-                setattr(db_obj, field, date_value)
+                if hasattr(db_obj, field):
+                    setattr(db_obj, field, value)
         
         db.add(db_obj)
         db.commit()
@@ -482,8 +303,21 @@ class CRUDContest:
         
         return {"success": True, "entry_id": entry.id}
 
-    def enrich_contest_with_stats(self, db: Session, contest: Contest, current_user: Optional['User'] = None) -> Dict[str, Any]:
-        """Enrichit un contest avec les statistiques (nombre de participants et votes)"""
+    def enrich_contest_with_stats(
+        self, db: Session, contest: Contest, current_user: Optional['User'] = None,
+        filter_country: Optional[str] = None,
+        filter_region: Optional[str] = None,
+        filter_continent: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Enrichit un contest avec les statistiques (nombre de participants et votes).
+        
+        Paramètres de filtrage géographique:
+        - filter_country: Si fourni, compte les contestants de ce pays
+        - filter_region: Si fourni, compte les contestants de cette région
+        - filter_continent: Si fourni, compte les contestants de ce continent
+        - Par défaut (aucun filtre), utilise la localisation de l'utilisateur connecté
+        """
         from app.models.contests import ContestSeasonLink, ContestSeason, SeasonLevel
         from app.models.user import User
         
@@ -506,15 +340,33 @@ class CRUDContest:
         if not season_level:
             season_level = contest.level.lower() if contest.level else None
         
-        # Compter le nombre de participants selon la saison et la localisation de l'utilisateur
+        # Compter le nombre de participants selon la saison et la localisation
         entries_query = db.query(func.count(Contestant.id.distinct()))\
             .filter(
                 Contestant.season_id == contest.id,
                 Contestant.is_deleted == False
             )
         
-        # Filtrer par localisation selon le niveau de la saison et l'utilisateur connecté
-        if current_user and season_level:
+        # Appliquer les filtres géographiques
+        # Priorité: filtres explicites > localisation de l'utilisateur
+        has_location_filter = filter_country or filter_region or filter_continent
+        
+        if has_location_filter:
+            # Utiliser les filtres fournis par l'utilisateur
+            if filter_country:
+                entries_query = entries_query.filter(
+                    func.lower(Contestant.country) == func.lower(filter_country)
+                )
+            if filter_region:
+                entries_query = entries_query.filter(
+                    func.lower(Contestant.region) == func.lower(filter_region)
+                )
+            if filter_continent:
+                entries_query = entries_query.filter(
+                    func.lower(Contestant.continent) == func.lower(filter_continent)
+                )
+        elif current_user and season_level:
+            # Filtrer par localisation selon le niveau de la saison et l'utilisateur connecté
             season_level_lower = season_level.lower()
             
             if season_level_lower == "city":
@@ -541,6 +393,16 @@ class CRUDContest:
             # Pour "global", pas de filtre géographique
         
         entries_count = entries_query.scalar() or 0
+        
+        # Vérifier si l'utilisateur connecté participe à ce concours
+        current_user_contesting = False
+        if current_user:
+            user_contestant = db.query(Contestant).filter(
+                Contestant.season_id == contest.id,
+                Contestant.user_id == current_user.id,
+                Contestant.is_deleted == False
+            ).first()
+            current_user_contesting = user_contestant is not None
         
         # Récupérer les top 5 contestants par votes
         top_contestants = []
@@ -765,6 +627,15 @@ class CRUDContest:
         from datetime import date
         today = date.today()
         
+        # Récupérer le round actif pour obtenir les dates
+        from app.crud import crud_round
+        active_round = crud_round.round.get_active_round_for_contest(db, contest_id=contest.id)
+        
+        submission_start_date = active_round.submission_start_date if active_round else None
+        submission_end_date = active_round.submission_end_date if active_round else None
+        voting_start_date = active_round.voting_start_date if active_round else None
+        voting_end_date = active_round.voting_end_date if active_round else None
+
         # is_submission_open est true seulement si:
         # 1. Le flag dans la DB est true (admin peut fermer manuellement)
         # 2. La date actuelle est >= submission_start_date (si définie)
@@ -773,16 +644,16 @@ class CRUDContest:
         
         if is_submission_open_calculated:
             # Vérifier si la date de début est passée
-            if contest.submission_start_date:
-                start_date = contest.submission_start_date
+            if submission_start_date:
+                start_date = submission_start_date
                 if isinstance(start_date, datetime):
                     start_date = start_date.date()
                 if today < start_date:
                     is_submission_open_calculated = False
             
             # Vérifier si la date de fin est passée
-            if contest.submission_end_date:
-                end_date = contest.submission_end_date
+            if submission_end_date:
+                end_date = submission_end_date
                 if isinstance(end_date, datetime):
                     end_date = end_date.date()
                 if today > end_date:
@@ -792,15 +663,15 @@ class CRUDContest:
         is_voting_open_calculated = contest.is_voting_open
         
         if is_voting_open_calculated:
-            if contest.voting_start_date:
-                voting_start = contest.voting_start_date
+            if voting_start_date:
+                voting_start = voting_start_date
                 if isinstance(voting_start, datetime):
                     voting_start = voting_start.date()
                 if today < voting_start:
                     is_voting_open_calculated = False
             
-            if contest.voting_end_date:
-                voting_end = contest.voting_end_date
+            if voting_end_date:
+                voting_end = voting_end_date
                 if isinstance(voting_end, datetime):
                     voting_end = voting_end.date()
                 if today > voting_end:
@@ -820,10 +691,10 @@ class CRUDContest:
             "contest_type": contest.contest_type,
             "cover_image_url": cover_image_url,
             "image_url": image_url_processed,  # Retourner aussi image_url traitée
-            "submission_start_date": contest.submission_start_date,
-            "submission_end_date": contest.submission_end_date,
-            "voting_start_date": contest.voting_start_date,
-            "voting_end_date": contest.voting_end_date,
+            "submission_start_date": submission_start_date,
+            "submission_end_date": submission_end_date,
+            "voting_start_date": voting_start_date,
+            "voting_end_date": voting_end_date,
             "is_active": contest.is_active,
             "is_submission_open": is_submission_open_calculated,
             "is_voting_open": is_voting_open_calculated,
@@ -865,6 +736,8 @@ class CRUDContest:
             "max_age": getattr(contest, 'max_age', None),
             # Top contestants preview
             "top_contestants": top_contestants,
+            # Vérifier si l'utilisateur connecté participe
+            "current_user_contesting": current_user_contesting,
         }
         
         # Log pour vérifier que category_id est bien dans le résultat

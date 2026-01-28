@@ -2,7 +2,7 @@
  * Configuration de l'application frontend
  */
 
-export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://mh5-hbjp.onrender.com'
 
 export const config = {
   api: {

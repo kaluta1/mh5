@@ -100,7 +100,7 @@ export function ContestantHeader({
           {/* Info */}
           <div className="flex-1 pb-2">
             <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">
-              {author_name || 'Contestant'}
+              Contestant :  {author_name || 'Contestant'}
             </h1>
 
             {/* Stats */}
@@ -110,7 +110,7 @@ export function ContestantHeader({
                 <div>👥 {followersCount} {t('dashboard.following.followers') || 'Followers'}</div>
               )}
               {rank && total_participants && (
-                <div>🏆 #{rank}/{total_participants}</div>
+                <div>#{rank}/{total_participants}</div>
               )}
             </div>
 

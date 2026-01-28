@@ -48,7 +48,7 @@ class CRUDLoginLog:
         *,
         user_id: int,
         skip: int = 0,
-        limit: int = 100,
+        limit: int = 10,
         successful_only: Optional[bool] = None
     ) -> List[LoginLog]:
         """Récupérer les logs d'un utilisateur"""
@@ -64,7 +64,7 @@ class CRUDLoginLog:
         db: Session,
         *,
         skip: int = 0,
-        limit: int = 100,
+        limit: int = 10,
         user_id: Optional[int] = None,
         is_successful: Optional[bool] = None,
         ip_address: Optional[str] = None

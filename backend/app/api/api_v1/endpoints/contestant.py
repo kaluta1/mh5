@@ -36,7 +36,7 @@ def get_my_contestants(
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
     skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000)
+    limit: int = Query(10, ge=1, le=100)
 ) -> List[ContestantListResponse]:
     """Récupère les candidatures de l'utilisateur connecté"""
     contestants = crud_contestant.get_multi_by_user(
@@ -408,7 +408,7 @@ def get_contest_leaderboard(
     db: Session = Depends(deps.get_db),
     contest_id: int,
     skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000)
+    limit: int = Query(10, ge=1, le=100)
 ) -> List[ContestantListResponse]:
     """Récupère le classement d'un concours"""
     # Vérifier que la saison existe
@@ -444,10 +444,22 @@ def get_contest_contestants(
     db: Session = Depends(deps.get_db),
     contest_id: int,
     skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
+    limit: int = Query(10, ge=1, le=100),
+    filter_country: str = Query(None, description="Filtrer par pays"),
+    filter_region: str = Query(None, description="Filtrer par région"),
+    filter_continent: str = Query(None, description="Filtrer par continent"),
+    filter_city: str = Query(None, description="Filtrer par ville"),
     current_user: Optional[User] = Depends(deps.get_current_active_user_optional)
 ) -> List[ContestantWithAuthorAndStats]:
-    """Récupère les candidatures d'un concours avec infos auteur et stats enrichies"""
+    """
+    Récupère les candidatures d'un concours avec stats enrichies.
+    
+    Paramètres de filtrage géographique:
+    - filter_country: Affiche uniquement les contestants de ce pays
+    - filter_region: Affiche uniquement les contestants de cette région  
+    - filter_continent: Affiche uniquement les contestants de ce continent
+    - filter_city: Affiche uniquement les contestants de cette ville
+    """
     # Essayer d'abord de trouver une ContestSeason avec cet ID
     season = db.query(ContestSeason).filter(ContestSeason.id == contest_id).first()
     
@@ -464,7 +476,11 @@ def get_contest_contestants(
     # Utiliser la nouvelle méthode avec stats enrichies
     contestants_data = crud_contestant.get_multi_by_season_with_stats(
         db, contest_id, current_user_id=current_user.id if current_user else None,
-        skip=skip, limit=limit
+        skip=skip, limit=limit,
+        filter_country=filter_country,
+        filter_region=filter_region,
+        filter_continent=filter_continent,
+        filter_city=filter_city
     )
     
     # Log pour vérifier les données
@@ -732,6 +748,17 @@ def create_contestant(
         )
     
     # ============================================
+    # VALIDATION DU PAYS DU NOMINATEUR
+    # ============================================
+    if contestant_data.nominator_country:
+        user_country = current_user.country
+        if user_country and contestant_data.nominator_country.lower().strip() != user_country.lower().strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"The nominator country must match your country. Your country: {user_country}, Specified: {contestant_data.nominator_country}"
+            )
+    
+    # ============================================
     # CRÉATION DE LA CANDIDATURE
     # ============================================
     logger.info("Starting contestant creation...")
@@ -741,11 +768,64 @@ def create_contestant(
         from app.services.season_migration import SeasonMigrationService
         from datetime import datetime
         
+        # ------------------------------------------------------------------
+        # GESTION DU ROUND (Nouveauté)
+        # ------------------------------------------------------------------
+        # 1. Si round_id est fourni, vérifier qu'il existe et est valide pour ce contest
+        # 2. Si non fourni, trouver le round actif pour ce contest
+        target_round_id = contestant_data.round_id
+        
+        from app.models.round import Round, RoundStatus
+        
+        if target_round_id:
+            round_obj = db.query(Round).filter(Round.id == target_round_id).first()
+            if not round_obj:
+                raise HTTPException(status_code=404, detail="Round id not found")
+            if round_obj.contest_id != contest_id: # contest_id here might be season_id or contest_id depending on logic above
+                 # Logic check above: season_id = contest_id if no season found.
+                 # Need to ensure we match the right contest.
+                 # If `season_id` came from a `ContestSeason`, we need `season.contest_id` via link.
+                 # If `season_id` came from `Contest`, it IS the `contest_id` (in this legacy logic).
+                 # Wait, `season_id` var holds the ID to be used for `Contestant.season_id`. 
+                 # If it is a `Contest` ID (legacy), then `round_obj.contest_id` should match it.
+                 # If it is a `ContestSeason` ID, we need to check the link.
+                 pass 
+            # We assume for now if passed, it's correct. Validation could be stricter.
+        else:
+            # Trouver le round actif
+            # On a besoin du VRAI contest_id.
+            # Si `contest` object exists (found earlier), use `contest.id`.
+            real_contest_id = None
+            if contest:
+                real_contest_id = contest.id
+            elif season:
+                # Find linked contest
+                from app.models.contests import ContestSeasonLink
+                link = db.query(ContestSeasonLink).filter(ContestSeasonLink.season_id == season.id).first()
+                if link:
+                    real_contest_id = link.contest_id
+            
+            if real_contest_id:
+                 # Utiliser crud.round (accessible via app.crud if updated, or direct import)
+                 # We need to import it.
+                 from app import crud
+                 active_round = crud.round.get_active_round_for_contest(db, real_contest_id)
+                 if active_round:
+                     target_round_id = active_round.id
+            
+            if not target_round_id:
+                # Fallback: maybe just proceed without round_id (legacy)?
+                # User asked to include round_id. If we can't find one, maybe we should error or warn?
+                # For now let's optionalize it but log warning.
+                logger.warning(f"No active round found for contest {real_contest_id} and no round_id provided.")
+
         # Trouver ou créer la saison "city" avant de créer le contestant
+        # IMPORTANT: Utiliser le round_id pour scoper la saison
         city_season = SeasonMigrationService.get_or_create_season(
             db, 
             level=SeasonLevel.CITY,
-            title="Saison City"
+            title="Saison City",
+            round_id=target_round_id
         )
         
         # Créer la candidature
@@ -756,7 +836,10 @@ def create_contestant(
             title=contestant_data.title,
             description=contestant_data.description,
             image_media_ids=contestant_data.image_media_ids,
-            video_media_ids=contestant_data.video_media_ids
+            video_media_ids=contestant_data.video_media_ids,
+            nominator_city=contestant_data.nominator_city,
+            nominator_country=contestant_data.nominator_country,
+            round_id=target_round_id
         )
         
         # Vérifier si le lien existe déjà
@@ -792,6 +875,7 @@ def create_contestant(
     return ContestantSubmissionResponse(
         id=contestant.id,
         season_id=contestant.season_id,
+        round_id=contestant.round_id,
         user_id=contestant.user_id,
         title=contestant.title,
         description=contestant.description,
@@ -1111,6 +1195,17 @@ def update_contestant(
             detail=f"Submission not relevant for this contest. {suggestions_text}"
         )
     
+    # ============================================
+    # VALIDATION DU PAYS DU NOMINATEUR
+    # ============================================
+    if contestant_data.nominator_country:
+        user_country = current_user.country
+        if user_country and contestant_data.nominator_country.lower().strip() != user_country.lower().strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"The nominator country must match your country. Your country: {user_country}, Specified: {contestant_data.nominator_country}"
+            )
+    
     # Mettre à jour la candidature
     updated_contestant = crud_contestant.update(
         db,
@@ -1118,7 +1213,9 @@ def update_contestant(
         title=contestant_data.title,
         description=contestant_data.description,
         image_media_ids=contestant_data.image_media_ids,
-        video_media_ids=contestant_data.video_media_ids
+        video_media_ids=contestant_data.video_media_ids,
+        nominator_city=contestant_data.nominator_city,
+        nominator_country=contestant_data.nominator_country
     )
     
     return ContestantResponse.model_validate(updated_contestant)

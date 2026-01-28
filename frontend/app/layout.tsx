@@ -14,47 +14,6 @@ const inter = Inter({ subsets: ["latin"] })
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myhigh5.com"
 const defaultImage = `${appUrl}/thumbnails.png` // Image par défaut pour le partage
 
-// Récupérer une image de contest pour le thumbnail
-async function getFeaturedContestImage(): Promise<string> {
-  try {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-    const response = await fetch(`${apiUrl}/api/v1/contests?limit=1&skip=0`, {
-      next: { revalidate: 3600 }, // Cache pour 1 heure
-      headers: {
-        'Accept': 'application/json',
-      }
-    })
-    
-    if (response.ok) {
-      const data = await response.json()
-      if (data && Array.isArray(data) && data.length > 0) {
-        const contest = data[0]
-        // Utiliser image_url ou cover_image_url
-        const imageUrl = contest.image_url || contest.cover_image_url
-        if (imageUrl) {
-          // Si c'est une URL relative, construire l'URL complète
-          if (imageUrl.startsWith('/')) {
-            return `${apiUrl}${imageUrl}`
-          } else if (imageUrl.startsWith('http')) {
-            return imageUrl
-          } else {
-            return `${apiUrl}/${imageUrl}`
-          }
-        }
-      }
-    } else if (response.status === 404) {
-      // Si l'endpoint n'existe pas, retourner l'image par défaut sans erreur
-      console.warn('Contests endpoint not found, using default image')
-    }
-  } catch (error) {
-    // Ne pas logger l'erreur en production pour éviter le spam
-    if (process.env.NODE_ENV === 'development') {
-    console.error('Error fetching contest image for metadata:', error)
-    }
-  }
-  return defaultImage
-}
-
 // Générer les métadonnées selon la langue détectée
 export async function generateMetadata(): Promise<Metadata> {
   let lang: import("@/lib/translations").Language = 'en'
@@ -69,19 +28,10 @@ export async function generateMetadata(): Promise<Metadata> {
   const translations = getMetadataTranslations(lang)
   // Traductions en anglais pour les partages sociaux (toujours en anglais)
   const englishTranslations = getMetadataTranslations('en')
-  const localeMap: Record<typeof lang, string> = {
-    fr: "fr_FR",
-    en: "en_US",
-    es: "es_ES",
-    de: "de_DE",
-  }
 
-  // Récupérer une image de contest pour le thumbnail
-  const ogImage = await getFeaturedContestImage()
-  
-  // S'assurer que l'image est une URL absolue
-  const absoluteOgImage = ogImage.startsWith('http') ? ogImage : `${appUrl}${ogImage.startsWith('/') ? ogImage : '/' + ogImage}`
-  
+  // Utiliser directement l'image par défaut (pas d'appel API bloquant)
+  const absoluteOgImage = defaultImage
+
   // Utiliser les traductions en anglais pour tous les partages sociaux
   const englishTitle = englishTranslations.pages.home.title
   const englishDescription = englishTranslations.pages.home.description || englishTranslations.defaultDescription || 'Join contests, build your network, and earn through our 10-level affiliate program. Every vote, every referral generates income.'

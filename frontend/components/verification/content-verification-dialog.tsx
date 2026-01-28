@@ -55,15 +55,16 @@ export function ContentVerificationDialog({
     const file = e.target.files?.[0]
     if (!file) return
 
-    // Check file size
-    if (file.size > maxSizeMb * 1024 * 1024) {
-      setError(t('verification.file_too_large') || `Le fichier dépasse ${maxSizeMb}MB`)
+    // Check file type first
+    if (!file.type.startsWith('image/')) {
+      setError(t('verification.invalid_file_type') || 'Type de fichier invalide. Seules les images sont acceptées.')
       return
     }
 
-    // Check file type
-    if (!file.type.startsWith('image/')) {
-      setError(t('verification.invalid_file_type') || 'Type de fichier invalide')
+    // Check file size
+    if (file.size > maxSizeMb * 1024 * 1024) {
+      const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2)
+      setError(t('verification.file_too_large_with_size') || `L'image est trop volumineuse (${fileSizeMB}MB). Taille maximale autorisée: ${maxSizeMb}MB`)
       return
     }
 

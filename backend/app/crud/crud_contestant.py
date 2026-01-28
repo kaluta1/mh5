@@ -121,6 +121,13 @@ class CRUDContestant:
             except (json.JSONDecodeError, TypeError):
                 videos_count = 0
         
+        # Récupérer l'URL de la première image pour le contestant
+        contestant_image_url = None
+        for submission in contestant.submissions:
+            if submission.media_type == "image" and (submission.file_url or submission.external_url):
+                contestant_image_url = submission.file_url or submission.external_url
+                break
+        
         # Calculer le rang dynamiquement en fonction des votes et du niveau de la saison
         # On applique les mêmes règles que pour get_contest_with_enriched_contestants :
         # - city    -> classement par ville + pays
@@ -355,6 +362,7 @@ class CRUDContestant:
         
         # Récupérer les infos du contest (saison)
         contest_title = None
+        contest_image_url = None
         
         if season:
             # Essayer d'abord de récupérer le titre du contest lié via ContestSeasonLink
@@ -372,6 +380,8 @@ class CRUDContestant:
                 ).first()
                 if contest:
                     contest_title = contest.name
+                    # Préférer image_url, puis cover_image_url
+                    contest_image_url = contest.image_url or contest.cover_image_url
                 else:
                     contest_title = season.title
             else:
@@ -416,6 +426,7 @@ class CRUDContestant:
             "description": contestant.description,
             "image_media_ids": contestant.image_media_ids,
             "video_media_ids": contestant.video_media_ids,
+            "contestant_image_url": contestant_image_url,
             "registration_date": contestant.registration_date,
             "is_qualified": contestant.is_qualified or False,
             # Infos auteur
@@ -435,6 +446,7 @@ class CRUDContestant:
             "shares_count": shares_count,
             # Infos du contest
             "contest_title": contest_title,
+            "contest_image_url": contest_image_url,
             "contest_id": contestant.season_id,
             "total_participants": total_participants,
             # Position dans les favoris
@@ -460,7 +472,7 @@ class CRUDContestant:
             .first()
     
     def get_multi_by_season(
-        self, db: Session, season_id: int, *, skip: int = 0, limit: int = 100
+        self, db: Session, season_id: int, *, skip: int = 0, limit: int = 10
     ) -> List[Contestant]:
         """Récupère les candidatures d'une saison"""
         return db.query(Contestant)\
@@ -476,17 +488,47 @@ class CRUDContestant:
     
     def get_multi_by_season_with_stats(
         self, db: Session, season_id: int, current_user_id: Optional[int] = None, 
-        *, skip: int = 0, limit: int = 100
+        *, skip: int = 0, limit: int = 10,
+        filter_country: Optional[str] = None,
+        filter_region: Optional[str] = None,
+        filter_continent: Optional[str] = None,
+        filter_city: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         Récupère les candidatures d'une saison avec stats enrichies (votes, rang, infos auteur).
+        
+        Paramètres de filtrage géographique:
+        - filter_country: Affiche uniquement les contestants de ce pays
+        - filter_region: Affiche uniquement les contestants de cette région
+        - filter_continent: Affiche uniquement les contestants de ce continent
+        - filter_city: Affiche uniquement les contestants de cette ville
         """
         # Récupérer tous les contestants de la saison avec leurs relations (exclure les supprimés)
-        contestants = db.query(Contestant)\
+        contestants_query = db.query(Contestant)\
             .filter(
                 Contestant.season_id == season_id,
                 Contestant.is_deleted == False
-            )\
+            )
+        
+        # Appliquer les filtres géographiques si fournis
+        if filter_country:
+            contestants_query = contestants_query.filter(
+                func.lower(Contestant.country) == func.lower(filter_country)
+            )
+        if filter_region:
+            contestants_query = contestants_query.filter(
+                func.lower(Contestant.region) == func.lower(filter_region)
+            )
+        if filter_continent:
+            contestants_query = contestants_query.filter(
+                func.lower(Contestant.continent) == func.lower(filter_continent)
+            )
+        if filter_city:
+            contestants_query = contestants_query.filter(
+                func.lower(Contestant.city) == func.lower(filter_city)
+            )
+        
+        contestants = contestants_query\
             .options(
                 joinedload(Contestant.user),
                 joinedload(Contestant.submissions)
@@ -496,17 +538,43 @@ class CRUDContestant:
             .limit(limit)\
             .all()
         
-        # Calculer les votes pour chaque contestant
+        # Optimisation: Récupérer tous les IDs pour éviter les requêtes N+1
+        contestant_ids = [c.id for c in contestants]
+        
+        # Initialiser les dictionnaires de comptes
         votes_by_contestant = {}
-        for contestant in contestants:
-            votes_count = db.query(func.count(Vote.id))\
-                .filter(Vote.contestant_id == contestant.id)\
-                .scalar() or 0
-            votes_by_contestant[contestant.id] = votes_count
+        favorites_by_contestant = {}
+        reactions_by_contestant = {}
+        comments_by_contestant = {}
+        
+        if contestant_ids:
+            # Récupérer les votes en une seule requête
+            votes_results = db.query(Vote.contestant_id, func.count(Vote.id))\
+                .filter(Vote.contestant_id.in_(contestant_ids))\
+                .group_by(Vote.contestant_id).all()
+            votes_by_contestant = {cid: count for cid, count in votes_results}
+            
+            # Récupérer les favoris en une seule requête
+            fav_results = db.query(MyFavorites.contestant_id, func.count(MyFavorites.id))\
+                .filter(MyFavorites.contestant_id.in_(contestant_ids))\
+                .group_by(MyFavorites.contestant_id).all()
+            favorites_by_contestant = {cid: count for cid, count in fav_results}
+            
+            # Récupérer les réactions (likes) en une seule requête
+            like_results = db.query(ContestLike.contestant_id, func.count(ContestLike.id))\
+                .filter(ContestLike.contestant_id.in_(contestant_ids))\
+                .group_by(ContestLike.contestant_id).all()
+            reactions_by_contestant = {cid: count for cid, count in like_results}
+            
+            # Récupérer les commentaires en une seule requête
+            comment_results = db.query(ContestComment.contestant_id, func.count(ContestComment.id))\
+                .filter(ContestComment.contestant_id.in_(contestant_ids))\
+                .group_by(ContestComment.contestant_id).all()
+            comments_by_contestant = {cid: count for cid, count in comment_results}
         
         # Calculer les rangs (trié par votes décroissants)
         ranked_contestants = sorted(
-            [(c.id, votes_by_contestant[c.id]) for c in contestants],
+            [(c.id, votes_by_contestant.get(c.id, 0)) for c in contestants],
             key=lambda x: x[1],
             reverse=True
         )
@@ -514,9 +582,9 @@ class CRUDContestant:
         
         # Vérifier les votes de l'utilisateur courant
         user_votes = {}
-        if current_user_id:
+        if current_user_id and contestant_ids:
             user_votes_list = db.query(Vote.contestant_id)\
-                .filter(Vote.voter_id == current_user_id, Vote.contestant_id.in_([c.id for c in contestants]))\
+                .filter(Vote.voter_id == current_user_id, Vote.contestant_id.in_(contestant_ids))\
                 .all()
             user_votes = {row[0] for row in user_votes_list}
         
@@ -543,20 +611,10 @@ class CRUDContestant:
                 # L'utilisateur n'est pas l'auteur et n'a pas déjà voté
                 can_vote = contestant.id not in user_votes
             
-            # Compter les favoris
-            favorites_count = db.query(func.count(MyFavorites.id))\
-                .filter(MyFavorites.contestant_id == contestant.id)\
-                .scalar() or 0
-            
-            # Compter les réactions (likes)
-            reactions_count = db.query(func.count(ContestLike.id))\
-                .filter(ContestLike.contestant_id == contestant.id)\
-                .scalar() or 0
-            
-            # Compter les commentaires
-            comments_count = db.query(func.count(ContestComment.id))\
-                .filter(ContestComment.contestant_id == contestant.id)\
-                .scalar() or 0
+            # Utiliser les comptes pré-calculés
+            favorites_count = favorites_by_contestant.get(contestant.id, 0)
+            reactions_count = reactions_by_contestant.get(contestant.id, 0)
+            comments_count = comments_by_contestant.get(contestant.id, 0)
             
             result.append({
                 "id": contestant.id,
@@ -566,13 +624,22 @@ class CRUDContestant:
                 "description": contestant.description,
                 "image_media_ids": contestant.image_media_ids,
                 "video_media_ids": contestant.video_media_ids,
+                "nominator_city": contestant.nominator_city,
+                "nominator_country": contestant.nominator_country,
                 "registration_date": contestant.registration_date,
                 "is_qualified": contestant.is_qualified,
-                # Infos auteur
+                # Infos auteur (depuis l'utilisateur)
                 "author_name": contestant.user.full_name or f"{contestant.user.first_name or ''} {contestant.user.last_name or ''}".strip() if contestant.user else None,
                 "author_country": contestant.user.country if contestant.user else None,
                 "author_city": contestant.user.city if contestant.user else None,
+                "author_continent": contestant.user.continent if contestant.user else None,
+                "author_region": contestant.user.region if contestant.user else None,
                 "author_avatar_url": contestant.user.avatar_url if contestant.user else None,
+                # Données géographiques du contestant (copiées à la création)
+                "country": contestant.country,
+                "city": contestant.city,
+                "continent": contestant.continent,
+                "region": contestant.region,
                 # Stats
                 "rank": ranks.get(contestant.id),
                 "votes_count": votes_by_contestant.get(contestant.id, 0),
@@ -592,7 +659,7 @@ class CRUDContestant:
         return result
     
     def get_multi_by_user(
-        self, db: Session, user_id: int, *, skip: int = 0, limit: int = 100
+        self, db: Session, user_id: int, *, skip: int = 0, limit: int = 10
     ) -> List[Contestant]:
         """Récupère les candidatures d'un utilisateur"""
         return db.query(Contestant)\
@@ -618,7 +685,10 @@ class CRUDContestant:
         title: Optional[str] = None,
         description: Optional[str] = None,
         image_media_ids: Optional[str] = None,
-        video_media_ids: Optional[str] = None
+        video_media_ids: Optional[str] = None,
+        nominator_city: Optional[str] = None,
+        nominator_country: Optional[str] = None,
+        round_id: Optional[int] = None
     ) -> Contestant:
         """Crée une nouvelle candidature"""
         # Vérifier qu'il n'existe pas déjà une candidature pour cet utilisateur
@@ -648,6 +718,9 @@ class CRUDContestant:
             region=user.region,
             continent=user.continent,
             author_gender=author_gender_value,
+            nominator_city=nominator_city,
+            nominator_country=nominator_country,
+            round_id=round_id,
             registration_date=datetime.utcnow(),
             verification_status="pending",
             is_active=True
@@ -702,7 +775,7 @@ class CRUDContestant:
         return submission
     
     def get_leaderboard(
-        self, db: Session, season_id: int, *, skip: int = 0, limit: int = 100
+        self, db: Session, season_id: int, *, skip: int = 0, limit: int = 10
     ) -> List[Contestant]:
         """Récupère le classement d'une saison"""
         return db.query(Contestant)\
@@ -728,7 +801,9 @@ class CRUDContestant:
         title: Optional[str] = None,
         description: Optional[str] = None,
         image_media_ids: Optional[str] = None,
-        video_media_ids: Optional[str] = None
+        video_media_ids: Optional[str] = None,
+        nominator_city: Optional[str] = None,
+        nominator_country: Optional[str] = None
     ) -> Optional[Contestant]:
         """Met à jour une candidature"""
         db_obj = db.query(Contestant).filter(Contestant.id == id).first()
@@ -744,6 +819,10 @@ class CRUDContestant:
             db_obj.image_media_ids = image_media_ids
         if video_media_ids is not None:
             db_obj.video_media_ids = video_media_ids
+        if nominator_city is not None:
+            db_obj.nominator_city = nominator_city
+        if nominator_country is not None:
+            db_obj.nominator_country = nominator_country
         
         db.add(db_obj)
         db.commit()
@@ -797,20 +876,35 @@ class CRUDContestant:
                     "reason": "Les inscriptions sont fermées pour ce concours"
                 }
             
-            # Vérifier les dates de soumission
+            # Vérifier les dates de soumission via le Round actif
             today = date.today()
             
-            if contest.submission_start_date and today < contest.submission_start_date:
-                return {
-                    "eligible": False,
-                    "reason": "La période d'inscription n'a pas encore commencé"
-                }
+            # Récupérer le round actif
+            from app.crud import crud_round
+            active_round = crud_round.round.get_active_round_for_contest(db, contest_id=contest.id)
             
-            if contest.submission_end_date and today > contest.submission_end_date:
-                return {
-                    "eligible": False,
-                    "reason": "La période d'inscription est terminée"
-                }
+            submission_start_date = active_round.submission_start_date if active_round else None
+            submission_end_date = active_round.submission_end_date if active_round else None
+
+            if submission_start_date:
+                start_date = submission_start_date
+                if isinstance(start_date, datetime):
+                    start_date = start_date.date()
+                if today < start_date:
+                    return {
+                        "eligible": False,
+                        "reason": "La période d'inscription n'a pas encore commencé"
+                    }
+            
+            if submission_end_date:
+                end_date = submission_end_date
+                if isinstance(end_date, datetime):
+                    end_date = end_date.date()
+                if today > end_date:
+                    return {
+                        "eligible": False,
+                        "reason": "La période d'inscription est terminée"
+                    }
             
             return {
                 "eligible": True,
@@ -855,14 +949,29 @@ class CRUDContestant:
             if not contest.is_active:
                 return False
             
-            # Vérifier les dates
+            # Vérifier les dates via le Round actif
             today = date.today()
             
-            if contest.submission_start_date and today < contest.submission_start_date:
-                return False
+            # Récupérer le round actif
+            from app.crud import crud_round
+            active_round = crud_round.round.get_active_round_for_contest(db, contest_id=contest.id)
             
-            if contest.submission_end_date and today > contest.submission_end_date:
-                return False
+            submission_start_date = active_round.submission_start_date if active_round else None
+            submission_end_date = active_round.submission_end_date if active_round else None
+            
+            if submission_start_date:
+                start_date = submission_start_date
+                if isinstance(start_date, datetime):
+                    start_date = start_date.date()
+                if today < start_date:
+                    return False
+            
+            if submission_end_date:
+                end_date = submission_end_date
+                if isinstance(end_date, datetime):
+                    end_date = end_date.date()
+                if today > end_date:
+                    return False
             
             return True
         

@@ -152,7 +152,8 @@ export function VoiceVerificationDialog({
     
     // Check file size
     if (recordedAudio.size > maxSizeMb * 1024 * 1024) {
-      setError(t('verification.file_too_large') || `L'enregistrement est trop volumineux (max ${maxSizeMb}MB)`)
+      const fileSizeMB = (recordedAudio.size / (1024 * 1024)).toFixed(2)
+      setError(t('verification.file_too_large_with_size') || `L'enregistrement est trop volumineux (${fileSizeMB}MB). Taille maximale autorisée: ${maxSizeMb}MB`)
       return
     }
     

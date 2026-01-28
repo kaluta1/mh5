@@ -6,10 +6,12 @@ import { ArrowRight, Play, Star, Trophy, Users, Globe, Sparkles, CheckCircle2 } 
 import { useLanguage } from "@/contexts/language-context"
 import { InteractiveCarousel } from "@/components/ui/interactive-carousel"
 import { useRouter } from "next/navigation"
+import { useAuth } from "@/hooks/use-auth"
 
 export function Hero() {
   const { t } = useLanguage()
   const router = useRouter()
+  const { isAuthenticated } = useAuth()
 
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-gradient-to-br from-white via-blue-50/30 to-purple-50/30 dark:from-gray-900 dark:via-gray-800/50 dark:to-gray-900 pt-20 md:pt-16">
@@ -19,11 +21,11 @@ export function Hero() {
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-gradient-to-br from-myhigh5-primary/20 to-myhigh5-secondary/20 rounded-full blur-3xl animate-pulse" />
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-gradient-to-br from-purple-400/20 to-cyan-400/20 rounded-full blur-3xl animate-pulse delay-1000" />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-gradient-to-br from-blue-200/10 to-purple-200/10 rounded-full blur-3xl" />
-        
+
         {/* Grid pattern */}
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] opacity-40" />
       </div>
-      
+
       <div className="container px-4 md:px-6 relative z-10">
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center min-h-[calc(100vh-5rem)] md:min-h-[calc(100vh-4rem)]">
           {/* Left Column - Main Content */}
@@ -35,7 +37,7 @@ export function Hero() {
                 {t('hero.badge') || "World's #1 Contest Platform"}
               </span>
             </div> */}
-          
+
             {/* Main Heading */}
             <div className="space-y-6 lg:space-y-8">
               <h1 className="text-xl sm:text-2xl md:text-2xl lg:text-3xl xl:text-4xl font-black tracking-tight leading-[1.1] text-gray-900 dark:text-white">
@@ -52,7 +54,7 @@ export function Hero() {
 
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row gap-4 sm:gap-5 justify-center lg:justify-start pt-2">
-              <Button 
+              <Button
                 size="lg"
                 onClick={() => router.push('/register')}
                 className="group text-base sm:text-lg px-8 sm:px-10 py-6 sm:py-7 bg-gradient-to-r from-myhigh5-primary to-myhigh5-secondary hover:from-myhigh5-primary-dark hover:to-myhigh5-secondary-dark text-white font-bold rounded-xl shadow-xl hover:shadow-2xl hover:shadow-myhigh5-primary/50 transition-all duration-300 hover:-translate-y-1 hover:scale-105"
@@ -60,10 +62,10 @@ export function Hero() {
                 <span>{t('hero.cta')}</span>
                 <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
               </Button>
-              <Button 
-                size="lg" 
+              <Button
+                size="lg"
                 variant="outline"
-                onClick={() => router.push('/contests')}
+                onClick={() => router.push(isAuthenticated ? '/dashboard/contests' : '/contests')}
                 className="text-base sm:text-lg px-8 sm:px-10 py-6 sm:py-7 border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white font-semibold rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-all duration-300 hover:-translate-y-1 hover:border-myhigh5-primary dark:hover:border-myhigh5-primary"
               >
                 <Trophy className="mr-2 h-5 w-5" />
@@ -98,10 +100,7 @@ export function Hero() {
 
             {/* Trust Indicators */}
             <div className="flex flex-wrap items-center justify-center lg:justify-start gap-6 sm:gap-8 pt-2">
-              <div className="flex items-center gap-3 bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm rounded-full px-4 py-2 border border-gray-200/50 dark:border-gray-700/50">
-                <CheckCircle2 className="w-5 h-5 text-green-500" />
-                <span className="text-sm sm:text-base text-gray-700 dark:text-gray-200 font-medium">{t('hero.trust.secure')}</span>
-              </div>
+
               <div className="flex items-center gap-3 bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm rounded-full px-4 py-2 border border-gray-200/50 dark:border-gray-700/50">
                 <CheckCircle2 className="w-5 h-5 text-green-500" />
                 <span className="text-sm sm:text-base text-gray-700 dark:text-gray-200 font-medium">{t('hero.trust.support')}</span>

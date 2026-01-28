@@ -1,14 +1,17 @@
 /* MyHigh5 Color Palette - Couleurs spécifiées */
 :root {
   /* Couleurs principales MyHigh5 */
-  --myhigh5-primary: #1e40af;      /* Bleu principal */
-  --myhigh5-secondary: #0891b2;    /* Cyan/Turquoise */
-  --myhigh5-accent: #FFFF79;       /* Jaune accent (hover) */
-  
+  --myhigh5-primary: #1e40af;
+  /* Bleu principal */
+  --myhigh5-secondary: #0891b2;
+  /* Cyan/Turquoise */
+  --myhigh5-accent: #FFFF79;
+  /* Jaune accent (hover) */
+
   /* Gradients */
   --myhigh5-gradient-primary: linear-gradient(to bottom right, #1e40af, #0891b2);
   --myhigh5-gradient-light: linear-gradient(to bottom right, #3b82f6, #06b6d4);
-  
+
   /* Variations de bleu */
   --myhigh5-blue-50: #eff6ff;
   --myhigh5-blue-100: #dbeafe;
@@ -20,7 +23,7 @@
   --myhigh5-blue-700: #1d4ed8;
   --myhigh5-blue-800: #1e40af;
   --myhigh5-blue-900: #1e3a8a;
-  
+
   /* Variations de cyan */
   --myhigh5-cyan-50: #ecfeff;
   --myhigh5-cyan-100: #cffafe;

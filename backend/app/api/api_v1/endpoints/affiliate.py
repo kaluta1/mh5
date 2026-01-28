@@ -49,7 +49,7 @@ def get_direct_referrals(
     db: Session = Depends(deps.get_db),
     current_user = Depends(deps.get_current_active_user),
     skip: int = 0,
-    limit: int = 50
+    limit: int = 10
 ):
     """
     Récupérer les filleuls directs de l'utilisateur (via User.sponsor_id).
@@ -65,7 +65,7 @@ def get_referrals_with_commissions(
     db: Session = Depends(deps.get_db),
     current_user = Depends(deps.get_current_active_user),
     skip: int = 0,
-    limit: int = 50
+    limit: int = 10
 ):
     """
     Récupérer les filleuls avec les commissions générées et statut KYC.
@@ -92,7 +92,7 @@ def get_all_referrals_multilevel(
     db: Session = Depends(deps.get_db),
     current_user = Depends(deps.get_current_active_user),
     skip: int = 0,
-    limit: int = 50,
+    limit: int = 10,
     level: int = None,
     status: str = None,
     search: str = None,

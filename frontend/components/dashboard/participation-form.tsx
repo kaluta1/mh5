@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useRef } from 'react'
-import { X, Upload, FileText, Image as ImageIcon, Video, Eye, Link, Plus, AlertCircle, CheckCircle, Loader2 } from 'lucide-react'
+import { X, Upload, FileText, Image as ImageIcon, Video, Eye, Link, Plus, AlertCircle, CheckCircle, Loader2, MapPin, Globe } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ImagePreviewDialog } from '@/components/ui/image-preview-dialog'
@@ -12,6 +12,7 @@ import { useRouter } from 'next/navigation'
 import { useModeratedUpload } from '@/hooks/use-moderated-upload'
 import { useToast } from '@/components/ui/toast'
 import { isValidVideoUrl, detectVideoPlatform, isYouTubeShort } from '@/lib/utils/video-platforms'
+import { countries } from '@/lib/countries'
 
 interface MediaRequirements {
   requiresVideo?: boolean
@@ -28,7 +29,9 @@ interface ParticipationFormProps {
     title: string,
     description: string,
     imageMediaIds?: string,
-    videoMediaIds?: string
+    videoMediaIds?: string,
+    nominatorCity?: string,
+    nominatorCountry?: string
   ) => Promise<void>
   onCancel?: () => void
   isSubmitting?: boolean
@@ -38,6 +41,8 @@ interface ParticipationFormProps {
     description?: string
     imageUrls?: string[]
     videoUrl?: string
+    nominatorCity?: string
+    nominatorCountry?: string
   }
   mediaRequirements?: MediaRequirements
   isNomination?: boolean
@@ -47,7 +52,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
   const { t } = useLanguage()
   const router = useRouter()
   const { addToast } = useToast()
-  
+
   const [title, setTitle] = useState<string>(initialData?.title || '')
   const [description, setDescription] = useState<string>(initialData?.description || '')
   const [imageUrls, setImageUrls] = useState<string[]>(initialData?.imageUrls || [])
@@ -58,13 +63,17 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
   const [previewVideoUrl, setPreviewVideoUrl] = useState<string>('')
   const [showImagePreview, setShowImagePreview] = useState(false)
   const [showVideoPreview, setShowVideoPreview] = useState(false)
-  
+
   // URL import states
   const [showImageUrlInput, setShowImageUrlInput] = useState(false)
   const [showVideoUrlInput, setShowVideoUrlInput] = useState(false)
   const [imageUrlInput, setImageUrlInput] = useState('')
   const [videoUrlInput, setVideoUrlInput] = useState('')
-  
+
+  // Nomination location states
+  const [nominatorCountry, setNominatorCountry] = useState<string>(initialData?.nominatorCountry || '')
+  const [nominatorCity, setNominatorCity] = useState<string>(initialData?.nominatorCity || '')
+
   // Media requirements with defaults
   // Pour les nominations : images optionnelles (minImages = 0), vidéos obligatoires
   const minImages = isNomination ? 0 : (mediaRequirements?.minImages ?? 1)
@@ -120,12 +129,12 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
   const handleImageFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
     if (files.length === 0) return
-    
+
     for (const file of files) {
       if (imageUrls.length >= maxImages) break
       await imageUpload.upload(file)
     }
-    
+
     if (imageInputRef.current) {
       imageInputRef.current.value = ''
     }
@@ -134,7 +143,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
   const handleVideoFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    
+
     // Pour les nominations : les fichiers vidéo ne sont pas autorisés, seulement les URLs
     if (isNomination) {
       addToast(t('participation.video_file_not_allowed') || 'Les fichiers vidéo ne sont pas autorisés pour les nominations. Veuillez utiliser une URL YouTube (y compris YouTube Shorts), TikTok, ou un autre lien vidéo.', 'error')
@@ -143,9 +152,9 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
       }
       return
     }
-    
+
     await videoUpload.upload(file)
-    
+
     if (videoInputRef.current) {
       videoInputRef.current.value = ''
     }
@@ -214,13 +223,13 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
       addToast(t('participation.invalid_url') || 'URL invalide', 'error')
       return
     }
-    
+
     // Vérifier si c'est un YouTube Short (interdit)
     if (isYouTubeShort(videoUrlInput)) {
       addToast(t('participation.youtube_shorts_not_allowed') || 'Les YouTube Shorts ne sont pas autorisés. Veuillez utiliser une vidéo YouTube standard.', 'error')
       return
     }
-    
+
     // Pour les nominations : valider que ce n'est pas Facebook ou Vimeo
     if (isNomination) {
       const platform = detectVideoPlatform(videoUrlInput)
@@ -233,7 +242,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
         return
       }
     }
-    
+
     if (!isVideoUrl(videoUrlInput)) {
       addToast(t('participation.invalid_video_url'), 'error')
       return
@@ -288,6 +297,12 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
       return
     }
 
+    // Pour les nominations, le pays du nominateur est obligatoire
+    if (isNomination && !nominatorCountry) {
+      addToast(t('participation.errors.nominator_country_required') || 'Le pays du nominateur est obligatoire', 'error')
+      return
+    }
+
     try {
       setIsSubmitting(true)
 
@@ -296,7 +311,9 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
           title,
           description,
           JSON.stringify(imageUrls),
-          videoUrl ? JSON.stringify([videoUrl]) : undefined
+          videoUrl ? JSON.stringify([videoUrl]) : undefined,
+          isNomination ? nominatorCity : undefined,
+          isNomination ? nominatorCountry : undefined
         )
       }
     } catch (err: any) {
@@ -313,6 +330,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
   // Pour les nominations, les images sont optionnelles
   const hasImageError = !isNomination && imageUrls.length === 0
   const hasVideoError = requiresVideo && !videoUrl
+  const hasNominatorCountryError = isNomination && !nominatorCountry
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -327,20 +345,19 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
           onChange={(e) => setTitle(e.target.value)}
           placeholder={t('participation.content_title_placeholder') || 'Entrez le titre de votre candidature (5-100 caractères)'}
           maxLength={100}
-          className={`w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 ${
-            (!title.trim() || hasTitleError)
-              ? 'border-red-500 focus:ring-red-500' 
-              : 'border-gray-300 dark:border-gray-600 focus:ring-myhigh5-primary'
-          }`}
+          className={`w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 ${(!title.trim() || hasTitleError)
+            ? 'border-red-500 focus:ring-red-500'
+            : 'border-gray-300 dark:border-gray-600 focus:ring-myhigh5-primary'
+            }`}
           disabled={isSubmitting}
         />
         <div className="flex items-center justify-between mt-2">
           <p className={`text-xs ${hasTitleError ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'}`}>
-            {title.length < 5 
+            {title.length < 5
               ? `${t('participation.min_characters') || 'Minimum'} 5 ${t('participation.characters') || 'characters'} (${title.length}/5)`
               : title.length > 100
-              ? `${t('participation.max_characters') || 'Maximum'} 100 ${t('participation.characters') || 'characters'} (${title.length}/100)`
-              : `${title.length}/100`
+                ? `${t('participation.max_characters') || 'Maximum'} 100 ${t('participation.characters') || 'characters'} (${title.length}/100)`
+                : `${title.length}/100`
             }
           </p>
         </div>
@@ -349,11 +366,11 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
           <div className="mt-2 flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
             <span>
-              {!title.trim() 
+              {!title.trim()
                 ? t('participation.errors.content_title_required') || 'Content Title is required'
                 : title.length < 5
-                ? t('participation.errors.content_title_min_length') || 'Content title must contain at least 5 characters'
-                : t('participation.errors.content_title_max_length') || 'Content title must not exceed 100 characters'
+                  ? t('participation.errors.content_title_min_length') || 'Content title must contain at least 5 characters'
+                  : t('participation.errors.content_title_max_length') || 'Content title must not exceed 100 characters'
               }
             </span>
           </div>
@@ -372,20 +389,19 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
           placeholder={t('participation.content_description_placeholder') || 'Décrivez votre candidature (20-500 caractères)'}
           maxLength={500}
           rows={4}
-          className={`w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 resize-none ${
-            (!description.trim() || hasDescriptionError)
-              ? 'border-red-500 focus:ring-red-500' 
-              : 'border-gray-300 dark:border-gray-600 focus:ring-myhigh5-primary'
-          }`}
+          className={`w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 resize-none ${(!description.trim() || hasDescriptionError)
+            ? 'border-red-500 focus:ring-red-500'
+            : 'border-gray-300 dark:border-gray-600 focus:ring-myhigh5-primary'
+            }`}
           disabled={isSubmitting}
         />
         <div className="flex items-center justify-between mt-2">
           <p className={`text-xs ${hasDescriptionError ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'}`}>
-            {description.length < 20 
+            {description.length < 20
               ? `${t('participation.min_characters') || 'Minimum'} 20 ${t('participation.characters') || 'characters'} (${description.length}/20)`
               : description.length > 500
-              ? `${t('participation.max_characters') || 'Maximum'} 500 ${t('participation.characters') || 'characters'} (${description.length}/500)`
-              : `${description.length}/500`
+                ? `${t('participation.max_characters') || 'Maximum'} 500 ${t('participation.characters') || 'characters'} (${description.length}/500)`
+                : `${description.length}/500`
             }
           </p>
         </div>
@@ -394,16 +410,79 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
           <div className="mt-2 flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
             <span>
-              {!description.trim() 
+              {!description.trim()
                 ? t('participation.errors.content_description_required') || 'Content Description is required'
                 : description.length < 20
-                ? t('participation.errors.content_description_min_length') || 'Content description must contain at least 20 characters'
-                : t('participation.errors.content_description_max_length') || 'Content description must not exceed 500 characters'
+                  ? t('participation.errors.content_description_min_length') || 'Content description must contain at least 20 characters'
+                  : t('participation.errors.content_description_max_length') || 'Content description must not exceed 500 characters'
               }
             </span>
           </div>
         )}
       </div>
+
+      {/* Section: Nominator Location - Visible uniquement pour les nominations */}
+      {isNomination && (
+        <div className={`bg-gray-50 dark:bg-gray-800 rounded-lg p-6 border ${hasNominatorCountryError
+          ? 'border-red-500 dark:border-red-500'
+          : 'border-gray-200 dark:border-gray-700'
+          }`}>
+          <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <Globe className="w-5 h-5" />
+            {t('participation.nominator_location') || 'Contestant Location'}
+          </h3>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            {t('participation.nominator_location_description') || 'Please provide the location of the person you are nominating.'}
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Country - Required */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                {t('participation.nominator_country') || 'Country'} *
+              </label>
+              <select
+                value={nominatorCountry}
+                onChange={(e) => setNominatorCountry(e.target.value)}
+                className={`w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 ${hasNominatorCountryError
+                  ? 'border-red-500 focus:ring-red-500'
+                  : 'border-gray-300 dark:border-gray-600 focus:ring-myhigh5-primary'
+                  }`}
+                disabled={isSubmitting}
+              >
+                <option value="">{t('participation.select_country') || 'Select a country'}</option>
+                {countries.map((country) => (
+                  <option key={country.code} value={country.name}>
+                    {country.name}
+                  </option>
+                ))}
+              </select>
+              {hasNominatorCountryError && (
+                <div className="mt-2 flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>{t('participation.errors.nominator_country_required') || 'Country is required'}</span>
+                </div>
+              )}
+            </div>
+
+            {/* City - Optional */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <MapPin className="w-4 h-4 inline mr-1" />
+                {t('participation.nominator_city') || 'City'} ({t('common.optional') || 'optional'})
+              </label>
+              <input
+                type="text"
+                value={nominatorCity}
+                onChange={(e) => setNominatorCity(e.target.value)}
+                placeholder={t('participation.nominator_city_placeholder') || 'Enter the city name'}
+                className="w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 border-gray-300 dark:border-gray-600 focus:ring-myhigh5-primary"
+                disabled={isSubmitting}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Media Requirements Info */}
       {mediaRequirements && (
@@ -414,10 +493,10 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
           </h4>
           <ul className="text-sm text-blue-800 dark:text-blue-300 space-y-1">
             {!isNomination && (
-            <li className="flex items-center gap-2">
-              {imageUrls.length >= minImages ? <CheckCircle className="w-4 h-4 text-green-500" /> : <AlertCircle className="w-4 h-4 text-amber-500" />}
-              {t('participation.images_required') || 'Images'}: {minImages} min, {maxImages} max ({imageUrls.length}/{maxImages})
-            </li>
+              <li className="flex items-center gap-2">
+                {imageUrls.length >= minImages ? <CheckCircle className="w-4 h-4 text-green-500" /> : <AlertCircle className="w-4 h-4 text-amber-500" />}
+                {t('participation.images_required') || 'Images'}: {minImages} min, {maxImages} max ({imageUrls.length}/{maxImages})
+              </li>
             )}
             {requiresVideo && (
               <li className="flex items-center gap-2">
@@ -431,223 +510,221 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
 
       {/* Section 3: Content Images - Masqué pour les nominations */}
       {!isNomination && (
-      <div className={`bg-gray-50 dark:bg-gray-800 rounded-lg p-6 border ${
-        hasImageError 
-          ? 'border-red-500 dark:border-red-500' 
+        <div className={`bg-gray-50 dark:bg-gray-800 rounded-lg p-6 border ${hasImageError
+          ? 'border-red-500 dark:border-red-500'
           : 'border-gray-200 dark:border-gray-700'
-      }`}>
-        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-          <ImageIcon className="w-5 h-5" />
-          {t('participation.content_image') || 'Content Image'} {minImages > 0 && '*'} ({imageUrls.length}/{maxImages})
-        </h3>
-        
-        {imageUrls.length < maxImages && (
-          <div className="space-y-3 mb-4">
-            {/* Upload button avec modération */}
-            <div 
-              className="p-6 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg bg-white/50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition cursor-pointer"
-              onClick={() => !imageUpload.isUploading && !isSubmitting && imageInputRef.current?.click()}
-            >
-              <input
-                ref={imageInputRef}
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={handleImageFileSelect}
-                className="hidden"
-                disabled={isSubmitting || imageUpload.isUploading || imageUrls.length >= maxImages}
-              />
-              
-              <div className="flex flex-col items-center justify-center text-center">
-                {imageUpload.isUploading ? (
-                  <>
-                    <Loader2 className="w-8 h-8 text-gray-400 mb-2 animate-spin" />
-                    <p className="font-semibold text-gray-700 dark:text-gray-300">
-                      {t('moderation.analyzing') || 'Modération et upload...'} ({Math.round(imageUpload.progress)}%)
+          }`}>
+          <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <ImageIcon className="w-5 h-5" />
+            {t('participation.content_image') || 'Content Image'} {minImages > 0 && '*'} ({imageUrls.length}/{maxImages})
+          </h3>
+
+          {imageUrls.length < maxImages && (
+            <div className="space-y-3 mb-4">
+              {/* Upload button avec modération */}
+              <div
+                className="p-6 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg bg-white/50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition cursor-pointer"
+                onClick={() => !imageUpload.isUploading && !isSubmitting && imageInputRef.current?.click()}
+              >
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleImageFileSelect}
+                  className="hidden"
+                  disabled={isSubmitting || imageUpload.isUploading || imageUrls.length >= maxImages}
+                />
+
+                <div className="flex flex-col items-center justify-center text-center">
+                  {imageUpload.isUploading ? (
+                    <>
+                      <Loader2 className="w-8 h-8 text-gray-400 mb-2 animate-spin" />
+                      <p className="font-semibold text-gray-700 dark:text-gray-300">
+                        {t('moderation.analyzing') || 'Modération et upload...'} ({Math.round(imageUpload.progress)}%)
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-8 h-8 text-gray-400 mb-2" />
+                      <p className="font-semibold text-gray-700 dark:text-gray-300">
+                        {t('dashboard.contests.participation_form.click_add_images') || 'Cliquez pour ajouter des images'}
+                      </p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                        {t('dashboard.contests.participation_form.images_format') || 'JPG, PNG, GIF, WebP'}
+                      </p>
+                    </>
+                  )}
+                </div>
+
+                {/* Afficher les erreurs de modération */}
+                {imageUpload.error && imageUpload.moderationFlags.length > 0 && (
+                  <div className="mt-3 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-xs">
+                    <p className="text-red-700 dark:text-red-300 font-medium flex items-center gap-1">
+                      <AlertCircle className="w-4 h-4" />
+                      {t('moderation.content_rejected') || 'Contenu rejeté'}
                     </p>
-                  </>
-                ) : (
-                  <>
-                    <Upload className="w-8 h-8 text-gray-400 mb-2" />
-                    <p className="font-semibold text-gray-700 dark:text-gray-300">
-                      {t('dashboard.contests.participation_form.click_add_images') || 'Cliquez pour ajouter des images'}
-                    </p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                      {t('dashboard.contests.participation_form.images_format') || 'JPG, PNG, GIF, WebP'}
-                    </p>
-                  </>
+                    <ul className="list-disc list-inside text-red-600 dark:text-red-400 mt-1">
+                      {imageUpload.moderationFlags.map((flag, idx) => (
+                        <li key={idx}>{flag.description}</li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
               </div>
 
-              {/* Afficher les erreurs de modération */}
-              {imageUpload.error && imageUpload.moderationFlags.length > 0 && (
-                <div className="mt-3 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-xs">
-                  <p className="text-red-700 dark:text-red-300 font-medium flex items-center gap-1">
-                    <AlertCircle className="w-4 h-4" />
-                    {t('moderation.content_rejected') || 'Contenu rejeté'}
-                  </p>
-                  <ul className="list-disc list-inside text-red-600 dark:text-red-400 mt-1">
-                    {imageUpload.moderationFlags.map((flag, idx) => (
-                      <li key={idx}>{flag.description}</li>
-                    ))}
-                  </ul>
+              {/* URL Import Option */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-500 dark:text-gray-400">{t('participation.or') || 'ou'}</span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowImageUrlInput(!showImageUrlInput)}
+                  className="gap-2"
+                >
+                  <Link className="w-4 h-4" />
+                  {t('participation.add_by_url') || 'Ajouter par URL'}
+                </Button>
+              </div>
+
+              {/* URL Input */}
+              {showImageUrlInput && (
+                <div className="flex gap-2">
+                  <Input
+                    type="url"
+                    value={imageUrlInput}
+                    onChange={(e) => setImageUrlInput(e.target.value)}
+                    placeholder={t('participation.image_url_placeholder') || 'https://exemple.com/image.jpg'}
+                    className="flex-1"
+                  />
+                  <Button type="button" onClick={handleAddImageByUrl} className="gap-1">
+                    <Plus className="w-4 h-4" />
+                    {t('participation.add') || 'Ajouter'}
+                  </Button>
                 </div>
               )}
             </div>
+          )}
 
-            {/* URL Import Option */}
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-500 dark:text-gray-400">{t('participation.or') || 'ou'}</span>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setShowImageUrlInput(!showImageUrlInput)}
-                className="gap-2"
-              >
-                <Link className="w-4 h-4" />
-                {t('participation.add_by_url') || 'Ajouter par URL'}
-              </Button>
-            </div>
-
-            {/* URL Input */}
-            {showImageUrlInput && (
-              <div className="flex gap-2">
-                <Input
-                  type="url"
-                  value={imageUrlInput}
-                  onChange={(e) => setImageUrlInput(e.target.value)}
-                  placeholder={t('participation.image_url_placeholder') || 'https://exemple.com/image.jpg'}
-                  className="flex-1"
-                />
-                <Button type="button" onClick={handleAddImageByUrl} className="gap-1">
-                  <Plus className="w-4 h-4" />
-                  {t('participation.add') || 'Ajouter'}
-                </Button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Uploaded Images List */}
-        {imageUrls.length > 0 && (
-          <div className="grid grid-cols-2 gap-3">
-            {imageUrls.map((url, index) => (
-              <div key={index} className="relative group">
-                <img
-                  src={url}
-                  alt={`Image ${index + 1}`}
-                  className="w-full h-32 object-cover rounded-lg border border-gray-200 dark:border-gray-600 cursor-pointer hover:opacity-75 transition"
-                  onClick={() => {
-                    setPreviewImageUrl(url)
-                    setShowImagePreview(true)
-                  }}
-                />
-                <div className="absolute inset-0 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
+          {/* Uploaded Images List */}
+          {imageUrls.length > 0 && (
+            <div className="grid grid-cols-2 gap-3">
+              {imageUrls.map((url, index) => (
+                <div key={index} className="relative group">
+                  <img
+                    src={url}
+                    alt={`Image ${index + 1}`}
+                    className="w-full h-32 object-cover rounded-lg border border-gray-200 dark:border-gray-600 cursor-pointer hover:opacity-75 transition"
+                    onClick={() => {
                       setPreviewImageUrl(url)
                       setShowImagePreview(true)
                     }}
-                    className="bg-blue-500 hover:bg-blue-600 text-white p-2 rounded-lg"
-                    title="Prévisualiser"
-                  >
-                    <Eye className="w-4 h-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveImage(index)}
-                    className="bg-red-500 hover:bg-red-600 text-white p-2 rounded-lg"
-                    disabled={isSubmitting}
-                    title="Supprimer"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setPreviewImageUrl(url)
+                        setShowImagePreview(true)
+                      }}
+                      className="bg-blue-500 hover:bg-blue-600 text-white p-2 rounded-lg"
+                      title="Prévisualiser"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveImage(index)}
+                      className="bg-red-500 hover:bg-red-600 text-white p-2 rounded-lg"
+                      disabled={isSubmitting}
+                      title="Supprimer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
-        {/* Error message for images */}
-        {hasImageError && (
-          <div className="mt-4 flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
-            <AlertCircle className="w-4 h-4 flex-shrink-0" />
-            <span>
-              {t('participation.errors.content_image_required') || 'Content Image'} - {t('participation.errors.at_least_one_image') || 'At least one image is required'}
-            </span>
-          </div>
-        )}
-      </div>
+              ))}
+            </div>
+          )}
+          {/* Error message for images */}
+          {hasImageError && (
+            <div className="mt-4 flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              <span>
+                {t('participation.errors.content_image_required') || 'Content Image'} - {t('participation.errors.at_least_one_image') || 'At least one image is required'}
+              </span>
+            </div>
+          )}
+        </div>
       )}
 
       {/* Section 4: Content Video */}
-      <div className={`bg-gray-50 dark:bg-gray-800 rounded-lg p-6 border ${
-        hasVideoError 
-          ? 'border-red-500 dark:border-red-500' 
-          : 'border-gray-200 dark:border-gray-700'
-      }`}>
+      <div className={`bg-gray-50 dark:bg-gray-800 rounded-lg p-6 border ${hasVideoError
+        ? 'border-red-500 dark:border-red-500'
+        : 'border-gray-200 dark:border-gray-700'
+        }`}>
         <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
           <Video className="w-5 h-5" />
-          {requiresVideo 
+          {requiresVideo
             ? (t('participation.content_video_required') || 'Content Video *')
             : (t('participation.content_video_optional') || 'Content Video (optional)')}
         </h3>
-        
+
         {!videoUrl && (
           <div className="space-y-3">
             {/* Upload button avec modération - Masqué pour les nominations */}
             {!isNomination && (
-            <div 
-              className="p-6 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg bg-white/50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition cursor-pointer"
-              onClick={() => !videoUpload.isUploading && !isSubmitting && videoInputRef.current?.click()}
-            >
-              <input
-                ref={videoInputRef}
-                type="file"
-                accept="video/*"
-                onChange={handleVideoFileSelect}
-                className="hidden"
-                disabled={isSubmitting || videoUpload.isUploading}
-              />
-              
-              <div className="flex flex-col items-center justify-center text-center">
-                {videoUpload.isUploading ? (
-                  <>
-                    <Loader2 className="w-8 h-8 text-gray-400 mb-2 animate-spin" />
-                    <p className="font-semibold text-gray-700 dark:text-gray-300">
-                      {t('moderation.analyzing') || 'Modération et upload...'} ({Math.round(videoUpload.progress)}%)
+              <div
+                className="p-6 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg bg-white/50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition cursor-pointer"
+                onClick={() => !videoUpload.isUploading && !isSubmitting && videoInputRef.current?.click()}
+              >
+                <input
+                  ref={videoInputRef}
+                  type="file"
+                  accept="video/*"
+                  onChange={handleVideoFileSelect}
+                  className="hidden"
+                  disabled={isSubmitting || videoUpload.isUploading}
+                />
+
+                <div className="flex flex-col items-center justify-center text-center">
+                  {videoUpload.isUploading ? (
+                    <>
+                      <Loader2 className="w-8 h-8 text-gray-400 mb-2 animate-spin" />
+                      <p className="font-semibold text-gray-700 dark:text-gray-300">
+                        {t('moderation.analyzing') || 'Modération et upload...'} ({Math.round(videoUpload.progress)}%)
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <Video className="w-8 h-8 text-gray-400 mb-2" />
+                      <p className="font-semibold text-gray-700 dark:text-gray-300">
+                        {t('dashboard.contests.participation_form.click_add_video') || 'Cliquez pour ajouter une vidéo'}
+                      </p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                        {t('dashboard.contests.participation_form.video_format') || 'MP4, WebM, MOV, YouTube, Vimeo, TikTok, Facebook'}
+                      </p>
+                    </>
+                  )}
+                </div>
+
+                {/* Afficher les erreurs de modération */}
+                {videoUpload.error && videoUpload.moderationFlags.length > 0 && (
+                  <div className="mt-3 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-xs">
+                    <p className="text-red-700 dark:text-red-300 font-medium flex items-center gap-1">
+                      <AlertCircle className="w-4 h-4" />
+                      {t('moderation.content_rejected') || 'Contenu rejeté'}
                     </p>
-                  </>
-                ) : (
-                  <>
-                    <Video className="w-8 h-8 text-gray-400 mb-2" />
-                    <p className="font-semibold text-gray-700 dark:text-gray-300">
-                      {t('dashboard.contests.participation_form.click_add_video') || 'Cliquez pour ajouter une vidéo'}
-                    </p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                      {t('dashboard.contests.participation_form.video_format') || 'MP4, WebM, MOV, YouTube, Vimeo, TikTok, Facebook'}
-                    </p>
-                  </>
+                    <ul className="list-disc list-inside text-red-600 dark:text-red-400 mt-1">
+                      {videoUpload.moderationFlags.map((flag, idx) => (
+                        <li key={idx}>{flag.description}</li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
               </div>
-
-              {/* Afficher les erreurs de modération */}
-              {videoUpload.error && videoUpload.moderationFlags.length > 0 && (
-                <div className="mt-3 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-xs">
-                  <p className="text-red-700 dark:text-red-300 font-medium flex items-center gap-1">
-                    <AlertCircle className="w-4 h-4" />
-                    {t('moderation.content_rejected') || 'Contenu rejeté'}
-                  </p>
-                  <ul className="list-disc list-inside text-red-600 dark:text-red-400 mt-1">
-                    {videoUpload.moderationFlags.map((flag, idx) => (
-                      <li key={idx}>{flag.description}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
             )}
 
             {/* URL Import Option */}
@@ -732,6 +809,16 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
         )}
       </div>
 
+      {/* Ad Revenue Warning */}
+      <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 mt-6">
+        <div className="flex gap-3">
+          <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-amber-800 dark:text-amber-300">
+            {t('participation.ad_revenue_warning') || 'Warning: You will not be paid for ad revenue generated by your content if we detect that the content does not originate from your country.'}
+          </p>
+        </div>
+      </div>
+
       {/* Submit Buttons */}
       <div className="flex gap-3 pt-4">
         <Button
@@ -746,21 +833,22 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
         <Button
           type="submit"
           disabled={
-            !title.trim() || 
-            title.trim().length < 5 || 
+            !title.trim() ||
+            title.trim().length < 5 ||
             title.trim().length > 100 ||
-            !description.trim() || 
-            description.trim().length < 20 || 
+            !description.trim() ||
+            description.trim().length < 20 ||
             description.trim().length > 500 ||
-            (!isNomination && imageUrls.length === 0) || 
+            (!isNomination && imageUrls.length === 0) ||
             (requiresVideo && !videoUrl) ||
+            (isNomination && !nominatorCountry) ||
             isSubmitting
           }
           className="flex-1 bg-myhigh5-primary hover:bg-myhigh5-primary-dark text-white font-bold"
         >
-          {isSubmitting 
-            ? t('common.submitting') 
-            : isEditing 
+          {isSubmitting
+            ? t('common.submitting')
+            : isEditing
               ? (t('dashboard.contests.participation_form.edit_participation') || 'Modifier ma candidature')
               : t('participation.submit')}
         </Button>

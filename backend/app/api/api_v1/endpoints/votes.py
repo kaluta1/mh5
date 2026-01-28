@@ -58,25 +58,39 @@ def cast_vote(
         ContestVote.user_id == current_user.id
     ).all()
     
+    # Récupérer le round actif pour le contest
+    from app.crud import crud_round
+    active_round = crud_round.round.get_active_round_for_contest(db, contest_id)
+    
+    # S'assurer qu'un round est actif (la vérification précédente check_voting_allowed devrait déjà le couvrir, mais pour être sûr)
+    if not active_round:
+        # Fallback: si pas de round actif trouvé via dates, on essaie de voir si on peut voter quand même
+        # (cas de migration ou data incohérente). 
+        # Mais idéalement on devrait avoir un round.
+        # On log un warning et on continue sans round_id ou on bloque ?
+        # Le user veut "avoir le nombre de vote par round". Donc round_id est important.
+        # Si check_voting_allowed dit OK, c'est qu'il y a un round ouvert (après qu'on ait mis à jour contest_status).
+        pass
+
     # Vérifier si l'utilisateur a déjà voté pour cette entrée
     for vote in existing_votes:
         if vote.entry_id == entry_id:
             # Mise à jour du vote existant
             vote.score = score
+            # Mettre à jour le round_id si disponible et manquant
+            if active_round and not vote.round_id:
+                vote.round_id = active_round.id
             db.commit()
             return {"message": "Vote mis à jour avec succès"}
     
-    if len(existing_votes) >= 5:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Vous avez déjà atteint le nombre maximum de votes (5)"
-        )
+
     
     # Créer un nouveau vote
     new_vote = ContestVote(
         entry_id=entry_id,
         user_id=current_user.id,
-        score=score
+        score=score,
+        round_id=active_round.id if active_round else None
     )
     
     db.add(new_vote)

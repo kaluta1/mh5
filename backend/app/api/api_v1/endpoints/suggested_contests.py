@@ -71,7 +71,7 @@ def read_suggested_contests(
     *,
     db: Session = Depends(get_db),
     skip: int = 0,
-    limit: int = 100,
+    limit: int = 10,
     status: Optional[str] = Query(None, description="Filtrer par statut (pending, approved, rejected)"),
     category: Optional[str] = Query(None, description="Filtrer par catégorie"),
 ) -> Any:

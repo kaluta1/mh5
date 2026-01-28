@@ -101,8 +101,8 @@ export default function FoundingMemberPage() {
                     <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
                       Annual Profit Pool (10%)
                     </h3>
-                    <p className="text-gray-700 dark:text-gray-300 mb-3">
-                      Founding Members of MyHigh5 and DSM participate in a combined pool comprising ten percent (10%) of MyHigh5's annual profit after taxes.
+                    <p className="text-gray-700 dark:text-gray-300 mb-3"> 
+                      Founding Members of MyHigh5 and <a href="https://digitalshoppingmall.net/">Digital Shopping Mall</a>  participate in a combined pool comprising ten percent (10%) of MyHigh5's annual profit after taxes.
                     </p>
                     <div className="space-y-3">
                       <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
@@ -116,7 +116,7 @@ export default function FoundingMemberPage() {
                           </li>
                           <li className="flex items-center gap-2">
                             <span className="w-1.5 h-1.5 rounded-full bg-myhigh5-primary"></span>
-                            20% of the pool is allocated to DSM Founding Members.
+                            20% of the pool is allocated to <a href="https://digitalshoppingmall.net/">Digital Shopping Mall</a> Founding Members.
                           </li>
                         </ul>
                       </div>

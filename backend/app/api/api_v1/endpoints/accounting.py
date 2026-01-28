@@ -67,7 +67,7 @@ def get_journal_entries(
     db: Session = Depends(deps.get_db),
     current_user = Depends(deps.get_current_active_superuser),
     skip: int = 0,
-    limit: int = 100,
+    limit: int = 10,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     account_id: Optional[int] = None
@@ -125,7 +125,7 @@ def get_revenue_transactions(
     db: Session = Depends(deps.get_db),
     current_user = Depends(deps.get_current_active_superuser),
     skip: int = 0,
-    limit: int = 100,
+    limit: int = 10,
     transaction_type: Optional[str] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None
@@ -267,7 +267,7 @@ def get_audit_trail(
     db: Session = Depends(deps.get_db),
     current_user = Depends(deps.get_current_active_superuser),
     skip: int = 0,
-    limit: int = 100,
+    limit: int = 10,
     table_name: Optional[str] = None,
     action_type: Optional[str] = None,
     start_date: Optional[datetime] = None,

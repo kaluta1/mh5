@@ -66,7 +66,7 @@ cors_origins = [
     "http://127.0.0.1:8000",
     "https://myhigh5.com",
     "https://www.myhigh5.com",
-    "https://mh5-sbe4.onrender.com",
+    "https://mh5-hbjp.onrender.com",
 ]
 
 # Ajouter les origines depuis les settings
@@ -114,6 +114,11 @@ def read_root():
         "version": "0.1.0",
         "documentation": "/docs"
     }
+
+# Route health check pour Docker
+@app.get("/health", tags=["Status"])
+def health_check():
+    return {"status": "healthy"}
 
 # Route de debug CORS
 @app.get("/debug/cors", tags=["Debug"])

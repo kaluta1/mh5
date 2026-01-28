@@ -132,10 +132,6 @@ export default function AffiliateAgreementPage() {
         <div className="p-6 sm:p-8 space-y-6">
           <div className="prose prose-sm dark:prose-invert max-w-none">
             <p className="text-gray-700 dark:text-gray-300">
-              This Affiliate Agreement ("Agreement") is entered into between Kaluta Shopping Mall Inc., a company duly incorporated under the laws of Canada, doing business as Digital Shopping Mall ("Company", "we", "our", or "us"), and you ("Affiliate", "you", or "your") upon your acceptance of the terms and conditions herein.
-            </p>
-            
-            <p className="text-gray-700 dark:text-gray-300">
               By accepting this Agreement, you acknowledge that you have read, understood, and agreed to be bound by the terms below, and that you are legally authorized to act on behalf of yourself or your organization.
             </p>
             
@@ -193,8 +189,8 @@ export default function AffiliateAgreementPage() {
             <p className="text-gray-700 dark:text-gray-300">Commissions will be paid according to the following terms:</p>
             <ul className="list-disc list-inside space-y-2 text-gray-700 dark:text-gray-300 ml-4">
               <li>Payments will be processed monthly for the previous month's confirmed commissions;</li>
-              <li>A minimum threshold of $50 CAD must be reached before payment is issued;</li>
-              <li>Payment methods include direct deposit (for Canadian affiliates), PayPal, or cryptocurrency;</li>
+              <li>A minimum threshold of $100 must be reached before payment is issued;</li>
+              <li>Payment methods include bank transfer, PayPal, or BSC USDT;</li>
               <li>All applicable taxes are the responsibility of the Affiliate.</li>
             </ul>
             
@@ -235,7 +231,7 @@ export default function AffiliateAgreementPage() {
             
             <h5 className="text-lg font-semibold text-gray-900 dark:text-white mt-6 mb-3">12. Governing Law</h5>
             <p className="text-gray-700 dark:text-gray-300">
-              This Agreement shall be governed by and construed in accordance with the laws of the Province of Ontario, Canada, without regard to its conflict of law principles.
+              This Agreement shall be governed by and construed in accordance with the laws of the Province of British Columbia, Canada, without regard to its conflict of law principles.
             </p>
             
             <h5 className="text-lg font-semibold text-gray-900 dark:text-white mt-6 mb-3">13. Entire Agreement</h5>
