@@ -28,12 +28,12 @@ export default function PrivacyPage() {
     title: string
     lastUpdated: string
     intro: string
-    sections: { title: string; icon: React.ElementType; content: string | string[] }[]
+    sections: { title: string; icon: React.ElementType; content: string | string[]; items?: string[] }[]
     contact: string
   }> = {
     en: {
       title: "Privacy Policy",
-      lastUpdated: "Last Updated: December 2024",
+      lastUpdated: "Last Updated: January 2026",
       intro: "At MyHigh5.com, we value your privacy. This policy explains how we collect, use, and protect your personal information.",
       sections: [
         {
@@ -389,9 +389,21 @@ export default function PrivacyPage() {
                             ))}
                           </ul>
                         ) : (
-                          <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
-                            {section.content}
-                          </p>
+                          <>
+                            <p className="text-gray-600 dark:text-gray-400 leading-relaxed mb-2">
+                              {section.content}
+                            </p>
+                            {(section as any).items && (
+                              <ul className="space-y-2 mt-2">
+                                {(section as any).items.map((item: string, i: number) => (
+                                  <li key={i} className="flex items-start gap-2 text-gray-600 dark:text-gray-400">
+                                    <span className="text-myhigh5-primary mt-1">•</span>
+                                    <span>{item}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </>
                         )}
                       </div>
                     </div>

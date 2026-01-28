@@ -7625,9 +7625,9 @@ export const translations: Record<Language, TranslationKeys> = {
         cta: {
           title: "Create your own Club",
           subtitle: "Monetize your content, manage your community and earn through the affiliate program.",
-          feature1: "Secure payments via DSP",
+          feature1: "Get paid your specified subscription fee, minus transaction costs",
           feature2: "Multi-administrator management",
-          feature3: "10% commission on sales",
+          feature3: "Affiliate commissions are paid to members from 20% of the website margin added on top of your specified subscription fee, distributed up to 10 generations deep.",
           button: "Create my Club"
         }
       },
