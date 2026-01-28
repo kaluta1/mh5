@@ -1,12 +1,16 @@
 from typing import Any, Dict, Optional, Union, List
 import secrets
 import string
+import logging
 
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import OperationalError, SQLAlchemyError
 
 from app.core.security import get_password_hash, verify_password
 from app.models.user import User, Role
 from app.schemas.user import UserCreate, UserUpdate
+
+logger = logging.getLogger(__name__)
 
 
 def generate_referral_code(length: int = 8) -> str:
@@ -20,7 +24,12 @@ class CRUDUser:
         return db.query(User).filter(User.id == id).first()
 
     def get_by_email(self, db: Session, email: str) -> Optional[User]:
-        return db.query(User).filter(User.email == email).first()
+        """Get user by email. Returns None if not found."""
+        try:
+            return db.query(User).filter(User.email == email).first()
+        except Exception as e:
+            logger.error(f"Error querying user by email '{email}': {e}", exc_info=True)
+            raise
 
     def get_multi(self, db: Session, skip: int = 0, limit: int = 10) -> List[User]:
         return db.query(User).offset(skip).limit(limit).all()
@@ -474,21 +483,54 @@ class CRUDUser:
         return db_obj
     
     def get_by_username(self, db: Session, username: str) -> Optional[User]:
-        return db.query(User).filter(User.username == username).first()
+        """Get user by username. Returns None if not found."""
+        try:
+            return db.query(User).filter(User.username == username).first()
+        except Exception as e:
+            logger.error(f"Error querying user by username '{username}': {e}", exc_info=True)
+            raise
 
     def authenticate(self, db: Session, email_or_username: str, password: str) -> Optional[User]:
-        # Essayer d'abord par email
-        user = self.get_by_email(db=db, email=email_or_username)
-        
-        # Si pas trouvé par email, essayer par username
-        if not user:
-            user = self.get_by_username(db=db, username=email_or_username)
-        
-        if not user:
-            return None
-        if not verify_password(password, user.hashed_password):
-            return None
-        return user
+        """
+        Authenticate a user by email or username and password.
+        Returns None if authentication fails, or raises an exception on database errors.
+        """
+        try:
+            # Essayer d'abord par email
+            user = self.get_by_email(db=db, email=email_or_username)
+            
+            # Si pas trouvé par email, essayer par username
+            if not user:
+                user = self.get_by_username(db=db, username=email_or_username)
+            
+            if not user:
+                logger.debug(f"Authentication failed: User not found for '{email_or_username}'")
+                return None
+            
+            # Verify password
+            if not verify_password(password, user.hashed_password):
+                logger.debug(f"Authentication failed: Invalid password for user '{email_or_username}'")
+                return None
+            
+            logger.debug(f"Authentication successful for user '{email_or_username}' (ID: {user.id})")
+            return user
+            
+        except OperationalError as e:
+            # Database connection error
+            error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
+            logger.error(f"Database connection error during authentication: {error_msg}")
+            logger.error("Please check your internet connection and DATABASE_URL configuration")
+            # Re-raise to be handled by get_db() dependency
+            raise
+        except SQLAlchemyError as e:
+            # Other database errors
+            logger.error(f"Database error during authentication: {e}", exc_info=True)
+            # Re-raise to be handled by get_db() dependency
+            raise
+        except Exception as e:
+            # Unexpected errors
+            logger.error(f"Unexpected error during authentication: {e}", exc_info=True)
+            raise
 
     def is_active(self, user: User) -> bool:
         return user.is_active

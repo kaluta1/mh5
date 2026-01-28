@@ -23,9 +23,11 @@ import {
   Plus,
   Minus,
   Loader2,
-  QrCode
+  CheckCircle2
 } from 'lucide-react'
-import { paymentService, CryptoPaymentResponse } from '@/services/payment-service'
+import { paymentService, PaymentResponse } from '@/services/payment-service'
+import { useWalletPayment } from '@/hooks/use-wallet-payment'
+import { CONTRACTS } from '@/lib/config'
 
 interface PaymentMethod {
   id: string
@@ -77,36 +79,11 @@ interface PaymentDialogProps {
 
 const paymentMethods: PaymentMethod[] = [
   {
-    id: 'usdt_bsc',
-    nameKey: 'USDT (BNB Chain)',
+    id: 'usdt',
+    nameKey: 'USDT (BSC)',
     icon: <Wallet className="w-5 h-5 text-yellow-500" />,
     category: 'crypto',
-    network: 'BNB Smart Chain (BEP20)',
-    address: 'TBA'
-  },
-  {
-    id: 'usdt_sol',
-    nameKey: 'USDT (Solana)',
-    icon: <Wallet className="w-5 h-5 text-purple-500" />,
-    category: 'crypto',
-    network: 'Solana',
-    address: 'TBA'
-  },
-  {
-    id: 'btc',
-    nameKey: 'Bitcoin',
-    icon: <Bitcoin className="w-5 h-5 text-orange-500" />,
-    category: 'crypto',
-    network: 'Bitcoin',
-    address: 'TBA'
-  },
-  {
-    id: 'sol',
-    nameKey: 'Solana',
-    icon: <Wallet className="w-5 h-5 text-gradient-to-r from-purple-500 to-green-500" />,
-    category: 'crypto',
-    network: 'Solana',
-    address: 'TBA'
+    network: 'BNB Smart Chain'
   },
   {
     id: 'card',
@@ -140,8 +117,19 @@ export function PaymentDialog({
   const [selectedProductCode, setSelectedProductCode] = useState<string>(productCode)
   const [amountError, setAmountError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const [cryptoPayment, setCryptoPayment] = useState<CryptoPaymentResponse | null>(null)
+  const [payment, setPayment] = useState<PaymentResponse | null>(null)
   const [paymentError, setPaymentError] = useState<string | null>(null)
+  const [txHash, setTxHash] = useState<string | null>(null)
+  
+  // Wallet payment hook
+  const {
+    isConnecting,
+    isProcessing,
+    connectedAddress,
+    error: walletError,
+    connectWallet,
+    executePayment
+  } = useWalletPayment()
 
   const selectedProduct = products.find(p => p.code === selectedProductCode) || products[0]
   const selectedPaymentMethod = paymentMethods.find(m => m.id === selectedMethod)
@@ -208,24 +196,14 @@ export function PaymentDialog({
           return
         }
 
-        // Mapper l'ID de méthode vers la crypto
-        const cryptoMap: Record<string, string> = {
-          'usdt_bsc': 'usdtbsc',
-          'usdt_sol': 'usdtsol',
-          'btc': 'btc',
-          'sol': 'sol'
-        }
-        
-        const payCurrency = cryptoMap[methodId] || 'btc'
-        
-        const payment = await paymentService.createPayment(token, {
+        // Create payment order for smart contract payment
+        const paymentOrder = await paymentService.createPayment(token, {
           amount: totalAmount,
           currency: currency.toLowerCase(),
-          pay_currency: payCurrency,
           product_code: selectedProductCode
         })
         
-        setCryptoPayment(payment)
+        setPayment(paymentOrder)
         setStep('instructions')
       } catch (error) {
         console.error('Payment creation error:', error)
@@ -244,7 +222,7 @@ export function PaymentDialog({
     if (step === 'instructions') {
       setStep('select')
       setSelectedMethod(null)
-      setCryptoPayment(null)
+      setPayment(null)
     } else if (step === 'select') {
       setStep('product')
     }
@@ -257,8 +235,9 @@ export function PaymentDialog({
     setQuantity(1)
     setCustomAmount(100)
     setAmountError(null)
-    setCryptoPayment(null)
+    setPayment(null)
     setPaymentError(null)
+    setTxHash(null)
     onOpenChange(false)
   }
 
@@ -515,73 +494,87 @@ export function PaymentDialog({
               </div>
             </div>
 
-            {/* Crypto Payment Info from API */}
-            {selectedPaymentMethod.category === 'crypto' && cryptoPayment && (
+            {/* Wallet Payment Flow */}
+            {selectedPaymentMethod.category === 'crypto' && payment && (
               <>
-                {/* Amount in crypto */}
+                {/* Payment Amount */}
                 <div className="bg-myhigh5-primary/10 dark:bg-myhigh5-primary/20 rounded-lg p-4 text-center">
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">{t('payment.amount_to_send') || 'Montant à envoyer'}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">{t('Amount to pay') || 'Montant à payer'}</p>
                   <p className="text-3xl font-bold text-myhigh5-primary">
-                    {cryptoPayment.pay_amount} {cryptoPayment.pay_currency.toUpperCase()}
+                    ${payment.price_amount.toFixed(2)} {payment.price_currency.toUpperCase()}
                   </p>
                   <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                    ≈ {cryptoPayment.price_amount} {cryptoPayment.price_currency.toUpperCase()}
+                    ≈ {(parseFloat(payment.amount_wei) / 1e18).toFixed(6)} USDT
                   </p>
                 </div>
 
-                {/* Payment Address */}
-                <div>
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    {t('payment.receiving_address') || 'Adresse de réception'}
-                  </p>
-                  <div className="flex items-center gap-2 p-3 bg-gray-100 dark:bg-gray-800 rounded-lg">
-                    <code className="text-xs flex-1 break-all text-gray-900 dark:text-white font-mono">
-                      {cryptoPayment.pay_address}
-                    </code>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => copyToClipboard(cryptoPayment.pay_address)}
-                      className="flex-shrink-0"
-                    >
-                      {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-                    </Button>
+                {/* Wallet Connection Status */}
+                {connectedAddress ? (
+                  <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                    <CheckCircle2 className="w-5 h-5 text-green-500" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-green-700 dark:text-green-300">
+                        {t('wallet connected') || 'Portefeuille connecté'}
+                      </p>
+                      <p className="text-xs text-green-600 dark:text-green-400 font-mono">
+                        {connectedAddress.slice(0, 6)}...{connectedAddress.slice(-4)}
+                      </p>
+                    </div>
                   </div>
+                ) : (
+                  <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <p className="text-sm text-blue-700 dark:text-blue-300 text-center">
+                      {t('connect wallet first') || 'Connectez votre portefeuille pour continuer'}
+                    </p>
+                  </div>
+                )}
+
+                {/* Network Info */}
+                <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
+                    {t('payment.network') || 'Réseau'}
+                  </p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                    BNB Smart Chain (BSC)
+                  </p>
                 </div>
 
                 {/* Order ID */}
                 <div className="text-center text-xs text-gray-500 dark:text-gray-400">
-                  {t('payment.order_id') || 'Référence'}: {cryptoPayment.order_id}
-                </div>
-              </>
-            )}
-
-            {/* Fallback for non-crypto or manual addresses */}
-            {selectedPaymentMethod.category === 'crypto' && !cryptoPayment && selectedPaymentMethod.address && (
-              <>
-                {/* Amount */}
-                <div className="bg-myhigh5-primary/10 dark:bg-myhigh5-primary/20 rounded-lg p-4 text-center">
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">{t('payment.amount_to_send') || 'Montant à envoyer'}</p>
-                  <p className="text-3xl font-bold text-myhigh5-primary">{totalAmount} {currency}</p>
+                  {t('payment.order_id') || 'Référence'}: {payment.order_id}
                 </div>
 
-                {/* Address */}
-                <div>
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('payment.receiving_address') || 'Adresse de réception'}</p>
-                  <div className="flex items-center gap-2 p-3 bg-gray-100 dark:bg-gray-800 rounded-lg">
-                    <code className="text-xs flex-1 break-all text-gray-900 dark:text-white">
-                      {selectedPaymentMethod.address}
-                    </code>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => copyToClipboard(selectedPaymentMethod.address!)}
-                      className="flex-shrink-0"
-                    >
-                      {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-                    </Button>
+                {/* Transaction Hash (if payment completed) */}
+                {txHash && (
+                  <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
+                      {t('payment.transaction_hash') || 'Hash de transaction'}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <code className="text-xs flex-1 break-all text-gray-900 dark:text-white font-mono">
+                        {txHash}
+                      </code>
+                      <a
+                        href={`${CONTRACTS.EXPLORER_URL}/tx/${txHash}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-shrink-0"
+                      >
+                        <ExternalLink className="w-4 h-4 text-blue-500" />
+                      </a>
+                    </div>
                   </div>
-                </div>
+                )}
+
+                {/* Error Messages */}
+                {(paymentError || walletError) && (
+                  <div className="flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                    <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+                    <p className="text-sm text-red-700 dark:text-red-300">
+                      {paymentError || walletError}
+                    </p>
+                  </div>
+                )}
               </>
             )}
 
@@ -615,18 +608,63 @@ export function PaymentDialog({
 
             {/* Actions */}
             <div className="flex gap-3 pt-2">
-              <Button variant="outline" onClick={handleBack} className="flex-1">
+              <Button variant="outline" onClick={handleBack} className="flex-1" disabled={isProcessing || isConnecting}>
                 {t('common.back') || 'Retour'}
               </Button>
-              <Button 
-                onClick={() => {
-                  onPaymentInitiated?.()
-                  handleClose()
-                }}
-                className="flex-1 bg-myhigh5-primary hover:bg-myhigh5-primary/90"
-              >
-                {t('payment.payment_done') || "J'ai effectué le paiement"}
-              </Button>
+              {selectedPaymentMethod?.category === 'crypto' && payment ? (
+                !connectedAddress ? (
+                  <Button
+                    onClick={connectWallet}
+                    disabled={isConnecting}
+                    className="flex-1 bg-myhigh5-primary hover:bg-myhigh5-primary/90"
+                  >
+                    {isConnecting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        {t('payment.connecting') || 'Connexion...'}
+                      </>
+                    ) : (
+                      <>
+                        <Wallet className="w-4 h-4 mr-2" />
+                        {t('connect wallet first') || 'Connecter le portefeuille'}
+                      </>
+                    )}
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={handleWalletPayment}
+                    disabled={isProcessing || !!txHash}
+                    className="flex-1 bg-myhigh5-primary hover:bg-myhigh5-primary/90"
+                  >
+                    {isProcessing ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        {t('processing') || 'Traitement...'}
+                      </>
+                    ) : txHash ? (
+                      <>
+                        <CheckCircle2 className="w-4 h-4 mr-2" />
+                        {t('payment.completed') || 'Terminé'}
+                      </>
+                    ) : (
+                      <>
+                        <Wallet className="w-4 h-4 mr-2" />
+                        {t('pay now') || 'Payer maintenant'}
+                      </>
+                    )}
+                  </Button>
+                )
+              ) : (
+                <Button 
+                  onClick={() => {
+                    onPaymentInitiated?.()
+                    handleClose()
+                  }}
+                  className="flex-1 bg-myhigh5-primary hover:bg-myhigh5-primary/90"
+                >
+                  {t('common.close') || 'Fermer'}
+                </Button>
+              )}
             </div>
           </div>
         )}

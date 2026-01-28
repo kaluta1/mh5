@@ -7476,7 +7476,7 @@ export const translations: Record<Language, TranslationKeys> = {
       add_recipients: "Add recipients",
       recipients_description: "Add users you want to pay for",
       method_description: "Choose your payment method",
-      instructions_description: "Send the exact amount to the address shown",
+      instructions_description: "complete payment within your wallet",
       recipient: "Recipient",
       username_or_email: "Username or email",
       user_not_found: "User not found",

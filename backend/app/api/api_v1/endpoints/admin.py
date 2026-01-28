@@ -2335,7 +2335,7 @@ async def get_user_details(
                 'amount': float(d.amount),
                 'currency': d.currency,
                 'crypto_currency': d.crypto_currency,
-                'crypto_amount': float(d.crypto_amount) if d.crypto_amount else None,
+                'crypto_amount': d.crypto_amount if d.crypto_amount else None,  # Stored as string (wei amount)
                 'status': d.status.value if d.status else None,
                 'product_type': product_type.code if product_type else None,
                 'product_type_name': product_type.name if product_type else None,

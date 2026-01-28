@@ -1,8 +1,7 @@
 /**
- * Payment Service - Crypto payments integration
+ * Payment Service - Smart Contract payments integration (BSC)
  */
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://mh5-hbjp.onrender.com'
+import { API_URL } from '@/lib/config'
 
 export interface PaymentRecipient {
   username_or_email: string
@@ -10,10 +9,9 @@ export interface PaymentRecipient {
   amount: number
 }
 
-export interface CryptoPaymentRequest {
+export interface PaymentRequest {
   amount: number
   currency: string
-  pay_currency: string // btc, eth, usdt, etc.
   product_code: string // kyc, efm_membership, etc.
   recipients?: PaymentRecipient[]
 }
@@ -25,34 +23,30 @@ export interface VerifiedUser {
   display_name: string
 }
 
-export interface CryptoPaymentResponse {
+export interface PaymentResponse {
   deposit_id: number  // Local deposit ID for status checks
-  payment_id: number  // External payment provider ID
-  pay_address: string
-  pay_amount: number
-  pay_currency: string
-  price_amount: number
+  order_id: string  // Order ID for smart contract payment
+  contract_address: string  // Payment contract address
+  token_address: string  // USDT token address
+  amount_wei: string  // Amount in wei (as string for precision)
+  chain_id: number  // BSC chain ID
+  price_amount: number  // Amount in USD
   price_currency: string
-  order_id: string
   status: string
 }
 
-export interface InvoiceRequest {
-  amount: number
-  currency: string
-  product_code: string
-}
-
-export interface InvoiceResponse {
-  invoice_id: string
-  invoice_url: string
+export interface VerifyPaymentRequest {
   order_id: string
+  tx_hash: string
 }
 
-export interface PaymentEstimate {
-  estimated_amount: number
-  currency_from: string
-  currency_to: string
+export interface VerifyPaymentResponse {
+  valid: boolean
+  deposit_id: number
+  status: string
+  payer?: string
+  tx_hash?: string
+  message?: string
 }
 
 class PaymentService {
@@ -105,39 +99,13 @@ class PaymentService {
   }
 
   /**
-   * Get payment estimate (crypto amount for fiat amount)
-   */
-  async getEstimate(
-    token: string,
-    amount: number,
-    currencyFrom: string = 'usd',
-    currencyTo: string = 'btc'
-  ): Promise<PaymentEstimate> {
-    const params = new URLSearchParams({
-      amount: amount.toString(),
-      currency_from: currencyFrom,
-      currency_to: currencyTo
-    })
-
-    const response = await fetch(`${this.baseUrl}/estimate?${params}`, {
-      headers: this.getHeaders(token)
-    })
-
-    if (!response.ok) {
-      throw new Error('Failed to get estimate')
-    }
-
-    return response.json()
-  }
-
-  /**
-   * Create a crypto payment
-   * Returns payment address and amount to send
+   * Create a payment order for smart contract payment
+   * Returns order_id and payment details for frontend wallet integration
    */
   async createPayment(
     token: string,
-    request: CryptoPaymentRequest
-  ): Promise<CryptoPaymentResponse> {
+    request: PaymentRequest
+  ): Promise<PaymentResponse> {
     const response = await fetch(`${this.baseUrl}/create`, {
       method: 'POST',
       headers: this.getHeaders(token),
@@ -153,14 +121,13 @@ class PaymentService {
   }
 
   /**
-   * Create a payment invoice (hosted page)
-   * User is redirected to choose crypto and pay
+   * Verify a payment transaction on the blockchain
    */
-  async createInvoice(
+  async verifyPayment(
     token: string,
-    request: InvoiceRequest
-  ): Promise<InvoiceResponse> {
-    const response = await fetch(`${this.baseUrl}/invoice`, {
+    request: VerifyPaymentRequest
+  ): Promise<VerifyPaymentResponse> {
+    const response = await fetch(`${this.baseUrl}/verify`, {
       method: 'POST',
       headers: this.getHeaders(token),
       body: JSON.stringify(request)
@@ -168,37 +135,21 @@ class PaymentService {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({}))
-      throw new Error(error.detail || 'Failed to create invoice')
+      throw new Error(error.detail || 'Failed to verify payment')
     }
 
     return response.json()
   }
 
   /**
-   * Get payment status
-   */
-  async getPaymentStatus(token: string, paymentId: number): Promise<any> {
-    const response = await fetch(`${this.baseUrl}/status/${paymentId}`, {
-      headers: this.getHeaders(token)
-    })
-
-    if (!response.ok) {
-      throw new Error('Failed to get payment status')
-    }
-
-    return response.json()
-  }
-
-  /**
-   * Check and refresh deposit status
-   * Called when user clicks "I have paid" button
+   * Check payment status by deposit ID
    */
   async checkDepositStatus(token: string, depositId: number): Promise<{
     deposit_id: number
     status: string
-    payment_status?: string
     is_confirmed: boolean
-    error?: string
+    order_id?: string
+    tx_hash?: string
   }> {
     const response = await fetch(`${this.baseUrl}/check/${depositId}`, {
       method: 'POST',
@@ -214,23 +165,26 @@ class PaymentService {
   }
 
   /**
-   * Get deposit info
+   * Get payment status and details for a deposit
    */
-  async getDepositInfo(token: string, depositId: number): Promise<{
+  async getPaymentStatus(token: string, depositId: number): Promise<{
     deposit_id: number
     status: string
     is_confirmed: boolean
+    order_id?: string
+    tx_hash?: string
     amount: number
     currency: string
-    created_at?: string
-    validated_at?: string
+    contract_address: string
+    token_address: string
+    chain_id: number
   }> {
-    const response = await fetch(`${this.baseUrl}/deposit/${depositId}`, {
+    const response = await fetch(`${this.baseUrl}/check-status/${depositId}`, {
       headers: this.getHeaders(token)
     })
 
     if (!response.ok) {
-      throw new Error('Failed to get deposit info')
+      throw new Error('Failed to get payment status')
     }
 
     return response.json()

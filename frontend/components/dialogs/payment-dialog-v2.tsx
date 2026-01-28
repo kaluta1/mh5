@@ -49,8 +49,10 @@ import {
   Calendar,
   CheckCircle2
 } from 'lucide-react'
-import { QRCodeSVG } from 'qrcode.react'
-import { paymentService, CryptoPaymentResponse, VerifiedUser, PaymentRecipient } from '@/services/payment-service'
+import { paymentService, PaymentResponse, VerifiedUser, PaymentRecipient } from '@/services/payment-service'
+import { useWalletPayment } from '@/hooks/use-wallet-payment'
+import { CONTRACTS } from '@/lib/config'
+import { ExternalLink } from 'lucide-react'
 
 interface PaymentMethod {
   id: string
@@ -72,32 +74,11 @@ interface Recipient {
 
 const getPaymentMethods = (t: (key: string) => string | undefined): PaymentMethod[] => [
   {
-    id: 'usdtbsc',
-    name: 'USDT (BNB Chain)',
+    id: 'usdt',
+    name: 'USDT (BSC)',
     icon: <Wallet className="w-5 h-5 text-yellow-500" />,
     category: 'crypto',
-    network: 'BNB Smart Chain (BEP20)'
-  },
-  {
-    id: 'usdtsol',
-    name: 'USDT (Solana)',
-    icon: <Wallet className="w-5 h-5 text-purple-500" />,
-    category: 'crypto',
-    network: 'Solana'
-  },
-  {
-    id: 'btc',
-    name: 'Bitcoin',
-    icon: <Bitcoin className="w-5 h-5 text-orange-500" />,
-    category: 'crypto',
-    network: 'Bitcoin'
-  },
-  {
-    id: 'sol',
-    name: 'Solana',
-    icon: <Wallet className="w-5 h-5 text-green-500" />,
-    category: 'crypto',
-    network: 'Solana'
+    network: 'BNB Smart Chain'
   },
   {
     id: 'card',
@@ -137,8 +118,19 @@ export function PaymentDialog({
   const [recipients, setRecipients] = useState<Recipient[]>([])
   const [selectedMethod, setSelectedMethod] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const [cryptoPayment, setCryptoPayment] = useState<CryptoPaymentResponse | null>(null)
+  const [payment, setPayment] = useState<PaymentResponse | null>(null)
   const [paymentError, setPaymentError] = useState<string | null>(null)
+  const [txHash, setTxHash] = useState<string | null>(null)
+  
+  // Wallet payment hook
+  const {
+    isConnecting,
+    isProcessing,
+    connectedAddress,
+    error: walletError,
+    connectWallet,
+    executePayment
+  } = useWalletPayment()
   const [copied, setCopied] = useState(false)
   const [showCloseConfirm, setShowCloseConfirm] = useState(false)
   const [includeMyself, setIncludeMyself] = useState(true)
@@ -147,78 +139,7 @@ export function PaymentDialog({
     initialProductCode === 'kyc' ? 10 : 
     initialProductCode === 'annual_membership' ? 50 : 100
   )
-  const [isCheckingPayment, setIsCheckingPayment] = useState(false)
   const [paymentConfirmed, setPaymentConfirmed] = useState(false)
-  const [lastCheckTime, setLastCheckTime] = useState<Date | null>(null)
-  
-  // Ref for polling interval
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
-  const POLLING_INTERVAL = 30000 // 30 seconds
-
-  // Automatic check for polling (shows status messages)
-  const autoCheckPaymentStatus = useCallback(async () => {
-    if (!cryptoPayment?.deposit_id || paymentConfirmed) return
-    
-    try {
-      const token = localStorage.getItem('access_token')
-      if (!token) return
-      
-      const result = await paymentService.checkDepositStatus(token, cryptoPayment.deposit_id)
-      setLastCheckTime(new Date())
-      
-      if (result.is_confirmed) {
-        setPaymentConfirmed(true)
-        setPaymentError(null)
-        setStep('success')
-        // Stop polling on success
-        if (pollingIntervalRef.current) {
-          clearInterval(pollingIntervalRef.current)
-          pollingIntervalRef.current = null
-        }
-      } else if (result.payment_status === 'waiting') {
-        setPaymentError(t('payment.waiting_payment') || 'En attente de paiement...')
-      } else if (result.payment_status === 'confirming') {
-        setPaymentError(t('payment.confirming') || 'Paiement détecté, confirmation en cours...')
-      } else if (result.payment_status === 'partially_paid') {
-        setPaymentError(t('payment.partially_paid') || 'Paiement partiel reçu. Veuillez compléter le montant.')
-      } else if (result.error) {
-        setPaymentError(result.error)
-      }
-    } catch (error) {
-      console.error('Auto check error:', error)
-    }
-  }, [cryptoPayment?.deposit_id, paymentConfirmed, t])
-
-  // Start/stop polling when on payment step
-  useEffect(() => {
-    if (step === 'payment' && cryptoPayment?.deposit_id && !paymentConfirmed) {
-      // Initial check after 10 seconds
-      const initialTimeout = setTimeout(() => {
-        autoCheckPaymentStatus()
-      }, 10000)
-      
-      // Then check every 30 seconds
-      pollingIntervalRef.current = setInterval(() => {
-        autoCheckPaymentStatus()
-      }, POLLING_INTERVAL)
-      
-      return () => {
-        clearTimeout(initialTimeout)
-        if (pollingIntervalRef.current) {
-          clearInterval(pollingIntervalRef.current)
-          pollingIntervalRef.current = null
-        }
-      }
-    }
-    
-    // Cleanup when leaving payment step
-    return () => {
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current)
-        pollingIntervalRef.current = null
-      }
-    }
-  }, [step, cryptoPayment?.deposit_id, paymentConfirmed, autoCheckPaymentStatus])
 
   // Generate unique ID
   const generateId = () => Math.random().toString(36).substr(2, 9)
@@ -308,39 +229,6 @@ export function PaymentDialog({
     }
   }
 
-  // Check payment status manually
-  const checkPaymentStatus = async () => {
-    if (!cryptoPayment?.deposit_id) return
-    
-    setIsCheckingPayment(true)
-    setPaymentError(null)
-    
-    try {
-      const token = localStorage.getItem('access_token')
-      if (!token) {
-        setPaymentError(t('common.login_required') || 'Veuillez vous connecter')
-        return
-      }
-      
-      const result = await paymentService.checkDepositStatus(token, cryptoPayment.deposit_id)
-      
-      if (result.is_confirmed) {
-        setPaymentConfirmed(true)
-        setStep('success')
-        // onPaymentInitiated will be called when user clicks "Continue"
-      } else if (result.payment_status === 'waiting' || result.payment_status === 'confirming') {
-        setPaymentError(t('payment.waiting_confirmation') || 'Paiement en attente de confirmation...')
-      } else if (result.error) {
-        setPaymentError(result.error)
-      } else {
-        setPaymentError(t('payment.not_received') || 'Paiement non encore reçu. Veuillez réessayer.')
-      }
-    } catch (error) {
-      setPaymentError(error instanceof Error ? error.message : 'Erreur lors de la vérification')
-    } finally {
-      setIsCheckingPayment(false)
-    }
-  }
 
   // Handle method selection and create payment
   const handleMethodSelect = async (methodId: string) => {
@@ -382,15 +270,15 @@ export function PaymentDialog({
           }
         })
 
-        const payment = await paymentService.createPayment(token, {
+        // Create payment order
+        const paymentOrder = await paymentService.createPayment(token, {
           amount: totalAmount,
           currency: 'usd',
-          pay_currency: methodId,
           product_code: apiRecipients[0]?.product_code || 'kyc',
           recipients: apiRecipients
         })
 
-        setCryptoPayment(payment)
+        setPayment(paymentOrder)
         setStep('payment')
       } catch (error) {
         console.error('Payment creation error:', error)
@@ -402,6 +290,36 @@ export function PaymentDialog({
       alert(t('payment.card_coming_soon') || 'Paiement par carte bientôt disponible')
     } else if (method?.category === 'bank') {
       setStep('payment')
+    }
+  }
+
+  // Handle wallet connection and payment execution
+  const handleWalletPayment = async () => {
+    if (!payment) return
+
+    try {
+      setPaymentError(null)
+      
+      // Connect wallet if not connected
+      if (!connectedAddress) {
+        await connectWallet()
+      }
+
+      // Get auth token
+      const token = localStorage.getItem('access_token')
+      if (!token) {
+        throw new Error(t('common.login_required') || 'Veuillez vous connecter')
+      }
+
+      // Execute payment
+      const hash = await executePayment(payment, token)
+      setTxHash(hash)
+      setPaymentConfirmed(true)
+      setStep('success')
+      onPaymentInitiated?.()
+    } catch (error) {
+      console.error('Wallet payment error:', error)
+      setPaymentError(error instanceof Error ? error.message : 'Erreur lors du paiement')
     }
   }
 
@@ -431,8 +349,10 @@ export function PaymentDialog({
     setStep('recipients')
     setRecipients([])
     setSelectedMethod(null)
-    setCryptoPayment(null)
+    setPayment(null)
     setPaymentError(null)
+    setTxHash(null)
+    setPaymentConfirmed(false)
     setShowCloseConfirm(false)
     setIncludeMyself(true)
     setMyselfProduct(initialProductCode as 'kyc' | 'mfm_membership' | 'annual_membership')
@@ -440,9 +360,8 @@ export function PaymentDialog({
       initialProductCode === 'kyc' ? 10 : 
       initialProductCode === 'annual_membership' ? 50 : 100
     )
-    setIsCheckingPayment(false)
     setPaymentConfirmed(false)
-    setLastCheckTime(null)
+    setTxHash(null)
     onOpenChange(false)
   }
 
@@ -450,7 +369,7 @@ export function PaymentDialog({
   const handleBack = () => {
     if (step === 'payment') {
       setStep('method')
-      setCryptoPayment(null)
+      setPayment(null)
     } else if (step === 'method') {
       setStep('recipients')
       setSelectedMethod(null)
@@ -918,125 +837,137 @@ export function PaymentDialog({
             </div>
           )}
 
-          {/* Step 3: Payment Instructions */}
-          {step === 'payment' && cryptoPayment && (
+          {/* Step 3: Wallet Payment */}
+          {step === 'payment' && payment && (
             <div className="space-y-4">
-              {/* QR Code */}
-              <div className="flex justify-center">
-                <div className="p-3 bg-white rounded-xl border border-gray-200">
-                  <QRCodeSVG 
-                    value={cryptoPayment.pay_address}
-                    size={160}
-                    level="H"
-                    includeMargin={true}
-                  />
-                </div>
-              </div>
-
-              {/* Amount */}
+              {/* Payment Amount */}
               <div className="bg-myhigh5-primary/5 dark:bg-myhigh5-primary/10 rounded-xl p-4 text-center border border-myhigh5-primary/20">
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
-                  {t('payment.amount_to_send') || 'Montant à envoyer'}
+                  {t('Amount to pay') || 'Montant à payer'}
                 </p>
                 <p className="text-2xl font-bold text-myhigh5-primary">
-                  {cryptoPayment.pay_amount} {cryptoPayment.pay_currency.toUpperCase()}
+                  ${payment.price_amount.toFixed(2)} {payment.price_currency.toUpperCase()}
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  ≈ ${cryptoPayment.price_amount.toFixed(2)} USD
+                  ≈ {(parseFloat(payment.amount_wei) / 1e18).toFixed(6)} USDT
                 </p>
               </div>
 
-              {/* Address */}
-              <div>
-                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  {t('payment.receiving_address') || 'Adresse de réception'}
-                </p>
-                <div className="flex items-center gap-2 p-3 bg-gray-100 dark:bg-gray-800 rounded-lg">
-                  <code className="text-xs flex-1 break-all text-gray-900 dark:text-white font-mono">
-                    {cryptoPayment.pay_address}
-                  </code>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => copyToClipboard(cryptoPayment.pay_address)}
-                    className="flex-shrink-0"
-                  >
-                    {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-                  </Button>
+              {/* Wallet Connection Status */}
+              {connectedAddress ? (
+                <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                  <CheckCircle2 className="w-5 h-5 text-green-500" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-green-700 dark:text-green-300">
+                      {t('wallet connected') || 'Portefeuille connecté'}
+                    </p>
+                    <p className="text-xs text-green-600 dark:text-green-400 font-mono">
+                      {connectedAddress.slice(0, 6)}...{connectedAddress.slice(-4)}
+                    </p>
+                  </div>
                 </div>
+              ) : (
+                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <p className="text-sm text-blue-700 dark:text-blue-300 text-center">
+                    {t('connect wallet first') || 'Connectez votre portefeuille pour continuer'}
+                  </p>
+                </div>
+              )}
+
+              {/* Network Info */}
+              <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
+                  {t('payment.network') || 'Réseau'}
+                </p>
+                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                  BNB Smart Chain (BSC)
+                </p>
               </div>
 
               {/* Order ID */}
               <div className="text-center text-xs text-gray-500 dark:text-gray-400">
-                {t('payment.order_id') || 'Référence'}: {cryptoPayment.order_id}
+                {t('payment.order_id') || 'Référence'}: {payment.order_id}
               </div>
 
-              {/* Warning */}
-              <div className="flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
-                <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
-                <p className="text-xs text-red-700 dark:text-red-300">
-                  {t('payment.network_warning') || "Assurez-vous d'envoyer le montant exact sur le bon réseau. Les erreurs peuvent entraîner une perte de fonds."}
-                </p>
-              </div>
+              {/* Error Messages */}
+              {(paymentError || walletError) && (
+                <div className="flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                  <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+                  <p className="text-sm text-red-700 dark:text-red-300">
+                    {paymentError || walletError}
+                  </p>
+                </div>
+              )}
 
-              {/* Auto-check indicator */}
-              <div className="flex items-center justify-center gap-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
-                <p className="text-xs text-blue-700 dark:text-blue-300">
-                  {t('payment.auto_checking') || 'Vérification automatique active'}
-                  {lastCheckTime && (
-                    <span className="ml-1 text-blue-500">
-                      ({t('payment.last_check') || 'Dernière vérif.'}: {lastCheckTime.toLocaleTimeString()})
-                    </span>
-                  )}
-                </p>
-              </div>
-
-              {/* Status message */}
-              {paymentError && (
-                <div className={`flex items-start gap-2 p-3 rounded-lg ${
-                  paymentError.includes('détecté') || paymentError.includes('detected') || paymentError.includes('detectado') || paymentError.includes('erkannt')
-                    ? 'bg-green-50 dark:bg-green-900/20'
-                    : paymentError.includes('attente') || paymentError.includes('waiting') || paymentError.includes('Esperando') || paymentError.includes('Warten')
-                    ? 'bg-blue-50 dark:bg-blue-900/20'
-                    : 'bg-yellow-50 dark:bg-yellow-900/20'
-                }`}>
-                  {paymentError.includes('détecté') || paymentError.includes('detected') || paymentError.includes('detectado') || paymentError.includes('erkannt') ? (
-                    <Check className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
-                  ) : paymentError.includes('attente') || paymentError.includes('waiting') || paymentError.includes('Esperando') || paymentError.includes('Warten') ? (
-                    <Loader2 className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0 animate-spin" />
-                  ) : (
-                    <AlertCircle className="w-4 h-4 text-yellow-500 mt-0.5 flex-shrink-0" />
-                  )}
-                  <p className={`text-sm ${
-                    paymentError.includes('détecté') || paymentError.includes('detected') || paymentError.includes('detectado') || paymentError.includes('erkannt')
-                      ? 'text-green-700 dark:text-green-300'
-                      : paymentError.includes('attente') || paymentError.includes('waiting') || paymentError.includes('Esperando') || paymentError.includes('Warten')
-                      ? 'text-blue-700 dark:text-blue-300'
-                      : 'text-yellow-700 dark:text-yellow-300'
-                  }`}>{paymentError}</p>
+              {/* Transaction Hash (if payment completed) */}
+              {txHash && (
+                <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
+                    {t('payment.transaction_hash') || 'Hash de transaction'}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <code className="text-xs flex-1 break-all text-gray-900 dark:text-white font-mono">
+                      {txHash}
+                    </code>
+                    <a
+                      href={`${CONTRACTS.EXPLORER_URL}/tx/${txHash}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-shrink-0"
+                    >
+                      <ExternalLink className="w-4 h-4 text-blue-500" />
+                    </a>
+                  </div>
                 </div>
               )}
 
               {/* Actions */}
               <div className="flex gap-3 pt-2">
-                <Button variant="outline" onClick={handleBack} className="flex-1" disabled={isCheckingPayment}>
+                <Button variant="outline" onClick={handleBack} className="flex-1" disabled={isProcessing || isConnecting}>
                   {t('common.back') || 'Retour'}
                 </Button>
-                <Button
-                  onClick={checkPaymentStatus}
-                  disabled={isCheckingPayment}
-                  className="flex-1 bg-myhigh5-primary hover:bg-myhigh5-primary/90"
-                >
-                  {isCheckingPayment ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      {t('payment.checking') || 'Vérification...'}
-                    </>
-                  ) : (
-                    t('payment.payment_done') || "J'ai effectué le paiement"
-                  )}
-                </Button>
+                {!connectedAddress ? (
+                  <Button
+                    onClick={connectWallet}
+                    disabled={isConnecting}
+                    className="flex-1 bg-myhigh5-primary hover:bg-myhigh5-primary/90"
+                  >
+                    {isConnecting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        {t('payment.connecting') || 'Connexion...'}
+                      </>
+                    ) : (
+                      <>
+                        <Wallet className="w-4 h-4 mr-2" />
+                        {t('connect wallet first') || 'Connecter le portefeuille'}
+                      </>
+                    )}
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={handleWalletPayment}
+                    disabled={isProcessing || paymentConfirmed}
+                    className="flex-1 bg-myhigh5-primary hover:bg-myhigh5-primary/90"
+                  >
+                    {isProcessing ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        {t('processing') || 'Traitement...'}
+                      </>
+                    ) : paymentConfirmed ? (
+                      <>
+                        <CheckCircle2 className="w-4 h-4 mr-2" />
+                        {t('payment.completed') || 'Terminé'}
+                      </>
+                    ) : (
+                      <>
+                        <Wallet className="w-4 h-4 mr-2" />
+                        {t('pay now') || 'Payer maintenant'}
+                      </>
+                    )}
+                  </Button>
+                )}
               </div>
             </div>
           )}

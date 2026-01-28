@@ -46,8 +46,8 @@ def get_db():
     Ensures the session is always closed, even in case of error.
     Commits must be managed explicitly in endpoints/CRUD.
     """
-    from fastapi import HTTPException
-    from sqlalchemy.exc import OperationalError
+    from fastapi import HTTPException, status
+    from sqlalchemy.exc import OperationalError, SQLAlchemyError
     
     db = SessionLocal()
     try:
@@ -61,12 +61,29 @@ def get_db():
         error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
         logger.error(f"Database connection error: {error_msg}")
         logger.error("Please check your internet connection and DATABASE_URL configuration")
+        logger.error(f"Full error details: {e}", exc_info=True)
         db.rollback()
-        raise
+        # Convert to HTTP exception for better error handling
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database connection error. Please try again later or contact support if the problem persists.",
+        )
+    except SQLAlchemyError as e:
+        # Other database errors
+        error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
+        logger.error(f"Database error: {error_msg}")
+        logger.error(f"Full error details: {e}", exc_info=True)
+        db.rollback()
+        # Convert to HTTP exception for better error handling
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database error occurred. Please try again later or contact support if the problem persists.",
+        )
     except Exception as e:
-        # Log only real database errors
-        logger.error(f"Database error: {e}", exc_info=True)
+        # Log unexpected errors
+        logger.error(f"Unexpected error in database session: {e}", exc_info=True)
         db.rollback()
+        # Re-raise to let FastAPI handle it
         raise
     finally:
         # Always close the session to release the connection from the pool

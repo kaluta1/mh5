@@ -17,6 +17,7 @@ from app.models.user import User
 from app.models.affiliate import AffiliateCommission, CommissionType, CommissionStatus
 from app.models.payment import Deposit, ProductType
 from app.services.email import email_service
+from app.services.accounting_integration import record_payment_in_accounting
 
 logger = logging.getLogger(__name__)
 
@@ -163,6 +164,25 @@ def process_payment_validation(db: Session, deposit: Deposit) -> bool:
         
         # Distribuer les commissions
         commissions = distribute_commissions(db, deposit, product_code)
+        
+        # Record payment and commissions in accounting system
+        try:
+            journal_entry = record_payment_in_accounting(
+                db=db,
+                deposit=deposit,
+                commissions=commissions,
+                created_by=deposit.user_id  # User who made the payment
+            )
+            if journal_entry:
+                logger.info(
+                    f"Accounting entry created for deposit {deposit.id}: "
+                    f"Journal Entry #{journal_entry.entry_number}"
+                )
+            else:
+                logger.warning(f"Failed to create accounting entry for deposit {deposit.id}")
+        except Exception as e:
+            # Don't fail payment processing if accounting fails
+            logger.error(f"Error creating accounting entry for deposit {deposit.id}: {e}", exc_info=True)
         
         # Activer le service pour l'utilisateur
         user = db.query(User).filter(User.id == deposit.user_id).first()

@@ -10,8 +10,8 @@ import { useLanguage } from '@/contexts/language-context'
 import { useAuth } from '@/hooks/use-auth'
 import { UserDropdown } from "@/components/user/user-dropdown"
 import { LanguageSelector } from "@/components/ui/language-selector"
+import { Logo } from "@/components/ui/logo"
 import { 
-  Heart, 
   Menu, 
   X, 
   Home, 
@@ -94,22 +94,7 @@ export function Header({ user, onLoginClick, onLogout }: HeaderProps) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16 lg:h-18">
             {/* Logo */}
-            <Link href="/" className="flex items-center space-x-2.5 group">
-              <div className="relative">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary shadow-lg group-hover:shadow-xl transition-all duration-300 group-hover:scale-105">
-                  <Heart className="w-5 h-5 text-white fill-current" />
-                </div>
-                <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white dark:border-gray-900 animate-pulse" />
-              </div>
-              <div className="flex flex-col">
-                <span className="text-xl font-black bg-gradient-to-r from-myhigh5-primary to-myhigh5-secondary bg-clip-text text-transparent">
-                  MyHigh5
-                </span>
-                <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 -mt-1 hidden sm:block">
-                  Global Contest Platform
-                </span>
-              </div>
-            </Link>
+            <Logo size="md" showText={true} href="/" />
 
             {/* Desktop Navigation */}
             <nav className="hidden lg:flex items-center">
