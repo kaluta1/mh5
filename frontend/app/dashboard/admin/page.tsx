@@ -7,10 +7,16 @@ import { useEffect, useState } from 'react'
 import { AlertCircle, TrendingUp, DollarSign, ArrowDownCircle, ArrowUpCircle, Users, Flag, Tag, BarChart3, Calendar } from 'lucide-react'
 import api from '@/lib/api'
 import { StatsCard } from '@/components/dashboard/stats-card'
-import { UserProgressChart } from '@/components/dashboard/user-progress-chart'
+import dynamic from 'next/dynamic'
+
+// Lazy load heavy chart component
+const UserProgressChart = dynamic(() => import('@/components/dashboard/user-progress-chart').then(mod => ({ default: mod.UserProgressChart })), {
+  loading: () => <div className="h-64 animate-pulse bg-gray-200 dark:bg-gray-700 rounded-lg" />
+})
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+// Note: Recharts kept as direct import for admin page (admin-only, not frequently accessed)
 import { LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { cn } from '@/lib/utils'
 

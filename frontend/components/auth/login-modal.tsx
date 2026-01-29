@@ -1,6 +1,9 @@
 "use client"
 
 import * as React from "react"
+import { AxiosError } from "axios"
+import { logger } from "@/lib/logger"
+import type { User } from "@/types/user"
 import { useState, useEffect } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -23,7 +26,7 @@ interface LoginModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSwitchToRegister?: () => void
-  onLoginSuccess?: (user: any) => void
+  onLoginSuccess?: (user: User) => void
   onRegisterClick?: () => void
 }
 
@@ -93,8 +96,8 @@ export function LoginModal({ open, onOpenChange, onSwitchToRegister, onLoginSucc
           router.push('/dashboard/contests')
         }
       }, 1500)
-    } catch (err: any) {
-      console.error('Login error:', err)
+    } catch (err: unknown) {
+      logger.error('Login error', err)
       
       // Fonction pour mapper les erreurs backend aux traductions
       const mapErrorToTranslation = (message: string): string => {
@@ -120,29 +123,32 @@ export function LoginModal({ open, onOpenChange, onSwitchToRegister, onLoginSucc
       let errorMessage = t('auth.login.errors.invalid_credentials')
       
       // Gérer les erreurs de timeout spécifiquement
-      if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
-        errorMessage = t('auth.login.errors.timeout') || 'Connection timeout. The server is taking too long to respond. Please try again.'
-      } else if (err.response?.data) {
-        const errorData = err.response.data
+      const axiosError = err as AxiosError
+      if (axiosError.code === 'ECONNABORTED' || 
+          axiosError.message?.includes('timeout') || 
+          (err instanceof Error && err.message?.includes('timeout'))) {
+        errorMessage = t('auth.login.errors.timeout')
+      } else if (axiosError.response?.data) {
+        const errorData = axiosError.response.data as { detail?: string | { msg: string }[] | string; message?: string } | string
         if (typeof errorData === 'string') {
           errorMessage = mapErrorToTranslation(errorData)
-        } else if (errorData.detail) {
+        } else if (errorData && typeof errorData === 'object' && 'detail' in errorData) {
           if (typeof errorData.detail === 'string') {
             errorMessage = mapErrorToTranslation(errorData.detail)
           } else if (Array.isArray(errorData.detail)) {
-            const messages = errorData.detail.map(e => e.msg || e).join(', ')
+            const messages = errorData.detail.map(e => (typeof e === 'object' && 'msg' in e ? e.msg : String(e))).join(', ')
             errorMessage = mapErrorToTranslation(messages)
           } else {
             errorMessage = t('auth.login.errors.invalid_credentials')
           }
-        } else if (errorData.message) {
+        } else if (errorData && typeof errorData === 'object' && 'message' in errorData && errorData.message) {
           errorMessage = mapErrorToTranslation(errorData.message)
         }
-      } else if (err.message) {
-        errorMessage = mapErrorToTranslation(err.message)
-      } else if (!err.response && err.request) {
+      } else if (axiosError.message) {
+        errorMessage = mapErrorToTranslation(axiosError.message)
+      } else if (!axiosError.response && axiosError.request) {
         // Pas de réponse du serveur (réseau ou serveur down)
-        errorMessage = t('auth.login.errors.network_error') || 'Network error. Please check your connection and try again.'
+        errorMessage = t('auth.login.errors.network_error')
       }
       
       // Afficher l'erreur en haut du formulaire

@@ -11,16 +11,32 @@ import {
   UserCircle, Fingerprint
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { 
-  PerformanceChart, 
-  ReactionsChart, 
-  ActivityChart,
-  AffiliatesGrowthChart,
-  CommissionsChart
-} from '@/components/dashboard/analytics'
 import { DashboardSkeleton } from '@/components/ui/skeleton'
 import { analyticsService, DashboardAnalytics } from '@/services/analytics-service'
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
+import { logger } from '@/lib/logger'
+
+// Lazy load heavy chart components
+const PerformanceChart = dynamic(() => import('@/components/dashboard/analytics').then(mod => ({ default: mod.PerformanceChart })), {
+  loading: () => <div className="h-64 animate-pulse bg-gray-200 dark:bg-gray-700 rounded-lg" />
+})
+
+const ReactionsChart = dynamic(() => import('@/components/dashboard/analytics').then(mod => ({ default: mod.ReactionsChart })), {
+  loading: () => <div className="h-64 animate-pulse bg-gray-200 dark:bg-gray-700 rounded-lg" />
+})
+
+const ActivityChart = dynamic(() => import('@/components/dashboard/analytics').then(mod => ({ default: mod.ActivityChart })), {
+  loading: () => <div className="h-64 animate-pulse bg-gray-200 dark:bg-gray-700 rounded-lg" />
+})
+
+const AffiliatesGrowthChart = dynamic(() => import('@/components/dashboard/analytics').then(mod => ({ default: mod.AffiliatesGrowthChart })), {
+  loading: () => <div className="h-64 animate-pulse bg-gray-200 dark:bg-gray-700 rounded-lg" />
+})
+
+const CommissionsChart = dynamic(() => import('@/components/dashboard/analytics').then(mod => ({ default: mod.CommissionsChart })), {
+  loading: () => <div className="h-64 animate-pulse bg-gray-200 dark:bg-gray-700 rounded-lg" />
+})
 
 export default function DashboardPage() {
   const { user, isAuthenticated, isLoading } = useAuth()
@@ -48,7 +64,7 @@ export default function DashboardPage() {
         const data = await analyticsService.getDashboardAnalytics()
         setAnalytics(data)
       } catch (error) {
-        console.error('Error fetching analytics:', error)
+        logger.error('Error fetching analytics:', error)
         setAnalytics(analyticsService.getDefaultAnalytics())
       } finally {
         setAnalyticsLoading(false)

@@ -1,6 +1,9 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Response, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from contextlib import asynccontextmanager
 import uvicorn
 import os
@@ -120,6 +123,21 @@ def read_root():
 def health_check():
     return {"status": "healthy"}
 
+# Route favicon pour éviter les erreurs 404
+@app.get("/favicon.ico", tags=["Static"], include_in_schema=False)
+def favicon():
+    """Handle favicon requests to prevent 404 errors"""
+    return Response(status_code=204)  # No Content - browser will use default favicon
+
+# Route robots.txt pour éviter les erreurs 404
+@app.get("/robots.txt", tags=["Static"], include_in_schema=False)
+def robots_txt():
+    """Handle robots.txt requests to prevent 404 errors"""
+    return Response(
+        content="User-agent: *\nDisallow: /api/\nDisallow: /docs\nDisallow: /redoc\n",
+        media_type="text/plain"
+    )
+
 # Route de debug CORS
 @app.get("/debug/cors", tags=["Debug"])
 def debug_cors():
@@ -128,6 +146,44 @@ def debug_cors():
         "environment": os.getenv("ENVIRONMENT", "not set"),
         "backend_cors_origins_from_settings": settings.BACKEND_CORS_ORIGINS
     }
+
+# Custom exception handler for HTTP exceptions (including 404)
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    """Handle HTTP exceptions (404, etc.) with a consistent error format"""
+    if exc.status_code == 404:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={
+                "detail": f"Route not found: {request.method} {request.url.path}",
+                "code": "NOT_FOUND",
+                "message": "The requested endpoint does not exist. Please check the API documentation at /docs",
+                "path": str(request.url.path),
+                "method": request.method
+            }
+        )
+    # For other HTTP exceptions, return the default format
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "detail": exc.detail,
+            "code": f"HTTP_{exc.status_code}",
+            "message": str(exc.detail)
+        }
+    )
+
+# Custom exception handler for all HTTP exceptions
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Handle validation errors with a consistent format"""
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={
+            "detail": exc.errors(),
+            "code": "VALIDATION_ERROR",
+            "message": "Request validation failed"
+        }
+    )
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

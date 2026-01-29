@@ -52,7 +52,12 @@
       "loading": "Wird angemeldet...",
       "no_account": "Noch kein Konto?",
       "register_link": "Registrieren",
-      "error": "Anmeldefehler"
+      "error": "Anmeldefehler",
+      "errors": {
+        "invalid_credentials": "Ungültige E-Mail/Benutzername oder Passwort",
+        "timeout": "Verbindungszeitüberschreitung. Der Server antwortet zu langsam. Bitte versuchen Sie es erneut.",
+        "network_error": "Netzwerkfehler. Bitte überprüfen Sie Ihre Verbindung und versuchen Sie es erneut."
+      }
     },
     "register": {
       "title": "Bei MyFav Beitreten",

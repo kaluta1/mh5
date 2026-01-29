@@ -6,10 +6,17 @@ import { AuthProvider } from "@/hooks/use-auth"
 import { LanguageProvider } from "@/contexts/language-context"
 import { ToastProvider } from "@/components/ui/toast"
 import { CookieConsent } from "@/components/ui/cookie-consent"
+import { ErrorBoundary } from "@/components/error-boundary"
 import { getMetadataTranslations, detectLanguageFromHeaders, getKeywords } from "@/lib/metadata-translations"
 import { headers } from "next/headers"
 
-const inter = Inter({ subsets: ["latin"] })
+// Optimize font loading
+const inter = Inter({ 
+  subsets: ["latin"],
+  display: 'swap', // Better font loading performance
+  preload: true,
+  fallback: ['system-ui', 'arial']
+})
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myhigh5.com"
 const defaultImage = `${appUrl}/thumbnails.png` // Image par défaut pour le partage
@@ -121,14 +128,16 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <ToastProvider>
-            <LanguageProvider>
-              <AuthProvider>
-                {children}
-                <CookieConsent />
-              </AuthProvider>
-            </LanguageProvider>
-          </ToastProvider>
+          <ErrorBoundary>
+            <ToastProvider>
+              <LanguageProvider>
+                <AuthProvider>
+                  {children}
+                  <CookieConsent />
+                </AuthProvider>
+              </LanguageProvider>
+            </ToastProvider>
+          </ErrorBoundary>
         </ThemeProvider>
       </body>
     </html>

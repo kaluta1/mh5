@@ -3,51 +3,11 @@
 import * as React from 'react'
 import { authService } from '@/lib/api'
 import { cacheService } from '@/lib/cache-service'
+import { logger } from '@/lib/logger'
+import type { User, UserRole } from '@/types/user'
 
-export interface UserRole {
-  id: number
-  name: string
-  description?: string
-}
-
-export interface User {
-  id: number
-  email: string
-  username?: string
-  full_name?: string
-  first_name?: string
-  last_name?: string
-  avatar_url?: string
-  bio?: string
-  
-  // Demographics
-  gender?: 'male' | 'female' | 'other' | 'prefer_not_to_say'
-  date_of_birth?: string
-  phone_number?: string
-  
-  // Location
-  continent?: string
-  region?: string
-  country?: string
-  city?: string
-  
-  // Verification & Status
-  is_active: boolean
-  is_verified: boolean
-  is_admin: boolean
-  identity_verified?: boolean
-  verification_date?: string
-  status?: 'active' | 'suspended' | 'banned' | 'pending_verification'
-  last_login?: string
-  
-  // Referral
-  personal_referral_code?: string
-  sponsor_id?: number
-  
-  // RBAC
-  role_id?: number
-  role?: UserRole
-}
+// Re-export types for backward compatibility
+export type { User, UserRole }
 
 interface AuthContextType {
   user: User | null
@@ -85,40 +45,58 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isAdmin = user?.role?.name === 'admin' || user?.is_admin || false
   const isModerator = user?.role?.name === 'moderator' || isAdmin
 
-  // Fonction pour charger les permissions
+  // Fonction pour charger les permissions (avec timeout)
   const loadPermissions = async () => {
     try {
       const token = localStorage.getItem('access_token')
       if (!token) return
       
+      // Use AbortController for timeout
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 second timeout
+      
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/rbac/me/permissions`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 'Authorization': `Bearer ${token}` },
+        signal: controller.signal
       })
+      
+      clearTimeout(timeoutId)
       
       if (response.ok) {
         const perms = await response.json()
         setPermissions(perms)
       }
     } catch (error) {
-      console.error('Erreur lors du chargement des permissions:', error)
+      // Silently fail - permissions are not critical for initial load
+      if (error instanceof Error && error.name !== 'AbortError') {
+        logger.error('Erreur lors du chargement des permissions', error)
+      }
     }
   }
 
-  // Vérifier l'authentification au chargement
+  // Vérifier l'authentification au chargement (optimized)
   React.useEffect(() => {
     const checkAuth = async () => {
       try {
         if (authService.isAuthenticated()) {
+          // Load user first (critical)
           const userData = await authService.getCurrentUser()
           setUser({
             ...userData,
-            is_admin: (userData as any).is_admin || false
+            is_admin: (userData as any).is_admin || false,
+            is_active: userData.is_active ?? true,
+            is_verified: userData.is_verified ?? false
+          } as User)
+          
+          // Load permissions in background (non-blocking)
+          loadPermissions().catch(() => {
+            // Silently fail - permissions can load later
           })
-          // Charger les permissions après avoir récupéré l'utilisateur
-          await loadPermissions()
+        } else {
+          setIsLoading(false)
         }
       } catch (error) {
-        console.error('Erreur lors de la vérification de l\'authentification:', error)
+        logger.error('Erreur lors de la vérification de l\'authentification', error)
         // Token invalide, nettoyer le localStorage
         localStorage.removeItem('access_token')
         localStorage.removeItem('refresh_token')
@@ -138,8 +116,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const userData = await authService.getCurrentUser()
     setUser({
       ...userData,
-      is_admin: userData.is_admin || false
-    })
+      is_admin: (userData as any).is_admin || false,
+      is_active: userData.is_active ?? true,
+      is_verified: userData.is_verified ?? false
+    } as User)
     
     // Charger les permissions
     await loadPermissions()
@@ -157,10 +137,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (authService.isAuthenticated()) {
       try {
         const userData = await authService.getCurrentUser()
-        setUser(userData)
+        setUser({
+          ...userData,
+          is_admin: (userData as any).is_admin || false,
+          is_active: userData.is_active ?? true,
+          is_verified: userData.is_verified ?? false
+        } as User)
         await loadPermissions()
       } catch (error) {
-        console.error('Erreur lors du rafraîchissement de l\'utilisateur:', error)
+        logger.error('Erreur lors du rafraîchissement de l\'utilisateur', error)
         await logout()
       }
     }

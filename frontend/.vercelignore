@@ -1,0 +1,23 @@
+# Ignore everything outside frontend directory
+../backend/
+../.git/
+../.github/
+../*.md
+../*.txt
+../*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!next.config.js
+!tailwind.config.ts
+!postcss.config.js
+
+# Ignore common files
+node_modules/
+.next/
+.vercel/
+*.log
+.env.local
+.env.*.local
+dist/
+build/

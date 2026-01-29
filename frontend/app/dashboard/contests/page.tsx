@@ -2,23 +2,30 @@
 
 import * as React from "react"
 import { useState, useEffect, useMemo } from "react"
+import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useLanguage } from '@/contexts/language-context'
 import { useAuth } from '@/hooks/use-auth'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useToast } from '@/components/ui/toast'
 import { ContestsSkeleton } from '@/components/ui/skeleton'
-// import { ContestsHeader } from '@/components/dashboard/contests-header'
-// import { ContestsGrid } from '@/components/dashboard/contests-grid'
 import { ContestsLoader } from '@/components/dashboard/contests-loader'
 import { contestService, Contest } from '@/services/contest-service'
 import { AlertCircle, UserCircle, Fingerprint, ChevronRight, X, Lightbulb, Search, ArrowUpDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-// import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { ContestCard } from '@/components/dashboard/contest-card'
-import { SuggestContestDialog } from '@/components/dashboard/suggest-contest-dialog'
+import { logger } from '@/lib/logger'
+// Import LocationFilterBar and CONTINENTS directly (component is not heavy and used immediately)
 import { LocationFilterBar, CONTINENTS } from '@/components/dashboard/location-filter-bar'
+
+// Lazy load heavy components
+const ContestCard = dynamic(() => import('@/components/dashboard/contest-card').then(mod => ({ default: mod.ContestCard })), {
+  loading: () => <div className="h-64 animate-pulse bg-gray-200 dark:bg-gray-700 rounded-lg" />
+})
+
+const SuggestContestDialog = dynamic(() => import('@/components/dashboard/suggest-contest-dialog').then(mod => ({ default: mod.SuggestContestDialog })), {
+  ssr: false
+})
 
 export default function ContestsPage() {
   const { t } = useLanguage()
@@ -143,17 +150,13 @@ export default function ContestsPage() {
 
   // Charger les contests et les favoris
   useEffect(() => {
-    console.log('[ContestsPage] useEffect triggered', { isLoading, isAuthenticated, allContestsLength: allContests.length, isLoadingData: isLoadingDataRef.current, pageLoading })
-
     // Ne charger que si l'authentification est confirmée
     if (isLoading) {
-      console.log('[ContestsPage] Still loading auth, waiting...')
       // Ne pas mettre pageLoading à false ici, on attend que l'auth soit chargée
       return
     }
 
     if (!isAuthenticated) {
-      console.log('[ContestsPage] Not authenticated, stopping loading')
       setPageLoading(false)
       return
     }
@@ -192,23 +195,12 @@ export default function ContestsPage() {
           undefined, // filterRegion
           filterContinent && filterContinent !== 'all' ? filterContinent : undefined
         )
-        console.log('[ContestsPage] API response received:', apiContests?.length || 0, 'contests')
-        // Debug: Log first contest's top_contestants
-        if (apiContests?.length > 0) {
-          console.log('[ContestsPage] First contest raw data:', {
-            id: apiContests[0].id,
-            name: apiContests[0].name,
-            top_contestants: apiContests[0].top_contestants
-          })
-        }
 
         if (!isMountedRef.current) {
-          console.log('[ContestsPage] Component unmounted, aborting')
           return
         }
 
         if (!apiContests || apiContests.length === 0) {
-          console.warn('[ContestsPage] Aucun contest reçu du backend')
           if (isMountedRef.current) {
             setAllContests([])
             setDisplayedContests([])
@@ -220,7 +212,6 @@ export default function ContestsPage() {
           const contests: Contest[] = apiContests.map(apiContest =>
             contestService.mapResponseToContest(apiContest)
           )
-          console.log('[ContestsPage] Converted to Contest objects:', contests.length)
 
           // Trier les contests selon l'option de tri sélectionnée
           const sortedContests = [...contests].sort((a, b) => {
@@ -248,7 +239,6 @@ export default function ContestsPage() {
             }
           })
 
-          console.log('[ContestsPage] Setting state with', sortedContests.length, 'contests')
           if (isMountedRef.current) {
             setAllContests(sortedContests)
             // Le filtrage par catégorie est maintenant fait côté backend via has_voting_type
@@ -270,20 +260,18 @@ export default function ContestsPage() {
         // Charger les favoris depuis l'API
         if (isMountedRef.current) {
           try {
-            console.log('[ContestsPage] Loading favorites...')
             const favoritesContests = await contestService.getFavoritesContests(0, 100)
             const favoriteIds = favoritesContests.map(c => c.id)
             setFavorites(favoriteIds)
-            console.log('[ContestsPage] Favorites loaded:', favoriteIds.length)
           } catch (error) {
-            console.error('[ContestsPage] Erreur lors du chargement des favoris:', error)
+            logger.error('[ContestsPage] Erreur lors du chargement des favoris:', error)
             if (isMountedRef.current) {
               setFavorites([])
             }
           }
         }
       } catch (error) {
-        console.error('[ContestsPage] Erreur lors du chargement des contests:', error)
+        logger.error('[ContestsPage] Erreur lors du chargement des contests:', error)
         if (isMountedRef.current) {
           setAllContests([])
           setDisplayedContests([])
@@ -291,14 +279,12 @@ export default function ContestsPage() {
           setCurrentPage(1)
         }
       } finally {
-        console.log('[ContestsPage] Finally block executed, isMounted:', isMountedRef.current)
         // Toujours mettre pageLoading à false, même si le composant est démonté
         // pour éviter qu'il reste bloqué
         if (isMountedRef.current) {
           setPageLoading(false)
         }
         isLoadingDataRef.current = false
-        console.log('[ContestsPage] Loading completed, pageLoading set to false')
       }
     }
 
@@ -422,7 +408,7 @@ export default function ContestsPage() {
         setHasMore(newContests.length >= ITEMS_PER_PAGE)
       }
     } catch (error) {
-      console.error('Error loading more contests:', error)
+      logger.error('Error loading more contests:', error)
       setHasMore(false)
     } finally {
       setIsLoadingMore(false)
@@ -511,7 +497,7 @@ export default function ContestsPage() {
         addToast('❤️ ' + t('dashboard.contests.added_to_favorites'), 'success')
       }
     } catch (error) {
-      console.error('Erreur lors de la modification des favoris:', error)
+      logger.error('Erreur lors de la modification des favoris:', error)
       addToast('❌ ' + t('common.error'), 'error')
     }
   }
@@ -563,18 +549,7 @@ export default function ContestsPage() {
     }
   }, [searchTerm, activeSearchTerm])
 
-  // Debug log pour vérifier l'état
-  React.useEffect(() => {
-    console.log('[ContestsPage] Render state:', {
-      isLoading,
-      pageLoading,
-      isAuthenticated,
-      allContestsLength: allContests.length,
-      displayedContestsLength: displayedContests.length,
-      filteredContestsLength: filteredContests.length,
-      filteredContests: filteredContests.slice(0, 2) // Log first 2
-    })
-  }, [isLoading, pageLoading, isAuthenticated, allContests.length, displayedContests.length, filteredContests])
+  // Removed debug useEffect - it was causing unnecessary re-renders and performance issues
 
   if (isLoading || pageLoading) {
     return <ContestsSkeleton />

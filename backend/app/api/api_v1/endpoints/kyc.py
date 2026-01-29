@@ -356,6 +356,8 @@ def get_kyc_status(
 ) -> KYCStatusResponse:
     """
     Récupérer le statut de vérification KYC de l'utilisateur actuel
+    Returns 404 if no verification exists (for backward compatibility)
+    For a more user-friendly response, use /status-detailed instead
     """
     verification = crud_kyc.kyc_verification.get_by_user(db, user_id=current_user.id)
     if not verification:

@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Header } from "@/components/layout/header"
 import { Footer } from "@/components/sections/footer"
@@ -40,7 +40,7 @@ function ContestCardSkeleton() {
   )
 }
 
-export default function ContestsPage() {
+function ContestsPageContent() {
   const { t } = useLanguage()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -639,5 +639,13 @@ export default function ContestsPage() {
         onRegisterClick={handleRegisterClick}
       />
     </div>
+  )
+}
+
+export default function ContestsPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-white dark:bg-gray-900" />}>
+      <ContestsPageContent />
+    </Suspense>
   )
 }

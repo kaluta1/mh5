@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useLanguage } from '@/contexts/language-context'
 import { Button } from '@/components/ui/button'
+import { logger } from '@/lib/logger'
 import {
   Dialog,
   DialogContent,
@@ -152,7 +153,7 @@ export function PaymentDialog({
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch (err) {
-      console.error('Failed to copy:', err)
+      logger.error('Failed to copy to clipboard', err)
     }
   }
 
@@ -206,7 +207,7 @@ export function PaymentDialog({
         setPayment(paymentOrder)
         setStep('instructions')
       } catch (error) {
-        console.error('Payment creation error:', error)
+        logger.error('Payment creation error', error)
         setPaymentError(error instanceof Error ? error.message : 'Erreur lors de la création du paiement')
       } finally {
         setIsLoading(false)
@@ -234,7 +235,7 @@ export function PaymentDialog({
       const hash = await executePayment(payment, token)
       setTxHash(hash)
     } catch (error) {
-      console.error('Wallet payment error:', error)
+      logger.error('Wallet payment error', error)
       setPaymentError(error instanceof Error ? error.message : 'Erreur lors du paiement')
     }
   }
