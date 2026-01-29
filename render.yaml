@@ -1,0 +1,33 @@
+services:
+  - type: web
+    name: mh5-backend
+    env: python
+    region: oregon  # Change to your preferred region
+    plan: free  # or starter, standard, etc.
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt && alembic upgrade head
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        sync: false  # Use your existing database URL - set manually in Render dashboard
+      - key: SECRET_KEY
+        sync: false  # Set manually - CRITICAL!
+      - key: BACKEND_CORS_ORIGINS
+        sync: false  # Set manually with your frontend URL
+      - key: FRONTEND_URL
+        sync: false  # Set manually with your Vercel URL
+      - key: ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: 10080
+      - key: STORAGE_TYPE
+        value: s3
+      - key: BSC_CHAIN_ID
+        value: 56
+      - key: BSC_USDT_DECIMALS
+        value: 18
+      - key: BSC_RPC_URL
+        value: https://bsc-dataseed.binance.org
+
+# NOTE: Database section removed - using existing database
+# Just set DATABASE_URL environment variable in Render dashboard with your existing database connection string
