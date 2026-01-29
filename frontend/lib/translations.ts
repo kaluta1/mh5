@@ -13,7 +13,43 @@ export const languages: Record<Language, LanguageInfo> = {
   de: { name: 'Deutsch', flag: '🇩🇪' }
 }
 
+export const maintenanceTranslations = {
+  en: {
+    maintenance: {
+      title: "We'll be back soon",
+      message: "We are refining our contest migration functionality and adding more features to enhance user experience. We will be back soon.",
+      backSoon: "Back soon"
+    }
+  },
+  fr: {
+    maintenance: {
+      title: "Nous revenons bientôt",
+      message: "Nous peaufinons notre fonctionnalité de migration de concours et ajoutons plus de fonctionnalités pour améliorer l'expérience utilisateur. Nous serons de retour bientôt.",
+      backSoon: "De retour bientôt"
+    }
+  },
+  es: {
+    maintenance: {
+      title: "Volveremos pronto",
+      message: "Estamos perfeccionando nuestra funcionalidad de migración de concursos y agregando más características para mejorar la experiencia del usuario. Volveremos pronto.",
+      backSoon: "Volveremos pronto"
+    }
+  },
+  de: {
+    maintenance: {
+      title: "Wir sind bald zurück",
+      message: "Wir verfeinern unsere Wettbewerbsmigrationsfunktion und fügen weitere Funktionen hinzu, um die Benutzererfahrung zu verbessern. Wir sind bald wieder zurück.",
+      backSoon: "Bald zurück"
+    }
+  }
+}
+
 export interface TranslationKeys {
+  maintenance: {
+    title: string
+    message: string
+    backSoon: string
+  }
   hero: {
     badge: string
     title_line1: string
@@ -536,6 +572,7 @@ export interface TranslationKeys {
       suggested_contests: string
       transactions: string
       microservices: string
+      accounting: string
     }
     dashboard: {
       total_seasons: string
@@ -961,6 +998,33 @@ export interface TranslationKeys {
       details: string
       search: string
       load_error: string
+    }
+    accounting: {
+      title: string
+      subtitle: string
+      refresh: string
+      total_revenue: string
+      ytd: string
+      journal_tab: string
+      coa_tab: string
+      journal_title: string
+      journal_desc: string
+      coa_title: string
+      coa_desc: string
+      table: {
+        date: string
+        ref: string
+        description: string
+        debit: string
+        credit: string
+        status: string
+        code: string
+        account: string
+        type: string
+        balance: string
+      }
+      error_loading: string
+      retry: string
     }
     users: {
       title: string
@@ -1965,7 +2029,8 @@ export const translations: Record<Language, TranslationKeys> = {
         commission_settings: "Paramètres de commission",
         suggested_contests: "Concours suggérés",
         transactions: "Transactions",
-        microservices: "Microservices"
+        microservices: "Microservices",
+        accounting: "Comptabilité"
       },
       dashboard: {
         total_seasons: "Total des saisons",

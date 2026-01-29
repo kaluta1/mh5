@@ -188,5 +188,130 @@ class CRUDRound:
             Round.status != RoundStatus.CANCELLED
         ).first()
 
+    def get_rounds_for_contest(self, db: Session, contest_id: int) -> List[Round]:
+        """
+        Récupère tous les rounds d'un contest, triés par date de début
+        """
+        return db.query(Round).filter(
+            Round.contest_id == contest_id,
+            Round.status != RoundStatus.CANCELLED
+        ).order_by(Round.submission_start_date.asc()).all()
+
+    def count_participants_for_round(self, db: Session, round_id: int) -> int:
+        """
+        Compte le nombre de contestants dans un round spécifique
+        """
+        from app.models.contests import Contestant
+        return db.query(func.count(Contestant.id)).filter(
+            Contestant.round_id == round_id,
+            Contestant.is_deleted == False
+        ).scalar() or 0
+
+    def user_participated_in_round(self, db: Session, round_id: int, user_id: int) -> bool:
+        """
+        Vérifie si un utilisateur a déjà participé à un round
+        """
+        from app.models.contests import Contestant
+        contestant = db.query(Contestant).filter(
+            Contestant.round_id == round_id,
+            Contestant.user_id == user_id,
+            Contestant.is_deleted == False
+        ).first()
+        return contestant is not None
+
+    def calculate_current_season_level(self, round_obj: Round) -> Optional[str]:
+        """
+        Calcule le niveau de saison actuel basé sur les dates du round
+        """
+        today = date.today()
+        
+        if round_obj.global_start_date and round_obj.global_end_date:
+            if round_obj.global_start_date <= today <= round_obj.global_end_date:
+                return "global"
+        
+        if round_obj.continental_start_date and round_obj.continental_end_date:
+            if round_obj.continental_start_date <= today <= round_obj.continental_end_date:
+                return "continental"
+        
+        if round_obj.regional_start_date and round_obj.regional_end_date:
+            if round_obj.regional_start_date <= today <= round_obj.regional_end_date:
+                return "regional"
+        
+        if round_obj.country_season_start_date and round_obj.country_season_end_date:
+            if round_obj.country_season_start_date <= today <= round_obj.country_season_end_date:
+                return "country"
+        
+        if round_obj.city_season_start_date and round_obj.city_season_end_date:
+            if round_obj.city_season_start_date <= today <= round_obj.city_season_end_date:
+                return "city"
+        
+        # Si on est dans la période de soumission/vote
+        if round_obj.submission_start_date and round_obj.submission_end_date:
+            if round_obj.submission_start_date <= today <= round_obj.submission_end_date:
+                return "submission"
+        
+        if round_obj.voting_start_date and round_obj.voting_end_date:
+            if round_obj.voting_start_date <= today <= round_obj.voting_end_date:
+                return "voting"
+        
+        return None
+
+    def is_round_completed(self, round_obj: Round) -> bool:
+        """
+        Vérifie si un round est complété (global_end_date passée)
+        """
+        if round_obj.global_end_date:
+            return date.today() > round_obj.global_end_date
+        return False
+
+    def get_rounds_with_stats(
+        self, db: Session, contest_id: int, user_id: Optional[int] = None
+    ) -> List[dict]:
+        """
+        Récupère tous les rounds d'un contest avec leurs statistiques
+        """
+        rounds = self.get_rounds_for_contest(db, contest_id)
+        result = []
+        
+        for r in rounds:
+            participants_count = self.count_participants_for_round(db, r.id)
+            current_user_participated = False
+            if user_id:
+                current_user_participated = self.user_participated_in_round(db, r.id, user_id)
+            
+            current_season_level = self.calculate_current_season_level(r)
+            is_completed = self.is_round_completed(r)
+            
+            result.append({
+                "id": r.id,
+                "contest_id": r.contest_id,
+                "name": r.name,
+                "status": r.status.value if hasattr(r.status, 'value') else str(r.status),
+                "is_submission_open": r.is_submission_open,
+                "is_voting_open": r.is_voting_open,
+                "current_season_level": current_season_level or r.current_season_level,
+                "submission_start_date": r.submission_start_date,
+                "submission_end_date": r.submission_end_date,
+                "voting_start_date": r.voting_start_date,
+                "voting_end_date": r.voting_end_date,
+                "city_season_start_date": r.city_season_start_date,
+                "city_season_end_date": r.city_season_end_date,
+                "country_season_start_date": r.country_season_start_date,
+                "country_season_end_date": r.country_season_end_date,
+                "regional_start_date": r.regional_start_date,
+                "regional_end_date": r.regional_end_date,
+                "continental_start_date": r.continental_start_date,
+                "continental_end_date": r.continental_end_date,
+                "global_start_date": r.global_start_date,
+                "global_end_date": r.global_end_date,
+                "created_at": r.created_at,
+                "updated_at": r.updated_at,
+                "participants_count": participants_count,
+                "current_user_participated": current_user_participated,
+                "is_completed": is_completed,
+            })
+        
+        return result
+
 
 round = CRUDRound()

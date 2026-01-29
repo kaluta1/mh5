@@ -16,6 +16,7 @@ from .category import Category
 from .prize import Prize, PrizeWinner, Commission
 from .comment import Comment, Like, Report
 from .follow import Follow, Affiliation, ReferralCode
+from .vote_ranking import UserVoteRanking
 from .search_history import SearchHistory
 from .notification import Notification, NotificationType
 from .invitation import Invitation, InvitationStatus
@@ -28,6 +29,7 @@ from .contact_message import ContactMessage
 from .newsletter import NewsletterSubscription
 from .login_log import LoginLog
 from .user_encryption_keys import UserEncryptionKeys
+from .round import Round
 
 __all__ = [
     "User", "Role", "Permission", "role_permissions", "UserTransaction", "Wallet",
@@ -44,7 +46,7 @@ __all__ = [
     "Category",
     "Prize", "PrizeWinner", "Commission",
     "Comment", "Like", "Report",
-    "Follow", "Affiliation", "ReferralCode",
+    "Follow", "Affiliation", "ReferralCode", "UserVoteRanking",
     "SearchHistory",
     "Notification", "NotificationType",
     "Invitation", "InvitationStatus",
@@ -57,4 +59,5 @@ __all__ = [
     "NewsletterSubscription",
     "LoginLog",
     "UserEncryptionKeys",
+    "Round",
 ]

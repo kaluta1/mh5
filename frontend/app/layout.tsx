@@ -9,6 +9,7 @@ import { CookieConsent } from "@/components/ui/cookie-consent"
 import { ErrorBoundary } from "@/components/error-boundary"
 import { getMetadataTranslations, detectLanguageFromHeaders, getKeywords } from "@/lib/metadata-translations"
 import { headers } from "next/headers"
+import { ApolloWrapper } from "@/components/providers/apollo-provider"
 
 // Optimize font loading
 const inter = Inter({ 
@@ -132,8 +133,10 @@ export default function RootLayout({
             <ToastProvider>
               <LanguageProvider>
                 <AuthProvider>
-                  {children}
-                  <CookieConsent />
+                  <ApolloWrapper>
+                    {children}
+                    <CookieConsent />
+                  </ApolloWrapper>
                 </AuthProvider>
               </LanguageProvider>
             </ToastProvider>

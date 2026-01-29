@@ -449,6 +449,7 @@ def get_contest_contestants(
     filter_region: str = Query(None, description="Filtrer par région"),
     filter_continent: str = Query(None, description="Filtrer par continent"),
     filter_city: str = Query(None, description="Filtrer par ville"),
+    user_id: Optional[int] = Query(None, description="Filtrer par user_id"),
     current_user: Optional[User] = Depends(deps.get_current_active_user_optional)
 ) -> List[ContestantWithAuthorAndStats]:
     """
@@ -459,6 +460,7 @@ def get_contest_contestants(
     - filter_region: Affiche uniquement les contestants de cette région  
     - filter_continent: Affiche uniquement les contestants de ce continent
     - filter_city: Affiche uniquement les contestants de cette ville
+    - user_id: Affiche uniquement les contestants de cet utilisateur
     """
     # Essayer d'abord de trouver une ContestSeason avec cet ID
     season = db.query(ContestSeason).filter(ContestSeason.id == contest_id).first()
@@ -474,19 +476,30 @@ def get_contest_contestants(
             )
     
     # Utiliser la nouvelle méthode avec stats enrichies
-    contestants_data = crud_contestant.get_multi_by_season_with_stats(
-        db, contest_id, current_user_id=current_user.id if current_user else None,
-        skip=skip, limit=limit,
-        filter_country=filter_country,
-        filter_region=filter_region,
-        filter_continent=filter_continent,
-        filter_city=filter_city
-    )
-    
-    # Log pour vérifier les données
-    if contestants_data and len(contestants_data) > 0:
-        first_contestant = contestants_data[0]
-        print(f"[ContestantEndpoint] First contestant data: id={first_contestant.get('id')}, image_media_ids={first_contestant.get('image_media_ids')}, video_media_ids={first_contestant.get('video_media_ids')}")
+    try:
+        contestants_data = crud_contestant.get_multi_by_season_with_stats(
+            db, contest_id, current_user_id=current_user.id if current_user else None,
+            skip=skip, limit=limit,
+            filter_country=filter_country,
+            filter_region=filter_region,
+            filter_continent=filter_continent,
+            filter_city=filter_city,
+            filter_user_id=user_id
+        )
+        
+        # Log pour vérifier les données
+        if contestants_data and len(contestants_data) > 0:
+            first_contestant = contestants_data[0]
+            print(f"[ContestantEndpoint] First contestant data: id={first_contestant.get('id')}, image_media_ids={first_contestant.get('image_media_ids')}, video_media_ids={first_contestant.get('video_media_ids')}")
+        
+    except Exception as e:
+        import traceback
+        print(f"[ContestantEndpoint] ERROR: {str(e)}")
+        print(traceback.format_exc())
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error fetching contestants: {str(e)}"
+        )
     
     # Convertir en schéma Pydantic
     result = [ContestantWithAuthorAndStats(**data) for data in contestants_data]

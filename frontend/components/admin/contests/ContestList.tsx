@@ -121,7 +121,7 @@ export function ContestList({ seasons, votingTypes, categories }: ContestListPro
             voting_type_id: data.voting_type_id ? parseInt(data.voting_type_id) : null
         }
 
-        if (editingContest) {
+        if (editingContest && editingContest.id) {
             await contestService.updateContest(editingContest.id, dataToSend)
             addToast(t('admin.contests.update_success') || 'Concours mis à jour avec succès', 'success')
         } else {

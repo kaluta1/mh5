@@ -179,6 +179,36 @@ export interface ContestantWithAuthorAndStats {
   can_vote: boolean
 }
 
+export interface RoundWithStats {
+  id: number
+  contest_id: number
+  name: string
+  status: 'upcoming' | 'active' | 'completed' | 'cancelled'
+  is_submission_open: boolean
+  is_voting_open: boolean
+  current_season_level: string | null  // city, country, regional, continental, global, submission, voting
+  submission_start_date: string | null
+  submission_end_date: string | null
+  voting_start_date: string | null
+  voting_end_date: string | null
+  city_season_start_date: string | null
+  city_season_end_date: string | null
+  country_season_start_date: string | null
+  country_season_end_date: string | null
+  regional_start_date: string | null
+  regional_end_date: string | null
+  continental_start_date: string | null
+  continental_end_date: string | null
+  global_start_date: string | null
+  global_end_date: string | null
+  created_at: string
+  updated_at: string
+  // Stats
+  participants_count: number
+  current_user_participated: boolean
+  is_completed: boolean
+}
+
 class ContestService {
   /**
    * Récupère tous les contests avec pagination et recherche (avec cache)
@@ -250,6 +280,34 @@ class ContestService {
       return response.data
     } catch (error) {
       console.error(`Error fetching contest ${contestId}:`, error)
+      throw error
+    }
+  }
+
+  /**
+   * Récupère les rounds d'un contest avec leurs statistiques
+   * Inclut le nombre de participants et si l'utilisateur actuel a participé
+   */
+  async getRoundsForContest(contestId: string): Promise<RoundWithStats[]> {
+    try {
+      const cacheKey = `/api/v1/rounds/`
+      const params = { contest_id: contestId }
+
+      // Vérifier le cache
+      const cached = cacheService.get<RoundWithStats[]>(cacheKey, params)
+      if (cached) {
+        return cached
+      }
+
+      // Si pas en cache, faire la requête
+      const response = await api.get(cacheKey, { params })
+
+      // Mettre en cache
+      cacheService.set(cacheKey, response.data, params)
+
+      return response.data
+    } catch (error) {
+      console.error(`Error fetching rounds for contest ${contestId}:`, error)
       throw error
     }
   }
@@ -431,7 +489,8 @@ class ContestService {
     filterCountry?: string,
     filterRegion?: string,
     filterContinent?: string,
-    filterCity?: string
+    filterCity?: string,
+    userId?: number | string
   ): Promise<ContestantWithAuthorAndStats[]> {
     try {
       const cacheKey = `/api/v1/contestants/contest/${contestId}`
@@ -449,6 +508,9 @@ class ContestService {
       if (filterCity) {
         params.filter_city = filterCity
       }
+      if (userId) {
+        params.user_id = userId
+      }
 
       // Vérifier le cache
       const cached = cacheService.get<ContestantWithAuthorAndStats[]>(cacheKey, params)
@@ -463,8 +525,11 @@ class ContestService {
       cacheService.set(cacheKey, response.data, params)
 
       return response.data
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Error fetching contestants for contest ${contestId}:`, error)
+      if (error.response) {
+        console.error('Response error detail:', error.response.data)
+      }
       throw error
     }
   }

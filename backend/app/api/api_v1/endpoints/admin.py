@@ -970,16 +970,67 @@ async def create_contest(
         if voting_start: round_dates['voting_start_date'] = voting_start
         if voting_end: round_dates['voting_end_date'] = voting_end
         
-        # Create the round
-        round_name = f"Round {voting_start.strftime('%B %Y')}" if voting_start else "Initial Round"
+        # --- SHARED ROUND LINKING ---
+        # Instead of creating a new round, we link to the existing shared round for this month.
         
-        round_in = RoundCreate(
-            contest_id=new_contest.id,
-            name=round_name,
-            **round_dates
-        )
-        crud_round.create_with_contest(db, obj_in=round_in, contest_id=new_contest.id)
+        from app.models.round import Round, RoundStatus, round_contests
+        from sqlalchemy import insert
         
+        # 1. Determine target round name
+        # Use voting_start if available (to match month), otherwise today
+        target_date = voting_start if voting_start else datetime.now()
+        if isinstance(target_date, str):
+             # Handle weird case if voting_start wasn't parsed (should be handled above)
+             target_date = datetime.now()
+        
+        # We need a date object
+        if isinstance(target_date, datetime):
+            target_date = target_date.date()
+            
+        import calendar
+        month_name = calendar.month_name[target_date.month]
+        round_name_target = f"Round {month_name} {target_date.year}"
+        
+        print(f"DEBUG: Admin creating contest. Looking for round '{round_name_target}'")
+
+        # 2. Find existing active round
+        # Priority 1: Match Name
+        active_round = db.query(Round).filter(Round.name == round_name_target).first()
+        
+        # Priority 2: Match Date Coverage
+        if not active_round:
+            active_round = db.query(Round).filter(
+                Round.submission_start_date <= target_date,
+                Round.submission_end_date >= target_date,
+                Round.status != RoundStatus.CANCELLED
+            ).first()
+            
+        # Priority 3: Fallback to last created round
+        if not active_round:
+            active_round = db.query(Round).filter(
+                Round.status != RoundStatus.CANCELLED
+            ).order_by(Round.id.desc()).first()
+
+        # 3. Link
+        if active_round:
+             print(f"DEBUG: Found round {active_round.id} ({active_round.name}). Linking...")
+             # Check if link exists
+             link_exists = db.query(round_contests).filter(
+                round_contests.c.round_id == active_round.id,
+                round_contests.c.contest_id == new_contest.id
+             ).first()
+             
+             if not link_exists:
+                 stmt = insert(round_contests).values(
+                    round_id=active_round.id,
+                    contest_id=new_contest.id,
+                    created_at=datetime.utcnow()
+                 )
+                 db.execute(stmt)
+                 # Note: db.commit() is called below
+        else:
+             print("DEBUG: No round found to link to.")
+
         # Créer la liaison avec la saison via ContestSeasonLink si season_id est fourni
         if contest_data.season_id:
             contest_season_link = ContestSeasonLink(

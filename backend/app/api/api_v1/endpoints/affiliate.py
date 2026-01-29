@@ -144,7 +144,7 @@ def get_commissions(
     db: Session = Depends(deps.get_db),
     current_user = Depends(deps.get_current_active_user),
     skip: int = 0,
-    limit: int = 50,
+    limit: int = 10,
     commission_type: Optional[str] = None,
     product_type: Optional[str] = None,
     sort_by: Optional[str] = "date",  # date, amount, type
