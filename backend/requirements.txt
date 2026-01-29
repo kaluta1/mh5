@@ -71,7 +71,7 @@ vine==5.1.0
 wcwidth==0.2.14
 
 # GraphQL Dependencies
-strawberry-graphql==0.216.1
+strawberry-graphql[fastapi]>=0.216.0
 
 # Feed Microservice Dependencies (merged)
 pynacl==1.5.0  # End-to-end encryption for messages
