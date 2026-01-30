@@ -680,7 +680,8 @@ class Query:
             contest = db.query(Contest).filter(Contest.id == id).first()
             if not contest:
                 return None
-            return map_contest_to_type(contest, db, include_contestants=True, current_user=current_user)
+            # FIXED: Always include contestants for single contest query
+            return map_contest_to_type(contest, db, include_rounds=True, include_contestants=True, current_user=current_user)
         finally:
             db.close()
     

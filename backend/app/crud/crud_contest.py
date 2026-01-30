@@ -916,87 +916,44 @@ class CRUDContest:
                 ContestSeason.id == season_link.season_id
             ).first()
         
-        # Récupérer tous les contestants du contest via la saison active
-        # IMPORTANT: Filtrer par contest_id pour éviter d'afficher des contestants d'autres contests
-        # qui partagent la même saison
-        contestants = []
-        if season:
-            # Récupérer les IDs des contestants qui appartiennent vraiment à ce contest spécifique
-            from app.models.voting import ContestantVoting
-            
-            # Option 1: Contestants créés directement pour ce contest (ancien système)
-            # où season_id = contest_id dans le modèle Contestant
-            contestants_old_system = db.query(Contestant.id)\
-                .filter(
-                    Contestant.season_id == contest_id,
-                    Contestant.is_deleted == False
-                )\
-                .all()
-            
-            contestant_ids_old_system = [row[0] for row in contestants_old_system]
-            
-            # Option 2: Contestants qui ont des votes pour ce contest spécifique
-            # Cela garantit qu'ils ont réellement participé à ce contest
-            contestant_ids_with_votes = db.query(ContestantVoting.contestant_id)\
-                .filter(
-                    ContestantVoting.contest_id == contest_id,
-                    ContestantVoting.season_id == season.id
-                )\
-                .distinct()\
-                .all()
-            
-            contestant_ids_from_votes = [row[0] for row in contestant_ids_with_votes]
-            
-            # Option 3: Vérifier les contestants de la saison qui ont été créés pour ce contest
-            # via le champ season_id qui pourrait pointer vers une saison liée uniquement à ce contest
-            # Mais d'abord, vérifions si cette saison est liée uniquement à ce contest
-            other_contest_links = db.query(ContestSeasonLink)\
-                .filter(
-                    ContestSeasonLink.season_id == season.id,
-                    ContestSeasonLink.contest_id != contest_id,
-                    ContestSeasonLink.is_active == True
-                )\
-                .count()
-            
-            # Si la saison n'est liée qu'à ce contest, alors tous les contestants de la saison
-            # appartiennent à ce contest
-            contestant_ids_from_season = []
-            if other_contest_links == 0:
-                # Cette saison est unique à ce contest, donc tous les contestants de la saison
-                # appartiennent à ce contest
-                contestant_season_links = db.query(ContestantSeason.contestant_id)\
-                .filter(
-                    ContestantSeason.season_id == season.id,
-                        ContestantSeason.is_active == True
-                    )\
-                    .all()
-                
-                contestant_ids_from_season = [link[0] for link in contestant_season_links]
-            
-            # Combiner toutes les listes et supprimer les doublons
-            all_contestant_ids = list(set(
-                contestant_ids_old_system + 
-                contestant_ids_from_votes + 
-                contestant_ids_from_season
-            ))
-            
-            # Récupérer les contestants avec leurs relations
-            if all_contestant_ids:
-                contestants_query = db.query(Contestant)\
-                    .filter(
-                        Contestant.id.in_(all_contestant_ids),
-                        Contestant.is_deleted == False
-                    )\
-                    .options(
-                        joinedload(Contestant.user)
-                    )
-            else:
-                contestants_query = None
-        else:
-            # Fallback : utiliser l'ancien système (season_id = contest_id)
-            contestants_query = db.query(Contestant)\
-                .filter(
-                    Contestant.season_id == contest_id,
+        # FIXED: Query contestants by BOTH round_id and season_id
+        from app.models.round import Round, round_contests
+        from sqlalchemy import or_
+        
+        # Find round IDs linked to this contest
+        round_ids = []
+        try:
+            round_ids_via_table = db.query(round_contests.c.round_id).filter(
+                round_contests.c.contest_id == contest_id
+            ).all()
+            if round_ids_via_table:
+                round_ids.extend([r[0] for r in round_ids_via_table])
+        except Exception:
+            pass
+        
+        try:
+            legacy_rounds = db.query(Round.id).filter(Round.contest_id == contest_id).all()
+            if legacy_rounds:
+                round_ids.extend([r[0] for r in legacy_rounds])
+        except Exception:
+            pass
+        
+        round_ids = list(set(round_ids))
+        
+        # Build OR conditions for round_id and season_id
+        conditions = [Contestant.season_id == contest_id]
+        if round_ids:
+            conditions.append(Contestant.round_id.in_(round_ids))
+        
+        # Query contestants using comprehensive OR conditions
+        contestants_query = db.query(Contestant)\
+            .filter(
+                Contestant.is_deleted == False,
+                or_(*conditions) if len(conditions) > 1 else conditions[0]
+            )\
+            .options(
+                joinedload(Contestant.user)
+            )
                     Contestant.is_deleted == False
                 )\
                 .options(
@@ -1051,14 +1008,14 @@ class CRUDContest:
                     # Même pays
                     if is_valid_location(user.country):
                         return Contestant.country.ilike(user.country)
-                        return None
+                    return None
                     
                 elif level in ("regional", "region"):
                     # Même région
                     user_region = getattr(user, "region", None)
                     if is_valid_location(user_region):
                         return Contestant.region.ilike(user_region)
-                        return None
+                    return None
                     
                 elif level == "continent":
                     # Même continent uniquement
@@ -1074,13 +1031,34 @@ class CRUDContest:
                 contestants_query = contestants_query.filter(location_filter)
         
         # Exécuter la requête
-        if contestants_query:
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        try:
+            # Log query details for debugging
+            logger.info(f"[get_contest_with_enriched_contestants] Querying contestants for contest_id={contest_id}, round_ids={round_ids}")
             contestants = contestants_query.all()
-        else:
-            contestants = []
+            logger.info(f"[get_contest_with_enriched_contestants] Found {len(contestants)} contestants")
+        except Exception as e:
+            logger.error(f"Error fetching contestants: {e}", exc_info=True)
+            # Fallback: try simple query by season_id only
+            try:
+                logger.info(f"[get_contest_with_enriched_contestants] Trying fallback query by season_id={contest_id}")
+                contestants = db.query(Contestant)\
+                    .filter(
+                        Contestant.is_deleted == False,
+                        Contestant.season_id == contest_id
+                    )\
+                    .options(joinedload(Contestant.user))\
+                    .all()
+                logger.info(f"[get_contest_with_enriched_contestants] Fallback query found {len(contestants)} contestants")
+            except Exception as e2:
+                logger.error(f"Error in fallback query: {e2}", exc_info=True)
+                contestants = []
         
         # Récupérer tous les IDs des contestants (après filtrage)
         contestant_ids = [c.id for c in contestants]
+        logger.info(f"[get_contest_with_enriched_contestants] Returning {len(contestant_ids)} contestant IDs")
         
         # Récupérer tous les votes avec utilisateurs (depuis ContestantVoting)
         # Filtrer par season_id pour ne récupérer que les votes de cette saison
