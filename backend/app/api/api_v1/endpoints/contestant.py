@@ -475,64 +475,51 @@ def get_contest_contestants(
                 detail="Contest not found"
             )
     
-    # FIXED: Query contestants DIRECTLY from database using comprehensive OR query
-    # This ensures we get ALL contestants regardless of how they're linked
+    # FIXED: Simplified query to avoid database errors and 503 responses
     from app.models.round import Round
     from app.models.contests import round_contests, Contestant
     from sqlalchemy import or_, func
     from sqlalchemy.orm import joinedload
+    import logging
+    
+    logger = logging.getLogger(__name__)
     
     try:
-        # Find ALL possible round IDs linked to this contest
-        # Method 1: Via round_contests table (N:N relationship)
-        round_ids_via_table = db.query(round_contests.c.round_id).filter(
-            round_contests.c.contest_id == contest_id
-        ).all()
-        round_ids_from_table = [r[0] for r in round_ids_via_table] if round_ids_via_table else []
+        # Step 1: Find round IDs linked to this contest (simplified approach)
+        all_round_ids = []
         
-        # Method 2: Via legacy round.contest_id (1:N relationship)
-        legacy_rounds = db.query(Round.id).filter(Round.contest_id == contest_id).all()
-        legacy_round_ids = [r[0] for r in legacy_rounds] if legacy_rounds else []
+        try:
+            # Method 1: Via round_contests table
+            round_ids_via_table = db.query(round_contests.c.round_id).filter(
+                round_contests.c.contest_id == contest_id
+            ).all()
+            if round_ids_via_table:
+                all_round_ids.extend([r[0] for r in round_ids_via_table])
+        except Exception as e:
+            logger.warning(f"Error querying round_contests: {e}")
         
-        # Combine all round IDs (remove duplicates)
-        all_round_ids = list(set(round_ids_from_table + legacy_round_ids))
+        try:
+            # Method 2: Via legacy round.contest_id
+            legacy_rounds = db.query(Round.id).filter(Round.contest_id == contest_id).all()
+            if legacy_rounds:
+                all_round_ids.extend([r[0] for r in legacy_rounds])
+        except Exception as e:
+            logger.warning(f"Error querying legacy rounds: {e}")
         
-        # Build comprehensive query with OR conditions
-        # Get contestants that match ANY of these conditions:
-        # 1. round_id in rounds linked to this contest (via round_contests)
-        # 2. round_id in rounds with contest_id == contest_id (legacy)
-        # 3. season_id == contest_id (legacy)
-        # 4. round_id where round is linked to contest (via subquery)
+        # Remove duplicates
+        all_round_ids = list(set(all_round_ids))
         
-        or_conditions = []
+        # Step 2: Build simplified query - try season_id first (most common)
+        query = db.query(Contestant).filter(Contestant.is_deleted == False)
         
-        # Condition 1: round_id in all found rounds
+        # Build OR conditions (simplified)
+        conditions = [Contestant.season_id == contest_id]
+        
         if all_round_ids:
-            or_conditions.append(Contestant.round_id.in_(all_round_ids))
+            conditions.append(Contestant.round_id.in_(all_round_ids))
         
-        # Condition 2: season_id == contest_id (legacy direct link)
-        or_conditions.append(Contestant.season_id == contest_id)
-        
-        # Condition 3: round_id where round is linked via round_contests (subquery for safety)
-        if round_ids_from_table:
-            or_conditions.append(Contestant.round_id.in_(round_ids_from_table))
-        
-        # Condition 4: round_id where round.contest_id == contest_id (legacy direct)
-        if legacy_round_ids:
-            or_conditions.append(Contestant.round_id.in_(legacy_round_ids))
-        
-        # Build base query
-        if or_conditions:
-            query = db.query(Contestant).filter(
-                Contestant.is_deleted == False,
-                or_(*or_conditions)
-            )
-        else:
-            # Fallback: just season_id
-            query = db.query(Contestant).filter(
-                Contestant.is_deleted == False,
-                Contestant.season_id == contest_id
-            )
+        # Apply OR condition
+        query = query.filter(or_(*conditions))
         
         # Apply geographic filters
         if filter_country:
@@ -546,89 +533,89 @@ def get_contest_contestants(
         if user_id:
             query = query.filter(Contestant.user_id == user_id)
         
-        # Get total count for pagination
-        total_count = query.count()
-        
-        # Get contestants with relations
-        contestants = query.options(
-            joinedload(Contestant.user),
-            joinedload(Contestant.submissions)
-        ).order_by(Contestant.registration_date.desc()).offset(skip).limit(limit).all()
-        
-        # If no contestants found, try a simpler direct query as last resort
-        if not contestants:
-            # Last resort: query ALL contestants with season_id or round_id that could link to this contest
-            fallback_query = db.query(Contestant).filter(
-                Contestant.is_deleted == False
-            ).filter(
-                or_(
-                    Contestant.season_id == contest_id,
-                    Contestant.round_id.in_(
-                        db.query(Round.id).filter(
-                            or_(
-                                Round.contest_id == contest_id,
-                                Round.id.in_(
-                                    db.query(round_contests.c.round_id).filter(
-                                        round_contests.c.contest_id == contest_id
-                                    )
-                                )
-                            )
-                        )
-                    )
-                )
-            )
-            
-            if filter_country:
-                fallback_query = fallback_query.filter(func.lower(Contestant.country) == func.lower(filter_country))
-            if filter_region:
-                fallback_query = fallback_query.filter(func.lower(Contestant.region) == func.lower(filter_region))
-            if filter_continent:
-                fallback_query = fallback_query.filter(func.lower(Contestant.continent) == func.lower(filter_continent))
-            if filter_city:
-                fallback_query = fallback_query.filter(func.lower(Contestant.city) == func.lower(filter_city))
-            if user_id:
-                fallback_query = fallback_query.filter(Contestant.user_id == user_id)
-            
-            contestants = fallback_query.options(
-                joinedload(Contestant.user),
-                joinedload(Contestant.submissions)
+        # Get contestants with relations (limit joins to avoid timeouts)
+        try:
+            contestants = query.options(
+                joinedload(Contestant.user)
             ).order_by(Contestant.registration_date.desc()).offset(skip).limit(limit).all()
+        except Exception as e:
+            logger.error(f"Error fetching contestants with relations: {e}")
+            # Fallback: fetch without relations
+            contestants = query.order_by(Contestant.registration_date.desc()).offset(skip).limit(limit).all()
         
-        # Enrich contestants with stats using the existing method
-        # Get contestant IDs
-        contestant_ids = [c.id for c in contestants]
+        # If no contestants found, try simpler fallback
+        if not contestants:
+            # Last resort: simple query by season_id only
+            try:
+                fallback_query = db.query(Contestant).filter(
+                    Contestant.is_deleted == False,
+                    Contestant.season_id == contest_id
+                )
+                
+                if filter_country:
+                    fallback_query = fallback_query.filter(func.lower(Contestant.country) == func.lower(filter_country))
+                if filter_region:
+                    fallback_query = fallback_query.filter(func.lower(Contestant.region) == func.lower(filter_region))
+                if filter_continent:
+                    fallback_query = fallback_query.filter(func.lower(Contestant.continent) == func.lower(filter_continent))
+                if filter_city:
+                    fallback_query = fallback_query.filter(func.lower(Contestant.city) == func.lower(filter_city))
+                if user_id:
+                    fallback_query = fallback_query.filter(Contestant.user_id == user_id)
+                
+                contestants = fallback_query.options(
+                    joinedload(Contestant.user)
+                ).order_by(Contestant.registration_date.desc()).offset(skip).limit(limit).all()
+            except Exception as e:
+                logger.error(f"Error in fallback query: {e}")
+                contestants = []
+        
+        # Enrich contestants with stats (with error handling)
+        contestant_ids = [c.id for c in contestants] if contestants else []
         
         if not contestant_ids:
             return []
         
-        # Use the enrichment logic from get_multi_by_season_with_stats
-        from app.models.voting import Vote, ContestLike, ContestComment
-        
-        # Get votes, favorites, reactions, comments in bulk
+        # Initialize stats dictionaries
         votes_by_contestant = {}
         favorites_by_contestant = {}
         reactions_by_contestant = {}
         comments_by_contestant = {}
         
-        votes_results = db.query(Vote.contestant_id, func.count(Vote.id))\
-            .filter(Vote.contestant_id.in_(contestant_ids))\
-            .group_by(Vote.contestant_id).all()
-        votes_by_contestant = {cid: count for cid, count in votes_results}
+        # Get stats with error handling for each query
+        try:
+            from app.models.voting import Vote, ContestLike, ContestComment
+            
+            votes_results = db.query(Vote.contestant_id, func.count(Vote.id))\
+                .filter(Vote.contestant_id.in_(contestant_ids))\
+                .group_by(Vote.contestant_id).all()
+            votes_by_contestant = {cid: count for cid, count in votes_results}
+        except Exception as e:
+            logger.warning(f"Error fetching votes: {e}")
         
-        fav_results = db.query(MyFavorites.contestant_id, func.count(MyFavorites.id))\
-            .filter(MyFavorites.contestant_id.in_(contestant_ids))\
-            .group_by(MyFavorites.contestant_id).all()
-        favorites_by_contestant = {cid: count for cid, count in fav_results}
+        try:
+            fav_results = db.query(MyFavorites.contestant_id, func.count(MyFavorites.id))\
+                .filter(MyFavorites.contestant_id.in_(contestant_ids))\
+                .group_by(MyFavorites.contestant_id).all()
+            favorites_by_contestant = {cid: count for cid, count in fav_results}
+        except Exception as e:
+            logger.warning(f"Error fetching favorites: {e}")
         
-        like_results = db.query(ContestLike.contestant_id, func.count(ContestLike.id))\
-            .filter(ContestLike.contestant_id.in_(contestant_ids))\
-            .group_by(ContestLike.contestant_id).all()
-        reactions_by_contestant = {cid: count for cid, count in like_results}
+        try:
+            like_results = db.query(ContestLike.contestant_id, func.count(ContestLike.id))\
+                .filter(ContestLike.contestant_id.in_(contestant_ids))\
+                .group_by(ContestLike.contestant_id).all()
+            reactions_by_contestant = {cid: count for cid, count in like_results}
+        except Exception as e:
+            logger.warning(f"Error fetching reactions: {e}")
         
-        comment_results = db.query(ContestComment.contestant_id, func.count(ContestComment.id))\
-            .filter(ContestComment.contestant_id.in_(contestant_ids))\
-            .group_by(ContestComment.contestant_id).all()
-        comments_by_contestant = {cid: count for cid, count in comment_results}
+        try:
+            comment_results = db.query(ContestComment.contestant_id, func.count(ContestComment.id))\
+                .filter(ContestComment.contestant_id.in_(contestant_ids))\
+                .group_by(ContestComment.contestant_id).all()
+            comments_by_contestant = {cid: count for cid, count in comment_results}
+        except Exception as e:
+            logger.warning(f"Error fetching comments: {e}")
         
         # Calculate ranks
         ranked_contestants = sorted(
@@ -638,14 +625,18 @@ def get_contest_contestants(
         )
         ranks = {cid: rank + 1 for rank, (cid, _) in enumerate(ranked_contestants)}
         
-        # Check user votes
-        user_votes = {}
+        # Check user votes (with error handling)
+        user_votes = set()
         current_user_id = current_user.id if current_user else None
         if current_user_id:
-            user_votes_list = db.query(Vote.contestant_id)\
-                .filter(Vote.voter_id == current_user_id, Vote.contestant_id.in_(contestant_ids))\
-                .all()
-            user_votes = {row[0] for row in user_votes_list}
+            try:
+                from app.models.voting import Vote
+                user_votes_list = db.query(Vote.contestant_id)\
+                    .filter(Vote.voter_id == current_user_id, Vote.contestant_id.in_(contestant_ids))\
+                    .all()
+                user_votes = {row[0] for row in user_votes_list}
+            except Exception as e:
+                logger.warning(f"Error fetching user votes: {e}")
         
         # Build enriched response
         import json

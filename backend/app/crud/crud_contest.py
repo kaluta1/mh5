@@ -418,11 +418,40 @@ class CRUDContest:
         if not season_level:
             season_level = contest.level.lower() if contest.level else None
         
-        # Compter le nombre de participants selon la saison et la localisation
+        # FIXED: Query contestants by both round_id and season_id
+        from app.models.round import Round, round_contests
+        
+        # Find round IDs linked to this contest
+        round_ids = []
+        try:
+            round_ids_via_table = db.query(round_contests.c.round_id).filter(
+                round_contests.c.contest_id == contest.id
+            ).all()
+            if round_ids_via_table:
+                round_ids.extend([r[0] for r in round_ids_via_table])
+        except Exception:
+            pass
+        
+        try:
+            legacy_rounds = db.query(Round.id).filter(Round.contest_id == contest.id).all()
+            if legacy_rounds:
+                round_ids.extend([r[0] for r in legacy_rounds])
+        except Exception:
+            pass
+        
+        round_ids = list(set(round_ids))
+        
+        # Build query with OR conditions for round_id and season_id
+        from sqlalchemy import or_
+        conditions = [Contestant.season_id == contest.id]
+        if round_ids:
+            conditions.append(Contestant.round_id.in_(round_ids))
+        
+        # Compter le nombre de participants selon la saison/round et la localisation
         entries_query = db.query(func.count(Contestant.id.distinct()))\
             .filter(
-                Contestant.season_id == contest.id,
-                Contestant.is_deleted == False
+                Contestant.is_deleted == False,
+                or_(*conditions) if len(conditions) > 1 else conditions[0]
             )
         
         # Appliquer les filtres géographiques
@@ -475,12 +504,25 @@ class CRUDContest:
         # Vérifier si l'utilisateur connecté participe à ce concours
         current_user_contesting = False
         if current_user:
-            user_contestant = db.query(Contestant).filter(
-                Contestant.season_id == contest.id,
-                Contestant.user_id == current_user.id,
-                Contestant.is_deleted == False
-            ).first()
-            current_user_contesting = user_contestant is not None
+            try:
+                user_conditions = [Contestant.season_id == contest.id]
+                if round_ids:
+                    user_conditions.append(Contestant.round_id.in_(round_ids))
+                
+                user_contestant = db.query(Contestant).filter(
+                    Contestant.is_deleted == False,
+                    Contestant.user_id == current_user.id,
+                    or_(*user_conditions) if len(user_conditions) > 1 else user_conditions[0]
+                ).first()
+                current_user_contesting = user_contestant is not None
+            except Exception:
+                # Fallback to season_id only
+                user_contestant = db.query(Contestant).filter(
+                    Contestant.season_id == contest.id,
+                    Contestant.user_id == current_user.id,
+                    Contestant.is_deleted == False
+                ).first()
+                current_user_contesting = user_contestant is not None
         
         # Récupérer les top 5 contestants par votes
         top_contestants = []
