@@ -70,6 +70,8 @@ cors_origins = [
     "https://myhigh5.com",
     "https://www.myhigh5.com",
     "https://mh5-hbjp.onrender.com",
+    "https://frontend-rho-eight-72.vercel.app",  # Vercel frontend
+    # Note: Wildcards don't work in allow_origins list, use allow_origin_regex instead
 ]
 
 # Ajouter les origines depuis les settings
@@ -86,7 +88,7 @@ print(f"CORS Origins configured: {cors_origins}")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,  # Use explicit origins list
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://.*\.vercel\.app$",  # Allow localhost and all Vercel deployments
     allow_credentials=True,  # Allow credentials for authentication cookies/tokens
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],

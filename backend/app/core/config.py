@@ -25,6 +25,7 @@ class Settings(BaseModel):
         "http://localhost:3000",
         "http://localhost:8000",
         "https://myhigh5.vercel.app",
+        "https://frontend-rho-eight-72.vercel.app",  # Vercel frontend
         "https://mh5-rx4z.onrender.com",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:8000"

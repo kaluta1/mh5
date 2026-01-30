@@ -45,6 +45,7 @@ const GET_ACCOUNTING_DATA = gql`
 `
 
 export default function AdminAccounting() {
+    const [activeTab, setActiveTab] = useState('journal')
     const { data, loading, error, refetch } = useQuery(GET_ACCOUNTING_DATA, {
         pollInterval: 60000 // Rafraîchir toutes les minutes
     })
@@ -115,7 +116,7 @@ export default function AdminAccounting() {
                 {/* Autres cartes KPI à venir */}
             </div>
 
-            <Tabs defaultValue="journal" className="space-y-4">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
                 <TabsList>
                     <TabsTrigger value="journal" className="gap-2">
                         <FileText className="h-4 w-4" />
