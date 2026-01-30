@@ -201,9 +201,18 @@ function ContestsPageContent() {
       const mappedContests = response
         .map((c: ContestResponse) => {
           try {
-            return contestService.mapResponseToContest(c)
+            const mapped = contestService.mapResponseToContest(c)
+            console.log(`[ContestsPage] Mapped contest ${c?.id}:`, {
+              id: mapped.id,
+              title: mapped.title,
+              contestants: mapped.contestants,
+              votingType: mapped.votingType,
+              categoryTab: categoryTab
+            })
+            return mapped
           } catch (error) {
             console.error(`[ContestsPage] Error mapping contest ${c?.id}:`, error)
+            console.error(`[ContestsPage] Contest data:`, c)
             return null
           }
         })
@@ -211,6 +220,11 @@ function ContestsPageContent() {
       
       console.log(`[ContestsPage] Successfully mapped ${mappedContests.length} contests`)
       console.log(`[ContestsPage] Sample mapped contest:`, mappedContests[0])
+      
+      // DEBUG: Check filtering
+      console.log(`[ContestsPage] Category tab: ${categoryTab}`)
+      console.log(`[ContestsPage] Contests with votingType:`, mappedContests.filter(c => c.votingType != null).length)
+      console.log(`[ContestsPage] Contests without votingType:`, mappedContests.filter(c => c.votingType == null).length)
       
       setAllContests(mappedContests)
     } catch (error: any) {
