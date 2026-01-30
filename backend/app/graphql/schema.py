@@ -300,32 +300,48 @@ def map_round_to_type(
     # 1. Fetch Contests in this Round
     contests_in_round = []
     
-    # Query contests via association table
-    query_contests = db.query(Contest).join(
+    # FIXED: Query contests DIRECTLY from database - check both round_contests table AND legacy round.contest_id
+    from sqlalchemy import or_
+    
+    # Method 1: Via round_contests association table (N:N)
+    contests_via_table = db.query(Contest).join(
         round_contests, Contest.id == round_contests.c.contest_id
     ).filter(
         round_contests.c.round_id == round_obj.id
-    )
+    ).all()
     
-    # Filter by Voting Type (Nomination vs Participation)
+    # Method 2: Via legacy round.contest_id (1:N) - if round has direct contest_id
+    contests_via_legacy = []
+    if round_obj.contest_id:
+        legacy_contest = db.query(Contest).filter(Contest.id == round_obj.contest_id).first()
+        if legacy_contest:
+            contests_via_legacy = [legacy_contest]
+    
+    # Combine and deduplicate
+    all_contests_dict = {}
+    for c in contests_via_table:
+        all_contests_dict[c.id] = c
+    for c in contests_via_legacy:
+        if c.id not in all_contests_dict:
+            all_contests_dict[c.id] = c
+    
+    linked_contests = list(all_contests_dict.values())
+    
+    # Apply filters to the combined list
     if has_voting_type is not None:
         if has_voting_type:
-            query_contests = query_contests.filter(Contest.voting_type_id.isnot(None))
+            linked_contests = [c for c in linked_contests if c.voting_type_id is not None]
         else:
-            query_contests = query_contests.filter(Contest.voting_type_id.is_(None))
+            linked_contests = [c for c in linked_contests if c.voting_type_id is None]
         
     # Filter linked contests by search term (Name or Description)
     if search_term:
-        term = f"%{search_term}%"
-        query_contests = query_contests.filter(
-            or_(
-                Contest.name.ilike(term),
-                Contest.description.ilike(term),
-                Contest.contest_type.ilike(term)
-            )
-        )
-        
-    linked_contests = query_contests.all()
+        term = search_term.lower()
+        linked_contests = [c for c in linked_contests if (
+            (c.name and term in c.name.lower()) or
+            (c.description and term in c.description.lower()) or
+            (c.contest_type and term in c.contest_type.lower())
+        )]
     
     for contest in linked_contests:
         contests_in_round.append(map_contest_in_round_to_type(
@@ -707,30 +723,36 @@ class Query:
             if id:
                 query = query.filter(Round.id == id)
             
-            # Join with Contest via round_contests if contest filters are present
+            # FIXED: Always join with contests to get all rounds with their contests
+            # Use LEFT JOIN to include rounds even if they don't have contests linked yet
             from app.models.round import round_contests
+            from sqlalchemy import or_
             
-            if contest_id or has_voting_type is not None or contest_type or is_active:
-                query = query.join(round_contests, Round.id == round_contests.c.round_id)
-                query = query.join(Contest, Contest.id == round_contests.c.contest_id)
+            # Always join with contests (LEFT JOIN to include rounds without contests)
+            # Check both round_contests table AND legacy round.contest_id
+            query = query.outerjoin(round_contests, Round.id == round_contests.c.round_id)
+            query = query.outerjoin(Contest, or_(
+                Contest.id == round_contests.c.contest_id,
+                Contest.id == Round.contest_id
+            ))
+            
+            # Apply filters only if specified
+            if contest_id:
+                query = query.filter(Contest.id == contest_id)
+            
+            # Only filter by is_active when explicitly True
+            # When is_active=False, we want ALL contests (active and inactive)
+            if is_active is True:
+                query = query.filter(Contest.is_active == True)
                 
-                if contest_id:
-                    query = query.filter(Contest.id == contest_id)
+            if contest_type:
+                query = query.filter(Contest.contest_type == contest_type)
                 
-                if is_active:
-                     # If is_active is explicitly True, we want rounds with ACTIVE contests
-                     # OR rounds that are themselves ACTIVE?
-                     # Legacy behavior was filtering Contest.is_active
-                     query = query.filter(Contest.is_active == True)
-                    
-                if contest_type:
-                    query = query.filter(Contest.contest_type == contest_type)
-                    
-                if has_voting_type is not None:
-                    if has_voting_type:
-                        query = query.filter(Contest.voting_type_id.isnot(None))
-                    else:
-                        query = query.filter(Contest.voting_type_id.is_(None))
+            if has_voting_type is not None:
+                if has_voting_type:
+                    query = query.filter(Contest.voting_type_id.isnot(None))
+                else:
+                    query = query.filter(Contest.voting_type_id.is_(None))
             
             rounds = query.offset(skip).limit(limit).all()
             
