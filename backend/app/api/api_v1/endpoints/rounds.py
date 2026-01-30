@@ -116,16 +116,29 @@ def ensure_january_round(
         # Re-raise HTTP exceptions as-is
         raise
     except Exception as e:
+        import traceback
+        error_traceback = traceback.format_exc()
         logger.error(f"Error in ensure_january_round endpoint: {str(e)}", exc_info=True)
+        logger.error(f"Full traceback: {error_traceback}")
+        
         # Return more detailed error message
         error_detail = str(e)
         if "Failed to ensure" in error_detail:
             # Extract the underlying error
             error_detail = error_detail.split(": ", 1)[-1] if ": " in error_detail else error_detail
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error ensuring January round: {error_detail}"
-        )
+        
+        # Include more context in debug mode
+        import os
+        if os.getenv("DEBUG") == "true":
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error ensuring January round: {error_detail}\n\nTraceback:\n{error_traceback}"
+            )
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error ensuring January round: {error_detail}. Check server logs for details."
+            )
 
 
 @router.post("/generate-monthly", response_model=round_schema.Round)

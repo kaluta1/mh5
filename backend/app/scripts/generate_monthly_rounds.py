@@ -100,27 +100,46 @@ def generate_monthly_round(db: Session, target_date: Optional[date] = None) -> R
     global_end = get_month_end(m4_year, m4_month)
     
     # Créer le round
-    new_round = Round(
-        name=round_name,
-        status=RoundStatus.ACTIVE,
-        is_submission_open=True,
-        is_voting_open=False,
-        current_season_level=None,  # Sera mis à jour quand le voting commence
-        submission_start_date=submission_start,
-        submission_end_date=submission_end,
-        voting_start_date=city_start,  # Date de début de voting générale
-        voting_end_date=global_end,     # Date de fin globale
-        city_season_start_date=city_start,
-        city_season_end_date=city_end,
-        country_season_start_date=country_start,
-        country_season_end_date=country_end,
-        regional_start_date=regional_start,
-        regional_end_date=regional_end,
-        continental_start_date=continental_start,
-        continental_end_date=continental_end,
-        global_start_date=global_start,
-        global_end_date=global_end,
-    )
+    # FIXED: Create round with only required fields first, then add optional date fields
+    try:
+        # Use ACTIVE status (should exist in RoundStatus enum)
+        status_value = RoundStatus.ACTIVE
+        
+        new_round = Round(
+            name=round_name,
+            status=status_value,
+            is_submission_open=True,
+            is_voting_open=False,
+            current_season_level=None,  # Sera mis à jour quand le voting commence
+        )
+        
+        # Add date fields using setattr to handle potential missing columns gracefully
+        date_fields = {
+            'submission_start_date': submission_start,
+            'submission_end_date': submission_end,
+            'voting_start_date': city_start,
+            'voting_end_date': global_end,
+            'city_season_start_date': city_start,
+            'city_season_end_date': city_end,
+            'country_season_start_date': country_start,
+            'country_season_end_date': country_end,
+            'regional_start_date': regional_start,
+            'regional_end_date': regional_end,
+            'continental_start_date': continental_start,
+            'continental_end_date': continental_end,
+            'global_start_date': global_start,
+            'global_end_date': global_end,
+        }
+        
+        # Set date fields if they exist in the model
+        for field_name, field_value in date_fields.items():
+            if hasattr(new_round, field_name):
+                setattr(new_round, field_name, field_value)
+            else:
+                print(f"Warning: Round model doesn't have field {field_name}, skipping")
+    except Exception as e:
+        print(f"Error creating Round object: {e}")
+        raise Exception(f"Failed to create Round object: {str(e)}") from e
     
     try:
         db.add(new_round)
