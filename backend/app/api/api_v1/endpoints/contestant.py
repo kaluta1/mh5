@@ -509,17 +509,62 @@ def get_contest_contestants(
         # Remove duplicates
         all_round_ids = list(set(all_round_ids))
         
+        # DEBUG: First check if ANY contestants exist for this contest (without filters)
+        debug_query = db.query(
+            Contestant.id,
+            Contestant.season_id,
+            Contestant.round_id,
+            Contestant.is_deleted
+        ).filter(Contestant.is_deleted == False)
+        
+        # Try to find contestants by ANY possible link
+        debug_conditions = []
+        if all_round_ids:
+            debug_conditions.append(Contestant.round_id.in_(all_round_ids))
+        debug_conditions.append(Contestant.season_id == contest_id)
+        
+        if debug_conditions:
+            debug_results = debug_query.filter(or_(*debug_conditions)).limit(10).all()
+            logger.info(f"[DEBUG] Found {len(debug_results)} contestants matching contest_id={contest_id}, round_ids={all_round_ids}")
+            for d in debug_results:
+                logger.info(f"[DEBUG] Contestant id={d.id}, season_id={d.season_id}, round_id={d.round_id}")
+        else:
+            # If no conditions, check ALL non-deleted contestants to see what exists
+            all_contestants_sample = db.query(
+                Contestant.id,
+                Contestant.season_id,
+                Contestant.round_id
+            ).filter(Contestant.is_deleted == False).limit(20).all()
+            logger.warning(f"[DEBUG] No round_ids found. Sample of all contestants: {[(c.id, c.season_id, c.round_id) for c in all_contestants_sample]}")
+        
         # Step 2: Build simplified query - try season_id first (most common)
         query = db.query(Contestant).filter(Contestant.is_deleted == False)
         
-        # Build OR conditions (simplified)
-        conditions = [Contestant.season_id == contest_id]
+        # Build OR conditions (comprehensive - handle all cases)
+        conditions = []
         
+        # Condition 1: season_id matches contest_id
+        conditions.append(Contestant.season_id == contest_id)
+        
+        # Condition 2: round_id matches any of the found rounds
         if all_round_ids:
             conditions.append(Contestant.round_id.in_(all_round_ids))
         
+        # Condition 3: Handle NULL season_id but valid round_id (for migrated data)
+        if all_round_ids:
+            conditions.append(
+                and_(
+                    Contestant.season_id.is_(None),
+                    Contestant.round_id.in_(all_round_ids)
+                )
+            )
+        
         # Apply OR condition
-        query = query.filter(or_(*conditions))
+        if conditions:
+            query = query.filter(or_(*conditions))
+        else:
+            # Fallback: if no conditions, just query by season_id
+            query = query.filter(Contestant.season_id == contest_id)
         
         # Apply geographic filters
         if filter_country:
@@ -545,30 +590,67 @@ def get_contest_contestants(
         
         # If no contestants found, try simpler fallback
         if not contestants:
-            # Last resort: simple query by season_id only
+            logger.warning(f"[get_contest_contestants] No contestants found with filters. Trying fallback queries...")
+            
+            # Fallback 1: Try by season_id only (no geographic filters)
             try:
-                fallback_query = db.query(Contestant).filter(
+                fallback1 = db.query(Contestant).filter(
                     Contestant.is_deleted == False,
                     Contestant.season_id == contest_id
-                )
-                
-                if filter_country:
-                    fallback_query = fallback_query.filter(func.lower(Contestant.country) == func.lower(filter_country))
-                if filter_region:
-                    fallback_query = fallback_query.filter(func.lower(Contestant.region) == func.lower(filter_region))
-                if filter_continent:
-                    fallback_query = fallback_query.filter(func.lower(Contestant.continent) == func.lower(filter_continent))
-                if filter_city:
-                    fallback_query = fallback_query.filter(func.lower(Contestant.city) == func.lower(filter_city))
-                if user_id:
-                    fallback_query = fallback_query.filter(Contestant.user_id == user_id)
-                
-                contestants = fallback_query.options(
-                    joinedload(Contestant.user)
-                ).order_by(Contestant.registration_date.desc()).offset(skip).limit(limit).all()
+                ).limit(limit).all()
+                logger.info(f"[get_contest_contestants] Fallback 1 (season_id only): Found {len(fallback1)} contestants")
+                if fallback1:
+                    contestants = fallback1
             except Exception as e:
-                logger.error(f"Error in fallback query: {e}")
-                contestants = []
+                logger.error(f"Error in fallback 1: {e}")
+            
+            # Fallback 2: Try by round_id only (if we have round_ids)
+            if not contestants and all_round_ids:
+                try:
+                    fallback2 = db.query(Contestant).filter(
+                        Contestant.is_deleted == False,
+                        Contestant.round_id.in_(all_round_ids)
+                    ).limit(limit).all()
+                    logger.info(f"[get_contest_contestants] Fallback 2 (round_id only): Found {len(fallback2)} contestants")
+                    if fallback2:
+                        contestants = fallback2
+                except Exception as e:
+                    logger.error(f"Error in fallback 2: {e}")
+            
+            # Fallback 3: Try ANY non-deleted contestant (for debugging)
+            if not contestants:
+                try:
+                    fallback3 = db.query(Contestant).filter(
+                        Contestant.is_deleted == False
+                    ).limit(5).all()
+                    logger.warning(f"[get_contest_contestants] Fallback 3 (ANY contestant): Found {len(fallback3)} contestants. Sample IDs: {[c.id for c in fallback3]}")
+                except Exception as e:
+                    logger.error(f"Error in fallback 3: {e}")
+            
+            # Apply geographic filters to fallback results if we found any
+            if contestants and (filter_country or filter_region or filter_continent or filter_city):
+                original_count = len(contestants)
+                if filter_country:
+                    contestants = [c for c in contestants if c.country and func.lower(c.country) == func.lower(filter_country)]
+                if filter_region:
+                    contestants = [c for c in contestants if c.region and func.lower(c.region) == func.lower(filter_region)]
+                if filter_continent:
+                    contestants = [c for c in contestants if c.continent and func.lower(c.continent) == func.lower(filter_continent)]
+                if filter_city:
+                    contestants = [c for c in contestants if c.city and func.lower(c.city) == func.lower(filter_city)]
+                logger.info(f"[get_contest_contestants] After geographic filters: {len(contestants)}/{original_count} contestants remain")
+            
+            # Apply user_id filter if specified
+            if contestants and user_id:
+                contestants = [c for c in contestants if c.user_id == user_id]
+            
+            # Load user relations for fallback results
+            if contestants:
+                contestant_ids = [c.id for c in contestants]
+                contestants_with_users = db.query(Contestant).filter(
+                    Contestant.id.in_(contestant_ids)
+                ).options(joinedload(Contestant.user)).all()
+                contestants = contestants_with_users
         
         # Enrich contestants with stats (with error handling)
         contestant_ids = [c.id for c in contestants] if contestants else []

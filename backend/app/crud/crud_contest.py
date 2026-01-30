@@ -940,20 +940,46 @@ class CRUDContest:
         
         round_ids = list(set(round_ids))
         
-        # Build OR conditions for round_id and season_id
-        conditions = [Contestant.season_id == contest_id]
+        # Build comprehensive OR conditions for round_id and season_id
+        conditions = []
+        
+        # Condition 1: season_id matches contest_id
+        conditions.append(Contestant.season_id == contest_id)
+        
+        # Condition 2: round_id matches any of the found rounds
         if round_ids:
             conditions.append(Contestant.round_id.in_(round_ids))
         
-        # Query contestants using comprehensive OR conditions
-        contestants_query = db.query(Contestant)\
-            .filter(
-                Contestant.is_deleted == False,
-                or_(*conditions) if len(conditions) > 1 else conditions[0]
-            )\
-            .options(
-                joinedload(Contestant.user)
+        # Condition 3: Handle NULL season_id but valid round_id (for migrated data)
+        if round_ids:
+            from sqlalchemy import and_
+            conditions.append(
+                and_(
+                    Contestant.season_id.is_(None),
+                    Contestant.round_id.in_(round_ids)
+                )
             )
+        
+        # Query contestants using comprehensive OR conditions
+        if conditions:
+            contestants_query = db.query(Contestant)\
+                .filter(
+                    Contestant.is_deleted == False,
+                    or_(*conditions)
+                )\
+                .options(
+                    joinedload(Contestant.user)
+                )
+        else:
+            # Fallback: just season_id
+            contestants_query = db.query(Contestant)\
+                .filter(
+                    Contestant.is_deleted == False,
+                    Contestant.season_id == contest_id
+                )\
+                .options(
+                    joinedload(Contestant.user)
+                )
         
         # Appliquer le filtrage géographique selon le niveau de la saison et l'utilisateur connecté
         # Récupérer l'utilisateur courant pour le filtrage géographique
@@ -1030,26 +1056,63 @@ class CRUDContest:
         logger = logging.getLogger(__name__)
         
         try:
+            # DEBUG: First check what contestants actually exist
+            debug_sample = db.query(
+                Contestant.id,
+                Contestant.season_id,
+                Contestant.round_id,
+                Contestant.is_deleted
+            ).filter(Contestant.is_deleted == False).limit(20).all()
+            logger.info(f"[DEBUG] Sample of all contestants in DB: {[(c.id, c.season_id, c.round_id) for c in debug_sample]}")
+            
             # Log query details for debugging
             logger.info(f"[get_contest_with_enriched_contestants] Querying contestants for contest_id={contest_id}, round_ids={round_ids}")
+            logger.info(f"[get_contest_with_enriched_contestants] OR conditions: season_id={contest_id}, round_ids={round_ids}")
             contestants = contestants_query.all()
             logger.info(f"[get_contest_with_enriched_contestants] Found {len(contestants)} contestants")
-        except Exception as e:
-            logger.error(f"Error fetching contestants: {e}", exc_info=True)
-            # Fallback: try simple query by season_id only
-            try:
-                logger.info(f"[get_contest_with_enriched_contestants] Trying fallback query by season_id={contest_id}")
-                contestants = db.query(Contestant)\
-                    .filter(
+            
+            # If no contestants, try fallbacks
+            if not contestants:
+                logger.warning(f"[get_contest_with_enriched_contestants] No contestants found. Trying fallbacks...")
+                
+                # Fallback 1: season_id only
+                try:
+                    fallback1 = db.query(Contestant).filter(
                         Contestant.is_deleted == False,
                         Contestant.season_id == contest_id
-                    )\
-                    .options(joinedload(Contestant.user))\
-                    .all()
-                logger.info(f"[get_contest_with_enriched_contestants] Fallback query found {len(contestants)} contestants")
-            except Exception as e2:
-                logger.error(f"Error in fallback query: {e2}", exc_info=True)
-                contestants = []
+                    ).options(joinedload(Contestant.user)).limit(100).all()
+                    logger.info(f"[get_contest_with_enriched_contestants] Fallback 1 (season_id={contest_id}): Found {len(fallback1)}")
+                    if fallback1:
+                        contestants = fallback1
+                except Exception as e1:
+                    logger.error(f"Error in fallback 1: {e1}")
+                
+                # Fallback 2: round_id only
+                if not contestants and round_ids:
+                    try:
+                        fallback2 = db.query(Contestant).filter(
+                            Contestant.is_deleted == False,
+                            Contestant.round_id.in_(round_ids)
+                        ).options(joinedload(Contestant.user)).limit(100).all()
+                        logger.info(f"[get_contest_with_enriched_contestants] Fallback 2 (round_ids={round_ids}): Found {len(fallback2)}")
+                        if fallback2:
+                            contestants = fallback2
+                    except Exception as e2:
+                        logger.error(f"Error in fallback 2: {e2}")
+                
+                # Fallback 3: ANY contestant (for debugging)
+                if not contestants:
+                    try:
+                        fallback3 = db.query(Contestant).filter(
+                            Contestant.is_deleted == False
+                        ).options(joinedload(Contestant.user)).limit(10).all()
+                        logger.warning(f"[get_contest_with_enriched_contestants] Fallback 3 (ANY): Found {len(fallback3)}. Sample: {[(c.id, c.season_id, c.round_id) for c in fallback3]}")
+                    except Exception as e3:
+                        logger.error(f"Error in fallback 3: {e3}")
+                        
+        except Exception as e:
+            logger.error(f"Error fetching contestants: {e}", exc_info=True)
+            contestants = []
         
         # Récupérer tous les IDs des contestants (après filtrage)
         contestant_ids = [c.id for c in contestants]

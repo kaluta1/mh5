@@ -150,11 +150,25 @@ def map_contest_in_round_to_type(contest: Contest, round_id: int, db: Session, c
     # Combine all round IDs
     all_round_ids = list(set(round_ids_from_table + legacy_round_ids))
     
-    # Build comprehensive OR query
+    # Build comprehensive OR query (handle all cases including NULL season_id)
     or_conditions = []
+    
+    # Condition 1: season_id matches contest.id
+    or_conditions.append(Contestant.season_id == contest.id)
+    
+    # Condition 2: round_id matches any of the found rounds
     if all_round_ids:
         or_conditions.append(Contestant.round_id.in_(all_round_ids))
-    or_conditions.append(Contestant.season_id == contest.id)
+    
+    # Condition 3: Handle NULL season_id but valid round_id (for migrated data)
+    if all_round_ids:
+        from sqlalchemy import and_
+        or_conditions.append(
+            and_(
+                Contestant.season_id.is_(None),
+                Contestant.round_id.in_(all_round_ids)
+            )
+        )
     
     if or_conditions:
         participants_query = db.query(Contestant).filter(
@@ -212,9 +226,22 @@ def map_contest_in_round_to_type(contest: Contest, round_id: int, db: Session, c
         all_round_ids.append(round_id)
     
     or_conditions_votes = []
+    
+    # Condition 1: season_id matches contest.id
+    or_conditions_votes.append(Contestant.season_id == contest.id)
+    
+    # Condition 2: round_id matches any of the found rounds
     if all_round_ids:
         or_conditions_votes.append(Contestant.round_id.in_(all_round_ids))
-    or_conditions_votes.append(Contestant.season_id == contest.id)
+    
+    # Condition 3: Handle NULL season_id but valid round_id (for migrated data)
+    if all_round_ids:
+        or_conditions_votes.append(
+            and_(
+                Contestant.season_id.is_(None),
+                Contestant.round_id.in_(all_round_ids)
+            )
+        )
     
     if or_conditions_votes:
         votes_query = db.query(func.sum(ContestantRanking.total_votes)).join(
@@ -486,11 +513,25 @@ def map_contest_to_type(contest: Contest, db: Session, include_rounds: bool = Tr
     
     all_round_ids = list(set(round_ids_from_table + legacy_round_ids))
     
-    # Build comprehensive OR conditions
+    # Build comprehensive OR conditions (handle all cases including NULL season_id)
     or_conditions = []
+    
+    # Condition 1: season_id matches contest.id
+    or_conditions.append(Contestant.season_id == contest.id)
+    
+    # Condition 2: round_id matches any of the found rounds
     if all_round_ids:
         or_conditions.append(Contestant.round_id.in_(all_round_ids))
-    or_conditions.append(Contestant.season_id == contest.id)
+    
+    # Condition 3: Handle NULL season_id but valid round_id (for migrated data)
+    if all_round_ids:
+        from sqlalchemy import and_
+        or_conditions.append(
+            and_(
+                Contestant.season_id.is_(None),
+                Contestant.round_id.in_(all_round_ids)
+            )
+        )
     
     # Base filter for all queries
     base_filter = or_(*or_conditions) if or_conditions else (Contestant.season_id == contest.id)
