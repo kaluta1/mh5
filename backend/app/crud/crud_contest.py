@@ -126,6 +126,30 @@ class CRUDContest:
         # This ensures we don't miss contests due to low limits
         effective_limit = limit if limit > 0 else 1000
         
+        # FIXED: Defer date columns that don't exist in database to avoid SQL errors
+        from sqlalchemy.orm import defer
+        try:
+            # Add defer options to exclude date columns that may not exist
+            query = query.options(
+                defer(Contest.submission_start_date),
+                defer(Contest.submission_end_date),
+                defer(Contest.voting_start_date),
+                defer(Contest.voting_end_date),
+                defer(Contest.city_season_start_date),
+                defer(Contest.city_season_end_date),
+                defer(Contest.country_season_start_date),
+                defer(Contest.country_season_end_date),
+                defer(Contest.regional_start_date),
+                defer(Contest.regional_end_date),
+                defer(Contest.continental_start_date),
+                defer(Contest.continental_end_date),
+                defer(Contest.global_start_date),
+                defer(Contest.global_end_date),
+            )
+        except Exception as defer_error:
+            logger.warning(f"Could not add defer options: {defer_error}")
+            # Continue without defer - may fail if columns don't exist
+        
         try:
             logger.info(f"Executing query with skip={skip}, limit={effective_limit}")
             results = query.offset(skip).limit(effective_limit).all()
