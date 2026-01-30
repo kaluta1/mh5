@@ -146,9 +146,12 @@ def generate_monthly_round(db: Session, target_date: Optional[date] = None) -> R
         db.flush()  # Pour obtenir l'ID
         print(f"Round '{round_name}' created with ID: {new_round.id}")
     except Exception as e:
+        import traceback
+        error_traceback = traceback.format_exc()
         print(f"Error creating round object: {e}")
+        print(f"Full traceback: {error_traceback}")
         db.rollback()
-        raise Exception(f"Failed to create round in database: {str(e)}") from e
+        raise Exception(f"Failed to create round in database: {str(e)}\n\nTraceback:\n{error_traceback}") from e
     
     # Récupérer tous les contests actifs
     try:

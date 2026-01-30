@@ -114,13 +114,22 @@ class MonthlyRoundScheduler:
         db = SessionLocal()
         try:
             target_date = date(year, month, 1)
+            logger.info(f"Calling generate_monthly_round for {target_date.strftime('%B %Y')}...")
             round_obj = generate_monthly_round(db, target_date=target_date)
-            logger.info(f"✅ Round created for {target_date.strftime('%B %Y')} (id={round_obj.id})")
-            return round_obj
+            if round_obj:
+                logger.info(f"✅ Round created for {target_date.strftime('%B %Y')} (id={round_obj.id})")
+                return round_obj
+            else:
+                logger.error(f"generate_monthly_round returned None for {year}-{month:02d}")
+                return None
         except Exception as e:
+            import traceback
+            error_traceback = traceback.format_exc()
             logger.error(f"Error creating round for {year}-{month:02d}: {e}", exc_info=True)
+            logger.error(f"Full traceback: {error_traceback}")
             db.rollback()
-            return None
+            # Re-raise instead of returning None so the caller can see the actual error
+            raise Exception(f"Failed to create round for {year}-{month:02d}: {str(e)}") from e
         finally:
             db.close()
     
@@ -223,11 +232,14 @@ class MonthlyRoundScheduler:
                     logger.info(f"✅ Successfully created January round (id={round_obj.id})")
                     return round_obj
                 else:
-                    logger.error("create_round_for_month returned None")
-                    raise Exception("Failed to create round - create_round_for_month returned None")
+                    error_msg = "create_round_for_month returned None - check logs for underlying error"
+                    logger.error(error_msg)
+                    raise Exception(error_msg)
             except Exception as e:
-                logger.error(f"Error in create_round_for_month: {e}", exc_info=True)
-                raise
+                error_msg = f"Error in create_round_for_month: {str(e)}"
+                logger.error(error_msg, exc_info=True)
+                # Re-raise with more context
+                raise Exception(f"Failed to create round for month: {str(e)}") from e
             
         except Exception as e:
             logger.error(f"Error ensuring January round exists: {e}", exc_info=True)
