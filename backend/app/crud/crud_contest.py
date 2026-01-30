@@ -38,7 +38,20 @@ class CRUDContest:
         # Note: On ne fait plus de joinedload sur voting_type ici car la table peut ne pas exister
         # Le voting_type est chargé séparément dans enrich_contest_with_stats si nécessaire
         
-        query = db.query(Contest).filter(Contest.is_deleted == False)
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        try:
+            # FIXED: Try to filter by is_deleted, but handle if column doesn't exist
+            try:
+                query = db.query(Contest).filter(Contest.is_deleted == False)
+            except Exception as col_error:
+                # If is_deleted column doesn't exist, query without it
+                logger.warning(f"Could not filter by is_deleted, column may not exist: {str(col_error)}")
+                query = db.query(Contest)
+        except Exception as e:
+            logger.error(f"Error creating base query: {str(e)}", exc_info=True)
+            raise
         
         # Gérer la recherche textuelle sur plusieurs champs
         if "search" in filters and filters["search"]:
@@ -102,14 +115,25 @@ class CRUDContest:
         for field, value in filters.items():
             if field in ["search", "voting_level", "voting_type_id", "has_voting_type"]:
                 continue  # Déjà traité ci-dessus
-            if hasattr(Contest, field) and value is not None:
-                query = query.filter(getattr(Contest, field) == value)
+            try:
+                if hasattr(Contest, field) and value is not None:
+                    query = query.filter(getattr(Contest, field) == value)
+            except Exception as e:
+                logger.warning(f"Error applying filter {field}={value}: {str(e)}")
+                # Continue with other filters
         
         # FIXED: Increase default limit if not specified to get all active contests
         # This ensures we don't miss contests due to low limits
         effective_limit = limit if limit > 0 else 1000
         
-        return query.offset(skip).limit(effective_limit).all()
+        try:
+            logger.info(f"Executing query with skip={skip}, limit={effective_limit}")
+            results = query.offset(skip).limit(effective_limit).all()
+            logger.info(f"Query returned {len(results)} contests")
+            return results
+        except Exception as e:
+            logger.error(f"Error executing contest query: {str(e)}", exc_info=True)
+            raise
 
     def create(self, db: Session, *, obj_in: ContestCreate) -> Contest:
         """Crée un nouveau concours"""

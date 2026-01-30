@@ -50,7 +50,9 @@ function ContestsPageContent() {
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("") // Terme de recherche dans l'input
   const [activeSearchTerm, setActiveSearchTerm] = useState("") // Terme de recherche actif (utilisé pour l'API)
-  const [categoryTab, setCategoryTab] = useState<'nomination' | 'participations'>('nomination')
+  // FIXED: Start with 'participations' as default since most users want to see regular contests first
+  // Users can switch to 'nomination' tab if they want
+  const [categoryTab, setCategoryTab] = useState<'nomination' | 'participations'>('participations')
   const [activeTab, setActiveTab] = useState<string>('all')
   const [sortBy, setSortBy] = useState<string>('participants') // participants, votes, date, name
   const [favorites, setFavorites] = useState<string[]>([])
@@ -170,9 +172,14 @@ function ContestsPageContent() {
   const loadContests = async () => {
     try {
       setIsLoading(true)
+      console.log(`[ContestsPage] Loading contests for categoryTab: ${categoryTab}`)
+      
       // Pour l'onglet Nominations : filtrer les contests qui ont un voting_type (has_voting_type = true)
       // Pour l'onglet Participations : filtrer les contests qui n'ont pas de voting_type (has_voting_type = false)
       const hasVotingType = categoryTab === 'nomination' ? true : categoryTab === 'participations' ? false : undefined
+      
+      console.log(`[ContestsPage] Calling API with hasVotingType: ${hasVotingType}`)
+      
       const response = await contestService.getContests(
         0, 
         500, // FIXED: Increased limit to get all contests (we have 178 total)
@@ -181,14 +188,38 @@ function ContestsPageContent() {
         undefined, // votingTypeId
         hasVotingType
       )
-      console.log(`Loaded ${response.length} contests from API (categoryTab: ${categoryTab}, hasVotingType: ${hasVotingType})`)
-      const mappedContests = response.map((c: ContestResponse) => 
-        contestService.mapResponseToContest(c)
-      )
-      console.log(`Mapped ${mappedContests.length} contests`)
+      
+      console.log(`[ContestsPage] API returned ${response?.length || 0} contests`)
+      console.log(`[ContestsPage] Response sample:`, response?.slice(0, 2))
+      
+      if (!response || !Array.isArray(response)) {
+        console.error("[ContestsPage] Invalid response format:", response)
+        setAllContests([])
+        return
+      }
+      
+      const mappedContests = response
+        .map((c: ContestResponse) => {
+          try {
+            return contestService.mapResponseToContest(c)
+          } catch (error) {
+            console.error(`[ContestsPage] Error mapping contest ${c?.id}:`, error)
+            return null
+          }
+        })
+        .filter((c: any) => c !== null)
+      
+      console.log(`[ContestsPage] Successfully mapped ${mappedContests.length} contests`)
+      console.log(`[ContestsPage] Sample mapped contest:`, mappedContests[0])
+      
       setAllContests(mappedContests)
-    } catch (error) {
-      console.error("Error loading contests:", error)
+    } catch (error: any) {
+      console.error("[ContestsPage] Error loading contests:", error)
+      console.error("[ContestsPage] Error details:", {
+        message: error?.message,
+        stack: error?.stack,
+        response: error?.response?.data
+      })
       // FIXED: Set empty array on error so UI shows proper message
       setAllContests([])
     } finally {
@@ -469,6 +500,26 @@ function ContestsPageContent() {
               ))}
             </div>
           ) : filteredContests.length === 0 ? (
+            <div className="text-center py-20 bg-gray-50 dark:bg-gray-800/50 rounded-3xl border border-gray-100 dark:border-gray-700">
+              <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
+                <Trophy className="w-10 h-10 text-gray-400" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-700 dark:text-gray-300 mb-2">
+                {t('pages.contests.no_results') || "Aucun concours trouvé"}
+              </h3>
+              <p className="text-gray-500 dark:text-gray-400 mb-2">
+                {t('pages.contests.try_different_filter') || "Essayez un autre filtre ou terme de recherche"}
+              </p>
+              {/* DEBUG INFO */}
+              <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-900 rounded text-left text-xs text-gray-600 dark:text-gray-400 max-w-md mx-auto">
+                <p><strong>Debug Info:</strong></p>
+                <p>All Contests: {allContests.length}</p>
+                <p>Filtered Contests: {filteredContests.length}</p>
+                <p>Category Tab: {categoryTab}</p>
+                <p>Active Tab: {activeTab}</p>
+                <p>Is Loading: {isLoading ? 'Yes' : 'No'}</p>
+                <p>Search Term: {activeSearchTerm || 'None'}</p>
+              </div>
             <div className="text-center py-20 bg-gray-50 dark:bg-gray-800/50 rounded-3xl border border-gray-100 dark:border-gray-700">
               <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
                 <Trophy className="w-10 h-10 text-gray-400" />

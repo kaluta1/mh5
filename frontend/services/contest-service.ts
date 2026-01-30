@@ -259,14 +259,26 @@ class ContestService {
       }
 
       // Si pas en cache, faire la requête
+      console.log('[ContestService] Fetching contests with params:', params)
       const data = await apiService.get<ContestResponse[]>('/api/v1/contests/', params)
+      console.log('[ContestService] Received data:', {
+        type: Array.isArray(data) ? 'array' : typeof data,
+        length: Array.isArray(data) ? data.length : 'N/A',
+        sample: Array.isArray(data) && data.length > 0 ? data[0] : null
+      })
 
       // Mettre en cache
       cacheService.set(cacheKey, data, params)
 
       return data
-    } catch (error) {
-      console.error('Error fetching contests:', error)
+    } catch (error: any) {
+      console.error('[ContestService] Error fetching contests:', error)
+      console.error('[ContestService] Error details:', {
+        message: error?.message,
+        response: error?.response?.data,
+        status: error?.response?.status,
+        url: error?.config?.url
+      })
       throw error
     }
   }

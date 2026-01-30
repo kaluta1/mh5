@@ -74,10 +74,20 @@ def get_db():
         logger.error(f"Database error: {error_msg}")
         logger.error(f"Full error details: {e}", exc_info=True)
         db.rollback()
+        
+        # FIXED: Return more specific error message in development/debug mode
+        import os
+        debug_mode = os.getenv("DEBUG", "false").lower() == "true"
+        
+        detail_msg = "Database error occurred. Please try again later or contact support if the problem persists."
+        if debug_mode:
+            # Include actual error in debug mode
+            detail_msg = f"Database error: {error_msg}"
+        
         # Convert to HTTP exception for better error handling
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Database error occurred. Please try again later or contact support if the problem persists.",
+            detail=detail_msg,
         )
     except Exception as e:
         # Log unexpected errors
