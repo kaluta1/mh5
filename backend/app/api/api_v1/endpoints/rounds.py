@@ -86,6 +86,34 @@ def read_rounds(
     return rounds_with_stats[skip:skip+limit] if contest_id else rounds_with_stats # slicing managed above for no-contest case? No, slicing on list.
 
 
+@router.post("/ensure-january", response_model=round_schema.Round)
+def ensure_january_round(
+    *,
+    db: Session = Depends(deps.get_db),
+    current_user: models.User = Depends(deps.get_current_admin_user),
+) -> Any:
+    """
+    Ensure January round exists for current year and links all active contests.
+    Admin only.
+    """
+    from app.services.monthly_round_scheduler import monthly_round_scheduler
+    
+    try:
+        round_obj = monthly_round_scheduler.ensure_january_round_exists()
+        if round_obj:
+            return round_obj
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to create or retrieve January round"
+            )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error ensuring January round: {str(e)}"
+        )
+
+
 @router.post("/generate-monthly", response_model=round_schema.Round)
 def generate_monthly(
     *,

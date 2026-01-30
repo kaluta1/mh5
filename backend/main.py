@@ -12,6 +12,7 @@ from app.api.api_v1.api import api_router
 from app.services.payment_scheduler import payment_scheduler
 from app.services.contest_status import contest_status_scheduler
 from app.services.season_migration_scheduler import season_migration_scheduler
+from app.services.monthly_round_scheduler import monthly_round_scheduler
 from app.services.socketio_app import create_socketio_app
 
 
@@ -28,6 +29,20 @@ async def lifespan(app: FastAPI):
     print("Starting season migration scheduler...")
     await season_migration_scheduler.start()
     
+    print("Starting monthly round scheduler...")
+    await monthly_round_scheduler.start()
+    
+    # Ensure January round exists on startup
+    print("Ensuring January round exists...")
+    try:
+        january_round = monthly_round_scheduler.ensure_january_round_exists()
+        if january_round:
+            print(f"✅ January round ready (id={january_round.id})")
+        else:
+            print("⚠️ Could not create/verify January round")
+    except Exception as e:
+        print(f"⚠️ Error ensuring January round: {e}")
+    
     # Initialize encryption service for E2E messaging
     try:
         from app.services.feed_encryption import init_encryption_service
@@ -39,6 +54,9 @@ async def lifespan(app: FastAPI):
     yield
     
     # Shutdown
+    print("Stopping monthly round scheduler...")
+    await monthly_round_scheduler.stop()
+    
     print("Stopping season migration scheduler...")
     await season_migration_scheduler.stop()
     

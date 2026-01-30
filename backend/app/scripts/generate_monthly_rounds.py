@@ -13,6 +13,7 @@ from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
 from calendar import monthrange
 from sqlalchemy.orm import Session
+from sqlalchemy import select, insert
 from typing import Optional
 
 from app.db.session import SessionLocal
@@ -125,20 +126,45 @@ def generate_monthly_round(db: Session, target_date: Optional[date] = None) -> R
     db.flush()  # Pour obtenir l'ID
     
     # Récupérer tous les contests actifs
-    active_contests = db.query(Contest).filter(
-        Contest.is_active == True,
-        Contest.is_deleted == False
-    ).all()
+    try:
+        active_contests = db.query(Contest).filter(
+            Contest.is_active == True
+        ).all()
+        
+        # Try to filter by is_deleted if column exists
+        try:
+            active_contests = [c for c in active_contests if not getattr(c, 'is_deleted', False)]
+        except:
+            pass
+    except Exception as e:
+        print(f"Warning: Error filtering contests: {e}")
+        # Fallback: get all contests
+        active_contests = db.query(Contest).all()
     
     # Associer tous les contests au round via la table de liaison
+    linked_count = 0
+    
     for contest in active_contests:
-        # Insérer dans la table de liaison
-        db.execute(
-            round_contests.insert().values(
-                round_id=new_round.id,
-                contest_id=contest.id
-            )
-        )
+        try:
+            # Check if link already exists
+            existing_link = db.execute(
+                select(round_contests).where(
+                    round_contests.c.round_id == new_round.id,
+                    round_contests.c.contest_id == contest.id
+                )
+            ).first()
+            
+            if not existing_link:
+                # Insérer dans la table de liaison
+                stmt = insert(round_contests).values(
+                    round_id=new_round.id,
+                    contest_id=contest.id
+                )
+                db.execute(stmt)
+                linked_count += 1
+        except Exception as e:
+            print(f"Warning: Could not link contest {contest.id}: {e}")
+            continue
     
     db.commit()
     
