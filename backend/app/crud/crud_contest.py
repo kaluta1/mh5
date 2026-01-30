@@ -471,27 +471,45 @@ class CRUDContest:
         
         # Build query with OR conditions for round_id and season_id
         from sqlalchemy import or_
-        conditions = [Contestant.season_id == contest.id]
+        conditions = []
+        
+        # Always include season_id condition (legacy support)
+        conditions.append(Contestant.season_id == contest.id)
+        
+        # Add round_id condition if rounds are linked
         if round_ids:
             conditions.append(Contestant.round_id.in_(round_ids))
         
+        # FIXED: If no rounds linked, still show the contest (it will have 0 contestants until rounds are created)
+        # This ensures contests are visible even before rounds are set up
+        
         # FIXED: Always count ALL contestants for the contest first (without location filters)
         # This ensures the count is accurate even when no user is logged in
-        base_entries_query = db.query(func.count(Contestant.id.distinct()))\
-            .filter(
-                Contestant.is_deleted == False,
-                or_(*conditions) if len(conditions) > 1 else conditions[0]
-            )
+        if conditions:
+            base_entries_query = db.query(func.count(Contestant.id.distinct()))\
+                .filter(
+                    Contestant.is_deleted == False,
+                    or_(*conditions) if len(conditions) > 1 else conditions[0]
+                )
+        else:
+            # No conditions - return 0 (contest has no rounds or seasons linked yet)
+            base_entries_query = db.query(func.count(Contestant.id.distinct()))\
+                .filter(Contestant.id == -1)  # Impossible condition = 0 results
         
         # Get total count without location filters (for display purposes)
         total_entries_count = base_entries_query.scalar() or 0
         
         # Compter le nombre de participants selon la saison/round et la localisation
-        entries_query = db.query(func.count(Contestant.id.distinct()))\
-            .filter(
-                Contestant.is_deleted == False,
-                or_(*conditions) if len(conditions) > 1 else conditions[0]
-            )
+        if conditions:
+            entries_query = db.query(func.count(Contestant.id.distinct()))\
+                .filter(
+                    Contestant.is_deleted == False,
+                    or_(*conditions) if len(conditions) > 1 else conditions[0]
+                )
+        else:
+            # No conditions - return 0
+            entries_query = db.query(func.count(Contestant.id.distinct()))\
+                .filter(Contestant.id == -1)  # Impossible condition = 0 results
         
         # Appliquer les filtres géographiques
         # Priorité: filtres explicites > localisation de l'utilisateur

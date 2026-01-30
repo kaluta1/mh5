@@ -90,11 +90,11 @@ def read_rounds(
 def ensure_january_round(
     *,
     db: Session = Depends(deps.get_db),
-    current_user: models.User = Depends(deps.get_current_admin_user),
+    current_user: Optional[models.User] = Depends(deps.get_current_active_user_optional),
 ) -> Any:
     """
     Ensure January round exists for current year and links all active contests.
-    Admin only.
+    Public endpoint - can be called without authentication for initial setup.
     """
     from app.services.monthly_round_scheduler import monthly_round_scheduler
     
