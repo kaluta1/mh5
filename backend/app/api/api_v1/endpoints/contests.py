@@ -63,12 +63,16 @@ def read_contests(
     """
     # Construire les filtres
     filters = {}
+    # FIXED: Default to active contests only if not specified
+    if active is not None:
+        filters["is_active"] = active
+    else:
+        filters["is_active"] = True  # Default to active contests only
+    
     if location_id:
         filters["location_id"] = location_id
     if contest_type:
         filters["contest_type"] = contest_type
-    if active is not None:
-        filters["is_active"] = active
     if search:
         filters["search"] = search
     if voting_level:

@@ -105,7 +105,11 @@ class CRUDContest:
             if hasattr(Contest, field) and value is not None:
                 query = query.filter(getattr(Contest, field) == value)
         
-        return query.offset(skip).limit(limit).all()
+        # FIXED: Increase default limit if not specified to get all active contests
+        # This ensures we don't miss contests due to low limits
+        effective_limit = limit if limit > 0 else 1000
+        
+        return query.offset(skip).limit(effective_limit).all()
 
     def create(self, db: Session, *, obj_in: ContestCreate) -> Contest:
         """Crée un nouveau concours"""

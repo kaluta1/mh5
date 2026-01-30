@@ -113,7 +113,9 @@ function ContestsPageContent() {
   useEffect(() => {
     if (allContests.length === 0) return
     
-    // Filtrer par catégorie (Nomination ou Participations)
+    // FIXED: Backend already filters by has_voting_type, so we don't need to filter again here
+    // The backend returns only the contests matching the categoryTab (nomination or participations)
+    // However, we keep a safety check in case the backend filter didn't work
     let categoryFiltered = allContests.filter(contest => {
       if (categoryTab === 'nomination') {
         return contest.votingType != null
@@ -173,18 +175,22 @@ function ContestsPageContent() {
       const hasVotingType = categoryTab === 'nomination' ? true : categoryTab === 'participations' ? false : undefined
       const response = await contestService.getContests(
         0, 
-        100,
+        500, // FIXED: Increased limit to get all contests (we have 178 total)
         activeSearchTerm || undefined,
         undefined, // votingLevel n'est plus utilisé
         undefined, // votingTypeId
         hasVotingType
       )
+      console.log(`Loaded ${response.length} contests from API (categoryTab: ${categoryTab}, hasVotingType: ${hasVotingType})`)
       const mappedContests = response.map((c: ContestResponse) => 
         contestService.mapResponseToContest(c)
       )
+      console.log(`Mapped ${mappedContests.length} contests`)
       setAllContests(mappedContests)
     } catch (error) {
       console.error("Error loading contests:", error)
+      // FIXED: Set empty array on error so UI shows proper message
+      setAllContests([])
     } finally {
       setIsLoading(false)
     }
