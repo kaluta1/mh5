@@ -475,17 +475,45 @@ def get_contest_contestants(
                 detail="Contest not found"
             )
     
-    # Utiliser la nouvelle méthode avec stats enrichies
+    # Find rounds associated with this contest
+    from app.models.round import Round
+    from app.models.contests import round_contests
+    
+    # Get rounds linked to this contest via round_contests table
+    rounds = db.query(Round).join(
+        round_contests, Round.id == round_contests.c.round_id
+    ).filter(
+        round_contests.c.contest_id == contest_id
+    ).all()
+    
+    round_ids = [r.id for r in rounds] if rounds else []
+    
+    # Also check if contest_id matches a season_id (legacy support)
+    # And check if any contestants have this contest_id as season_id
+    # Use the new method with stats enrichies, but also query by round_id
     try:
-        contestants_data = crud_contestant.get_multi_by_season_with_stats(
-            db, contest_id, current_user_id=current_user.id if current_user else None,
-            skip=skip, limit=limit,
-            filter_country=filter_country,
-            filter_region=filter_region,
-            filter_continent=filter_continent,
-            filter_city=filter_city,
-            filter_user_id=user_id
-        )
+        # If we have rounds, query contestants by round_id
+        if round_ids:
+            contestants_data = crud_contestant.get_multi_by_rounds_with_stats(
+                db, round_ids, current_user_id=current_user.id if current_user else None,
+                skip=skip, limit=limit,
+                filter_country=filter_country,
+                filter_region=filter_region,
+                filter_continent=filter_continent,
+                filter_city=filter_city,
+                filter_user_id=user_id
+            )
+        else:
+            # Fallback to season_id query (legacy)
+            contestants_data = crud_contestant.get_multi_by_season_with_stats(
+                db, contest_id, current_user_id=current_user.id if current_user else None,
+                skip=skip, limit=limit,
+                filter_country=filter_country,
+                filter_region=filter_region,
+                filter_continent=filter_continent,
+                filter_city=filter_city,
+                filter_user_id=user_id
+            )
         
         # Log pour vérifier les données
         if contestants_data and len(contestants_data) > 0:

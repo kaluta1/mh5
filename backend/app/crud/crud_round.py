@@ -179,23 +179,59 @@ class CRUDRound:
     def get_active_round_for_contest(self, db: Session, contest_id: int) -> Optional[Round]:
         """
         Trouve le round actif pour l'inscription (submission_start <= now <= submission_end)
+        FIXED: Uses new N:N relationship via round_contests table
         """
+        from app.models.contests import round_contests
         now = date.today()
-        return db.query(Round).filter(
-            Round.contest_id == contest_id,
+        
+        # Query via N:N relationship
+        round_obj = db.query(Round).join(
+            round_contests, Round.id == round_contests.c.round_id
+        ).filter(
+            round_contests.c.contest_id == contest_id,
             Round.submission_start_date <= now,
             Round.submission_end_date >= now,
             Round.status != RoundStatus.CANCELLED
         ).first()
+        
+        # Fallback to legacy contest_id field
+        if not round_obj:
+            round_obj = db.query(Round).filter(
+                Round.contest_id == contest_id,
+                Round.submission_start_date <= now,
+                Round.submission_end_date >= now,
+                Round.status != RoundStatus.CANCELLED
+            ).first()
+        
+        return round_obj
 
     def get_rounds_for_contest(self, db: Session, contest_id: int) -> List[Round]:
         """
         Récupère tous les rounds d'un contest, triés par date de début
+        FIXED: Uses new N:N relationship via round_contests table
         """
-        return db.query(Round).filter(
+        from app.models.contests import round_contests
+        # Query rounds via the N:N relationship table
+        rounds = db.query(Round).join(
+            round_contests, Round.id == round_contests.c.round_id
+        ).filter(
+            round_contests.c.contest_id == contest_id,
+            Round.status != RoundStatus.CANCELLED
+        ).order_by(Round.submission_start_date.asc()).all()
+        
+        # Also check legacy contest_id field for backward compatibility
+        legacy_rounds = db.query(Round).filter(
             Round.contest_id == contest_id,
             Round.status != RoundStatus.CANCELLED
         ).order_by(Round.submission_start_date.asc()).all()
+        
+        # Combine and deduplicate
+        round_ids = {r.id for r in rounds}
+        for r in legacy_rounds:
+            if r.id not in round_ids:
+                rounds.append(r)
+        
+        return rounds
 
     def count_participants_for_round(self, db: Session, round_id: int) -> int:
         """

@@ -137,11 +137,24 @@ def map_contest_in_round_to_type(contest: Contest, round_id: int, db: Session, c
         season_level = contest.level.lower() if contest.level else None
         
     # Base query for participants
-    # Corrected: We strictly filter by season_id == contest.id. 
-    # The previous logic comparing season_id with linked ContestSeason IDs was flawed (ID collision).
-    participants_query = db.query(Contestant).filter(
-        Contestant.season_id == contest.id
-    ).filter(Contestant.is_deleted == False)
+    # FIXED: Query by round_id first (new system), then fallback to season_id (legacy)
+    # Find rounds linked to this contest
+    from app.models.round import round_contests as rc_table
+    round_ids_for_contest = db.query(rc_table.c.round_id).filter(
+        rc_table.c.contest_id == contest.id
+    ).all()
+    round_ids_list = [r[0] for r in round_ids_for_contest] if round_ids_for_contest else []
+    
+    # Build query: contestants in rounds linked to this contest OR with season_id == contest.id (legacy)
+    if round_ids_list:
+        participants_query = db.query(Contestant).filter(
+            (Contestant.round_id.in_(round_ids_list)) | (Contestant.season_id == contest.id)
+        ).filter(Contestant.is_deleted == False)
+    else:
+        # Fallback to legacy season_id only
+        participants_query = db.query(Contestant).filter(
+            Contestant.season_id == contest.id
+        ).filter(Contestant.is_deleted == False)
 
     # Apply Geo Filters
     # Priority: Explicit filters > User Location > Default (Global)
@@ -182,11 +195,31 @@ def map_contest_in_round_to_type(contest: Contest, round_id: int, db: Session, c
     participants_count = participants_query.count()
     
     # Calculate total votes for this contest in this round (Apply same filters)
-    votes_query = db.query(func.sum(ContestantRanking.total_votes)).join(
-        Contestant, Contestant.id == ContestantRanking.contestant_id
-    ).filter(
-        Contestant.season_id == contest.id
-    ).filter(Contestant.is_deleted == False)
+    # FIXED: Query by round_id first, then fallback to season_id
+    # Use the round_id passed to this function (it's the round this contest is in)
+    # Also check if there are other rounds linked to this contest
+    from app.models.round import round_contests as rc_table_votes
+    round_ids_for_contest_votes = db.query(rc_table_votes.c.round_id).filter(
+        rc_table_votes.c.contest_id == contest.id
+    ).all()
+    round_ids_list_votes = [r[0] for r in round_ids_for_contest_votes] if round_ids_for_contest_votes else []
+    
+    # Include the current round_id if not already in the list
+    if round_id and round_id not in round_ids_list_votes:
+        round_ids_list_votes.append(round_id)
+    
+    if round_ids_list_votes:
+        votes_query = db.query(func.sum(ContestantRanking.total_votes)).join(
+            Contestant, Contestant.id == ContestantRanking.contestant_id
+        ).filter(
+            (Contestant.round_id.in_(round_ids_list_votes)) | (Contestant.season_id == contest.id)
+        ).filter(Contestant.is_deleted == False)
+    else:
+        votes_query = db.query(func.sum(ContestantRanking.total_votes)).join(
+            Contestant, Contestant.id == ContestantRanking.contestant_id
+        ).filter(
+            Contestant.season_id == contest.id
+        ).filter(Contestant.is_deleted == False)
     
     # Apply EXACT SAME filters to votes
     if filter_country:
@@ -412,24 +445,63 @@ def map_contest_to_type(contest: Contest, db: Session, include_rounds: bool = Tr
     # If I populate it here, it will be sent.
     # I should add `include_contestants` argument to `map_contest_to_type`.
     
+    # FIXED: Find rounds linked to this contest (calculate once, reuse for all queries)
+    from app.models.round import round_contests as rc_table
+    round_ids_for_contest = db.query(rc_table.c.round_id).filter(
+        rc_table.c.contest_id == contest.id
+    ).all()
+    round_ids_list = [r[0] for r in round_ids_for_contest] if round_ids_for_contest else []
+    
     # Logic to fetch contestants if requested
-    # We fetch ALL contestants for this contest/season.
-    # LIMITATION: This fetches ALL. In future we might want pagination on this field via a resolver method in ContestType class.
-    # For now, to match REST API behavior (which seemed to fetch all), we fetch all (limit 100 for safety).
+    # FIXED: Query by round_id first (new system), then fallback to season_id (legacy)
     if include_contestants:
-         qs = db.query(Contestant).filter(Contestant.season_id == contest.id).filter(Contestant.is_deleted == False).limit(100).all()
-         contestants_list = [map_contestant_to_type(c, db) for c in qs]
+        if round_ids_list:
+            qs = db.query(Contestant).filter(
+                (Contestant.round_id.in_(round_ids_list)) | (Contestant.season_id == contest.id)
+            ).filter(Contestant.is_deleted == False).limit(100).all()
+        else:
+            qs = db.query(Contestant).filter(Contestant.season_id == contest.id).filter(Contestant.is_deleted == False).limit(100).all()
+        contestants_list = [map_contestant_to_type(c, db) for c in qs]
 
     # Resolve Current User Participation
     user_participation = None
     if current_user:
-        up = db.query(Contestant).filter(
-            Contestant.season_id == contest.id,
-            Contestant.user_id == current_user.id,
-            Contestant.is_deleted == False
-        ).first()
+        if round_ids_list:
+            up = db.query(Contestant).filter(
+                ((Contestant.round_id.in_(round_ids_list)) | (Contestant.season_id == contest.id)),
+                Contestant.user_id == current_user.id,
+                Contestant.is_deleted == False
+            ).first()
+        else:
+            up = db.query(Contestant).filter(
+                Contestant.season_id == contest.id,
+                Contestant.user_id == current_user.id,
+                Contestant.is_deleted == False
+            ).first()
         if up:
             user_participation = map_contestant_to_type(up, db)
+    
+    # FIXED: Calculate entries_count and total_votes using round_id
+    if hasattr(contest, 'participant_count') and contest.participant_count is not None:
+        entries_count_val = contest.participant_count
+    else:
+        if round_ids_list:
+            entries_count_val = db.query(Contestant).filter(
+                (Contestant.round_id.in_(round_ids_list)) | (Contestant.season_id == contest.id)
+            ).filter(Contestant.is_deleted == False).count()
+        else:
+            entries_count_val = db.query(Contestant).filter(Contestant.season_id == contest.id).filter(Contestant.is_deleted == False).count()
+    
+    if round_ids_list:
+        total_votes_val = db.query(func.sum(ContestantRanking.total_votes)).join(
+            Contestant, Contestant.id == ContestantRanking.contestant_id
+        ).filter(
+            (Contestant.round_id.in_(round_ids_list)) | (Contestant.season_id == contest.id)
+        ).scalar() or 0
+    else:
+        total_votes_val = db.query(func.sum(ContestantRanking.total_votes)).join(
+            Contestant, Contestant.id == ContestantRanking.contestant_id
+        ).filter(Contestant.season_id == contest.id).scalar() or 0
 
     return ContestType(
         id=contest.id,
@@ -465,14 +537,8 @@ def map_contest_to_type(contest: Contest, db: Session, include_rounds: bool = Tr
         verification_video_max_duration=contest.verification_video_max_duration,
         verification_max_size_mb=contest.verification_max_size_mb,
 
-        entries_count=db.query(Contestant).filter(
-            Contestant.season_id == contest.id 
-        ).count() if not hasattr(contest, 'participant_count') else contest.participant_count,
-        total_votes=db.query(func.sum(ContestantRanking.total_votes)).join(
-            Contestant, Contestant.id == ContestantRanking.contestant_id
-        ).filter(
-            Contestant.season_id == contest.id
-        ).scalar() or 0,
+        entries_count=entries_count_val,
+        total_votes=total_votes_val,
         rounds=rounds,
         voting_type=voting_type,
         contestants=contestants_list,
