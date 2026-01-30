@@ -25,12 +25,9 @@ from app.api import deps # To get user logic if needed, or just types
 
 
 def get_db():
-    """Get database session"""
+    """Get database session - MUST be closed after use"""
     db = SessionLocal()
-    try:
-        return db
-    finally:
-        pass  # Will be closed after use
+    return db
 
 
 def map_user_to_type(user: User) -> UserType:
@@ -723,38 +720,50 @@ class Query:
             if id:
                 query = query.filter(Round.id == id)
             
-            # FIXED: Always join with contests to get all rounds with their contests
-            # Use LEFT JOIN to include rounds even if they don't have contests linked yet
+            # FIXED: Query rounds directly first, then filter by contest attributes if needed
+            # This avoids complex joins that might filter out rounds incorrectly
             from app.models.round import round_contests
-            from sqlalchemy import or_
             
-            # Always join with contests (LEFT JOIN to include rounds without contests)
-            # Check both round_contests table AND legacy round.contest_id
-            query = query.outerjoin(round_contests, Round.id == round_contests.c.round_id)
-            query = query.outerjoin(Contest, or_(
-                Contest.id == round_contests.c.contest_id,
-                Contest.id == Round.contest_id
-            ))
-            
-            # Apply filters only if specified
-            if contest_id:
-                query = query.filter(Contest.id == contest_id)
-            
-            # Only filter by is_active when explicitly True
-            # When is_active=False, we want ALL contests (active and inactive)
-            if is_active is True:
-                query = query.filter(Contest.is_active == True)
-                
-            if contest_type:
-                query = query.filter(Contest.contest_type == contest_type)
-                
-            if has_voting_type is not None:
-                if has_voting_type:
-                    query = query.filter(Contest.voting_type_id.isnot(None))
-                else:
-                    query = query.filter(Contest.voting_type_id.is_(None))
-            
+            # First, get all rounds (without joining contests to avoid filtering issues)
             rounds = query.offset(skip).limit(limit).all()
+            
+            # If we have filters that require contest data, filter rounds after fetching
+            if contest_id or has_voting_type is not None or contest_type or is_active is True:
+                # Get round IDs that match the contest filters via round_contests table
+                contest_query = db.query(round_contests.c.round_id).distinct()
+                contest_query = contest_query.join(Contest, Contest.id == round_contests.c.contest_id)
+                
+                # Also check legacy round.contest_id
+                legacy_round_ids_query = db.query(Round.id).filter(Round.contest_id.isnot(None))
+                if contest_id:
+                    legacy_round_ids_query = legacy_round_ids_query.filter(Round.contest_id == contest_id)
+                legacy_round_ids = [r[0] for r in legacy_round_ids_query.all()]
+                
+                if contest_id:
+                    contest_query = contest_query.filter(Contest.id == contest_id)
+                
+                # Only filter by is_active when explicitly True
+                if is_active is True:
+                    contest_query = contest_query.filter(Contest.is_active == True)
+                    
+                if contest_type:
+                    contest_query = contest_query.filter(Contest.contest_type == contest_type)
+                    
+                if has_voting_type is not None:
+                    if has_voting_type:
+                        contest_query = contest_query.filter(Contest.voting_type_id.isnot(None))
+                    else:
+                        contest_query = contest_query.filter(Contest.voting_type_id.is_(None))
+                
+                # Get round IDs that match filters
+                filtered_round_ids = set([r[0] for r in contest_query.all()] + legacy_round_ids)
+                
+                # Filter rounds to only include those with matching contests
+                if filtered_round_ids:
+                    rounds = [r for r in rounds if r.id in filtered_round_ids]
+                else:
+                    # If no rounds match filters, return empty list
+                    rounds = []
             
             # Get current user from context
             current_user = info.context.get("user")
