@@ -122,8 +122,10 @@ function ContestsPageContent() {
       }
     })
     
-    // Exclure les contests sans participants
-    categoryFiltered = categoryFiltered.filter(contest => contest.contestants > 0)
+    // FIXED: Don't exclude contests with 0 contestants - they might have contestants but the count might be wrong
+    // Instead, only filter if we're sure there are no contestants (contestants === 0 AND we've verified)
+    // For now, show all contests - the backend should return accurate counts
+    // categoryFiltered = categoryFiltered.filter(contest => contest.contestants > 0)
     
     // Filtrer par type si un onglet est sélectionné (mais pas "all")
     if (activeTab !== 'all') {

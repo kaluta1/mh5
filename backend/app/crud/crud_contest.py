@@ -447,6 +447,17 @@ class CRUDContest:
         if round_ids:
             conditions.append(Contestant.round_id.in_(round_ids))
         
+        # FIXED: Always count ALL contestants for the contest first (without location filters)
+        # This ensures the count is accurate even when no user is logged in
+        base_entries_query = db.query(func.count(Contestant.id.distinct()))\
+            .filter(
+                Contestant.is_deleted == False,
+                or_(*conditions) if len(conditions) > 1 else conditions[0]
+            )
+        
+        # Get total count without location filters (for display purposes)
+        total_entries_count = base_entries_query.scalar() or 0
+        
         # Compter le nombre de participants selon la saison/round et la localisation
         entries_query = db.query(func.count(Contestant.id.distinct()))\
             .filter(
@@ -457,9 +468,11 @@ class CRUDContest:
         # Appliquer les filtres géographiques
         # Priorité: filtres explicites > localisation de l'utilisateur
         has_location_filter = filter_country or filter_region or filter_continent
+        applied_location_filter = False
         
         if has_location_filter:
             # Utiliser les filtres fournis par l'utilisateur
+            applied_location_filter = True
             if filter_country:
                 entries_query = entries_query.filter(
                     func.lower(Contestant.country) == func.lower(filter_country)
@@ -478,28 +491,41 @@ class CRUDContest:
             
             if season_level_lower == "city":
                 # Filtrer par ville et pays
-                entries_query = entries_query.filter(
-                    Contestant.city == current_user.city,
-                    Contestant.country == current_user.country
-                )
+                if current_user.city and current_user.country:
+                    entries_query = entries_query.filter(
+                        Contestant.city == current_user.city,
+                        Contestant.country == current_user.country
+                    )
+                    applied_location_filter = True
             elif season_level_lower == "country":
                 # Filtrer par pays
-                entries_query = entries_query.filter(
-                    Contestant.country == current_user.country
-                )
+                if current_user.country:
+                    entries_query = entries_query.filter(
+                        Contestant.country == current_user.country
+                    )
+                    applied_location_filter = True
             elif season_level_lower in ("regional", "region"):
                 # Filtrer par région
-                entries_query = entries_query.filter(
-                    Contestant.region == current_user.region
-                )
+                if current_user.region:
+                    entries_query = entries_query.filter(
+                        Contestant.region == current_user.region
+                    )
+                    applied_location_filter = True
             elif season_level_lower == "continent":
                 # Filtrer par continent
-                entries_query = entries_query.filter(
-                    Contestant.continent == current_user.continent
-                )
+                if current_user.continent:
+                    entries_query = entries_query.filter(
+                        Contestant.continent == current_user.continent
+                    )
+                    applied_location_filter = True
             # Pour "global", pas de filtre géographique
         
-        entries_count = entries_query.scalar() or 0
+        # Use total count if no location filters were applied, otherwise use filtered count
+        # IMPORTANT: For public display (no user logged in), always show total count
+        if not applied_location_filter:
+            entries_count = total_entries_count
+        else:
+            entries_count = entries_query.scalar() or 0
         
         # Vérifier si l'utilisateur connecté participe à ce concours
         current_user_contesting = False

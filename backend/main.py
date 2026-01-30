@@ -76,7 +76,11 @@ cors_origins = [
 
 # Ajouter les origines depuis les settings
 if settings.BACKEND_CORS_ORIGINS:
-    cors_origins.extend(settings.BACKEND_CORS_ORIGINS)
+    # Handle both comma-separated string and list
+    if isinstance(settings.BACKEND_CORS_ORIGINS, str):
+        cors_origins.extend([origin.strip() for origin in settings.BACKEND_CORS_ORIGINS.split(",") if origin.strip()])
+    elif isinstance(settings.BACKEND_CORS_ORIGINS, list):
+        cors_origins.extend([origin.strip() for origin in settings.BACKEND_CORS_ORIGINS if origin.strip()])
 
 # Nettoyer et supprimer les doublons
 cors_origins = list(set([origin.strip() for origin in cors_origins if origin]))
@@ -88,7 +92,7 @@ print(f"CORS Origins configured: {cors_origins}")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,  # Use explicit origins list
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://.*\.vercel\.app$",  # Allow localhost and all Vercel deployments
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://.*\.vercel\.app$|^https://.*\.vercel\.dev$",  # Allow localhost and all Vercel deployments (both .app and .dev)
     allow_credentials=True,  # Allow credentials for authentication cookies/tokens
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
