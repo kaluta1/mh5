@@ -92,6 +92,13 @@ def read_contests(
             db=db, skip=skip, limit=limit, filters=filters
         )
         logger.info(f"Successfully fetched {len(contests)} contests from database")
+        
+        # DEBUG: Log contest IDs and basic info
+        if contests:
+            logger.info(f"Sample contest IDs: {[c.id for c in contests[:5]]}")
+            logger.info(f"Sample contest names: {[c.name for c in contests[:5]]}")
+        else:
+            logger.warning("No contests found in database with current filters!")
     except Exception as e:
         logger.error(f"Error fetching contests from database: {str(e)}", exc_info=True)
         # Re-raise to let the database session handler catch it properly
@@ -105,6 +112,7 @@ def read_contests(
     
     for c in contests:
         try:
+            logger.debug(f"Enriching contest {c.id} ({c.name})...")
             enriched = contest.enrich_contest_with_stats(
                 db=db, 
                 contest=c, 
@@ -114,6 +122,7 @@ def read_contests(
                 filter_continent=filter_continent
             )
             if isinstance(enriched, dict):
+                logger.debug(f"Contest {c.id} enriched: entries_count={enriched.get('entries_count', 0)}, total_votes={enriched.get('total_votes', 0)}")
                 enriched_contests.append(enriched)
             else:
                 logger.warning(f"Contest {c.id} enrichment returned non-dict: {type(enriched)}")

@@ -452,22 +452,34 @@ class CRUDContest:
         # Find round IDs linked to this contest
         round_ids = []
         try:
-            round_ids_via_table = db.query(round_contests.c.round_id).filter(
-                round_contests.c.contest_id == contest.id
-            ).all()
+            from sqlalchemy import select
+            round_ids_via_table = db.execute(
+                select(round_contests.c.round_id).where(
+                    round_contests.c.contest_id == contest.id
+                )
+            ).fetchall()
             if round_ids_via_table:
                 round_ids.extend([r[0] for r in round_ids_via_table])
-        except Exception:
+                logger.debug(f"Contest {contest.id} linked to rounds via table: {round_ids}")
+        except Exception as e:
+            logger.warning(f"Error querying round_contests for contest {contest.id}: {e}")
             pass
         
         try:
             legacy_rounds = db.query(Round.id).filter(Round.contest_id == contest.id).all()
             if legacy_rounds:
-                round_ids.extend([r[0] for r in legacy_rounds])
-        except Exception:
+                legacy_ids = [r[0] for r in legacy_rounds]
+                round_ids.extend(legacy_ids)
+                logger.debug(f"Contest {contest.id} linked to rounds via legacy: {legacy_ids}")
+        except Exception as e:
+            logger.warning(f"Error querying legacy rounds for contest {contest.id}: {e}")
             pass
         
         round_ids = list(set(round_ids))
+        if round_ids:
+            logger.debug(f"Contest {contest.id} has {len(round_ids)} linked rounds: {round_ids}")
+        else:
+            logger.debug(f"Contest {contest.id} has no linked rounds")
         
         # Build query with OR conditions for round_id and season_id
         from sqlalchemy import or_
