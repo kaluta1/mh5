@@ -27,6 +27,51 @@ from app.services.content_relevance import content_relevance_service
 router = APIRouter()
 
 
+# DEBUG ENDPOINT: Test if contestants exist in database
+@router.get("/debug/all-contestants")
+def debug_get_all_contestants(
+    *,
+    db: Session = Depends(deps.get_db),
+    limit: int = Query(20, ge=1, le=100)
+):
+    """
+    DEBUG: Get all contestants from database (no filters) to verify they exist.
+    This endpoint helps diagnose why contestants aren't appearing.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        # Query ALL non-deleted contestants
+        all_contestants = db.query(Contestant).filter(
+            Contestant.is_deleted == False
+        ).limit(limit).all()
+        
+        logger.info(f"[DEBUG] Found {len(all_contestants)} total contestants in database")
+        
+        result = []
+        for c in all_contestants:
+            result.append({
+                "id": c.id,
+                "user_id": c.user_id,
+                "season_id": c.season_id,
+                "round_id": c.round_id,
+                "title": c.title,
+                "is_deleted": c.is_deleted,
+                "registration_date": c.registration_date.isoformat() if c.registration_date else None
+            })
+            logger.info(f"[DEBUG] Contestant {c.id}: season_id={c.season_id}, round_id={c.round_id}, user_id={c.user_id}")
+        
+        return {
+            "total_found": len(all_contestants),
+            "contestants": result,
+            "message": f"Found {len(all_contestants)} contestants. Check logs for details."
+        }
+    except Exception as e:
+        logger.error(f"[DEBUG] Error querying contestants: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+
 # Routes spécifiques d'abord (avant les routes génériques avec {id})
 # IMPORTANT: Les routes plus spécifiques DOIVENT venir avant les routes générales
 

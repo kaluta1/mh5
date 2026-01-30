@@ -538,11 +538,54 @@ def map_contest_to_type(contest: Contest, db: Session, include_rounds: bool = Tr
     
     # Logic to fetch contestants if requested
     if include_contestants:
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # DEBUG: Log what we're querying
+        logger.info(f"[map_contest_to_type] Querying contestants for contest.id={contest.id}, all_round_ids={all_round_ids}")
+        logger.info(f"[map_contest_to_type] OR conditions count: {len(or_conditions)}")
+        
+        # First, try the comprehensive query
         qs = db.query(Contestant).filter(
             Contestant.is_deleted == False,
             base_filter
         ).limit(100).all()
+        
+        logger.info(f"[map_contest_to_type] Found {len(qs)} contestants with comprehensive query")
+        
+        # If no results, try fallback queries
+        if not qs:
+            logger.warning(f"[map_contest_to_type] No contestants found. Trying fallback queries...")
+            
+            # Fallback 1: season_id only
+            fallback1 = db.query(Contestant).filter(
+                Contestant.is_deleted == False,
+                Contestant.season_id == contest.id
+            ).limit(100).all()
+            logger.info(f"[map_contest_to_type] Fallback 1 (season_id={contest.id}): Found {len(fallback1)}")
+            if fallback1:
+                qs = fallback1
+            
+            # Fallback 2: round_id only
+            if not qs and all_round_ids:
+                fallback2 = db.query(Contestant).filter(
+                    Contestant.is_deleted == False,
+                    Contestant.round_id.in_(all_round_ids)
+                ).limit(100).all()
+                logger.info(f"[map_contest_to_type] Fallback 2 (round_ids={all_round_ids}): Found {len(fallback2)}")
+                if fallback2:
+                    qs = fallback2
+            
+            # Fallback 3: ANY non-deleted contestant (for debugging)
+            if not qs:
+                fallback3 = db.query(Contestant).filter(
+                    Contestant.is_deleted == False
+                ).limit(10).all()
+                logger.warning(f"[map_contest_to_type] Fallback 3 (ANY): Found {len(fallback3)}. Sample IDs: {[c.id for c in fallback3]}")
+                logger.warning(f"[map_contest_to_type] Sample contestants season_id/round_id: {[(c.id, c.season_id, c.round_id) for c in fallback3]}")
+        
         contestants_list = [map_contestant_to_type(c, db) for c in qs]
+        logger.info(f"[map_contest_to_type] Returning {len(contestants_list)} contestants")
 
     # Resolve Current User Participation
     user_participation = None
