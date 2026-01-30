@@ -954,11 +954,6 @@ class CRUDContest:
             .options(
                 joinedload(Contestant.user)
             )
-                    Contestant.is_deleted == False
-                )\
-                .options(
-                    joinedload(Contestant.user)
-                )
         
         # Appliquer le filtrage géographique selon le niveau de la saison et l'utilisateur connecté
         # Récupérer l'utilisateur courant pour le filtrage géographique
