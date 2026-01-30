@@ -136,25 +136,39 @@ def map_contest_in_round_to_type(contest: Contest, round_id: int, db: Session, c
     if not season_level:
         season_level = contest.level.lower() if contest.level else None
         
-    # Base query for participants
-    # FIXED: Query by round_id first (new system), then fallback to season_id (legacy)
-    # Find rounds linked to this contest
-    from app.models.round import round_contests as rc_table
-    round_ids_for_contest = db.query(rc_table.c.round_id).filter(
+    # FIXED: Query participants DIRECTLY from database using comprehensive OR query
+    from app.models.round import Round, round_contests as rc_table
+    from sqlalchemy import or_
+    
+    # Find ALL possible round IDs linked to this contest
+    round_ids_via_table = db.query(rc_table.c.round_id).filter(
         rc_table.c.contest_id == contest.id
     ).all()
-    round_ids_list = [r[0] for r in round_ids_for_contest] if round_ids_for_contest else []
+    round_ids_from_table = [r[0] for r in round_ids_via_table] if round_ids_via_table else []
     
-    # Build query: contestants in rounds linked to this contest OR with season_id == contest.id (legacy)
-    if round_ids_list:
+    # Also check legacy round.contest_id
+    legacy_rounds = db.query(Round.id).filter(Round.contest_id == contest.id).all()
+    legacy_round_ids = [r[0] for r in legacy_rounds] if legacy_rounds else []
+    
+    # Combine all round IDs
+    all_round_ids = list(set(round_ids_from_table + legacy_round_ids))
+    
+    # Build comprehensive OR query
+    or_conditions = []
+    if all_round_ids:
+        or_conditions.append(Contestant.round_id.in_(all_round_ids))
+    or_conditions.append(Contestant.season_id == contest.id)
+    
+    if or_conditions:
         participants_query = db.query(Contestant).filter(
-            (Contestant.round_id.in_(round_ids_list)) | (Contestant.season_id == contest.id)
-        ).filter(Contestant.is_deleted == False)
+            Contestant.is_deleted == False,
+            or_(*or_conditions)
+        )
     else:
-        # Fallback to legacy season_id only
         participants_query = db.query(Contestant).filter(
+            Contestant.is_deleted == False,
             Contestant.season_id == contest.id
-        ).filter(Contestant.is_deleted == False)
+        )
 
     # Apply Geo Filters
     # Priority: Explicit filters > User Location > Default (Global)
@@ -195,31 +209,30 @@ def map_contest_in_round_to_type(contest: Contest, round_id: int, db: Session, c
     participants_count = participants_query.count()
     
     # Calculate total votes for this contest in this round (Apply same filters)
-    # FIXED: Query by round_id first, then fallback to season_id
-    # Use the round_id passed to this function (it's the round this contest is in)
-    # Also check if there are other rounds linked to this contest
-    from app.models.round import round_contests as rc_table_votes
-    round_ids_for_contest_votes = db.query(rc_table_votes.c.round_id).filter(
-        rc_table_votes.c.contest_id == contest.id
-    ).all()
-    round_ids_list_votes = [r[0] for r in round_ids_for_contest_votes] if round_ids_for_contest_votes else []
+    # FIXED: Use the same comprehensive OR query as participants
+    # Include the current round_id if provided
+    if round_id and round_id not in all_round_ids:
+        all_round_ids.append(round_id)
     
-    # Include the current round_id if not already in the list
-    if round_id and round_id not in round_ids_list_votes:
-        round_ids_list_votes.append(round_id)
+    or_conditions_votes = []
+    if all_round_ids:
+        or_conditions_votes.append(Contestant.round_id.in_(all_round_ids))
+    or_conditions_votes.append(Contestant.season_id == contest.id)
     
-    if round_ids_list_votes:
+    if or_conditions_votes:
         votes_query = db.query(func.sum(ContestantRanking.total_votes)).join(
             Contestant, Contestant.id == ContestantRanking.contestant_id
         ).filter(
-            (Contestant.round_id.in_(round_ids_list_votes)) | (Contestant.season_id == contest.id)
-        ).filter(Contestant.is_deleted == False)
+            Contestant.is_deleted == False,
+            or_(*or_conditions_votes)
+        )
     else:
         votes_query = db.query(func.sum(ContestantRanking.total_votes)).join(
             Contestant, Contestant.id == ContestantRanking.contestant_id
         ).filter(
+            Contestant.is_deleted == False,
             Contestant.season_id == contest.id
-        ).filter(Contestant.is_deleted == False)
+        )
     
     # Apply EXACT SAME filters to votes
     if filter_country:
@@ -445,63 +458,64 @@ def map_contest_to_type(contest: Contest, db: Session, include_rounds: bool = Tr
     # If I populate it here, it will be sent.
     # I should add `include_contestants` argument to `map_contest_to_type`.
     
-    # FIXED: Find rounds linked to this contest (calculate once, reuse for all queries)
-    from app.models.round import round_contests as rc_table
-    round_ids_for_contest = db.query(rc_table.c.round_id).filter(
+    # FIXED: Query contestants DIRECTLY from database using comprehensive OR query
+    from app.models.round import Round, round_contests as rc_table
+    from sqlalchemy import or_
+    
+    # Find ALL possible round IDs linked to this contest
+    round_ids_via_table = db.query(rc_table.c.round_id).filter(
         rc_table.c.contest_id == contest.id
     ).all()
-    round_ids_list = [r[0] for r in round_ids_for_contest] if round_ids_for_contest else []
+    round_ids_from_table = [r[0] for r in round_ids_via_table] if round_ids_via_table else []
+    
+    legacy_rounds = db.query(Round.id).filter(Round.contest_id == contest.id).all()
+    legacy_round_ids = [r[0] for r in legacy_rounds] if legacy_rounds else []
+    
+    all_round_ids = list(set(round_ids_from_table + legacy_round_ids))
+    
+    # Build comprehensive OR conditions
+    or_conditions = []
+    if all_round_ids:
+        or_conditions.append(Contestant.round_id.in_(all_round_ids))
+    or_conditions.append(Contestant.season_id == contest.id)
+    
+    # Base filter for all queries
+    base_filter = or_(*or_conditions) if or_conditions else (Contestant.season_id == contest.id)
     
     # Logic to fetch contestants if requested
-    # FIXED: Query by round_id first (new system), then fallback to season_id (legacy)
     if include_contestants:
-        if round_ids_list:
-            qs = db.query(Contestant).filter(
-                (Contestant.round_id.in_(round_ids_list)) | (Contestant.season_id == contest.id)
-            ).filter(Contestant.is_deleted == False).limit(100).all()
-        else:
-            qs = db.query(Contestant).filter(Contestant.season_id == contest.id).filter(Contestant.is_deleted == False).limit(100).all()
+        qs = db.query(Contestant).filter(
+            Contestant.is_deleted == False,
+            base_filter
+        ).limit(100).all()
         contestants_list = [map_contestant_to_type(c, db) for c in qs]
 
     # Resolve Current User Participation
     user_participation = None
     if current_user:
-        if round_ids_list:
-            up = db.query(Contestant).filter(
-                ((Contestant.round_id.in_(round_ids_list)) | (Contestant.season_id == contest.id)),
-                Contestant.user_id == current_user.id,
-                Contestant.is_deleted == False
-            ).first()
-        else:
-            up = db.query(Contestant).filter(
-                Contestant.season_id == contest.id,
-                Contestant.user_id == current_user.id,
-                Contestant.is_deleted == False
-            ).first()
+        up = db.query(Contestant).filter(
+            Contestant.is_deleted == False,
+            base_filter,
+            Contestant.user_id == current_user.id
+        ).first()
         if up:
             user_participation = map_contestant_to_type(up, db)
     
-    # FIXED: Calculate entries_count and total_votes using round_id
+    # FIXED: Calculate entries_count and total_votes using comprehensive query
     if hasattr(contest, 'participant_count') and contest.participant_count is not None:
         entries_count_val = contest.participant_count
     else:
-        if round_ids_list:
-            entries_count_val = db.query(Contestant).filter(
-                (Contestant.round_id.in_(round_ids_list)) | (Contestant.season_id == contest.id)
-            ).filter(Contestant.is_deleted == False).count()
-        else:
-            entries_count_val = db.query(Contestant).filter(Contestant.season_id == contest.id).filter(Contestant.is_deleted == False).count()
+        entries_count_val = db.query(Contestant).filter(
+            Contestant.is_deleted == False,
+            base_filter
+        ).count()
     
-    if round_ids_list:
-        total_votes_val = db.query(func.sum(ContestantRanking.total_votes)).join(
-            Contestant, Contestant.id == ContestantRanking.contestant_id
-        ).filter(
-            (Contestant.round_id.in_(round_ids_list)) | (Contestant.season_id == contest.id)
-        ).scalar() or 0
-    else:
-        total_votes_val = db.query(func.sum(ContestantRanking.total_votes)).join(
-            Contestant, Contestant.id == ContestantRanking.contestant_id
-        ).filter(Contestant.season_id == contest.id).scalar() or 0
+    total_votes_val = db.query(func.sum(ContestantRanking.total_votes)).join(
+        Contestant, Contestant.id == ContestantRanking.contestant_id
+    ).filter(
+        Contestant.is_deleted == False,
+        base_filter
+    ).scalar() or 0
 
     return ContestType(
         id=contest.id,
