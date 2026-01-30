@@ -12,7 +12,7 @@ Ou via l'API admin:
 from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
 from calendar import monthrange
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, defer
 from sqlalchemy import select, insert
 from typing import Optional
 
@@ -154,10 +154,31 @@ def generate_monthly_round(db: Session, target_date: Optional[date] = None) -> R
         raise Exception(f"Failed to create round in database: {str(e)}\n\nTraceback:\n{error_traceback}") from e
     
     # Récupérer tous les contests actifs
+    # FIXED: Use defer() to exclude date columns that don't exist in database
+    from sqlalchemy.orm import defer
     try:
-        active_contests = db.query(Contest).filter(
+        # Query contests but defer the date columns that don't exist in DB
+        contests_query = db.query(Contest).filter(
             Contest.is_active == True
-        ).all()
+        ).options(
+            # Defer date columns that may not exist in database
+            defer(Contest.submission_start_date),
+            defer(Contest.submission_end_date),
+            defer(Contest.voting_start_date),
+            defer(Contest.voting_end_date),
+            defer(Contest.city_season_start_date),
+            defer(Contest.city_season_end_date),
+            defer(Contest.country_season_start_date),
+            defer(Contest.country_season_end_date),
+            defer(Contest.regional_start_date),
+            defer(Contest.regional_end_date),
+            defer(Contest.continental_start_date),
+            defer(Contest.continental_end_date),
+            defer(Contest.global_start_date),
+            defer(Contest.global_end_date),
+        )
+        
+        active_contests = contests_query.all()
         print(f"Found {len(active_contests)} active contests")
         
         # Try to filter by is_deleted if column exists
@@ -169,12 +190,42 @@ def generate_monthly_round(db: Session, target_date: Optional[date] = None) -> R
             pass
     except Exception as e:
         print(f"Warning: Error filtering contests: {e}")
-        # Fallback: get all contests
+        import traceback
+        print(traceback.format_exc())
+        # Fallback: try to get contest IDs only, then load without date columns
         try:
-            active_contests = db.query(Contest).all()
-            print(f"Fallback: Found {len(active_contests)} total contests")
+            # Get just IDs first
+            contest_ids = db.execute(
+                select(Contest.id).where(Contest.is_active == True)
+            ).scalars().all()
+            print(f"Fallback: Found {len(contest_ids)} contest IDs")
+            
+            # Load contests by ID with defer
+            if contest_ids:
+                active_contests = db.query(Contest).filter(
+                    Contest.id.in_(contest_ids)
+                ).options(
+                    defer(Contest.submission_start_date),
+                    defer(Contest.submission_end_date),
+                    defer(Contest.voting_start_date),
+                    defer(Contest.voting_end_date),
+                    defer(Contest.city_season_start_date),
+                    defer(Contest.city_season_end_date),
+                    defer(Contest.country_season_start_date),
+                    defer(Contest.country_season_end_date),
+                    defer(Contest.regional_start_date),
+                    defer(Contest.regional_end_date),
+                    defer(Contest.continental_start_date),
+                    defer(Contest.continental_end_date),
+                    defer(Contest.global_start_date),
+                    defer(Contest.global_end_date),
+                ).all()
+            else:
+                active_contests = []
         except Exception as e2:
             print(f"Error: Could not query contests at all: {e2}")
+            import traceback
+            print(traceback.format_exc())
             active_contests = []
     
     # Associer tous les contests au round via la table de liaison
