@@ -97,10 +97,14 @@ app.add_middleware(
 # Inclusion des routes API
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
-# GraphQL endpoint
-from app.graphql.schema import graphql_app
-app.include_router(graphql_app, prefix="/graphql")
-print("✅ GraphQL endpoint available at /graphql")
+# GraphQL endpoint (optional - skip if strawberry not available)
+try:
+    from app.graphql.schema import graphql_app
+    app.include_router(graphql_app, prefix="/graphql")
+    print("✅ GraphQL endpoint available at /graphql")
+except ImportError as e:
+    print(f"⚠️  GraphQL endpoint not available: {e}")
+    print("   Continuing without GraphQL support...")
 
 
 # Servir les fichiers statiques (médias)

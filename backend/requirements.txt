@@ -71,7 +71,8 @@ vine==5.1.0
 wcwidth==0.2.14
 
 # GraphQL Dependencies
-strawberry-graphql[fastapi]>=0.216.0
+# Using latest version - upgrade if Python 3.13 compatibility issues occur
+strawberry-graphql[fastapi]>=0.230.0
 
 # Feed Microservice Dependencies (merged)
 pynacl==1.5.0  # End-to-end encryption for messages
