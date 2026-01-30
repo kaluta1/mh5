@@ -90,7 +90,6 @@ def read_rounds(
 def ensure_january_round(
     *,
     db: Session = Depends(deps.get_db),
-    current_user: Optional[models.User] = Depends(deps.get_current_active_user_optional),
 ) -> Any:
     """
     Ensure January round exists for current year and links all active contests.
@@ -98,19 +97,34 @@ def ensure_january_round(
     """
     from app.services.monthly_round_scheduler import monthly_round_scheduler
     
+    import logging
+    logger = logging.getLogger(__name__)
+    
     try:
+        logger.info("Starting ensure_january_round_exists...")
         round_obj = monthly_round_scheduler.ensure_january_round_exists()
         if round_obj:
+            logger.info(f"Successfully retrieved/created January round (id={round_obj.id})")
             return round_obj
         else:
+            logger.error("ensure_january_round_exists returned None")
             raise HTTPException(
                 status_code=500,
-                detail="Failed to create or retrieve January round"
+                detail="Failed to create or retrieve January round (returned None)"
             )
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
     except Exception as e:
+        logger.error(f"Error in ensure_january_round endpoint: {str(e)}", exc_info=True)
+        # Return more detailed error message
+        error_detail = str(e)
+        if "Failed to ensure" in error_detail:
+            # Extract the underlying error
+            error_detail = error_detail.split(": ", 1)[-1] if ": " in error_detail else error_detail
         raise HTTPException(
             status_code=500,
-            detail=f"Error ensuring January round: {str(e)}"
+            detail=f"Error ensuring January round: {error_detail}"
         )
 
 

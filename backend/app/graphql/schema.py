@@ -325,14 +325,47 @@ def map_round_to_type(
     contests_in_round = []
     
     # FIXED: Query contests DIRECTLY from database - check both round_contests table AND legacy round.contest_id
-    from sqlalchemy import or_
+    from sqlalchemy import or_, select
+    import logging
+    logger = logging.getLogger(__name__)
     
     # Method 1: Via round_contests association table (N:N)
-    contests_via_table = db.query(Contest).join(
-        round_contests, Contest.id == round_contests.c.contest_id
-    ).filter(
-        round_contests.c.round_id == round_obj.id
-    ).all()
+    # FIXED: Defer date columns that don't exist in database to avoid SQL errors
+    from sqlalchemy.orm import defer
+    try:
+        contests_via_table = db.query(Contest).join(
+            round_contests, Contest.id == round_contests.c.contest_id
+        ).filter(
+            round_contests.c.round_id == round_obj.id
+        ).options(
+            # Defer date columns that may not exist in database
+            defer(Contest.submission_start_date),
+            defer(Contest.submission_end_date),
+            defer(Contest.voting_start_date),
+            defer(Contest.voting_end_date),
+            defer(Contest.city_season_start_date),
+            defer(Contest.city_season_end_date),
+            defer(Contest.country_season_start_date),
+            defer(Contest.country_season_end_date),
+            defer(Contest.regional_start_date),
+            defer(Contest.regional_end_date),
+            defer(Contest.continental_start_date),
+            defer(Contest.continental_end_date),
+            defer(Contest.global_start_date),
+            defer(Contest.global_end_date),
+        ).all()
+    except Exception as e:
+        # Fallback: try without defer (may fail if columns don't exist)
+        logger.warning(f"Error with defer, trying direct query: {e}")
+        try:
+            contests_via_table = db.query(Contest).join(
+                round_contests, Contest.id == round_contests.c.contest_id
+            ).filter(
+                round_contests.c.round_id == round_obj.id
+            ).all()
+        except Exception as e2:
+            logger.error(f"Error loading contests: {e2}", exc_info=True)
+            contests_via_table = []
     
     # Method 2: Via legacy round.contest_id (1:N) - if round has direct contest_id
     contests_via_legacy = []
@@ -624,9 +657,10 @@ def map_contest_to_type(contest: Contest, db: Session, include_rounds: bool = Tr
         level=contest.level,
         
         # Submission Status & Dates
+        # FIXED: Use getattr to safely access date fields that may not exist in database
         is_submission_open=contest.is_submission_open,
-        submission_start_date=contest.submission_start_date,
-        submission_end_date=contest.submission_end_date,
+        submission_start_date=getattr(contest, 'submission_start_date', None),
+        submission_end_date=getattr(contest, 'submission_end_date', None),
         
         # Verification Requirements
         requires_kyc=contest.requires_kyc,

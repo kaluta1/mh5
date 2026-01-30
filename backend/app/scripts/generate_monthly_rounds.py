@@ -122,24 +122,38 @@ def generate_monthly_round(db: Session, target_date: Optional[date] = None) -> R
         global_end_date=global_end,
     )
     
-    db.add(new_round)
-    db.flush()  # Pour obtenir l'ID
+    try:
+        db.add(new_round)
+        db.flush()  # Pour obtenir l'ID
+        print(f"Round '{round_name}' created with ID: {new_round.id}")
+    except Exception as e:
+        print(f"Error creating round object: {e}")
+        db.rollback()
+        raise Exception(f"Failed to create round in database: {str(e)}") from e
     
     # Récupérer tous les contests actifs
     try:
         active_contests = db.query(Contest).filter(
             Contest.is_active == True
         ).all()
+        print(f"Found {len(active_contests)} active contests")
         
         # Try to filter by is_deleted if column exists
         try:
             active_contests = [c for c in active_contests if not getattr(c, 'is_deleted', False)]
-        except:
+            print(f"After filtering is_deleted: {len(active_contests)} contests")
+        except Exception as e:
+            print(f"Warning: Could not filter by is_deleted: {e}")
             pass
     except Exception as e:
         print(f"Warning: Error filtering contests: {e}")
         # Fallback: get all contests
-        active_contests = db.query(Contest).all()
+        try:
+            active_contests = db.query(Contest).all()
+            print(f"Fallback: Found {len(active_contests)} total contests")
+        except Exception as e2:
+            print(f"Error: Could not query contests at all: {e2}")
+            active_contests = []
     
     # Associer tous les contests au round via la table de liaison
     linked_count = 0
@@ -166,7 +180,13 @@ def generate_monthly_round(db: Session, target_date: Optional[date] = None) -> R
             print(f"Warning: Could not link contest {contest.id}: {e}")
             continue
     
-    db.commit()
+    try:
+        db.commit()
+        print(f"Successfully committed round and {linked_count} contest links")
+    except Exception as e:
+        print(f"Error committing to database: {e}")
+        db.rollback()
+        raise Exception(f"Failed to commit round to database: {str(e)}") from e
     
     print(f"✅ Round '{round_name}' créé avec succès!")
     print(f"   - ID: {new_round.id}")
