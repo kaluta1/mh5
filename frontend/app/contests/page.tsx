@@ -331,7 +331,7 @@ function ContestsPageContent() {
         router.push(`/dashboard/contests/${selectedContestId}/apply`)
         setShouldGoToParticipate(false)
       } else {
-      router.push(`/dashboard/contests/${selectedContestId}`)
+        router.push(`/dashboard/contests/${selectedContestId}`)
       }
       setSelectedContestId(null)
     }
@@ -539,7 +539,7 @@ function ContestsPageContent() {
               <h3 className="text-xl font-bold text-gray-700 dark:text-gray-300 mb-2">
                 {t('pages.contests.no_results') || "Aucun concours trouvé"}
               </h3>
-              <p className="text-gray-500 dark:text-gray-400 mb-2">
+              <p className="text-gray-500 dark:text-gray-400 mb-6 max-w-md mx-auto">
                 {t('pages.contests.try_different_filter') || "Essayez un autre filtre ou terme de recherche"}
               </p>
               {/* DEBUG INFO */}
@@ -552,16 +552,6 @@ function ContestsPageContent() {
                 <p>Is Loading: {isLoading ? 'Yes' : 'No'}</p>
                 <p>Search Term: {activeSearchTerm || 'None'}</p>
               </div>
-            <div className="text-center py-20 bg-gray-50 dark:bg-gray-800/50 rounded-3xl border border-gray-100 dark:border-gray-700">
-              <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
-                <Trophy className="w-10 h-10 text-gray-400" />
-              </div>
-              <h3 className="text-xl font-bold text-gray-700 dark:text-gray-300 mb-2">
-                {t('pages.contests.no_results') || "Aucun concours trouvé"}
-              </h3>
-              <p className="text-gray-500 dark:text-gray-400 mb-6 max-w-md mx-auto">
-                {t('pages.contests.try_different_filter') || "Essayez un autre filtre ou terme de recherche"}
-              </p>
               <Button 
                 variant="outline" 
                 onClick={() => {
@@ -569,6 +559,7 @@ function ContestsPageContent() {
                   setSearchTerm("")
                   setActiveSearchTerm("")
                 }}
+                className="mt-4"
               >
                 {t('pages.contests.reset_filters') || "Réinitialiser les filtres"}
               </Button>
