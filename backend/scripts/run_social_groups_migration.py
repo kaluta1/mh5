@@ -28,7 +28,7 @@ def run_migration():
     try:
         # Run alembic upgrade
         result = subprocess.run(
-            ["alembic", "upgrade", "head"],
+            ["alembic", "upgrade", "heads"],
             cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
             env=os.environ.copy(),
             check=True
