@@ -113,18 +113,31 @@ function ContestsPageContent() {
 
   // Filtrer et trier les contests
   useEffect(() => {
-    if (allContests.length === 0) return
+    if (allContests.length === 0) {
+      console.log('[ContestsPage] No contests to filter (allContests.length === 0)')
+      setFilteredContests([])
+      return
+    }
+    
+    console.log(`[ContestsPage] Filtering ${allContests.length} contests, categoryTab: ${categoryTab}`)
     
     // FIXED: Backend already filters by has_voting_type, so we don't need to filter again here
     // The backend returns only the contests matching the categoryTab (nomination or participations)
     // However, we keep a safety check in case the backend filter didn't work
     let categoryFiltered = allContests.filter(contest => {
-      if (categoryTab === 'nomination') {
-        return contest.votingType != null
-      } else {
-        return contest.votingType == null
+      const hasVotingType = contest.votingType != null
+      const matches = categoryTab === 'nomination' 
+        ? hasVotingType 
+        : !hasVotingType
+      
+      if (!matches) {
+        console.log(`[ContestsPage] Contest ${contest.id} filtered out: votingType=${contest.votingType}, categoryTab=${categoryTab}`)
       }
+      
+      return matches
     })
+    
+    console.log(`[ContestsPage] After category filter: ${categoryFiltered.length} contests`)
     
     // FIXED: Don't exclude contests with 0 contestants - they might have contestants but the count might be wrong
     // Instead, only filter if we're sure there are no contestants (contestants === 0 AND we've verified)
@@ -165,6 +178,11 @@ function ContestsPageContent() {
           return b.received - a.received
       }
     })
+    
+    console.log(`[ContestsPage] Final filtered contests: ${sortedContests.length}`)
+    if (sortedContests.length > 0) {
+      console.log(`[ContestsPage] First contest:`, sortedContests[0])
+    }
     
     setFilteredContests(sortedContests)
   }, [allContests, categoryTab, activeTab, sortBy, contestTypes])
