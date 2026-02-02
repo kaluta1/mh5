@@ -44,7 +44,7 @@ export const assertApiUrl = (): void => {
 export const config = {
   api: {
     url: API_URL,
-    timeout: 30000,
+    timeout: 0,
     retries: 3
   },
   app: {
