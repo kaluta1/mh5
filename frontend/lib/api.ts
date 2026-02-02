@@ -2,7 +2,7 @@ import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios'
 import { cacheService } from './cache-service'
 import { logger } from './logger'
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://mh5-hbjp.onrender.com'
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://mh5-backend.onrender.com'
 
 // Créer une instance axios avec la configuration de base
 const api = axios.create({
