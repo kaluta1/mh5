@@ -1,10 +1,7 @@
 "use client";
 
 import { ApolloClient, ApolloProvider, InMemoryCache, HttpLink } from "@apollo/client";
-import { PropsWithChildren, useEffect, useState } from "react";
-import { persistCache, LocalStorageWrapper } from 'apollo3-cache-persist';
-
-const cache = new InMemoryCache();
+import { PropsWithChildren } from "react";
 
 // Helper to get GraphQL URL
 const getGraphQLUrl = () => {
@@ -19,39 +16,26 @@ const client = new ApolloClient({
         uri: getGraphQLUrl(),
         credentials: 'include', // Include cookies for authentication
     }),
-    cache,
+    cache: new InMemoryCache({
+        addTypename: false,
+        resultCaching: false,
+    }),
     defaultOptions: {
         watchQuery: {
-            fetchPolicy: 'cache-and-network',
-            nextFetchPolicy: 'cache-first',
+            fetchPolicy: 'no-cache',
+            errorPolicy: 'ignore',
         },
         query: {
-            fetchPolicy: 'cache-first',
+            fetchPolicy: 'no-cache',
+            errorPolicy: 'all',
         },
+        mutate: {
+            fetchPolicy: 'no-cache',
+            errorPolicy: 'all'
+        }
     },
 });
 
 export const ApolloWrapper = ({ children }: PropsWithChildren) => {
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        async function initCache() {
-            try {
-                await persistCache({
-                    cache,
-                    storage: new LocalStorageWrapper(window.localStorage),
-                });
-            } catch (error) {
-            } finally {
-                setLoading(false);
-            }
-        }
-        initCache();
-    }, []);
-
-    if (loading) {
-        return null; // Or a local loading spinner if preferred, but usually sync/fast
-    }
-
     return <ApolloProvider client={client}>{children}</ApolloProvider>;
 };
