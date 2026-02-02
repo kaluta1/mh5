@@ -20,6 +20,22 @@ from app.services.socketio_app import create_socketio_app
 async def lifespan(app: FastAPI):
     """Application lifespan - start/stop background services"""
     # Startup
+    print("Starting schema fix for contest table...")
+    try:
+        from backend.fix_contest_schema import fix_schema
+        fix_schema()
+        print("✅ Schema fix completed")
+    except ImportError:
+        # Try local import if backend package not resolvable (local dev)
+        try:
+            from fix_contest_schema import fix_schema
+            fix_schema()
+            print("✅ Schema fix completed (local)")
+        except Exception as e:
+            print(f"⚠️ Could not import/run fix_contest_schema: {e}")
+    except Exception as e:
+        print(f"⚠️ Error running schema fix: {e}")
+
     print("Starting payment scheduler...")
     await payment_scheduler.start()
     
