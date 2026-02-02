@@ -36,12 +36,6 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"⚠️ Error running schema fix: {e}")
 
-    print("Starting payment scheduler...")
-    await payment_scheduler.start()
-    
-    print("Starting contest status scheduler...")
-    await contest_status_scheduler.start()
-    
     # --- AUTOMATIC MIGRATIONS ---
     def run_migrations():
         """Run alembic migrations in background"""
