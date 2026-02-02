@@ -139,7 +139,7 @@ def main():
     parser.add_argument("--no-migrations", action="store_true", help="Ne pas exécuter les migrations de base de données")
     parser.add_argument("--no-init-data", action="store_true", help="Ne pas initialiser les données")
     parser.add_argument("--host", default="0.0.0.0", help="Hôte sur lequel démarrer l'application")
-    parser.add_argument("--port", type=int, default=8000, help="Port sur lequel démarrer l'application")
+    parser.add_argument("--port", type=int, default=int(os.environ.get("PORT", 8000)), help="Port sur lequel démarrer l'application")
     parser.add_argument("--no-reload", action="store_true", help="Désactiver le rechargement automatique")
     parser.add_argument("--workers", type=int, default=1, help="Nombre de workers")
     parser.add_argument("--debug", action="store_true", help="Afficher les informations de débogage")
