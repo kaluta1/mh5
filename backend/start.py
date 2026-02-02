@@ -180,10 +180,11 @@ def main():
             logger.error(f"Erreur lors de l'affichage des variables d'environnement: {e}")
     
     if not args.no_migrations:
-        logger.info("Tentative d'exécution des migrations...")
-        if not run_alembic_migrations():
-            logger.error("Échec des migrations, arrêt du script")
-            sys.exit(1)
+        logger.info("Démarrage des migrations en arrière-plan...")
+        import threading
+        migration_thread = threading.Thread(target=run_alembic_migrations)
+        migration_thread.daemon = True
+        migration_thread.start()
     else:
         logger.info("Migrations ignorées (--no-migrations)")
     
