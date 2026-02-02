@@ -65,6 +65,15 @@ def create_admin_user(db: Session) -> None:
         admin = crud_user.get_by_email(db, email=admin_email)
         
         if not admin:
+            # Vérifier aussi si le username 'admin' existe déjà
+            existing_user_by_name = crud_user.get_by_username(db, username="admin")
+            if existing_user_by_name:
+                logger.warning(f"L'utilisateur avec le username 'admin' existe déjà (ID: {existing_user_by_name.id}). Mise à jour de l'email si nécessaire ou saut de la création.")
+                # Optionnel: on pourrait mettre à jour l'utilisateur ici, mais pour l'instant on log juste et on évite le crash
+                if existing_user_by_name.email != admin_email:
+                    logger.warning(f"Attention: Le compte 'admin' a un email différent: {existing_user_by_name.email}")
+                return
+
             user_in = UserCreate(
                 email=admin_email,
                 password="admin123",  # À changer en production !

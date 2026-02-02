@@ -92,6 +92,32 @@ async def lifespan(app: FastAPI):
     await season_migration_scheduler.start()
     
     print("Starting monthly round scheduler...")
+    await monthly_round_scheduler.start()
+    
+    # Ensure January round exists on startup
+    print("Ensuring January round exists...")
+    try:
+        january_round = monthly_round_scheduler.ensure_january_round_exists()
+        if january_round:
+            print(f"✅ January round ready (id={january_round.id})")
+        else:
+            print("⚠️ Could not create/verify January round")
+    except Exception as e:
+        print(f"⚠️ Error ensuring January round: {e}")
+    
+    yield
+    
+    # Shutdown
+    print("Stopping monthly round scheduler...")
+    await monthly_round_scheduler.stop()
+    
+    print("Stopping season migration scheduler...")
+    await season_migration_scheduler.stop()
+    
+    print("Stopping contest status scheduler...")
+    await contest_status_scheduler.stop()
+    
+    print("Stopping payment scheduler...")
     await payment_scheduler.stop()
 
 # Import all models to ensure they are registered with SQLAlchemy
