@@ -64,19 +64,19 @@ function ContestsPageContent() {
   // Extraire les types de contests disponibles depuis les données du backend
   const contestTypes = React.useMemo(() => {
     const types = new Set<string>()
-    
+
     // Parcourir tous les contests pour extraire les types uniques
     allContests.forEach(contest => {
       if (contest.contestType) {
         types.add(contest.contestType)
       }
     })
-    
+
     // Créer la liste des types avec "Tout" en premier
     const typeList: Array<{ id: string, label: string, value: string | null }> = [
       { id: 'all', label: t('dashboard.contests.all') || 'Tout', value: null }
     ]
-    
+
     // Ajouter chaque type unique trouvé
     Array.from(types).sort().forEach(type => {
       // Normaliser le type en minuscules pour la traduction
@@ -84,17 +84,17 @@ function ContestsPageContent() {
       // Chercher la traduction avec le type normalisé
       const translationKey = `dashboard.contests.contest_type.${normalizedType}`
       let label = t(translationKey)
-      
+
       // Si pas de traduction trouvée (la fonction t retourne la clé si non trouvée)
       // ou si le label contient "dashboard.contests.contest_type" (signe qu'il n'a pas été trouvé)
       if (!label || label === translationKey || label.includes('dashboard.contests.contest_type')) {
         // Utiliser le type original formaté
         label = type.charAt(0).toUpperCase() + type.slice(1).replace(/_/g, ' ')
       }
-      
+
       typeList.push({ id: type, label, value: type })
     })
-    
+
     return typeList
   }, [allContests, t])
 
@@ -118,32 +118,32 @@ function ContestsPageContent() {
       setFilteredContests([])
       return
     }
-    
+
     console.log(`[ContestsPage] Filtering ${allContests.length} contests, categoryTab: ${categoryTab}`)
-    
+
     // FIXED: Backend already filters by has_voting_type, so we don't need to filter again here
     // The backend returns only the contests matching the categoryTab (nomination or participations)
     // However, we keep a safety check in case the backend filter didn't work
     let categoryFiltered = allContests.filter(contest => {
       const hasVotingType = contest.votingType != null
-      const matches = categoryTab === 'nomination' 
-        ? hasVotingType 
+      const matches = categoryTab === 'nomination'
+        ? hasVotingType
         : !hasVotingType
-      
+
       if (!matches) {
         console.log(`[ContestsPage] Contest ${contest.id} filtered out: votingType=${contest.votingType}, categoryTab=${categoryTab}`)
       }
-      
+
       return matches
     })
-    
+
     console.log(`[ContestsPage] After category filter: ${categoryFiltered.length} contests`)
-    
+
     // FIXED: Don't exclude contests with 0 contestants - they might have contestants but the count might be wrong
     // Instead, only filter if we're sure there are no contestants (contestants === 0 AND we've verified)
     // For now, show all contests - the backend should return accurate counts
     // categoryFiltered = categoryFiltered.filter(contest => contest.contestants > 0)
-    
+
     // Filtrer par type si un onglet est sélectionné (mais pas "all")
     if (activeTab !== 'all') {
       const selectedType = contestTypes.find(t => t.id === activeTab)
@@ -151,9 +151,9 @@ function ContestsPageContent() {
         categoryFiltered = categoryFiltered.filter(contest => contest.contestType === selectedType.value)
       }
     }
-    
+
     // La recherche est maintenant gérée côté backend, pas besoin de filtrer ici
-    
+
     // Trier les contests selon l'option sélectionnée
     const sortedContests = [...categoryFiltered].sort((a, b) => {
       switch (sortBy) {
@@ -178,12 +178,12 @@ function ContestsPageContent() {
           return b.received - a.received
       }
     })
-    
+
     console.log(`[ContestsPage] Final filtered contests: ${sortedContests.length}`)
     if (sortedContests.length > 0) {
       console.log(`[ContestsPage] First contest:`, sortedContests[0])
     }
-    
+
     setFilteredContests(sortedContests)
   }, [allContests, categoryTab, activeTab, sortBy, contestTypes])
 
@@ -191,31 +191,31 @@ function ContestsPageContent() {
     try {
       setIsLoading(true)
       console.log(`[ContestsPage] Loading contests for categoryTab: ${categoryTab}`)
-      
+
       // Pour l'onglet Nominations : filtrer les contests qui ont un voting_type (has_voting_type = true)
       // Pour l'onglet Participations : filtrer les contests qui n'ont pas de voting_type (has_voting_type = false)
       const hasVotingType = categoryTab === 'nomination' ? true : categoryTab === 'participations' ? false : undefined
-      
+
       console.log(`[ContestsPage] Calling API with hasVotingType: ${hasVotingType}`)
-      
+
       const response = await contestService.getContests(
-        0, 
-        500, // FIXED: Increased limit to get all contests (we have 178 total)
+        0,
+        10, // Reduced from 500 to avoid timeout - pagination should be implemented instead
         activeSearchTerm || undefined,
         undefined, // votingLevel n'est plus utilisé
         undefined, // votingTypeId
         hasVotingType
       )
-      
+
       console.log(`[ContestsPage] API returned ${response?.length || 0} contests`)
       console.log(`[ContestsPage] Response sample:`, response?.slice(0, 2))
-      
+
       if (!response || !Array.isArray(response)) {
         console.error("[ContestsPage] Invalid response format:", response)
         setAllContests([])
         return
       }
-      
+
       const mappedContests = response
         .map((c: ContestResponse) => {
           try {
@@ -235,15 +235,15 @@ function ContestsPageContent() {
           }
         })
         .filter((c: any) => c !== null)
-      
+
       console.log(`[ContestsPage] Successfully mapped ${mappedContests.length} contests`)
       console.log(`[ContestsPage] Sample mapped contest:`, mappedContests[0])
-      
+
       // DEBUG: Check filtering
       console.log(`[ContestsPage] Category tab: ${categoryTab}`)
       console.log(`[ContestsPage] Contests with votingType:`, mappedContests.filter(c => c.votingType != null).length)
       console.log(`[ContestsPage] Contests without votingType:`, mappedContests.filter(c => c.votingType == null).length)
-      
+
       setAllContests(mappedContests)
     } catch (error: any) {
       console.error("[ContestsPage] Error loading contests:", error)
@@ -285,8 +285,8 @@ function ContestsPageContent() {
   }, [searchTerm, activeSearchTerm])
 
   const handleToggleFavorite = (contestId: string) => {
-    setFavorites(prev => 
-      prev.includes(contestId) 
+    setFavorites(prev =>
+      prev.includes(contestId)
         ? prev.filter(id => id !== contestId)
         : [...prev, contestId]
     )
@@ -341,19 +341,19 @@ function ContestsPageContent() {
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900">
       <Header />
-      
+
       <main className="pt-24 pb-16">
         {/* Hero Section */}
-        <section className="relative py-20 overflow-hidden">  
+        <section className="relative py-20 overflow-hidden">
           {/* Background gradient */}
           <div className="absolute inset-0 bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary" />
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.15),transparent_50%)]" />
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_80%,rgba(8,145,178,0.3),transparent_50%)]" />
-          
+
           {/* Decorative elements */}
           <div className="absolute top-10 left-10 w-20 h-20 bg-white/10 rounded-full blur-xl animate-pulse" />
           <div className="absolute bottom-10 right-10 w-32 h-32 bg-myhigh5-cyan-400/20 rounded-full blur-2xl animate-pulse delay-700" />
-          
+
           <div className="container px-4 md:px-6 relative z-10">
             <div className="max-w-4xl mx-auto text-center text-white">
               {/* Badge */}
@@ -361,14 +361,14 @@ function ContestsPageContent() {
                 <Flame className="w-4 h-4 text-orange-400" />
                 <span className="text-sm font-medium">{t('pages.contests.badge') || "Concours en cours"}</span>
               </div>
-              
+
               <h1 className="text-4xl md:text-6xl font-black mb-6 leading-tight">
                 {t('pages.contests.title') || "Découvrez nos Concours"}
               </h1>
               <p className="text-xl md:text-2xl opacity-90 mb-10 max-w-2xl mx-auto leading-relaxed">
                 {t('pages.contests.subtitle') || "Participez à des compétitions passionnantes du niveau local au niveau mondial"}
               </p>
-              
+
               {/* Stats Cards */}
               <div className="grid grid-cols-3 gap-4 md:gap-6 max-w-2xl mx-auto">
                 <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-4 md:p-6 hover:bg-white/15 transition-all">
@@ -404,11 +404,10 @@ function ContestsPageContent() {
                     setCategoryTab('nomination')
                     setActiveTab('all')
                   }}
-                  className={`px-6 py-3 text-base font-semibold transition-colors border-b-2 ${
-                    categoryTab === 'nomination'
-                      ? 'border-blue-500 text-blue-500'
-                      : 'border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
-                  }`}
+                  className={`px-6 py-3 text-base font-semibold transition-colors border-b-2 ${categoryTab === 'nomination'
+                    ? 'border-blue-500 text-blue-500'
+                    : 'border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+                    }`}
                 >
                   {t('dashboard.contests.nomination') || 'Nomination'}
                 </button>
@@ -417,21 +416,20 @@ function ContestsPageContent() {
                     setCategoryTab('participations')
                     setActiveTab('all')
                   }}
-                  className={`px-6 py-3 text-base font-semibold transition-colors border-b-2 ${
-                    categoryTab === 'participations'
-                      ? 'border-blue-500 text-blue-500'
-                      : 'border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
-                  }`}
+                  className={`px-6 py-3 text-base font-semibold transition-colors border-b-2 ${categoryTab === 'participations'
+                    ? 'border-blue-500 text-blue-500'
+                    : 'border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+                    }`}
                 >
                   {t('dashboard.contests.participations') || 'Participations'}
                 </button>
               </div>
             </div>
-            
+
             {/* Hint explicatif pour l'onglet actif */}
             <div className="mb-6 px-4 py-3 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg">
               <p className="text-sm text-gray-600 dark:text-gray-300">
-                {categoryTab === 'nomination' 
+                {categoryTab === 'nomination'
                   ? (t('dashboard.contests.nomination_hint') || 'Nominate others to enter into competitions. Vote for contestants who have been nominated by their fans.')
                   : (t('dashboard.contests.participations_hint') || 'Participate yourself in competitions. Contestants sign up directly to compete.')}
               </p>
@@ -440,9 +438,9 @@ function ContestsPageContent() {
             <div className="flex flex-col lg:flex-row gap-6">
               {/* Search */}
               <div className="flex-1 flex gap-2">
-              <div className="relative flex-1">
+                <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <Input
+                  <Input
                     type="text"
                     placeholder={t('dashboard.contests.search_placeholder') || 'Rechercher un concours...'}
                     value={searchTerm}
@@ -459,7 +457,7 @@ function ContestsPageContent() {
                   {t('dashboard.contests.search_button') || 'Rechercher'}
                 </Button>
               </div>
-              
+
               {/* Sélecteur de tri */}
               <div className="w-full lg:w-48">
                 <Select value={sortBy} onValueChange={(value) => setSortBy(value)}>
@@ -483,8 +481,8 @@ function ContestsPageContent() {
                   </SelectContent>
                 </Select>
               </div>
-              </div>
-              
+            </div>
+
             {/* Barre d'onglets de navigation par type */}
             {contestTypes.length > 1 && (
               <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
@@ -493,17 +491,16 @@ function ContestsPageContent() {
                     <button
                       key={type.id}
                       onClick={() => setActiveTab(type.id)}
-                      className={`px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors border-b-2 ${
-                        activeTab === type.id
-                          ? 'border-blue-500 text-blue-500'
-                          : 'border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
-                      }`}
+                      className={`px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors border-b-2 ${activeTab === type.id
+                        ? 'border-blue-500 text-blue-500'
+                        : 'border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+                        }`}
                     >
                       {type.label}
                     </button>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
             )}
           </div>
         </section>
@@ -514,7 +511,7 @@ function ContestsPageContent() {
           <div className="flex items-center justify-between mb-8">
             <div>
               <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">
-                {activeTab === "all" 
+                {activeTab === "all"
                   ? t('pages.contests.all_contests') || "Tous les concours"
                   : `${t('pages.contests.contests_filter') || "Concours"} ${contestTypes.find(t => t.id === activeTab)?.label}`
                 }
@@ -552,8 +549,8 @@ function ContestsPageContent() {
                 <p>Is Loading: {isLoading ? 'Yes' : 'No'}</p>
                 <p>Search Term: {activeSearchTerm || 'None'}</p>
               </div>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={() => {
                   setActiveTab("all")
                   setSearchTerm("")
@@ -619,22 +616,22 @@ function ContestsPageContent() {
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(8,145,178,0.3),transparent_40%)]" />
             <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl" />
             <div className="absolute bottom-0 left-0 w-48 h-48 bg-myhigh5-cyan-400/10 rounded-full blur-2xl" />
-            
+
             <div className="relative z-10 text-center text-white">
               <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-2 mb-6">
                 <Users className="w-4 h-4" />
                 <span className="text-sm font-medium">{t('pages.contests.join_community') || "Rejoignez la communauté"}</span>
               </div>
-              
+
               <h2 className="text-3xl md:text-5xl font-black mb-6 leading-tight">
                 {t('pages.contests.cta.title') || "Prêt à participer ?"}
               </h2>
               <p className="text-lg md:text-xl opacity-90 mb-10 max-w-2xl mx-auto leading-relaxed">
                 {t('pages.contests.cta.subtitle') || "Créez votre compte gratuitement et commencez à participer aux concours dès aujourd'hui !"}
               </p>
-              
+
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button 
+                <Button
                   size="lg"
                   onClick={() => router.push('/register')}
                   className="bg-white text-myhigh5-primary hover:bg-gray-100 font-bold px-10 py-7 text-lg rounded-xl shadow-2xl hover:shadow-white/20 transition-all hover:-translate-y-1"
@@ -642,7 +639,7 @@ function ContestsPageContent() {
                   <Users className="w-5 h-5 mr-2" />
                   {t('pages.contests.cta.button') || "Créer mon compte"}
                 </Button>
-                <Button 
+                <Button
                   size="lg"
                   variant="outline"
                   onClick={() => router.push('/about')}
@@ -655,7 +652,7 @@ function ContestsPageContent() {
           </div>
         </section>
       </main>
-      
+
       <Footer />
 
       {/* Auth Required Dialog */}
@@ -672,7 +669,7 @@ function ContestsPageContent() {
               {t('pages.contests.auth_required_description') || "Vous devez être connecté pour participer aux concours ou voir les participants."}
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4 mt-6">
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
               <div className="flex items-start gap-3">
@@ -699,7 +696,7 @@ function ContestsPageContent() {
                 <LogIn className="w-5 h-5 mr-2" />
                 {t('pages.contests.auth_required_login') || "Se connecter"}
               </Button>
-              
+
               <Button
                 onClick={handleRegisterClick}
                 variant="outline"
