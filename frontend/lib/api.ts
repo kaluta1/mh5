@@ -7,7 +7,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://mh5-hbjp.onrend
 // Créer une instance axios avec la configuration de base
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000, // 15 secondes de timeout pour les requêtes générales (réduit pour des réponses plus rapides)
+  timeout: 0, // No timeout
   headers: {
     'Content-Type': 'application/json',
   },
@@ -17,7 +17,7 @@ const api = axios.create({
 // (Render.com backends can be slow to wake up from sleep)
 const authApi = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 20000, // 20 secondes pour les requêtes d'authentification (augmenté pour Render.com)
+  timeout: 0, // No timeout
   headers: {
     'Content-Type': 'application/json',
   },
@@ -58,36 +58,36 @@ api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     const config = error.config as InternalAxiosRequestConfig & { _retry?: boolean; _retryCount?: number }
-    
+
     // Retry logic pour les erreurs de timeout ou réseau (mais pas pour les requêtes d'auth)
     const isAuthRequest = config?.url?.includes('/auth/')
-    
+
     if (
       config &&
       !config._retry &&
       !isAuthRequest && // Don't retry auth requests - they have their own timeout
-      (error.code === 'ECONNABORTED' || 
-       error.message?.includes('timeout') ||
-       error.message?.includes('Network Error') ||
-       !error.response)
+      (error.code === 'ECONNABORTED' ||
+        error.message?.includes('timeout') ||
+        error.message?.includes('Network Error') ||
+        !error.response)
     ) {
       const retryCount = config._retryCount || 0
       const maxRetries = 1 // Reduced to 1 retry for faster failure
-      
+
       if (retryCount < maxRetries) {
         config._retry = true
         config._retryCount = retryCount + 1
-        
+
         // Shorter backoff: 500ms
         const delay = 500
         logger.warn(`Request timeout/error, retrying (${retryCount + 1}/${maxRetries}) after ${delay}ms...`)
-        
+
         await new Promise(resolve => setTimeout(resolve, delay))
-        
+
         return api(config)
       }
     }
-    
+
     // Gestion des erreurs 401 (non autorisé)
     if (error.response?.status === 401) {
       // Ne pas rediriger si c'est une tentative de connexion (erreur normale)
@@ -105,7 +105,7 @@ api.interceptors.response.use(
         // window.location.href = '/login'
       }
     }
-    
+
     return Promise.reject(error)
   }
 )
