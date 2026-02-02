@@ -63,6 +63,11 @@ from app.models.accounting import (
     RevenueTransaction, TaxConfiguration, AuditTrail
 )
 from app.models.contact_message import ContactMessage
+from app.models.social_group import (
+    SocialGroup, GroupMember, GroupJoinRequest, GroupMessage, 
+    MessageReadReceipt, GroupType, GroupMemberRole, MessageType, MessageStatus
+)
+from app.models.private_message import GroupInvitation
 
 target_metadata = Base.metadata
 

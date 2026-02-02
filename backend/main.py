@@ -1,6 +1,9 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Response, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from contextlib import asynccontextmanager
 import uvicorn
 import os
@@ -9,6 +12,7 @@ from app.api.api_v1.api import api_router
 from app.services.payment_scheduler import payment_scheduler
 from app.services.contest_status import contest_status_scheduler
 from app.services.season_migration_scheduler import season_migration_scheduler
+from app.services.monthly_round_scheduler import monthly_round_scheduler
 from app.services.socketio_app import create_socketio_app
 
 
@@ -25,6 +29,20 @@ async def lifespan(app: FastAPI):
     print("Starting season migration scheduler...")
     await season_migration_scheduler.start()
     
+    print("Starting monthly round scheduler...")
+    await monthly_round_scheduler.start()
+    
+    # Ensure January round exists on startup
+    print("Ensuring January round exists...")
+    try:
+        january_round = monthly_round_scheduler.ensure_january_round_exists()
+        if january_round:
+            print(f"✅ January round ready (id={january_round.id})")
+        else:
+            print("⚠️ Could not create/verify January round")
+    except Exception as e:
+        print(f"⚠️ Error ensuring January round: {e}")
+    
     # Initialize encryption service for E2E messaging
     try:
         from app.services.feed_encryption import init_encryption_service
@@ -36,6 +54,9 @@ async def lifespan(app: FastAPI):
     yield
     
     # Shutdown
+    print("Stopping monthly round scheduler...")
+    await monthly_round_scheduler.stop()
+    
     print("Stopping season migration scheduler...")
     await season_migration_scheduler.stop()
     
@@ -67,11 +88,17 @@ cors_origins = [
     "https://myhigh5.com",
     "https://www.myhigh5.com",
     "https://mh5-hbjp.onrender.com",
+    "https://frontend-rho-eight-72.vercel.app",  # Vercel frontend
+    # Note: Wildcards don't work in allow_origins list, use allow_origin_regex instead
 ]
 
 # Ajouter les origines depuis les settings
 if settings.BACKEND_CORS_ORIGINS:
-    cors_origins.extend(settings.BACKEND_CORS_ORIGINS)
+    # Handle both comma-separated string and list
+    if isinstance(settings.BACKEND_CORS_ORIGINS, str):
+        cors_origins.extend([origin.strip() for origin in settings.BACKEND_CORS_ORIGINS.split(",") if origin.strip()])
+    elif isinstance(settings.BACKEND_CORS_ORIGINS, list):
+        cors_origins.extend([origin.strip() for origin in settings.BACKEND_CORS_ORIGINS if origin.strip()])
 
 # Nettoyer et supprimer les doublons
 cors_origins = list(set([origin.strip() for origin in cors_origins if origin]))
@@ -83,7 +110,7 @@ print(f"CORS Origins configured: {cors_origins}")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,  # Use explicit origins list
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://.*\.vercel\.app$|^https://.*\.vercel\.dev$",  # Allow localhost and all Vercel deployments (both .app and .dev)
     allow_credentials=True,  # Allow credentials for authentication cookies/tokens
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
@@ -94,10 +121,14 @@ app.add_middleware(
 # Inclusion des routes API
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
-# GraphQL endpoint
-from app.graphql.schema import graphql_app
-app.include_router(graphql_app, prefix="/graphql")
-print("✅ GraphQL endpoint available at /graphql")
+# GraphQL endpoint (optional - skip if strawberry not available)
+try:
+    from app.graphql.schema import graphql_app
+    app.include_router(graphql_app, prefix="/graphql")
+    print("✅ GraphQL endpoint available at /graphql")
+except ImportError as e:
+    print(f"⚠️  GraphQL endpoint not available: {e}")
+    print("   Continuing without GraphQL support...")
 
 
 # Servir les fichiers statiques (médias)
@@ -126,6 +157,21 @@ def read_root():
 def health_check():
     return {"status": "healthy"}
 
+# Route favicon pour éviter les erreurs 404
+@app.get("/favicon.ico", tags=["Static"], include_in_schema=False)
+def favicon():
+    """Handle favicon requests to prevent 404 errors"""
+    return Response(status_code=204)  # No Content - browser will use default favicon
+
+# Route robots.txt pour éviter les erreurs 404
+@app.get("/robots.txt", tags=["Static"], include_in_schema=False)
+def robots_txt():
+    """Handle robots.txt requests to prevent 404 errors"""
+    return Response(
+        content="User-agent: *\nDisallow: /api/\nDisallow: /docs\nDisallow: /redoc\n",
+        media_type="text/plain"
+    )
+
 # Route de debug CORS
 @app.get("/debug/cors", tags=["Debug"])
 def debug_cors():
@@ -134,6 +180,44 @@ def debug_cors():
         "environment": os.getenv("ENVIRONMENT", "not set"),
         "backend_cors_origins_from_settings": settings.BACKEND_CORS_ORIGINS
     }
+
+# Custom exception handler for HTTP exceptions (including 404)
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    """Handle HTTP exceptions (404, etc.) with a consistent error format"""
+    if exc.status_code == 404:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={
+                "detail": f"Route not found: {request.method} {request.url.path}",
+                "code": "NOT_FOUND",
+                "message": "The requested endpoint does not exist. Please check the API documentation at /docs",
+                "path": str(request.url.path),
+                "method": request.method
+            }
+        )
+    # For other HTTP exceptions, return the default format
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "detail": exc.detail,
+            "code": f"HTTP_{exc.status_code}",
+            "message": str(exc.detail)
+        }
+    )
+
+# Custom exception handler for all HTTP exceptions
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Handle validation errors with a consistent format"""
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={
+            "detail": exc.errors(),
+            "code": "VALIDATION_ERROR",
+            "message": "Request validation failed"
+        }
+    )
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

@@ -1,17 +1,34 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import dynamic from 'next/dynamic'
 import { Loader2, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { PostCard } from '@/components/feed/post-card'
-import { PostDialog } from '@/components/feed/post-dialog'
-import { CommentDialog } from '@/components/feed/comment-dialog'
-import { CreatePostBox } from '@/components/feed/create-post-box'
-import { FloatingActionButton } from '@/components/ui/floating-action-button'
 import { socialService, Post } from '@/services/social-service'
 import { useAuth } from '@/hooks/use-auth'
 import { useRouter } from 'next/navigation'
 import { useLanguage } from '@/contexts/language-context'
+
+// Lazy load heavy feed components
+const PostCard = dynamic(() => import('@/components/feed/post-card').then(mod => ({ default: mod.PostCard })), {
+  loading: () => <div className="h-64 animate-pulse bg-gray-200 dark:bg-gray-700 rounded-lg mb-4" />
+})
+
+const PostDialog = dynamic(() => import('@/components/feed/post-dialog').then(mod => ({ default: mod.PostDialog })), {
+  ssr: false
+})
+
+const CommentDialog = dynamic(() => import('@/components/feed/comment-dialog').then(mod => ({ default: mod.CommentDialog })), {
+  ssr: false
+})
+
+const CreatePostBox = dynamic(() => import('@/components/feed/create-post-box').then(mod => ({ default: mod.CreatePostBox })), {
+  loading: () => <div className="h-32 animate-pulse bg-gray-200 dark:bg-gray-700 rounded-lg mb-4" />
+})
+
+const FloatingActionButton = dynamic(() => import('@/components/ui/floating-action-button').then(mod => ({ default: mod.FloatingActionButton })), {
+  ssr: false
+})
 
 export default function FeedPage() {
   const { isAuthenticated, user } = useAuth()

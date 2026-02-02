@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useLanguage } from '@/contexts/language-context'
 import { useAuth } from '@/hooks/use-auth'
+import { logger } from '@/lib/logger'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -166,7 +167,7 @@ export function PaymentDialog({
   }
 
   // Update recipient field
-  const updateRecipient = (id: string, field: keyof Recipient, value: any) => {
+  const updateRecipient = (id: string, field: keyof Recipient, value: string | number | boolean | null) => {
     setRecipients(recipients.map(r => {
       if (r.id !== id) return r
       
@@ -228,7 +229,7 @@ export function PaymentDialog({
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch (err) {
-      console.error('Failed to copy:', err)
+      logger.error('Failed to copy to clipboard', err)
     }
   }
 
@@ -284,7 +285,7 @@ export function PaymentDialog({
         setPayment(paymentOrder)
         setStep('payment')
       } catch (error) {
-        console.error('Payment creation error:', error)
+        logger.error('Payment creation error', error)
         setPaymentError(error instanceof Error ? error.message : 'Erreur lors de la création du paiement')
       } finally {
         setIsLoading(false)
@@ -321,7 +322,7 @@ export function PaymentDialog({
       setStep('success')
       onPaymentInitiated?.()
     } catch (error) {
-      console.error('Wallet payment error:', error)
+      logger.error('Wallet payment error', error)
       setPaymentError(error instanceof Error ? error.message : 'Erreur lors du paiement')
     }
   }

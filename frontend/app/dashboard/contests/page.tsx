@@ -1,25 +1,33 @@
 'use client'
 
 import * as React from "react"
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, Suspense } from "react"
+import dynamic from 'next/dynamic'
 import { useLanguage } from '@/contexts/language-context'
 import { useAuth } from '@/hooks/use-auth'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useToast } from '@/components/ui/toast'
 import { ContestsSkeleton } from '@/components/ui/skeleton'
-import { ContestsLoader } from '@/components/dashboard/contests-loader'
-import { Contest } from '@/services/contest-service'
 import { Lightbulb } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { ContestCard } from '@/components/dashboard/contest-card'
-import { SuggestContestDialog } from '@/components/dashboard/suggest-contest-dialog'
+import { logger } from '@/lib/logger'
 import { LocationFilterBar } from '@/components/dashboard/location-filter-bar'
 
 // GraphQL
 import { useQuery } from '@apollo/client'
 import { GET_ROUNDS_FOR_SELECTOR, GET_ROUNDS_WITH_CONTESTS } from '@/graphql/queries'
 
-export default function ContestsPage() {
+// Lazy load heavy components
+const ContestCard = dynamic(() => import('@/components/dashboard/contest-card').then(mod => ({ default: mod.ContestCard })), {
+  ssr: false,
+  loading: () => <div className="h-64 animate-pulse bg-gray-200 dark:bg-gray-700 rounded-lg" />
+})
+
+const SuggestContestDialog = dynamic(() => import('@/components/dashboard/suggest-contest-dialog').then(mod => ({ default: mod.SuggestContestDialog })), {
+  ssr: false
+})
+
+function ContestsPageContent() {
   const { t } = useLanguage()
   const { user, isAuthenticated, isLoading } = useAuth()
   const router = useRouter()
@@ -41,15 +49,11 @@ export default function ContestsPage() {
   const [showSuggestDialog, setShowSuggestDialog] = useState(false)
 
   // Filter States
-  // Filter States
   const [searchTerm, setSearchTerm] = useState('')
   const [committedSearch, setCommittedSearch] = useState('') // New state for executed search
   const [sortBy, setSortBy] = useState<string>('participants')
   const [filterContinent, setFilterContinent] = useState<string>('all')
   const [filterCountry, setFilterCountry] = useState<string>('')
-
-  // Constants
-  const ITEMS_PER_PAGE = 50
 
   // 1. Fetch Rounds for Selector
   const { data: roundsData, loading: roundsLoading } = useQuery(GET_ROUNDS_FOR_SELECTOR, {
@@ -113,8 +117,6 @@ export default function ContestsPage() {
         coverImage = `${API_BASE_URL}/${coverImage}`
       }
 
-      console.log('Cover Image Debug:', { id: c.id, name: c.name, raw: rawImage, final: coverImage })
-
       return {
         id: String(c.id),
         title: c.name,
@@ -122,16 +124,7 @@ export default function ContestsPage() {
         coverImage: coverImage,
         startDate: new Date(),
         status: c.level || 'country',
-        received: c.votesCount || 0, // Not yet in ContestInRoundType? check schema. we put participantsCount. Votes? 
-        // Wait, ContestInRoundType in backend schema DOES NOT HAVE votes_count explicitly yet? 
-        // Schema Step 1584 queries.ts had votesCount in Contest type inside rounds... 
-        // but ContestInRoundType in types.py (Step 1513) didn't have total_votes?
-        // Let's check schema.py Step 1522. map_contest_in_round_to_type returns ContestInRoundType.
-        // It has participants_count. Types.py ContestInRoundType (Step 1513) does NOT have votes_count field?
-        // ContestType has total_votes. ContestInRoundType has participants_count.
-        // I might need to add votes_count to ContestInRoundType later if missing. 
-        // For now use 0 or verify.
-
+        received: c.votesCount || 0,
         contestants: c.participantsCount || 0,
         isOpen: activeRound.isSubmissionOpen || activeRound.isVotingOpen || false,
         contestType: c.contestType,
@@ -189,8 +182,7 @@ export default function ContestsPage() {
     })
 
     return filtered
-  }, [rawContests, activeTab, searchTerm, sortBy])
-
+  }, [rawContests, activeTab, committedSearch, sortBy])
 
   // Handlers
   const handleParticipate = (id: string, isEditing: boolean) => {
@@ -326,5 +318,13 @@ export default function ContestsPage() {
         <SuggestContestDialog open={showSuggestDialog} onOpenChange={setShowSuggestDialog} />
       </div>
     </div>
+  )
+}
+
+export default function ContestsPage() {
+  return (
+    <Suspense fallback={<ContestsSkeleton />}>
+      <ContestsPageContent />
+    </Suspense>
   )
 }

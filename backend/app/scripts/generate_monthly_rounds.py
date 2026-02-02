@@ -12,7 +12,8 @@ Ou via l'API admin:
 from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
 from calendar import monthrange
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, defer
+from sqlalchemy import select, insert
 from typing import Optional
 
 from app.db.session import SessionLocal
@@ -99,48 +100,166 @@ def generate_monthly_round(db: Session, target_date: Optional[date] = None) -> R
     global_end = get_month_end(m4_year, m4_month)
     
     # Créer le round
-    new_round = Round(
-        name=round_name,
-        status=RoundStatus.ACTIVE,
-        is_submission_open=True,
-        is_voting_open=False,
-        current_season_level=None,  # Sera mis à jour quand le voting commence
-        submission_start_date=submission_start,
-        submission_end_date=submission_end,
-        voting_start_date=city_start,  # Date de début de voting générale
-        voting_end_date=global_end,     # Date de fin globale
-        city_season_start_date=city_start,
-        city_season_end_date=city_end,
-        country_season_start_date=country_start,
-        country_season_end_date=country_end,
-        regional_start_date=regional_start,
-        regional_end_date=regional_end,
-        continental_start_date=continental_start,
-        continental_end_date=continental_end,
-        global_start_date=global_start,
-        global_end_date=global_end,
-    )
+    # FIXED: Create round with only required fields first, then add optional date fields
+    try:
+        # Use ACTIVE status (should exist in RoundStatus enum)
+        status_value = RoundStatus.ACTIVE
+        
+        new_round = Round(
+            name=round_name,
+            status=status_value,
+            is_submission_open=True,
+            is_voting_open=False,
+            current_season_level=None,  # Sera mis à jour quand le voting commence
+        )
+        
+        # Add date fields using setattr to handle potential missing columns gracefully
+        date_fields = {
+            'submission_start_date': submission_start,
+            'submission_end_date': submission_end,
+            'voting_start_date': city_start,
+            'voting_end_date': global_end,
+            'city_season_start_date': city_start,
+            'city_season_end_date': city_end,
+            'country_season_start_date': country_start,
+            'country_season_end_date': country_end,
+            'regional_start_date': regional_start,
+            'regional_end_date': regional_end,
+            'continental_start_date': continental_start,
+            'continental_end_date': continental_end,
+            'global_start_date': global_start,
+            'global_end_date': global_end,
+        }
+        
+        # Set date fields if they exist in the model
+        for field_name, field_value in date_fields.items():
+            if hasattr(new_round, field_name):
+                setattr(new_round, field_name, field_value)
+            else:
+                print(f"Warning: Round model doesn't have field {field_name}, skipping")
+    except Exception as e:
+        print(f"Error creating Round object: {e}")
+        raise Exception(f"Failed to create Round object: {str(e)}") from e
     
-    db.add(new_round)
-    db.flush()  # Pour obtenir l'ID
+    try:
+        db.add(new_round)
+        db.flush()  # Pour obtenir l'ID
+        print(f"Round '{round_name}' created with ID: {new_round.id}")
+    except Exception as e:
+        import traceback
+        error_traceback = traceback.format_exc()
+        print(f"Error creating round object: {e}")
+        print(f"Full traceback: {error_traceback}")
+        db.rollback()
+        raise Exception(f"Failed to create round in database: {str(e)}\n\nTraceback:\n{error_traceback}") from e
     
     # Récupérer tous les contests actifs
-    active_contests = db.query(Contest).filter(
-        Contest.is_active == True,
-        Contest.is_deleted == False
-    ).all()
+    # FIXED: Use defer() to exclude date columns that don't exist in database
+    from sqlalchemy.orm import defer
+    try:
+        # Query contests but defer the date columns that don't exist in DB
+        contests_query = db.query(Contest).filter(
+            Contest.is_active == True
+        ).options(
+            # Defer date columns that may not exist in database
+            defer(Contest.submission_start_date),
+            defer(Contest.submission_end_date),
+            defer(Contest.voting_start_date),
+            defer(Contest.voting_end_date),
+            defer(Contest.city_season_start_date),
+            defer(Contest.city_season_end_date),
+            defer(Contest.country_season_start_date),
+            defer(Contest.country_season_end_date),
+            defer(Contest.regional_start_date),
+            defer(Contest.regional_end_date),
+            defer(Contest.continental_start_date),
+            defer(Contest.continental_end_date),
+            defer(Contest.global_start_date),
+            defer(Contest.global_end_date),
+        )
+        
+        active_contests = contests_query.all()
+        print(f"Found {len(active_contests)} active contests")
+        
+        # Try to filter by is_deleted if column exists
+        try:
+            active_contests = [c for c in active_contests if not getattr(c, 'is_deleted', False)]
+            print(f"After filtering is_deleted: {len(active_contests)} contests")
+        except Exception as e:
+            print(f"Warning: Could not filter by is_deleted: {e}")
+            pass
+    except Exception as e:
+        print(f"Warning: Error filtering contests: {e}")
+        import traceback
+        print(traceback.format_exc())
+        # Fallback: try to get contest IDs only, then load without date columns
+        try:
+            # Get just IDs first
+            contest_ids = db.execute(
+                select(Contest.id).where(Contest.is_active == True)
+            ).scalars().all()
+            print(f"Fallback: Found {len(contest_ids)} contest IDs")
+            
+            # Load contests by ID with defer
+            if contest_ids:
+                active_contests = db.query(Contest).filter(
+                    Contest.id.in_(contest_ids)
+                ).options(
+                    defer(Contest.submission_start_date),
+                    defer(Contest.submission_end_date),
+                    defer(Contest.voting_start_date),
+                    defer(Contest.voting_end_date),
+                    defer(Contest.city_season_start_date),
+                    defer(Contest.city_season_end_date),
+                    defer(Contest.country_season_start_date),
+                    defer(Contest.country_season_end_date),
+                    defer(Contest.regional_start_date),
+                    defer(Contest.regional_end_date),
+                    defer(Contest.continental_start_date),
+                    defer(Contest.continental_end_date),
+                    defer(Contest.global_start_date),
+                    defer(Contest.global_end_date),
+                ).all()
+            else:
+                active_contests = []
+        except Exception as e2:
+            print(f"Error: Could not query contests at all: {e2}")
+            import traceback
+            print(traceback.format_exc())
+            active_contests = []
     
     # Associer tous les contests au round via la table de liaison
-    for contest in active_contests:
-        # Insérer dans la table de liaison
-        db.execute(
-            round_contests.insert().values(
-                round_id=new_round.id,
-                contest_id=contest.id
-            )
-        )
+    linked_count = 0
     
-    db.commit()
+    for contest in active_contests:
+        try:
+            # Check if link already exists
+            existing_link = db.execute(
+                select(round_contests).where(
+                    round_contests.c.round_id == new_round.id,
+                    round_contests.c.contest_id == contest.id
+                )
+            ).first()
+            
+            if not existing_link:
+                # Insérer dans la table de liaison
+                stmt = insert(round_contests).values(
+                    round_id=new_round.id,
+                    contest_id=contest.id
+                )
+                db.execute(stmt)
+                linked_count += 1
+        except Exception as e:
+            print(f"Warning: Could not link contest {contest.id}: {e}")
+            continue
+    
+    try:
+        db.commit()
+        print(f"Successfully committed round and {linked_count} contest links")
+    except Exception as e:
+        print(f"Error committing to database: {e}")
+        db.rollback()
+        raise Exception(f"Failed to commit round to database: {str(e)}") from e
     
     print(f"✅ Round '{round_name}' créé avec succès!")
     print(f"   - ID: {new_round.id}")

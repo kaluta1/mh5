@@ -1,4 +1,5 @@
 import { API_URL } from '@/lib/config'
+import { logger } from '@/lib/logger'
 
 export interface KYCSubmissionData {
   firstName: string
@@ -68,8 +69,6 @@ class KYCService {
         throw new Error('Authentication token is required')
       }
 
-      console.log('Initiating Shufti Pro verification...')
-
       const response = await fetch(`${this.baseUrl}/api/v1/kyc/initiate?language=${language}`, {
         method: 'POST',
         headers: {
@@ -80,7 +79,7 @@ class KYCService {
 
       if (!response.ok) {
         const error = await response.json()
-        console.error('KYC initiation error:', error)
+        logger.error('KYC initiation error:', error)
         
         // Gérer l'erreur 402 Payment Required
         if (response.status === 402) {
@@ -98,10 +97,9 @@ class KYCService {
       }
 
       const result = await response.json()
-      console.log('KYC initiation successful:', result)
       return result
     } catch (error) {
-      console.error('KYC initiation error:', error)
+      logger.error('KYC initiation error:', error)
       throw error instanceof Error ? error : new Error('An error occurred while initiating KYC')
     }
   }
@@ -115,9 +113,6 @@ class KYCService {
         throw new Error('Authentication token is required')
       }
 
-      console.log('Submitting KYC data to:', `${this.baseUrl}/api/v1/kyc/submit`)
-      console.log('Token:', token.substring(0, 20) + '...')
-
       const response = await fetch(`${this.baseUrl}/api/v1/kyc/submit`, {
         method: 'POST',
         headers: {
@@ -127,25 +122,23 @@ class KYCService {
         body: JSON.stringify(data)
       })
 
-      console.log('Response status:', response.status)
-
       if (!response.ok) {
         const error = await response.json()
-        console.error('KYC submission error:', error)
+        logger.error('KYC submission error:', error)
         throw new Error(error.detail || error.message || 'Failed to submit KYC')
       }
 
       const result = await response.json()
-      console.log('KYC submission successful:', result)
       return result
     } catch (error) {
-      console.error('KYC submission error:', error)
+      logger.error('KYC submission error:', error)
       throw error instanceof Error ? error : new Error('An error occurred while submitting KYC')
     }
   }
 
   /**
    * Récupérer le statut KYC de l'utilisateur
+   * Uses status-detailed endpoint which returns a better response even when no verification exists
    */
   async getKYCStatus(token: string): Promise<KYCStatusResponse> {
     try {
@@ -153,28 +146,48 @@ class KYCService {
         throw new Error('Authentication token is required')
       }
 
-      console.log('Fetching KYC status from:', `${this.baseUrl}/api/v1/kyc/status`)
-
-      const response = await fetch(`${this.baseUrl}/api/v1/kyc/status`, {
+      // Use status-detailed endpoint which handles "no verification" case gracefully
+      const response = await fetch(`${this.baseUrl}/api/v1/kyc/status-detailed`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`
         }
       })
 
-      console.log('Response status:', response.status)
-
       if (!response.ok) {
+        // If 404, return null status (no verification found)
+        if (response.status === 404) {
+          return {
+            status: null,
+            can_start: true,
+            message: 'Aucune vérification KYC trouvée'
+          } as any
+        }
         const error = await response.json()
-        console.error('KYC status error:', error)
         throw new Error(error.detail || error.message || 'Failed to fetch KYC status')
       }
 
       const result = await response.json()
-      console.log('KYC status:', result)
-      return result
+      // Map status-detailed response to KYCStatusResponse format
+      return {
+        status: result.status,
+        identity_verified: result.identity_verified || false,
+        address_verified: result.address_verified || false,
+        document_verified: result.document_verified || false,
+        face_verified: result.face_verified || false,
+        submitted_at: result.submitted_at,
+        processed_at: result.processed_at,
+        rejection_reason: result.rejection_reason,
+        expires_at: result.expires_at,
+        can_start: result.can_restart || result.can_continue || false,
+        needs_payment: result.needs_payment || false,
+        has_valid_payment: result.has_valid_payment || false
+      } as any
     } catch (error) {
-      console.error('KYC status error:', error)
+      // Handle network errors gracefully
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        throw new Error('Network error: Unable to connect to server')
+      }
       throw error instanceof Error ? error : new Error('An error occurred while fetching KYC status')
     }
   }

@@ -25,12 +25,9 @@ from app.api import deps # To get user logic if needed, or just types
 
 
 def get_db():
-    """Get database session"""
+    """Get database session - MUST be closed after use"""
     db = SessionLocal()
-    try:
-        return db
-    finally:
-        pass  # Will be closed after use
+    return db
 
 
 def map_user_to_type(user: User) -> UserType:
@@ -136,12 +133,53 @@ def map_contest_in_round_to_type(contest: Contest, round_id: int, db: Session, c
     if not season_level:
         season_level = contest.level.lower() if contest.level else None
         
-    # Base query for participants
-    # Corrected: We strictly filter by season_id == contest.id. 
-    # The previous logic comparing season_id with linked ContestSeason IDs was flawed (ID collision).
-    participants_query = db.query(Contestant).filter(
-        Contestant.season_id == contest.id
-    ).filter(Contestant.is_deleted == False)
+    # FIXED: Query participants DIRECTLY from database using comprehensive OR query
+    from app.models.round import Round, round_contests as rc_table
+    from sqlalchemy import or_
+    
+    # Find ALL possible round IDs linked to this contest
+    round_ids_via_table = db.query(rc_table.c.round_id).filter(
+        rc_table.c.contest_id == contest.id
+    ).all()
+    round_ids_from_table = [r[0] for r in round_ids_via_table] if round_ids_via_table else []
+    
+    # Also check legacy round.contest_id
+    legacy_rounds = db.query(Round.id).filter(Round.contest_id == contest.id).all()
+    legacy_round_ids = [r[0] for r in legacy_rounds] if legacy_rounds else []
+    
+    # Combine all round IDs
+    all_round_ids = list(set(round_ids_from_table + legacy_round_ids))
+    
+    # Build comprehensive OR query (handle all cases including NULL season_id)
+    or_conditions = []
+    
+    # Condition 1: season_id matches contest.id
+    or_conditions.append(Contestant.season_id == contest.id)
+    
+    # Condition 2: round_id matches any of the found rounds
+    if all_round_ids:
+        or_conditions.append(Contestant.round_id.in_(all_round_ids))
+    
+    # Condition 3: Handle NULL season_id but valid round_id (for migrated data)
+    if all_round_ids:
+        from sqlalchemy import and_
+        or_conditions.append(
+            and_(
+                Contestant.season_id.is_(None),
+                Contestant.round_id.in_(all_round_ids)
+            )
+        )
+    
+    if or_conditions:
+        participants_query = db.query(Contestant).filter(
+            Contestant.is_deleted == False,
+            or_(*or_conditions)
+        )
+    else:
+        participants_query = db.query(Contestant).filter(
+            Contestant.is_deleted == False,
+            Contestant.season_id == contest.id
+        )
 
     # Apply Geo Filters
     # Priority: Explicit filters > User Location > Default (Global)
@@ -182,11 +220,43 @@ def map_contest_in_round_to_type(contest: Contest, round_id: int, db: Session, c
     participants_count = participants_query.count()
     
     # Calculate total votes for this contest in this round (Apply same filters)
-    votes_query = db.query(func.sum(ContestantRanking.total_votes)).join(
-        Contestant, Contestant.id == ContestantRanking.contestant_id
-    ).filter(
-        Contestant.season_id == contest.id
-    ).filter(Contestant.is_deleted == False)
+    # FIXED: Use the same comprehensive OR query as participants
+    # Include the current round_id if provided
+    if round_id and round_id not in all_round_ids:
+        all_round_ids.append(round_id)
+    
+    or_conditions_votes = []
+    
+    # Condition 1: season_id matches contest.id
+    or_conditions_votes.append(Contestant.season_id == contest.id)
+    
+    # Condition 2: round_id matches any of the found rounds
+    if all_round_ids:
+        or_conditions_votes.append(Contestant.round_id.in_(all_round_ids))
+    
+    # Condition 3: Handle NULL season_id but valid round_id (for migrated data)
+    if all_round_ids:
+        or_conditions_votes.append(
+            and_(
+                Contestant.season_id.is_(None),
+                Contestant.round_id.in_(all_round_ids)
+            )
+        )
+    
+    if or_conditions_votes:
+        votes_query = db.query(func.sum(ContestantRanking.total_votes)).join(
+            Contestant, Contestant.id == ContestantRanking.contestant_id
+        ).filter(
+            Contestant.is_deleted == False,
+            or_(*or_conditions_votes)
+        )
+    else:
+        votes_query = db.query(func.sum(ContestantRanking.total_votes)).join(
+            Contestant, Contestant.id == ContestantRanking.contestant_id
+        ).filter(
+            Contestant.is_deleted == False,
+            Contestant.season_id == contest.id
+        )
     
     # Apply EXACT SAME filters to votes
     if filter_country:
@@ -254,32 +324,81 @@ def map_round_to_type(
     # 1. Fetch Contests in this Round
     contests_in_round = []
     
-    # Query contests via association table
-    query_contests = db.query(Contest).join(
-        round_contests, Contest.id == round_contests.c.contest_id
-    ).filter(
-        round_contests.c.round_id == round_obj.id
-    )
+    # FIXED: Query contests DIRECTLY from database - check both round_contests table AND legacy round.contest_id
+    from sqlalchemy import or_, select
+    import logging
+    logger = logging.getLogger(__name__)
     
-    # Filter by Voting Type (Nomination vs Participation)
+    # Method 1: Via round_contests association table (N:N)
+    # FIXED: Defer date columns that don't exist in database to avoid SQL errors
+    from sqlalchemy.orm import defer
+    try:
+        contests_via_table = db.query(Contest).join(
+            round_contests, Contest.id == round_contests.c.contest_id
+        ).filter(
+            round_contests.c.round_id == round_obj.id
+        ).options(
+            # Defer date columns that may not exist in database
+            defer(Contest.submission_start_date),
+            defer(Contest.submission_end_date),
+            defer(Contest.voting_start_date),
+            defer(Contest.voting_end_date),
+            defer(Contest.city_season_start_date),
+            defer(Contest.city_season_end_date),
+            defer(Contest.country_season_start_date),
+            defer(Contest.country_season_end_date),
+            defer(Contest.regional_start_date),
+            defer(Contest.regional_end_date),
+            defer(Contest.continental_start_date),
+            defer(Contest.continental_end_date),
+            defer(Contest.global_start_date),
+            defer(Contest.global_end_date),
+        ).all()
+    except Exception as e:
+        # Fallback: try without defer (may fail if columns don't exist)
+        logger.warning(f"Error with defer, trying direct query: {e}")
+        try:
+            contests_via_table = db.query(Contest).join(
+                round_contests, Contest.id == round_contests.c.contest_id
+            ).filter(
+                round_contests.c.round_id == round_obj.id
+            ).all()
+        except Exception as e2:
+            logger.error(f"Error loading contests: {e2}", exc_info=True)
+            contests_via_table = []
+    
+    # Method 2: Via legacy round.contest_id (1:N) - if round has direct contest_id
+    contests_via_legacy = []
+    if round_obj.contest_id:
+        legacy_contest = db.query(Contest).filter(Contest.id == round_obj.contest_id).first()
+        if legacy_contest:
+            contests_via_legacy = [legacy_contest]
+    
+    # Combine and deduplicate
+    all_contests_dict = {}
+    for c in contests_via_table:
+        all_contests_dict[c.id] = c
+    for c in contests_via_legacy:
+        if c.id not in all_contests_dict:
+            all_contests_dict[c.id] = c
+    
+    linked_contests = list(all_contests_dict.values())
+    
+    # Apply filters to the combined list
     if has_voting_type is not None:
         if has_voting_type:
-            query_contests = query_contests.filter(Contest.voting_type_id.isnot(None))
+            linked_contests = [c for c in linked_contests if c.voting_type_id is not None]
         else:
-            query_contests = query_contests.filter(Contest.voting_type_id.is_(None))
+            linked_contests = [c for c in linked_contests if c.voting_type_id is None]
         
     # Filter linked contests by search term (Name or Description)
     if search_term:
-        term = f"%{search_term}%"
-        query_contests = query_contests.filter(
-            or_(
-                Contest.name.ilike(term),
-                Contest.description.ilike(term),
-                Contest.contest_type.ilike(term)
-            )
-        )
-        
-    linked_contests = query_contests.all()
+        term = search_term.lower()
+        linked_contests = [c for c in linked_contests if (
+            (c.name and term in c.name.lower()) or
+            (c.description and term in c.description.lower()) or
+            (c.contest_type and term in c.contest_type.lower())
+        )]
     
     for contest in linked_contests:
         contests_in_round.append(map_contest_in_round_to_type(
@@ -412,24 +531,121 @@ def map_contest_to_type(contest: Contest, db: Session, include_rounds: bool = Tr
     # If I populate it here, it will be sent.
     # I should add `include_contestants` argument to `map_contest_to_type`.
     
+    # FIXED: Query contestants DIRECTLY from database using comprehensive OR query
+    from app.models.round import Round, round_contests as rc_table
+    from sqlalchemy import or_
+    
+    # Find ALL possible round IDs linked to this contest
+    round_ids_via_table = db.query(rc_table.c.round_id).filter(
+        rc_table.c.contest_id == contest.id
+    ).all()
+    round_ids_from_table = [r[0] for r in round_ids_via_table] if round_ids_via_table else []
+    
+    legacy_rounds = db.query(Round.id).filter(Round.contest_id == contest.id).all()
+    legacy_round_ids = [r[0] for r in legacy_rounds] if legacy_rounds else []
+    
+    all_round_ids = list(set(round_ids_from_table + legacy_round_ids))
+    
+    # Build comprehensive OR conditions (handle all cases including NULL season_id)
+    or_conditions = []
+    
+    # Condition 1: season_id matches contest.id
+    or_conditions.append(Contestant.season_id == contest.id)
+    
+    # Condition 2: round_id matches any of the found rounds
+    if all_round_ids:
+        or_conditions.append(Contestant.round_id.in_(all_round_ids))
+    
+    # Condition 3: Handle NULL season_id but valid round_id (for migrated data)
+    if all_round_ids:
+        from sqlalchemy import and_
+        or_conditions.append(
+            and_(
+                Contestant.season_id.is_(None),
+                Contestant.round_id.in_(all_round_ids)
+            )
+        )
+    
+    # Base filter for all queries
+    base_filter = or_(*or_conditions) if or_conditions else (Contestant.season_id == contest.id)
+    
     # Logic to fetch contestants if requested
-    # We fetch ALL contestants for this contest/season.
-    # LIMITATION: This fetches ALL. In future we might want pagination on this field via a resolver method in ContestType class.
-    # For now, to match REST API behavior (which seemed to fetch all), we fetch all (limit 100 for safety).
     if include_contestants:
-         qs = db.query(Contestant).filter(Contestant.season_id == contest.id).filter(Contestant.is_deleted == False).limit(100).all()
-         contestants_list = [map_contestant_to_type(c, db) for c in qs]
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # DEBUG: Log what we're querying
+        logger.info(f"[map_contest_to_type] Querying contestants for contest.id={contest.id}, all_round_ids={all_round_ids}")
+        logger.info(f"[map_contest_to_type] OR conditions count: {len(or_conditions)}")
+        
+        # First, try the comprehensive query
+        qs = db.query(Contestant).filter(
+            Contestant.is_deleted == False,
+            base_filter
+        ).limit(100).all()
+        
+        logger.info(f"[map_contest_to_type] Found {len(qs)} contestants with comprehensive query")
+        
+        # If no results, try fallback queries
+        if not qs:
+            logger.warning(f"[map_contest_to_type] No contestants found. Trying fallback queries...")
+            
+            # Fallback 1: season_id only
+            fallback1 = db.query(Contestant).filter(
+                Contestant.is_deleted == False,
+                Contestant.season_id == contest.id
+            ).limit(100).all()
+            logger.info(f"[map_contest_to_type] Fallback 1 (season_id={contest.id}): Found {len(fallback1)}")
+            if fallback1:
+                qs = fallback1
+            
+            # Fallback 2: round_id only
+            if not qs and all_round_ids:
+                fallback2 = db.query(Contestant).filter(
+                    Contestant.is_deleted == False,
+                    Contestant.round_id.in_(all_round_ids)
+                ).limit(100).all()
+                logger.info(f"[map_contest_to_type] Fallback 2 (round_ids={all_round_ids}): Found {len(fallback2)}")
+                if fallback2:
+                    qs = fallback2
+            
+            # Fallback 3: ANY non-deleted contestant (for debugging)
+            if not qs:
+                fallback3 = db.query(Contestant).filter(
+                    Contestant.is_deleted == False
+                ).limit(10).all()
+                logger.warning(f"[map_contest_to_type] Fallback 3 (ANY): Found {len(fallback3)}. Sample IDs: {[c.id for c in fallback3]}")
+                logger.warning(f"[map_contest_to_type] Sample contestants season_id/round_id: {[(c.id, c.season_id, c.round_id) for c in fallback3]}")
+        
+        contestants_list = [map_contestant_to_type(c, db) for c in qs]
+        logger.info(f"[map_contest_to_type] Returning {len(contestants_list)} contestants")
 
     # Resolve Current User Participation
     user_participation = None
     if current_user:
         up = db.query(Contestant).filter(
-            Contestant.season_id == contest.id,
-            Contestant.user_id == current_user.id,
-            Contestant.is_deleted == False
+            Contestant.is_deleted == False,
+            base_filter,
+            Contestant.user_id == current_user.id
         ).first()
         if up:
             user_participation = map_contestant_to_type(up, db)
+    
+    # FIXED: Calculate entries_count and total_votes using comprehensive query
+    if hasattr(contest, 'participant_count') and contest.participant_count is not None:
+        entries_count_val = contest.participant_count
+    else:
+        entries_count_val = db.query(Contestant).filter(
+            Contestant.is_deleted == False,
+            base_filter
+        ).count()
+    
+    total_votes_val = db.query(func.sum(ContestantRanking.total_votes)).join(
+        Contestant, Contestant.id == ContestantRanking.contestant_id
+    ).filter(
+        Contestant.is_deleted == False,
+        base_filter
+    ).scalar() or 0
 
     return ContestType(
         id=contest.id,
@@ -441,9 +657,10 @@ def map_contest_to_type(contest: Contest, db: Session, include_rounds: bool = Tr
         level=contest.level,
         
         # Submission Status & Dates
+        # FIXED: Use getattr to safely access date fields that may not exist in database
         is_submission_open=contest.is_submission_open,
-        submission_start_date=contest.submission_start_date,
-        submission_end_date=contest.submission_end_date,
+        submission_start_date=getattr(contest, 'submission_start_date', None),
+        submission_end_date=getattr(contest, 'submission_end_date', None),
         
         # Verification Requirements
         requires_kyc=contest.requires_kyc,
@@ -465,14 +682,8 @@ def map_contest_to_type(contest: Contest, db: Session, include_rounds: bool = Tr
         verification_video_max_duration=contest.verification_video_max_duration,
         verification_max_size_mb=contest.verification_max_size_mb,
 
-        entries_count=db.query(Contestant).filter(
-            Contestant.season_id == contest.id 
-        ).count() if not hasattr(contest, 'participant_count') else contest.participant_count,
-        total_votes=db.query(func.sum(ContestantRanking.total_votes)).join(
-            Contestant, Contestant.id == ContestantRanking.contestant_id
-        ).filter(
-            Contestant.season_id == contest.id
-        ).scalar() or 0,
+        entries_count=entries_count_val,
+        total_votes=total_votes_val,
         rounds=rounds,
         voting_type=voting_type,
         contestants=contestants_list,
@@ -587,7 +798,8 @@ class Query:
             contest = db.query(Contest).filter(Contest.id == id).first()
             if not contest:
                 return None
-            return map_contest_to_type(contest, db, include_contestants=True, current_user=current_user)
+            # FIXED: Always include contestants for single contest query
+            return map_contest_to_type(contest, db, include_rounds=True, include_contestants=True, current_user=current_user)
         finally:
             db.close()
     
@@ -627,32 +839,50 @@ class Query:
             if id:
                 query = query.filter(Round.id == id)
             
-            # Join with Contest via round_contests if contest filters are present
+            # FIXED: Query rounds directly first, then filter by contest attributes if needed
+            # This avoids complex joins that might filter out rounds incorrectly
             from app.models.round import round_contests
             
-            if contest_id or has_voting_type is not None or contest_type or is_active:
-                query = query.join(round_contests, Round.id == round_contests.c.round_id)
-                query = query.join(Contest, Contest.id == round_contests.c.contest_id)
+            # First, get all rounds (without joining contests to avoid filtering issues)
+            rounds = query.offset(skip).limit(limit).all()
+            
+            # If we have filters that require contest data, filter rounds after fetching
+            if contest_id or has_voting_type is not None or contest_type or is_active is True:
+                # Get round IDs that match the contest filters via round_contests table
+                contest_query = db.query(round_contests.c.round_id).distinct()
+                contest_query = contest_query.join(Contest, Contest.id == round_contests.c.contest_id)
+                
+                # Also check legacy round.contest_id
+                legacy_round_ids_query = db.query(Round.id).filter(Round.contest_id.isnot(None))
+                if contest_id:
+                    legacy_round_ids_query = legacy_round_ids_query.filter(Round.contest_id == contest_id)
+                legacy_round_ids = [r[0] for r in legacy_round_ids_query.all()]
                 
                 if contest_id:
-                    query = query.filter(Contest.id == contest_id)
+                    contest_query = contest_query.filter(Contest.id == contest_id)
                 
-                if is_active:
-                     # If is_active is explicitly True, we want rounds with ACTIVE contests
-                     # OR rounds that are themselves ACTIVE?
-                     # Legacy behavior was filtering Contest.is_active
-                     query = query.filter(Contest.is_active == True)
+                # Only filter by is_active when explicitly True
+                if is_active is True:
+                    contest_query = contest_query.filter(Contest.is_active == True)
                     
                 if contest_type:
-                    query = query.filter(Contest.contest_type == contest_type)
+                    contest_query = contest_query.filter(Contest.contest_type == contest_type)
                     
                 if has_voting_type is not None:
                     if has_voting_type:
-                        query = query.filter(Contest.voting_type_id.isnot(None))
+                        contest_query = contest_query.filter(Contest.voting_type_id.isnot(None))
                     else:
-                        query = query.filter(Contest.voting_type_id.is_(None))
-            
-            rounds = query.offset(skip).limit(limit).all()
+                        contest_query = contest_query.filter(Contest.voting_type_id.is_(None))
+                
+                # Get round IDs that match filters
+                filtered_round_ids = set([r[0] for r in contest_query.all()] + legacy_round_ids)
+                
+                # Filter rounds to only include those with matching contests
+                if filtered_round_ids:
+                    rounds = [r for r in rounds if r.id in filtered_round_ids]
+                else:
+                    # If no rounds match filters, return empty list
+                    rounds = []
             
             # Get current user from context
             current_user = info.context.get("user")

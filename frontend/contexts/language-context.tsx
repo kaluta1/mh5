@@ -56,7 +56,10 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
           if (fallback && typeof fallback === 'object' && fk in fallback) {
             fallback = fallback[fk]
           } else {
-              console.warn(`Translation key "${key}" not found in any language`)
+              // Only warn in development - translation key not found
+              if (process.env.NODE_ENV === 'development') {
+                console.warn(`Translation key "${key}" not found in any language`)
+              }
             return key // Return key if not found in any language
             }
           }

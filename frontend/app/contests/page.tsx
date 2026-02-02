@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Header } from "@/components/layout/header"
 import { Footer } from "@/components/sections/footer"
@@ -40,7 +40,7 @@ function ContestCardSkeleton() {
   )
 }
 
-export default function ContestsPage() {
+function ContestsPageContent() {
   const { t } = useLanguage()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -50,7 +50,9 @@ export default function ContestsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("") // Terme de recherche dans l'input
   const [activeSearchTerm, setActiveSearchTerm] = useState("") // Terme de recherche actif (utilisé pour l'API)
-  const [categoryTab, setCategoryTab] = useState<'nomination' | 'participations'>('nomination')
+  // FIXED: Start with 'participations' as default since most users want to see regular contests first
+  // Users can switch to 'nomination' tab if they want
+  const [categoryTab, setCategoryTab] = useState<'nomination' | 'participations'>('participations')
   const [activeTab, setActiveTab] = useState<string>('all')
   const [sortBy, setSortBy] = useState<string>('participants') // participants, votes, date, name
   const [favorites, setFavorites] = useState<string[]>([])
@@ -111,19 +113,36 @@ export default function ContestsPage() {
 
   // Filtrer et trier les contests
   useEffect(() => {
-    if (allContests.length === 0) return
+    if (allContests.length === 0) {
+      console.log('[ContestsPage] No contests to filter (allContests.length === 0)')
+      setFilteredContests([])
+      return
+    }
     
-    // Filtrer par catégorie (Nomination ou Participations)
+    console.log(`[ContestsPage] Filtering ${allContests.length} contests, categoryTab: ${categoryTab}`)
+    
+    // FIXED: Backend already filters by has_voting_type, so we don't need to filter again here
+    // The backend returns only the contests matching the categoryTab (nomination or participations)
+    // However, we keep a safety check in case the backend filter didn't work
     let categoryFiltered = allContests.filter(contest => {
-      if (categoryTab === 'nomination') {
-        return contest.votingType != null
-      } else {
-        return contest.votingType == null
+      const hasVotingType = contest.votingType != null
+      const matches = categoryTab === 'nomination' 
+        ? hasVotingType 
+        : !hasVotingType
+      
+      if (!matches) {
+        console.log(`[ContestsPage] Contest ${contest.id} filtered out: votingType=${contest.votingType}, categoryTab=${categoryTab}`)
       }
+      
+      return matches
     })
     
-    // Exclure les contests sans participants
-    categoryFiltered = categoryFiltered.filter(contest => contest.contestants > 0)
+    console.log(`[ContestsPage] After category filter: ${categoryFiltered.length} contests`)
+    
+    // FIXED: Don't exclude contests with 0 contestants - they might have contestants but the count might be wrong
+    // Instead, only filter if we're sure there are no contestants (contestants === 0 AND we've verified)
+    // For now, show all contests - the backend should return accurate counts
+    // categoryFiltered = categoryFiltered.filter(contest => contest.contestants > 0)
     
     // Filtrer par type si un onglet est sélectionné (mais pas "all")
     if (activeTab !== 'all') {
@@ -160,29 +179,81 @@ export default function ContestsPage() {
       }
     })
     
+    console.log(`[ContestsPage] Final filtered contests: ${sortedContests.length}`)
+    if (sortedContests.length > 0) {
+      console.log(`[ContestsPage] First contest:`, sortedContests[0])
+    }
+    
     setFilteredContests(sortedContests)
   }, [allContests, categoryTab, activeTab, sortBy, contestTypes])
 
   const loadContests = async () => {
     try {
       setIsLoading(true)
+      console.log(`[ContestsPage] Loading contests for categoryTab: ${categoryTab}`)
+      
       // Pour l'onglet Nominations : filtrer les contests qui ont un voting_type (has_voting_type = true)
       // Pour l'onglet Participations : filtrer les contests qui n'ont pas de voting_type (has_voting_type = false)
       const hasVotingType = categoryTab === 'nomination' ? true : categoryTab === 'participations' ? false : undefined
+      
+      console.log(`[ContestsPage] Calling API with hasVotingType: ${hasVotingType}`)
+      
       const response = await contestService.getContests(
         0, 
-        100,
+        500, // FIXED: Increased limit to get all contests (we have 178 total)
         activeSearchTerm || undefined,
         undefined, // votingLevel n'est plus utilisé
         undefined, // votingTypeId
         hasVotingType
       )
-      const mappedContests = response.map((c: ContestResponse) => 
-        contestService.mapResponseToContest(c)
-      )
+      
+      console.log(`[ContestsPage] API returned ${response?.length || 0} contests`)
+      console.log(`[ContestsPage] Response sample:`, response?.slice(0, 2))
+      
+      if (!response || !Array.isArray(response)) {
+        console.error("[ContestsPage] Invalid response format:", response)
+        setAllContests([])
+        return
+      }
+      
+      const mappedContests = response
+        .map((c: ContestResponse) => {
+          try {
+            const mapped = contestService.mapResponseToContest(c)
+            console.log(`[ContestsPage] Mapped contest ${c?.id}:`, {
+              id: mapped.id,
+              title: mapped.title,
+              contestants: mapped.contestants,
+              votingType: mapped.votingType,
+              categoryTab: categoryTab
+            })
+            return mapped
+          } catch (error) {
+            console.error(`[ContestsPage] Error mapping contest ${c?.id}:`, error)
+            console.error(`[ContestsPage] Contest data:`, c)
+            return null
+          }
+        })
+        .filter((c: any) => c !== null)
+      
+      console.log(`[ContestsPage] Successfully mapped ${mappedContests.length} contests`)
+      console.log(`[ContestsPage] Sample mapped contest:`, mappedContests[0])
+      
+      // DEBUG: Check filtering
+      console.log(`[ContestsPage] Category tab: ${categoryTab}`)
+      console.log(`[ContestsPage] Contests with votingType:`, mappedContests.filter(c => c.votingType != null).length)
+      console.log(`[ContestsPage] Contests without votingType:`, mappedContests.filter(c => c.votingType == null).length)
+      
       setAllContests(mappedContests)
-    } catch (error) {
-      console.error("Error loading contests:", error)
+    } catch (error: any) {
+      console.error("[ContestsPage] Error loading contests:", error)
+      console.error("[ContestsPage] Error details:", {
+        message: error?.message,
+        stack: error?.stack,
+        response: error?.response?.data
+      })
+      // FIXED: Set empty array on error so UI shows proper message
+      setAllContests([])
     } finally {
       setIsLoading(false)
     }
@@ -260,7 +331,7 @@ export default function ContestsPage() {
         router.push(`/dashboard/contests/${selectedContestId}/apply`)
         setShouldGoToParticipate(false)
       } else {
-      router.push(`/dashboard/contests/${selectedContestId}`)
+        router.push(`/dashboard/contests/${selectedContestId}`)
       }
       setSelectedContestId(null)
     }
@@ -471,6 +542,16 @@ export default function ContestsPage() {
               <p className="text-gray-500 dark:text-gray-400 mb-6 max-w-md mx-auto">
                 {t('pages.contests.try_different_filter') || "Essayez un autre filtre ou terme de recherche"}
               </p>
+              {/* DEBUG INFO */}
+              <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-900 rounded text-left text-xs text-gray-600 dark:text-gray-400 max-w-md mx-auto">
+                <p><strong>Debug Info:</strong></p>
+                <p>All Contests: {allContests.length}</p>
+                <p>Filtered Contests: {filteredContests.length}</p>
+                <p>Category Tab: {categoryTab}</p>
+                <p>Active Tab: {activeTab}</p>
+                <p>Is Loading: {isLoading ? 'Yes' : 'No'}</p>
+                <p>Search Term: {activeSearchTerm || 'None'}</p>
+              </div>
               <Button 
                 variant="outline" 
                 onClick={() => {
@@ -478,6 +559,7 @@ export default function ContestsPage() {
                   setSearchTerm("")
                   setActiveSearchTerm("")
                 }}
+                className="mt-4"
               >
                 {t('pages.contests.reset_filters') || "Réinitialiser les filtres"}
               </Button>
@@ -639,5 +721,13 @@ export default function ContestsPage() {
         onRegisterClick={handleRegisterClick}
       />
     </div>
+  )
+}
+
+export default function ContestsPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-white dark:bg-gray-900" />}>
+      <ContestsPageContent />
+    </Suspense>
   )
 }

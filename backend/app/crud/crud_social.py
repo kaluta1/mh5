@@ -320,12 +320,33 @@ class CRUDSocialGroup:
         skip: int = 0, 
         limit: int = 20
     ) -> List[SocialGroup]:
-        """Récupère plusieurs groupes"""
+        """
+        Récupère plusieurs groupes.
+        FIXED: Private groups are only shown to members (like WhatsApp).
+        """
         query = db.query(SocialGroup).filter(SocialGroup.is_deleted == False)
         
         if user_id:
-            # Groupes où l'utilisateur est membre
-            query = query.join(GroupMember).filter(GroupMember.user_id == user_id)
+            # Get groups where user is a member
+            user_group_ids = db.query(GroupMember.group_id).filter(
+                GroupMember.user_id == user_id
+            ).subquery()
+            
+            # Show only:
+            # 1. Public groups
+            # 2. Groups where user is a member
+            # 3. Groups created by user (they're automatically admin)
+            from sqlalchemy import or_
+            query = query.filter(
+                or_(
+                    SocialGroup.group_type == GroupType.PUBLIC,
+                    SocialGroup.creator_id == user_id,
+                    SocialGroup.id.in_(db.query(user_group_ids.c.group_id))
+                )
+            )
+        else:
+            # If not logged in, only show public groups
+            query = query.filter(SocialGroup.group_type == GroupType.PUBLIC)
         
         return query.order_by(desc(SocialGroup.created_at)).offset(skip).limit(limit).all()
     
@@ -334,18 +355,24 @@ class CRUDSocialGroup:
         import secrets
         import string
         
-        # Générer un code d'invitation unique
-        alphabet = string.ascii_uppercase + string.digits
-        invite_code = ''.join(secrets.choice(alphabet) for _ in range(8))
+        # FIXED: Always generate invite code for private groups (default)
+        # Groups are private by default like WhatsApp
+        group_type = obj_in.group_type if obj_in.group_type else GroupType.PRIVATE
         
-        # Vérifier l'unicité
-        while db.query(SocialGroup).filter(SocialGroup.invite_code == invite_code).first():
-            invite_code = ''.join(secrets.choice(alphabet) for _ in range(8))
+        # Générer un code d'invitation unique (always for private groups)
+        invite_code = None
+        if group_type == GroupType.PRIVATE:
+            alphabet = string.ascii_uppercase + string.digits
+            invite_code = ''.join(secrets.choice(alphabet) for _ in range(12))  # Longer code for security
+            
+            # Vérifier l'unicité
+            while db.query(SocialGroup).filter(SocialGroup.invite_code == invite_code).first():
+                invite_code = ''.join(secrets.choice(alphabet) for _ in range(12))
         
         db_obj = SocialGroup(
             name=obj_in.name,
             description=obj_in.description,
-            group_type=obj_in.group_type,
+            group_type=group_type,  # Use determined group_type
             creator_id=creator_id,
             avatar_url=obj_in.avatar_url,
             cover_url=obj_in.cover_url,
@@ -356,11 +383,12 @@ class CRUDSocialGroup:
         db.add(db_obj)
         db.flush()
         
-        # Ajouter le créateur comme owner
+        # FIXED: Add creator as ADMIN (not just owner) - WhatsApp-like behavior
+        # Owner has full control, but we also support ADMIN role
         member = GroupMember(
             group_id=db_obj.id,
             user_id=creator_id,
-            role=GroupMemberRole.OWNER
+            role=GroupMemberRole.ADMIN  # Creator becomes admin
         )
         db.add(member)
         db_obj.member_count = 1

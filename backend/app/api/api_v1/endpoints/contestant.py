@@ -8,7 +8,7 @@ from app.api import deps
 from app.crud import contestant as crud_contestant, report
 from app.models.user import User
 from app.models.contests import Contestant, ContestSubmission, ContestSeason, ContestStage, ContestantSeason, SeasonLevel
-from app.models.voting import MyFavorites, Vote, ContestantReaction, ContestantShare, ReactionType, ContestantVoting
+from app.models.voting import MyFavorites, Vote, ContestantReaction, ContestantShare, ReactionType, ContestantVoting, ContestLike, ContestComment
 from app.models.contest import Contest
 from app.schemas.comment import ContestantReportCreate, ReportResponse
 from app.schemas.voting import (
@@ -25,6 +25,51 @@ from app.services.content_moderation import content_moderation_service, ContentT
 from app.services.content_relevance import content_relevance_service
 
 router = APIRouter()
+
+
+# DEBUG ENDPOINT: Test if contestants exist in database
+@router.get("/debug/all-contestants")
+def debug_get_all_contestants(
+    *,
+    db: Session = Depends(deps.get_db),
+    limit: int = Query(20, ge=1, le=100)
+):
+    """
+    DEBUG: Get all contestants from database (no filters) to verify they exist.
+    This endpoint helps diagnose why contestants aren't appearing.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        # Query ALL non-deleted contestants
+        all_contestants = db.query(Contestant).filter(
+            Contestant.is_deleted == False
+        ).limit(limit).all()
+        
+        logger.info(f"[DEBUG] Found {len(all_contestants)} total contestants in database")
+        
+        result = []
+        for c in all_contestants:
+            result.append({
+                "id": c.id,
+                "user_id": c.user_id,
+                "season_id": c.season_id,
+                "round_id": c.round_id,
+                "title": c.title,
+                "is_deleted": c.is_deleted,
+                "registration_date": c.registration_date.isoformat() if c.registration_date else None
+            })
+            logger.info(f"[DEBUG] Contestant {c.id}: season_id={c.season_id}, round_id={c.round_id}, user_id={c.user_id}")
+        
+        return {
+            "total_found": len(all_contestants),
+            "contestants": result,
+            "message": f"Found {len(all_contestants)} contestants. Check logs for details."
+        }
+    except Exception as e:
+        logger.error(f"[DEBUG] Error querying contestants: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
 
 # Routes spécifiques d'abord (avant les routes génériques avec {id})
@@ -475,17 +520,309 @@ def get_contest_contestants(
                 detail="Contest not found"
             )
     
-    # Utiliser la nouvelle méthode avec stats enrichies
+    # FIXED: Simplified query to avoid database errors and 503 responses
+    from app.models.round import Round
+    from app.models.contests import round_contests, Contestant
+    from sqlalchemy import or_, func
+    from sqlalchemy.orm import joinedload
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
     try:
-        contestants_data = crud_contestant.get_multi_by_season_with_stats(
-            db, contest_id, current_user_id=current_user.id if current_user else None,
-            skip=skip, limit=limit,
-            filter_country=filter_country,
-            filter_region=filter_region,
-            filter_continent=filter_continent,
-            filter_city=filter_city,
-            filter_user_id=user_id
+        # Step 1: Find round IDs linked to this contest (simplified approach)
+        all_round_ids = []
+        
+        try:
+            # Method 1: Via round_contests table
+            round_ids_via_table = db.query(round_contests.c.round_id).filter(
+                round_contests.c.contest_id == contest_id
+            ).all()
+            if round_ids_via_table:
+                all_round_ids.extend([r[0] for r in round_ids_via_table])
+        except Exception as e:
+            logger.warning(f"Error querying round_contests: {e}")
+        
+        try:
+            # Method 2: Via legacy round.contest_id
+            legacy_rounds = db.query(Round.id).filter(Round.contest_id == contest_id).all()
+            if legacy_rounds:
+                all_round_ids.extend([r[0] for r in legacy_rounds])
+        except Exception as e:
+            logger.warning(f"Error querying legacy rounds: {e}")
+        
+        # Remove duplicates
+        all_round_ids = list(set(all_round_ids))
+        
+        # DEBUG: First check if ANY contestants exist for this contest (without filters)
+        debug_query = db.query(
+            Contestant.id,
+            Contestant.season_id,
+            Contestant.round_id,
+            Contestant.is_deleted
+        ).filter(Contestant.is_deleted == False)
+        
+        # Try to find contestants by ANY possible link
+        debug_conditions = []
+        if all_round_ids:
+            debug_conditions.append(Contestant.round_id.in_(all_round_ids))
+        debug_conditions.append(Contestant.season_id == contest_id)
+        
+        if debug_conditions:
+            debug_results = debug_query.filter(or_(*debug_conditions)).limit(10).all()
+            logger.info(f"[DEBUG] Found {len(debug_results)} contestants matching contest_id={contest_id}, round_ids={all_round_ids}")
+            for d in debug_results:
+                logger.info(f"[DEBUG] Contestant id={d.id}, season_id={d.season_id}, round_id={d.round_id}")
+        else:
+            # If no conditions, check ALL non-deleted contestants to see what exists
+            all_contestants_sample = db.query(
+                Contestant.id,
+                Contestant.season_id,
+                Contestant.round_id
+            ).filter(Contestant.is_deleted == False).limit(20).all()
+            logger.warning(f"[DEBUG] No round_ids found. Sample of all contestants: {[(c.id, c.season_id, c.round_id) for c in all_contestants_sample]}")
+        
+        # Step 2: Build simplified query - try season_id first (most common)
+        query = db.query(Contestant).filter(Contestant.is_deleted == False)
+        
+        # Build OR conditions (comprehensive - handle all cases)
+        conditions = []
+        
+        # Condition 1: season_id matches contest_id
+        conditions.append(Contestant.season_id == contest_id)
+        
+        # Condition 2: round_id matches any of the found rounds
+        if all_round_ids:
+            conditions.append(Contestant.round_id.in_(all_round_ids))
+        
+        # Condition 3: Handle NULL season_id but valid round_id (for migrated data)
+        if all_round_ids:
+            conditions.append(
+                and_(
+                    Contestant.season_id.is_(None),
+                    Contestant.round_id.in_(all_round_ids)
+                )
+            )
+        
+        # Apply OR condition
+        if conditions:
+            query = query.filter(or_(*conditions))
+        else:
+            # Fallback: if no conditions, just query by season_id
+            query = query.filter(Contestant.season_id == contest_id)
+        
+        # Apply geographic filters
+        if filter_country:
+            query = query.filter(func.lower(Contestant.country) == func.lower(filter_country))
+        if filter_region:
+            query = query.filter(func.lower(Contestant.region) == func.lower(filter_region))
+        if filter_continent:
+            query = query.filter(func.lower(Contestant.continent) == func.lower(filter_continent))
+        if filter_city:
+            query = query.filter(func.lower(Contestant.city) == func.lower(filter_city))
+        if user_id:
+            query = query.filter(Contestant.user_id == user_id)
+        
+        # Get contestants with relations (limit joins to avoid timeouts)
+        try:
+            contestants = query.options(
+                joinedload(Contestant.user)
+            ).order_by(Contestant.registration_date.desc()).offset(skip).limit(limit).all()
+        except Exception as e:
+            logger.error(f"Error fetching contestants with relations: {e}")
+            # Fallback: fetch without relations
+            contestants = query.order_by(Contestant.registration_date.desc()).offset(skip).limit(limit).all()
+        
+        # If no contestants found, try simpler fallback
+        if not contestants:
+            logger.warning(f"[get_contest_contestants] No contestants found with filters. Trying fallback queries...")
+            
+            # Fallback 1: Try by season_id only (no geographic filters)
+            try:
+                fallback1 = db.query(Contestant).filter(
+                    Contestant.is_deleted == False,
+                    Contestant.season_id == contest_id
+                ).limit(limit).all()
+                logger.info(f"[get_contest_contestants] Fallback 1 (season_id only): Found {len(fallback1)} contestants")
+                if fallback1:
+                    contestants = fallback1
+            except Exception as e:
+                logger.error(f"Error in fallback 1: {e}")
+            
+            # Fallback 2: Try by round_id only (if we have round_ids)
+            if not contestants and all_round_ids:
+                try:
+                    fallback2 = db.query(Contestant).filter(
+                        Contestant.is_deleted == False,
+                        Contestant.round_id.in_(all_round_ids)
+                    ).limit(limit).all()
+                    logger.info(f"[get_contest_contestants] Fallback 2 (round_id only): Found {len(fallback2)} contestants")
+                    if fallback2:
+                        contestants = fallback2
+                except Exception as e:
+                    logger.error(f"Error in fallback 2: {e}")
+            
+            # Fallback 3: Try ANY non-deleted contestant (for debugging)
+            if not contestants:
+                try:
+                    fallback3 = db.query(Contestant).filter(
+                        Contestant.is_deleted == False
+                    ).limit(5).all()
+                    logger.warning(f"[get_contest_contestants] Fallback 3 (ANY contestant): Found {len(fallback3)} contestants. Sample IDs: {[c.id for c in fallback3]}")
+                except Exception as e:
+                    logger.error(f"Error in fallback 3: {e}")
+            
+            # Apply geographic filters to fallback results if we found any
+            if contestants and (filter_country or filter_region or filter_continent or filter_city):
+                original_count = len(contestants)
+                if filter_country:
+                    contestants = [c for c in contestants if c.country and func.lower(c.country) == func.lower(filter_country)]
+                if filter_region:
+                    contestants = [c for c in contestants if c.region and func.lower(c.region) == func.lower(filter_region)]
+                if filter_continent:
+                    contestants = [c for c in contestants if c.continent and func.lower(c.continent) == func.lower(filter_continent)]
+                if filter_city:
+                    contestants = [c for c in contestants if c.city and func.lower(c.city) == func.lower(filter_city)]
+                logger.info(f"[get_contest_contestants] After geographic filters: {len(contestants)}/{original_count} contestants remain")
+            
+            # Apply user_id filter if specified
+            if contestants and user_id:
+                contestants = [c for c in contestants if c.user_id == user_id]
+            
+            # Load user relations for fallback results
+            if contestants:
+                contestant_ids = [c.id for c in contestants]
+                contestants_with_users = db.query(Contestant).filter(
+                    Contestant.id.in_(contestant_ids)
+                ).options(joinedload(Contestant.user)).all()
+                contestants = contestants_with_users
+        
+        # Enrich contestants with stats (with error handling)
+        contestant_ids = [c.id for c in contestants] if contestants else []
+        
+        if not contestant_ids:
+            return []
+        
+        # Initialize stats dictionaries
+        votes_by_contestant = {}
+        favorites_by_contestant = {}
+        reactions_by_contestant = {}
+        comments_by_contestant = {}
+        
+        # Get stats with error handling for each query
+        try:
+            from app.models.voting import Vote, ContestLike, ContestComment
+            
+            votes_results = db.query(Vote.contestant_id, func.count(Vote.id))\
+                .filter(Vote.contestant_id.in_(contestant_ids))\
+                .group_by(Vote.contestant_id).all()
+            votes_by_contestant = {cid: count for cid, count in votes_results}
+        except Exception as e:
+            logger.warning(f"Error fetching votes: {e}")
+        
+        try:
+            fav_results = db.query(MyFavorites.contestant_id, func.count(MyFavorites.id))\
+                .filter(MyFavorites.contestant_id.in_(contestant_ids))\
+                .group_by(MyFavorites.contestant_id).all()
+            favorites_by_contestant = {cid: count for cid, count in fav_results}
+        except Exception as e:
+            logger.warning(f"Error fetching favorites: {e}")
+        
+        try:
+            like_results = db.query(ContestLike.contestant_id, func.count(ContestLike.id))\
+                .filter(ContestLike.contestant_id.in_(contestant_ids))\
+                .group_by(ContestLike.contestant_id).all()
+            reactions_by_contestant = {cid: count for cid, count in like_results}
+        except Exception as e:
+            logger.warning(f"Error fetching reactions: {e}")
+        
+        try:
+            comment_results = db.query(ContestComment.contestant_id, func.count(ContestComment.id))\
+                .filter(ContestComment.contestant_id.in_(contestant_ids))\
+                .group_by(ContestComment.contestant_id).all()
+            comments_by_contestant = {cid: count for cid, count in comment_results}
+        except Exception as e:
+            logger.warning(f"Error fetching comments: {e}")
+        
+        # Calculate ranks
+        ranked_contestants = sorted(
+            [(c.id, votes_by_contestant.get(c.id, 0)) for c in contestants],
+            key=lambda x: x[1],
+            reverse=True
         )
+        ranks = {cid: rank + 1 for rank, (cid, _) in enumerate(ranked_contestants)}
+        
+        # Check user votes (with error handling)
+        user_votes = set()
+        current_user_id = current_user.id if current_user else None
+        if current_user_id:
+            try:
+                from app.models.voting import Vote
+                user_votes_list = db.query(Vote.contestant_id)\
+                    .filter(Vote.voter_id == current_user_id, Vote.contestant_id.in_(contestant_ids))\
+                    .all()
+                user_votes = {row[0] for row in user_votes_list}
+            except Exception as e:
+                logger.warning(f"Error fetching user votes: {e}")
+        
+        # Build enriched response
+        import json
+        contestants_data = []
+        for contestant in contestants:
+            # Count images and videos
+            images_count = 0
+            videos_count = 0
+            if contestant.image_media_ids:
+                try:
+                    images_count = len(json.loads(contestant.image_media_ids))
+                except (json.JSONDecodeError, TypeError):
+                    images_count = 0
+            if contestant.video_media_ids:
+                try:
+                    videos_count = len(json.loads(contestant.video_media_ids))
+                except (json.JSONDecodeError, TypeError):
+                    videos_count = 0
+            
+            can_vote = False
+            if current_user_id and current_user_id != contestant.user_id:
+                can_vote = contestant.id not in user_votes
+            
+            contestants_data.append({
+                "id": contestant.id,
+                "user_id": contestant.user_id,
+                "season_id": contestant.season_id,
+                "round_id": contestant.round_id,
+                "title": contestant.title,
+                "description": contestant.description,
+                "image_media_ids": contestant.image_media_ids,
+                "video_media_ids": contestant.video_media_ids,
+                "nominator_city": contestant.nominator_city,
+                "nominator_country": contestant.nominator_country,
+                "registration_date": contestant.registration_date,
+                "is_qualified": contestant.is_qualified,
+                "author_name": contestant.user.full_name or f"{contestant.user.first_name or ''} {contestant.user.last_name or ''}".strip() if contestant.user else None,
+                "author_country": contestant.user.country if contestant.user else None,
+                "author_city": contestant.user.city if contestant.user else None,
+                "author_continent": contestant.user.continent if contestant.user else None,
+                "author_region": contestant.user.region if contestant.user else None,
+                "author_avatar_url": contestant.user.avatar_url if contestant.user else None,
+                "country": contestant.country,
+                "city": contestant.city,
+                "continent": contestant.continent,
+                "region": contestant.region,
+                "rank": ranks.get(contestant.id),
+                "votes_count": votes_by_contestant.get(contestant.id, 0),
+                "images_count": images_count,
+                "videos_count": videos_count,
+                "favorites_count": favorites_by_contestant.get(contestant.id, 0),
+                "reactions_count": reactions_by_contestant.get(contestant.id, 0),
+                "comments_count": comments_by_contestant.get(contestant.id, 0),
+                "has_voted": contestant.id in user_votes,
+                "can_vote": can_vote,
+            })
+        
+        # Sort by votes descending
+        contestants_data.sort(key=lambda x: x["votes_count"], reverse=True)
         
         # Log pour vérifier les données
         if contestants_data and len(contestants_data) > 0:

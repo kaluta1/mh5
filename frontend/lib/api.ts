@@ -1,31 +1,53 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios'
 import { cacheService } from './cache-service'
+import { logger } from './logger'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://mh5-hbjp.onrender.com'
 
 // Créer une instance axios avec la configuration de base
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000, // 30 secondes de timeout (augmenté pour gérer les cold starts Render.com)
+  timeout: 15000, // 15 secondes de timeout pour les requêtes générales (réduit pour des réponses plus rapides)
   headers: {
     'Content-Type': 'application/json',
   },
 })
 
+// Instance séparée pour les requêtes d'authentification avec timeout plus long
+// (Render.com backends can be slow to wake up from sleep)
+const authApi = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 20000, // 20 secondes pour les requêtes d'authentification (augmenté pour Render.com)
+  headers: {
+    'Content-Type': 'application/json',
+  },
+})
+
+// Helper pour ajouter les headers communs
+const addCommonHeaders = (config: InternalAxiosRequestConfig) => {
+  const token = localStorage.getItem('access_token')
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  // Ajouter la langue depuis localStorage si disponible
+  const savedLanguage = localStorage.getItem('myhigh5-language')
+  if (savedLanguage && ['en', 'fr', 'es', 'de'].includes(savedLanguage)) {
+    config.headers['Accept-Language'] = savedLanguage
+  }
+  return config
+}
+
 // Intercepteur pour ajouter le token d'authentification et la langue
 api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('access_token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-    // Ajouter la langue depuis localStorage si disponible
-    const savedLanguage = localStorage.getItem('myhigh5-language')
-    if (savedLanguage && ['en', 'fr', 'es', 'de'].includes(savedLanguage)) {
-      config.headers['Accept-Language'] = savedLanguage
-    }
-    return config
-  },
+  (config) => addCommonHeaders(config),
+  (error) => {
+    return Promise.reject(error)
+  }
+)
+
+// Intercepteur pour authApi (même configuration mais timeout plus court)
+authApi.interceptors.request.use(
+  (config) => addCommonHeaders(config),
   (error) => {
     return Promise.reject(error)
   }
@@ -37,25 +59,28 @@ api.interceptors.response.use(
   async (error: AxiosError) => {
     const config = error.config as InternalAxiosRequestConfig & { _retry?: boolean; _retryCount?: number }
     
-    // Retry logic pour les erreurs de timeout ou réseau
+    // Retry logic pour les erreurs de timeout ou réseau (mais pas pour les requêtes d'auth)
+    const isAuthRequest = config?.url?.includes('/auth/')
+    
     if (
       config &&
       !config._retry &&
+      !isAuthRequest && // Don't retry auth requests - they have their own timeout
       (error.code === 'ECONNABORTED' || 
        error.message?.includes('timeout') ||
        error.message?.includes('Network Error') ||
        !error.response)
     ) {
       const retryCount = config._retryCount || 0
-      const maxRetries = 2 // Maximum 2 retries (3 tentatives au total)
+      const maxRetries = 1 // Reduced to 1 retry for faster failure
       
       if (retryCount < maxRetries) {
         config._retry = true
         config._retryCount = retryCount + 1
         
-        // Exponential backoff: attendre 1s, puis 2s
-        const delay = 1000 * (retryCount + 1)
-        console.warn(`Request timeout/error, retrying (${retryCount + 1}/${maxRetries}) after ${delay}ms...`)
+        // Shorter backoff: 500ms
+        const delay = 500
+        logger.warn(`Request timeout/error, retrying (${retryCount + 1}/${maxRetries}) after ${delay}ms...`)
         
         await new Promise(resolve => setTimeout(resolve, delay))
         
@@ -137,19 +162,19 @@ export const authService = {
   },
 
   // Obtenir les informations de l'utilisateur actuel
-  async getCurrentUser(): Promise<any> {
+  async getCurrentUser(): Promise<LoginResponse['user']> {
     const response = await api.get('/api/v1/auth/me')
     return response.data
   },
 
-  // Connexion
+  // Connexion (utilise authApi avec timeout plus court)
   async login(credentials: LoginRequest): Promise<LoginResponse> {
     // Convertir en URLSearchParams pour OAuth2PasswordRequestForm (application/x-www-form-urlencoded)
     const params = new URLSearchParams()
     params.append('username', credentials.email_or_username)
     params.append('password', credentials.password)
 
-    const response = await api.post('/api/v1/auth/login', params.toString(), {
+    const response = await authApi.post('/api/v1/auth/login', params.toString(), {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
@@ -185,7 +210,7 @@ export const authService = {
     try {
       await api.post('/api/v1/auth/logout')
     } catch (error) {
-      console.error('Erreur lors de la déconnexion:', error)
+      logger.error('Erreur lors de la déconnexion', error)
     } finally {
       localStorage.removeItem('access_token')
       localStorage.removeItem('refresh_token')
@@ -219,20 +244,20 @@ export const authService = {
 // Service générique pour les autres appels API (cache géré côté backend avec Redis)
 export const apiService = {
   // GET request (cache géré côté backend)
-  async get<T>(endpoint: string, params?: any, useCache?: boolean): Promise<T> {
+  async get<T>(endpoint: string, params?: Record<string, unknown>, useCache?: boolean): Promise<T> {
     // Le cache est maintenant géré côté backend avec Redis
     const response = await api.get(endpoint, { params })
     return response.data
   },
 
   // POST request
-  async post<T>(endpoint: string, data?: any, invalidateCache?: string, config?: any): Promise<T> {
+  async post<T>(endpoint: string, data?: unknown, invalidateCache?: string, config?: Record<string, unknown>): Promise<T> {
     const response = await api.post(endpoint, data, config)
     return response.data
   },
 
   // PUT request
-  async put<T>(endpoint: string, data?: any, invalidateCache?: string): Promise<T> {
+  async put<T>(endpoint: string, data?: unknown, invalidateCache?: string): Promise<T> {
     const response = await api.put(endpoint, data)
     return response.data
   },

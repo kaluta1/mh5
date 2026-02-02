@@ -6,11 +6,18 @@ import { persistCache, LocalStorageWrapper } from 'apollo3-cache-persist';
 
 const cache = new InMemoryCache();
 
+// Helper to get GraphQL URL
+const getGraphQLUrl = () => {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://mh5-hbjp.onrender.com'
+    // Remove /api/v1 if present, then add /graphql
+    const baseUrl = apiUrl.replace(/\/api\/v1\/?$/, '').replace(/\/$/, '')
+    return `${baseUrl}/graphql`
+}
+
 const client = new ApolloClient({
     link: new HttpLink({
-        uri: process.env.NEXT_PUBLIC_API_URL
-            ? `${process.env.NEXT_PUBLIC_API_URL.replace('/api/v1', '')}/graphql`
-            : "http://localhost:8000/graphql",
+        uri: getGraphQLUrl(),
+        credentials: 'include', // Include cookies for authentication
     }),
     cache,
     defaultOptions: {

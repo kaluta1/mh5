@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { notificationService, Notification } from "@/services/notification-service"
 import { useLanguage } from "@/contexts/language-context"
+import { logger } from "@/lib/logger"
 
 interface NotificationDropdownProps {
   className?: string
@@ -46,10 +47,13 @@ export function NotificationDropdown({ className }: NotificationDropdownProps) {
         notificationService.getNotifications(0, 20, false),
         notificationService.getUnreadCount()
       ])
-      setNotifications(notifs)
-      setUnreadCount(count)
+      // Ensure we always have an array, even if API returns undefined
+      setNotifications(Array.isArray(notifs) ? notifs : [])
+      setUnreadCount(typeof count === 'number' ? count : 0)
     } catch (error) {
-      console.error('Erreur lors du chargement des notifications:', error)
+      // On error, keep existing notifications but ensure it's an array
+      setNotifications(prev => Array.isArray(prev) ? prev : [])
+      setUnreadCount(0)
     } finally {
       setIsLoading(false)
     }
@@ -61,7 +65,14 @@ export function NotificationDropdown({ className }: NotificationDropdownProps) {
     
     // Rafraîchir le compteur toutes les 30 secondes
     intervalRef.current = setInterval(() => {
-      notificationService.getUnreadCount().then(setUnreadCount).catch(console.error)
+      notificationService.getUnreadCount()
+        .then(count => {
+          // Use functional update to avoid setState during render issues
+          setUnreadCount(prev => typeof count === 'number' ? count : prev)
+        })
+        .catch(() => {
+          // Silently fail - don't update state on error
+        })
     }, 30000)
 
     return () => {
@@ -89,7 +100,7 @@ export function NotificationDropdown({ className }: NotificationDropdownProps) {
       )
       setUnreadCount(prev => Math.max(0, prev - 1))
     } catch (error) {
-      console.error('Erreur lors du marquage de la notification comme lue:', error)
+      logger.error('Erreur lors du marquage de la notification comme lue:', error)
     } finally {
       setIsMarkingAsRead(null)
     }
@@ -104,7 +115,7 @@ export function NotificationDropdown({ className }: NotificationDropdownProps) {
       setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
       setUnreadCount(0)
     } catch (error) {
-      console.error('Erreur lors du marquage de toutes les notifications comme lues:', error)
+      logger.error('Erreur lors du marquage de toutes les notifications comme lues:', error)
     } finally {
       setIsLoading(false)
     }
@@ -185,11 +196,11 @@ export function NotificationDropdown({ className }: NotificationDropdownProps) {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         
-        {isLoading && notifications.length === 0 ? (
+        {isLoading && (!notifications || notifications.length === 0) ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
           </div>
-        ) : notifications.length === 0 ? (
+        ) : !notifications || notifications.length === 0 ? (
           <div className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
             {t('notifications.no_notifications') || 'Aucune notification'}
           </div>

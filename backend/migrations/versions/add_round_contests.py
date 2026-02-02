@@ -16,30 +16,48 @@ depends_on = None
 
 
 def upgrade():
-    # 1. Create round_contests association table
-    op.create_table(
-        'round_contests',
-        sa.Column('id', sa.Integer(), primary_key=True),
-        sa.Column('round_id', sa.Integer(), sa.ForeignKey('rounds.id', ondelete='CASCADE'), nullable=False),
-        sa.Column('contest_id', sa.Integer(), sa.ForeignKey('contest.id', ondelete='CASCADE'), nullable=False),
-        sa.Column('created_at', sa.DateTime(), server_default=sa.func.now()),
-        sa.UniqueConstraint('round_id', 'contest_id', name='unique_round_contest'),
-    )
+    # Check if table already exists (idempotent migration)
+    from sqlalchemy import inspect
+    conn = op.get_bind()
+    inspector = inspect(conn)
+    tables = inspector.get_table_names()
     
-    # 2. Create indexes for performance
-    op.create_index('idx_round_contests_round_id', 'round_contests', ['round_id'])
-    op.create_index('idx_round_contests_contest_id', 'round_contests', ['contest_id'])
-    
-    # 3. Migrate existing data from rounds.contest_id to round_contests
-    # This is done with raw SQL to handle the data migration
-    op.execute("""
-        INSERT INTO round_contests (round_id, contest_id)
-        SELECT id, contest_id FROM rounds WHERE contest_id IS NOT NULL
-        ON CONFLICT (round_id, contest_id) DO NOTHING
-    """)
+    if 'round_contests' not in tables:
+        # 1. Create round_contests association table
+        op.create_table(
+            'round_contests',
+            sa.Column('id', sa.Integer(), primary_key=True),
+            sa.Column('round_id', sa.Integer(), sa.ForeignKey('rounds.id', ondelete='CASCADE'), nullable=False),
+            sa.Column('contest_id', sa.Integer(), sa.ForeignKey('contest.id', ondelete='CASCADE'), nullable=False),
+            sa.Column('created_at', sa.DateTime(), server_default=sa.func.now()),
+            sa.UniqueConstraint('round_id', 'contest_id', name='unique_round_contest'),
+        )
+        
+        # 2. Create indexes for performance
+        op.create_index('idx_round_contests_round_id', 'round_contests', ['round_id'])
+        op.create_index('idx_round_contests_contest_id', 'round_contests', ['contest_id'])
+        
+        # 3. Migrate existing data from rounds.contest_id to round_contests
+        # This is done with raw SQL to handle the data migration
+        op.execute("""
+            INSERT INTO round_contests (round_id, contest_id)
+            SELECT id, contest_id FROM rounds WHERE contest_id IS NOT NULL
+            ON CONFLICT (round_id, contest_id) DO NOTHING
+        """)
+    else:
+        # Table already exists, just ensure indexes exist
+        indexes = [idx['name'] for idx in inspector.get_indexes('round_contests')]
+        if 'idx_round_contests_round_id' not in indexes:
+            op.create_index('idx_round_contests_round_id', 'round_contests', ['round_id'])
+        if 'idx_round_contests_contest_id' not in indexes:
+            op.create_index('idx_round_contests_contest_id', 'round_contests', ['contest_id'])
     
     # 4. Make contest_id nullable on rounds table (keeping for backward compatibility)
-    op.alter_column('rounds', 'contest_id', nullable=True)
+    # Check if column exists and is not already nullable
+    try:
+        op.alter_column('rounds', 'contest_id', nullable=True)
+    except Exception:
+        pass  # Column may already be nullable or doesn't exist
 
 
 def downgrade():

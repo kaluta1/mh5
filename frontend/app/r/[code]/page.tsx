@@ -3,6 +3,7 @@
 import { useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
+import { logger } from '@/lib/logger'
 
 export default function ReferralRedirectPage() {
   const router = useRouter()
@@ -20,7 +21,9 @@ export default function ReferralRedirectPage() {
         headers: {
           'Content-Type': 'application/json'
         }
-      }).catch(console.error)
+      }).catch((error) => {
+        logger.error('Failed to track referral click', error)
+      })
       
       // Rediriger vers la page d'inscription avec le code
       router.push(`/register?ref=${code}`)

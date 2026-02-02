@@ -1,26 +1,12 @@
-# Ignore files that shouldn't be deployed to Vercel
-backend/migrations/
-backend/scripts/
-backend/*.py
-backend/*.md
-backend/*.sql
-backend/Dockerfile
-backend/docker-compose.yml
-backend/myfav.db
-backend/__pycache__/
-backend/**/__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-*.so
-*.egg
-*.egg-info/
-dist/
-build/
-.env
-.env.local
-.env.*.local
+# Ignore backend directory completely to prevent stack overflow
+backend/
+
+# Ignore common files
 node_modules/
 .next/
 .vercel/
+*.log
+.env.local
+.env.*.local
+dist/
+build/

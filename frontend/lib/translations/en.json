@@ -57,7 +57,12 @@
       "loading": "Signing in...",
       "no_account": "Don't have an account?",
       "register_link": "Sign up",
-      "error": "Login error"
+      "error": "Login error",
+      "errors": {
+        "invalid_credentials": "Invalid email/username or password",
+        "timeout": "Connection timeout. The server is taking too long to respond. Please try again.",
+        "network_error": "Network error. Please check your connection and try again."
+      }
     },
     "register": {
       "title": "Join MyFav",

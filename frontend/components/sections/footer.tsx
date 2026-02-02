@@ -85,7 +85,7 @@ export function Footer() {
           })
         }
       } catch (error) {
-        console.error('Erreur lors de la récupération de la localisation:', error)
+        // Silently fail - location is optional
         // Essayer une autre API en fallback
         try {
           const fallbackResponse = await fetch('https://api.ipify.org?format=json')
@@ -96,7 +96,7 @@ export function Footer() {
             })
           }
         } catch (fallbackError) {
-          console.error('Erreur avec l\'API de fallback:', fallbackError)
+          // Silently fail - location is optional
         }
       }
     }
@@ -121,9 +121,9 @@ export function Footer() {
       setEmail("")
       addToast(t('common.success') || 'Inscription réussie !', 'success')
       setTimeout(() => setSubscribed(false), 5000)
-    } catch (error: any) {
-      console.error('Erreur lors de l\'abonnement:', error)
-      addToast(error.message || 'Une erreur est survenue', 'error')
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Une erreur est survenue'
+      addToast(errorMessage, 'error')
     } finally {
       setIsSubmitting(false)
     }
@@ -141,18 +141,7 @@ export function Footer() {
         if (response.data && Array.isArray(response.data)) {
           setCategories(response.data)
         }
-      } catch (error: any) {
-        console.error('Erreur lors du chargement des catégories:', error)
-        
-        // Log plus détaillé pour le debugging
-        if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-          console.warn('Categories loading timed out - server may be slow or unreachable')
-        } else if (error.response) {
-          console.error('Server responded with error:', error.response.status, error.response.data)
-        } else if (error.request) {
-          console.error('No response received from server:', error.request)
-        }
-        
+      } catch (error: unknown) {
         // En cas d'erreur, on garde un tableau vide (l'UI gère déjà ce cas)
         setCategories([])
       } finally {

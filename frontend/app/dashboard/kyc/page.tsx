@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { KYCSkeleton } from '@/components/ui/skeleton'
 import { kycService, KYCPaymentRequiredError } from '@/services/kyc-service'
 import { PaymentDialog } from '@/components/dialogs/payment-dialog-v2'
+import { logger } from '@/lib/logger'
 import { 
   CheckCircle, 
   AlertCircle, 
@@ -81,8 +82,13 @@ function KYCPageContent() {
           refreshUser?.()
         }
       } catch (err) {
-        console.error('Error loading KYC status:', err)
-        setKycData(null)
+        // Handle 404 gracefully - no verification found is not an error
+        if (err instanceof Error && err.message.includes('404')) {
+          setKycData(null)
+        } else {
+          logger.error('Error loading KYC status:', err)
+          setKycData(null)
+        }
       } finally {
         setIsLoadingStatus(false)
       }
@@ -120,13 +126,13 @@ function KYCPageContent() {
         setError(t('kyc.init_error') || 'Impossible de démarrer la vérification')
       }
     } catch (err) {
-      console.error('Error initiating verification:', err)
-      
       // Gérer l'erreur de paiement requis
       if (err instanceof KYCPaymentRequiredError) {
         setShowPaymentDialog(true)
         setError(null) // Ne pas afficher d'erreur, on affiche le dialog
+        // Don't log payment required errors - they're expected
       } else {
+        logger.error('Error initiating verification:', err)
         setError(err instanceof Error ? err.message : t('common.error') || 'Une erreur est survenue')
       }
     } finally {

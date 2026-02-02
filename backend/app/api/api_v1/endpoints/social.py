@@ -443,9 +443,44 @@ def create_group(
     group_in: SocialGroupCreate,
     current_user: User = Depends(get_current_active_user)
 ) -> Any:
-    """Créer un nouveau groupe social"""
+    """
+    Créer un nouveau groupe social (privé par défaut, comme WhatsApp).
+    Le créateur devient automatiquement admin du groupe.
+    """
+    # FIXED: Force private by default if not specified
+    if not group_in.group_type:
+        group_in.group_type = GroupType.PRIVATE
+    
     group = crud_social_group.create(db, obj_in=group_in, creator_id=current_user.id)
-    return group
+    
+    # Build response with invitation link
+    group_dict = {
+        "id": group.id,
+        "name": group.name,
+        "description": group.description,
+        "group_type": group.group_type,
+        "creator_id": group.creator_id,
+        "avatar_url": group.avatar_url,
+        "cover_url": group.cover_url,
+        "max_members": group.max_members,
+        "requires_approval": group.requires_approval,
+        "invite_code": group.invite_code,
+        "invitation_link": f"/groups/join/{group.invite_code}" if group.invite_code else None,  # Frontend will build full URL
+        "member_count": group.member_count,
+        "post_count": group.post_count,
+        "is_active": group.is_active,
+        "created_at": group.created_at,
+        "updated_at": group.updated_at,
+        "creator": {
+            "id": group.creator.id,
+            "username": group.creator.username,
+            "avatar_url": group.creator.avatar_url
+        } if group.creator else None,
+        "user_role": GroupMemberRole.ADMIN,  # Creator is admin
+        "is_member": True  # Creator is always a member
+    }
+    
+    return group_dict
 
 
 @router.get("/groups", response_model=GroupListResponse)
@@ -456,7 +491,11 @@ def get_groups(
     limit: int = Query(20, ge=1, le=100),
     current_user: Optional[User] = Depends(get_current_active_user)
 ) -> Any:
-    """Récupérer les groupes"""
+    """
+    Récupérer les groupes.
+    FIXED: Private groups are only shown to members (like WhatsApp).
+    Public groups are visible to everyone.
+    """
     user_id = current_user.id if current_user else None
     groups = crud_social_group.get_multi(db, user_id=user_id, skip=skip, limit=limit)
     
@@ -473,6 +512,7 @@ def get_groups(
             "max_members": group.max_members,
             "requires_approval": group.requires_approval,
             "invite_code": group.invite_code,
+            "invitation_link": f"/groups/join/{group.invite_code}" if group.invite_code else None,
             "member_count": group.member_count,
             "post_count": group.post_count,
             "is_active": group.is_active,
@@ -511,7 +551,10 @@ def get_group(
     group_id: int,
     current_user: Optional[User] = Depends(get_current_active_user)
 ) -> Any:
-    """Récupérer un groupe par son ID"""
+    """
+    Récupérer un groupe par son ID.
+    FIXED: Private groups are only visible to members (like WhatsApp).
+    """
     group = crud_social_group.get(db, group_id=group_id)
     
     if not group:
@@ -521,6 +564,24 @@ def get_group(
         )
     
     user_id = current_user.id if current_user else None
+    
+    # FIXED: Private groups are only visible to members
+    if group.group_type == GroupType.PRIVATE:
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Ce groupe est privé. Vous devez être connecté et membre pour y accéder."
+            )
+        
+        is_member = crud_social_group.is_member(db, group.id, user_id)
+        is_creator = group.creator_id == user_id
+        
+        if not is_member and not is_creator:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Ce groupe est privé. Vous devez être membre pour y accéder."
+            )
+    
     group_dict = {
         "id": group.id,
         "name": group.name,
@@ -532,6 +593,7 @@ def get_group(
         "max_members": group.max_members,
         "requires_approval": group.requires_approval,
         "invite_code": group.invite_code,
+        "invitation_link": f"/groups/join/{group.invite_code}" if group.invite_code else None,
         "member_count": group.member_count,
         "post_count": group.post_count,
         "is_active": group.is_active,

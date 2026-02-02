@@ -57,7 +57,12 @@
       "loading": "Connexion...",
       "no_account": "Pas encore de compte ?",
       "register_link": "S'inscrire",
-      "error": "Erreur de connexion"
+      "error": "Erreur de connexion",
+      "errors": {
+        "invalid_credentials": "Email/nom d'utilisateur ou mot de passe invalide",
+        "timeout": "Délai d'attente dépassé. Le serveur met trop de temps à répondre. Veuillez réessayer.",
+        "network_error": "Erreur réseau. Veuillez vérifier votre connexion et réessayer."
+      }
     },
     "register": {
       "title": "Rejoindre MyFav",

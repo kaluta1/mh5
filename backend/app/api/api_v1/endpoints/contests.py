@@ -63,12 +63,16 @@ def read_contests(
     """
     # Construire les filtres
     filters = {}
+    # FIXED: Default to active contests only if not specified
+    if active is not None:
+        filters["is_active"] = active
+    else:
+        filters["is_active"] = True  # Default to active contests only
+    
     if location_id:
         filters["location_id"] = location_id
     if contest_type:
         filters["contest_type"] = contest_type
-    if active is not None:
-        filters["is_active"] = active
     if search:
         filters["search"] = search
     if voting_level:
@@ -79,15 +83,36 @@ def read_contests(
         filters["has_voting_type"] = has_voting_type
     
     # Récupérer les contests depuis la base de données
-    contests = contest.get_multi_with_filters(
-        db=db, skip=skip, limit=limit, filters=filters
-    )
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        logger.info(f"Fetching contests with filters: {filters}")
+        contests = contest.get_multi_with_filters(
+            db=db, skip=skip, limit=limit, filters=filters
+        )
+        logger.info(f"Successfully fetched {len(contests)} contests from database")
+        
+        # DEBUG: Log contest IDs and basic info
+        if contests:
+            logger.info(f"Sample contest IDs: {[c.id for c in contests[:5]]}")
+            logger.info(f"Sample contest names: {[c.name for c in contests[:5]]}")
+        else:
+            logger.warning("No contests found in database with current filters!")
+    except Exception as e:
+        logger.error(f"Error fetching contests from database: {str(e)}", exc_info=True)
+        # Re-raise to let the database session handler catch it properly
+        raise
     
     # Enrichir chaque contest avec les statistiques
     # enrich_contest_with_stats retourne un dictionnaire avec toutes les valeurs converties
     enriched_contests = []
+    
+    logger.info(f"Found {len(contests)} contests in database, starting enrichment...")
+    
     for c in contests:
         try:
+            logger.debug(f"Enriching contest {c.id} ({c.name})...")
             enriched = contest.enrich_contest_with_stats(
                 db=db, 
                 contest=c, 
@@ -97,14 +122,40 @@ def read_contests(
                 filter_continent=filter_continent
             )
             if isinstance(enriched, dict):
+                logger.debug(f"Contest {c.id} enriched: entries_count={enriched.get('entries_count', 0)}, total_votes={enriched.get('total_votes', 0)}")
                 enriched_contests.append(enriched)
+            else:
+                logger.warning(f"Contest {c.id} enrichment returned non-dict: {type(enriched)}")
         except Exception as e:
-            # Logger l'erreur mais continuer avec les autres contests
-            import logging
-            logger = logging.getLogger(__name__)
+            # FIXED: Log full error with traceback for debugging
+            import traceback
             logger.error(f"Erreur lors de l'enrichissement du contest {c.id}: {str(e)}")
+            logger.error(traceback.format_exc())
+            # FIXED: Return basic contest data even if enrichment fails
+            try:
+                basic_contest = {
+                    "id": c.id,
+                    "name": c.name,
+                    "description": c.description,
+                    "contest_type": c.contest_type,
+                    "cover_image_url": c.cover_image_url or c.image_url,
+                    "image_url": c.image_url,
+                    "is_active": c.is_active,
+                    "is_submission_open": c.is_submission_open,
+                    "is_voting_open": c.is_voting_open,
+                    "level": c.level,
+                    "voting_type_id": getattr(c, 'voting_type_id', None),
+                    "voting_type": None,
+                    "entries_count": 0,
+                    "total_votes": 0,
+                }
+                enriched_contests.append(basic_contest)
+                logger.info(f"Added basic contest data for contest {c.id} after enrichment error")
+            except Exception as e2:
+                logger.error(f"Failed to create basic contest data for {c.id}: {str(e2)}")
             continue
     
+    logger.info(f"Successfully enriched {len(enriched_contests)} out of {len(contests)} contests")
     return enriched_contests
 
 

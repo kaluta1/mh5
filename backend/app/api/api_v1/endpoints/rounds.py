@@ -86,6 +86,61 @@ def read_rounds(
     return rounds_with_stats[skip:skip+limit] if contest_id else rounds_with_stats # slicing managed above for no-contest case? No, slicing on list.
 
 
+@router.post("/ensure-january", response_model=round_schema.Round)
+def ensure_january_round(
+    *,
+    db: Session = Depends(deps.get_db),
+) -> Any:
+    """
+    Ensure January round exists for current year and links all active contests.
+    Public endpoint - can be called without authentication for initial setup.
+    """
+    from app.services.monthly_round_scheduler import monthly_round_scheduler
+    
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        logger.info("Starting ensure_january_round_exists...")
+        round_obj = monthly_round_scheduler.ensure_january_round_exists()
+        if round_obj:
+            logger.info(f"Successfully retrieved/created January round (id={round_obj.id})")
+            return round_obj
+        else:
+            logger.error("ensure_january_round_exists returned None")
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to create or retrieve January round (returned None)"
+            )
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
+    except Exception as e:
+        import traceback
+        error_traceback = traceback.format_exc()
+        logger.error(f"Error in ensure_january_round endpoint: {str(e)}", exc_info=True)
+        logger.error(f"Full traceback: {error_traceback}")
+        
+        # Return more detailed error message
+        error_detail = str(e)
+        if "Failed to ensure" in error_detail:
+            # Extract the underlying error
+            error_detail = error_detail.split(": ", 1)[-1] if ": " in error_detail else error_detail
+        
+        # Include more context in debug mode
+        import os
+        if os.getenv("DEBUG") == "true":
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error ensuring January round: {error_detail}\n\nTraceback:\n{error_traceback}"
+            )
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error ensuring January round: {error_detail}. Check server logs for details."
+            )
+
+
 @router.post("/generate-monthly", response_model=round_schema.Round)
 def generate_monthly(
     *,

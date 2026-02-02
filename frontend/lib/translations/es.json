@@ -52,7 +52,12 @@
       "loading": "Iniciando sesión...",
       "no_account": "¿No tienes cuenta?",
       "register_link": "Regístrate",
-      "error": "Error de inicio de sesión"
+      "error": "Error de inicio de sesión",
+      "errors": {
+        "invalid_credentials": "Email/nombre de usuario o contraseña inválidos",
+        "timeout": "Tiempo de espera agotado. El servidor está tardando demasiado en responder. Por favor, inténtalo de nuevo.",
+        "network_error": "Error de red. Por favor, verifica tu conexión e inténtalo de nuevo."
+      }
     },
     "register": {
       "title": "Únete a MyFav",
