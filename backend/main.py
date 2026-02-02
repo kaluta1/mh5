@@ -88,22 +88,54 @@ async def lifespan(app: FastAPI):
     migration_thread.start()
     # ---------------------------
 
-    print("Starting season migration scheduler...")
-    await season_migration_scheduler.start()
     
-    print("Starting monthly round scheduler...")
-    await monthly_round_scheduler.start()
+    # Start delayed background services (schedulers)
+    # This ensures the API starts immediately and migrations have time to run
+    def start_background_services():
+        import time
+        import asyncio
+        import logging
+        
+        logger = logging.getLogger("uvicorn.error")
+        
+        async def _delayed_start():
+            # Wait for migrations to likely complete (10 seconds)
+            logger.info("⏳ Waiting 10s before starting background schedulers...")
+            await asyncio.sleep(10)
+            
+            logger.info("Starting payment scheduler...")
+            await payment_scheduler.start()
+            
+            logger.info("Starting contest status scheduler...")
+            await contest_status_scheduler.start()
+            
+            logger.info("Starting season migration scheduler...")
+            await season_migration_scheduler.start()
+            
+            logger.info("Starting monthly round scheduler...")
+            await monthly_round_scheduler.start()
+            
+            # Ensure January round exists
+            logger.info("Ensuring January round exists...")
+            try:
+                # Run in thread pool to avoid blocking async loop if it does heavy sync work
+                # ensure_january_round_exists is synchronous DB code
+                loop = asyncio.get_event_loop()
+                january_round = await loop.run_in_executor(None, monthly_round_scheduler.ensure_january_round_exists)
+                
+                if january_round:
+                    logger.info(f"✅ January round ready (id={january_round.id})")
+                else:
+                    logger.warn("⚠️ Could not create/verify January round")
+            except Exception as e:
+                logger.error(f"⚠️ Error ensuring January round: {e}")
+                
+        # Fire and forget the async task
+        asyncio.create_task(_delayed_start())
+
+    start_background_services()
     
-    # Ensure January round exists on startup
-    print("Ensuring January round exists...")
-    try:
-        january_round = monthly_round_scheduler.ensure_january_round_exists()
-        if january_round:
-            print(f"✅ January round ready (id={january_round.id})")
-        else:
-            print("⚠️ Could not create/verify January round")
-    except Exception as e:
-        print(f"⚠️ Error ensuring January round: {e}")
+    # Initialize encryption service for E2E messaging
     
     yield
     
