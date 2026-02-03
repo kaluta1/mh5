@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from 'react'
+import { AxiosError } from 'axios'
 import { authService } from '@/lib/api'
 import { cacheService } from '@/lib/cache-service'
 import { logger } from '@/lib/logger'
@@ -74,12 +75,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  // Vérifier l'authentification au chargement (optimized)
+  // Vérifier l'authentification au chargement (avec 1 retry si backend 5xx/réseau)
   React.useEffect(() => {
-    const checkAuth = async () => {
+    const checkAuth = async (retryCount = 0) => {
       try {
         if (authService.isAuthenticated()) {
-          // Load user first (critical)
           const userData = await authService.getCurrentUser()
           setUser({
             ...userData,
@@ -87,19 +87,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             is_active: userData.is_active ?? true,
             is_verified: userData.is_verified ?? false
           } as User)
-          
-          // Load permissions in background (non-blocking)
-          loadPermissions().catch(() => {
-            // Silently fail - permissions can load later
-          })
+          loadPermissions().catch(() => {})
         } else {
           setIsLoading(false)
         }
       } catch (error) {
-        logger.error('Erreur lors de la vérification de l\'authentification', error)
-        // Token invalide, nettoyer le localStorage
-        localStorage.removeItem('access_token')
-        localStorage.removeItem('refresh_token')
+        const axiosErr = error as AxiosError
+        const status = axiosErr.response?.status
+        const isNetworkOrServerError = !axiosErr.response || (status && status >= 500)
+        const isRetryable = isNetworkOrServerError || axiosErr.code === 'ECONNABORTED' || axiosErr.message === 'Network Error'
+
+        if (status === 401) {
+          localStorage.removeItem('access_token')
+          localStorage.removeItem('refresh_token')
+          logger.debug('Session expirée ou token invalide')
+        } else if (isRetryable && retryCount < 1) {
+          logger.warn('Backend indisponible, nouvel essai dans 3s...')
+          await new Promise((r) => setTimeout(r, 3000))
+          return checkAuth(retryCount + 1)
+        } else if (isRetryable) {
+          logger.warn('Backend temporairement indisponible')
+        } else {
+          logger.error('Erreur lors de la vérification de l\'authentification', error)
+          localStorage.removeItem('access_token')
+          localStorage.removeItem('refresh_token')
+        }
       } finally {
         setIsLoading(false)
       }
@@ -145,8 +157,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } as User)
         await loadPermissions()
       } catch (error) {
-        logger.error('Erreur lors du rafraîchissement de l\'utilisateur', error)
-        await logout()
+        const status = (error as AxiosError).response?.status
+        if (status === 401) {
+          await logout()
+        } else {
+          logger.warn('Rafraîchissement utilisateur impossible (backend indisponible?)', error)
+        }
       }
     }
   }

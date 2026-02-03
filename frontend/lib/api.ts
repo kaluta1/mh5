@@ -5,10 +5,10 @@ import { DEFAULT_PUBLIC_API_URL } from './config'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || DEFAULT_PUBLIC_API_URL
 
-// Créer une instance axios avec la configuration de base
+// Instance axios pour les appels API (timeout pour éviter blocage si backend down/520)
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 0, // No timeout
+  timeout: 25000, // 25s pour /auth/me et autres appels
   headers: {
     'Content-Type': 'application/json',
   },

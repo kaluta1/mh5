@@ -11,6 +11,7 @@ import { LanguageSelector } from '@/components/ui/language-selector'
 import { useLanguage } from '@/contexts/language-context'
 import { useAuth } from '@/hooks/use-auth'
 import { useToast } from '@/components/ui/toast'
+import { logger } from '@/lib/logger'
 
 function LoginPageContent() {
   const { t } = useLanguage()
