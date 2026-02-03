@@ -108,9 +108,8 @@ const nextConfig = {
     ];
   },
   async rewrites() {
-    // NOTE: Update these URLs to match your Render backend URL after deployment
-    // These are share link rewrites - update 'mh5-hbjp.onrender.com' to your actual backend URL
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'https://mh5-hbjp.onrender.com'
+    // Share link rewrites: backend URL from env or default (see lib/config.ts)
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'https://mh5-backend.onrender.com'
     
     return [
       {

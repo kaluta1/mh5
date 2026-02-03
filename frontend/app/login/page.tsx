@@ -76,18 +76,21 @@ function LoginPageContent() {
     
     setIsLoading(true)
 
+    const loadingTimeoutId = window.setTimeout(() => {
+      setIsLoading(false)
+      addToast(t('auth.login.errors.timeout'), 'error', 6000)
+    }, 65000)
+
     try {
-      // Utiliser la fonction login du hook useAuth pour mettre à jour le contexte
       await login({
         email_or_username: formData.emailOrUsername.trim(),
         password: formData.password,
       })
-
-      // Afficher la page de succès et rediriger
+      clearTimeout(loadingTimeoutId)
       setIsSuccess(true)
-      // La redirection se fait via le useEffect qui surveille isAuthenticated
     } catch (err: any) {
-      console.error('Login error:', err)
+      clearTimeout(loadingTimeoutId)
+      logger.error('Login error', { message: err.message, status: err.response?.status, url: err.config?.baseURL + err.config?.url, detail: err.response?.data })
       
       // Fonction pour mapper les erreurs backend aux traductions
       const mapErrorToTranslation = (message: string): string => {
@@ -131,10 +134,12 @@ function LoginPageContent() {
       } else if (err.message) {
         errorMessage = mapErrorToTranslation(err.message)
       }
-      
-      // Afficher l'erreur dans un toast (pas de rechargement de page)
+      if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+        errorMessage = t('auth.login.errors.timeout')
+      }
       addToast(errorMessage, 'error', 6000)
     } finally {
+      clearTimeout(loadingTimeoutId)
       setIsLoading(false)
     }
   }

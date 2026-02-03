@@ -71,12 +71,18 @@ export function LoginModal({ open, onOpenChange, onSwitchToRegister, onLoginSucc
     setIsLoading(true)
     setError(null)
 
+    // Safeguard: stop loading after 65s if request never settles (e.g. no timeout fired)
+    const loadingTimeoutId = window.setTimeout(() => {
+      setIsLoading(false)
+      setError(t('auth.login.errors.timeout'))
+    }, 65000)
+
     try {
-      // Utiliser la fonction login du hook useAuth pour mettre à jour le contexte
       await login({
         email_or_username: formData.emailOrUsername.trim(),
         password: formData.password,
       })
+      clearTimeout(loadingTimeoutId)
 
       // Afficher la page de succès
       setIsSuccess(true)
@@ -154,6 +160,7 @@ export function LoginModal({ open, onOpenChange, onSwitchToRegister, onLoginSucc
       // Afficher l'erreur en haut du formulaire
       setError(errorMessage)
     } finally {
+      clearTimeout(loadingTimeoutId)
       setIsLoading(false)
     }
     
