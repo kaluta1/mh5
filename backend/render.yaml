@@ -12,9 +12,9 @@ services:
       - key: SECRET_KEY
         sync: false  # Set manually - CRITICAL!
       - key: BACKEND_CORS_ORIGINS
-        sync: false  # Set manually with your frontend URL
+        value: https://frontend-rho-eight-72.vercel.app
       - key: FRONTEND_URL
-        sync: false  # Set manually with your Vercel URL
+        value: https://frontend-rho-eight-72.vercel.app
       - key: ALGORITHM
         value: HS256
       - key: ACCESS_TOKEN_EXPIRE_MINUTES
