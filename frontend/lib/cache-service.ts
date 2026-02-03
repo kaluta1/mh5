@@ -13,7 +13,7 @@ class CacheService {
   private cache: Map<string, CacheEntry<any>> = new Map()
   private readonly DEFAULT_TTL = 10 * 60 * 1000 // 5 minutes par défaut
   private readonly STORAGE_KEY = 'api_cache'
-  private enabled: boolean = true // Cache activé
+  private enabled: boolean = false // Cache désactivé par défaut sur demande utilisateur
 
   constructor() {
     this.loadFromStorage()
@@ -50,7 +50,7 @@ class CacheService {
       if (stored) {
         const parsed = JSON.parse(stored)
         const now = Date.now()
-        
+
         // Ne charger que les entrées non expirées
         for (const [key, entry] of Object.entries(parsed)) {
           const cacheEntry = entry as CacheEntry<any>
@@ -185,7 +185,7 @@ class CacheService {
     })
 
     keysToDelete.forEach(key => this.cache.delete(key))
-    
+
     if (keysToDelete.length > 0) {
       this.saveToStorage()
     }

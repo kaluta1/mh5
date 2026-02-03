@@ -572,3 +572,4 @@ class CRUDUser:
 
 
 user = CRUDUser()
+crud_user = user

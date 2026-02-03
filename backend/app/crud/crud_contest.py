@@ -448,6 +448,9 @@ class CRUDContest:
         - filter_continent: Si fourni, compte les contestants de ce continent
         - Par défaut (aucun filtre), utilise la localisation de l'utilisateur connecté
         """
+        import logging
+        logger = logging.getLogger(__name__)
+
         from app.models.contests import ContestSeasonLink, ContestSeason, SeasonLevel
         from app.models.user import User
         

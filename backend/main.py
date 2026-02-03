@@ -20,36 +20,116 @@ from app.services.socketio_app import create_socketio_app
 async def lifespan(app: FastAPI):
     """Application lifespan - start/stop background services"""
     # Startup
-    print("Starting payment scheduler...")
-    await payment_scheduler.start()
-    
-    print("Starting contest status scheduler...")
-    await contest_status_scheduler.start()
-    
-    print("Starting season migration scheduler...")
-    await season_migration_scheduler.start()
-    
-    print("Starting monthly round scheduler...")
-    await monthly_round_scheduler.start()
-    
-    # Ensure January round exists on startup
-    print("Ensuring January round exists...")
+    print("Starting schema fix for contest table...")
     try:
-        january_round = monthly_round_scheduler.ensure_january_round_exists()
-        if january_round:
-            print(f"✅ January round ready (id={january_round.id})")
-        else:
-            print("⚠️ Could not create/verify January round")
+        from backend.fix_contest_schema import fix_schema
+        fix_schema()
+        print("✅ Schema fix completed")
+    except ImportError:
+        # Try local import if backend package not resolvable (local dev)
+        try:
+            from fix_contest_schema import fix_schema
+            fix_schema()
+            print("✅ Schema fix completed (local)")
+        except Exception as e:
+            print(f"⚠️ Could not import/run fix_contest_schema: {e}")
     except Exception as e:
-        print(f"⚠️ Error ensuring January round: {e}")
+        print(f"⚠️ Error running schema fix: {e}")
+
+    # --- AUTOMATIC MIGRATIONS ---
+    def run_migrations():
+        """Run alembic migrations in background"""
+        import subprocess
+        import os
+        import logging
+        
+        logger = logging.getLogger("uvicorn.error")
+        logger.info("Starting background database migrations...")
+        
+        try:
+            env = os.environ.copy()
+            # Ensure we can find the app
+            project_root = os.path.dirname(os.path.abspath(__file__))
+            if 'PYTHONPATH' in env:
+                env['PYTHONPATH'] = f"{project_root}{os.pathsep}{env['PYTHONPATH']}"
+            else:
+                env['PYTHONPATH'] = project_root
+                
+            # Run alembic upgrade heads
+            result = subprocess.run(["alembic", "upgrade", "heads"], check=True, env=env, capture_output=True, text=True)
+            logger.info("✅ Database migrations completed successfully")
+            logger.info(result.stdout)
+            
+            # Init data after migrations if needed
+            try:
+                from app.initial_data import init_db
+                logger.info("Initializing base data...")
+                init_db()
+                logger.info("✅ Base data initialized")
+            except Exception as e:
+                logger.warning(f"⚠️ Data initialization skipped or failed: {e}")
+                
+        except subprocess.CalledProcessError as e:
+            logger.error(f"❌ Migration failed: {e}")
+            logger.error(f"Stderr: {e.stderr}")
+        except Exception as e:
+            logger.error(f"❌ Error during background migration: {e}")
+
+    # Start migrations in background thread
+    import threading
+    migration_thread = threading.Thread(target=run_migrations)
+    migration_thread.daemon = True
+    migration_thread.start()
+    # ---------------------------
+
+    
+    # Start delayed background services (schedulers)
+    # This ensures the API starts immediately and migrations have time to run
+    def start_background_services():
+        import time
+        import asyncio
+        import logging
+        
+        logger = logging.getLogger("uvicorn.error")
+        
+        async def _delayed_start():
+            # Wait for migrations to likely complete (10 seconds)
+            logger.info("⏳ Waiting 10s before starting background schedulers...")
+            await asyncio.sleep(10)
+            
+            logger.info("Starting payment scheduler...")
+            await payment_scheduler.start()
+            
+            logger.info("Starting contest status scheduler...")
+            await contest_status_scheduler.start()
+            
+            logger.info("Starting season migration scheduler...")
+            await season_migration_scheduler.start()
+            
+            logger.info("Starting monthly round scheduler...")
+            await monthly_round_scheduler.start()
+            
+            # Ensure January round exists
+            logger.info("Ensuring January round exists...")
+            try:
+                # Run in thread pool to avoid blocking async loop if it does heavy sync work
+                # ensure_january_round_exists is synchronous DB code
+                loop = asyncio.get_event_loop()
+                january_round = await loop.run_in_executor(None, monthly_round_scheduler.ensure_january_round_exists)
+                
+                if january_round:
+                    logger.info(f"✅ January round ready (id={january_round.id})")
+                else:
+                    logger.warn("⚠️ Could not create/verify January round")
+            except Exception as e:
+                logger.error(f"⚠️ Error ensuring January round: {e}")
+                
+        # Fire and forget the async task
+        asyncio.create_task(_delayed_start())
+
+    start_background_services()
     
     # Initialize encryption service for E2E messaging
-    try:
-        from app.services.feed_encryption import init_encryption_service
-        init_encryption_service()
-        print("✅ Encryption service initialized")
-    except Exception as e:
-        print(f"⚠️ Encryption service initialization failed: {e}")
     
     yield
     

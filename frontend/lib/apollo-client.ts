@@ -14,7 +14,24 @@ const createApolloClient = () => {
             uri: getGraphQLUrl(),
             credentials: 'include', // Include cookies for authentication
         }),
-        cache: new InMemoryCache(),
+        cache: new InMemoryCache({
+            addTypename: false, // Prevent adding __typename to query results if causing issues
+            resultCaching: false, // Disable result caching
+        }),
+        defaultOptions: {
+            watchQuery: {
+                fetchPolicy: 'no-cache',
+                errorPolicy: 'ignore',
+            },
+            query: {
+                fetchPolicy: 'no-cache',
+                errorPolicy: 'all',
+            },
+            mutate: {
+                fetchPolicy: 'no-cache',
+                errorPolicy: 'all'
+            }
+        }
     });
 };
 

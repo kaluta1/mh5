@@ -2609,6 +2609,33 @@ export const translations: Record<Language, TranslationKeys> = {
         search: "Rechercher",
         load_error: "Erreur lors du chargement des transactions"
       },
+      accounting: {
+        title: "Comptabilité",
+        subtitle: "Vue d'ensemble financière et journal des écritures",
+        refresh: "Actualiser",
+        total_revenue: "Revenus Totaux",
+        ytd: "Depuis le début de l'exercice",
+        journal_tab: "Journal Général",
+        coa_tab: "Plan Comptable",
+        journal_title: "Journal des Écritures",
+        journal_desc: "Les 50 dernières écritures comptables",
+        coa_title: "Plan Comptable",
+        coa_desc: "Liste des comptes et soldes actuels",
+        table: {
+          date: "Date",
+          ref: "N° Pièce",
+          description: "Description",
+          debit: "Débit",
+          credit: "Crédit",
+          status: "Statut",
+          code: "Code",
+          account: "Nom du Compte",
+          type: "Type",
+          balance: "Solde"
+        },
+        error_loading: "Erreur lors du chargement des données comptables",
+        retry: "Réessayer"
+      },
       users: {
         title: "Gestion des Utilisateurs",
         description: "Gérez les rôles et les permissions des utilisateurs",
