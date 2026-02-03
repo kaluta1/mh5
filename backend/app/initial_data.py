@@ -149,23 +149,23 @@ def create_default_contest_templates(db: Session) -> None:
 def create_base_locations(db: Session) -> None:
     """Crée les localisations de base (continents)"""
     try:
-        from app.models.contest import Location
+        from app.models.contest import Location, LocationLevel
         
         # Création des continents
         continents = [
-            {"name": "Afrique", "level": "continent"},
-            {"name": "Asie", "level": "continent"},
-            {"name": "Europe", "level": "continent"},
-            {"name": "Amérique du Nord", "level": "continent"},
-            {"name": "Amérique du Sud", "level": "continent"},
-            {"name": "Océanie", "level": "continent"},
-            {"name": "Antarctique", "level": "continent"}
+            {"name": "Afrique", "level": LocationLevel.CONTINENT},
+            {"name": "Asie", "level": LocationLevel.CONTINENT},
+            {"name": "Europe", "level": LocationLevel.CONTINENT},
+            {"name": "Amérique du Nord", "level": LocationLevel.CONTINENT},
+            {"name": "Amérique du Sud", "level": LocationLevel.CONTINENT},
+            {"name": "Océanie", "level": LocationLevel.CONTINENT},
+            {"name": "Antarctique", "level": LocationLevel.CONTINENT}
         ]
         
         for continent_data in continents:
             continent = db.query(Location).filter(
                 Location.name == continent_data["name"],
-                Location.level == "continent"
+                Location.level == LocationLevel.CONTINENT
             ).first()
             
             if not continent:

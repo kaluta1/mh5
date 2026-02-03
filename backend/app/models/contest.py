@@ -261,11 +261,24 @@ class ContestTemplate(Base):
     contests: Mapped[List["Contest"]] = relationship("Contest", back_populates="template")
 
 
+
+class LocationLevel(str, enum.Enum):
+    """Niveau de localisation."""
+    CITY = "city"
+    COUNTRY = "country"
+    REGION = "region"
+    CONTINENT = "continent"
+    GLOBAL = "global"
+
+
 class Location(Base):
     __tablename__ = "location"
     
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    level: Mapped[str] = mapped_column(String(20), nullable=False)  # 'city', 'country', 'region', 'continent', 'global'
+    level: Mapped[LocationLevel] = mapped_column(
+        Enum(LocationLevel, name='location_level', values_callable=lambda x: [e.value for e in x]),
+        nullable=False
+    )
     
     # Relations hiérarchiques
     parent_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("location.id"), nullable=True)
