@@ -96,6 +96,7 @@ export const ApiService = {
         filterContinent?: string;
         searchTerm?: string;
         contestLimit?: number;
+        contestSkip?: number;
     }) => {
         const response = await api.get<Round[]>('/rounds/', { params });
         return response.data;

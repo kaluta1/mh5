@@ -1,14 +1,14 @@
 'use client'
 
 import * as React from "react"
-import { useState, useEffect, useMemo, Suspense } from "react"
+import { useState, useEffect, useMemo, Suspense, useRef, useCallback } from "react"
 import dynamic from 'next/dynamic'
 import { useLanguage } from '@/contexts/language-context'
 import { useAuth } from '@/hooks/use-auth'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useToast } from '@/components/ui/toast'
 import { ContestsSkeleton } from '@/components/ui/skeleton'
-import { Lightbulb } from 'lucide-react'
+import { Lightbulb, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { logger } from '@/lib/logger'
 import { LocationFilterBar } from '@/components/dashboard/location-filter-bar'
@@ -26,6 +26,29 @@ const ContestCard = dynamic(() => import('@/components/dashboard/contest-card').
 const SuggestContestDialog = dynamic(() => import('@/components/dashboard/suggest-contest-dialog').then(mod => ({ default: mod.SuggestContestDialog })), {
   ssr: false
 })
+
+const CONTESTS_PER_PAGE = 12
+const CACHE_TTL = 5 * 60 * 1000 // 5 minutes cache
+
+// Simple in-memory cache for contests data
+const contestsCache = new Map<string, { data: any; timestamp: number }>()
+
+function getCacheKey(roundId: string, category: string, country: string, continent: string, search: string, skip: number) {
+  return `${roundId}-${category}-${country}-${continent}-${search}-${skip}`
+}
+
+function getFromCache(key: string) {
+  const cached = contestsCache.get(key)
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.data
+  }
+  contestsCache.delete(key)
+  return null
+}
+
+function setToCache(key: string, data: any) {
+  contestsCache.set(key, { data, timestamp: Date.now() })
+}
 
 function ContestsPageContent() {
   const { t } = useLanguage()
@@ -60,6 +83,14 @@ function ContestsPageContent() {
   const [roundsLoading, setRoundsLoading] = useState(true)
   const [contestsData, setContestsData] = useState<Round | null>(null)
   const [contestsLoading, setContestsLoading] = useState(false)
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false)
+
+  // Infinite scroll states
+  const [allContests, setAllContests] = useState<any[]>([])
+  const [hasMore, setHasMore] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [totalContests, setTotalContests] = useState(0)
+  const loaderRef = useRef<HTMLDivElement>(null)
 
   // 1. Fetch Rounds for Selector
   useEffect(() => {
@@ -96,7 +127,14 @@ function ContestsPageContent() {
     setCommittedSearch(searchTerm)
   }
 
-  // 2. Fetch Contests for Selected Round (Fetch ALL types to populate tabs correctly)
+  // Reset pagination when filters change
+  useEffect(() => {
+    setAllContests([])
+    setHasMore(true)
+    setInitialLoadComplete(false)
+  }, [activeRoundId, categoryTab, filterCountry, filterContinent, committedSearch])
+
+  // 2. Fetch Contests for Selected Round (Initial load)
   useEffect(() => {
     if (!activeRoundId || !isAuthenticated) return
 
@@ -107,45 +145,115 @@ function ContestsPageContent() {
       const activeContinent = filterContinent !== 'all' ? filterContinent : undefined
       const activeSearch = committedSearch || undefined
 
-      try {
-        // We reuse getRounds but ideally we should have a more specific endpoint 
-        // to get a single round with contests or get contests filtered by round.
-        // Currently getRounds returns a list.
-        // Based on previous GraphQL usage, it was getting rounds filtered by ID.
-        // Let's assume getRounds can handle the ID or we filter client side if needed 
-        // but ApiService.getRounds supports roundId param? Yes it does in our implementation.
+      // Check cache first
+      const cacheKey = getCacheKey(activeRoundId, categoryTab, activeCountry || 'all', activeContinent || 'all', activeSearch || '', 0)
+      const cached = getFromCache(cacheKey)
+      if (cached) {
+        setContestsData(cached)
+        setAllContests(cached.contests || [])
+        setTotalContests(cached.contests_count || cached.contests?.length || 0)
+        setHasMore((cached.contests?.length || 0) < (cached.contests_count || 0))
+        setContestsLoading(false)
+        setInitialLoadComplete(true)
+        return
+      }
 
+      try {
         const data = await ApiService.getRounds({
           roundId: parseInt(activeRoundId),
           isActive: false,
           hasVotingType,
           filterCountry: activeCountry,
           filterContinent: activeContinent,
-          searchTerm: activeSearch
+          searchTerm: activeSearch,
+          contestLimit: CONTESTS_PER_PAGE
         })
 
         if (data && data.length > 0) {
           setContestsData(data[0])
+          setAllContests(data[0].contests || [])
+          setTotalContests(data[0].contests_count || data[0].contests?.length || 0)
+          setHasMore((data[0].contests?.length || 0) < (data[0].contests_count || 0))
+          // Cache the result
+          setToCache(cacheKey, data[0])
         } else {
           setContestsData(null)
+          setAllContests([])
+          setTotalContests(0)
+          setHasMore(false)
         }
       } catch (error) {
         console.error('Failed to fetch contests:', error)
       } finally {
         setContestsLoading(false)
+        setInitialLoadComplete(true)
       }
     }
 
     fetchContestsForRound()
   }, [activeRoundId, isAuthenticated, categoryTab, filterCountry, filterContinent, committedSearch])
 
-  // Raw Contests List (Before filtering by type)
-  const rawContests = useMemo(() => {
-    // New Structure: contestsData.contests (from REST API)
-    const activeRound = contestsData
-    if (!activeRound?.contests) return []
+  // Load more contests function
+  const loadMoreContests = useCallback(async () => {
+    if (loadingMore || !hasMore || !activeRoundId) return
 
-    return activeRound.contests.map((c: any) => {
+    setLoadingMore(true)
+    const hasVotingType = categoryTab === 'nomination'
+    const activeCountry = filterCountry !== 'all' ? filterCountry : undefined
+    const activeContinent = filterContinent !== 'all' ? filterContinent : undefined
+    const activeSearch = committedSearch || undefined
+
+    try {
+      const data = await ApiService.getRounds({
+        roundId: parseInt(activeRoundId),
+        isActive: false,
+        hasVotingType,
+        filterCountry: activeCountry,
+        filterContinent: activeContinent,
+        searchTerm: activeSearch,
+        contestLimit: CONTESTS_PER_PAGE,
+        contestSkip: allContests.length  // Skip already loaded contests
+      })
+
+      if (data && data.length > 0 && data[0].contests) {
+        const newContests = data[0].contests
+        // Append new contests to existing ones
+        setAllContests(prev => [...prev, ...newContests])
+        // Check if there are more by comparing total loaded vs total count
+        setHasMore(allContests.length + newContests.length < (data[0].contests_count || 0))
+      } else {
+        setHasMore(false)
+      }
+    } catch (error) {
+      console.error('Failed to load more contests:', error)
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [loadingMore, hasMore, activeRoundId, categoryTab, filterCountry, filterContinent, committedSearch, allContests.length])
+
+  // Intersection Observer for infinite scroll
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore) {
+          loadMoreContests()
+        }
+      },
+      { threshold: 0.1 }
+    )
+
+    if (loaderRef.current) {
+      observer.observe(loaderRef.current)
+    }
+
+    return () => observer.disconnect()
+  }, [hasMore, loadingMore, loadMoreContests])
+
+  // Raw Contests List (Before filtering by type) - Now uses allContests for infinite scroll
+  const rawContests = useMemo(() => {
+    if (!allContests || allContests.length === 0) return []
+
+    return allContests.map((c: any) => {
       // Stats are now directly on the contest object in the new schema
       // Fallback multiple pour l'image
       const rawImage = c.cover_image_url || c.image_url || '/placeholder.png'
@@ -167,20 +275,20 @@ function ContestsPageContent() {
         status: c.level || 'country',
         received: c.votes_count || 0,
         contestants: c.participants_count || c.entries_count || 0,
-        isOpen: activeRound.is_submission_open || activeRound.is_voting_open || false,
+        isOpen: contestsData?.is_submission_open || contestsData?.is_voting_open || false,
         contestType: c.contest_type,
-        isSubmissionOpen: activeRound.is_submission_open,
-        isVotingOpen: activeRound.is_voting_open,
+        isSubmissionOpen: contestsData?.is_submission_open,
+        isVotingOpen: contestsData?.is_voting_open,
         // Pass dates for countdown in ContestCard
-        participationStartDate: activeRound.submission_start_date,
-        participationEndDate: activeRound.submission_end_date,
-        votingStartDate: activeRound.voting_start_date,
-        votingEndDate: activeRound.voting_end_date,
+        participationStartDate: contestsData?.submission_start_date,
+        participationEndDate: contestsData?.submission_end_date,
+        votingStartDate: contestsData?.voting_start_date,
+        votingEndDate: contestsData?.voting_end_date,
         currentUserParticipated: false, // Not fetching this specific user status in new query yet
         topContestants: [] // Not fetching top contestants per contest in new query yet
       }
     })
-  }, [contestsData])
+  }, [allContests, contestsData])
 
   // Extract contest types from ALL loaded contests (so tabs don't disappear)
   const contestTypes = useMemo(() => {
@@ -335,24 +443,46 @@ function ContestsPageContent() {
         {contestsLoading && !contestsData ? (
           <ContestsSkeleton />
         ) : displayedContests.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {displayedContests.map((contest: any) => (
-              <ContestCard
-                key={contest.id}
-                {...contest}
-                canParticipate={true}
-                isKycVerified={!!user?.identity_verified}
-                isFavorite={false}
-                onToggleFavorite={() => { }}
-                onParticipate={() => handleParticipate(contest.id, contest.currentUserParticipated)}
-                onViewContestants={() => router.push(`/dashboard/contests/${contest.id}`)}
-                onOpenDetails={() => router.push(`/dashboard/contests/${contest.id}`)}
-              />
-            ))}
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {displayedContests.map((contest: any) => (
+                <ContestCard
+                  key={contest.id}
+                  {...contest}
+                  canParticipate={true}
+                  isKycVerified={!!user?.identity_verified}
+                  isFavorite={false}
+                  onToggleFavorite={() => { }}
+                  onParticipate={() => handleParticipate(contest.id, contest.currentUserParticipated)}
+                  onViewContestants={() => router.push(`/dashboard/contests/${contest.id}`)}
+                  onOpenDetails={() => router.push(`/dashboard/contests/${contest.id}`)}
+                />
+              ))}
+            </div>
+
+            {/* Infinite scroll loader */}
+            <div ref={loaderRef} className="flex justify-center py-8">
+              {loadingMore && (
+                <div className="flex items-center gap-2 text-gray-400">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Loading more...</span>
+                </div>
+              )}
+              {!hasMore && allContests.length > 0 && (
+                <span className="text-gray-500">
+                  {t('admin.contests.all_loaded') || `Showing all ${totalContests} contests`}
+                </span>
+              )}
+            </div>
+          </>
+        ) : !initialLoadComplete ? (
+          <div className="flex flex-col items-center justify-center py-20 gap-3">
+            <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+            <p className="text-gray-500">{t('common.loading') || 'Loading...'}</p>
           </div>
         ) : (
           <div className="text-center py-20">
-            <p className="text-gray-500">No contests found matching criteria.</p>
+            <p className="text-gray-500">{t('contests.no_contests') || 'No contests found matching criteria.'}</p>
           </div>
         )}
 
