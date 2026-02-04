@@ -203,6 +203,7 @@ class Contest(ContestBase):
     created_at: Any
     updated_at: Any
     entries_count: int = 0  # Nombre de participants
+    participants_count: int = 0  # Alias for entries_count (used by rounds endpoint)
     total_votes: int = 0  # Nombre total de votes
     season_level: Optional[str] = None  # Niveau depuis la season
     image_url: Optional[str] = None  # URL de l'image principale

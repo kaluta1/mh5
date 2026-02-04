@@ -21,7 +21,10 @@ def read_rounds(
     round_id: Optional[int] = Query(None, alias="roundId", description="ID du round spécifique"),
     current_user: Optional[models.User] = Depends(deps.get_current_active_user_optional),
     has_voting_type: Optional[bool] = Query(None, alias="hasVotingType", description="Filtrer les contests par présence de type de vote"),
-    contest_limit: int = Query(10, description="Nombre maximum de contests par round"),
+    filter_country: Optional[str] = Query(None, alias="filterCountry", description="Filtrer les participants par pays"),
+    filter_continent: Optional[str] = Query(None, alias="filterContinent", description="Filtrer les participants par continent"),
+    contest_limit: int = Query(12, alias="contestLimit", description="Nombre maximum de contests par round"),
+    contest_skip: int = Query(0, alias="contestSkip", description="Nombre de contests à sauter pour la pagination"),
 ) -> Any:
     """
     Récupère les rounds (optionnellement filtrés par contest) avec leurs statistiques.
@@ -105,19 +108,49 @@ def read_rounds(
         r_dict["votes_count"] = get_round_votes_count(r_dict["id"])
         
         if hasattr(r_item, "contests") and r_item.contests:
+            # First, calculate total contests (before filtering/limiting) that match the filter criteria
+            total_contests = 0
+            for c in r_item.contests:
+                if has_voting_type is not None:
+                    if has_voting_type and c.voting_type_id is None:
+                        continue
+                    if not has_voting_type and c.voting_type_id is not None:
+                        continue
+                total_contests += 1
+            
+            r_dict["contests_count"] = total_contests
+            
             contests_added = 0
+            contests_skipped = 0
             for contest in r_item.contests:
-                 if contests_added >= contest_limit:
-                     break
-                     
                  # Filter by voting_type presence if requested
                  if has_voting_type is not None:
                      if has_voting_type and contest.voting_type_id is None:
                          continue
                      if not has_voting_type and contest.voting_type_id is not None:
                          continue
+                 
+                 # Skip contests for pagination
+                 if contests_skipped < contest_skip:
+                     contests_skipped += 1
+                     continue
+                     
+                 if contests_added >= contest_limit:
+                     break
 
-                 real_p_count = db.query(func.count(models.ContestEntry.id)).filter(models.ContestEntry.contest_id == contest.id).scalar() or 0
+                 # Count participants for this specific contest using the Contestant table
+                 # Contestant.season_id stores the contest ID (legacy field name)
+                 # Apply location filters if provided
+                 from app.models.contests import Contestant
+                 p_query = db.query(func.count(Contestant.id)).filter(
+                     Contestant.season_id == contest.id,
+                     Contestant.is_deleted == False
+                 )
+                 if filter_country and filter_country != 'all':
+                     p_query = p_query.filter(Contestant.country == filter_country)
+                 if filter_continent and filter_continent != 'all':
+                     p_query = p_query.filter(Contestant.continent == filter_continent)
+                 real_p_count = p_query.scalar() or 0
 
                  c_data = {
                      "id": contest.id,
@@ -134,9 +167,6 @@ def read_rounds(
                  }
                  r_dict["contests"].append(c_data)
                  contests_added += 1
-            
-            # Update contests_count with the number of added contests (filtered)
-            r_dict["contests_count"] = len(r_dict["contests"])
         
         # Fallback to legacy contest_id logic if specific contest_id column is set and no N:N links found
         # (Only if we didn't already add it via N:N - avoiding duplicates if migration happened)
