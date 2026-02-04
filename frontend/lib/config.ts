@@ -1,6 +1,10 @@
 /**
  * Frontend Configuration
+ * Single source for backend URL: set NEXT_PUBLIC_API_URL in Vercel to your Render backend URL.
  */
+
+/** Default backend URL when NEXT_PUBLIC_API_URL is not set (e.g. production Render service name) */
+export const DEFAULT_PUBLIC_API_URL = 'https://mh5-backend.onrender.com'
 
 const normalizeApiUrl = (url: string): string => {
   if (!url) return ''
@@ -13,7 +17,7 @@ const normalizeApiUrl = (url: string): string => {
 
 const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_BACKEND_URL || ''
 const isProduction = process.env.NODE_ENV === 'production'
-const fallbackUrl = isProduction ? '' : 'http://localhost:8000'
+const fallbackUrl = isProduction ? DEFAULT_PUBLIC_API_URL : 'http://localhost:8000'
 
 export const API_URL = normalizeApiUrl(rawApiUrl || fallbackUrl)
 

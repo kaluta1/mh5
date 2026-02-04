@@ -1,23 +1,25 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios'
 import { cacheService } from './cache-service'
 import { logger } from './logger'
+import { DEFAULT_PUBLIC_API_URL } from './config'
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://mh5-backend.onrender.com'
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || DEFAULT_PUBLIC_API_URL
 
-// Créer une instance axios avec la configuration de base
+// Instance axios pour les appels API (timeout pour éviter blocage si backend down/520)
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 0, // No timeout
+  timeout: 25000, // 25s pour /auth/me et autres appels
   headers: {
     'Content-Type': 'application/json',
   },
 })
 
-// Instance séparée pour les requêtes d'authentification avec timeout plus long
-// (Render.com backends can be slow to wake up from sleep)
+// Instance séparée pour les requêtes d'authentification avec timeout fini
+// (évite loading infini si le backend ne répond pas; Render cold start ~30–60s)
+const AUTH_TIMEOUT_MS = 60000 // 60 secondes
 const authApi = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 0, // No timeout
+  timeout: AUTH_TIMEOUT_MS,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -167,28 +169,36 @@ export const authService = {
     return response.data
   },
 
-  // Connexion (utilise authApi avec timeout plus court)
+  // Connexion (timeout 60s, 1 retry si timeout pour cold start Render)
   async login(credentials: LoginRequest): Promise<LoginResponse> {
-    // Convertir en URLSearchParams pour OAuth2PasswordRequestForm (application/x-www-form-urlencoded)
     const params = new URLSearchParams()
     params.append('username', credentials.email_or_username)
     params.append('password', credentials.password)
 
-    const response = await authApi.post('/api/v1/auth/login', params.toString(), {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-    })
+    const doLogin = () =>
+      authApi.post('/api/v1/auth/login', params.toString(), {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      })
+
+    let response
+    try {
+      response = await doLogin()
+    } catch (err) {
+      const isTimeout =
+        (err as AxiosError).code === 'ECONNABORTED' ||
+        (err as Error).message?.includes('timeout')
+      if (isTimeout) {
+        logger.warn('Login timeout, retrying once...')
+        await new Promise((r) => setTimeout(r, 2000))
+        response = await doLogin()
+      } else {
+        throw err
+      }
+    }
+
     const data = response.data
-
-    // Sauvegarder les tokens
-    if (data.access_token) {
-      localStorage.setItem('access_token', data.access_token)
-    }
-    if (data.refresh_token) {
-      localStorage.setItem('refresh_token', data.refresh_token)
-    }
-
+    if (data.access_token) localStorage.setItem('access_token', data.access_token)
+    if (data.refresh_token) localStorage.setItem('refresh_token', data.refresh_token)
     return data
   },
 
