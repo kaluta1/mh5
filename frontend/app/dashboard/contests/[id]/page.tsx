@@ -9,8 +9,8 @@ import { ContestDetailSkeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, Sparkles, Users, Video, Image, Globe, Lightbulb, Youtube, ExternalLink } from 'lucide-react'
 import { contestService, ContestResponse } from '@/services/contest-service'
-import { useQuery } from '@apollo/client'
-import { GET_CONTEST_DETAILS } from '@/graphql/queries'
+// REST API
+import ApiService from '@/lib/api-service'
 import { StickyPageHeader } from '@/components/ui/sticky-page-header'
 import { ContestInfoDialog } from '@/components/dashboard/contest-info-dialog'
 import { ContestantsList } from '@/components/dashboard/contestants-list'
@@ -131,13 +131,6 @@ export default function ContestDetailPage() {
   const [selectedContestantId, setSelectedContestantId] = useState<number | null>(null)
   const [selectedContestantTitle, setSelectedContestantTitle] = useState<string>('')
 
-  // Apollo Query
-  const { data: qData, loading: qLoading, error: qError, refetch: qRefetch } = useQuery(GET_CONTEST_DETAILS, {
-    variables: { id: parseInt(contestId) },
-    skip: !contestId,
-    notifyOnNetworkStatusChange: true
-  })
-
   // Lire les filtres de localisation depuis l'URL
   const searchParams = useSearchParams()
   const [filterCountry, setFilterCountry] = React.useState<string>(() => {
@@ -161,18 +154,17 @@ export default function ContestDetailPage() {
     router.replace(newUrl, { scroll: false })
   }, [router, contestId])
 
-  // Redirection si non authentifié
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.push('/')
-    }
-  }, [isAuthenticated, isLoading, router])
+  // REST Data Fetching
+  const fetchContestDetails = React.useCallback(async () => {
+    if (!contestId) return
 
-  // Transformer les données GraphQL vers le format attendu par la page
-  useEffect(() => {
-    if (qData?.contest) {
-      const c = qData.contest;
+    try {
+      setPageLoading(true)
+      // Need to fetch contest + enrichment (participants etc)
+      // Currently getContest returns everything if backend is updated
+      const c = await ApiService.getContest(parseInt(contestId)) as any
 
+      // Map data
       const parseMediaIds = (mediaIds: string | undefined, type: 'image' | 'video'): Media[] => {
         if (!mediaIds) return []
         try {
@@ -190,19 +182,19 @@ export default function ContestDetailPage() {
       }
 
       const mappedContestants: Contestant[] = (c.contestants || []).map((ct: any, index: number) => {
-        const images = parseMediaIds(ct.imageMediaIds, 'image')
-        const videos = parseMediaIds(ct.videoMediaIds, 'video')
+        const images = parseMediaIds(ct.image_media_ids, 'image') // snake_case from python
+        const videos = parseMediaIds(ct.video_media_ids, 'video')
         return {
           id: String(ct.id ?? index),
-          userId: ct.userId,
-          name: ct.author?.fullName || ct.author?.username || `Contestant #${index + 1}`,
-          country: ct.author?.country,
-          city: ct.author?.city,
-          continent: ct.author?.continent,
-          avatar: ct.author?.avatarUrl || '👤',
+          userId: ct.user_id,
+          name: ct.author_name || `Contestant #${index + 1}`,
+          country: ct.author_country,
+          city: ct.author_city,
+          continent: ct.author?.continent, // check if existing schema had this nested or flat
+          avatar: ct.author_avatar_url || '👤',
           participationTitle: ct.title,
           description: ct.description ?? '',
-          votes: ct.votesCount ?? 0,
+          votes: ct.votes_count ?? 0,
           rank: ct.rank,
           imagesCount: ct.images_count ?? images.length,
           videosCount: ct.videos_count ?? videos.length,
@@ -231,17 +223,26 @@ export default function ContestDetailPage() {
       setContest({
         contest: {
           ...c,
-          entries_count: c.entriesCount,
-          total_votes: c.totalVotes,
-          cover_image_url: c.coverImageUrl
+          entries_count: c.entries_count,
+          total_votes: c.total_votes,
+          cover_image_url: c.cover_image_url
         },
         contestants: mappedContestants
       })
 
       setFavorites(mappedContestants.filter(ct => ct.isFavorite).map(ct => ct.id))
+
+    } catch (error) {
+      console.error("Failed to fetch contest:", error)
+      setToast({ message: "Failed to load contest", type: "error" })
+    } finally {
       setPageLoading(false)
     }
-  }, [qData, t])
+  }, [contestId, t])
+
+  useEffect(() => {
+    fetchContestDetails()
+  }, [fetchContestDetails])
 
   const handleReportClick = (contestantId: string) => {
     const contestant = contest?.contestants.find(c => c.id === contestantId)
@@ -255,8 +256,8 @@ export default function ContestDetailPage() {
   const handleDeleteContestant = async (contestantId: string) => {
     try {
       await contestService.deleteContestant(Number(contestantId))
-      // Refetch GraphQL data instead of REST
-      await qRefetch()
+      // Refetch REST data
+      await fetchContestDetails()
       showToast(t('common.deleted_successfully') || 'Candidature supprimée avec succès', 'success')
     } catch (err: any) {
       console.error('Erreur lors de la suppression:', err)

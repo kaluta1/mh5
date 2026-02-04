@@ -198,6 +198,29 @@ def read_contest(
             detail="Concours non trouvé"
         )
     
+    
+    # Enrich with current user participation
+    if current_user and enriched_contest:
+        # Check if we have participation
+        participation = contest.get_participation_for_user(
+            db=db, 
+            contest_id=contest_id, 
+            user_id=current_user.id
+        )
+        if participation:
+             # Add to response - simplified map
+             participation_dict = {
+                 "id": participation.id,
+                 "contest_id": participation.contest_id,
+                 "user_id": participation.user_id,
+                 "media_id": participation.media_id,
+                 "total_score": participation.total_score,
+                 "rank": participation.rank,
+                 # We need media object for schema validation
+                 "media": participation.media 
+             }
+             enriched_contest["current_user_participation"] = participation_dict
+
     return enriched_contest
 
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { useLanguage } from '@/contexts/language-context'
@@ -8,8 +8,8 @@ import { useToast } from '@/components/ui/toast'
 import { ParticipateFormSkeleton } from '@/components/ui/skeleton'
 import { ParticipationForm } from '@/components/dashboard/participation-form'
 import { contestService } from '@/services/contest-service'
-import { useQuery } from '@apollo/client'
-import { GET_CONTEST_PARTICIPATION_DETAILS } from '@/graphql/queries'
+// REST API
+import ApiService from '@/lib/api-service'
 import {
   VerificationRequirementsDialog,
   SelfieVerificationDialog,
@@ -42,12 +42,7 @@ export default function ApplyToContestPage() {
   const [existingParticipationData, setExistingParticipationData] = useState<any>(null)
   const [participantId, setParticipantId] = useState<number | null>(null)
 
-  // Apollo Query
-  const { data: qData, loading: qLoading, error: qError } = useQuery(GET_CONTEST_PARTICIPATION_DETAILS, {
-    variables: { id: parseInt(contestId) },
-    skip: !contestId,
-    notifyOnNetworkStatusChange: true
-  })
+
 
   // Verification states
   const [showVerificationDialog, setShowVerificationDialog] = useState(false)
@@ -61,9 +56,118 @@ export default function ApplyToContestPage() {
   const [hasContentVerification, setHasContentVerification] = useState(false)
   const [verificationsCompleted, setVerificationsCompleted] = useState(false)
 
+  // REST Data Fetching
+  const fetchContestDetails = useCallback(async () => {
+    if (!contestId) return
+
+    try {
+      // Need to fetch contest + enrichment (participants etc)
+      // Currently getContest returns everything if backend is updated
+      const c = await ApiService.getContest(parseInt(contestId)) as any
+
+      // Data Mapping
+      // 1. Check Profile Completeness
+      if (user && (!(user as any)?.first_name || !(user as any)?.last_name || !(user as any)?.country || !(user as any)?.city || !(user as any)?.continent)) {
+        if (contestId) sessionStorage.setItem('contestId', contestId)
+        setNeedsProfileSetup(true)
+      } else {
+        setNeedsProfileSetup(false)
+      }
+
+      // Check KYC status
+      if (user && !user?.is_verified) {
+        setNeedsKYC(true)
+      }
+
+      // 2. Set Contest Data
+      setContest({
+        ...c,
+        submission_end_date: c.submission_end_date,
+        is_submission_open: c.is_submission_open,
+        requires_kyc: c.requires_kyc,
+        requires_visual_verification: c.requires_visual_verification,
+        requires_voice_verification: c.requires_voice_verification,
+        requires_brand_verification: c.requires_brand_verification,
+        requires_content_verification: c.requires_content_verification,
+        requires_video: c.requires_video,
+        max_videos: c.max_videos,
+        video_max_duration: c.video_max_duration,
+        video_max_size_mb: c.video_max_size_mb,
+        min_images: c.min_images,
+        max_images: c.max_images,
+        verification_video_max_duration: c.verification_video_max_duration,
+        verification_max_size_mb: c.verification_max_size_mb,
+        voting_type: c.voting_type,
+        participant_type: c.participant_type
+      })
+
+      setIsNomination(c.voting_type != null)
+
+      // 3. User Participation check
+      const up = c.current_user_participation;
+      if (up) {
+        setUserAlreadyParticipating(true)
+        setParticipantId(up.id)
+
+        let imageUrls: string[] = []
+        try {
+          imageUrls = up.image_media_ids ? JSON.parse(up.image_media_ids) : [] // snake_case likely
+        } catch (e) { imageUrls = [] }
+
+        let videoUrl = ''
+        try {
+          const vids = up.video_media_ids ? JSON.parse(up.video_media_ids) : []
+          videoUrl = Array.isArray(vids) && vids.length > 0 ? vids[0] : ''
+        } catch (e) { videoUrl = '' }
+
+        setExistingParticipationData({
+          title: up.title || '',
+          description: up.description || '',
+          imageUrls: imageUrls,
+          videoUrl: videoUrl,
+          nominatorCity: up.nominator_city || '',
+          nominatorCountry: up.nominator_country || ''
+        })
+
+        if (isEditMode) setIsEditingParticipation(true)
+      }
+
+      // 4. Verification Check
+      const needsVerification =
+        c.requires_kyc ||
+        c.requires_visual_verification ||
+        c.requires_voice_verification ||
+        c.requires_brand_verification ||
+        c.requires_content_verification
+
+      if (needsVerification && !isEditMode) {
+        const kycDone = !c.requires_kyc || user?.identity_verified
+        const visualDone = !c.requires_visual_verification || hasVisualVerification
+        const voiceDone = !c.requires_voice_verification || hasVoiceVerification
+        const brandDone = !c.requires_brand_verification || hasBrandVerification
+        const contentDone = !c.requires_content_verification || hasContentVerification
+
+        if (!kycDone || !visualDone || !voiceDone || !brandDone || !contentDone) {
+          setShowVerificationDialog(true)
+        }
+      }
+
+      setPageLoading(false)
+
+    } catch (error) {
+      console.error("Failed to fetch contest:", error)
+      addToast(t('dashboard.contests.load_error') || "Failed to load contest", 'error') // Fixed signature
+      setPageLoading(false)
+    }
+  }, [contestId, user, isEditMode, hasVisualVerification, hasVoiceVerification, hasBrandVerification, hasContentVerification, addToast, t])
+
+  useEffect(() => {
+    fetchContestDetails()
+  }, [fetchContestDetails])
+
   // Calculer le temps restant
   useEffect(() => {
-    const submissionEndDate = qData?.contest?.submissionEndDate || contest?.submission_end_date
+    const submissionEndDate = contest?.submission_end_date
     if (!submissionEndDate) {
       setTimeValues({ days: 0, hours: 0, minutes: 0, seconds: 0, isClosed: false, isNA: true })
       return
@@ -90,7 +194,7 @@ export default function ApplyToContestPage() {
     updateTimeRemaining()
     const interval = setInterval(updateTimeRemaining, 1000)
     return () => clearInterval(interval)
-  }, [qData?.contest?.submissionEndDate, contest?.submission_end_date])
+  }, [contest?.submission_end_date])
 
   // Formater le temps restant avec les traductions
   useEffect(() => {
@@ -134,100 +238,6 @@ export default function ApplyToContestPage() {
   }, [isAuthenticated, isLoading, router])
 
 
-  // Data Mapping & Profile Check
-  useEffect(() => {
-    if (qData?.contest) {
-      const c = qData.contest;
-
-      // 1. Check Profile Completeness
-      if (user && (!(user as any)?.first_name || !(user as any)?.last_name || !(user as any)?.country || !(user as any)?.city || !(user as any)?.continent)) {
-        if (contestId) sessionStorage.setItem('contestId', contestId)
-        setNeedsProfileSetup(true)
-      } else {
-        setNeedsProfileSetup(false)
-      }
-
-      // Check KYC status
-      if (user && !user?.is_verified) {
-        setNeedsKYC(true)
-      }
-
-      // 2. Set Contest Data
-      setContest({
-        ...c,
-        submission_end_date: c.submissionEndDate,
-        is_submission_open: c.isSubmissionOpen,
-        requires_kyc: c.requiresKyc,
-        requires_visual_verification: c.requiresVisualVerification,
-        requires_voice_verification: c.requiresVoiceVerification,
-        requires_brand_verification: c.requiresBrandVerification,
-        requires_content_verification: c.requiresContentVerification,
-        requires_video: c.requiresVideo,
-        max_videos: c.maxVideos,
-        video_max_duration: c.videoMaxDuration,
-        video_max_size_mb: c.videoMaxSizeMb,
-        min_images: c.minImages,
-        max_images: c.maxImages,
-        verification_video_max_duration: c.verificationVideoMaxDuration,
-        verification_max_size_mb: c.verificationMaxSizeMb,
-        voting_type: c.votingType,
-        participant_type: c.participantType
-      })
-
-      setIsNomination(c.votingType != null)
-
-      // 3. User Participation check
-      const up = c.currentUserParticipation;
-      if (up) {
-        setUserAlreadyParticipating(true)
-        setParticipantId(up.id)
-
-        let imageUrls: string[] = []
-        try {
-          imageUrls = up.imageMediaIds ? JSON.parse(up.imageMediaIds) : []
-        } catch (e) { imageUrls = [] }
-
-        let videoUrl = ''
-        try {
-          const vids = up.videoMediaIds ? JSON.parse(up.videoMediaIds) : []
-          videoUrl = Array.isArray(vids) && vids.length > 0 ? vids[0] : ''
-        } catch (e) { videoUrl = '' }
-
-        setExistingParticipationData({
-          title: up.title || '',
-          description: up.description || '',
-          imageUrls: imageUrls,
-          videoUrl: videoUrl,
-          nominatorCity: up.nominatorCity || '',
-          nominatorCountry: up.nominatorCountry || ''
-        })
-
-        if (isEditMode) setIsEditingParticipation(true)
-      }
-
-      // 4. Verification Check
-      const needsVerification =
-        c.requiresKyc ||
-        c.requiresVisualVerification ||
-        c.requiresVoiceVerification ||
-        c.requiresBrandVerification ||
-        c.requiresContentVerification
-
-      if (needsVerification && !isEditMode) {
-        const kycDone = !c.requiresKyc || user?.identity_verified
-        const visualDone = !c.requiresVisualVerification || hasVisualVerification
-        const voiceDone = !c.requiresVoiceVerification || hasVoiceVerification
-        const brandDone = !c.requiresBrandVerification || hasBrandVerification
-        const contentDone = !c.requiresContentVerification || hasContentVerification
-
-        if (!kycDone || !visualDone || !voiceDone || !brandDone || !contentDone) {
-          setShowVerificationDialog(true)
-        }
-      }
-
-      setPageLoading(false)
-    }
-  }, [qData, user, isEditMode, contestId, hasVisualVerification, hasVoiceVerification, hasBrandVerification, hasContentVerification])
 
 
   const handleCancel = () => {

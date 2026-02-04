@@ -14,8 +14,8 @@ import { logger } from '@/lib/logger'
 import { LocationFilterBar } from '@/components/dashboard/location-filter-bar'
 
 // GraphQL
-import { useQuery } from '@apollo/client'
-import { GET_ROUNDS_FOR_SELECTOR, GET_ROUNDS_WITH_CONTESTS } from '@/graphql/queries'
+// REST API
+import ApiService, { Round } from '@/lib/api-service'
 
 // Lazy load heavy components
 const ContestCard = dynamic(() => import('@/components/dashboard/contest-card').then(mod => ({ default: mod.ContestCard })), {
@@ -55,19 +55,36 @@ function ContestsPageContent() {
   const [filterContinent, setFilterContinent] = useState<string>('all')
   const [filterCountry, setFilterCountry] = useState<string>('')
 
-  // 1. Fetch Rounds for Selector
-  const { data: roundsData, loading: roundsLoading } = useQuery(GET_ROUNDS_FOR_SELECTOR, {
-    variables: { isActive: false }, // Fetch all non-cancelled rounds
-    skip: !isAuthenticated,
-    fetchPolicy: 'cache-first'
-  })
+  // Data States
+  const [rounds, setRounds] = useState<Round[]>([])
+  const [roundsLoading, setRoundsLoading] = useState(true)
+  const [contestsData, setContestsData] = useState<Round | null>(null)
+  const [contestsLoading, setContestsLoading] = useState(false)
 
-  // Set default active round
+  // 1. Fetch Rounds for Selector
   useEffect(() => {
-    if (roundsData?.rounds?.length > 0 && !activeRoundId) {
-      setActiveRoundId(String(roundsData.rounds[0].id))
+    if (!isAuthenticated) return
+
+    const fetchRounds = async () => {
+      try {
+        setRoundsLoading(true)
+        const data = await ApiService.getRounds({ isActive: false })
+        setRounds(data)
+
+        // Set default active round
+        if (data.length > 0 && !activeRoundId) {
+          setActiveRoundId(String(data[0].id))
+        }
+      } catch (error) {
+        console.error('Failed to fetch rounds:', error)
+        addToast("Failed to load rounds", "error")
+      } finally {
+        setRoundsLoading(false)
+      }
     }
-  }, [roundsData, activeRoundId])
+
+    fetchRounds()
+  }, [isAuthenticated, addToast, activeRoundId])
 
   // Save category tab preference
   useEffect(() => {
@@ -80,34 +97,58 @@ function ContestsPageContent() {
   }
 
   // 2. Fetch Contests for Selected Round (Fetch ALL types to populate tabs correctly)
-  const hasVotingType = categoryTab === 'nomination' ? true : false
-  const activeCountry = filterCountry !== 'all' ? filterCountry : undefined
-  const activeContinent = filterContinent !== 'all' ? filterContinent : undefined
-  const activeSearch = committedSearch || undefined // Use committed search
+  useEffect(() => {
+    if (!activeRoundId || !isAuthenticated) return
 
-  const { data: contestsData, loading: contestsLoading } = useQuery(GET_ROUNDS_WITH_CONTESTS, {
-    variables: {
-      roundId: activeRoundId ? parseInt(activeRoundId) : undefined,
-      isActive: false, // Fetch all contests (active/inactive) for this round
-      hasVotingType: hasVotingType,
-      country: activeCountry,
-      continent: activeContinent,
-      search: activeSearch
-    },
-    skip: !activeRoundId || !isAuthenticated,
-    fetchPolicy: 'network-only' // Force fetch on tab change to avoid stale data (empty lists or wrong types)
-  })
+    const fetchContestsForRound = async () => {
+      setContestsLoading(true)
+      const hasVotingType = categoryTab === 'nomination'
+      const activeCountry = filterCountry !== 'all' ? filterCountry : undefined
+      const activeContinent = filterContinent !== 'all' ? filterContinent : undefined
+      const activeSearch = committedSearch || undefined
+
+      try {
+        // We reuse getRounds but ideally we should have a more specific endpoint 
+        // to get a single round with contests or get contests filtered by round.
+        // Currently getRounds returns a list.
+        // Based on previous GraphQL usage, it was getting rounds filtered by ID.
+        // Let's assume getRounds can handle the ID or we filter client side if needed 
+        // but ApiService.getRounds supports roundId param? Yes it does in our implementation.
+
+        const data = await ApiService.getRounds({
+          roundId: parseInt(activeRoundId),
+          isActive: false,
+          hasVotingType,
+          filterCountry: activeCountry,
+          filterContinent: activeContinent,
+          searchTerm: activeSearch
+        })
+
+        if (data && data.length > 0) {
+          setContestsData(data[0])
+        } else {
+          setContestsData(null)
+        }
+      } catch (error) {
+        console.error('Failed to fetch contests:', error)
+      } finally {
+        setContestsLoading(false)
+      }
+    }
+
+    fetchContestsForRound()
+  }, [activeRoundId, isAuthenticated, categoryTab, filterCountry, filterContinent, committedSearch])
 
   // Raw Contests List (Before filtering by type)
   const rawContests = useMemo(() => {
-    // New Structure: contestsData.rounds[0].contests
-    const activeRound = contestsData?.rounds?.length > 0 ? contestsData.rounds[0] : null
+    // New Structure: contestsData.contests (from REST API)
+    const activeRound = contestsData
     if (!activeRound?.contests) return []
 
     return activeRound.contests.map((c: any) => {
       // Stats are now directly on the contest object in the new schema
       // Fallback multiple pour l'image
-      const rawImage = c.coverImageUrl || c.imageUrl || c.cover_image_url || c.image_url || '/placeholder.png'
+      const rawImage = c.cover_image_url || c.image_url || '/placeholder.png'
 
       const isEmoji = rawImage?.length <= 4 && rawImage?.codePointAt(0) > 0x1F000
       let coverImage = rawImage
@@ -124,22 +165,22 @@ function ContestsPageContent() {
         coverImage: coverImage,
         startDate: new Date(),
         status: c.level || 'country',
-        received: c.votesCount || 0,
-        contestants: c.participantsCount || 0,
-        isOpen: activeRound.isSubmissionOpen || activeRound.isVotingOpen || false,
-        contestType: c.contestType,
-        isSubmissionOpen: activeRound.isSubmissionOpen,
-        isVotingOpen: activeRound.isVotingOpen,
+        received: c.votes_count || 0,
+        contestants: c.participants_count || c.entries_count || 0,
+        isOpen: activeRound.is_submission_open || activeRound.is_voting_open || false,
+        contestType: c.contest_type,
+        isSubmissionOpen: activeRound.is_submission_open,
+        isVotingOpen: activeRound.is_voting_open,
         // Pass dates for countdown in ContestCard
-        participationStartDate: activeRound.submissionStartDate,
-        participationEndDate: activeRound.submissionEndDate,
-        votingStartDate: activeRound.votingStartDate,
-        votingEndDate: activeRound.votingEndDate,
+        participationStartDate: activeRound.submission_start_date,
+        participationEndDate: activeRound.submission_end_date,
+        votingStartDate: activeRound.voting_start_date,
+        votingEndDate: activeRound.voting_end_date,
         currentUserParticipated: false, // Not fetching this specific user status in new query yet
         topContestants: [] // Not fetching top contestants per contest in new query yet
       }
     })
-  }, [contestsData, activeRoundId])
+  }, [contestsData])
 
   // Extract contest types from ALL loaded contests (so tabs don't disappear)
   const contestTypes = useMemo(() => {
@@ -189,7 +230,7 @@ function ContestsPageContent() {
     router.push(isEditing ? `/dashboard/contests/${id}/apply?edit=true` : `/dashboard/contests/${id}/apply`)
   }
 
-  if (isLoading || (roundsLoading && !roundsData)) return <ContestsSkeleton />
+  if (isLoading || (roundsLoading && rounds.length === 0)) return <ContestsSkeleton />
   if (!isAuthenticated) return null
 
   return (
@@ -207,7 +248,7 @@ function ContestsPageContent() {
         {/* Round Selector (Top Tabs) */}
         <div className="mb-6">
           <div className="flex space-x-2 overflow-x-auto pb-2 scrollbar-hide">
-            {roundsData?.rounds.map((round: any) => (
+            {rounds.map((round: any) => (
               <button
                 key={round.id}
                 onClick={() => setActiveRoundId(String(round.id))}
@@ -216,7 +257,7 @@ function ContestsPageContent() {
                   : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white'
                   }`}
               >
-                {round.name} <span className="ml-1 opacity-70">({round.participantsCount || 0})</span>
+                {round.name} <span className="ml-1 opacity-70">({round.contests_count !== undefined ? round.contests_count : (round.contests?.length || 0)})</span>
               </button>
             ))}
           </div>

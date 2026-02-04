@@ -59,9 +59,26 @@ class Round(RoundInDBBase):
     pass
 
 
+
+# Forward reference to avoid circular imports
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from app.schemas.contest import Contest, TopContestantPreview
+
 # Round with statistics for frontend display
 class RoundWithStats(Round):
     participants_count: int = 0
+    contests_count: int = 0
+    votes_count: int = 0  # Added votes_count
     current_user_participated: bool = False
     is_completed: bool = False  # True if global_end_date passed
+    
+    # Nested data
+    top_contestants: List["TopContestantPreview"] = []
+    contests: List["Contest"] = []
+
+# Update forward refs
+from app.schemas.contest import Contest, TopContestantPreview
+RoundWithStats.model_rebuild()
+
 

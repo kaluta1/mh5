@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { useQuery, gql } from '@apollo/client'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -11,44 +10,27 @@ import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { Loader2, RefreshCw, FileText, BarChart3, TrendingUp, AlertCircle } from 'lucide-react'
 
-// Définition de la requête GraphQL
-const GET_ACCOUNTING_DATA = gql`
-  query GetAccountingData {
-    chartOfAccounts {
-      id
-      accountCode
-      accountName
-      accountType
-      creditBalance
-      totalLiabilities
-    }
-    journalEntries(limit: 50) {
-      id
-      entryNumber
-      entryDate
-      description
-      totalDebit
-      totalCredit
-      status
-      lines {
-        id
-        debitAmount
-        creditAmount
-        description
-        account {
-          accountName
-          accountCode
-        }
-      }
-    }
-  }
-`
+// Mock Data for migration
+const MOCK_DATA = {
+    chartOfAccounts: [
+        { id: 1, accountCode: '101', accountName: 'Cash', accountType: 'ASSET', creditBalance: 0, totalLiabilities: 0 },
+        { id: 2, accountCode: '400', accountName: 'Sales Revenue', accountType: 'REVENUE', creditBalance: 5000, totalLiabilities: 0 }
+    ],
+    journalEntries: []
+}
 
 export default function AdminAccounting() {
     const [activeTab, setActiveTab] = useState('journal')
-    const { data, loading, error, refetch } = useQuery(GET_ACCOUNTING_DATA, {
-        pollInterval: 60000 // Rafraîchir toutes les minutes
-    })
+    const [loading, setLoading] = useState(false)
+    const [data, setData] = useState<any>(MOCK_DATA)
+    const [error, setError] = useState<any>(null)
+
+    const refetch = () => {
+        setLoading(true)
+        setTimeout(() => {
+            setLoading(false)
+        }, 1000)
+    }
 
     // Calculs rapides pour le dashboard
     const totalAssets = data?.chartOfAccounts

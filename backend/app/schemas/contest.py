@@ -7,7 +7,9 @@ from enum import Enum
 
 from app.schemas.media import Media
 from app.schemas.voting import VoteUserDetail, ReactionUserDetail, FavoriteUserDetail
-from app.schemas.round import Round
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from app.schemas.round import Round
 
 
 # Enums pour les schémas
@@ -207,7 +209,10 @@ class Contest(ContestBase):
     top_contestants: List[TopContestantPreview] = []  # Top contestants preview
     voting_type: Optional["VotingType"] = None  # Type de vote associé
     category: Optional[Dict[str, Any]] = None  # Catégorie associée (id, name, slug, description, is_active)
-    rounds: List[Round] = []
+    rounds: List["Round"] = []
+    
+    # User specific data
+    current_user_participation: Optional[ContestEntry] = None
     
     class Config:
         from_attributes = True
@@ -410,5 +415,9 @@ class SuggestedContest(SuggestedContestBase):
     
     class Config:
         from_attributes = True
+
+# Update forward refs
+from app.schemas.round import Round
+Contest.model_rebuild()
 
 

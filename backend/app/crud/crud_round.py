@@ -181,7 +181,7 @@ class CRUDRound:
         Trouve le round actif pour l'inscription (submission_start <= now <= submission_end)
         FIXED: Uses new N:N relationship via round_contests table
         """
-        from app.models.contests import round_contests
+        from app.models.round import round_contests
         now = date.today()
         
         # Query via N:N relationship
@@ -210,7 +210,7 @@ class CRUDRound:
         Récupère tous les rounds d'un contest, triés par date de début
         FIXED: Uses new N:N relationship via round_contests table
         """
-        from app.models.contests import round_contests
+        from app.models.round import round_contests
         # Query rounds via the N:N relationship table
         rounds = db.query(Round).join(
             round_contests, Round.id == round_contests.c.round_id
