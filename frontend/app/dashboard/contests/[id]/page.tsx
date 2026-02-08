@@ -162,7 +162,14 @@ export default function ContestDetailPage() {
       setPageLoading(true)
       // Need to fetch contest + enrichment (participants etc)
       // Currently getContest returns everything if backend is updated
-      const c = await ApiService.getContest(parseInt(contestId)) as any
+      // Pass location filters: explicit filters from URL or user's location as default
+      const effectiveCountry = filterCountry || (user?.country as string) || undefined
+      const effectiveContinent = filterContinent !== 'all' ? filterContinent : (user?.continent as string) || undefined
+
+      const c = await ApiService.getContest(parseInt(contestId), {
+        filterCountry: effectiveCountry,
+        filterContinent: effectiveContinent
+      }) as any
 
       // Map data
       const parseMediaIds = (mediaIds: string | undefined, type: 'image' | 'video'): Media[] => {
@@ -238,7 +245,7 @@ export default function ContestDetailPage() {
     } finally {
       setPageLoading(false)
     }
-  }, [contestId, t])
+  }, [contestId, t, filterCountry, filterContinent, user?.country, user?.continent])
 
   useEffect(() => {
     fetchContestDetails()
