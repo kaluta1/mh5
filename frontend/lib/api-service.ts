@@ -113,8 +113,16 @@ export const ApiService = {
         return response.data;
     },
 
-    getContest: async (id: number) => {
-        const response = await api.get<Contest>(`/contests/${id}`);
+    getContest: async (id: number, params?: {
+        filterCountry?: string;
+        filterContinent?: string;
+    }) => {
+        const response = await api.get<Contest>(`/contests/${id}`, {
+            params: {
+                filter_country: params?.filterCountry,
+                filter_continent: params?.filterContinent
+            }
+        });
         return response.data;
     },
 

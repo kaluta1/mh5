@@ -980,7 +980,8 @@ class CRUDContest:
 
 
     def get_contest_with_enriched_contestants(
-        self, db: Session, contest_id: int, current_user_id: Optional[int] = None
+        self, db: Session, contest_id: int, current_user_id: Optional[int] = None,
+        filter_country: Optional[str] = None, filter_continent: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Récupère un contest avec tous ses contestants enrichis de toutes les informations :
@@ -990,6 +991,9 @@ class CRUDContest:
         - Favoris avec utilisateurs
         - Partages avec utilisateurs
         - Saison
+        
+        Si filter_country ou filter_continent sont fournis, ils ont priorité sur les filtres automatiques.
+        Si aucun filtre n'est fourni, on utilise la localisation de l'utilisateur connecté par défaut.
         """
         from app.models.contests import ContestSeasonLink, ContestSeason
         from app.models.user import User
@@ -1027,7 +1031,7 @@ class CRUDContest:
                 ContestSeason.id == season_link.season_id
             ).first()
         
-        # FIXED: Query contestants by BOTH round_id and season_id
+        # FIXED: Query contestants by the ACTIVE SEASON ID (not contest_id)
         from app.models.round import Round, round_contests
         from sqlalchemy import or_
         
@@ -1051,27 +1055,28 @@ class CRUDContest:
         
         round_ids = list(set(round_ids))
         
-        # Build comprehensive OR conditions for round_id and season_id
+        # Build conditions based on active season
+        # IMPORTANT: Use season.id (active season) NOT contest_id
         conditions = []
         
-        # Condition 1: season_id matches contest_id
-        conditions.append(Contestant.season_id == contest_id)
+        if season:
+            # Primary condition: contestants from the ACTIVE season
+            conditions.append(Contestant.season_id == season.id)
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"[get_contest_with_enriched_contestants] Filtering by ACTIVE season_id={season.id} for contest_id={contest_id}")
+        else:
+            # Fallback: no active season, use contest_id (legacy behavior)
+            conditions.append(Contestant.season_id == contest_id)
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"[get_contest_with_enriched_contestants] No active season found, using contest_id={contest_id} as fallback")
+            
+            # Only use round_ids as fallback when no active season
+            if round_ids:
+                conditions.append(Contestant.round_id.in_(round_ids))
         
-        # Condition 2: round_id matches any of the found rounds
-        if round_ids:
-            conditions.append(Contestant.round_id.in_(round_ids))
-        
-        # Condition 3: Handle NULL season_id but valid round_id (for migrated data)
-        if round_ids:
-            from sqlalchemy import and_
-            conditions.append(
-                and_(
-                    Contestant.season_id.is_(None),
-                    Contestant.round_id.in_(round_ids)
-                )
-            )
-        
-        # Query contestants using comprehensive OR conditions
+        # Query contestants - when active season exists, use ONLY season_id filter
         if conditions:
             contestants_query = db.query(Contestant)\
                 .filter(
@@ -1105,62 +1110,50 @@ class CRUDContest:
             if isinstance(season_level, str):
                 season_level = season_level.lower()
         
-        # Appliquer le filtrage géographique dans la requête SQL si un utilisateur est connecté
-        # Utilisation directe des colonnes de Contestant (plus besoin de jointure avec User)
-        if contestants_query and current_user and season_level and season_level != "global":
-            from sqlalchemy import and_
+        # =====================================================
+        # FILTRAGE GÉOGRAPHIQUE
+        # Priorité: 1) Filtres explicites, 2) Localisation utilisateur, 3) Pas de filtre
+        # =====================================================
+        from sqlalchemy import and_
+        
+        def is_valid_location(value: Optional[str]) -> bool:
+            if not value:
+                return False
+            val_lower = str(value).lower().strip()
+            return val_lower not in ("unknown", "none", "", "null", "all")
+        
+        # Déterminer les valeurs de filtre à utiliser
+        # Si des filtres explicites sont fournis, les utiliser
+        # Sinon, utiliser la localisation de l'utilisateur connecté par défaut
+        effective_country = None
+        effective_continent = None
+        
+        if filter_country and is_valid_location(filter_country):
+            # Filtre explicite par pays
+            effective_country = filter_country
+        elif filter_continent and is_valid_location(filter_continent):
+            # Filtre explicite par continent uniquement (pas de pays)
+            effective_continent = filter_continent
+        elif current_user:
+            # Pas de filtre explicite -> utiliser la localisation de l'utilisateur
+            if is_valid_location(current_user.country):
+                effective_country = current_user.country
+            if is_valid_location(current_user.continent):
+                effective_continent = current_user.continent
+        
+        # Appliquer les filtres à la requête
+        if contestants_query:
+            location_conditions = []
             
-            # Fonction helper pour créer des conditions de filtrage
-            def create_location_filter(level: str, user: User):
-                """
-                Crée un filtre SQL basé sur le niveau et la localisation de l'utilisateur.
-                Utilise directement les colonnes de Contestant (city, country, region, continent).
-                """
-                def is_valid_location(value: Optional[str]) -> bool:
-                    if not value:
-                        return False
-                    val_lower = str(value).lower().strip()
-                    return val_lower not in ("unknown", "none", "", "null")
-                
-                # Construire les conditions selon le niveau en utilisant les colonnes de Contestant
-                if level == "city":
-                    # Même ville ET même pays
-                    conditions = []
-                    if is_valid_location(user.country):
-                        conditions.append(Contestant.country.ilike(user.country))
-                    if is_valid_location(user.city):
-                        conditions.append(Contestant.city.ilike(user.city))
-                    # Si aucune condition valide, pas de filtre (afficher tous)
-                    if not conditions:
-                        return None
-                    # Combiner avec AND (les deux doivent correspondre si les deux sont valides)
-                    return and_(*conditions) if len(conditions) > 1 else conditions[0]
-                    
-                elif level == "country":
-                    # Même pays
-                    if is_valid_location(user.country):
-                        return Contestant.country.ilike(user.country)
-                    return None
-                    
-                elif level in ("regional", "region"):
-                    # Même région
-                    user_region = getattr(user, "region", None)
-                    if is_valid_location(user_region):
-                        return Contestant.region.ilike(user_region)
-                    return None
-                    
-                elif level == "continent":
-                    # Même continent uniquement
-                    if is_valid_location(user.continent):
-                        return Contestant.continent.ilike(user.continent)
-                    return None
-                
-                # Niveau inconnu ou global -> pas de filtre
-                return None
+            if effective_country:
+                # Filtrer par pays (prioritaire)
+                location_conditions.append(Contestant.country.ilike(f"%{effective_country}%"))
+            elif effective_continent:
+                # Filtrer par continent si pas de pays
+                location_conditions.append(Contestant.continent.ilike(f"%{effective_continent}%"))
             
-            location_filter = create_location_filter(season_level, current_user)
-            if location_filter is not None:
-                contestants_query = contestants_query.filter(location_filter)
+            if location_conditions:
+                contestants_query = contestants_query.filter(and_(*location_conditions))
         
         # Exécuter la requête
         import logging

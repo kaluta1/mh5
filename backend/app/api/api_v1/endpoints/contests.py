@@ -164,6 +164,8 @@ def read_contest(
     *,
     db: Session = Depends(get_db),
     contest_id: int,
+    filter_country: str = Query(None, description="Filtrer par pays"),
+    filter_continent: str = Query(None, description="Filtrer par continent"),
     current_user: Optional[Any] = Depends(get_current_active_user_optional),
 ) -> Any:
     """
@@ -176,6 +178,9 @@ def read_contest(
     - regional: même région
     - continent: même continent
     - global: tous les contestants
+    
+    Si filter_country ou filter_continent sont fournis, ils ont priorité sur la localisation de l'utilisateur.
+    Si aucun filtre n'est fourni, on utilise la localisation de l'utilisateur connecté par défaut.
     """
     contest_obj = contest.get(db=db, id=contest_id)
     if not contest_obj:
@@ -189,7 +194,9 @@ def read_contest(
     enriched_contest = contest.get_contest_with_enriched_contestants(
         db=db, 
         contest_id=contest_id, 
-        current_user_id=current_user_id
+        current_user_id=current_user_id,
+        filter_country=filter_country,
+        filter_continent=filter_continent
     )
     
     if not enriched_contest:
