@@ -93,7 +93,8 @@ class ContestStatusService:
     @staticmethod
     def check_submission_allowed(db: Session, contest_id: int) -> tuple[bool, str]:
         """
-        Vérifie si les soumissions sont autorisées pour un contest (i.e., il y a un round actif en phase de soumission).
+        Vérifie si les soumissions sont autorisées pour un contest.
+        Allows submissions based on contest deadline, not rounds.
         
         Returns:
             (is_allowed, error_message)
@@ -112,9 +113,17 @@ class ContestStatusService:
         if not contest.is_active:
             return False, "This contest is not active"
             
-        # Vérifier si un round permet la soumission aujourd'hui
+        # Check submission deadline instead of rounds
         today = date.today()
         
+        # Check if contest has a submission_end_date and if it has passed
+        if contest.submission_end_date:
+            if today > contest.submission_end_date:
+                return False, f"Submissions closed. Deadline was {contest.submission_end_date}"
+            # If deadline hasn't passed, allow submission
+            return True, ""
+        
+        # If no submission_end_date, check for active rounds as fallback
         active_submission_round = db.query(Round).filter(
             Round.contest_id == contest_id,
             Round.status != RoundStatus.CANCELLED,
@@ -125,17 +134,9 @@ class ContestStatusService:
         if active_submission_round:
             return True, ""
             
-        # Si aucun round n'est ouvert, on essaie de trouver le prochain pour donner un message utile
-        next_round = db.query(Round).filter(
-            Round.contest_id == contest_id,
-            Round.status != RoundStatus.CANCELLED,
-            Round.submission_start_date > today
-        ).order_by(Round.submission_start_date.asc()).first()
-        
-        if next_round:
-            return False, f"Submissions for the next round ({next_round.name}) will start on {next_round.submission_start_date}"
-        
-        return False, "No active rounds accepting submissions at this time"
+        # If no rounds and no deadline, allow submission (default behavior)
+        # This allows submissions regardless of rounds
+        return True, ""
     
     @staticmethod
     def check_voting_allowed(db: Session, contest_id: int) -> tuple[bool, str]:

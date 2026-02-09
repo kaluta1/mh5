@@ -388,14 +388,37 @@ class ContestService {
     nominatorCountry?: string
   ): Promise<any> {
     try {
-      const response = await api.post(`/api/v1/contestants/${contestId}`, {
+      // Prepare request body - only include fields that have values
+      const requestBody: any = {
         title: title,
-        description: description,
-        image_media_ids: imageMediaIds,
-        video_media_ids: videoMediaIds,
-        nominator_city: nominatorCity,
-        nominator_country: nominatorCountry
+        description: description
+      }
+
+      // Only include optional fields if they have values
+      if (imageMediaIds) {
+        requestBody.image_media_ids = imageMediaIds
+      }
+      if (videoMediaIds) {
+        requestBody.video_media_ids = videoMediaIds
+      }
+      if (nominatorCity && nominatorCity.trim()) {
+        requestBody.nominator_city = nominatorCity.trim()
+      }
+      if (nominatorCountry && nominatorCountry.trim()) {
+        requestBody.nominator_country = nominatorCountry.trim()
+      }
+
+      console.log('Submitting contestant with data:', {
+        contestId,
+        title,
+        description,
+        hasImages: !!imageMediaIds,
+        hasVideos: !!videoMediaIds,
+        nominatorCity: nominatorCity || 'not provided',
+        nominatorCountry: nominatorCountry || 'not provided'
       })
+
+      const response = await api.post(`/api/v1/contestants/${contestId}`, requestBody)
 
       // Invalider le cache des contestants et du contest
       cacheService.invalidate(`/api/v1/contestants/contest/${contestId}`)
@@ -403,8 +426,10 @@ class ContestService {
       cacheService.invalidate('/api/v1/contests/')
 
       return response.data
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Error submitting contestant for contest ${contestId}:`, error)
+      console.error('Error response data:', error?.response?.data)
+      console.error('Error response status:', error?.response?.status)
       throw error
     }
   }

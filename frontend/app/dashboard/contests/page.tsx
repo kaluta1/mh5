@@ -8,8 +8,9 @@ import { useAuth } from '@/hooks/use-auth'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useToast } from '@/components/ui/toast'
 import { ContestsSkeleton } from '@/components/ui/skeleton'
-import { Lightbulb, Loader2 } from 'lucide-react'
+import { Lightbulb, Loader2, MapPin } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { logger } from '@/lib/logger'
 import { LocationFilterBar } from '@/components/dashboard/location-filter-bar'
 
@@ -77,6 +78,7 @@ function ContestsPageContent() {
   const [sortBy, setSortBy] = useState<string>('participants')
   const [filterContinent, setFilterContinent] = useState<string>('all')
   const [filterCountry, setFilterCountry] = useState<string>('')
+  const [filterLevel, setFilterLevel] = useState<string>('city') // Level filter for participations: 'city', 'country', 'all'
 
   // Data States
   const [rounds, setRounds] = useState<Round[]>([])
@@ -122,6 +124,33 @@ function ContestsPageContent() {
     if (typeof window !== 'undefined') localStorage.setItem('contests_category_tab', categoryTab)
   }, [categoryTab])
 
+  // Set default filters based on category tab and user location
+  // This runs when categoryTab changes or when user data becomes available
+  useEffect(() => {
+    if (!user) return
+
+    if (categoryTab === 'nomination') {
+      // For nominations: default to user's country if not already set
+      if (user.country && filterCountry !== user.country) {
+        setFilterCountry(user.country)
+      }
+      // Reset level filter (not used for nominations)
+      if (filterLevel !== 'all') {
+        setFilterLevel('all')
+      }
+    } else if (categoryTab === 'participations') {
+      // For participations: default to city level
+      if (filterLevel !== 'city') {
+        setFilterLevel('city')
+      }
+      // Reset country filter (level filter is used instead)
+      if (filterCountry) {
+        setFilterCountry('')
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categoryTab, user?.country])
+
   // Handle Search Execution
   const handleSearch = () => {
     setCommittedSearch(searchTerm)
@@ -132,7 +161,7 @@ function ContestsPageContent() {
     setAllContests([])
     setHasMore(true)
     setInitialLoadComplete(false)
-  }, [activeRoundId, categoryTab, filterCountry, filterContinent, committedSearch])
+  }, [activeRoundId, categoryTab, filterCountry, filterContinent, filterLevel, committedSearch])
 
   // 2. Fetch Contests for Selected Round (Initial load)
   useEffect(() => {
@@ -317,8 +346,10 @@ function ContestsPageContent() {
       filtered = filtered.filter(c => c.title.toLowerCase().includes(lower))
     }
 
-    // 3. Location Filters (if applicable to contest objects in future, currently filtering by user input)
-    // Add logic here if contests have country/continent fields
+    // 3. Filter by Level (for participations tab)
+    if (categoryTab === 'participations' && filterLevel !== 'all') {
+      filtered = filtered.filter(c => c.status === filterLevel)
+    }
 
     // 4. Sort
     filtered.sort((a, b) => {
@@ -331,7 +362,7 @@ function ContestsPageContent() {
     })
 
     return filtered
-  }, [rawContests, activeTab, committedSearch, sortBy])
+  }, [rawContests, activeTab, committedSearch, sortBy, categoryTab, filterLevel])
 
   // Handlers
   const handleParticipate = (id: string, isEditing: boolean) => {
@@ -371,21 +402,50 @@ function ContestsPageContent() {
           </div>
         </div>
 
-        {/* Location Filter Bar (Re-added) */}
-        <LocationFilterBar
-          user={user}
-          searchTerm={searchTerm}
-          onSearchChange={setSearchTerm}
-          onSearch={handleSearch}
-          searchPlaceholder={t('dashboard.contests.search_placeholder') || 'Search...'}
-          filterContinent={filterContinent}
-          onContinentChange={setFilterContinent}
-          filterCountry={filterCountry}
-          onCountryChange={setFilterCountry}
-          sortBy={sortBy}
-          onSortChange={setSortBy}
-          className="mb-6"
-        />
+        {/* Location Filter Bar */}
+        <div className="mb-6">
+          <LocationFilterBar
+            user={user}
+            searchTerm={searchTerm}
+            onSearchChange={setSearchTerm}
+            onSearch={handleSearch}
+            searchPlaceholder={t('dashboard.contests.search_placeholder') || 'Search...'}
+            filterContinent={filterContinent}
+            onContinentChange={setFilterContinent}
+            filterCountry={filterCountry}
+            onCountryChange={setFilterCountry}
+            sortBy={sortBy}
+            onSortChange={setSortBy}
+            showCountryFilter={categoryTab === 'nomination'} // Only show country filter for nominations
+            className="mb-4"
+          />
+          
+          {/* Level Filter for Participations */}
+          {categoryTab === 'participations' && (
+            <div className="flex items-center gap-4">
+              <label className="text-sm font-medium text-gray-300 whitespace-nowrap">
+                {t('dashboard.contests.filter_level') || 'Level:'}
+              </label>
+              <Select value={filterLevel} onValueChange={setFilterLevel}>
+                <SelectTrigger className="w-48 bg-gray-800 border-gray-700 text-white">
+                  <MapPin className="w-4 h-4 mr-2" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-800 border-gray-700">
+                  <SelectItem value="city">
+                    {t('dashboard.contests.level_city') || 'City'}
+                  </SelectItem>
+                  <SelectItem value="country">
+                    {t('dashboard.contests.level_country') || 'Country'}
+                  </SelectItem>
+                  <SelectItem value="all">
+                    {t('dashboard.contests.all_levels') || 'All Levels'}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </div>
 
         {/* Main Category Tabs (Nomination / Participations) */}
         <div className="mb-6 border-b border-gray-800">
@@ -396,8 +456,14 @@ function ContestsPageContent() {
                 setActiveTab('all');
                 setSearchTerm('');
                 setCommittedSearch('');
-                setFilterCountry('');
                 setFilterContinent('all');
+                // Set country filter to user's country for nominations
+                if (user?.country) {
+                  setFilterCountry(user.country);
+                } else {
+                  setFilterCountry('');
+                }
+                setFilterLevel('all'); // Reset level filter
               }}
               className={`px-6 py-3 text-base font-semibold transition-colors border-b-2 ${categoryTab === 'nomination' ? 'border-blue-500 text-blue-500' : 'border-transparent text-gray-400 hover:text-gray-300'}`}
             >
@@ -409,8 +475,9 @@ function ContestsPageContent() {
                 setActiveTab('all');
                 setSearchTerm('');
                 setCommittedSearch('');
-                setFilterCountry('');
+                setFilterCountry(''); // Reset country filter for participations
                 setFilterContinent('all');
+                setFilterLevel('city'); // Default to city level for participations
               }}
               className={`px-6 py-3 text-base font-semibold transition-colors border-b-2 ${categoryTab === 'participations' ? 'border-blue-500 text-blue-500' : 'border-transparent text-gray-400 hover:text-gray-300'}`}
             >
@@ -452,6 +519,7 @@ function ContestsPageContent() {
                   canParticipate={true}
                   isKycVerified={!!user?.identity_verified}
                   isFavorite={false}
+                  isNomination={categoryTab === 'nomination'}
                   onToggleFavorite={() => { }}
                   onParticipate={() => handleParticipate(contest.id, contest.currentUserParticipated)}
                   onViewContestants={() => router.push(`/dashboard/contests/${contest.id}`)}

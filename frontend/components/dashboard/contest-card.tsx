@@ -726,14 +726,14 @@ export function ContestCard({
                   onViewContestants()
                 }}
                 variant="outline"
-                className="flex-1 bg-gray-800/50 hover:bg-gray-800 text-white border-gray-700 hover:border-myhigh5-primary/50 font-medium py-2.5 text-xs rounded-lg transition-all duration-300 group/view relative overflow-hidden hover:shadow-lg hover:shadow-myhigh5-primary/20"
+                className="flex-1 bg-gray-800 hover:bg-gray-700 text-white border-gray-600 hover:border-myhigh5-primary font-semibold py-2 text-[11px] rounded-lg transition-all duration-300 group/view relative overflow-hidden hover:shadow-lg hover:shadow-myhigh5-primary/30 whitespace-nowrap"
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-myhigh5-primary/10 via-myhigh5-primary/20 to-myhigh5-primary/10 opacity-0 group-hover/view:opacity-100 transition-opacity duration-300" />
-                <Eye className="w-4 h-4 mr-1.5 group-hover/view:scale-110 group-hover/view:text-myhigh5-secondary transition-all duration-300 relative z-10" />
-                <span className="relative z-10 group-hover/view:text-white transition-colors duration-300">
-                  {t('dashboard.contests.view') || 'Voir'} {t('dashboard.contests.contestant') || 'participant'}{contestants > 1 ? 's' : ''}
+                <Eye className="w-3.5 h-3.5 mr-1.5 group-hover/view:scale-110 group-hover/view:text-myhigh5-secondary transition-all duration-300 relative z-10 flex-shrink-0" />
+                <span className="relative z-10 font-semibold group-hover/view:text-white transition-colors duration-300">
+                  {t('dashboard.contests.view') || 'View'} {t('dashboard.contests.contestant') || 'Contestant'}{contestants > 1 ? 's' : ''}
                 </span>
-                <ArrowRight className="w-3.5 h-3.5 ml-1.5 group-hover/view:translate-x-1 group-hover/view:text-myhigh5-secondary transition-all duration-300 relative z-10" />
+                <ArrowRight className="w-3.5 h-3.5 ml-1.5 group-hover/view:translate-x-1 group-hover/view:text-myhigh5-secondary transition-all duration-300 relative z-10 flex-shrink-0" />
               </Button>
             </>
           ) : (
@@ -742,14 +742,14 @@ export function ContestCard({
                 e.stopPropagation()
                 onViewContestants()
               }}
-              className="w-full bg-gradient-to-r from-myhigh5-primary to-purple-600 hover:from-myhigh5-primary-dark hover:to-purple-700 text-white font-semibold py-2.5 text-xs rounded-lg transition-all duration-300 group/view relative overflow-hidden shadow-lg shadow-myhigh5-primary/20 hover:shadow-xl hover:shadow-myhigh5-primary/40 hover:scale-[1.02]"
+              className="w-full bg-gradient-to-r from-myhigh5-primary to-purple-600 hover:from-myhigh5-primary-dark hover:to-purple-700 text-white font-semibold py-2 text-[11px] rounded-lg transition-all duration-300 group/view relative overflow-hidden shadow-lg shadow-myhigh5-primary/20 hover:shadow-xl hover:shadow-myhigh5-primary/40 hover:scale-[1.02] whitespace-nowrap"
             >
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover/view:translate-x-full transition-transform duration-500" />
-              <Eye className="w-4 h-4 mr-2 relative z-10 group-hover/view:scale-110 transition-transform duration-300" />
-              <span className="relative z-10 group-hover/view:drop-shadow-sm transition-all duration-300">
-                {t('dashboard.contests.view') || 'Voir'} {contestants} {t('dashboard.contests.contestant') || 'participant'}{contestants > 1 ? 's' : ''}
+              <Eye className="w-3.5 h-3.5 mr-1.5 relative z-10 group-hover/view:scale-110 transition-transform duration-300 flex-shrink-0" />
+              <span className="relative z-10 font-semibold group-hover/view:drop-shadow-sm transition-all duration-300">
+                {t('dashboard.contests.view') || 'View'} {contestants} {t('dashboard.contests.contestant') || 'Contestant'}{contestants > 1 ? 's' : ''}
               </span>
-              <ArrowRight className="w-3.5 h-3.5 ml-2 group-hover/view:translate-x-1 group-hover/view:scale-110 transition-all duration-300 relative z-10" />
+              <ArrowRight className="w-3.5 h-3.5 ml-1.5 group-hover/view:translate-x-1 group-hover/view:scale-110 transition-all duration-300 relative z-10 flex-shrink-0" />
             </Button>
           )}
         </div>

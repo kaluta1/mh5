@@ -41,8 +41,8 @@ export default function ApplyToContestPage() {
   const [timeValues, setTimeValues] = useState<{ days: number; hours: number; minutes: number; seconds: number; isClosed: boolean; isNA: boolean } | null>(null)
   const [existingParticipationData, setExistingParticipationData] = useState<any>(null)
   const [participantId, setParticipantId] = useState<number | null>(null)
-
-
+  const [activeRounds, setActiveRounds] = useState<any[]>([])
+  const [hasActiveSubmissionRound, setHasActiveSubmissionRound] = useState<boolean>(true)
 
   // Verification states
   const [showVerificationDialog, setShowVerificationDialog] = useState(false)
@@ -64,6 +64,19 @@ export default function ApplyToContestPage() {
       // Need to fetch contest + enrichment (participants etc)
       // Currently getContest returns everything if backend is updated
       const c = await ApiService.getContest(parseInt(contestId)) as any
+
+      // Fetch rounds for this contest (optional, not blocking submissions)
+      try {
+        const rounds = await contestService.getRoundsForContest(contestId)
+        setActiveRounds(rounds || [])
+        // Always allow submissions regardless of rounds status (only deadline matters)
+        setHasActiveSubmissionRound(true)
+      } catch (roundsError) {
+        console.error('Failed to fetch rounds:', roundsError)
+        // Always allow submissions even if rounds fetch fails
+        setHasActiveSubmissionRound(true)
+        setActiveRounds([])
+      }
 
       // Data Mapping
       // 1. Check Profile Completeness
@@ -159,23 +172,30 @@ export default function ApplyToContestPage() {
       addToast(t('dashboard.contests.load_error') || "Failed to load contest", 'error') // Fixed signature
       setPageLoading(false)
     }
-  }, [contestId, user, isEditMode, hasVisualVerification, hasVoiceVerification, hasBrandVerification, hasContentVerification, addToast, t])
+  }, [contestId, user, isEditMode, hasVisualVerification, hasVoiceVerification, hasBrandVerification, hasContentVerification, addToast, t, contestService])
 
   useEffect(() => {
     fetchContestDetails()
   }, [fetchContestDetails])
 
-  // Calculer le temps restant
+  // Calculer le temps restant jusqu'au 28 février 2026 (ou submission_end_date si plus tard)
   useEffect(() => {
-    const submissionEndDate = contest?.submission_end_date
-    if (!submissionEndDate) {
-      setTimeValues({ days: 0, hours: 0, minutes: 0, seconds: 0, isClosed: false, isNA: true })
-      return
+    // Default deadline: February 28, 2026
+    const defaultDeadline = new Date('2026-02-28')
+    defaultDeadline.setHours(23, 59, 59, 999)
+    
+    // Use submission_end_date if available, otherwise use default deadline
+    let submissionDeadline = defaultDeadline
+    if (contest?.submission_end_date) {
+      const endDate = new Date(contest.submission_end_date)
+      endDate.setHours(23, 59, 59, 999)
+      // Use the later date between default deadline and actual end date
+      submissionDeadline = endDate > defaultDeadline ? endDate : defaultDeadline
     }
 
     const updateTimeRemaining = () => {
       const now = new Date().getTime()
-      const endDate = new Date(submissionEndDate).getTime()
+      const endDate = submissionDeadline.getTime()
       const difference = endDate - now
 
       if (difference <= 0) {
@@ -236,6 +256,34 @@ export default function ApplyToContestPage() {
       router.push('/')
     }
   }, [isAuthenticated, isLoading, router])
+
+  // Helper function to check if submissions are actually open
+  // Only checks deadline date - allows submissions regardless of active rounds
+  const isSubmissionActuallyOpen = useCallback((contestData: any): boolean => {
+    if (!contestData) return false
+    
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    
+    // Default deadline: February 28, 2026
+    const defaultDeadline = new Date('2026-02-28')
+    defaultDeadline.setHours(23, 59, 59, 999)
+    
+    // Use submission_end_date if available, otherwise use default deadline
+    let submissionDeadline = defaultDeadline
+    if (contestData.submission_end_date) {
+      const endDate = new Date(contestData.submission_end_date)
+      endDate.setHours(23, 59, 59, 999)
+      // Use the later date between default deadline and actual end date
+      submissionDeadline = endDate > defaultDeadline ? endDate : defaultDeadline
+    }
+    
+    // Check if deadline has passed
+    const isDeadlinePassed = today > submissionDeadline
+    
+    // Submissions are open if deadline hasn't passed (rounds check removed)
+    return !isDeadlinePassed
+  }, [])
 
 
 
@@ -299,39 +347,66 @@ export default function ApplyToContestPage() {
       )
     } catch (err: any) {
       console.error('Erreur lors de la soumission:', err)
-      const errorDetail = err?.response?.data?.detail || err?.message || ''
+      
+      // Try to get error detail from different possible locations
+      let errorDetail = ''
+      if (err?.response?.data?.detail) {
+        errorDetail = typeof err.response.data.detail === 'string' 
+          ? err.response.data.detail 
+          : JSON.stringify(err.response.data.detail)
+      } else if (err?.response?.data?.message) {
+        errorDetail = err.response.data.message
+      } else if (err?.message) {
+        errorDetail = err.message
+      }
+
+      // Log the full error for debugging
+      console.error('Full error response:', err?.response?.data)
+      console.error('Error detail:', errorDetail)
 
       // Détecter le type d'erreur et utiliser les traductions appropriées
-      let errorMessage = t('dashboard.contests.participation_form.error.submit_error')
+      let errorMessage = t('dashboard.contests.participation_form.error.submit_error') || 'An error occurred while submitting'
 
       if (errorDetail) {
         const errorLower = errorDetail.toLowerCase()
 
+        // Détecter les erreurs de pays du nominateur
+        if (errorLower.includes('nominator country') || errorLower.includes('country must match')) {
+          errorMessage = errorDetail // Show the actual backend message
+        }
         // Détecter les erreurs de genre
-        if (errorLower.includes('masculin') || errorLower.includes('male') || errorLower.includes('male participants only')) {
-          errorMessage = t('dashboard.contests.participation_form.error.gender_restriction_male')
+        else if (errorLower.includes('masculin') || errorLower.includes('male') || errorLower.includes('male participants only')) {
+          errorMessage = t('dashboard.contests.participation_form.error.gender_restriction_male') || errorDetail
         } else if (errorLower.includes('féminin') || errorLower.includes('female') || errorLower.includes('female participants only')) {
-          errorMessage = t('dashboard.contests.participation_form.error.gender_restriction_female')
+          errorMessage = t('dashboard.contests.participation_form.error.gender_restriction_female') || errorDetail
         } else if (errorLower.includes('genre') || errorLower.includes('gender') || errorLower.includes('gender information')) {
-          errorMessage = t('dashboard.contests.participation_form.error.gender_not_set')
+          errorMessage = t('dashboard.contests.participation_form.error.gender_not_set') || errorDetail
         }
         // Détecter les erreurs de soumission déjà effectuée
         else if (errorLower.includes('already') && (errorLower.includes('submission') || errorLower.includes('candidature'))) {
-          errorMessage = t('dashboard.contests.participation_form.error.already_submitted')
+          errorMessage = t('dashboard.contests.participation_form.error.already_submitted') || errorDetail
         }
-        // Détecter les erreurs de soumission fermée
-        else if (errorLower.includes('closed') || errorLower.includes('fermée') || errorLower.includes('fermé') || errorLower.includes('not open')) {
-          errorMessage = t('dashboard.contests.participation_form.error.submission_closed')
+        // Détecter les erreurs de soumission fermée (including "no active rounds")
+        else if (errorLower.includes('closed') || errorLower.includes('fermée') || errorLower.includes('fermé') || errorLower.includes('not open') || errorLower.includes('no active rounds') || errorLower.includes('no active rounds accepting submissions')) {
+          // Use the backend error message directly as it's more specific
+          errorMessage = errorDetail || t('dashboard.contests.participation_form.error.submission_closed') || 'Submissions are closed for this contest.'
         }
         // Détecter les erreurs de date limite
         else if (errorLower.includes('deadline') || errorLower.includes('date limite') || errorLower.includes('dépassée') || errorLower.includes('passed')) {
-          errorMessage = t('dashboard.contests.participation_form.error.deadline_passed')
+          errorMessage = t('dashboard.contests.participation_form.error.deadline_passed') || errorDetail
+        }
+        // Détecter les erreurs de validation
+        else if (errorLower.includes('validation') || errorLower.includes('required') || errorLower.includes('invalid')) {
+          errorMessage = errorDetail
         }
         // Utiliser le message d'erreur du backend s'il est disponible
         else {
           errorMessage = errorDetail
         }
       }
+
+      // Display the error message to the user
+      addToast(errorMessage, 'error')
     } finally {
       setIsSubmitting(false)
     }
@@ -378,7 +453,7 @@ export default function ApplyToContestPage() {
                       </p>
                     </div>
                   </div>
-                  {contest?.is_submission_open && (
+                  {isSubmissionActuallyOpen(contest) && (
                     <button
                       onClick={() => {
                         // Permettre de modifier à nouveau
@@ -399,7 +474,7 @@ export default function ApplyToContestPage() {
                   <p className="text-blue-900 dark:text-blue-200">
                     {t('dashboard.contests.participation_form.already_participating')}
                   </p>
-                  {contest?.is_submission_open && (
+                  {isSubmissionActuallyOpen(contest) && (
                     <button
                       onClick={() => {
                         // Afficher le formulaire en mode édition
@@ -433,15 +508,65 @@ export default function ApplyToContestPage() {
                     }
                   </p>
 
+                  {/* Deadline Countdown - Show for nominations and participations */}
+                  {!isEditingParticipation && !submitSuccess && timeValues && !timeValues.isNA && (
+                    <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                          <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                            {isNomination 
+                              ? (t('dashboard.contests.time_remaining_to_nominate') || 'Time remaining to nominate')
+                              : (t('dashboard.contests.time_remaining_to_participate') || 'Time remaining to participate')
+                            }:
+                          </span>
+                        </div>
+                        {timeValues.isClosed ? (
+                          <span className="text-red-600 dark:text-red-400 font-bold text-lg">
+                            {t('dashboard.contests.closed') || 'Closed'}
+                          </span>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            {timeValues.days > 0 && (
+                              <span className="px-3 py-1 bg-blue-500 text-white rounded-lg font-bold text-lg">
+                                {timeValues.days}{t('dashboard.contests.time_unit_days') || 'd'}
+                              </span>
+                            )}
+                            <span className="px-3 py-1 bg-blue-500 text-white rounded-lg font-bold text-lg">
+                              {String(timeValues.hours).padStart(2, '0')}{t('dashboard.contests.time_unit_hours') || 'h'}
+                            </span>
+                            <span className="px-3 py-1 bg-blue-500 text-white rounded-lg font-bold text-lg">
+                              {String(timeValues.minutes).padStart(2, '0')}{t('dashboard.contests.time_unit_minutes') || 'm'}
+                            </span>
+                            {timeValues.days === 0 && (
+                              <span className="px-3 py-1 bg-purple-500 text-white rounded-lg font-bold text-lg animate-pulse">
+                                {String(timeValues.seconds).padStart(2, '0')}{t('dashboard.contests.time_unit_seconds') || 's'}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      {!timeValues.isClosed && (
+                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-2">
+                          {t('Deadline countdown') || 'Deadline: February 28, 2026'}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
                   {/* Participation Form - DISPLAYED FIRST */}
-                  {!needsProfileSetup && contest?.is_submission_open && (
+                  {!needsProfileSetup && isSubmissionActuallyOpen(contest) && (
                     <ParticipationForm
                       contestId={contestId}
                       onSubmit={handleParticipationSubmit}
                       onCancel={handleCancel}
                       isSubmitting={isSubmitting}
                       isEditing={isEditingParticipation}
-                      initialData={existingParticipationData}
+                      initialData={{
+                        ...existingParticipationData,
+                        // Set default nominator country to user's country for nominations
+                        nominatorCountry: existingParticipationData?.nominatorCountry || (isNomination && user?.country ? user.country : undefined)
+                      }}
                       isNomination={isNomination}
                       mediaRequirements={{
                         requiresVideo: isNomination ? true : contest?.requires_video,
@@ -479,13 +604,13 @@ export default function ApplyToContestPage() {
                   )}
 
                   {/* Submission Closed Alert */}
-                  {contest && !contest.is_submission_open && (
+                  {contest && !isSubmissionActuallyOpen(contest) && (
                     <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg mb-4">
                       <p className="text-red-900 dark:text-red-200 font-medium">
-                        🚫 {t('dashboard.contests.submission_closed') || 'Les inscriptions sont fermées pour ce concours.'}
+                        🚫 {t('dashboard.contests.submission_closed') || 'Submissions are closed for this contest.'}
                       </p>
                       <p className="text-red-700 dark:text-red-300 text-sm mt-1">
-                        {t('dashboard.contests.submission_closed_message') || 'La date limite de soumission est dépassée.'}
+                        {t('dashboard.contests.submission_closed_message') || 'The submission deadline has passed.'}
                       </p>
                     </div>
                   )}
@@ -512,7 +637,7 @@ export default function ApplyToContestPage() {
                       </p>
                     </div>
                   </div>
-                  {contest?.is_submission_open && (
+                  {isSubmissionActuallyOpen(contest) && (
                     <button
                       onClick={() => {
                         // Permettre de modifier à nouveau
@@ -533,7 +658,7 @@ export default function ApplyToContestPage() {
                   <p className="text-blue-900 dark:text-blue-200">
                     {t('dashboard.contests.participation_form.already_participating')}
                   </p>
-                  {contest?.is_submission_open && (
+                  {isSubmissionActuallyOpen(contest) && (
                     <button
                       onClick={() => {
                         // Afficher le formulaire en mode édition

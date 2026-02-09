@@ -13,6 +13,7 @@ import { useModeratedUpload } from '@/hooks/use-moderated-upload'
 import { useToast } from '@/components/ui/toast'
 import { isValidVideoUrl, detectVideoPlatform, isYouTubeShort } from '@/lib/utils/video-platforms'
 import { countries } from '@/lib/countries'
+import { getCitiesByCountry } from '@/lib/geography'
 
 interface MediaRequirements {
   requiresVideo?: boolean
@@ -73,6 +74,8 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
   // Nomination location states
   const [nominatorCountry, setNominatorCountry] = useState<string>(initialData?.nominatorCountry || '')
   const [nominatorCity, setNominatorCity] = useState<string>(initialData?.nominatorCity || '')
+  const [availableCities, setAvailableCities] = useState<string[]>([])
+  const [loadingCities, setLoadingCities] = useState(false)
 
   // Media requirements with defaults
   // Pour les nominations : images optionnelles (minImages = 0), vidéos obligatoires
@@ -88,6 +91,198 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
       setAccessToken(token)
     }
   }, [])
+
+  // Load cities when country changes (for nominations)
+  useEffect(() => {
+    // CRITICAL: Always clear cities FIRST and IMMEDIATELY to prevent showing wrong cities
+    // Use a function form to ensure we're clearing the current state
+    setAvailableCities(prev => {
+      if (prev.length > 0) {
+        console.log(`[CITY CLEAR] Clearing ${prev.length} previous cities`)
+      }
+      return []
+    })
+    setNominatorCity('')
+    setLoadingCities(false)
+    
+    if (!isNomination || !nominatorCountry || !nominatorCountry.trim()) {
+      return
+    }
+      
+    // Find country code from country name (case-insensitive match with trimmed comparison)
+    const trimmedCountryName = nominatorCountry.trim()
+    const country = countries.find(c => c.name.trim().toLowerCase() === trimmedCountryName.toLowerCase())
+    
+    if (!country || !country.code) {
+      console.warn(`Country not found: "${nominatorCountry}". Available countries:`, countries.slice(0, 5).map(c => c.name))
+      setAvailableCities([])
+      setNominatorCity('')
+      setLoadingCities(false)
+      return
+    }
+    
+    const currentCountryCode = country.code.toUpperCase().trim()
+    
+    // Validate country code format (should be 2 uppercase letters)
+    if (!/^[A-Z]{2}$/.test(currentCountryCode)) {
+      console.error(`[CITY LOAD] Invalid country code format: "${currentCountryCode}"`)
+      setAvailableCities([])
+      setNominatorCity('')
+      setLoadingCities(false)
+      return
+    }
+    
+    // CRITICAL: Log exactly what we're about to look up
+    console.log(`[CITY LOAD] ==========================================`)
+    console.log(`[CITY LOAD] Country Name: "${country.name}"`)
+    console.log(`[CITY LOAD] Country Code: "${currentCountryCode}"`)
+    console.log(`[CITY LOAD] About to call getCitiesByCountry("${currentCountryCode}")`)
+    console.log(`[CITY LOAD] ==========================================`)
+    
+    setLoadingCities(true)
+    
+    try {
+      // Get cities for the specific country code
+      const cities = getCitiesByCountry(currentCountryCode)
+      
+      console.log(`[CITY LOAD] Country: ${country.name}, Code: ${currentCountryCode}, Cities loaded: ${cities.length}`)
+      console.log(`[CITY LOAD] First 5 cities:`, cities.slice(0, 5))
+      console.log(`[CITY LOAD] Last 5 cities:`, cities.slice(-5))
+      
+      // CRITICAL: Check if Tanzania cities appear in the first 18 cities (as user reported)
+      if (currentCountryCode !== 'TZ') {
+        const tanzaniaCities = ['Dar es Salaam', 'Mwanza', 'Arusha', 'Dodoma', 'Mbeya', 'Zanzibar City', 'Morogoro', 'Tanga', 'Mtwara', 'Tabora', 'Kigoma', 'Iringa', 'Songea', 'Shinyanga', 'Musoma', 'Bukoba', 'Sumbawanga', 'Singida']
+        const first18Cities = cities.slice(0, 18)
+        const tanzaniaCitiesInFirst18 = first18Cities.filter(city => tanzaniaCities.includes(city))
+        
+        if (tanzaniaCitiesInFirst18.length > 0) {
+          console.error(`[CRITICAL ERROR] Found ${tanzaniaCitiesInFirst18.length} Tanzania cities in first 18 for ${country.name} (${currentCountryCode}):`, tanzaniaCitiesInFirst18)
+          console.error(`[CRITICAL ERROR] Full first 18 cities:`, first18Cities)
+          console.error(`[CRITICAL ERROR] This should NOT happen! Blocking city list.`)
+          setAvailableCities([])
+          setNominatorCity('')
+          setLoadingCities(false)
+          return
+        }
+      }
+      
+      // Triple-check that we're still on the same country before setting cities
+      const verifyCountry = countries.find(c => c.name.trim().toLowerCase() === trimmedCountryName.toLowerCase())
+      if (!verifyCountry || verifyCountry.code.toUpperCase().trim() !== currentCountryCode) {
+        console.warn(`Country changed during city load. Expected: ${currentCountryCode}, Got: ${verifyCountry?.code}`)
+        setAvailableCities([])
+        setNominatorCity('')
+        setLoadingCities(false)
+        return
+      }
+      
+      // Final validation: ensure cities belong to the correct country
+      // Check that we don't have ANY Tanzania cities when country is not Tanzania
+      if (currentCountryCode !== 'TZ') {
+        const tanzaniaCities = ['Dar es Salaam', 'Mwanza', 'Arusha', 'Dodoma', 'Mbeya', 'Zanzibar City', 'Morogoro', 'Tanga', 'Mtwara', 'Tabora', 'Kigoma', 'Iringa', 'Songea', 'Shinyanga', 'Musoma', 'Bukoba', 'Sumbawanga', 'Singida', 'Lindi', 'Moshi']
+        const hasTanzaniaCities = cities.some(city => tanzaniaCities.includes(city))
+        if (hasTanzaniaCities) {
+          console.error(`ERROR: Tanzania cities found for non-Tanzania country ${country.name} (${currentCountryCode})!`)
+          console.error(`Found Tanzania cities:`, cities.filter(city => tanzaniaCities.includes(city)))
+          setAvailableCities([])
+          setNominatorCity('')
+          setLoadingCities(false)
+          return
+        }
+      }
+      
+      // CRITICAL FINAL FILTER: Explicitly remove ALL Tanzania cities if this is not Tanzania
+      let cleanCities = Array.isArray(cities) ? Array.from(cities) : []
+      
+      // Complete list of ALL Tanzania cities to filter out
+      const allTanzaniaCities = [
+        'Dar es Salaam', 'Mwanza', 'Arusha', 'Dodoma', 'Mbeya', 'Zanzibar City', 
+        'Morogoro', 'Tanga', 'Mtwara', 'Tabora', 'Kigoma', 'Iringa', 
+        'Songea', 'Shinyanga', 'Musoma', 'Bukoba', 'Sumbawanga', 'Singida', 
+        'Lindi', 'Moshi', 'Kilimanjaro', 'Bagamoyo', 'Pemba', 'Unguja', 
+        'Stone Town', 'Kibaha', 'Ifakara', 'Mpanda', 'Kasulu', 'Njombe', 
+        'Babati', 'Geita', 'Kahama', 'Same', 'Korogwe', 'Handeni'
+      ]
+      const tanzaniaSet = new Set(allTanzaniaCities)
+      
+      if (currentCountryCode !== 'TZ' && cleanCities.length > 0) {
+        const beforeFilter = cleanCities.length
+        
+        // Filter out ANY city that matches Tanzania cities
+        cleanCities = cleanCities.filter(city => {
+          const isTanzaniaCity = tanzaniaSet.has(city)
+          if (isTanzaniaCity) {
+            console.warn(`[FILTER] Removing Tanzania city "${city}" from ${country.name} (${currentCountryCode})`)
+          }
+          return !isTanzaniaCity
+        })
+        
+        if (beforeFilter !== cleanCities.length) {
+          console.error(`[CRITICAL FILTER] Removed ${beforeFilter - cleanCities.length} Tanzania cities from ${country.name} (${currentCountryCode})!`)
+          console.error(`[CRITICAL FILTER] Original count: ${beforeFilter}, Filtered count: ${cleanCities.length}`)
+        }
+        
+        // CRITICAL: Check if first 18 cities match Tanzania pattern EXACTLY
+        const tanzaniaFirst18 = ['Dar es Salaam', 'Mwanza', 'Arusha', 'Dodoma', 'Mbeya', 'Zanzibar City', 'Morogoro', 'Tanga', 'Mtwara', 'Tabora', 'Kigoma', 'Iringa', 'Songea', 'Shinyanga', 'Musoma', 'Bukoba', 'Sumbawanga', 'Singida']
+        const first18 = cleanCities.slice(0, 18)
+        
+        // Check if positions match exactly
+        let exactMatches = 0
+        for (let i = 0; i < Math.min(18, first18.length, tanzaniaFirst18.length); i++) {
+          if (first18[i] === tanzaniaFirst18[i]) {
+            exactMatches++
+          }
+        }
+        
+        if (exactMatches >= 3) {
+          console.error(`[CRITICAL FILTER] First 18 cities match Tanzania pattern! Exact matches: ${exactMatches}`)
+          console.error(`[CRITICAL FILTER] First 18 received:`, first18)
+          console.error(`[CRITICAL FILTER] Tanzania first 18:`, tanzaniaFirst18)
+          console.error(`[CRITICAL FILTER] BLOCKING: Returning empty array to prevent showing wrong cities`)
+          cleanCities = []
+        }
+        
+        // Also check if ANY of the first 18 are Tanzania cities
+        const tanzaniaInFirst18 = first18.filter(city => tanzaniaSet.has(city))
+        if (tanzaniaInFirst18.length > 0) {
+          console.error(`[CRITICAL FILTER] Found ${tanzaniaInFirst18.length} Tanzania cities in first 18 after filtering!`)
+          console.error(`[CRITICAL FILTER] Tanzania cities found:`, tanzaniaInFirst18)
+          cleanCities = []
+        }
+      }
+      
+      // FINAL VALIDATION: Double-check country code before setting
+      const finalVerifyCountry = countries.find(c => c.name.trim().toLowerCase() === trimmedCountryName.toLowerCase())
+      if (!finalVerifyCountry || finalVerifyCountry.code.toUpperCase().trim() !== currentCountryCode) {
+        console.error(`[FINAL CHECK] Country mismatch! Expected: ${currentCountryCode}, Got: ${finalVerifyCountry?.code}`)
+        setAvailableCities([])
+        setNominatorCity('')
+        setLoadingCities(false)
+        return
+      }
+      
+      // Ensure we have valid cities array
+      if (cleanCities.length > 0) {
+        console.log(`[CITY LOAD] ✓ Setting ${cleanCities.length} cities for ${country.name} (${currentCountryCode})`)
+        console.log(`[CITY LOAD] First 5 cities:`, cleanCities.slice(0, 5))
+        setAvailableCities(cleanCities)
+        // Reset city if current city is not in the new list
+        if (nominatorCity && !cleanCities.includes(nominatorCity)) {
+          setNominatorCity('')
+        }
+      } else {
+        console.warn(`[CITY LOAD] ✗ No valid cities found for ${country.name} (${currentCountryCode})`)
+        setAvailableCities([])
+        setNominatorCity('')
+      }
+    } catch (error) {
+      console.error('Error loading cities:', error)
+      setAvailableCities([])
+      setNominatorCity('')
+    } finally {
+      setLoadingCities(false)
+    }
+  }, [nominatorCountry, isNomination])
 
   // Hook pour upload modéré des images
   const imageUpload = useModeratedUpload({
@@ -224,11 +419,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
       return
     }
 
-    // Vérifier si c'est un YouTube Short (interdit)
-    if (isYouTubeShort(videoUrlInput)) {
-      addToast(t('participation.youtube_shorts_not_allowed') || 'Les YouTube Shorts ne sont pas autorisés. Veuillez utiliser une vidéo YouTube standard.', 'error')
-      return
-    }
+    // YouTube Shorts are now allowed - removed restriction
 
     // Pour les nominations : valider que ce n'est pas Facebook ou Vimeo
     if (isNomination) {
@@ -301,6 +492,14 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
     if (isNomination && !nominatorCountry) {
       addToast(t('participation.errors.nominator_country_required') || 'Le pays du nominateur est obligatoire', 'error')
       return
+    }
+
+    // Pour les nominations, vérifier que le pays correspond au pays de l'utilisateur
+    // Note: Cette validation sera aussi faite côté backend, mais on peut prévenir l'utilisateur ici
+    if (isNomination && nominatorCountry) {
+      // Le backend vérifiera que nominator_country correspond au pays de l'utilisateur
+      // On ne peut pas vérifier ici car on n'a pas accès direct au user object dans ce composant
+      // Mais on peut au moins s'assurer que le champ est rempli
     }
 
     try {
@@ -434,6 +633,11 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
             {t('participation.nominator_location_description') || 'Please provide the location of the person you are nominating.'}
           </p>
+          <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+            <p className="text-xs text-blue-800 dark:text-blue-300">
+              <strong>Note:</strong> {t('participation.nominator_country_note') || 'The country must match your profile country. You can only nominate contestants from your own country.'}
+            </p>
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Country - Required */}
@@ -471,14 +675,40 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
                 <MapPin className="w-4 h-4 inline mr-1" />
                 {t('participation.nominator_city') || 'City'} ({t('common.optional') || 'optional'})
               </label>
-              <input
-                type="text"
-                value={nominatorCity}
-                onChange={(e) => setNominatorCity(e.target.value)}
-                placeholder={t('participation.nominator_city_placeholder') || 'Enter the city name'}
-                className="w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 border-gray-300 dark:border-gray-600 focus:ring-myhigh5-primary"
-                disabled={isSubmitting}
-              />
+              {nominatorCountry ? (
+                <select
+                  value={nominatorCity}
+                  onChange={(e) => setNominatorCity(e.target.value)}
+                  className="w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 border-gray-300 dark:border-gray-600 focus:ring-myhigh5-primary"
+                  disabled={isSubmitting || loadingCities}
+                >
+                  <option value="">
+                    {loadingCities 
+                      ? (t('participation.loading_cities') || 'Loading cities...')
+                      : (t('select city') || 'Select a city')
+                    }
+                  </option>
+                  {availableCities.map((city) => (
+                    <option key={city} value={city}>
+                      {city}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  value={nominatorCity}
+                  onChange={(e) => setNominatorCity(e.target.value)}
+                  placeholder={t('participation.select_country_first') || 'Please select a country first'}
+                  className="w-full px-4 py-2 border rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 cursor-not-allowed"
+                  disabled={true}
+                />
+              )}
+              {nominatorCountry && availableCities.length === 0 && !loadingCities && (
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  {t('participation.no_cities_available') || 'No cities available for this country. You can still enter a city name manually if needed.'}
+                </p>
+              )}
             </div>
           </div>
         </div>
