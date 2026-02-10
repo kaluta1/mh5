@@ -122,6 +122,7 @@ export default function ContestDetailPage() {
   const [contest, setContest] = useState<ContestDetail | null>(null)
   const [favorites, setFavorites] = useState<string[]>([])
   const [pageLoading, setPageLoading] = useState(true)
+  const [fetchError, setFetchError] = useState<string | null>(null)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
   const [showInfoDialog, setShowInfoDialog] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -160,16 +161,20 @@ export default function ContestDetailPage() {
 
     try {
       setPageLoading(true)
-      // Need to fetch contest + enrichment (participants etc)
-      // Currently getContest returns everything if backend is updated
-      // Pass location filters: explicit filters from URL or user's location as default
+      setFetchError(null)
       const effectiveCountry = filterCountry || (user?.country as string) || undefined
       const effectiveContinent = filterContinent !== 'all' ? filterContinent : (user?.continent as string) || undefined
 
-      const c = await ApiService.getContest(parseInt(contestId), {
-        filterCountry: effectiveCountry,
-        filterContinent: effectiveContinent
-      }) as any
+      let c: any
+      try {
+        c = await ApiService.getContest(parseInt(contestId), {
+          filterCountry: effectiveCountry,
+          filterContinent: effectiveContinent
+        }) as any
+      } catch (apiErr: any) {
+        console.warn('Contest fetch with filters failed, retrying without filters:', apiErr?.message || apiErr)
+        c = await ApiService.getContest(parseInt(contestId), { filterCountry: undefined, filterContinent: undefined }) as any
+      }
 
       // Map data
       const parseMediaIds = (mediaIds: string | undefined, type: 'image' | 'video'): Media[] => {
@@ -239,8 +244,9 @@ export default function ContestDetailPage() {
 
       setFavorites(mappedContestants.filter(ct => ct.isFavorite).map(ct => ct.id))
 
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to fetch contest:", error)
+      setFetchError(error?.message || error?.response?.data?.detail || 'Failed to load contest')
       setToast({ message: "Failed to load contest", type: "error" })
     } finally {
       setPageLoading(false)
@@ -347,7 +353,32 @@ export default function ContestDetailPage() {
     return <ContestDetailSkeleton />
   }
 
-  if (!isAuthenticated || !user || !contest) {
+  if (!isAuthenticated || !user) {
+    return null
+  }
+
+  if (fetchError && !contest) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center px-4">
+        <div className="text-center max-w-md">
+          <p className="text-red-600 dark:text-red-400 mb-4">{fetchError}</p>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+            {t('dashboard.contests.network_error_hint') || 'Check your connection or try again. The server may be starting.'}
+          </p>
+          <div className="flex gap-3 justify-center">
+            <Button variant="outline" onClick={() => { setFetchError(null); fetchContestDetails(); }}>
+              {t('common.retry') || 'Retry'}
+            </Button>
+            <Button variant="outline" onClick={() => router.back()}>
+              {t('common.back') || 'Back'}
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!contest) {
     return null
   }
 
