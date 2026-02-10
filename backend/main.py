@@ -299,5 +299,22 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         }
     )
 
+
+# Global exception handler so 500 responses always return JSON with CORS headers (avoids "No CORS header" in browser)
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """Catch all unhandled exceptions and return 500 with JSON so CORS middleware can add headers"""
+    import logging
+    logging.getLogger(__name__).exception("Unhandled exception: %s", exc)
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "detail": "Internal server error",
+            "code": "INTERNAL_SERVER_ERROR",
+            "message": str(exc) if os.getenv("ENVIRONMENT", "").lower() in ("development", "dev") else "An error occurred",
+        }
+    )
+
+
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

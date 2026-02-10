@@ -22,18 +22,31 @@ interface ContestantsSidebarProps {
   contestId: string
   formatLocation?: (contestant: Contestant) => string
   onShowToast: (message: string, type: 'success' | 'error') => void
+  /** Current country filter so "View all" opens contestants page with same filter */
+  filterCountry?: string
+  filterContinent?: string
 }
 
 export function ContestantsSidebar({
   contestants,
   contestId,
   formatLocation,
-  onShowToast
+  onShowToast,
+  filterCountry,
+  filterContinent
 }: ContestantsSidebarProps) {
   const { t, language } = useLanguage()
   const router = useRouter()
 
   const topContestants = contestants.slice(0, 5)
+
+  const viewAllUrl = () => {
+    const params = new URLSearchParams()
+    if (filterCountry) params.set('country', filterCountry)
+    if (filterContinent && filterContinent !== 'all') params.set('continent', filterContinent)
+    const qs = params.toString()
+    return `/dashboard/contests/${contestId}/contestants${qs ? `?${qs}` : ''}`
+  }
 
   if (topContestants.length === 0) {
     return null
@@ -52,7 +65,7 @@ export function ContestantsSidebar({
                 variant="outline"
                 size="sm"
                 className="text-xs border-myhigh5-primary/30 text-myhigh5-primary hover:bg-myhigh5-primary hover:text-white transition-all"
-                onClick={() => router.push(`/dashboard/contests/${contestId}/contestants`)}
+                onClick={() => router.push(viewAllUrl())}
               >
                 {language === 'fr' ? 'Voir tout' : language === 'es' ? 'Ver todo' : language === 'de' ? 'Alle anzeigen' : 'View all'}
               </Button>

@@ -247,9 +247,11 @@ export default function ContestDetailPage() {
     }
   }, [contestId, t, filterCountry, filterContinent, user?.country, user?.continent])
 
+  // Wait for auth so first fetch uses user's country (default filter)
   useEffect(() => {
+    if (isLoading) return
     fetchContestDetails()
-  }, [fetchContestDetails])
+  }, [isLoading, fetchContestDetails])
 
   const handleReportClick = (contestantId: string) => {
     const contestant = contest?.contestants.find(c => c.id === contestantId)
@@ -740,6 +742,8 @@ export default function ContestDetailPage() {
               contestants={contest.contestants}
               contestId={contestId}
               onShowToast={showToast}
+              filterCountry={filterCountry || (user?.country as string) || ''}
+              filterContinent={filterContinent}
             />
           </div>
         </div>

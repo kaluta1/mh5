@@ -1,3 +1,4 @@
+import logging
 from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
@@ -9,6 +10,7 @@ from app.schemas.contest import Contest, ContestCreate, ContestUpdate, ContestWi
 from app.core.cache import cache_service
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 @router.post("/", response_model=Contest, status_code=status.HTTP_201_CREATED)
 def create_contest(
@@ -189,22 +191,35 @@ def read_contest(
             detail="Concours non trouvé"
         )
     
-    # Utiliser la méthode simplifiée qui utilise directement les champs du Contestant
     current_user_id = current_user.id if current_user else None
-    enriched_contest = contest.get_contest_with_enriched_contestants(
-        db=db, 
-        contest_id=contest_id, 
-        current_user_id=current_user_id,
-        filter_country=filter_country,
-        filter_continent=filter_continent
-    )
+    enriched_contest = None
+    try:
+        enriched_contest = contest.get_contest_with_enriched_contestants(
+            db=db,
+            contest_id=contest_id,
+            current_user_id=current_user_id,
+            filter_country=filter_country,
+            filter_continent=filter_continent
+        )
+    except Exception as e:
+        logger.exception("get_contest_with_enriched_contestants failed with filters filter_country=%s filter_continent=%s: %s", filter_country, filter_continent, e)
+        try:
+            enriched_contest = contest.get_contest_with_enriched_contestants(
+                db=db,
+                contest_id=contest_id,
+                current_user_id=current_user_id,
+                filter_country=None,
+                filter_continent=None
+            )
+        except Exception as e2:
+            logger.exception("get_contest_with_enriched_contestants failed without filters: %s", e2)
+            raise
     
     if not enriched_contest:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Concours non trouvé"
         )
-    
     
     # Enrich with current user participation
     if current_user and enriched_contest:

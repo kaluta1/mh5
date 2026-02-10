@@ -2,17 +2,16 @@
 import axios from 'axios';
 
 // Get API URL from env or default
-// Ensure we handle the case where NEXT_PUBLIC_API_URL might be just the domain
+// Ensure we always have an absolute URL with protocol (fixes Network Error when env is just domain)
 const getApiUrl = () => {
-    let url = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
-    // If url ends with /, remove it
+    let url = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').trim();
+    // Ensure protocol: if no protocol, use https in production and http for localhost
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = (url.includes('localhost') || url.startsWith('127.0.0.1')) ? `http://${url}` : `https://${url}`;
+    }
     if (url.endsWith('/')) {
         url = url.slice(0, -1);
     }
-    // If url doesn't end with /api/v1 and it's not the root domain (assuming we want to enforce v1)
-    // Actually simplest is: if not includes /api/v1, append it.
-    // But sticking to the default being correct is safer.
-    // Let's assume the user might have set NEXT_PUBLIC_API_URL=http://localhost:8000
     if (!url.includes('/api/v1')) {
         url = `${url}/api/v1`;
     }
@@ -34,7 +33,7 @@ api.interceptors.request.use(
     (config) => {
         // Check if running in browser
         if (typeof window !== 'undefined') {
-            const token = localStorage.getItem('token');
+            const token = localStorage.getItem('access_token');
             if (token) {
                 config.headers.Authorization = `Bearer ${token}`;
             }
