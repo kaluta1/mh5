@@ -60,6 +60,7 @@ function ContestsPageContent() {
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [selectedContestId, setSelectedContestId] = useState<string | null>(null)
   const [shouldGoToParticipate, setShouldGoToParticipate] = useState(false)
+  const [shouldGoToContestants, setShouldGoToContestants] = useState(false)
 
   // Extraire les types de contests disponibles depuis les données du backend
   const contestTypes = React.useMemo(() => {
@@ -292,12 +293,24 @@ function ContestsPageContent() {
     )
   }
 
-  // Show auth dialog if not authenticated, otherwise go to contest details
+  // Go to contest details (used for card click / "Open details")
   const handleContestClick = (contestId: string) => {
     if (isAuthenticated) {
       router.push(`/dashboard/contests/${contestId}`)
     } else {
       setSelectedContestId(contestId)
+      setShouldGoToContestants(false)
+      setShowAuthDialog(true)
+    }
+  }
+
+  // Go to contestants list page (used for "View contestants" button)
+  const handleViewContestantsClick = (contestId: string) => {
+    if (isAuthenticated) {
+      router.push(`/dashboard/contests/${contestId}/contestants`)
+    } else {
+      setSelectedContestId(contestId)
+      setShouldGoToContestants(true)
       setShowAuthDialog(true)
     }
   }
@@ -330,6 +343,9 @@ function ContestsPageContent() {
       if (shouldGoToParticipate) {
         router.push(`/dashboard/contests/${selectedContestId}/apply`)
         setShouldGoToParticipate(false)
+      } else if (shouldGoToContestants) {
+        router.push(`/dashboard/contests/${selectedContestId}/contestants`)
+        setShouldGoToContestants(false)
       } else {
         router.push(`/dashboard/contests/${selectedContestId}`)
       }
@@ -599,7 +615,7 @@ function ContestsPageContent() {
                   votingType={contest.votingType}
                   isFavorite={favorites.includes(contest.id)}
                   onToggleFavorite={() => handleToggleFavorite(contest.id)}
-                  onViewContestants={() => handleContestClick(contest.id)}
+                  onViewContestants={() => handleViewContestantsClick(contest.id)}
                   onParticipate={() => handleParticipateClick(contest.id)}
                   onOpenDetails={() => handleContestClick(contest.id)}
                 />

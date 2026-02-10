@@ -159,7 +159,7 @@ export default function FavoritesPage() {
   }
 
   const handleViewContestants = (contestId: string) => {
-    router.push(`/dashboard/contests/${contestId}`)
+    router.push(`/dashboard/contests/${contestId}/contestants`)
   }
 
   const handleParticipate = (contestId: string) => {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 // import { UserPlus, MessageCircle } from 'lucide-react' // Boutons cachés
 import { useLanguage } from '@/contexts/language-context'
@@ -36,17 +36,13 @@ export function ContestantsSidebar({
   filterContinent
 }: ContestantsSidebarProps) {
   const { t, language } = useLanguage()
-  const router = useRouter()
 
   const topContestants = contestants.slice(0, 5)
-
-  const viewAllUrl = () => {
-    const params = new URLSearchParams()
-    if (filterCountry) params.set('country', filterCountry)
-    if (filterContinent && filterContinent !== 'all') params.set('continent', filterContinent)
-    const qs = params.toString()
-    return `/dashboard/contests/${contestId}/contestants${qs ? `?${qs}` : ''}`
-  }
+  const params = new URLSearchParams()
+  if (filterCountry) params.set('country', filterCountry)
+  if (filterContinent && filterContinent !== 'all') params.set('continent', filterContinent)
+  const qs = params.toString()
+  const viewAllHref = `/dashboard/contests/${contestId}/contestants${qs ? `?${qs}` : ''}`
 
   if (topContestants.length === 0) {
     return null
@@ -60,16 +56,16 @@ export function ContestantsSidebar({
             <h3 className="text-lg font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">
               {t('dashboard.contests.contestants') || 'Participants'}
             </h3>
-            {contestants.length > 5 && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-xs border-myhigh5-primary/30 text-myhigh5-primary hover:bg-myhigh5-primary hover:text-white transition-all"
-                onClick={() => router.push(viewAllUrl())}
-              >
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs border-myhigh5-primary/30 text-myhigh5-primary hover:bg-myhigh5-primary hover:text-white transition-all"
+              asChild
+            >
+              <Link href={viewAllHref}>
                 {language === 'fr' ? 'Voir tout' : language === 'es' ? 'Ver todo' : language === 'de' ? 'Alle anzeigen' : 'View all'}
-              </Button>
-            )}
+              </Link>
+            </Button>
           </div>
           
           <div className="space-y-2">
