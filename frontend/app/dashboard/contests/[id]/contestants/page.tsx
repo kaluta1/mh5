@@ -4,8 +4,8 @@ import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useLanguage } from '@/contexts/language-context'
 import { useAuth } from '@/hooks/use-auth'
+import api from '@/lib/api'
 import { contestService, ContestResponse } from '@/services/contest-service'
-import ApiService from '@/lib/api-service'
 import { Button } from '@/components/ui/button'
 import { ContestantCard } from '@/components/dashboard/contestant-card'
 import { ArrowLeft, UserPlus, MessageCircle } from 'lucide-react'
@@ -118,12 +118,15 @@ export default function ContestantsListPage() {
   const loadContest = async () => {
     try {
       setLoading(true)
-      // Default to user's country so "View Contestants" shows only contestants from their country
+      // Default to user's country so "View Contestants" shows only contestants from their country.
+      // Use authenticated api (lib/api) so backend receives token and can apply filter.
       const filterCountry = (user?.country as string) || undefined
-      const response = await ApiService.getContest(parseInt(contestId), {
-        filterCountry,
-        filterContinent: undefined
-      }) as any
+      const { data: response } = await api.get(`/api/v1/contests/${contestId}`, {
+        params: {
+          filter_country: filterCountry || undefined,
+          filter_continent: undefined
+        }
+      })
       setContest(response)
       
       const parseMediaIds = (mediaIds: string | null | undefined, type: 'image' | 'video'): Media[] => {

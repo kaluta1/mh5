@@ -7,6 +7,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from contextlib import asynccontextmanager
 import uvicorn
 import os
+import re
 from app.core.config import settings
 from app.api.api_v1.api import api_router
 from app.services.payment_scheduler import payment_scheduler
@@ -168,30 +169,67 @@ cors_origins = [
     "https://myhigh5.com",
     "https://www.myhigh5.com",
     "https://mh5-hbjp.onrender.com",
-    "https://frontend-rho-eight-72.vercel.app",  # Vercel frontend
-    # Note: Wildcards don't work in allow_origins list, use allow_origin_regex instead
+    "https://frontend-rho-eight-72.vercel.app",
+    "https://myhigh5.vercel.app",
 ]
 
-# Ajouter les origines depuis les settings
+# Ajouter les origines depuis les settings (ne pas écraser si env définit une liste)
 if settings.BACKEND_CORS_ORIGINS:
-    # Handle both comma-separated string and list
     if isinstance(settings.BACKEND_CORS_ORIGINS, str):
-        cors_origins.extend([origin.strip() for origin in settings.BACKEND_CORS_ORIGINS.split(",") if origin.strip()])
+        cors_origins.extend([o.strip() for o in settings.BACKEND_CORS_ORIGINS.split(",") if o.strip()])
     elif isinstance(settings.BACKEND_CORS_ORIGINS, list):
-        cors_origins.extend([origin.strip() for origin in settings.BACKEND_CORS_ORIGINS if origin.strip()])
+        cors_origins.extend([o.strip() for o in settings.BACKEND_CORS_ORIGINS if o and str(o).strip()])
 
 # Nettoyer et supprimer les doublons
-cors_origins = list(set([origin.strip() for origin in cors_origins if origin]))
+cors_origins = list(dict.fromkeys([o.strip() for o in cors_origins if o]))
+
+# Regex pour accepter tout sous-domaine Vercel (preview + prod)
+_cors_origin_regex = re.compile(
+    r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
+    r"|^https://[a-zA-Z0-9-]+\.vercel\.app$"
+    r"|^https://[a-zA-Z0-9-]+\.vercel\.dev$"
+)
+
+def _cors_allowed_origin(origin: str) -> bool:
+    if not origin:
+        return False
+    origin = origin.strip()
+    if origin in cors_origins:
+        return True
+    return bool(_cors_origin_regex.fullmatch(origin))
 
 print(f"CORS Origins configured: {cors_origins}")
 
-# IMPORTANT: Ajouter le middleware CORS EN PREMIER
-# Permettre tous les CORS sans restriction pour le développement
+# Middleware CORS "early": répond immédiatement aux OPTIONS et ajoute les en-têtes CORS à toutes les réponses.
+# Cela évite les blocages CORS quand le backend est lent (ex: cold start Render) ou en erreur.
+@app.middleware("http")
+async def cors_early_middleware(request: Request, call_next):
+    origin = request.headers.get("origin", "").strip()
+    if _cors_allowed_origin(origin):
+        if request.method == "OPTIONS":
+            return Response(
+                status_code=200,
+                headers={
+                    "Access-Control-Allow-Origin": origin,
+                    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
+                    "Access-Control-Allow-Headers": "*",
+                    "Access-Control-Max-Age": "86400",
+                    "Access-Control-Allow-Credentials": "true",
+                },
+            )
+        response = await call_next(request)
+        # Toujours ajouter CORS sur la réponse si l'origine est autorisée
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        return response
+    return await call_next(request)
+
+# CORSMiddleware standard en secours
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins,  # Use explicit origins list
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://.*\.vercel\.app$|^https://.*\.vercel\.dev$",  # Allow localhost and all Vercel deployments (both .app and .dev)
-    allow_credentials=True,  # Allow credentials for authentication cookies/tokens
+    allow_origins=cors_origins,
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://[a-zA-Z0-9-]+\.vercel\.app$|^https://[a-zA-Z0-9-]+\.vercel\.dev$",
+    allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
     expose_headers=["*"],

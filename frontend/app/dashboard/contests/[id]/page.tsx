@@ -8,9 +8,8 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { ContestDetailSkeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, Sparkles, Users, Video, Image, Globe, Lightbulb, Youtube, ExternalLink } from 'lucide-react'
+import api from '@/lib/api'
 import { contestService, ContestResponse } from '@/services/contest-service'
-// REST API
-import ApiService from '@/lib/api-service'
 import { StickyPageHeader } from '@/components/ui/sticky-page-header'
 import { ContestInfoDialog } from '@/components/dashboard/contest-info-dialog'
 import { ContestantsList } from '@/components/dashboard/contestants-list'
@@ -131,13 +130,17 @@ export default function ContestDetailPage() {
   const [selectedContestantId, setSelectedContestantId] = useState<number | null>(null)
   const [selectedContestantTitle, setSelectedContestantTitle] = useState<string>('')
 
-  // Lire les filtres de localisation depuis l'URL
+  // Lire les filtres de localisation depuis l'URL; défaut = pays de l'utilisateur
   const searchParams = useSearchParams()
   const [filterCountry, setFilterCountry] = React.useState<string>(() => {
-    return searchParams.get('country') || ''
+    const fromUrl = searchParams.get('country')
+    if (fromUrl) return fromUrl
+    return (user?.country as string) || ''
   })
   const [filterContinent, setFilterContinent] = React.useState<string>(() => {
-    return searchParams.get('continent') || 'all'
+    const fromUrl = searchParams.get('continent')
+    if (fromUrl) return fromUrl
+    return (user?.continent as string) || 'all'
   })
 
   // Mettre à jour l'URL quand les filtres changent
@@ -166,10 +169,12 @@ export default function ContestDetailPage() {
       const effectiveCountry = filterCountry || (user?.country as string) || undefined
       const effectiveContinent = filterContinent !== 'all' ? filterContinent : (user?.continent as string) || undefined
 
-      const c = await ApiService.getContest(parseInt(contestId), {
-        filterCountry: effectiveCountry,
-        filterContinent: effectiveContinent
-      }) as any
+      const { data: c } = await api.get(`/api/v1/contests/${contestId}`, {
+        params: {
+          filter_country: effectiveCountry || undefined,
+          filter_continent: effectiveContinent !== 'all' ? effectiveContinent : undefined
+        }
+      })
 
       // Map data
       const parseMediaIds = (mediaIds: string | undefined, type: 'image' | 'video'): Media[] => {
@@ -246,6 +251,16 @@ export default function ContestDetailPage() {
       setPageLoading(false)
     }
   }, [contestId, t, filterCountry, filterContinent, user?.country, user?.continent])
+
+  // When user loads and URL has no country, default filter to user's country so "View Contestants" shows only their country
+  useEffect(() => {
+    if (!searchParams.get('country') && user?.country && filterCountry !== (user.country as string)) {
+      setFilterCountry(user.country as string)
+      if (user.continent && filterContinent !== (user.continent as string)) {
+        setFilterContinent((user.continent as string) || 'all')
+      }
+    }
+  }, [user?.country, user?.continent])
 
   useEffect(() => {
     fetchContestDetails()
