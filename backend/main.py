@@ -261,27 +261,12 @@ def debug_cors():
         "backend_cors_origins_from_settings": settings.BACKEND_CORS_ORIGINS
     }
 
-def _add_cors_to_response(request: Request, response: JSONResponse) -> JSONResponse:
-    """Ensure error responses include CORS headers so the browser shows the real error instead of CORS."""
-    origin = request.headers.get("origin")
-    if origin and (origin in cors_origins or origin == "null"):
-        response.headers["Access-Control-Allow-Origin"] = origin
-    elif origin:
-        # allow_origin_regex: localhost, 127.0.0.1, *.vercel.app, *.vercel.dev
-        import re
-        if re.match(r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$", origin) or re.match(r"^https://.*\.vercel\.(app|dev)$", origin):
-            response.headers["Access-Control-Allow-Origin"] = origin
-    response.headers["Access-Control-Allow-Credentials"] = "true"
-    response.headers["Access-Control-Expose-Headers"] = "*"
-    return response
-
-
 # Custom exception handler for HTTP exceptions (including 404)
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
-    """Handle HTTP exceptions (404, etc.) with a consistent error format and CORS headers."""
+    """Handle HTTP exceptions (404, etc.) with a consistent error format"""
     if exc.status_code == 404:
-        resp = JSONResponse(
+        return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
             content={
                 "detail": f"Route not found: {request.method} {request.url.path}",
@@ -291,22 +276,21 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
                 "method": request.method
             }
         )
-    else:
-        resp = JSONResponse(
-            status_code=exc.status_code,
-            content={
-                "detail": exc.detail,
-                "code": f"HTTP_{exc.status_code}",
-                "message": str(exc.detail)
-            }
-        )
-    return _add_cors_to_response(request, resp)
+    # For other HTTP exceptions, return the default format
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "detail": exc.detail,
+            "code": f"HTTP_{exc.status_code}",
+            "message": str(exc.detail)
+        }
+    )
 
 # Custom exception handler for all HTTP exceptions
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """Handle validation errors with a consistent format"""
-    resp = JSONResponse(
+    return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={
             "detail": exc.errors(),
@@ -314,25 +298,6 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             "message": "Request validation failed"
         }
     )
-    return _add_cors_to_response(request, resp)
-
-
-# Global exception handler so 500 responses always return JSON with CORS headers (avoids "No CORS header" in browser)
-@app.exception_handler(Exception)
-async def unhandled_exception_handler(request: Request, exc: Exception):
-    """Catch all unhandled exceptions and return 500 with JSON and explicit CORS headers."""
-    import logging
-    logging.getLogger(__name__).exception("Unhandled exception: %s", exc)
-    resp = JSONResponse(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={
-            "detail": "Internal server error",
-            "code": "INTERNAL_SERVER_ERROR",
-            "message": str(exc) if os.getenv("ENVIRONMENT", "").lower() in ("development", "dev") else "An error occurred",
-        }
-    )
-    return _add_cors_to_response(request, resp)
-
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

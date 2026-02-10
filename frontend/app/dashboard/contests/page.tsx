@@ -522,7 +522,7 @@ function ContestsPageContent() {
                   isNomination={categoryTab === 'nomination'}
                   onToggleFavorite={() => { }}
                   onParticipate={() => handleParticipate(contest.id, contest.currentUserParticipated)}
-                  onViewContestants={() => router.push(`/dashboard/contests/${contest.id}/contestants`)}
+                  onViewContestants={() => router.push(`/dashboard/contests/${contest.id}`)}
                   onOpenDetails={() => router.push(`/dashboard/contests/${contest.id}`)}
                 />
               ))}

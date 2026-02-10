@@ -1,6 +1,6 @@
 'use client'
 
-import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 // import { UserPlus, MessageCircle } from 'lucide-react' // Boutons cachés
 import { useLanguage } from '@/contexts/language-context'
@@ -22,27 +22,18 @@ interface ContestantsSidebarProps {
   contestId: string
   formatLocation?: (contestant: Contestant) => string
   onShowToast: (message: string, type: 'success' | 'error') => void
-  /** Current country filter so "View all" opens contestants page with same filter */
-  filterCountry?: string
-  filterContinent?: string
 }
 
 export function ContestantsSidebar({
   contestants,
   contestId,
   formatLocation,
-  onShowToast,
-  filterCountry,
-  filterContinent
+  onShowToast
 }: ContestantsSidebarProps) {
   const { t, language } = useLanguage()
+  const router = useRouter()
 
   const topContestants = contestants.slice(0, 5)
-  const params = new URLSearchParams()
-  if (filterCountry) params.set('country', filterCountry)
-  if (filterContinent && filterContinent !== 'all') params.set('continent', filterContinent)
-  const qs = params.toString()
-  const viewAllHref = `/dashboard/contests/${contestId}/contestants${qs ? `?${qs}` : ''}`
 
   if (topContestants.length === 0) {
     return null
@@ -56,16 +47,16 @@ export function ContestantsSidebar({
             <h3 className="text-lg font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">
               {t('dashboard.contests.contestants') || 'Participants'}
             </h3>
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-xs border-myhigh5-primary/30 text-myhigh5-primary hover:bg-myhigh5-primary hover:text-white transition-all"
-              asChild
-            >
-              <Link href={viewAllHref}>
+            {contestants.length > 5 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs border-myhigh5-primary/30 text-myhigh5-primary hover:bg-myhigh5-primary hover:text-white transition-all"
+                onClick={() => router.push(`/dashboard/contests/${contestId}/contestants`)}
+              >
                 {language === 'fr' ? 'Voir tout' : language === 'es' ? 'Ver todo' : language === 'de' ? 'Alle anzeigen' : 'View all'}
-              </Link>
-            </Button>
+              </Button>
+            )}
           </div>
           
           <div className="space-y-2">

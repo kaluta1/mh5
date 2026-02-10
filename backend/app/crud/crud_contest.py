@@ -1222,19 +1222,17 @@ class CRUDContest:
         contestant_ids = [c.id for c in contestants]
         logger.info(f"[get_contest_with_enriched_contestants] Returning {len(contestant_ids)} contestant IDs")
         
-        # When no contestants, avoid .in_([]) which causes invalid SQL on many DBs
-        if not contestant_ids:
-            votes_data = []
-        else:
-            votes_data = []
-            if season:
-                votes_data = db.query(ContestantVoting, User)\
-                    .join(User, ContestantVoting.user_id == User.id)\
-                    .filter(
-                        ContestantVoting.contestant_id.in_(contestant_ids),
-                        ContestantVoting.season_id == season.id
-                    )\
-                    .all()
+        # Récupérer tous les votes avec utilisateurs (depuis ContestantVoting)
+        # Filtrer par season_id pour ne récupérer que les votes de cette saison
+        votes_data = []
+        if season:
+            votes_data = db.query(ContestantVoting, User)\
+                .join(User, ContestantVoting.user_id == User.id)\
+                .filter(
+                    ContestantVoting.contestant_id.in_(contestant_ids),
+                    ContestantVoting.season_id == season.id
+                )\
+                .all()
         
         # Grouper les votes par contestant_id
         votes_by_contestant = {}
@@ -1253,18 +1251,16 @@ class CRUDContest:
                 "season_id": voting.season_id  # ID de la saison
             })
         
-        # Récupérer tous les commentaires avec utilisateurs (skip if no contestants)
-        comments_data = []
-        if contestant_ids:
-            comments_data = db.query(Comment, User)\
-                .join(User, Comment.user_id == User.id)\
-                .filter(
-                    Comment.contestant_id.in_(contestant_ids),
-                    Comment.is_hidden == False,
-                    Comment.is_deleted == False
-                )\
-                .order_by(Comment.created_at.desc())\
-                .all()
+        # Récupérer tous les commentaires avec utilisateurs
+        comments_data = db.query(Comment, User)\
+            .join(User, Comment.user_id == User.id)\
+            .filter(
+                Comment.contestant_id.in_(contestant_ids),
+                Comment.is_hidden == False,
+                Comment.is_deleted == False
+            )\
+            .order_by(Comment.created_at.desc())\
+            .all()
         
         # Grouper les commentaires par contestant_id
         comments_by_contestant = {}
@@ -1283,12 +1279,10 @@ class CRUDContest:
             })
         
         # Récupérer toutes les réactions avec utilisateurs
-        reactions_data = []
-        if contestant_ids:
-            reactions_data = db.query(ContestantReaction, User)\
-                .join(User, ContestantReaction.user_id == User.id)\
-                .filter(ContestantReaction.contestant_id.in_(contestant_ids))\
-                .all()
+        reactions_data = db.query(ContestantReaction, User)\
+            .join(User, ContestantReaction.user_id == User.id)\
+            .filter(ContestantReaction.contestant_id.in_(contestant_ids))\
+            .all()
         
         # Grouper les réactions par contestant_id et type
         reactions_by_contestant = {}
@@ -1308,12 +1302,10 @@ class CRUDContest:
             })
         
         # Récupérer tous les favoris avec utilisateurs
-        favorites_data = []
-        if contestant_ids:
-            favorites_data = db.query(MyFavorites, User)\
-                .join(User, MyFavorites.user_id == User.id)\
-                .filter(MyFavorites.contestant_id.in_(contestant_ids))\
-                .all()
+        favorites_data = db.query(MyFavorites, User)\
+            .join(User, MyFavorites.user_id == User.id)\
+            .filter(MyFavorites.contestant_id.in_(contestant_ids))\
+            .all()
         
         # Grouper les favoris par contestant_id
         favorites_by_contestant = {}
@@ -1331,12 +1323,10 @@ class CRUDContest:
             })
         
         # Récupérer tous les partages avec utilisateurs
-        shares_data = []
-        if contestant_ids:
-            shares_data = db.query(ContestantShare, User)\
-                .outerjoin(User, ContestantShare.user_id == User.id)\
-                .filter(ContestantShare.contestant_id.in_(contestant_ids))\
-                .all()
+        shares_data = db.query(ContestantShare, User)\
+            .outerjoin(User, ContestantShare.user_id == User.id)\
+            .filter(ContestantShare.contestant_id.in_(contestant_ids))\
+            .all()
         
         # Grouper les partages par contestant_id
         shares_by_contestant = {}
@@ -1376,7 +1366,7 @@ class CRUDContest:
                 # Si la colonne n'existe pas, on ignore les signalements
                 pass
         
-        if current_user_id and contestant_ids:
+        if current_user_id:
             author_favs = db.query(MyFavorites.contestant_id)\
                 .filter(
                     MyFavorites.user_id == current_user_id,
@@ -1389,7 +1379,7 @@ class CRUDContest:
         # IMPORTANT: Un utilisateur peut voter pour plusieurs contestants dans la même saison
         # Mais il ne peut pas voter deux fois pour le même contestant dans la même saison
         user_votes_in_season = {}
-        if current_user_id and season and contestant_ids:
+        if current_user_id and season:
             user_votes = db.query(ContestantVoting)\
                 .filter(
                     ContestantVoting.user_id == current_user_id,
@@ -1397,6 +1387,7 @@ class CRUDContest:
                     ContestantVoting.contestant_id.in_(contestant_ids)
                 )\
                 .all()
+            # Créer un dictionnaire {contestant_id: vote} pour vérification rapide
             user_votes_in_season = {vote.contestant_id: vote for vote in user_votes}
         
         # Déterminer le niveau de la saison (city, country, regional, continent, global, etc.)

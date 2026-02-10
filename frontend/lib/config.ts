@@ -8,13 +8,7 @@ export const DEFAULT_PUBLIC_API_URL = 'https://mh5-backend.onrender.com'
 
 const normalizeApiUrl = (url: string): string => {
   if (!url) return ''
-  let normalized = (url || '').trim().replace(/\/+$/, '')
-  // Ensure protocol so requests never fail with "Network Error" (e.g. env set to "mh5-backend.onrender.com")
-  if (normalized && !normalized.startsWith('http://') && !normalized.startsWith('https://')) {
-    normalized = (normalized.includes('localhost') || normalized.startsWith('127.0.0.1'))
-      ? `http://${normalized}`
-      : `https://${normalized}`
-  }
+  let normalized = url.replace(/\/+$/, '')
   if (typeof window !== 'undefined' && window.location.protocol === 'https:' && normalized.startsWith('http://')) {
     normalized = normalized.replace('http://', 'https://')
   }

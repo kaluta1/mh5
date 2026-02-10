@@ -1,14 +1,13 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { useParams, useRouter, useSearchParams } from 'next/navigation'
+import { useState, useEffect } from 'react'
+import { useParams, useRouter } from 'next/navigation'
 import { useLanguage } from '@/contexts/language-context'
 import { useAuth } from '@/hooks/use-auth'
 import { contestService, ContestResponse } from '@/services/contest-service'
 import ApiService from '@/lib/api-service'
 import { Button } from '@/components/ui/button'
 import { ContestantCard } from '@/components/dashboard/contestant-card'
-import { LocationFilterBar } from '@/components/dashboard/location-filter-bar'
 import { ArrowLeft, UserPlus, MessageCircle } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 
@@ -99,55 +98,32 @@ interface Contestant {
 
 export default function ContestantsListPage() {
   const { t, language } = useLanguage()
-  const { user, isLoading: authLoading } = useAuth()
+  const { user } = useAuth()
   const router = useRouter()
   const params = useParams()
-  const searchParams = useSearchParams()
   const contestId = params.id as string
 
   const [contest, setContest] = useState<ContestResponse | null>(null)
   const [contestants, setContestants] = useState<Contestant[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [favorites, setFavorites] = useState<string[]>([])
-  // Country filter: default from URL, then user's country. '' = use user's country, 'all' = show all
-  const [filterCountry, setFilterCountry] = useState<string>(() => searchParams.get('country') || '')
-  const [filterContinent, setFilterContinent] = useState<string>(() => searchParams.get('continent') || 'all')
 
-  // Once auth is loaded, default filter to user's country if not already set from URL
   useEffect(() => {
-    if (authLoading) return
-    const fromUrl = searchParams.get('country')
-    if (fromUrl) return
-    if (user?.country && filterCountry === '') {
-      setFilterCountry((user.country as string) || '')
+    if (contestId) {
+      loadContest()
     }
-  }, [authLoading, user?.country, searchParams, filterCountry])
+  }, [contestId, user?.country])
 
-  const loadContest = useCallback(async () => {
-    if (!contestId) return
+  const loadContest = async () => {
     try {
       setLoading(true)
-      setError(null)
-      // By default show user's country; 'all' = no filter (show all); otherwise use selected country
-      const effectiveCountry =
-        filterCountry === 'all'
-          ? undefined
-          : (filterCountry || (user?.country as string) || undefined)
-      const effectiveContinent =
-        filterContinent && filterContinent !== 'all' ? filterContinent : undefined
-      let response: any
-      try {
-        response = await ApiService.getContest(parseInt(contestId), {
-          filterCountry: effectiveCountry,
-          filterContinent: effectiveContinent
-        }) as any
-      } catch (apiErr: any) {
-        // Fallback: try without filters (contest-service uses main api with same base URL)
-        console.warn('Contest fetch with filters failed, retrying without filters:', apiErr?.message || apiErr)
-        response = await contestService.getContestById(contestId) as any
-      }
+      // Default to user's country so "View Contestants" shows only contestants from their country
+      const filterCountry = (user?.country as string) || undefined
+      const response = await ApiService.getContest(parseInt(contestId), {
+        filterCountry,
+        filterContinent: undefined
+      }) as any
       setContest(response)
       
       const parseMediaIds = (mediaIds: string | null | undefined, type: 'image' | 'video'): Media[] => {
@@ -242,19 +218,12 @@ export default function ContestantsListPage() {
 
       setContestants(mappedContestants)
       setFavorites(mappedContestants.filter(c => c.isFavorite).map(c => c.id))
-    } catch (err: any) {
-      console.error('Error loading contest:', err)
-      setError(err?.message || err?.response?.data?.detail || 'Failed to load contestants. Please try again.')
+    } catch (error) {
+      console.error('Error loading contest:', error)
     } finally {
       setLoading(false)
     }
-  }, [contestId, filterCountry, filterContinent, user?.country])
-
-  // Fetch when contestId is set and auth is ready; refetch when filters change
-  useEffect(() => {
-    if (!contestId || authLoading) return
-    loadContest()
-  }, [contestId, authLoading, loadContest])
+  }
 
   const filteredContestants = contestants.filter(contestant => {
     if (!searchQuery.trim()) return true
@@ -326,33 +295,12 @@ export default function ContestantsListPage() {
     return `#${rank}`
   }
 
-  if (loading && !contest) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-white dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-myfav-primary mx-auto mb-4"></div>
           <p className="text-gray-600 dark:text-gray-400">{t('common.loading') || 'Chargement...'}</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (error && !contest) {
-    return (
-      <div className="min-h-screen bg-white dark:bg-gray-900 flex items-center justify-center px-4">
-        <div className="text-center max-w-md">
-          <p className="text-red-600 dark:text-red-400 mb-4">{error}</p>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
-            {t('dashboard.contests.network_error_hint') || 'Check your connection or try again in a moment. The server may be starting.'}
-          </p>
-          <div className="flex gap-3 justify-center">
-            <Button variant="outline" onClick={() => { setError(null); loadContest(); }}>
-              {t('common.retry') || 'Retry'}
-            </Button>
-            <Button variant="outline" onClick={() => router.back()}>
-              {t('common.back') || 'Back'}
-            </Button>
-          </div>
         </div>
       </div>
     )
@@ -387,24 +335,14 @@ export default function ContestantsListPage() {
             )}
           </div>
 
-          {/* Country filter - default is user's country; changing it refetches contestants */}
+          {/* Search */}
           <div className="mb-6">
-            <LocationFilterBar
-              user={user}
-              searchTerm={searchQuery}
-              onSearchChange={setSearchQuery}
-              searchPlaceholder={t('dashboard.contests.search_contestant') || 'Rechercher un participant...'}
-              filterContinent={filterContinent}
-              onContinentChange={(value) => {
-                setFilterContinent(value)
-              }}
-              filterCountry={filterCountry || (user?.country as string) || ''}
-              onCountryChange={(value) => {
-                setFilterCountry(value === 'all' ? 'all' : value)
-              }}
-              showSort={false}
-              showContinentFilter={true}
-              showCountryFilter={true}
+            <Input
+              type="text"
+              placeholder={t('dashboard.contests.search_contestant') || 'Rechercher un participant...'}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="max-w-md"
             />
           </div>
 
