@@ -4,6 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.base import BaseHTTPMiddleware
 from contextlib import asynccontextmanager
 import uvicorn
 import os
@@ -200,31 +201,32 @@ def _cors_allowed_origin(origin: str) -> bool:
 
 print(f"CORS Origins configured: {cors_origins}")
 
-# Middleware CORS "early": répond immédiatement aux OPTIONS et ajoute les en-têtes CORS à toutes les réponses.
-# Cela évite les blocages CORS quand le backend est lent (ex: cold start Render) ou en erreur.
-@app.middleware("http")
-async def cors_early_middleware(request: Request, call_next):
-    origin = request.headers.get("origin", "").strip()
-    if _cors_allowed_origin(origin):
-        if request.method == "OPTIONS":
-            return Response(
-                status_code=200,
-                headers={
-                    "Access-Control-Allow-Origin": origin,
-                    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
-                    "Access-Control-Allow-Headers": "*",
-                    "Access-Control-Max-Age": "86400",
-                    "Access-Control-Allow-Credentials": "true",
-                },
-            )
-        response = await call_next(request)
-        # Toujours ajouter CORS sur la réponse si l'origine est autorisée
-        response.headers["Access-Control-Allow-Origin"] = origin
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-        return response
-    return await call_next(request)
+# CORS headers à injecter pour une origine autorisée
+def _cors_headers(origin: str) -> dict:
+    return {
+        "Access-Control-Allow-Origin": origin,
+        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
+        "Access-Control-Allow-Headers": "*",
+        "Access-Control-Max-Age": "86400",
+        "Access-Control-Allow-Credentials": "true",
+    }
 
-# CORSMiddleware standard en secours
+class CORSOriginMiddleware(BaseHTTPMiddleware):
+    """S'exécute en premier : répond aux OPTIONS et ajoute CORS à toutes les réponses."""
+    async def dispatch(self, request: Request, call_next):
+        origin = (request.headers.get("origin") or "").strip()
+        if not origin:
+            return await call_next(request)
+        if not _cors_allowed_origin(origin):
+            return await call_next(request)
+        if request.method == "OPTIONS":
+            return Response(status_code=200, headers=_cors_headers(origin))
+        response = await call_next(request)
+        for k, v in _cors_headers(origin).items():
+            response.headers[k] = v
+        return response
+
+# 1) CORSMiddleware (s'exécute en second = inner)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
@@ -235,6 +237,9 @@ app.add_middleware(
     expose_headers=["*"],
     max_age=86400,
 )
+
+# 2) Notre middleware CORS en premier (outermost) : OPTIONS + headers sur chaque réponse
+app.add_middleware(CORSOriginMiddleware)
 
 # Inclusion des routes API
 app.include_router(api_router, prefix=settings.API_V1_STR)
