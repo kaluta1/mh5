@@ -4,11 +4,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from starlette.middleware.base import BaseHTTPMiddleware
 from contextlib import asynccontextmanager
 import uvicorn
 import os
-import re
 from app.core.config import settings
 from app.api.api_v1.api import api_router
 from app.services.payment_scheduler import payment_scheduler
@@ -170,76 +168,35 @@ cors_origins = [
     "https://myhigh5.com",
     "https://www.myhigh5.com",
     "https://mh5-hbjp.onrender.com",
-    "https://frontend-rho-eight-72.vercel.app",
-    "https://myhigh5.vercel.app",
+    "https://frontend-rho-eight-72.vercel.app",  # Vercel frontend
+    # Note: Wildcards don't work in allow_origins list, use allow_origin_regex instead
 ]
 
-# Ajouter les origines depuis les settings (ne pas écraser si env définit une liste)
+# Ajouter les origines depuis les settings
 if settings.BACKEND_CORS_ORIGINS:
+    # Handle both comma-separated string and list
     if isinstance(settings.BACKEND_CORS_ORIGINS, str):
-        cors_origins.extend([o.strip() for o in settings.BACKEND_CORS_ORIGINS.split(",") if o.strip()])
+        cors_origins.extend([origin.strip() for origin in settings.BACKEND_CORS_ORIGINS.split(",") if origin.strip()])
     elif isinstance(settings.BACKEND_CORS_ORIGINS, list):
-        cors_origins.extend([o.strip() for o in settings.BACKEND_CORS_ORIGINS if o and str(o).strip()])
+        cors_origins.extend([origin.strip() for origin in settings.BACKEND_CORS_ORIGINS if origin.strip()])
 
 # Nettoyer et supprimer les doublons
-cors_origins = list(dict.fromkeys([o.strip() for o in cors_origins if o]))
-
-# Regex pour accepter tout sous-domaine Vercel (preview + prod)
-_cors_origin_regex = re.compile(
-    r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
-    r"|^https://[a-zA-Z0-9-]+\.vercel\.app$"
-    r"|^https://[a-zA-Z0-9-]+\.vercel\.dev$"
-)
-
-def _cors_allowed_origin(origin: str) -> bool:
-    if not origin:
-        return False
-    origin = origin.strip()
-    if origin in cors_origins:
-        return True
-    return bool(_cors_origin_regex.fullmatch(origin))
+cors_origins = list(set([origin.strip() for origin in cors_origins if origin]))
 
 print(f"CORS Origins configured: {cors_origins}")
 
-# CORS headers à injecter pour une origine autorisée
-def _cors_headers(origin: str) -> dict:
-    return {
-        "Access-Control-Allow-Origin": origin,
-        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
-        "Access-Control-Allow-Headers": "*",
-        "Access-Control-Max-Age": "86400",
-        "Access-Control-Allow-Credentials": "true",
-    }
-
-class CORSOriginMiddleware(BaseHTTPMiddleware):
-    """S'exécute en premier : répond aux OPTIONS et ajoute CORS à toutes les réponses."""
-    async def dispatch(self, request: Request, call_next):
-        origin = (request.headers.get("origin") or "").strip()
-        if not origin:
-            return await call_next(request)
-        if not _cors_allowed_origin(origin):
-            return await call_next(request)
-        if request.method == "OPTIONS":
-            return Response(status_code=200, headers=_cors_headers(origin))
-        response = await call_next(request)
-        for k, v in _cors_headers(origin).items():
-            response.headers[k] = v
-        return response
-
-# 1) CORSMiddleware (s'exécute en second = inner)
+# IMPORTANT: Ajouter le middleware CORS EN PREMIER
+# Permettre tous les CORS sans restriction pour le développement
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins,
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://[a-zA-Z0-9-]+\.vercel\.app$|^https://[a-zA-Z0-9-]+\.vercel\.dev$",
-    allow_credentials=True,
+    allow_origins=cors_origins,  # Use explicit origins list
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://.*\.vercel\.app$|^https://.*\.vercel\.dev$",  # Allow localhost and all Vercel deployments (both .app and .dev)
+    allow_credentials=True,  # Allow credentials for authentication cookies/tokens
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
     expose_headers=["*"],
     max_age=86400,
 )
-
-# 2) Notre middleware CORS en premier (outermost) : OPTIONS + headers sur chaque réponse
-app.add_middleware(CORSOriginMiddleware)
 
 # Inclusion des routes API
 app.include_router(api_router, prefix=settings.API_V1_STR)

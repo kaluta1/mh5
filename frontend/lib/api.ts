@@ -59,7 +59,16 @@ authApi.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
-    const config = error.config as InternalAxiosRequestConfig & { _retry?: boolean; _retryCount?: number }
+    const config = error.config as InternalAxiosRequestConfig & { _retry?: boolean; _retryCount?: number; _retry503?: boolean }
+
+    // Retry on 503 (e.g. Render cold start) - once per request, after 4s
+    const is503 = error.response?.status === 503
+    if (config && !config._retry503 && is503) {
+      config._retry503 = true
+      logger.warn('Backend returned 503 (service starting), retrying in 4s...')
+      await new Promise((resolve) => setTimeout(resolve, 4000))
+      return api(config)
+    }
 
     // Retry logic pour les erreurs de timeout ou réseau (mais pas pour les requêtes d'auth)
     const isAuthRequest = config?.url?.includes('/auth/')
@@ -169,7 +178,7 @@ export const authService = {
     return response.data
   },
 
-  // Connexion (timeout 60s, 1 retry si timeout pour cold start Render)
+  // Connexion (timeout 60s, retries on timeout or 503 for Render cold start)
   async login(credentials: LoginRequest): Promise<LoginResponse> {
     const params = new URLSearchParams()
     params.append('username', credentials.email_or_username)
@@ -180,26 +189,42 @@ export const authService = {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       })
 
-    let response
-    try {
-      response = await doLogin()
-    } catch (err) {
-      const isTimeout =
-        (err as AxiosError).code === 'ECONNABORTED' ||
-        (err as Error).message?.includes('timeout')
-      if (isTimeout) {
-        logger.warn('Login timeout, retrying once...')
-        await new Promise((r) => setTimeout(r, 2000))
-        response = await doLogin()
-      } else {
-        throw err
+    const maxRetries = 2
+    let lastError: unknown
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await doLogin()
+        const data = response.data
+        if (data.access_token) localStorage.setItem('access_token', data.access_token)
+        if (data.refresh_token) localStorage.setItem('refresh_token', data.refresh_token)
+        return data
+      } catch (err) {
+        lastError = err
+        const axiosErr = err as AxiosError
+        const status = axiosErr.response?.status
+        const is503 = status === 503
+        const isTimeout =
+          axiosErr.code === 'ECONNABORTED' || (err as Error).message?.includes('timeout')
+
+        if (attempt < maxRetries && (is503 || isTimeout)) {
+          const delay = is503 ? (attempt + 1) * 4000 : 2000
+          logger.warn(`Login failed (${is503 ? '503' : 'timeout'}), retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})...`)
+          await new Promise((r) => setTimeout(r, delay))
+        } else {
+          if (is503) {
+            const serviceUnavailableError = new Error(
+              'Service is starting up. Please wait a moment and try again.'
+            ) as Error & { response?: { status: number } }
+            serviceUnavailableError.response = { status: 503 }
+            throw serviceUnavailableError
+          }
+          throw err
+        }
       }
     }
 
-    const data = response.data
-    if (data.access_token) localStorage.setItem('access_token', data.access_token)
-    if (data.refresh_token) localStorage.setItem('refresh_token', data.refresh_token)
-    return data
+    throw lastError
   },
 
   // Inscription

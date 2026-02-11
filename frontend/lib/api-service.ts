@@ -29,12 +29,12 @@ export const api = axios.create({
     },
 });
 
-// Add auth token interceptor
+// Add auth token interceptor (use same key as lib/api.ts: access_token)
 api.interceptors.request.use(
     (config) => {
         // Check if running in browser
         if (typeof window !== 'undefined') {
-            const token = localStorage.getItem('token');
+            const token = localStorage.getItem('access_token') || localStorage.getItem('token');
             if (token) {
                 config.headers.Authorization = `Bearer ${token}`;
             }

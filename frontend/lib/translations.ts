@@ -117,6 +117,9 @@ export interface TranslationKeys {
       errors: {
         required_fields: string
         invalid_credentials: string
+        timeout?: string
+        service_unavailable?: string
+        network_error?: string
       }
     }
     register: {
@@ -3409,7 +3412,10 @@ export const translations: Record<Language, TranslationKeys> = {
         register_link: "S'inscrire",
         errors: {
           required_fields: "Tous les champs sont obligatoires",
-          invalid_credentials: "Email/nom d'utilisateur ou mot de passe incorrect"
+          invalid_credentials: "Email/nom d'utilisateur ou mot de passe incorrect",
+          timeout: "Délai dépassé. Réessayez.",
+          service_unavailable: "Le service démarre. Veuillez patienter et réessayer.",
+          network_error: "Erreur réseau. Vérifiez votre connexion."
         }
       },
       register: {
@@ -5907,7 +5913,10 @@ export const translations: Record<Language, TranslationKeys> = {
         register_link: "Sign up",
         errors: {
           required_fields: "All fields are required",
-          invalid_credentials: "Invalid email/username or password"
+          invalid_credentials: "Invalid email/username or password",
+          timeout: "Request timed out. Please try again.",
+          service_unavailable: "Service is starting up. Please wait a moment and try again.",
+          network_error: "Network error. Check your connection."
         }
       },
       register: {
@@ -8554,7 +8563,10 @@ export const translations: Record<Language, TranslationKeys> = {
         register_link: "Registrarse",
         errors: {
           required_fields: "Todos los campos son obligatorios",
-          invalid_credentials: "Correo/nombre de usuario o contraseña inválidos"
+          invalid_credentials: "Correo/nombre de usuario o contraseña inválidos",
+          timeout: "Tiempo de espera agotado. Inténtelo de nuevo.",
+          service_unavailable: "El servicio se está iniciando. Espere un momento e inténtelo de nuevo.",
+          network_error: "Error de red. Compruebe su conexión."
         }
       },
       register: {
@@ -10889,7 +10901,10 @@ export const translations: Record<Language, TranslationKeys> = {
         register_link: "Registrieren",
         errors: {
           required_fields: "Alle Felder sind erforderlich",
-          invalid_credentials: "Ungültige E-Mail/Benutzername oder Passwort"
+          invalid_credentials: "Ungültige E-Mail/Benutzername oder Passwort",
+          timeout: "Zeitüberschreitung. Bitte versuchen Sie es erneut.",
+          service_unavailable: "Der Dienst startet. Bitte warten Sie einen Moment und versuchen Sie es erneut.",
+          network_error: "Netzwerkfehler. Überprüfen Sie Ihre Verbindung."
         }
       },
       register: {
