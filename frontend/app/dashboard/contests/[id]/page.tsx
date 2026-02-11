@@ -162,7 +162,7 @@ export default function ContestDetailPage() {
   // Mettre à jour l'URL quand les filtres changent
   const updateUrlWithFilters = React.useCallback((continent: string, country: string) => {
     const params = new URLSearchParams()
-    if (continent && continent !== 'all') {
+    if (continent) {
       params.set('continent', continent)
     }
     if (country) {
@@ -183,7 +183,8 @@ export default function ContestDetailPage() {
       // Currently getContest returns everything if backend is updated
       // Pass location filters: explicit filters from URL or user's location as default
       const effectiveCountry = filterCountry || (user?.country as string) || undefined
-      const effectiveContinent = filterContinent !== 'all' ? filterContinent : (user?.continent as string) || undefined
+      // Allow 'all' to be passed to backend if explicit
+      const effectiveContinent = filterContinent
 
       const c = await ApiService.getContest(parseInt(contestId), {
         filterCountry: effectiveCountry,

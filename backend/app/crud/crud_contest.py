@@ -1128,17 +1128,34 @@ class CRUDContest:
         effective_country = None
         effective_continent = None
         
-        if filter_country and is_valid_location(filter_country):
+        # Check for explicit "ALL" intention
+        # If user explicitly requests "all", we should NOT fallback to their location
+        is_explicit_all_country = filter_country and str(filter_country).lower().strip() == "all"
+        is_explicit_all_continent = filter_continent and str(filter_continent).lower().strip() == "all"
+        
+        if is_explicit_all_country:
+            # User wants ALL countries
+            effective_country = None
+            # If they didn't specify a continent, we also assume they want all continents (global)
+            if not filter_continent:
+                effective_continent = None
+        elif filter_country and is_valid_location(filter_country):
             # Filtre explicite par pays
             effective_country = filter_country
+            
+        # Handle continent similarly
+        if is_explicit_all_continent:
+             effective_continent = None
         elif filter_continent and is_valid_location(filter_continent):
             # Filtre explicite par continent uniquement (pas de pays)
             effective_continent = filter_continent
-        elif current_user:
-            # Pas de filtre explicite -> utiliser la localisation de l'utilisateur
-            if is_valid_location(current_user.country):
+            
+        # Fallback to current_user location ONLY if no explicit "all" and no specific filter
+        if current_user and not is_explicit_all_country and not is_explicit_all_continent:
+            # Pas de filtre explicite (ni spécifique ni "all") -> utiliser la localisation de l'utilisateur
+            if not effective_country and is_valid_location(current_user.country):
                 effective_country = current_user.country
-            if is_valid_location(current_user.continent):
+            if not effective_continent and is_valid_location(current_user.continent):
                 effective_continent = current_user.continent
         
         # Appliquer les filtres à la requête

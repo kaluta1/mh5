@@ -161,7 +161,7 @@ export function LocationFilterBar({
             {/* Sélecteur de pays */}
             {showCountryFilter && (
                 <div className="w-full sm:w-48">
-                    <Select value={filterCountry || 'all'} onValueChange={(value) => onCountryChange?.(value === 'all' ? '' : value)}>
+                    <Select value={filterCountry || 'all'} onValueChange={(value) => onCountryChange?.(value)}>
                         <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
                             <MapPin className="w-4 h-4 mr-2" />
                             <SelectValue placeholder={t('dashboard.contests.filter_country') || 'Pays'} />
