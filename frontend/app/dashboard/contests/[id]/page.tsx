@@ -131,7 +131,7 @@ export default function ContestDetailPage() {
   const [selectedContestantId, setSelectedContestantId] = useState<number | null>(null)
   const [selectedContestantTitle, setSelectedContestantTitle] = useState<string>('')
 
-  // Lire les filtres de localisation depuis l'URL
+  // Lire les filtres de localisation depuis l'URL (ou défaut: pays/continent de l'utilisateur)
   const searchParams = useSearchParams()
   const [filterCountry, setFilterCountry] = React.useState<string>(() => {
     return searchParams.get('country') || ''
@@ -139,6 +139,25 @@ export default function ContestDetailPage() {
   const [filterContinent, setFilterContinent] = React.useState<string>(() => {
     return searchParams.get('continent') || 'all'
   })
+
+  // Au premier chargement sans paramètres URL: afficher par défaut les contestants du pays de l'utilisateur
+  React.useEffect(() => {
+    const urlCountry = searchParams.get('country')
+    const urlContinent = searchParams.get('continent')
+    if (urlCountry || urlContinent) return
+    if (!user?.country && !user?.continent) return
+    const defaultCountry = (user?.country as string) || ''
+    const defaultContinent = (user?.continent as string) || 'all'
+    if (defaultCountry || (defaultContinent && defaultContinent !== 'all')) {
+      setFilterCountry(defaultCountry)
+      setFilterContinent(defaultContinent && defaultContinent !== 'all' ? defaultContinent : 'all')
+      const params = new URLSearchParams()
+      if (defaultCountry) params.set('country', defaultCountry)
+      if (defaultContinent && defaultContinent !== 'all') params.set('continent', defaultContinent)
+      const q = params.toString()
+      if (q) router.replace(`/dashboard/contests/${contestId}?${q}`, { scroll: false })
+    }
+  }, [user?.country, user?.continent, contestId, router])
 
   // Mettre à jour l'URL quand les filtres changent
   const updateUrlWithFilters = React.useCallback((continent: string, country: string) => {

@@ -522,8 +522,20 @@ function ContestsPageContent() {
                   isNomination={categoryTab === 'nomination'}
                   onToggleFavorite={() => { }}
                   onParticipate={() => handleParticipate(contest.id, contest.currentUserParticipated)}
-                  onViewContestants={() => router.push(`/dashboard/contests/${contest.id}`)}
-                  onOpenDetails={() => router.push(`/dashboard/contests/${contest.id}`)}
+                  onViewContestants={() => {
+                    const params = new URLSearchParams()
+                    if (user?.country) params.set('country', user.country)
+                    if (user?.continent) params.set('continent', user.continent)
+                    const q = params.toString()
+                    router.push(`/dashboard/contests/${contest.id}${q ? `?${q}` : ''}`)
+                  }}
+                  onOpenDetails={() => {
+                    const params = new URLSearchParams()
+                    if (user?.country) params.set('country', user.country)
+                    if (user?.continent) params.set('continent', user.continent)
+                    const q = params.toString()
+                    router.push(`/dashboard/contests/${contest.id}${q ? `?${q}` : ''}`)
+                  }}
                 />
               ))}
             </div>

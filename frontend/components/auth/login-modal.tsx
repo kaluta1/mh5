@@ -128,16 +128,15 @@ export function LoginModal({ open, onOpenChange, onSwitchToRegister, onLoginSucc
       
       let errorMessage = t('auth.login.errors.invalid_credentials')
       
+      // Gérer les erreurs de timeout et 503 (service indisponible / cold start)
       const axiosError = err as AxiosError
-      const errMessage = err instanceof Error ? err.message : ''
-
-      // 503 or "Service is starting up" (backend cold start, e.g. Render)
-      if (axiosError.response?.status === 503 || errMessage.includes('Service is starting up')) {
-        errorMessage = t('auth.login.errors.service_unavailable') || 'Service is starting up. Please wait a moment and try again.'
-      } else if (axiosError.code === 'ECONNABORTED' ||
-          axiosError.message?.includes('timeout') ||
-          errMessage.includes('timeout')) {
-        errorMessage = t('auth.login.errors.timeout')
+      const status = axiosError.response?.status
+      if (status === 503) {
+        errorMessage = t('auth.login.errors.service_unavailable') || 'The service is starting up. Please wait a moment and try again.'
+      } else if (axiosError.code === 'ECONNABORTED' || 
+          axiosError.message?.includes('timeout') || 
+          (err instanceof Error && err.message?.includes('timeout'))) {
+        errorMessage = t('auth.login.errors.timeout') || 'Request timed out. Please try again.'
       } else if (axiosError.response?.data) {
         const errorData = axiosError.response.data as { detail?: string | { msg: string }[] | string; message?: string } | string
         if (typeof errorData === 'string') {

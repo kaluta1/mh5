@@ -3,7 +3,7 @@
 ## Overview
 
 - **Frontend** (Vercel): `https://frontend-rho-eight-72.vercel.app`
-- **Backend** (Render): Set via `NEXT_PUBLIC_API_URL`; default in code: `https://mh5-backend.onrender.com`
+- **Backend** (Render): Set via `NEXT_PUBLIC_API_URL`; default in code: `https://mh5-hbjp.onrender.com`
 
 All frontend API calls use `NEXT_PUBLIC_API_URL` (or the default above). CORS is configured on the backend to allow the frontend origin.
 
@@ -18,7 +18,7 @@ All frontend API calls use `NEXT_PUBLIC_API_URL` (or the default above). CORS is
 | Share rewrites     | `next.config.js` → same env, same default string |
 | Other fetch calls  | Various files → `NEXT_PUBLIC_API_URL` or `http://localhost:8000` (dev) |
 
-**Single default:** `lib/config.ts` exports `DEFAULT_PUBLIC_API_URL = 'https://mh5-backend.onrender.com'`.  
+**Single default:** `lib/config.ts` exports `DEFAULT_PUBLIC_API_URL = 'https://mh5-hbjp.onrender.com'`.  
 If your Render service has a **different** URL (e.g. `https://mh5-backend-xxxx.onrender.com`), you **must** set it in Vercel:
 
 - **Vercel** → Project → **Settings** → **Environment Variables**

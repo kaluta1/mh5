@@ -135,7 +135,9 @@ function LoginPageContent() {
       } else if (err.message) {
         errorMessage = mapErrorToTranslation(err.message)
       }
-      if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+      if (err.response?.status === 503) {
+        errorMessage = t('auth.login.errors.service_unavailable') || 'The service is starting up. Please wait a moment and try again.'
+      } else if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
         errorMessage = t('auth.login.errors.timeout')
       }
       addToast(errorMessage, 'error', 6000)

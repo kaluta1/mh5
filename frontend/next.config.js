@@ -109,7 +109,7 @@ const nextConfig = {
   },
   async rewrites() {
     // Share link rewrites: backend URL from env or default (see lib/config.ts)
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'https://mh5-backend.onrender.com'
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'https://mh5-hbjp.onrender.com'
     
     return [
       {

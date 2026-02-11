@@ -1146,12 +1146,8 @@ class CRUDContest:
             location_conditions = []
             
             if effective_country:
-                # Filtrer par pays: author country OU nominator_country (pour les concours de nomination)
-                country_filter = or_(
-                    Contestant.country.ilike(f"%{effective_country}%"),
-                    Contestant.nominator_country.ilike(f"%{effective_country}%")
-                )
-                location_conditions.append(country_filter)
+                # Filtrer par pays (prioritaire)
+                location_conditions.append(Contestant.country.ilike(f"%{effective_country}%"))
             elif effective_continent:
                 # Filtrer par continent si pas de pays
                 location_conditions.append(Contestant.continent.ilike(f"%{effective_continent}%"))

@@ -118,8 +118,8 @@ export interface TranslationKeys {
         required_fields: string
         invalid_credentials: string
         timeout?: string
-        service_unavailable?: string
         network_error?: string
+        service_unavailable?: string
       }
     }
     register: {
@@ -3413,9 +3413,9 @@ export const translations: Record<Language, TranslationKeys> = {
         errors: {
           required_fields: "Tous les champs sont obligatoires",
           invalid_credentials: "Email/nom d'utilisateur ou mot de passe incorrect",
-          timeout: "Délai dépassé. Réessayez.",
-          service_unavailable: "Le service démarre. Veuillez patienter et réessayer.",
-          network_error: "Erreur réseau. Vérifiez votre connexion."
+          timeout: "Délai dépassé. Veuillez réessayer.",
+          network_error: "Erreur de connexion. Vérifiez votre connexion internet.",
+          service_unavailable: "Le service démarre. Veuillez patienter quelques instants et réessayer."
         }
       },
       register: {
@@ -5915,8 +5915,8 @@ export const translations: Record<Language, TranslationKeys> = {
           required_fields: "All fields are required",
           invalid_credentials: "Invalid email/username or password",
           timeout: "Request timed out. Please try again.",
-          service_unavailable: "Service is starting up. Please wait a moment and try again.",
-          network_error: "Network error. Check your connection."
+          network_error: "Connection error. Please check your internet connection.",
+          service_unavailable: "The service is starting up. Please wait a moment and try again."
         }
       },
       register: {
@@ -8564,9 +8564,9 @@ export const translations: Record<Language, TranslationKeys> = {
         errors: {
           required_fields: "Todos los campos son obligatorios",
           invalid_credentials: "Correo/nombre de usuario o contraseña inválidos",
-          timeout: "Tiempo de espera agotado. Inténtelo de nuevo.",
-          service_unavailable: "El servicio se está iniciando. Espere un momento e inténtelo de nuevo.",
-          network_error: "Error de red. Compruebe su conexión."
+          timeout: "Tiempo de espera agotado. Inténtalo de nuevo.",
+          network_error: "Error de conexión. Verifica tu conexión a internet.",
+          service_unavailable: "El servicio se está iniciando. Espera un momento e inténtalo de nuevo."
         }
       },
       register: {
@@ -10903,8 +10903,8 @@ export const translations: Record<Language, TranslationKeys> = {
           required_fields: "Alle Felder sind erforderlich",
           invalid_credentials: "Ungültige E-Mail/Benutzername oder Passwort",
           timeout: "Zeitüberschreitung. Bitte versuchen Sie es erneut.",
-          service_unavailable: "Der Dienst startet. Bitte warten Sie einen Moment und versuchen Sie es erneut.",
-          network_error: "Netzwerkfehler. Überprüfen Sie Ihre Verbindung."
+          network_error: "Verbindungsfehler. Bitte überprüfen Sie Ihre Internetverbindung.",
+          service_unavailable: "Der Dienst startet. Bitte warten Sie einen Moment und versuchen Sie es erneut."
         }
       },
       register: {
