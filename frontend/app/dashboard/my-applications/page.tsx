@@ -38,7 +38,7 @@ export default function MyApplicationsPage() {
   const { user, isAuthenticated, isLoading } = useAuth()
   const { addToast } = useToast()
   const router = useRouter()
-  
+
   const [applications, setApplications] = useState<Application[]>([])
   const [pageLoading, setPageLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -56,54 +56,42 @@ export default function MyApplicationsPage() {
         setPageLoading(true)
         setError(null)
 
-        // Récupérer tous les contests
-        const contests = await contestService.getContests(0, 1000)
-        
-        const userApplications: Application[] = []
+        // Récupérer les candidatures de l'utilisateur directement
+        const myContestants = await contestService.getMyApplications(0, 100)
 
-        // Pour chaque contest, récupérer les candidatures
-        for (const contest of contests) {
-          try {
-            const contestants = await contestService.getContestantsByContest(contest.id)
-            const userParticipation = contestants.find((c: any) => c.user_id === user.id)
-            
-            if (userParticipation) {
-              // Extraire la première image comme coverImage
-              let coverImage: string | undefined
-              if (userParticipation.image_media_ids) {
-                try {
-                  const imageIds = JSON.parse(userParticipation.image_media_ids)
-                  if (Array.isArray(imageIds) && imageIds.length > 0) {
-                    coverImage = imageIds[0]
-                  }
-                } catch (e) {
-                  console.error('Erreur parsing image_media_ids:', e)
-                }
+        const userApplications: Application[] = myContestants.map(c => {
+          // Extraire l'image si contestant_image_url n'est pas défini
+          let coverImage = c.contestant_image_url
+          if (!coverImage && c.image_media_ids) {
+            try {
+              const imageIds = JSON.parse(c.image_media_ids)
+              if (Array.isArray(imageIds) && imageIds.length > 0) {
+                coverImage = imageIds[0]
               }
-
-              userApplications.push({
-                id: userParticipation.id,
-                contestId: Number(contest.id),
-                contestName: contest.name,
-                contestLevel: contest.level,
-                title: userParticipation.title || '',
-                description: userParticipation.description || '',
-                rank: userParticipation.rank,
-                registrationDate: userParticipation.registration_date,
-                status: userParticipation.is_qualified ? 'approved' : 'pending',
-                totalVotes: userParticipation.votes_count || 0,
-                totalComments: userParticipation.comments_count || 0,
-                totalLikes: userParticipation.reactions_count || 0,
-                totalFavorites: userParticipation.favorites_count || 0,
-                totalShares: 0, // Will be loaded separately if needed
-                coverImage: coverImage,
-                isLive: false // TODO: Implement live status
-              })
+            } catch (e) {
+              console.error('Erreur parsing image_media_ids:', e)
             }
-          } catch (err) {
-            console.error(`Erreur lors du chargement des candidatures pour le contest ${contest.id}:`, err)
           }
-        }
+
+          return {
+            id: c.id,
+            contestId: c.contest_id || c.season_id,
+            contestName: c.contest_title || t('common.unknown') || 'Unknown',
+            contestLevel: c.contest_level,
+            title: c.title || '',
+            description: c.description || '',
+            rank: c.rank,
+            registrationDate: c.registration_date,
+            status: c.is_qualified ? 'approved' : 'pending',
+            totalVotes: c.votes_count,
+            totalComments: c.comments_count || 0,
+            totalLikes: c.reactions_count || 0,
+            totalFavorites: c.favorites_count || 0,
+            totalShares: c.shares_count || 0,
+            coverImage: coverImage,
+            isLive: false
+          }
+        })
 
         setApplications(userApplications)
       } catch (err: any) {

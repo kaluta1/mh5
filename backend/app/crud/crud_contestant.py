@@ -1199,6 +1199,199 @@ class CRUDContestant:
             video_media_ids=getattr(obj_in, 'video_media_ids', None)
         )
 
+    def get_multi_by_user_with_stats(
+        self, db: Session, user_id: int, *, skip: int = 0, limit: int = 10
+    ) -> List[Dict[str, Any]]:
+        """
+        Récupère les candidatures d'un utilisateur avec stats enrichies.
+        Optimisé pour éviter les requêtes N+1.
+        """
+        # Récupérer les candidatures de l'utilisateur
+        contestants = db.query(Contestant)\
+            .filter(
+                Contestant.user_id == user_id,
+                Contestant.is_deleted == False
+            )\
+            .options(
+                joinedload(Contestant.user),
+                joinedload(Contestant.submissions)
+            )\
+            .order_by(Contestant.registration_date.desc())\
+            .offset(skip)\
+            .limit(limit)\
+            .all()
+        
+        if not contestants:
+            return []
+            
+        contestant_ids = [c.id for c in contestants]
+        
+        # Initialiser les dictionnaires de comptes
+        votes_by_contestant = {}
+        favorites_by_contestant = {}
+        reactions_by_contestant = {}
+        comments_by_contestant = {}
+        
+        # Récupérer les votes en une seule requête
+        votes_results = db.query(Vote.contestant_id, func.count(Vote.id))\
+            .filter(Vote.contestant_id.in_(contestant_ids))\
+            .group_by(Vote.contestant_id).all()
+        votes_by_contestant = {cid: count for cid, count in votes_results}
+        
+        # Récupérer les favoris en une seule requête
+        fav_results = db.query(MyFavorites.contestant_id, func.count(MyFavorites.id))\
+            .filter(MyFavorites.contestant_id.in_(contestant_ids))\
+            .group_by(MyFavorites.contestant_id).all()
+        favorites_by_contestant = {cid: count for cid, count in fav_results}
+        
+        # Récupérer les réactions (likes) en une seule requête
+        like_results = db.query(ContestLike.contestant_id, func.count(ContestLike.id))\
+            .filter(ContestLike.contestant_id.in_(contestant_ids))\
+            .group_by(ContestLike.contestant_id).all()
+        reactions_by_contestant = {cid: count for cid, count in like_results}
+        
+        # Récupérer les commentaires en une seule requête
+        comment_results = db.query(ContestComment.contestant_id, func.count(ContestComment.id))\
+            .filter(ContestComment.contestant_id.in_(contestant_ids))\
+            .group_by(ContestComment.contestant_id).all()
+        comments_by_contestant = {cid: count for cid, count in comment_results}
+        
+        # Récupérer les partages en une seule requête
+        share_results = db.query(ContestantShare.contestant_id, func.count(ContestantShare.id))\
+            .filter(ContestantShare.contestant_id.in_(contestant_ids))\
+            .group_by(ContestantShare.contestant_id).all()
+        shares_by_contestant = {cid: count for cid, count in share_results}
+        
+        # Récupérer les infos du contest (titre, image) pour chaque contestant
+        # Cela nécessite de remonter à la saison/contest
+        from app.models.contests import ContestSeasonLink, ContestSeason
+        from app.models.contest import Contest as MyfavContest
+        
+        contest_info_by_season = {}
+        season_ids = list(set([c.season_id for c in contestants]))
+        
+        if season_ids:
+            # Récupérer les liens saison -> contest
+            season_links = db.query(ContestSeasonLink).filter(
+                ContestSeasonLink.season_id.in_(season_ids),
+                ContestSeasonLink.is_active == True
+            ).all()
+            
+            season_to_contest_map = {link.season_id: link.contest_id for link in season_links}
+            contest_ids = list(set(season_to_contest_map.values()))
+            
+            # Récupérer les infos des contests
+            contests_data = db.query(MyfavContest).filter(
+                MyfavContest.id.in_(contest_ids)
+            ).all()
+            contest_map = {c.id: c for c in contests_data}
+            
+            # Récupérer les infos des saisons (pour fallback)
+            seasons_data = db.query(ContestSeason).filter(
+                ContestSeason.id.in_(season_ids)
+            ).all()
+            season_map = {s.id: s for s in seasons_data}
+            
+            for season_id in season_ids:
+                contest_id = season_to_contest_map.get(season_id)
+                if contest_id and contest_id in contest_map:
+                    contest = contest_map[contest_id]
+                    contest_info_by_season[season_id] = {
+                        "contest_title": contest.name,
+                        "contest_level": contest.level,
+                        "contest_image_url": contest.image_url or contest.cover_image_url,
+                        "contest_id": contest_id  # Use actual contest ID
+                    }
+                elif season_id in season_map:
+                    season = season_map[season_id]
+                    level_val = None
+                    if hasattr(season, 'level') and season.level:
+                        level_val = season.level.value if hasattr(season.level, 'value') else str(season.level)
+                        
+                    contest_info_by_season[season_id] = {
+                        "contest_title": season.title,
+                        "contest_level": level_val,
+                        "contest_image_url": None,
+                        "contest_id": season_id  # Fallback to season ID
+                    }
+        
+        
+        # Construire la réponse enrichie
+        result = []
+        for contestant in contestants:
+            # Compter les images et vidéos
+            images_count = 0
+            videos_count = 0
+            if contestant.image_media_ids:
+                try:
+                    images_count = len(json.loads(contestant.image_media_ids))
+                except (json.JSONDecodeError, TypeError):
+                    images_count = 0
+            if contestant.video_media_ids:
+                try:
+                    videos_count = len(json.loads(contestant.video_media_ids))
+                except (json.JSONDecodeError, TypeError):
+                    videos_count = 0
+            
+            # Utiliser les comptes pré-calculés
+            favorites_count = favorites_by_contestant.get(contestant.id, 0)
+            reactions_count = reactions_by_contestant.get(contestant.id, 0)
+            comments_count = comments_by_contestant.get(contestant.id, 0)
+            shares_count = shares_by_contestant.get(contestant.id, 0)
+            
+            # Infos contest
+            contest_info = contest_info_by_season.get(contestant.season_id, {})
+            
+            result.append({
+                "id": contestant.id,
+                "user_id": contestant.user_id,
+                "season_id": contestant.season_id,
+                "round_id": contestant.round_id,
+                "title": contestant.title,
+                "description": contestant.description,
+                "image_media_ids": contestant.image_media_ids,
+                "video_media_ids": contestant.video_media_ids,
+                "nominator_city": contestant.nominator_city,
+                "nominator_country": contestant.nominator_country,
+                "registration_date": contestant.registration_date,
+                "is_qualified": contestant.is_qualified,
+                # Infos auteur (depuis l'utilisateur)
+                "author_name": contestant.user.full_name or f"{contestant.user.first_name or ''} {contestant.user.last_name or ''}".strip() if contestant.user else None,
+                "author_country": contestant.user.country if contestant.user else None,
+                "author_city": contestant.user.city if contestant.user else None,
+                "author_continent": contestant.user.continent if contestant.user else None,
+                "author_region": contestant.user.region if contestant.user else None,
+                "author_avatar_url": contestant.user.avatar_url if contestant.user else None,
+                # Données géographiques du contestant
+                "country": contestant.country,
+                "city": contestant.city,
+                "continent": contestant.continent,
+                "region": contestant.region,
+                # Stats
+                "rank": None, # Rank is relative to contest, hard to calc global rank here efficiently
+                "votes_count": votes_by_contestant.get(contestant.id, 0),
+                "images_count": images_count,
+                "videos_count": videos_count,
+                "favorites_count": favorites_count,
+                "reactions_count": reactions_count,
+                "comments_count": comments_count,
+                "shares_count": shares_count,
+                # Infos du contest
+                "contest_title": contest_info.get("contest_title"),
+                "contest_level": contest_info.get("contest_level"),
+                "contest_image_url": contest_info.get("contest_image_url"),
+                "contest_id": contest_info.get("contest_id", contestant.season_id),
+                "total_participants": 0, # Not calculating total participants per contest here
+                # Position dans les favoris
+                "position": None,
+                # État du vote (l'utilisateur ne peut pas voter pour lui-même)
+                "has_voted": False,
+                "can_vote": False,
+                "vote_restriction_reason": "own_contestant"
+            })
+        
+        return result
+
 
 # Instance globale
 crud_contestant = CRUDContestant()

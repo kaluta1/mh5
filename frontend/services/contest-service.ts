@@ -164,9 +164,11 @@ export interface ContestantWithAuthorAndStats {
   favorites_count?: number
   reactions_count?: number
   comments_count?: number
+  shares_count?: number
 
   // Infos du contest
   contest_title?: string
+  contest_level?: string
   contest_image_url?: string
   contest_id?: number
   total_participants?: number
@@ -660,6 +662,33 @@ class ContestService {
   }
 
   /**
+   * Récupère les candidatures de l'utilisateur connecté
+   */
+  async getMyApplications(skip: number = 0, limit: number = 10): Promise<ContestantWithAuthorAndStats[]> {
+    try {
+      const cacheKey = '/api/v1/contestants/user/my-entries'
+      const params = { skip, limit }
+
+      // Vérifier le cache
+      const cached = cacheService.get<ContestantWithAuthorAndStats[]>(cacheKey, params)
+      if (cached) {
+        return cached
+      }
+
+      // Si pas en cache, faire la requête
+      const response = await api.get(cacheKey, { params })
+
+      // Mettre en cache
+      cacheService.set(cacheKey, response.data, params)
+
+      return response.data
+    } catch (error) {
+      console.error('Error fetching my applications:', error)
+      throw error
+    }
+  }
+
+  /**
    * Récupère les votes MyHigh5 de l'utilisateur courant (saisons actives uniquement)
    * Retourne les 5 contestants pour lesquels l'utilisateur a voté, groupés par season
    */
@@ -967,14 +996,14 @@ class ContestService {
     // On fait confiance au backend pour gérer les dates
     // FIXED: Handle missing date fields gracefully (they may not exist in database)
     const now = new Date()
-    const submissionStart = (response.submission_start_date && response.submission_start_date !== 'null') 
-      ? new Date(response.submission_start_date) 
+    const submissionStart = (response.submission_start_date && response.submission_start_date !== 'null')
+      ? new Date(response.submission_start_date)
       : null
     const submissionEnd = (response.submission_end_date && response.submission_end_date !== 'null')
-      ? new Date(response.submission_end_date) 
+      ? new Date(response.submission_end_date)
       : null
     const votingStart = (response.voting_start_date && response.voting_start_date !== 'null')
-      ? new Date(response.voting_start_date) 
+      ? new Date(response.voting_start_date)
       : null
 
     // Faire confiance au backend pour la valeur de is_submission_open

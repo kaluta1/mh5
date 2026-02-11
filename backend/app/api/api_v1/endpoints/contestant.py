@@ -75,32 +75,19 @@ def debug_get_all_contestants(
 # Routes spécifiques d'abord (avant les routes génériques avec {id})
 # IMPORTANT: Les routes plus spécifiques DOIVENT venir avant les routes générales
 
-@router.get("/user/my-entries", response_model=List[ContestantListResponse])
+@router.get("/user/my-entries", response_model=List[ContestantWithAuthorAndStats])
 def get_my_contestants(
     *,
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=100)
-) -> List[ContestantListResponse]:
-    """Récupère les candidatures de l'utilisateur connecté"""
-    contestants = crud_contestant.get_multi_by_user(
+) -> List[ContestantWithAuthorAndStats]:
+    """Récupère les candidatures de l'utilisateur connecté avec stats enrichies"""
+    contestants = crud_contestant.get_multi_by_user_with_stats(
         db, current_user.id, skip=skip, limit=limit
     )
-    
-    result = []
-    for contestant in contestants:
-        result.append(ContestantListResponse(
-            id=contestant.id,
-            user_id=contestant.user_id,
-            season_id=contestant.season_id,
-            title=contestant.title,
-            description=contestant.description,
-            registration_date=contestant.registration_date,
-            is_qualified=contestant.is_qualified
-        ))
-    
-    return result
+    return contestants
 
 
 @router.get("/user/my-votes")
