@@ -1193,7 +1193,12 @@ class CRUDContest:
             logger.info(f"[get_contest_with_enriched_contestants] Found {len(contestants)} contestants")
             
             # If no contestants, try fallbacks
-            if not contestants:
+            # IMPORTANT: Only try fallbacks if we DID NOT apply a location filter.
+            # If we applied a location filter and got 0 results, that means there are simply no contestants in that location.
+            # We should NOT fallback to showing all contestants in that case.
+            applied_location_filter = effective_country is not None or effective_continent is not None
+            
+            if not contestants and not applied_location_filter:
                 logger.warning(f"[get_contest_with_enriched_contestants] No contestants found. Trying fallbacks...")
                 
                 # Fallback 1: season_id only
