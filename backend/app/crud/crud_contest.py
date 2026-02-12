@@ -1162,12 +1162,27 @@ class CRUDContest:
         if contestants_query:
             location_conditions = []
             
+            # Ensure we can filter on User attributes if needed
+            # Validating if we need to join User (it might be joinedloaded but we need explicit join for filtering)
+            # We use distinct to avoid duplicates if any, though Many-to-One shouldn't cause them
+            contestants_query = contestants_query.join(User)
+            
             if effective_country:
-                # Filtrer par pays (prioritaire)
-                location_conditions.append(Contestant.country.ilike(f"%{effective_country}%"))
+                logger.info(f"[get_contest_with_enriched_contestants] Filtering by country: '{effective_country}'")
+                # Filtrer par pays (prioritaire) - CASE INSENSITIVE
+                # Check BOTH Contestant.country AND User.country
+                location_conditions.append(or_(
+                    Contestant.country.ilike(f"%{effective_country}%"),
+                    User.country.ilike(f"%{effective_country}%")
+                ))
             elif effective_continent:
+                logger.info(f"[get_contest_with_enriched_contestants] Filtering by continent: '{effective_continent}'")
                 # Filtrer par continent si pas de pays
-                location_conditions.append(Contestant.continent.ilike(f"%{effective_continent}%"))
+                # Check BOTH Contestant.continent AND User.continent
+                location_conditions.append(or_(
+                    Contestant.continent.ilike(f"%{effective_continent}%"),
+                    User.continent.ilike(f"%{effective_continent}%")
+                ))
             
             if location_conditions:
                 contestants_query = contestants_query.filter(and_(*location_conditions))
@@ -1177,6 +1192,12 @@ class CRUDContest:
         logger = logging.getLogger(__name__)
         
         try:
+            # DEBUG: Log the filter values
+            logger.info(f"[get_contest_with_enriched_contestants] User ID: {current_user_id}")
+            logger.info(f"[get_contest_with_enriched_contestants] Incoming Filter Country: '{filter_country}'")
+            logger.info(f"[get_contest_with_enriched_contestants] Incoming Filter Continent: '{filter_continent}'")
+            logger.info(f"[get_contest_with_enriched_contestants] Effective Country: '{effective_country}'")
+            logger.info(f"[get_contest_with_enriched_contestants] Effective Continent: '{effective_continent}'")
             # DEBUG: First check what contestants actually exist
             debug_sample = db.query(
                 Contestant.id,
