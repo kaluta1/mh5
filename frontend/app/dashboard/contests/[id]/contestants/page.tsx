@@ -7,8 +7,9 @@ import { useAuth } from '@/hooks/use-auth'
 import { contestService, ContestResponse } from '@/services/contest-service'
 import { Button } from '@/components/ui/button'
 import { ContestantCard } from '@/components/dashboard/contestant-card'
-import { ArrowLeft, UserPlus, MessageCircle } from 'lucide-react'
+import { ArrowLeft, Globe, MapPin } from 'lucide-react'
 import { Input } from '@/components/ui/input'
+import { API_URL } from '@/lib/config'
 
 interface Media {
   id: string
@@ -103,10 +104,11 @@ export default function ContestantsListPage() {
   const contestId = params.id as string
 
   const [contest, setContest] = useState<ContestResponse | null>(null)
-  const [contestants, setContestants] = useState<Contestant[]>([])
+  const [allContestants, setAllContestants] = useState<Contestant[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [favorites, setFavorites] = useState<string[]>([])
+  const [showMyCountryOnly, setShowMyCountryOnly] = useState(true)
 
   useEffect(() => {
     if (contestId) {
@@ -119,10 +121,10 @@ export default function ContestantsListPage() {
       setLoading(true)
       const response = await contestService.getContestById(contestId)
       setContest(response)
-      
+
       const parseMediaIds = (mediaIds: string | null | undefined, type: 'image' | 'video'): Media[] => {
         if (!mediaIds) return []
-        
+
         try {
           // Si c'est déjà une URL complète
           if (mediaIds.startsWith('http://') || mediaIds.startsWith('https://')) {
@@ -133,26 +135,24 @@ export default function ContestantsListPage() {
               thumbnail: type === 'video' ? mediaIds : undefined
             }]
           }
-          
+
           // Si c'est un JSON array
           if (mediaIds.startsWith('[')) {
             const ids = JSON.parse(mediaIds)
-            const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
             return ids.map((id: string | number) => ({
               id: String(id),
               type,
-              url: `${baseUrl}/api/v1/media/${id}`,
-              thumbnail: type === 'video' ? `${baseUrl}/api/v1/media/${id}/thumbnail` : undefined
+              url: `${API_URL}/api/v1/media/${id}`,
+              thumbnail: type === 'video' ? `${API_URL}/api/v1/media/${id}/thumbnail` : undefined
             }))
           }
-          
+
           // Si c'est un ID simple
-          const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
           return [{
             id: String(mediaIds),
             type,
-            url: `${baseUrl}/api/v1/media/${mediaIds}`,
-            thumbnail: type === 'video' ? `${baseUrl}/api/v1/media/${mediaIds}/thumbnail` : undefined
+            url: `${API_URL}/api/v1/media/${mediaIds}`,
+            thumbnail: type === 'video' ? `${API_URL}/api/v1/media/${mediaIds}/thumbnail` : undefined
           }]
         } catch (error) {
           console.error('Error parsing media IDs:', error)
@@ -210,7 +210,7 @@ export default function ContestantsListPage() {
         return Number(a.id) - Number(b.id)
       })
 
-      setContestants(mappedContestants)
+      setAllContestants(mappedContestants)
       setFavorites(mappedContestants.filter(c => c.isFavorite).map(c => c.id))
     } catch (error) {
       console.error('Error loading contest:', error)
@@ -218,6 +218,18 @@ export default function ContestantsListPage() {
       setLoading(false)
     }
   }
+
+  // Client-side filter: by user's country (default) or show all
+  const userCountry = (user?.country as string) || ''
+  const contestants = showMyCountryOnly && userCountry
+    ? allContestants.filter(c =>
+      c.country && c.country.toLowerCase() === userCountry.toLowerCase()
+    )
+    : allContestants
+
+  const countryContestantCount = userCountry
+    ? allContestants.filter(c => c.country && c.country.toLowerCase() === userCountry.toLowerCase()).length
+    : 0
 
   const filteredContestants = contestants.filter(contestant => {
     if (!searchQuery.trim()) return true
@@ -329,8 +341,32 @@ export default function ContestantsListPage() {
             )}
           </div>
 
-          {/* Search */}
-          <div className="mb-6">
+          {/* Search and Country Filter */}
+          <div className="mb-6 space-y-4">
+            {/* Country toggle */}
+            {userCountry && (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant={showMyCountryOnly ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setShowMyCountryOnly(true)}
+                  className={`gap-2 ${showMyCountryOnly ? 'bg-myfav-primary hover:bg-myfav-primary/90 text-white' : ''}`}
+                >
+                  <MapPin className="h-4 w-4" />
+                  {userCountry} ({countryContestantCount})
+                </Button>
+                <Button
+                  variant={!showMyCountryOnly ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setShowMyCountryOnly(false)}
+                  className={`gap-2 ${!showMyCountryOnly ? 'bg-myfav-primary hover:bg-myfav-primary/90 text-white' : ''}`}
+                >
+                  <Globe className="h-4 w-4" />
+                  {t('common.all') || 'Tous'} ({allContestants.length})
+                </Button>
+              </div>
+            )}
+            {/* Search */}
             <Input
               type="text"
               placeholder={t('dashboard.contests.search_contestant') || 'Rechercher un participant...'}
@@ -387,18 +423,18 @@ export default function ContestantsListPage() {
                     onVote={() => {
                       // Le vote est géré dans ContestantCard, pas de redirection nécessaire
                     }}
-                    onComment={() => {}}
-                    onShare={() => {}}
-                    onHoverAuthor={() => {}}
-                    onHoverEnd={() => {}}
-                    onHoverDescription={() => {}}
+                    onComment={() => { }}
+                    onShare={() => { }}
+                    onHoverAuthor={() => { }}
+                    onHoverEnd={() => { }}
+                    onHoverDescription={() => { }}
                     onHoverVotes={() => {
                       // Seul l'auteur peut voir la liste des votes
                       if (user?.id === contestant.userId) {
                         // TODO: Implémenter l'affichage de la liste des votes
                       }
                     }}
-                    onHoverReactions={() => {}}
+                    onHoverReactions={() => { }}
                     onHoverFavorites={() => {
                       // Seul l'auteur peut voir la liste des favoris
                       if (user?.id === contestant.userId) {
@@ -413,7 +449,7 @@ export default function ContestantsListPage() {
                 <div className="flex flex-col items-center gap-3">
                   <p className="text-5xl mb-2">🏆</p>
                   <p className="text-lg font-semibold text-gray-700 dark:text-gray-300">
-                    {searchQuery 
+                    {searchQuery
                       ? t('dashboard.contests.no_contestants_found') || 'Aucun participant trouvé'
                       : t('dashboard.contests.no_contestants') || 'Aucun participant pour le moment'}
                   </p>
