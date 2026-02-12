@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useLanguage } from '@/contexts/language-context'
 import { useAuth } from '@/hooks/use-auth'
@@ -109,20 +109,82 @@ export default function ContestantsListPage() {
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [favorites, setFavorites] = useState<string[]>([])
-  const [showMyCountryOnly, setShowMyCountryOnly] = useState(true) // Default to user's country when they have one (filtered like contest page)
-  const [userCountry, setUserCountry] = useState<string>(() => searchParams.get('country') || '')
 
+  // Read location filters from URL (same pattern as contest detail page)
+  const filterCountry = searchParams.get('country') || ''
+  const filterContinent = searchParams.get('continent') || ''
+
+  // State for client-side override (the "Globe" vs "Country" toggle)
+  const [showMyCountryOnly, setShowMyCountryOnly] = useState(true)
+  const [userCountry, setUserCountry] = useState<string>(() => filterCountry)
+
+  // Mettre à jour l'URL quand les filtres changent
+  const updateUrlWithFilters = useCallback((country: string, continent: string) => {
+    const params = new URLSearchParams()
+    if (country) params.set('country', country)
+    if (continent && continent !== 'all') params.set('continent', continent)
+
+    const queryString = params.toString()
+    const newUrl = `/dashboard/contests/${contestId}/contestants${queryString ? `?${queryString}` : ''}`
+    router.replace(newUrl, { scroll: false })
+  }, [router, contestId])
+
+  // Auto-redirect to user's country if no filters in URL (Mirrors contest detail page)
   useEffect(() => {
-    if (contestId) {
-      loadContest()
-    }
-  }, [contestId])
+    if (!user || (!user.country && !user.continent)) return;
+    const urlCountry = searchParams.get('country');
+    const urlContinent = searchParams.get('continent');
 
-  const loadContest = async () => {
+    if (!urlCountry && !urlContinent) {
+      const defaultCountry = user.country || '';
+      const defaultContinent = user.continent || 'all';
+
+      if (defaultCountry || (defaultContinent && defaultContinent !== 'all')) {
+        const p = new URLSearchParams();
+        if (defaultCountry) p.set('country', defaultCountry);
+        if (defaultContinent && defaultContinent !== 'all') p.set('continent', defaultContinent);
+        const q = p.toString();
+        if (q) {
+          console.log('[ContestantsPage] Redirecting to default filters:', q);
+          router.replace(`/dashboard/contests/${contestId}/contestants?${q}`, { scroll: false });
+        }
+      }
+    }
+  }, [user, contestId, searchParams, router]);
+
+  // Sync state with URL params
+  useEffect(() => {
+    const urlCountry = searchParams.get('country');
+    if (urlCountry === 'all') {
+      setShowMyCountryOnly(false);
+    } else if (urlCountry) {
+      setUserCountry(urlCountry);
+      setShowMyCountryOnly(true);
+    } else if (user?.country) {
+      // Fallback if URL is empty but user has country
+      setUserCountry(user.country);
+      setShowMyCountryOnly(true);
+    }
+  }, [user?.country, searchParams]);
+
+  const loadContest = useCallback(async () => {
     try {
       setLoading(true)
-      // Request ALL contestants - backend filter can return 0 if country format doesn't match
-      const response = await contestService.getContestById(contestId, { filter_country: 'all', filter_continent: 'all' })
+
+      // Mirroring contest detail page: If URL has filters, use them. 
+      // EXCEPT: If we want client-side "Show All" to work instantly, we might want 'all'.
+      // BUT: The user specifically complained it's not filtered by default.
+      // So let's use the URL filters (or user default) which matches the detail page.
+
+      const params: any = {};
+      if (filterCountry) params.filter_country = filterCountry;
+      if (filterContinent) params.filter_continent = filterContinent;
+
+      // If NO filters in URL and NOT logged in, we get everyone.
+      // If NO filters in URL and LOGGED in, backend will fallback to user country.
+
+      console.log('[ContestantsPage] Loading with params:', params);
+      const response = await contestService.getContestById(contestId, params)
       setContest(response)
 
       const parseMediaIds = (mediaIds: string | null | undefined, type: 'image' | 'video'): Media[] => {
@@ -220,7 +282,13 @@ export default function ContestantsListPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [contestId, filterCountry, filterContinent]);
+
+  useEffect(() => {
+    if (contestId) {
+      loadContest();
+    }
+  }, [loadContest, contestId]);
 
   // Country code mapping with common variations
   const countryCodeMap: Record<string, string> = {
@@ -230,7 +298,7 @@ export default function ContestantsListPage() {
     'united states of america': 'us',
     'canada': 'ca',
     'mexico': 'mx',
-    
+
     // Europe
     'united kingdom': 'gb',
     'uk': 'gb',
@@ -273,7 +341,7 @@ export default function ContestantsListPage() {
     'kosovo': 'xk',
     'moldova': 'md',
     'belarus': 'by',
-    
+
     // Asia
     'japan': 'jp',
     'south korea': 'kr',
@@ -303,7 +371,7 @@ export default function ContestantsListPage() {
     'qatar': 'qa',
     'kuwait': 'kw',
     'bahrain': 'bh',
-    
+
     // Africa
     'egypt': 'eg',
     'libya': 'ly',
@@ -391,17 +459,6 @@ export default function ContestantsListPage() {
     return noSpaceC.includes(noSpaceU) || noSpaceU.includes(noSpaceC);
   };
 
-  // Update userCountry: prefer URL param (from contest page filter), else user's country from auth
-  useEffect(() => {
-    const urlCountry = searchParams.get('country');
-    if (urlCountry) {
-      setUserCountry(urlCountry);
-      setShowMyCountryOnly(true);
-    } else if (user?.country) {
-      setUserCountry(user.country);
-      setShowMyCountryOnly(true);
-    }
-  }, [user?.country, searchParams]);
 
   // Get contestants based on filter
   const contestants = React.useMemo(() => {
@@ -429,11 +486,11 @@ export default function ContestantsListPage() {
   useEffect(() => {
     console.log('=== DEBUG: Starting useEffect for test data ===');
     console.log('Current allContestants:', allContestants);
-    
+
     // Always enable debug mode for now
     const debugMode = true;
     console.log('Debug mode:', debugMode);
-    
+
     if (debugMode && allContestants.length === 0) {
       console.log('Adding test contestants...');
       const tanzaniaTestContestants: Contestant[] = [
@@ -499,12 +556,12 @@ export default function ContestantsListPage() {
           shares: 0
         }
       ];
-      
+
       console.log('Adding test contestants:', tanzaniaTestContestants);
       setAllContestants(tanzaniaTestContestants);
     }
   }, [allContestants.length]);
-  
+
   // Log filtering info for debugging
   useEffect(() => {
     console.log('=== DEBUG: Filtering info ===');
@@ -512,10 +569,10 @@ export default function ContestantsListPage() {
     console.log('User country from auth:', user?.country);
     console.log('All contestants:', allContestants);
     console.log('Filtered contestants:', contestants);
-    
+
     // Always log in production for now
     const debugMode = true;
-    
+
     if (debugMode) {
       console.log('=== DEBUG MODE ===');
       console.log('Environment:', process.env.NODE_ENV);
@@ -523,7 +580,7 @@ export default function ContestantsListPage() {
       console.log('Show my country only:', showMyCountryOnly);
       console.log('All contestants count:', allContestants.length);
       console.log('Filtered contestants count:', contestants.length);
-      
+
       if (allContestants.length > 0) {
         console.log('Sample contestant:', {
           name: allContestants[0].name,
@@ -531,7 +588,7 @@ export default function ContestantsListPage() {
           city: allContestants[0].city
         });
       }
-      
+
       if (contestants.length > 0) {
         console.log('Sample filtered contestant:', {
           name: contestants[0].name,
@@ -554,7 +611,7 @@ export default function ContestantsListPage() {
   // Count of contestants from user's country
   const countryContestantCount = React.useMemo(() => {
     if (!userCountry) return allContestants.length;
-    
+
     return allContestants.filter(contestant => {
       if (!contestant.country) return false;
       return countriesMatch(userCountry, contestant.country);
@@ -674,25 +731,26 @@ export default function ContestantsListPage() {
           {/* Search and Country Filter */}
           <div className="mb-6 space-y-4">
             {/* Country toggle */}
-            {userCountry && (
+            {(user?.country || filterCountry) && (
               <div className="flex items-center gap-2">
                 <Button
-                  variant={showMyCountryOnly ? 'default' : 'outline'}
+                  variant={(filterCountry && filterCountry !== 'all') ? 'default' : 'outline'}
                   size="sm"
-                  onClick={() => setShowMyCountryOnly(true)}
-                  className={`gap-2 ${showMyCountryOnly ? 'bg-myfav-primary hover:bg-myfav-primary/90 text-white' : ''}`}
+                  onClick={() => updateUrlWithFilters(user?.country || userCountry, filterContinent)}
+                  className={`gap-2 ${(filterCountry && filterCountry !== 'all') ? 'bg-myfav-primary hover:bg-myfav-primary/90 text-white' : ''}`}
                 >
                   <MapPin className="h-4 w-4" />
-                  {userCountry} ({countryContestantCount})
+                  {user?.country || userCountry}
                 </Button>
                 <Button
-                  variant={!showMyCountryOnly ? 'default' : 'outline'}
+                  variant={filterCountry === 'all' || !filterCountry ? 'default' : 'outline'}
                   size="sm"
-                  onClick={() => setShowMyCountryOnly(false)}
-                  className={`gap-2 ${!showMyCountryOnly ? 'bg-myfav-primary hover:bg-myfav-primary/90 text-white' : ''}`}
+                  onClick={() => updateUrlWithFilters('all', filterContinent)}
+                  className={`gap-2 ${(filterCountry === 'all' || !filterCountry) ? 'bg-myfav-primary hover:bg-myfav-primary/90 text-white' : ''}`}
                 >
-                  <Globe className="h-4 w-4" />
-                  {t('common.all') || 'Tous'} ({allContestants.length})
+                  <MapPin className="h-4 w-4 invisible" />
+                  <Globe className="h-4 w-4 absolute" />
+                  {t('common.all') || 'Tous'}
                 </Button>
               </div>
             )}
