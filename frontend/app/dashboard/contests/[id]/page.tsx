@@ -760,6 +760,7 @@ export default function ContestDetailPage() {
               contestants={contest.contestants}
               contestId={contestId}
               onShowToast={showToast}
+              filterCountry={filterCountry || undefined}
             />
           </div>
         </div>

@@ -287,10 +287,12 @@ class ContestService {
 
   /**
    * Récupère un contest par son ID avec ses participants
+   * @param contestId - ID du concours
+   * @param params - filter_country: 'all' pour récupérer tous les contestants (filtrage côté client)
    */
-  async getContestById(contestId: string): Promise<ContestResponse> {
+  async getContestById(contestId: string, params?: { filter_country?: string; filter_continent?: string }): Promise<ContestResponse> {
     try {
-      const response = await api.get(`/api/v1/contests/${contestId}`)
+      const response = await api.get(`/api/v1/contests/${contestId}`, { params })
       return response.data
     } catch (error) {
       console.error(`Error fetching contest ${contestId}:`, error)

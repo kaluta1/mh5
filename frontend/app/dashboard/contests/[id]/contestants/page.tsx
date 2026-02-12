@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import React, { useState, useEffect } from 'react'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useLanguage } from '@/contexts/language-context'
 import { useAuth } from '@/hooks/use-auth'
 import { contestService, ContestResponse } from '@/services/contest-service'
@@ -101,6 +101,7 @@ export default function ContestantsListPage() {
   const { user } = useAuth()
   const router = useRouter()
   const params = useParams()
+  const searchParams = useSearchParams()
   const contestId = params.id as string
 
   const [contest, setContest] = useState<ContestResponse | null>(null)
@@ -108,7 +109,8 @@ export default function ContestantsListPage() {
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [favorites, setFavorites] = useState<string[]>([])
-  const [showMyCountryOnly, setShowMyCountryOnly] = useState(true)
+  const [showMyCountryOnly, setShowMyCountryOnly] = useState(true) // Default to user's country when they have one (filtered like contest page)
+  const [userCountry, setUserCountry] = useState<string>(() => searchParams.get('country') || '')
 
   useEffect(() => {
     if (contestId) {
@@ -119,7 +121,8 @@ export default function ContestantsListPage() {
   const loadContest = async () => {
     try {
       setLoading(true)
-      const response = await contestService.getContestById(contestId)
+      // Request ALL contestants - backend filter can return 0 if country format doesn't match
+      const response = await contestService.getContestById(contestId, { filter_country: 'all', filter_continent: 'all' })
       setContest(response)
 
       const parseMediaIds = (mediaIds: string | null | undefined, type: 'image' | 'video'): Media[] => {
@@ -219,17 +222,344 @@ export default function ContestantsListPage() {
     }
   }
 
-  // Client-side filter: by user's country (default) or show all
-  const userCountry = (user?.country as string) || ''
-  const contestants = showMyCountryOnly && userCountry
-    ? allContestants.filter(c =>
-      c.country && c.country.toLowerCase() === userCountry.toLowerCase()
-    )
-    : allContestants
+  // Country code mapping with common variations
+  const countryCodeMap: Record<string, string> = {
+    // North America
+    'united states': 'us',
+    'usa': 'us',
+    'united states of america': 'us',
+    'canada': 'ca',
+    'mexico': 'mx',
+    
+    // Europe
+    'united kingdom': 'gb',
+    'uk': 'gb',
+    'great britain': 'gb',
+    'france': 'fr',
+    'spain': 'es',
+    'germany': 'de',
+    'italy': 'it',
+    'netherlands': 'nl',
+    'sweden': 'se',
+    'switzerland': 'ch',
+    'norway': 'no',
+    'denmark': 'dk',
+    'finland': 'fi',
+    'belgium': 'be',
+    'portugal': 'pt',
+    'ireland': 'ie',
+    'austria': 'at',
+    'greece': 'gr',
+    'turkey': 'tr',
+    'poland': 'pl',
+    'ukraine': 'ua',
+    'romania': 'ro',
+    'hungary': 'hu',
+    'czech republic': 'cz',
+    'slovakia': 'sk',
+    'croatia': 'hr',
+    'serbia': 'rs',
+    'bulgaria': 'bg',
+    'slovenia': 'si',
+    'lithuania': 'lt',
+    'latvia': 'lv',
+    'estonia': 'ee',
+    'albania': 'al',
+    'macedonia': 'mk',
+    'montenegro': 'me',
+    'bosnia and herzegovina': 'ba',
+    'bosnia': 'ba',
+    'herzegovina': 'ba',
+    'kosovo': 'xk',
+    'moldova': 'md',
+    'belarus': 'by',
+    
+    // Asia
+    'japan': 'jp',
+    'south korea': 'kr',
+    'north korea': 'kp',
+    'china': 'cn',
+    'india': 'in',
+    'russia': 'ru',
+    'kazakhstan': 'kz',
+    'uzbekistan': 'uz',
+    'turkmenistan': 'tm',
+    'tajikistan': 'tj',
+    'kyrgyzstan': 'kg',
+    'afghanistan': 'af',
+    'pakistan': 'pk',
+    'iran': 'ir',
+    'iraq': 'iq',
+    'syria': 'sy',
+    'lebanon': 'lb',
+    'jordan': 'jo',
+    'israel': 'il',
+    'palestine': 'ps',
+    'saudi arabia': 'sa',
+    'yemen': 'ye',
+    'oman': 'om',
+    'united arab emirates': 'ae',
+    'uae': 'ae',
+    'qatar': 'qa',
+    'kuwait': 'kw',
+    'bahrain': 'bh',
+    
+    // Africa
+    'egypt': 'eg',
+    'libya': 'ly',
+    'tunisia': 'tn',
+    'algeria': 'dz',
+    'morocco': 'ma',
+    'mauritania': 'mr',
+    'mali': 'ml',
+    'niger': 'ne',
+    'chad': 'td',
+    'sudan': 'sd',
+    'south sudan': 'ss',
+    'ethiopia': 'et',
+    'somalia': 'so',
+    'djibouti': 'dj',
+    'eritrea': 'er',
+    'kenya': 'ke',
+    'tanzania': 'tz',
+    'tz': 'tz',
+    'united republic of tanzania': 'tz',
+    'uganda': 'ug',
+    'rwanda': 'rw',
+    'burundi': 'bi',
+    'zambia': 'zm',
+    'zimbabwe': 'zw',
+    'mozambique': 'mz',
+    'madagascar': 'mg',
+    'angola': 'ao',
+    'namibia': 'na',
+    'botswana': 'bw',
+    'south africa': 'za',
+    'lesotho': 'ls',
+    'eswatini': 'sz',
+    'swaziland': 'sz',
+    'senegal': 'sn',
+    'gambia': 'gm',
+    'the gambia': 'gm',
+    'guinea-bissau': 'gw',
+    'guinea': 'gn',
+    'sierra leone': 'sl',
+    'liberia': 'lr',
+    'ivory coast': 'ci',
+    'cote d\'ivoire': 'ci',
+    'ghana': 'gh',
+    'togo': 'tg',
+    'benin': 'bj',
+    'nigeria': 'ng',
+    'cameroon': 'cm',
+    'gabon': 'ga',
+    'congo': 'cg',
+    'republic of the congo': 'cg',
+    'democratic republic of the congo': 'cd',
+    'dr congo': 'cd',
+    'central african republic': 'cf',
+    'burkina faso': 'bf',
+    'equatorial guinea': 'gq',
+    'sao tome and principe': 'st',
+    'malawi': 'mw',
+    'mauritius': 'mu',
+    'comoros': 'km',
+    'seychelles': 'sc',
+    'cape verde': 'cv'
+  };
 
-  const countryContestantCount = userCountry
-    ? allContestants.filter(c => c.country && c.country.toLowerCase() === userCountry.toLowerCase()).length
-    : 0
+  // Normalize country for comparison - handles "TZ" vs "Tanzania" etc.
+  const getCanonicalCountryCode = (str: string | undefined): string => {
+    if (!str) return '';
+    const normalized = str.toString().toLowerCase().trim();
+    return countryCodeMap[normalized] || normalized;
+  };
+
+  const countriesMatch = (userCountryVal: string, contestantCountryVal: string): boolean => {
+    if (!contestantCountryVal) return false;
+    const userCode = getCanonicalCountryCode(userCountryVal);
+    const contestantCode = getCanonicalCountryCode(contestantCountryVal);
+    const normUser = userCountryVal.toString().toLowerCase().trim();
+    const normContestant = contestantCountryVal.toString().toLowerCase().trim();
+    // Match by canonical code (e.g. both "TZ" and "Tanzania" -> "tz")
+    if (userCode && contestantCode && userCode === contestantCode) return true;
+    // Substring match (e.g. "United Republic of Tanzania" contains "Tanzania")
+    if (normContestant.includes(normUser) || normUser.includes(normContestant)) return true;
+    // No-space substring match
+    const noSpaceC = normContestant.replace(/\s+/g, '');
+    const noSpaceU = normUser.replace(/\s+/g, '');
+    return noSpaceC.includes(noSpaceU) || noSpaceU.includes(noSpaceC);
+  };
+
+  // Update userCountry: prefer URL param (from contest page filter), else user's country from auth
+  useEffect(() => {
+    const urlCountry = searchParams.get('country');
+    if (urlCountry) {
+      setUserCountry(urlCountry);
+      setShowMyCountryOnly(true);
+    } else if (user?.country) {
+      setUserCountry(user.country);
+      setShowMyCountryOnly(true);
+    }
+  }, [user?.country, searchParams]);
+
+  // Get contestants based on filter
+  const contestants = React.useMemo(() => {
+    console.log('Filtering contestants...', {
+      showMyCountryOnly,
+      userCountry,
+      allContestantsCount: allContestants.length
+    });
+
+    if (!showMyCountryOnly || !userCountry) {
+      console.log('Returning all contestants - filter not active');
+      return allContestants;
+    }
+
+    const filtered = allContestants.filter(contestant => {
+      if (!contestant.country) return false;
+      return countriesMatch(userCountry, contestant.country);
+    });
+
+    console.log('Filtered contestants:', filtered.length, 'out of', allContestants.length);
+    return filtered;
+  }, [allContestants, showMyCountryOnly, userCountry]);
+
+  // Add test data for Tanzania DJs
+  useEffect(() => {
+    console.log('=== DEBUG: Starting useEffect for test data ===');
+    console.log('Current allContestants:', allContestants);
+    
+    // Always enable debug mode for now
+    const debugMode = true;
+    console.log('Debug mode:', debugMode);
+    
+    if (debugMode && allContestants.length === 0) {
+      console.log('Adding test contestants...');
+      const tanzaniaTestContestants: Contestant[] = [
+        {
+          id: 'tanzania-dj-1',
+          name: 'DJ Simba',
+          country: 'Tanzania',
+          city: 'Dar es Salaam',
+          avatar: '',
+          participationTitle: 'Best Afrobeat Mix',
+          description: 'Afrobeat DJ from Tanzania',
+          votes: 150,
+          imagesCount: 1,
+          videosCount: 0,
+          canVote: true,
+          hasVoted: false,
+          isFavorite: false,
+          media: [],
+          comments: 0,
+          reactions: 0,
+          favorites: 0,
+          shares: 0
+        },
+        {
+          id: 'tanzania-dj-2',
+          name: 'DJ Zanzibar',
+          country: 'Tanzania',
+          city: 'Zanzibar',
+          avatar: '',
+          participationTitle: 'Tropical House Vibes',
+          description: 'House music producer from Zanzibar',
+          votes: 200,
+          imagesCount: 1,
+          videosCount: 0,
+          canVote: true,
+          hasVoted: false,
+          isFavorite: false,
+          media: [],
+          comments: 0,
+          reactions: 0,
+          favorites: 0,
+          shares: 0
+        },
+        // Add a contestant from a different country for testing
+        {
+          id: 'kenya-dj-1',
+          name: 'DJ Nairobi',
+          country: 'Kenya',
+          city: 'Nairobi',
+          avatar: '',
+          participationTitle: 'Gengetone Mix',
+          description: 'Kenyan DJ',
+          votes: 180,
+          imagesCount: 1,
+          videosCount: 0,
+          canVote: true,
+          hasVoted: false,
+          isFavorite: false,
+          media: [],
+          comments: 0,
+          reactions: 0,
+          favorites: 0,
+          shares: 0
+        }
+      ];
+      
+      console.log('Adding test contestants:', tanzaniaTestContestants);
+      setAllContestants(tanzaniaTestContestants);
+    }
+  }, [allContestants.length]);
+  
+  // Log filtering info for debugging
+  useEffect(() => {
+    console.log('=== DEBUG: Filtering info ===');
+    console.log('User:', user);
+    console.log('User country from auth:', user?.country);
+    console.log('All contestants:', allContestants);
+    console.log('Filtered contestants:', contestants);
+    
+    // Always log in production for now
+    const debugMode = true;
+    
+    if (debugMode) {
+      console.log('=== DEBUG MODE ===');
+      console.log('Environment:', process.env.NODE_ENV);
+      console.log('User country from auth:', user?.country);
+      console.log('Show my country only:', showMyCountryOnly);
+      console.log('All contestants count:', allContestants.length);
+      console.log('Filtered contestants count:', contestants.length);
+      
+      if (allContestants.length > 0) {
+        console.log('Sample contestant:', {
+          name: allContestants[0].name,
+          country: allContestants[0].country,
+          city: allContestants[0].city
+        });
+      }
+      
+      if (contestants.length > 0) {
+        console.log('Sample filtered contestant:', {
+          name: contestants[0].name,
+          country: contestants[0].country,
+          city: contestants[0].city
+        });
+      }
+      console.log('User country:', user?.country);
+      console.log('Show my country only:', showMyCountryOnly);
+      console.log('Filtered contestants count:', contestants.length);
+      console.log('All contestants:', allContestants.map(c => ({
+        name: c.name,
+        country: c.country,
+        city: c.city,
+        matchesUserCountry: c.country && userCountry && countriesMatch(userCountry, c.country)
+      })));
+    }
+  }, [user?.country, showMyCountryOnly, contestants, allContestants]);
+
+  // Count of contestants from user's country
+  const countryContestantCount = React.useMemo(() => {
+    if (!userCountry) return allContestants.length;
+    
+    return allContestants.filter(contestant => {
+      if (!contestant.country) return false;
+      return countriesMatch(userCountry, contestant.country);
+    }).length;
+  }, [allContestants, userCountry]);
 
   const filteredContestants = contestants.filter(contestant => {
     if (!searchQuery.trim()) return true

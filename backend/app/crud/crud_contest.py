@@ -13,6 +13,36 @@ from app.schemas.contest import ContestCreate, ContestUpdate
 if TYPE_CHECKING:
     from app.models.user import User
 
+# Country code -> search patterns for ILIKE (handles "TZ" vs "Tanzania")
+_COUNTRY_CODE_TO_NAMES: Dict[str, List[str]] = {
+    "tz": ["%tz%", "%tanzania%", "%united republic of tanzania%"],
+    "ke": ["%ke%", "%kenya%"],
+    "ng": ["%ng%", "%nigeria%"],
+    "za": ["%za%", "%south africa%"],
+    "gh": ["%gh%", "%ghana%"],
+    "ug": ["%ug%", "%uganda%"],
+    "et": ["%et%", "%ethiopia%"],
+    "sn": ["%sn%", "%senegal%"],
+    "ci": ["%ci%", "%ivory coast%", "%cote d'ivoire%", "%côte d'ivoire%"],
+    "cm": ["%cm%", "%cameroon%"],
+    "us": ["%us%", "%usa%", "%united states%", "%united states of america%"],
+    "gb": ["%gb%", "%uk%", "%united kingdom%", "%great britain%"],
+    "fr": ["%fr%", "%france%"],
+    "de": ["%de%", "%germany%"],
+}
+
+
+def _get_country_match_patterns(country: str) -> List[str]:
+    """Return ILIKE patterns for a country (handles code vs full name)."""
+    if not country:
+        return []
+    norm = str(country).lower().strip()
+    # Direct pattern for the input
+    patterns = [f"%{norm}%"]
+    # Add known aliases when input is a 2-letter code
+    if len(norm) == 2 and norm in _COUNTRY_CODE_TO_NAMES:
+        patterns = _COUNTRY_CODE_TO_NAMES[norm]
+    return patterns
 
 
 class CRUDContest:
@@ -1170,12 +1200,13 @@ class CRUDContest:
             
             if effective_country:
                 logger.info(f"[get_contest_with_enriched_contestants] Filtering by country: '{effective_country}'")
-                # Filtrer par pays (prioritaire) - CASE INSENSITIVE
-                # Check BOTH Contestant.country AND User.country
-                location_conditions.append(or_(
-                    Contestant.country.ilike(f"%{effective_country}%"),
-                    User.country.ilike(f"%{effective_country}%")
-                ))
+                # Build patterns: include code (TZ) and common names (Tanzania) so both match
+                country_patterns = _get_country_match_patterns(effective_country)
+                conds = []
+                for pat in country_patterns:
+                    conds.append(Contestant.country.ilike(pat))
+                    conds.append(User.country.ilike(pat))
+                location_conditions.append(or_(*conds))
             elif effective_continent:
                 logger.info(f"[get_contest_with_enriched_contestants] Filtering by continent: '{effective_continent}'")
                 # Filtrer par continent si pas de pays
