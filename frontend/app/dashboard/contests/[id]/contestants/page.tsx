@@ -482,141 +482,16 @@ export default function ContestantsListPage() {
     return filtered;
   }, [allContestants, showMyCountryOnly, userCountry]);
 
-  // Add test data for Tanzania DJs
-  useEffect(() => {
-    console.log('=== DEBUG: Starting useEffect for test data ===');
-    console.log('Current allContestants:', allContestants);
-
-    // Always enable debug mode for now
-    const debugMode = true;
-    console.log('Debug mode:', debugMode);
-
-    if (debugMode && allContestants.length === 0) {
-      console.log('Adding test contestants...');
-      const tanzaniaTestContestants: Contestant[] = [
-        {
-          id: 'tanzania-dj-1',
-          name: 'DJ Simba',
-          country: 'Tanzania',
-          city: 'Dar es Salaam',
-          avatar: '',
-          participationTitle: 'Best Afrobeat Mix',
-          description: 'Afrobeat DJ from Tanzania',
-          votes: 150,
-          imagesCount: 1,
-          videosCount: 0,
-          canVote: true,
-          hasVoted: false,
-          isFavorite: false,
-          media: [],
-          comments: 0,
-          reactions: 0,
-          favorites: 0,
-          shares: 0
-        },
-        {
-          id: 'tanzania-dj-2',
-          name: 'DJ Zanzibar',
-          country: 'Tanzania',
-          city: 'Zanzibar',
-          avatar: '',
-          participationTitle: 'Tropical House Vibes',
-          description: 'House music producer from Zanzibar',
-          votes: 200,
-          imagesCount: 1,
-          videosCount: 0,
-          canVote: true,
-          hasVoted: false,
-          isFavorite: false,
-          media: [],
-          comments: 0,
-          reactions: 0,
-          favorites: 0,
-          shares: 0
-        },
-        // Add a contestant from a different country for testing
-        {
-          id: 'kenya-dj-1',
-          name: 'DJ Nairobi',
-          country: 'Kenya',
-          city: 'Nairobi',
-          avatar: '',
-          participationTitle: 'Gengetone Mix',
-          description: 'Kenyan DJ',
-          votes: 180,
-          imagesCount: 1,
-          videosCount: 0,
-          canVote: true,
-          hasVoted: false,
-          isFavorite: false,
-          media: [],
-          comments: 0,
-          reactions: 0,
-          favorites: 0,
-          shares: 0
-        }
-      ];
-
-      console.log('Adding test contestants:', tanzaniaTestContestants);
-      setAllContestants(tanzaniaTestContestants);
-    }
-  }, [allContestants.length]);
-
-  // Log filtering info for debugging
-  useEffect(() => {
-    console.log('=== DEBUG: Filtering info ===');
-    console.log('User:', user);
-    console.log('User country from auth:', user?.country);
-    console.log('All contestants:', allContestants);
-    console.log('Filtered contestants:', contestants);
-
-    // Always log in production for now
-    const debugMode = true;
-
-    if (debugMode) {
-      console.log('=== DEBUG MODE ===');
-      console.log('Environment:', process.env.NODE_ENV);
-      console.log('User country from auth:', user?.country);
-      console.log('Show my country only:', showMyCountryOnly);
-      console.log('All contestants count:', allContestants.length);
-      console.log('Filtered contestants count:', contestants.length);
-
-      if (allContestants.length > 0) {
-        console.log('Sample contestant:', {
-          name: allContestants[0].name,
-          country: allContestants[0].country,
-          city: allContestants[0].city
-        });
-      }
-
-      if (contestants.length > 0) {
-        console.log('Sample filtered contestant:', {
-          name: contestants[0].name,
-          country: contestants[0].country,
-          city: contestants[0].city
-        });
-      }
-      console.log('User country:', user?.country);
-      console.log('Show my country only:', showMyCountryOnly);
-      console.log('Filtered contestants count:', contestants.length);
-      console.log('All contestants:', allContestants.map(c => ({
-        name: c.name,
-        country: c.country,
-        city: c.city,
-        matchesUserCountry: c.country && userCountry && countriesMatch(userCountry, c.country)
-      })));
-    }
-  }, [user?.country, showMyCountryOnly, contestants, allContestants]);
-
   // Count of contestants from user's country
   const countryContestantCount = React.useMemo(() => {
-    if (!userCountry) return allContestants.length;
+    const targetCountry = user?.country || userCountry;
+    if (!targetCountry) return allContestants.length;
 
     return allContestants.filter(contestant => {
       if (!contestant.country) return false;
-      return countriesMatch(userCountry, contestant.country);
+      return countriesMatch(targetCountry, contestant.country);
     }).length;
-  }, [allContestants, userCountry]);
+  }, [allContestants, userCountry, user?.country]);
 
   const filteredContestants = contestants.filter(contestant => {
     if (!searchQuery.trim()) return true
@@ -733,25 +608,13 @@ export default function ContestantsListPage() {
             {/* Country toggle */}
             {(user?.country || filterCountry) && (
               <div className="flex items-center gap-2">
-                <Button
-                  variant={(filterCountry && filterCountry !== 'all') ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => updateUrlWithFilters(user?.country || userCountry, filterContinent)}
-                  className={`gap-2 ${(filterCountry && filterCountry !== 'all') ? 'bg-myfav-primary hover:bg-myfav-primary/90 text-white' : ''}`}
-                >
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-myfav-primary/10 text-myfav-primary rounded-full border border-myfav-primary/20">
                   <MapPin className="h-4 w-4" />
-                  {user?.country || userCountry}
-                </Button>
-                <Button
-                  variant={filterCountry === 'all' || !filterCountry ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => updateUrlWithFilters('all', filterContinent)}
-                  className={`gap-2 ${(filterCountry === 'all' || !filterCountry) ? 'bg-myfav-primary hover:bg-myfav-primary/90 text-white' : ''}`}
-                >
-                  <MapPin className="h-4 w-4 invisible" />
-                  <Globe className="h-4 w-4 absolute" />
-                  {t('common.all') || 'Tous'}
-                </Button>
+                  <span className="text-sm font-medium">{user?.country || userCountry}</span>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 ml-2">
+                  {t('dashboard.contests.filtered_by_country') || 'Filtré par votre pays'}
+                </p>
               </div>
             )}
             {/* Search */}

@@ -580,6 +580,8 @@ class CRUDContest:
             entries_query = db.query(func.count(Contestant.id.distinct()))\
                 .filter(Contestant.id == -1)  # Impossible condition = 0 results
         
+        from app.models.user import User
+        
         # Appliquer les filtres géographiques
         # Priorité: filtres explicites > localisation de l'utilisateur
         has_location_filter = filter_country or filter_region or filter_continent
@@ -589,9 +591,13 @@ class CRUDContest:
             # Utiliser les filtres fournis par l'utilisateur
             applied_location_filter = True
             if filter_country:
-                entries_query = entries_query.filter(
-                    func.lower(Contestant.country) == func.lower(filter_country)
-                )
+                # Use patterns for consistency with get_contest_with_enriched_contestants
+                patterns = _get_country_match_patterns(filter_country)
+                conds = []
+                for pat in patterns:
+                    conds.append(Contestant.country.ilike(pat))
+                    conds.append(User.country.ilike(pat))
+                entries_query = entries_query.join(User).filter(or_(*conds))
             if filter_region:
                 entries_query = entries_query.filter(
                     func.lower(Contestant.region) == func.lower(filter_region)
@@ -615,9 +621,16 @@ class CRUDContest:
             elif season_level_lower == "country":
                 # Filtrer par pays
                 if current_user.country:
-                    entries_query = entries_query.filter(
-                        Contestant.country == current_user.country
-                    )
+                    patterns = _get_country_match_patterns(current_user.country)
+                    conds = []
+                    for pat in patterns:
+                        conds.append(Contestant.country.ilike(pat))
+                        conds.append(User.country.ilike(pat))
+                    # Ensure join(User) is called before filtering on User.country
+                    # But we already did a join(User) if filter_country was handled above.
+                    # Actually, we should check if we already joined. 
+                    # Simpler is to use join(User) here too.
+                    entries_query = entries_query.join(User).filter(or_(*conds))
                     applied_location_filter = True
             elif season_level_lower in ("regional", "region"):
                 # Filtrer par région
@@ -1667,12 +1680,12 @@ class CRUDContest:
                 "video_media_ids": contestant.video_media_ids,
                 "registration_date": contestant.registration_date,
                 "is_qualified": contestant.is_qualified,
-                # Infos auteur - utiliser directement les champs du Contestant
+                # Infos auteur - utiliser les champs du Contestant avec fallback sur le User
                 "author_name": author_name,
-                "author_country": contestant.country,
-                "author_city": contestant.city,
-                "author_continent": contestant.continent,
-                "author_region": contestant.region,
+                "author_country": contestant.country or (contestant.user.country if contestant.user else None),
+                "author_city": contestant.city or (contestant.user.city if contestant.user else None),
+                "author_continent": contestant.continent or (contestant.user.continent if contestant.user else None),
+                "author_region": contestant.region or (contestant.user.region if contestant.user else None),
                 "author_gender": contestant.author_gender,
                 "author_avatar_url": author_avatar_url,
                 # Stats

@@ -173,9 +173,11 @@ export function LocationFilterBar({
                                     {countryOptions.myCountry.label}
                                 </SelectItem>
                             )}
-                            <SelectItem value="all">
-                                {t('dashboard.contests.all_countries') || 'Tous les pays'}
-                            </SelectItem>
+                            {!user?.country && (
+                                <SelectItem value="all">
+                                    {t('dashboard.contests.all_countries') || 'Tous les pays'}
+                                </SelectItem>
+                            )}
                             {countries.map((country) => (
                                 <SelectItem key={country.code} value={country.name}>
                                     {country.name}
