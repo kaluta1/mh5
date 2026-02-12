@@ -1002,7 +1002,7 @@ class CRUDContest:
             MyFavorites, ContestantVoting
         )
         from app.models.comment import Comment
-        from sqlalchemy.orm import joinedload
+        from sqlalchemy.orm import joinedload, contains_eager
         import json
         
         # Récupérer le contest
@@ -1083,8 +1083,9 @@ class CRUDContest:
                     Contestant.is_deleted == False,
                     or_(*conditions)
                 )\
+                .join(User) \
                 .options(
-                    joinedload(Contestant.user)
+                    contains_eager(Contestant.user)
                 )
         else:
             # Fallback: just season_id
@@ -1093,8 +1094,9 @@ class CRUDContest:
                     Contestant.is_deleted == False,
                     Contestant.season_id == contest_id
                 )\
+                .join(User) \
                 .options(
-                    joinedload(Contestant.user)
+                    contains_eager(Contestant.user)
                 )
         
         # Appliquer le filtrage géographique selon le niveau de la saison et l'utilisateur connecté
@@ -1162,10 +1164,9 @@ class CRUDContest:
         if contestants_query:
             location_conditions = []
             
-            # Ensure we can filter on User attributes if needed
-            # Validating if we need to join User (it might be joinedloaded but we need explicit join for filtering)
-            # We use distinct to avoid duplicates if any, though Many-to-One shouldn't cause them
-            contestants_query = contestants_query.join(User)
+            # User is already joined in base query via .join(User)
+            # This allows us to filter on User attributes directly without extra joins
+            # contestants_query = contestants_query.join(User)
             
             if effective_country:
                 logger.info(f"[get_contest_with_enriched_contestants] Filtering by country: '{effective_country}'")
