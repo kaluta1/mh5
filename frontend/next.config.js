@@ -2,13 +2,13 @@
 const nextConfig = {
   // Enable compression
   compress: true,
-  
+
   // Optimize production builds
   swcMinify: true,
-  
+
   // Enable React strict mode for better performance
   reactStrictMode: true,
-  
+
   // Optimize images
   images: {
     remotePatterns: [
@@ -51,13 +51,13 @@ const nextConfig = {
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
   },
-  
+
   // Optimize bundle size
   // Note: optimizeCss requires 'critters' package, disabled for now
   // experimental: {
   //   optimizeCss: true,
   // },
-  
+
   // Webpack optimizations
   webpack: (config, { isServer }) => {
     if (!isServer) {
@@ -109,8 +109,8 @@ const nextConfig = {
   },
   async rewrites() {
     // Share link rewrites: backend URL from env or default (see lib/config.ts)
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'https://mh5-hbjp.onrender.com'
-    
+    const backendUrl = (process.env.NEXT_PUBLIC_API_URL || 'https://mh5-hbjp.onrender.com').replace(/\/+$/, '')
+
     return [
       {
         source: '/s/c/:id',

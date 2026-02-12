@@ -9,6 +9,7 @@ import { useToast } from '@/components/ui/toast'
 import { LocationSelectorWithCreate } from '@/components/dashboard/location-selector-with-create'
 import { UploadButton } from '@/components/ui/upload-button'
 import { Calendar, User, Image as ImageIcon, FileText } from 'lucide-react'
+import { API_URL } from '@/lib/config'
 
 export default function ProfileSetupPage() {
   const router = useRouter()
@@ -22,12 +23,12 @@ export default function ProfileSetupPage() {
   const [bio, setBio] = useState<string>('')
   const [dateOfBirth, setDateOfBirth] = useState<string>('')
   const [gender, setGender] = useState<string>('')
-  
+
   const [continentId, setContinentId] = useState<number | null>(null)
   const [regionId, setRegionId] = useState<number | null>(null)
   const [countryId, setCountryId] = useState<number | null>(null)
   const [cityId, setCityId] = useState<number | null>(null)
-  
+
   const [isLoading, setIsLoading] = useState(false)
 
   useEffect(() => {
@@ -85,8 +86,7 @@ export default function ProfileSetupPage() {
         return
       }
 
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-      const response = await fetch(`${apiUrl}/api/v1/users/me`, {
+      const response = await fetch(`${API_URL}/api/v1/users/me`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -112,7 +112,7 @@ export default function ProfileSetupPage() {
       }
 
       addToast(t('profile_setup.success') || 'Profil configuré avec succès!', 'success')
-      
+
       // Rediriger vers le contest ou le dashboard
       const contestId = typeof window !== 'undefined' ? sessionStorage.getItem('contestId') : null
       if (contestId) {
@@ -259,11 +259,10 @@ export default function ProfileSetupPage() {
                 ].map((option) => (
                   <label
                     key={option.value}
-                    className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition ${
-                      gender === option.value
+                    className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition ${gender === option.value
                         ? 'border-myhigh5-primary bg-myhigh5-primary/10'
                         : 'border-gray-600 bg-gray-700/50 hover:border-gray-500'
-                    }`}
+                      }`}
                   >
                     <input
                       type="radio"

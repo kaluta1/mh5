@@ -6,6 +6,7 @@ import { useToast } from '@/components/ui/toast'
 import { Button } from '@/components/ui/button'
 import { LocationSelectorSimple } from '@/components/auth/location-selector-simple'
 import { MapPin, AlertCircle } from 'lucide-react'
+import { API_URL } from '@/lib/config'
 
 interface SettingsLocationTabProps {
   user: any
@@ -46,23 +47,23 @@ export function SettingsLocationTab({ user, onUpdate }: SettingsLocationTabProps
     if (!isCheckingParticipation && !hasParticipation) {
       // Valider directement avec les valeurs actuelles des états
       const newErrors: typeof errors = {}
-      
+
       if (!continent.trim()) {
         newErrors.continent = t('profile_setup.continent_required') || 'Le continent est requis'
       }
-      
+
       if (!region.trim()) {
         newErrors.region = t('profile_setup.region_required') || 'La région est requise'
       }
-      
+
       if (!country.trim()) {
         newErrors.country = t('profile_setup.country_required') || 'Le pays est requis'
       }
-      
+
       if (!city.trim()) {
         newErrors.city = t('profile_setup.city_required') || 'La ville est requise'
       }
-      
+
       setErrors(newErrors)
     }
   }, [isCheckingParticipation, hasParticipation, continent, region, country, city, t])
@@ -76,8 +77,7 @@ export function SettingsLocationTab({ user, onUpdate }: SettingsLocationTabProps
         return
       }
 
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-      const response = await fetch(`${apiUrl}/api/v1/contestants/user/my-entries`, {
+      const response = await fetch(`${API_URL}/api/v1/contestants/user/my-entries`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -97,23 +97,23 @@ export function SettingsLocationTab({ user, onUpdate }: SettingsLocationTabProps
 
   const validateForm = () => {
     const newErrors: typeof errors = {}
-    
+
     if (!continent.trim()) {
       newErrors.continent = t('profile_setup.continent_required') || 'Le continent est requis'
     }
-    
+
     if (!region.trim()) {
       newErrors.region = t('profile_setup.region_required') || 'La région est requise'
     }
-    
+
     if (!country.trim()) {
       newErrors.country = t('profile_setup.country_required') || 'Le pays est requis'
     }
-    
+
     if (!city.trim()) {
       newErrors.city = t('profile_setup.city_required') || 'La ville est requise'
     }
-    
+
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -134,8 +134,7 @@ export function SettingsLocationTab({ user, onUpdate }: SettingsLocationTabProps
         return
       }
 
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-      const response = await fetch(`${apiUrl}/api/v1/users/me`, {
+      const response = await fetch(`${API_URL}/api/v1/users/me`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -173,7 +172,7 @@ export function SettingsLocationTab({ user, onUpdate }: SettingsLocationTabProps
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: undefined }))
     }
-    
+
     if (field === 'continent') {
       setContinent(value)
     } else if (field === 'region') {
@@ -258,7 +257,7 @@ export function SettingsLocationTab({ user, onUpdate }: SettingsLocationTabProps
               selectedCountry={country}
               selectedCity={city}
             />
-            
+
             {/* City Input */}
             {country && (
               <div>
@@ -276,7 +275,7 @@ export function SettingsLocationTab({ user, onUpdate }: SettingsLocationTabProps
                 />
               </div>
             )}
-            
+
             {/* Error Messages */}
             {(errors.continent || errors.region || errors.country || errors.city) && (
               <div className="space-y-2">

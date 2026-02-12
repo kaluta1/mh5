@@ -5,6 +5,7 @@ import { useLanguage } from '@/contexts/language-context'
 import { useToast } from '@/components/ui/toast'
 import { Button } from '@/components/ui/button'
 import { Eye, EyeOff, Lock, Shield, CheckCircle2 } from 'lucide-react'
+import { API_URL } from '@/lib/config'
 
 interface SettingsPasswordTabProps {
   user: any
@@ -50,31 +51,31 @@ export function SettingsPasswordTab({ user }: SettingsPasswordTabProps) {
   const isPasswordValid = () => {
     if (!newPassword) return false
     return newPassword.length >= 8 &&
-           passwordErrors.hasUpperCase &&
-           passwordErrors.hasLowerCase &&
-           passwordErrors.hasNumber &&
-           passwordErrors.hasSpecialChar
+      passwordErrors.hasUpperCase &&
+      passwordErrors.hasLowerCase &&
+      passwordErrors.hasNumber &&
+      passwordErrors.hasSpecialChar
   }
 
   const validateForm = () => {
     const newErrors: typeof errors = {}
-    
+
     if (!currentPassword.trim()) {
       newErrors.currentPassword = t('settings.password.current_required') || 'Le mot de passe actuel est requis'
     }
-    
+
     if (!newPassword.trim()) {
       newErrors.newPassword = t('settings.password.new_required') || 'Le nouveau mot de passe est requis'
     } else if (!isPasswordValid()) {
       newErrors.newPassword = t('auth.register.errors.password_requirements') || 'Le mot de passe doit contenir une majuscule, une minuscule, un chiffre et un caractère spécial (*_/@=)'
     }
-    
+
     if (!confirmPassword.trim()) {
       newErrors.confirmPassword = t('settings.password.confirm_required') || 'La confirmation du mot de passe est requise'
     } else if (newPassword !== confirmPassword) {
       newErrors.confirmPassword = t('settings.password.mismatch') || 'Les mots de passe ne correspondent pas'
     }
-    
+
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -83,7 +84,7 @@ export function SettingsPasswordTab({ user }: SettingsPasswordTabProps) {
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: undefined }))
     }
-    
+
     if (field === 'currentPassword') {
       setCurrentPassword(value)
     } else if (field === 'newPassword') {
@@ -115,8 +116,7 @@ export function SettingsPasswordTab({ user }: SettingsPasswordTabProps) {
         return
       }
 
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-      const response = await fetch(`${apiUrl}/api/v1/auth/change-password`, {
+      const response = await fetch(`${API_URL}/api/v1/auth/change-password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -182,11 +182,10 @@ export function SettingsPasswordTab({ user }: SettingsPasswordTabProps) {
             type={showCurrentPassword ? 'text' : 'password'}
             value={currentPassword}
             onChange={(e) => handleFieldChange('currentPassword', e.target.value)}
-            className={`w-full pl-10 pr-12 py-3 rounded-xl border bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 transition-all ${
-              errors.currentPassword
+            className={`w-full pl-10 pr-12 py-3 rounded-xl border bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 transition-all ${errors.currentPassword
                 ? 'border-red-500 dark:border-red-500 focus:ring-red-500 focus:border-red-500 bg-red-50 dark:bg-red-900/10'
                 : 'border-gray-300 dark:border-gray-600 focus:ring-myhigh5-primary focus:border-transparent'
-            }`}
+              }`}
             placeholder="••••••••"
           />
           <button
@@ -215,11 +214,10 @@ export function SettingsPasswordTab({ user }: SettingsPasswordTabProps) {
             type={showNewPassword ? 'text' : 'password'}
             value={newPassword}
             onChange={(e) => handleFieldChange('newPassword', e.target.value)}
-            className={`w-full pl-10 pr-12 py-3 rounded-xl border bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 transition-all ${
-              errors.newPassword || (newPassword && !isPasswordValid())
+            className={`w-full pl-10 pr-12 py-3 rounded-xl border bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 transition-all ${errors.newPassword || (newPassword && !isPasswordValid())
                 ? 'border-red-500 dark:border-red-500 focus:ring-red-500 focus:border-red-500 bg-red-50 dark:bg-red-900/10'
                 : 'border-gray-300 dark:border-gray-600 focus:ring-myhigh5-primary focus:border-transparent'
-            }`}
+              }`}
             placeholder="••••••••"
           />
           <button
@@ -289,13 +287,12 @@ export function SettingsPasswordTab({ user }: SettingsPasswordTabProps) {
             type={showConfirmPassword ? 'text' : 'password'}
             value={confirmPassword}
             onChange={(e) => handleFieldChange('confirmPassword', e.target.value)}
-            className={`w-full pl-10 pr-12 py-3 rounded-xl border bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 transition-all ${
-              errors.confirmPassword || (confirmPassword.length > 0 && newPassword !== confirmPassword)
+            className={`w-full pl-10 pr-12 py-3 rounded-xl border bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 transition-all ${errors.confirmPassword || (confirmPassword.length > 0 && newPassword !== confirmPassword)
                 ? 'border-red-500 dark:border-red-500 focus:ring-red-500 focus:border-red-500 bg-red-50 dark:bg-red-900/10'
                 : confirmPassword.length > 0 && newPassword === confirmPassword
-                ? 'border-green-500 dark:border-green-500 focus:ring-green-500 focus:border-green-500'
-                : 'border-gray-300 dark:border-gray-600 focus:ring-myhigh5-primary focus:border-transparent'
-            }`}
+                  ? 'border-green-500 dark:border-green-500 focus:ring-green-500 focus:border-green-500'
+                  : 'border-gray-300 dark:border-gray-600 focus:ring-myhigh5-primary focus:border-transparent'
+              }`}
             placeholder="••••••••"
           />
           <button

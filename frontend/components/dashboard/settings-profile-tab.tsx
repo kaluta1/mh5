@@ -6,6 +6,7 @@ import { useToast } from '@/components/ui/toast'
 import { Button } from '@/components/ui/button'
 import { UploadButton } from '@/components/ui/upload-button'
 import { User, FileText, Image as ImageIcon } from 'lucide-react'
+import { API_URL } from '@/lib/config'
 
 interface SettingsProfileTabProps {
   user: any
@@ -35,49 +36,49 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
       setLastName(user.last_name || '')
       setAvatarUrl(user.avatar_url || '')
       setBio(user.bio || '')
-      
+
       // Valider et afficher les erreurs par défaut
       const newErrors: typeof errors = {}
-      
+
       if (!user.first_name?.trim()) {
         newErrors.firstName = t('profile_setup.first_name_required') || 'Le prénom est requis'
       }
-      
+
       if (!user.last_name?.trim()) {
         newErrors.lastName = t('profile_setup.last_name_required') || 'Le nom est requis'
       }
-      
+
       if (!user.avatar_url) {
         newErrors.avatarUrl = t('profile_setup.avatar_required') || 'L\'avatar est requis'
       }
-      
+
       if (!user.bio?.trim()) {
         newErrors.bio = t('profile_setup.bio_required') || 'La bio est requise'
       }
-      
+
       setErrors(newErrors)
     }
   }, [user, t])
 
   const validateForm = () => {
     const newErrors: typeof errors = {}
-    
+
     if (!firstName.trim()) {
       newErrors.firstName = t('profile_setup.first_name_required') || 'Le prénom est requis'
     }
-    
+
     if (!lastName.trim()) {
       newErrors.lastName = t('profile_setup.last_name_required') || 'Le nom est requis'
     }
-    
+
     if (!avatarUrl) {
       newErrors.avatarUrl = t('profile_setup.avatar_required') || 'L\'avatar est requis'
     }
-    
+
     if (!bio.trim()) {
       newErrors.bio = t('profile_setup.bio_required') || 'La bio est requise'
     }
-    
+
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -98,8 +99,7 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
         return
       }
 
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-      const response = await fetch(`${apiUrl}/api/v1/users/me`, {
+      const response = await fetch(`${API_URL}/api/v1/users/me`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -137,7 +137,7 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: undefined }))
     }
-    
+
     if (field === 'firstName') {
       setFirstName(value)
     } else if (field === 'lastName') {
@@ -161,8 +161,7 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
           return
         }
 
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-        const response = await fetch(`${apiUrl}/api/v1/users/me`, {
+        const response = await fetch(`${API_URL}/api/v1/users/me`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -211,13 +210,13 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
                     }}
                   />
                 </div>
-              <button
-                type="button"
+                <button
+                  type="button"
                   onClick={async () => await handleAvatarChange('')}
-                className="px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors"
-              >
-                {t('settings.remove') || 'Supprimer'}
-              </button>
+                  className="px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors"
+                >
+                  {t('settings.remove') || 'Supprimer'}
+                </button>
               </div>
             </div>
           ) : (
@@ -255,11 +254,10 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
             onChange={(e) => handleFieldChange('firstName', e.target.value)}
             placeholder={t('profile_setup.first_name_placeholder') || 'Votre prénom'}
             disabled={isLoading}
-            className={`w-full px-4 py-3 border rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 transition-all ${
-              errors.firstName
+            className={`w-full px-4 py-3 border rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 transition-all ${errors.firstName
                 ? 'border-red-500 dark:border-red-500 focus:ring-red-500 focus:border-red-500'
                 : 'border-gray-300 dark:border-gray-600 focus:ring-myhigh5-primary focus:border-transparent'
-            }`}
+              }`}
           />
           {errors.firstName && (
             <p className="text-sm text-red-600 dark:text-red-400 mt-1">
@@ -277,11 +275,10 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
             onChange={(e) => handleFieldChange('lastName', e.target.value)}
             placeholder={t('profile_setup.last_name_placeholder') || 'Votre nom'}
             disabled={isLoading}
-            className={`w-full px-4 py-3 border rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 transition-all ${
-              errors.lastName
+            className={`w-full px-4 py-3 border rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 transition-all ${errors.lastName
                 ? 'border-red-500 dark:border-red-500 focus:ring-red-500 focus:border-red-500'
                 : 'border-gray-300 dark:border-gray-600 focus:ring-myhigh5-primary focus:border-transparent'
-            }`}
+              }`}
           />
           {errors.lastName && (
             <p className="text-sm text-red-600 dark:text-red-400 mt-1">
@@ -304,11 +301,10 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
           maxLength={500}
           rows={4}
           disabled={isLoading}
-          className={`w-full px-4 py-3 border rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 resize-none transition-all ${
-            errors.bio
+          className={`w-full px-4 py-3 border rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 resize-none transition-all ${errors.bio
               ? 'border-red-500 dark:border-red-500 focus:ring-red-500 focus:border-red-500'
               : 'border-gray-300 dark:border-gray-600 focus:ring-myhigh5-primary focus:border-transparent'
-          }`}
+            }`}
         />
         <div className="flex items-center justify-between mt-2">
           <p className="text-xs text-gray-500 dark:text-gray-400">

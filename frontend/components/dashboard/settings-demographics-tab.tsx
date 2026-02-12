@@ -5,6 +5,7 @@ import { useLanguage } from '@/contexts/language-context'
 import { useToast } from '@/components/ui/toast'
 import { Button } from '@/components/ui/button'
 import { Calendar } from 'lucide-react'
+import { API_URL } from '@/lib/config'
 
 interface SettingsDemographicsTabProps {
   user: any
@@ -52,13 +53,13 @@ export function SettingsDemographicsTab({ user, onUpdate }: SettingsDemographics
     const dayNum = parseInt(day)
     const monthNum = parseInt(month)
     const yearNum = parseInt(year)
-    
+
     // Valider la date
     const date = new Date(yearNum, monthNum - 1, dayNum)
     if (date.getDate() !== dayNum || date.getMonth() !== monthNum - 1 || date.getFullYear() !== yearNum) {
       return ''
     }
-    
+
     return `${yearNum}-${monthNum.toString().padStart(2, '0')}-${dayNum.toString().padStart(2, '0')}`
   }
 
@@ -75,34 +76,34 @@ export function SettingsDemographicsTab({ user, onUpdate }: SettingsDemographics
       setMonth(parsedDate.month)
       setYear(parsedDate.year)
       setGender(user.gender || '')
-      
+
       // Valider et afficher les erreurs par défaut
       const newErrors: typeof errors = {}
-      
+
       if (!user.date_of_birth) {
         newErrors.dateOfBirth = t('profile_setup.dob_required') || 'La date de naissance est requise'
       }
-      
+
       if (!user.gender) {
         newErrors.gender = t('profile_setup.gender_required') || 'Le genre est requis'
       }
-      
+
       setErrors(newErrors)
     }
   }, [user, t])
 
   const validateForm = () => {
     const newErrors: typeof errors = {}
-    
+
     const dateStr = formatDate(day, month, year)
     if (!dateStr) {
       newErrors.dateOfBirth = t('profile_setup.dob_required') || 'La date de naissance est requise'
     }
-    
+
     if (!gender.trim()) {
       newErrors.gender = t('profile_setup.gender_required') || 'Le genre est requis'
     }
-    
+
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -123,8 +124,7 @@ export function SettingsDemographicsTab({ user, onUpdate }: SettingsDemographics
         return
       }
 
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-      const response = await fetch(`${apiUrl}/api/v1/users/me`, {
+      const response = await fetch(`${API_URL}/api/v1/users/me`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -160,7 +160,7 @@ export function SettingsDemographicsTab({ user, onUpdate }: SettingsDemographics
     if (errors.dateOfBirth) {
       setErrors(prev => ({ ...prev, dateOfBirth: undefined }))
     }
-    
+
     if (field === 'day') {
       setDay(value)
     } else if (field === 'month') {
@@ -174,7 +174,7 @@ export function SettingsDemographicsTab({ user, onUpdate }: SettingsDemographics
     if (errors.gender) {
       setErrors(prev => ({ ...prev, gender: undefined }))
     }
-      setGender(value)
+    setGender(value)
   }
 
   return (
@@ -191,13 +191,12 @@ export function SettingsDemographicsTab({ user, onUpdate }: SettingsDemographics
           ].map((option) => (
             <label
               key={option.value}
-              className={`flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                gender === option.value
+              className={`flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all ${gender === option.value
                   ? 'border-myhigh5-primary bg-myhigh5-primary/10'
                   : errors.gender
-                  ? 'border-red-500 dark:border-red-500 bg-red-50 dark:bg-red-900/10'
-                  : 'border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50 hover:border-gray-300 dark:hover:border-gray-500'
-              }`}
+                    ? 'border-red-500 dark:border-red-500 bg-red-50 dark:bg-red-900/10'
+                    : 'border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50 hover:border-gray-300 dark:hover:border-gray-500'
+                }`}
             >
               <input
                 type="radio"
@@ -232,11 +231,10 @@ export function SettingsDemographicsTab({ user, onUpdate }: SettingsDemographics
               value={day}
               onChange={(e) => handleDateChange('day', e.target.value)}
               disabled={isLoading}
-              className={`w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-700 border text-gray-900 dark:text-white focus:outline-none focus:ring-2 transition-all ${
-                errors.dateOfBirth
+              className={`w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-700 border text-gray-900 dark:text-white focus:outline-none focus:ring-2 transition-all ${errors.dateOfBirth
                   ? 'border-red-500 dark:border-red-500 focus:ring-red-500 focus:border-red-500'
                   : 'border-gray-300 dark:border-gray-600 focus:ring-myhigh5-primary focus:border-transparent'
-              }`}
+                }`}
             >
               <option value="">{language === 'fr' ? 'Jour' : language === 'es' ? 'Día' : language === 'de' ? 'Tag' : 'Day'}</option>
               {days.map((d) => (
@@ -253,11 +251,10 @@ export function SettingsDemographicsTab({ user, onUpdate }: SettingsDemographics
               value={month}
               onChange={(e) => handleDateChange('month', e.target.value)}
               disabled={isLoading}
-              className={`w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-700 border text-gray-900 dark:text-white focus:outline-none focus:ring-2 transition-all ${
-                errors.dateOfBirth
+              className={`w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-700 border text-gray-900 dark:text-white focus:outline-none focus:ring-2 transition-all ${errors.dateOfBirth
                   ? 'border-red-500 dark:border-red-500 focus:ring-red-500 focus:border-red-500'
                   : 'border-gray-300 dark:border-gray-600 focus:ring-myhigh5-primary focus:border-transparent'
-              }`}
+                }`}
             >
               <option value="">{language === 'fr' ? 'Mois' : language === 'es' ? 'Mes' : language === 'de' ? 'Monat' : 'Month'}</option>
               {months.map((m, index) => (
@@ -273,12 +270,11 @@ export function SettingsDemographicsTab({ user, onUpdate }: SettingsDemographics
             <select
               value={year}
               onChange={(e) => handleDateChange('year', e.target.value)}
-          disabled={isLoading}
-              className={`w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-700 border text-gray-900 dark:text-white focus:outline-none focus:ring-2 transition-all ${
-            errors.dateOfBirth
-              ? 'border-red-500 dark:border-red-500 focus:ring-red-500 focus:border-red-500'
-              : 'border-gray-300 dark:border-gray-600 focus:ring-myhigh5-primary focus:border-transparent'
-          }`}
+              disabled={isLoading}
+              className={`w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-700 border text-gray-900 dark:text-white focus:outline-none focus:ring-2 transition-all ${errors.dateOfBirth
+                  ? 'border-red-500 dark:border-red-500 focus:ring-red-500 focus:border-red-500'
+                  : 'border-gray-300 dark:border-gray-600 focus:ring-myhigh5-primary focus:border-transparent'
+                }`}
             >
               <option value="">{language === 'fr' ? 'Année' : language === 'es' ? 'Año' : language === 'de' ? 'Jahr' : 'Year'}</option>
               {years.map((y) => (

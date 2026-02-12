@@ -3,7 +3,9 @@ import { cacheService } from './cache-service'
 import { logger } from './logger'
 import { DEFAULT_PUBLIC_API_URL } from './config'
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || DEFAULT_PUBLIC_API_URL
+const RAW_API_URL = process.env.NEXT_PUBLIC_API_URL || DEFAULT_PUBLIC_API_URL
+// Strip trailing slashes to prevent double-slash URLs (e.g. baseURL/ + /api/v1/... = //api/v1/...)
+const API_BASE_URL = RAW_API_URL.replace(/\/+$/, '')
 
 // Instance axios pour les appels API (timeout pour éviter blocage si backend down/520)
 const api = axios.create({
