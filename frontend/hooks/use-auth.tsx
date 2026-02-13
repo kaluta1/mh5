@@ -51,12 +51,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const token = localStorage.getItem('access_token')
       if (!token) return
+      const baseUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').replace(/\/+$/, '')
       
-      // Use AbortController for timeout
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 5000)
       
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/rbac/me/permissions`, {
+      const response = await fetch(`${baseUrl}/api/v1/rbac/me/permissions`, {
         headers: { 'Authorization': `Bearer ${token}` },
         signal: controller.signal
       })
@@ -65,12 +65,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       if (response.ok) {
         const perms = await response.json()
-        setPermissions(perms)
+        setPermissions(Array.isArray(perms) ? perms : [])
+      } else if (response.status === 404 || response.status === 403) {
+        // Endpoint not implemented or user has no RBAC - treat as empty permissions
+        setPermissions([])
       }
     } catch (error) {
       // Silently fail - permissions are not critical for initial load
       if (error instanceof Error && error.name !== 'AbortError') {
-        logger.error('Erreur lors du chargement des permissions', error)
+        logger.debug('Permissions load skipped (endpoint may not exist)', error)
       }
     }
   }

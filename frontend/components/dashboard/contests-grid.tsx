@@ -69,8 +69,8 @@ export function ContestsGrid({
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8 auto-rows-fr">
       {contests.map((contest, index) => (
         <ContestCard
-          key={contest.id}
-          id={contest.id}
+          key={String(contest.id)}
+          id={String(contest.id)}
           title={contest.title}
           coverImage={contest.coverImage}
           startDate={contest.startDate}
@@ -80,12 +80,12 @@ export function ContestsGrid({
           likes={contest.likes}
           comments={contest.comments}
           isOpen={contest.isOpen}
-          isFeatured={index === 0 && contest.id === featuredContestId}
+          isFeatured={index === 0 && String(contest.id) === String(featuredContestId)}
           genderRestriction={contest.genderRestriction}
           participationStartDate={contest.participationStartDate}
           participationEndDate={contest.participationEndDate}
           votingStartDate={contest.votingStartDate}
-          isFavorite={favorites.includes(contest.id)}
+          isFavorite={favorites.includes(String(contest.id))}
           userGender={userGender}
           canParticipate={canParticipate}
           isKycVerified={isKycVerified}
@@ -100,10 +100,10 @@ export function ContestsGrid({
           requiresContentVerification={contest.requiresContentVerification}
           minAge={contest.minAge}
           maxAge={contest.maxAge}
-          onToggleFavorite={() => onToggleFavorite(contest.id)}
-          onViewContestants={() => onViewContestants(contest.id)}
-          onParticipate={() => onParticipate(contest.id)}
-          onOpenDetails={() => onViewContestants(contest.id)}
+          onToggleFavorite={() => onToggleFavorite(String(contest.id))}
+          onViewContestants={() => onViewContestants(String(contest.id))}
+          onParticipate={() => onParticipate(String(contest.id))}
+          onOpenDetails={() => onViewContestants(String(contest.id))}
         />
       ))}
     </div>

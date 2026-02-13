@@ -57,7 +57,7 @@ export default function MyApplicationsPage() {
         setError(null)
 
         // Récupérer les candidatures de l'utilisateur directement
-        const myContestants = await contestService.getMyApplications(0, 100)
+        const myContestants = await contestService.getMyApplications(0, 500)
 
         const userApplications: Application[] = myContestants.map(c => {
           // Extraire l'image si contestant_image_url n'est pas défini
@@ -298,7 +298,7 @@ export default function MyApplicationsPage() {
           >
             <Eye className="w-4 h-4" />
           </Button>
-          <Link href={`/dashboard/contests/${app.contestId}/apply?edit=true`}>
+          <Link href={`/dashboard/contests/${app.contestId}/apply?edit=true&contestantId=${app.id}`}>
             <Button
               variant="outline"
               size="sm"

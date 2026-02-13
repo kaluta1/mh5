@@ -28,6 +28,7 @@ export default function ApplyToContestPage() {
 
   const contestId = params?.id as string
   const isEditMode = searchParams.get('edit') === 'true'
+  const contestantIdParam = searchParams.get('contestantId')
   const [pageLoading, setPageLoading] = useState(true)
   const [needsProfileSetup, setNeedsProfileSetup] = useState(false)
   const [needsKYC, setNeedsKYC] = useState(false)
@@ -116,30 +117,40 @@ export default function ApplyToContestPage() {
 
       setIsNomination(c.voting_type != null)
 
-      // 3. User Participation check
-      const up = c.current_user_participation;
-      if (up) {
+      // 3. User Participation check - prefer specific contestant when contestantId in URL (from My Applications)
+      let participationToUse: any = c.current_user_participation
+      if (isEditMode && contestantIdParam && user?.id) {
+        try {
+          const specificContestant = await contestService.getContestantById(Number(contestantIdParam))
+          if (specificContestant && Number(specificContestant.contest_id) === Number(contestId) && specificContestant.user_id === user.id) {
+            participationToUse = specificContestant
+          }
+        } catch (err) {
+          console.warn('Could not load specific contestant for edit:', err)
+        }
+      }
+      if (participationToUse) {
         setUserAlreadyParticipating(true)
-        setParticipantId(up.id)
+        setParticipantId(participationToUse.id)
 
         let imageUrls: string[] = []
         try {
-          imageUrls = up.image_media_ids ? JSON.parse(up.image_media_ids) : [] // snake_case likely
+          imageUrls = participationToUse.image_media_ids ? JSON.parse(participationToUse.image_media_ids) : []
         } catch (e) { imageUrls = [] }
 
         let videoUrl = ''
         try {
-          const vids = up.video_media_ids ? JSON.parse(up.video_media_ids) : []
+          const vids = participationToUse.video_media_ids ? JSON.parse(participationToUse.video_media_ids) : []
           videoUrl = Array.isArray(vids) && vids.length > 0 ? vids[0] : ''
         } catch (e) { videoUrl = '' }
 
         setExistingParticipationData({
-          title: up.title || '',
-          description: up.description || '',
+          title: participationToUse.title || '',
+          description: participationToUse.description || '',
           imageUrls: imageUrls,
           videoUrl: videoUrl,
-          nominatorCity: up.nominator_city || '',
-          nominatorCountry: up.nominator_country || ''
+          nominatorCity: participationToUse.nominator_city || '',
+          nominatorCountry: participationToUse.nominator_country || ''
         })
 
         if (isEditMode) setIsEditingParticipation(true)
@@ -172,7 +183,7 @@ export default function ApplyToContestPage() {
       addToast(t('dashboard.contests.load_error') || "Failed to load contest", 'error') // Fixed signature
       setPageLoading(false)
     }
-  }, [contestId, user, isEditMode, hasVisualVerification, hasVoiceVerification, hasBrandVerification, hasContentVerification, addToast, t, contestService])
+  }, [contestId, user, isEditMode, contestantIdParam, hasVisualVerification, hasVoiceVerification, hasBrandVerification, hasContentVerification, addToast, t])
 
   useEffect(() => {
     fetchContestDetails()

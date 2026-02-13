@@ -4,7 +4,8 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useLanguage } from '@/contexts/language-context'
 import { useAuth } from '@/hooks/use-auth'
-import { contestService, ContestResponse } from '@/services/contest-service'
+import ApiService from '@/lib/api-service'
+import { contestService, Contest, Contestant as ServiceContestant } from '@/services/contest-service'
 import { Button } from '@/components/ui/button'
 import { ContestantCard } from '@/components/dashboard/contestant-card'
 import { ArrowLeft, Globe, MapPin } from 'lucide-react'
@@ -18,27 +19,30 @@ interface Media {
   thumbnail?: string
 }
 
-interface Contestant {
+interface Contestant extends Omit<ServiceContestant, 'id' | 'user_id' | 'title' | 'description' | 'image_media_ids' | 'video_media_ids' | 'votes_count' | 'author_name' | 'author_country' | 'author_city' | 'author_avatar_url'> {
   id: string
-  userId?: number
+  userId: number
   name: string
   country?: string
   city?: string
+  continent?: string
   avatar: string
-  participationTitle?: string
+  participationTitle: string
   description: string
   votes: number
   rank?: number
   imagesCount: number
   videosCount: number
   canVote: boolean
+  hasVoteRight?: boolean
   hasVoted: boolean
   media: Media[]
   comments: number
+  isFavorite: boolean
+  contestant_image_url?: string
   reactions?: number
   favorites?: number
   shares?: number
-  isFavorite: boolean
   votesList?: Array<{
     id?: number
     user_id: number
@@ -104,11 +108,12 @@ export default function ContestantsListPage() {
   const searchParams = useSearchParams()
   const contestId = params.id as string
 
-  const [contest, setContest] = useState<ContestResponse | null>(null)
+  const [contest, setContest] = useState<Contest | null>(null)
   const [allContestants, setAllContestants] = useState<Contestant[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [favorites, setFavorites] = useState<string[]>([])
+  const [rankings, setRankings] = useState<{[key: string]: number}>({})
 
   // Read location filters from URL (same pattern as contest detail page)
   const filterCountry = searchParams.get('country') || ''
@@ -117,6 +122,7 @@ export default function ContestantsListPage() {
   // State for client-side override (the "Globe" vs "Country" toggle)
   const [showMyCountryOnly, setShowMyCountryOnly] = useState(true)
   const [userCountry, setUserCountry] = useState<string>(() => filterCountry)
+  const [userContinent, setUserContinent] = useState<string>(() => filterContinent || 'all')
 
   // Mettre à jour l'URL quand les filtres changent
   const updateUrlWithFilters = useCallback((country: string, continent: string) => {
@@ -129,152 +135,124 @@ export default function ContestantsListPage() {
     router.replace(newUrl, { scroll: false })
   }, [router, contestId])
 
-  // Auto-redirect to user's country if no filters in URL (Mirrors contest detail page)
+  // Auto-redirect to user's country + continent=all if no filters in URL (Mirrors contest detail page)
   useEffect(() => {
-    if (!user || (!user.country && !user.continent)) return;
+    if (!user?.country) return;
     const urlCountry = searchParams.get('country');
     const urlContinent = searchParams.get('continent');
 
     if (!urlCountry && !urlContinent) {
       const defaultCountry = user.country || '';
-      const defaultContinent = user.continent || 'all';
-
-      if (defaultCountry || (defaultContinent && defaultContinent !== 'all')) {
+      if (defaultCountry) {
         const p = new URLSearchParams();
-        if (defaultCountry) p.set('country', defaultCountry);
-        if (defaultContinent && defaultContinent !== 'all') p.set('continent', defaultContinent);
-        const q = p.toString();
-        if (q) {
-          console.log('[ContestantsPage] Redirecting to default filters:', q);
-          router.replace(`/dashboard/contests/${contestId}/contestants?${q}`, { scroll: false });
-        }
+        p.set('country', defaultCountry);
+        p.set('continent', 'all');
+        router.replace(`/dashboard/contests/${contestId}/contestants?${p.toString()}`, { scroll: false });
       }
     }
-  }, [user, contestId, searchParams, router]);
+  }, [user?.country, contestId, searchParams, router]);
 
-  // Sync state with URL params
+  // Sync state with URL params (same filters as contest detail page)
   useEffect(() => {
     const urlCountry = searchParams.get('country');
+    const urlContinent = searchParams.get('continent') || 'all';
     if (urlCountry === 'all') {
       setShowMyCountryOnly(false);
     } else if (urlCountry) {
       setUserCountry(urlCountry);
       setShowMyCountryOnly(true);
     } else if (user?.country) {
-      // Fallback if URL is empty but user has country
       setUserCountry(user.country);
       setShowMyCountryOnly(true);
     }
+    setUserContinent(urlContinent);
   }, [user?.country, searchParams]);
 
   const loadContest = useCallback(async () => {
     try {
       setLoading(true)
 
-      // Mirroring contest detail page: If URL has filters, use them. 
-      // EXCEPT: If we want client-side "Show All" to work instantly, we might want 'all'.
-      // BUT: The user specifically complained it's not filtered by default.
-      // So let's use the URL filters (or user default) which matches the detail page.
+      // Fetch ALL contestants (same as contest detail page) - backend filter can return 0 due to format mismatch
+      const c = await ApiService.getContest(parseInt(contestId), {
+        filterCountry: 'all',
+        filterContinent: 'all'
+      }) as any
 
-      const params: any = {};
-      if (filterCountry) params.filter_country = filterCountry;
-      if (filterContinent) params.filter_continent = filterContinent;
-
-      // If NO filters in URL and NOT logged in, we get everyone.
-      // If NO filters in URL and LOGGED in, backend will fallback to user country.
-
-      console.log('[ContestantsPage] Loading with params:', params);
-      const response = await contestService.getContestById(contestId, params)
-      setContest(response)
-
-      const parseMediaIds = (mediaIds: string | null | undefined, type: 'image' | 'video'): Media[] => {
+      const parseMediaIds = (mediaIds: string | undefined, type: 'image' | 'video'): Media[] => {
         if (!mediaIds) return []
-
         try {
-          // Si c'est déjà une URL complète
-          if (mediaIds.startsWith('http://') || mediaIds.startsWith('https://')) {
-            return [{
-              id: mediaIds,
-              type,
-              url: mediaIds,
-              thumbnail: type === 'video' ? mediaIds : undefined
-            }]
-          }
-
-          // Si c'est un JSON array
-          if (mediaIds.startsWith('[')) {
-            const ids = JSON.parse(mediaIds)
-            return ids.map((id: string | number) => ({
-              id: String(id),
-              type,
-              url: `${API_URL}/api/v1/media/${id}`,
-              thumbnail: type === 'video' ? `${API_URL}/api/v1/media/${id}/thumbnail` : undefined
-            }))
-          }
-
-          // Si c'est un ID simple
-          return [{
-            id: String(mediaIds),
-            type,
-            url: `${API_URL}/api/v1/media/${mediaIds}`,
-            thumbnail: type === 'video' ? `${API_URL}/api/v1/media/${mediaIds}/thumbnail` : undefined
-          }]
-        } catch (error) {
-          console.error('Error parsing media IDs:', error)
-          return []
-        }
+          const parsed = typeof mediaIds === 'string' ? JSON.parse(mediaIds) : mediaIds
+          if (!Array.isArray(parsed)) return []
+          const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+          return parsed.filter((url: string) => url && url.trim() !== '').map((url: string, idx: number) => {
+            let fullUrl = url
+            if (url && !url.startsWith('http') && !url.startsWith('data:')) {
+              fullUrl = url.startsWith('/') ? `${API_BASE}${url}` : `${API_BASE}/${url}`
+            }
+            return { id: `${type}-${idx}`, type, url: fullUrl, thumbnail: type === 'video' ? fullUrl : undefined }
+          })
+        } catch { return [] }
       }
 
-      // Les contestants sont dans la réponse enrichie
-      const contestantsResponse = (response as any).contestants || []
-      const mappedContestants: Contestant[] = contestantsResponse.map((c: any) => {
-        const images = parseMediaIds(c.image_media_ids, 'image')
-        const videos = parseMediaIds(c.video_media_ids, 'video')
-        const allMedia = [...images, ...videos]
-
+      const mappedContestants: Contestant[] = (c.contestants || []).map((ct: any, index: number) => {
+        const images = parseMediaIds(ct.image_media_ids, 'image')
+        const videos = parseMediaIds(ct.video_media_ids, 'video')
         return {
-          id: String(c.id),
-          userId: c.user_id,
-          name: c.author_name || 'Utilisateur inconnu',
-          country: c.author_country,
-          city: c.author_city,
-          avatar: c.author_avatar_url || '',
-          participationTitle: c.title || '',
-          votes: c.votes_count || 0,
-          rank: c.rank,
-          imagesCount: c.images_count ?? images.length,
-          videosCount: c.videos_count ?? videos.length,
-          canVote: c.can_vote || false,
-          hasVoted: c.has_voted || false,
-          isFavorite: c.is_in_favorites ?? false,
-          media: allMedia,
-          description: c.description || '',
-          comments: c.comments_count || 0,
-          reactions: c.reactions_count || 0,
-          favorites: c.favorites_count || 0,
-          shares: c.shares_count || 0,
-          votesList: c.votes || [],
-          commentsList: c.comments || [],
-          reactionsList: c.reactions || {},
-          favoritesList: c.favorites || [],
-          sharesList: c.shares || [],
-          season: c.season,
+          id: String(ct.id ?? index),
+          userId: ct.user_id,
+          name: ct.author_name || `Contestant #${index + 1}`,
+          country: ct.author_country,
+          city: ct.author_city,
+          continent: ct.author?.continent,
+          avatar: ct.author_avatar_url || '/default-avatar.png',
+          participationTitle: ct.title,
+          description: ct.description ?? '',
+          votes: ct.votes_count ?? 0,
+          rank: ct.rank,
+          imagesCount: ct.images_count ?? images.length,
+          videosCount: ct.videos_count ?? videos.length,
+          canVote: ct.can_vote ?? false,
+          hasVoted: ct.has_voted ?? false,
+          media: [...images, ...videos],
+          comments: ct.comments_count ?? 0,
+          reactions: ct.reactions_count ?? 0,
+          favorites: ct.favorites_count ?? 0,
+          shares: ct.shares_count ?? 0,
+          isFavorite: ct.is_in_favorites ?? false,
+          votesList: ct.votes || [],
+          commentsList: ct.comments || [],
+          reactionsList: ct.reactions || {},
+          favoritesList: ct.favorites || [],
+          sharesList: ct.shares || [],
         }
       })
 
-      // Trier les contestants par rank (croissant) si disponible, sinon par votes décroissants
       mappedContestants.sort((a, b) => {
-        if (a.rank && b.rank) {
-          return a.rank - b.rank
-        }
+        if (a.rank && b.rank) return a.rank - b.rank
         if (a.rank && !b.rank) return -1
         if (!a.rank && b.rank) return 1
-        if (b.votes !== a.votes) {
-          return b.votes - a.votes
-        }
+        if (b.votes !== a.votes) return b.votes - a.votes
         return Number(a.id) - Number(b.id)
       })
 
+      const updatedContest: Contest = {
+        id: c.id,
+        title: c.name || c.contest_type || 'Unknown Contest',
+        description: c.description,
+        coverImage: c.cover_image_url || '',
+        startDate: c.submission_start_date ? new Date(c.submission_start_date) : new Date(),
+        status: 'global',
+        received: c.entries_count ?? mappedContestants.length,
+        contestants: mappedContestants.length,
+        likes: c.total_votes ?? 0,
+        comments: 0,
+        isOpen: true,
+        contestType: c.contest_type || 'general',
+        contest_type: c.contest_type || 'general',
+        name: c.name || 'Unknown Contest',
+      } as Contest
+
+      setContest(updatedContest)
       setAllContestants(mappedContestants)
       setFavorites(mappedContestants.filter(c => c.isFavorite).map(c => c.id))
     } catch (error) {
@@ -282,7 +260,7 @@ export default function ContestantsListPage() {
     } finally {
       setLoading(false)
     }
-  }, [contestId, filterCountry, filterContinent]);
+  }, [contestId])
 
   useEffect(() => {
     if (contestId) {
@@ -460,27 +438,32 @@ export default function ContestantsListPage() {
   };
 
 
-  // Get contestants based on filter
-  const contestants = React.useMemo(() => {
-    console.log('Filtering contestants...', {
-      showMyCountryOnly,
-      userCountry,
-      allContestantsCount: allContestants.length
-    });
+  // Continent match - same logic as contest detail page
+  const continentsMatch = (userContinentVal: string, contestantContinent: string | undefined): boolean => {
+    if (!userContinentVal || userContinentVal === 'all') return true;
+    if (!contestantContinent) return false;
+    const uc = (userContinentVal || '').toLowerCase().trim();
+    const cc = (contestantContinent || '').toLowerCase().trim();
+    return cc.includes(uc) || uc.includes(cc) || uc === cc;
+  };
 
-    if (!showMyCountryOnly || !userCountry) {
-      console.log('Returning all contestants - filter not active');
+  // Get contestants based on filter - same logic as contest page locationFilteredContestants
+  const contestants = React.useMemo(() => {
+    if (!showMyCountryOnly && (!userContinent || userContinent === 'all')) {
       return allContestants;
     }
-
-    const filtered = allContestants.filter(contestant => {
-      if (!contestant.country) return false;
-      return countriesMatch(userCountry, contestant.country);
+    if (!showMyCountryOnly && userContinent && userContinent !== 'all') {
+      return allContestants.filter(c => continentsMatch(userContinent, c.continent));
+    }
+    if (showMyCountryOnly && !userCountry && (!userContinent || userContinent === 'all')) {
+      return allContestants;
+    }
+    return allContestants.filter(contestant => {
+      const matchCountry = !userCountry || countriesMatch(userCountry, contestant.country || '');
+      const matchContinent = continentsMatch(userContinent, contestant.continent);
+      return matchCountry && matchContinent;
     });
-
-    console.log('Filtered contestants:', filtered.length, 'out of', allContestants.length);
-    return filtered;
-  }, [allContestants, showMyCountryOnly, userCountry]);
+  }, [allContestants, showMyCountryOnly, userCountry, userContinent]);
 
   // Count of contestants from user's country
   const countryContestantCount = React.useMemo(() => {
@@ -594,11 +577,11 @@ export default function ContestantsListPage() {
           {/* Title */}
           <div className="mb-6">
             <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-gray-900 dark:text-white mb-2">
-              {contest?.name || t('dashboard.contests.contestants') || 'Participants'}
+              {contest?.title || t('dashboard.contests.contestants') || 'Participants'}
             </h1>
             {contest && (
               <p className="text-lg text-gray-600 dark:text-gray-400">
-                {contest.contest_type}
+                {contest.contestType}
               </p>
             )}
           </div>
@@ -625,86 +608,93 @@ export default function ContestantsListPage() {
               onChange={(e) => setSearchQuery(e.target.value)}
               className="max-w-md"
             />
-          </div>
 
-          {/* Contestants Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredContestants.length > 0 ? (
-              filteredContestants.map((contestant) => (
-                <div key={contestant.id} className="relative">
-                  {/* Rank Badge */}
-                  {contestant.rank && (
-                    <div className="absolute -top-2 -left-2 z-10">
-                      <div className={`${getRankBadgeColor(contestant.rank)} border-2 font-bold text-sm px-3 py-1.5 shadow-lg flex items-center gap-1 rounded-full`}>
-                        <span>{getRankIcon(contestant.rank)}</span>
-                        <span className="hidden sm:inline">
-                          {getRankText(contestant.rank)}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
+            {loading ? (
+              <div className="flex justify-center items-center h-64">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-myfav-primary"></div>
+                <span className="ml-3">Loading contestants...</span>
+              </div>
+            ) : allContestants.length === 0 ? (
+              <div className="text-center py-12">
+                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+                  {t('dashboard.contests.no_contestants') || 'No contestants available'}
+                </h3>
+                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                  {t('dashboard.contests.check_back_later') || 'Check back later for new contestants.'}
+                </p>
+              </div>
+            ) : filteredContestants.length === 0 ? (
+              <div className="text-center py-12">
+                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+                  {t('dashboard.contests.no_matching_contestants') || 'No matching contestants found'}
+                </h3>
+                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                  {t('dashboard.contests.try_different_filters') || 'Try adjusting your filters or search term.'}
+                </p>
+                <button
+                  onClick={() => {
+                    setSearchQuery('');
+                    setShowMyCountryOnly(false);
+                  }}
+                  className="mt-4 px-4 py-2 bg-myfav-primary text-white rounded-md hover:bg-myfav-primary/90"
+                >
+                  {t('common.clear_filters') || 'Clear filters'}
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {filteredContestants.map((contestant) => (
                   <ContestantCard
+                    key={contestant.id}
                     id={contestant.id}
                     userId={contestant.userId}
                     currentUserId={user?.id}
                     contestId={contestId}
-                    name={contestant.name}
-                    country={contestant.country}
-                    city={contestant.city}
-                    avatar={contestant.avatar}
-                    participationTitle={contestant.participationTitle}
-                    votes={contestant.votes}
+                    name={contestant.name || 'Anonymous'}
+                    country={contestant.country || 'Unknown'}
+                    city={contestant.city || ''}
+                    avatar={contestant.avatar || '/default-avatar.png'}
+                    participationTitle={contestant.participationTitle || 'Contestant'}
+                    votes={contestant.votes || 0}
                     rank={contestant.rank}
-                    imagesCount={contestant.imagesCount}
-                    videosCount={contestant.videosCount}
-                    canVote={contestant.canVote}
-                    hasVoted={contestant.hasVoted}
+                    imagesCount={contestant.imagesCount || 0}
+                    videosCount={contestant.videosCount || 0}
+                    canVote={contestant.canVote || false}
+                    hasVoted={contestant.hasVoted || false}
                     isFavorite={favorites.includes(contestant.id)}
-                    media={contestant.media}
-                    description={contestant.description}
-                    comments={contestant.comments}
-                    reactions={contestant.reactions}
-                    favorites={contestant.favorites}
-                    votesList={contestant.votesList}
-                    reactionsList={contestant.reactionsList}
-                    favoritesList={contestant.favoritesList}
+                    media={contestant.media || []}
+                    description={contestant.description || ''}
+                    comments={contestant.comments || 0}
+                    reactions={contestant.reactions || 0}
+                    favorites={contestant.favorites || 0}
+                    votesList={contestant.votesList || []}
+                    reactionsList={contestant.reactionsList || {}}
+                    favoritesList={contestant.favoritesList || []}
                     onToggleFavorite={() => handleToggleFavorite(contestant.id)}
                     onViewDetails={() => router.push(`/dashboard/contests/${contestId}/contestant/${contestant.id}`)}
                     onVote={() => {
-                      // Le vote est géré dans ContestantCard, pas de redirection nécessaire
+                      // Voting is handled in ContestantCard
                     }}
-                    onComment={() => { }}
-                    onShare={() => { }}
-                    onHoverAuthor={() => { }}
-                    onHoverEnd={() => { }}
-                    onHoverDescription={() => { }}
+                    onComment={() => {}}
+                    onShare={() => {}}
+                    onHoverAuthor={() => {}}
+                    onHoverEnd={() => {}}
+                    onHoverDescription={() => {}}
                     onHoverVotes={() => {
-                      // Seul l'auteur peut voir la liste des votes
+                      // Only the author can see the votes list
                       if (user?.id === contestant.userId) {
-                        // TODO: Implémenter l'affichage de la liste des votes
+                        // TODO: Implement votes list display
                       }
                     }}
-                    onHoverReactions={() => { }}
+                    onHoverReactions={() => {}}
                     onHoverFavorites={() => {
-                      // Seul l'auteur peut voir la liste des favoris
+                      // Only the author can see the favorites list
                       if (user?.id === contestant.userId) {
-                        // TODO: Implémenter l'affichage de la liste des favoris
+                        // TODO: Implement favorites list display
                       }
                     }}
                   />
-                </div>
-              ))
-            ) : (
-              <div className="col-span-full text-center py-12">
-                <div className="flex flex-col items-center gap-3">
-                  <p className="text-5xl mb-2">🏆</p>
-                  <p className="text-lg font-semibold text-gray-700 dark:text-gray-300">
-                    {searchQuery
-                      ? t('dashboard.contests.no_contestants_found') || 'Aucun participant trouvé'
-                      : t('dashboard.contests.no_contestants') || 'Aucun participant pour le moment'}
-                  </p>
-                </div>
+                ))}
               </div>
             )}
           </div>

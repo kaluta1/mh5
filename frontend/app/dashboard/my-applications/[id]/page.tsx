@@ -385,7 +385,7 @@ export default function MyApplicationDetailPage() {
             
             {isAuthor && (
               <div className="flex items-center gap-2">
-                <Link href={`/dashboard/contests/${contestant.contest_id}/apply?edit=true`}>
+                <Link href={`/dashboard/contests/${contestant.contest_id}/apply?edit=true&contestantId=${applicationId}`}>
                   <Button variant="outline" className="flex items-center gap-2">
                     <Edit className="w-4 h-4" />
                     {t('common.edit') || 'Éditer'}

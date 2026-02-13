@@ -137,7 +137,14 @@ class ContestResponse(BaseModel):
 
 # Helper function to check if user is admin
 def check_admin(current_user: User) -> User:
-    if not current_user.is_admin:
+    """Allow access if user has is_admin=True OR has the admin role."""
+    is_admin_flag = getattr(current_user, 'is_admin', False)
+    has_admin_role = (
+        current_user.role_id is not None
+        and current_user.role is not None
+        and getattr(current_user.role, 'name', None) == 'admin'
+    )
+    if not is_admin_flag and not has_admin_role:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Vous n'avez pas les permissions pour accéder à cette ressource"
@@ -219,13 +226,7 @@ async def get_all_contests(
     """
     Récupère tous les concours (admin uniquement)
     """
-    # Vérifier que l'utilisateur est admin
-    if not current_user.is_admin:
-        print(f"DEBUG: User {current_user.id} is not admin (is_admin={current_user.is_admin})")
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Vous n'avez pas les permissions pour accéder à cette ressource"
-        )
+    check_admin(current_user)
     
     try:
         query = db.query(Contest).filter(Contest.is_deleted == False).options(

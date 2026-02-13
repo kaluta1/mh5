@@ -132,9 +132,13 @@ export default function AdminUsers() {
       
       // Mettre en cache (TTL de 5 minutes)
       cacheService.set(endpoint, data, params, 5 * 60 * 1000)
-    } catch (error) {
-      console.error('Erreur lors du chargement des utilisateurs:', error)
-      addToast(t('admin.users.load_error') || 'Erreur lors du chargement des utilisateurs', 'error')
+    } catch (error: any) {
+      const status = error?.response?.status
+      if (status === 403) {
+        addToast(t('admin.users.access_denied') || 'Vous n\'avez pas les permissions pour accéder à cette section', 'error')
+      } else {
+        addToast(t('admin.users.load_error') || 'Erreur lors du chargement des utilisateurs', 'error')
+      }
     } finally {
       setLoading(false)
     }

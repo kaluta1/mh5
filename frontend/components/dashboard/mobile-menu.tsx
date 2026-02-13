@@ -30,7 +30,8 @@ import {
   Lightbulb,
   CreditCard,
   FileCheck,
-  Rss
+  Rss,
+  Server
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useLanguage } from "@/contexts/language-context"
@@ -99,6 +100,7 @@ const adminMenuSections = [
   items: [
       { name: "admin.nav.categories", href: "/dashboard/admin/categories", icon: Tag },
       { name: "admin.nav.commission_settings", href: "/dashboard/admin/commission-settings", icon: Percent },
+      { name: "admin.nav.microservices", href: "/dashboard/admin/microservices", icon: Server },
       { name: "admin.nav.suggested_contests", href: "/dashboard/admin/suggested-contests", icon: Lightbulb },
       { name: "admin.nav.transactions", href: "/dashboard/admin/transactions", icon: CreditCard },
   ]

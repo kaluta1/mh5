@@ -140,24 +140,22 @@ export default function ContestDetailPage() {
     return searchParams.get('continent') || 'all'
   })
 
-  // Au premier chargement sans paramètres URL: afficher par défaut les contestants du pays de l'utilisateur
+  // Au premier chargement sans paramètres URL: afficher par défaut les contestants du pays + continent=all
   React.useEffect(() => {
     const urlCountry = searchParams.get('country')
     const urlContinent = searchParams.get('continent')
     if (urlCountry || urlContinent) return
-    if (!user?.country && !user?.continent) return
+    if (!user?.country) return
     const defaultCountry = (user?.country as string) || ''
-    const defaultContinent = (user?.continent as string) || 'all'
-    if (defaultCountry || (defaultContinent && defaultContinent !== 'all')) {
+    if (defaultCountry) {
       setFilterCountry(defaultCountry)
-      setFilterContinent(defaultContinent && defaultContinent !== 'all' ? defaultContinent : 'all')
+      setFilterContinent('all')
       const params = new URLSearchParams()
-      if (defaultCountry) params.set('country', defaultCountry)
-      if (defaultContinent && defaultContinent !== 'all') params.set('continent', defaultContinent)
-      const q = params.toString()
-      if (q) router.replace(`/dashboard/contests/${contestId}?${q}`, { scroll: false })
+      params.set('country', defaultCountry)
+      params.set('continent', 'all')
+      router.replace(`/dashboard/contests/${contestId}?${params.toString()}`, { scroll: false })
     }
-  }, [user?.country, user?.continent, contestId, router])
+  }, [user?.country, contestId, router, searchParams])
 
   // Mettre à jour l'URL quand les filtres changent
   const updateUrlWithFilters = React.useCallback((continent: string, country: string) => {
@@ -181,14 +179,10 @@ export default function ContestDetailPage() {
       setPageLoading(true)
       // Need to fetch contest + enrichment (participants etc)
       // Currently getContest returns everything if backend is updated
-      // Pass location filters: explicit filters from URL or user's location as default
-      const effectiveCountry = filterCountry || (user?.country as string) || undefined
-      // Allow 'all' to be passed to backend if explicit
-      const effectiveContinent = filterContinent
-
+      // Fetch ALL contestants - backend filter can return 0 due to country format mismatch (TZ vs Tanzania)
       const c = await ApiService.getContest(parseInt(contestId), {
-        filterCountry: effectiveCountry,
-        filterContinent: effectiveContinent
+        filterCountry: 'all',
+        filterContinent: 'all'
       }) as any
 
       // Map data
@@ -265,7 +259,7 @@ export default function ContestDetailPage() {
     } finally {
       setPageLoading(false)
     }
-  }, [contestId, t, filterCountry, filterContinent, user?.country, user?.continent])
+  }, [contestId, t])
 
   useEffect(() => {
     fetchContestDetails()
@@ -285,7 +279,7 @@ export default function ContestDetailPage() {
       await contestService.deleteContestant(Number(contestantId))
       // Refetch REST data
       await fetchContestDetails()
-      showToast(t('common.deleted_successfully') || 'Candidature supprimée avec succès', 'success')
+      showToast(t('common.deleted_successfully') || `Candidature supprimée avec succès`, 'success')
     } catch (err: any) {
       console.error('Erreur lors de la suppression:', err)
       const errorMessage = err?.response?.data?.detail || err?.message || t('common.delete_error') || 'Erreur lors de la suppression'
@@ -361,6 +355,32 @@ export default function ContestDetailPage() {
     }
   }
 
+  // Client-side location filter - must be before early returns (hooks rules)
+  const locationFilteredContestants = React.useMemo(() => {
+    const list = contest?.contestants ?? []
+    if (!filterCountry && (!filterContinent || filterContinent === 'all')) return list
+    return list.filter((c) => {
+      const matchCountry = !filterCountry || filterCountry === 'all' || (() => {
+        const uc = (filterCountry || '').toLowerCase().trim()
+        const cc = (c.country || '').toLowerCase().trim()
+        if (!cc) return false
+        if (uc === cc) return true
+        if (cc.includes(uc) || uc.includes(cc)) return true
+        const alias: Record<string, string[]> = { tz: ['tanzania', 'united republic of tanzania'], ke: ['kenya'] }
+        const uCode = uc.length === 2 ? uc : Object.entries(alias).find(([, names]) => names.some(n => cc.includes(n) || uc.includes(n)))?.[0]
+        const cCode = cc.length === 2 ? cc : Object.entries(alias).find(([, names]) => names.some(n => cc.includes(n)))?.[0]
+        return uCode && cCode && uCode === cCode
+      })()
+      const matchContinent = !filterContinent || filterContinent === 'all' || (() => {
+        const uc = (filterContinent || '').toLowerCase().trim()
+        const cc = (c.continent || '').toLowerCase().trim()
+        if (!cc) return false
+        return cc.includes(uc) || uc.includes(cc) || uc === cc
+      })()
+      return matchCountry && matchContinent
+    })
+  }, [contest?.contestants, filterCountry, filterContinent])
+
   if (isLoading || pageLoading) {
     return <ContestDetailSkeleton />
   }
@@ -402,7 +422,7 @@ export default function ContestDetailPage() {
     return parts.length > 0 ? parts.join(' · ') : t('dashboard.contests.participant') || 'Participant'
   }
 
-  const filteredContestants = contest.contestants.filter(contestant => {
+  const filteredContestants = locationFilteredContestants.filter(contestant => {
     if (!searchQuery.trim()) return true
     const query = searchQuery.toLowerCase()
     return (
@@ -757,10 +777,11 @@ export default function ContestDetailPage() {
 
             {/* Contestants Sidebar - Right Side */}
             <ContestantsSidebar
-              contestants={contest.contestants}
+              contestants={locationFilteredContestants}
               contestId={contestId}
               onShowToast={showToast}
               filterCountry={filterCountry || undefined}
+              filterContinent={filterContinent !== 'all' ? filterContinent : undefined}
             />
           </div>
         </div>

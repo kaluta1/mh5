@@ -193,8 +193,11 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
     try {
       const response = await api.get('/api/v1/admin/users')
       setUsers(response.data)
-    } catch (error) {
-      console.error('Erreur lors du chargement des utilisateurs:', error)
+    } catch (error: any) {
+      if (error?.response?.status !== 403) {
+        addToast(t('admin.contestants.users_load_error') || 'Erreur lors du chargement des utilisateurs', 'error')
+      }
+      setUsers([])
     }
   }
 

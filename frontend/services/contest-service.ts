@@ -1,6 +1,28 @@
 import api, { apiService } from '@/lib/api'
 import { cacheService } from '@/lib/cache-service'
 
+export interface Contestant {
+  id: number
+  user_id: number
+  contest_id: number
+  title: string
+  description?: string
+  image_media_ids?: string
+  video_media_ids?: string
+  status: 'pending' | 'approved' | 'rejected'
+  is_qualified: boolean
+  votes_count: number
+  rank?: number
+  created_at: string
+  updated_at: string
+  author_name?: string
+  author_avatar_url?: string
+  author_country?: string
+  author_city?: string
+  author_continent?: string
+  contestant_image_url?: string
+}
+
 export interface TopContestant {
   id: number
   user_id?: number  // ID de l'utilisateur qui a créé cette participation
@@ -12,8 +34,9 @@ export interface TopContestant {
 }
 
 export interface Contest {
-  id: string
+  id: string | number
   title: string
+  name?: string
   description?: string
   coverImage: string
   startDate: Date
@@ -30,6 +53,7 @@ export interface Contest {
   participationStartDate?: Date
   participationEndDate?: Date
   votingStartDate?: Date
+  votingEndDate?: Date
   topContestants?: TopContestant[]
   // Verification requirements
   requiresKyc?: boolean
@@ -65,40 +89,47 @@ export interface Contest {
 }
 
 export interface ContestResponse {
-  id: string
+  // Basic contest information
+  id: string | number
   name: string
   description?: string
   contest_type: string
   cover_image_url?: string
   image_url?: string
-  submission_start_date: string
-  submission_end_date: string
-  voting_start_date: string
-  voting_end_date: string
-  is_active: boolean
-  is_submission_open: boolean
-  is_voting_open: boolean
-  level: string
-  season_level?: string
-  location_id?: number
-  gender_restriction?: string
-  voting_restriction?: string
-  max_entries_per_user: number
-  template_id?: number
-  created_at: string
-  updated_at: string
-  entries_count?: number
-  total_votes?: number
+  status?: string
+  
+  // Dates
+  start_date?: string
+  end_date?: string
+  submission_start_date?: string
+  submission_end_date?: string
+  voting_start_date?: string
+  voting_end_date?: string
+  created_at?: string
+  updated_at?: string
+  
+  // Contest settings
+  is_active?: boolean
+  is_public?: boolean
+  is_submission_open?: boolean
+  is_voting_open?: boolean
+  max_participants?: number
+  max_entries_per_user?: number
+  
+  // Age and gender restrictions
+  min_age?: number | null
+  max_age?: number | null
+  gender_restriction?: 'male' | 'female' | null
+  
   // Verification requirements
   requires_kyc?: boolean
-  verification_type?: string
-  participant_type?: string
+  verification_type?: 'none' | 'visual' | 'voice' | 'brand' | 'content'
+  participant_type?: 'individual' | 'pet' | 'club' | 'content'
   requires_visual_verification?: boolean
   requires_voice_verification?: boolean
   requires_brand_verification?: boolean
   requires_content_verification?: boolean
-  min_age?: number | null
-  max_age?: number | null
+  
   // Media requirements
   requires_video?: boolean
   max_videos?: number
@@ -108,15 +139,18 @@ export interface ContestResponse {
   max_images?: number
   verification_video_max_duration?: number
   verification_max_size_mb?: number
+  
+  // Voting and commission
   voting_type_id?: number | null
-  voting_type?: {
-    id: number
-    name: string
-    voting_level: string
-    commission_source: string
-    commission_rules?: any
-  } | null
+  voting_restriction?: string
+  
+  // Location and category
+  location_id?: number | null
+  season_level?: string
   category_id?: number | null
+  template_id?: number | null
+  
+  // Category details
   category?: {
     id: number
     name: string
@@ -124,17 +158,29 @@ export interface ContestResponse {
     description?: string
     is_active: boolean
   } | null
-  // Top contestants preview
+  
+  // Voting type details
+  voting_type?: {
+    id: number
+    name: string
+    voting_level: string
+    commission_source: string
+    commission_rules?: any
+  } | null
   top_contestants?: Array<{
     id: number
+    user_id?: number
     author_name?: string
     author_avatar_url?: string
     image_url?: string
     votes_count?: number
     rank?: number
   }>
-  // Indique si l'utilisateur connecté a déjà participé à ce concours
+  contestants?: Contestant[]
   current_user_contesting?: boolean
+  entries_count?: number
+  total_votes?: number
+  level?: string
 }
 
 export interface ContestantWithAuthorAndStats {
@@ -148,15 +194,11 @@ export interface ContestantWithAuthorAndStats {
   contestant_image_url?: string
   registration_date: string
   is_qualified: boolean
-
-  // Infos auteur
   author_name?: string
   author_country?: string
   author_city?: string
   author_continent?: string
   author_avatar_url?: string
-
-  // Stats
   rank?: number
   votes_count: number
   images_count: number
@@ -165,18 +207,12 @@ export interface ContestantWithAuthorAndStats {
   reactions_count?: number
   comments_count?: number
   shares_count?: number
-
-  // Infos du contest
   contest_title?: string
   contest_level?: string
   contest_image_url?: string
   contest_id?: number
   total_participants?: number
-
-  // Position dans les favoris
   position?: number
-
-  // État du vote
   has_voted: boolean
   can_vote: boolean
 }
@@ -188,7 +224,7 @@ export interface RoundWithStats {
   status: 'upcoming' | 'active' | 'completed' | 'cancelled'
   is_submission_open: boolean
   is_voting_open: boolean
-  current_season_level: string | null  // city, country, regional, continental, global, submission, voting
+  current_season_level: string | null
   submission_start_date: string | null
   submission_end_date: string | null
   voting_start_date: string | null
@@ -205,918 +241,73 @@ export interface RoundWithStats {
   global_end_date: string | null
   created_at: string
   updated_at: string
-  // Stats
   participants_count: number
   current_user_participated: boolean
   is_completed: boolean
 }
 
 class ContestService {
-  /**
-   * Récupère tous les contests avec pagination et recherche (avec cache)
-   * @param filterCountry - Filtrer par pays (pour compter les contestants de ce pays)
-   * @param filterRegion - Filtrer par région (pour compter les contestants de cette région)
-   * @param filterContinent - Filtrer par continent (pour compter les contestants de ce continent)
-   */
-  async getContests(
-    skip: number = 0,
-    limit: number = 10,
-    search?: string,
-    votingLevel?: string,
-    votingTypeId?: number | null,
-    hasVotingType?: boolean,
-    filterCountry?: string,
-    filterRegion?: string,
-    filterContinent?: string
-  ): Promise<ContestResponse[]> {
+  async addToFavorites(id: string | number, type: 'contest' | 'contestant' = 'contest'): Promise<void> {
     try {
-      const params: any = { skip, limit }
-      if (search) {
-        params.search = search
+      if (type === 'contest') {
+        const cacheKey = `/api/v1/favorites/contests/${id}`;
+        await api.post(cacheKey);
+        cacheService.invalidate(`/api/v1/favorites/contests/${id}/is-favorite`);
+        cacheService.invalidate('/api/v1/favorites/contests');
+      } else {
+        await api.post(`/api/v1/contestants/${id}/favorite`);
+        cacheService.invalidate(`/api/v1/contestants/${id}`);
+        cacheService.invalidate('/api/v1/contestants/favorites');
       }
-      if (votingLevel) {
-        params.voting_level = votingLevel
-      }
-      if (votingTypeId !== undefined && votingTypeId !== null) {
-        params.voting_type_id = votingTypeId
-      }
-      if (hasVotingType !== undefined) {
-        params.has_voting_type = hasVotingType
-      }
-      if (filterCountry) {
-        params.filter_country = filterCountry
-      }
-      if (filterRegion) {
-        params.filter_region = filterRegion
-      }
-      if (filterContinent) {
-        params.filter_continent = filterContinent
-      }
+    } catch (error) {
+      console.error(`Error adding ${type} ${id} to favorites:`, error);
+      throw error;
+    }
+  }
 
-      // Vérifier le cache
-      const cacheKey = '/api/v1/contests/'
-      const cached = cacheService.get<ContestResponse[]>(cacheKey, params)
+  async removeFromFavorites(id: string | number, type: 'contest' | 'contestant' = 'contest'): Promise<void> {
+    try {
+      if (type === 'contest') {
+        const cacheKey = `/api/v1/favorites/contests/${id}`;
+        await api.delete(cacheKey);
+        cacheService.invalidate(`/api/v1/favorites/contests/${id}/is-favorite`);
+        cacheService.invalidate('/api/v1/favorites/contests');
+      } else {
+        await api.delete(`/api/v1/contestants/${id}/favorite`);
+        cacheService.invalidate(`/api/v1/contestants/${id}`);
+        cacheService.invalidate('/api/v1/contestants/favorites');
+      }
+    } catch (error) {
+      console.error(`Error removing ${type} ${id} from favorites:`, error);
+      throw error;
+    }
+  }
+
+  async getContestById(contestId: string | number): Promise<Contest> {
+    try {
+      const cacheKey = `/api/v1/contests/${contestId}`;
+      const cached = cacheService.get<ContestResponse>(cacheKey);
       if (cached) {
-        return cached
+        return this.mapResponseToContest(cached);
       }
 
-      // Si pas en cache, faire la requête
-      console.log('[ContestService] Fetching contests with params:', params)
-      const data = await apiService.get<ContestResponse[]>('/api/v1/contests/', params)
-      console.log('[ContestService] Received data:', {
-        type: Array.isArray(data) ? 'array' : typeof data,
-        length: Array.isArray(data) ? data.length : 'N/A',
-        sample: Array.isArray(data) && data.length > 0 ? data[0] : null
-      })
-
-      // Mettre en cache
-      cacheService.set(cacheKey, data, params)
-
-      return data
-    } catch (error: any) {
-      console.error('[ContestService] Error fetching contests:', error)
-      console.error('[ContestService] Error details:', {
-        message: error?.message,
-        response: error?.response?.data,
-        status: error?.response?.status,
-        url: error?.config?.url
-      })
-      throw error
-    }
-  }
-
-  /**
-   * Récupère un contest par son ID avec ses participants
-   * @param contestId - ID du concours
-   * @param params - filter_country: 'all' pour récupérer tous les contestants (filtrage côté client)
-   */
-  async getContestById(contestId: string, params?: { filter_country?: string; filter_continent?: string }): Promise<ContestResponse> {
-    try {
-      const response = await api.get(`/api/v1/contests/${contestId}`, { params })
-      return response.data
+      const response = await api.get<ContestResponse>(cacheKey);
+      cacheService.set(cacheKey, response.data);
+      return this.mapResponseToContest(response.data);
     } catch (error) {
-      console.error(`Error fetching contest ${contestId}:`, error)
-      throw error
+      console.error(`Error fetching contest ${contestId}:`, error);
+      throw error;
     }
   }
 
-  /**
-   * Récupère les rounds d'un contest avec leurs statistiques
-   * Inclut le nombre de participants et si l'utilisateur actuel a participé
-   */
-  async getRoundsForContest(contestId: string): Promise<RoundWithStats[]> {
-    try {
-      const cacheKey = `/api/v1/rounds/`
-      const params = { contest_id: contestId }
-
-      // Vérifier le cache
-      const cached = cacheService.get<RoundWithStats[]>(cacheKey, params)
-      if (cached) {
-        return cached
-      }
-
-      // Si pas en cache, faire la requête
-      const response = await api.get(cacheKey, { params })
-
-      // Mettre en cache
-      cacheService.set(cacheKey, response.data, params)
-
-      return response.data
-    } catch (error) {
-      console.error(`Error fetching rounds for contest ${contestId}:`, error)
-      throw error
-    }
-  }
-
-  /**
-   * Crée un nouveau contest (admin uniquement)
-   */
-  async createContest(contestData: Partial<ContestResponse>): Promise<ContestResponse> {
-    try {
-      const result = await apiService.post<ContestResponse>('/api/v1/contests/', contestData, '/api/v1/contests/')
-
-      // Invalider le cache des contests
-      cacheService.invalidate('/api/v1/contests/')
-
-      return result
-    } catch (error) {
-      console.error('Error creating contest:', error)
-      throw error
-    }
-  }
-
-  /**
-   * Met à jour un contest (admin uniquement)
-   */
-  async updateContest(contestId: string, contestData: Partial<ContestResponse>): Promise<ContestResponse> {
-    try {
-      const result = await apiService.put<ContestResponse>(`/api/v1/contests/${contestId}`, contestData, '/api/v1/contests/')
-
-      // Invalider le cache du contest spécifique et de la liste
-      cacheService.invalidate(`/api/v1/contests/${contestId}`)
-      cacheService.invalidate('/api/v1/contests/')
-
-      return result
-    } catch (error) {
-      console.error(`Error updating contest ${contestId}:`, error)
-      throw error
-    }
-  }
-
-  /**
-   * Supprime un contest (admin uniquement)
-   */
-  async deleteContest(contestId: string): Promise<void> {
-    try {
-      await apiService.delete<void>(`/api/v1/contests/${contestId}`, '/api/v1/contests/')
-
-      // Invalider le cache du contest spécifique et de la liste
-      cacheService.invalidate(`/api/v1/contests/${contestId}`)
-      cacheService.invalidate('/api/v1/contests/')
-    } catch (error) {
-      console.error(`Error deleting contest ${contestId}:`, error)
-      throw error
-    }
-  }
-
-  /**
-   * Soumet une candidature à un contest
-   */
-  async submitContestant(
-    contestId: string,
-    title: string,
-    description: string,
-    imageMediaIds?: string,
-    videoMediaIds?: string,
-    nominatorCity?: string,
-    nominatorCountry?: string
-  ): Promise<any> {
-    try {
-      // Prepare request body - only include fields that have values
-      const requestBody: any = {
-        title: title,
-        description: description
-      }
-
-      // Only include optional fields if they have values
-      if (imageMediaIds) {
-        requestBody.image_media_ids = imageMediaIds
-      }
-      if (videoMediaIds) {
-        requestBody.video_media_ids = videoMediaIds
-      }
-      if (nominatorCity && nominatorCity.trim()) {
-        requestBody.nominator_city = nominatorCity.trim()
-      }
-      if (nominatorCountry && nominatorCountry.trim()) {
-        requestBody.nominator_country = nominatorCountry.trim()
-      }
-
-      console.log('Submitting contestant with data:', {
-        contestId,
-        title,
-        description,
-        hasImages: !!imageMediaIds,
-        hasVideos: !!videoMediaIds,
-        nominatorCity: nominatorCity || 'not provided',
-        nominatorCountry: nominatorCountry || 'not provided'
-      })
-
-      const response = await api.post(`/api/v1/contestants/${contestId}`, requestBody)
-
-      // Invalider le cache des contestants et du contest
-      cacheService.invalidate(`/api/v1/contestants/contest/${contestId}`)
-      cacheService.invalidate(`/api/v1/contests/${contestId}`)
-      cacheService.invalidate('/api/v1/contests/')
-
-      return response.data
-    } catch (error: any) {
-      console.error(`Error submitting contestant for contest ${contestId}:`, error)
-      console.error('Error response data:', error?.response?.data)
-      console.error('Error response status:', error?.response?.status)
-      throw error
-    }
-  }
-
-  /**
-   * Met à jour une candidature existante
-   */
-  async updateContestant(
-    contestantId: number,
-    title: string,
-    description: string,
-    imageMediaIds?: string,
-    videoMediaIds?: string,
-    nominatorCity?: string,
-    nominatorCountry?: string
-  ): Promise<any> {
-    try {
-      const response = await api.put(`/api/v1/contestants/${contestantId}`, {
-        title: title,
-        description: description,
-        image_media_ids: imageMediaIds,
-        video_media_ids: videoMediaIds,
-        nominator_city: nominatorCity,
-        nominator_country: nominatorCountry
-      })
-
-      // Invalider le cache du contestant, de la liste des contestants et du contest
-      cacheService.invalidate(`/api/v1/contestants/${contestantId}`)
-      cacheService.invalidate('/api/v1/contestants/contest/')
-      cacheService.invalidate('/api/v1/contests/')
-
-      return response.data
-    } catch (error) {
-      console.error(`Error updating contestant ${contestantId}:`, error)
-      throw error
-    }
-  }
-
-  /**
-   * Ajoute une soumission (média) à une candidature
-   */
-  async addSubmission(
-    contestantId: number,
-    mediaType: string,
-    fileUrl: string,
-    title?: string,
-    description?: string
-  ): Promise<any> {
-    try {
-      const response = await api.post(`/api/v1/contestants/${contestantId}/submission`, null, {
-        params: {
-          media_type: mediaType,
-          file_url: fileUrl,
-          title,
-          description
-        }
-      })
-
-      // Invalider le cache du contestant et de la liste des contestants
-      cacheService.invalidate(`/api/v1/contestants/${contestantId}`)
-      cacheService.invalidate('/api/v1/contestants/contest/')
-
-      return response.data
-    } catch (error) {
-      console.error(`Error adding submission for contestant ${contestantId}:`, error)
-      throw error
-    }
-  }
-
-  /**
-   * Récupère un contestant par son ID avec infos auteur et stats
-   */
-  async getContestantById(contestantId: number): Promise<ContestantWithAuthorAndStats | null> {
-    try {
-      const response = await api.get(`/api/v1/contestants/${contestantId}`)
-      console.log(`Contestant ${contestantId} fetched:`, response.data)
-      return response.data
-    } catch (error) {
-      console.error(`Error fetching contestant ${contestantId}:`, error)
-      return null
-    }
-  }
-
-  /**
-   * Récupère les candidatures d'un contest avec infos auteur et stats enrichies
-   * @param filterCountry - Filtrer par pays
-   * @param filterRegion - Filtrer par région
-   * @param filterContinent - Filtrer par continent
-   */
-  async getContestantsByContest(
-    contestId: string,
-    skip: number = 0,
-    limit: number = 10,
-    filterCountry?: string,
-    filterRegion?: string,
-    filterContinent?: string,
-    filterCity?: string,
-    userId?: number | string
-  ): Promise<ContestantWithAuthorAndStats[]> {
-    try {
-      const cacheKey = `/api/v1/contestants/contest/${contestId}`
-      const params: any = { skip, limit }
-
-      if (filterCountry) {
-        params.filter_country = filterCountry
-      }
-      if (filterRegion) {
-        params.filter_region = filterRegion
-      }
-      if (filterContinent) {
-        params.filter_continent = filterContinent
-      }
-      if (filterCity) {
-        params.filter_city = filterCity
-      }
-      if (userId) {
-        params.user_id = userId
-      }
-
-      // Vérifier le cache
-      const cached = cacheService.get<ContestantWithAuthorAndStats[]>(cacheKey, params)
-      if (cached) {
-        return cached
-      }
-
-      // Si pas en cache, faire la requête
-      const response = await api.get(cacheKey, { params })
-
-      // Mettre en cache
-      cacheService.set(cacheKey, response.data, params)
-
-      return response.data
-    } catch (error: any) {
-      console.error(`Error fetching contestants for contest ${contestId}:`, error)
-      if (error.response) {
-        console.error('Response error detail:', error.response.data)
-      }
-      throw error
-    }
-  }
-
-  /**
-   * Ajoute un contestant aux favoris
-   */
-  async addToFavorites(contestantId: number): Promise<void> {
-    try {
-      await api.post(`/api/v1/contestants/${contestantId}/favorite`)
-
-      // Invalider le cache des favoris et du contestant
-      cacheService.invalidate('/api/v1/contestants/favorites')
-      cacheService.invalidate(`/api/v1/contestants/${contestantId}`)
-    } catch (error) {
-      console.error(`Error adding contestant ${contestantId} to favorites:`, error)
-      throw error
-    }
-  }
-
-  /**
-   * Retire un contestant des favoris
-   */
-  async removeFromFavorites(contestantId: number): Promise<void> {
-    try {
-      await api.delete(`/api/v1/contestants/${contestantId}/favorite`)
-
-      // Invalider le cache des favoris et du contestant
-      cacheService.invalidate('/api/v1/contestants/favorites')
-      cacheService.invalidate(`/api/v1/contestants/${contestantId}`)
-    } catch (error) {
-      console.error(`Error removing contestant ${contestantId} from favorites:`, error)
-      throw error
-    }
-  }
-
-  /**
-   * Supprime une candidature (l'utilisateur peut supprimer sa propre candidature)
-   */
-  async deleteContestant(contestantId: number): Promise<void> {
-    try {
-      await api.delete(`/api/v1/contestants/${contestantId}`)
-
-      // Invalider le cache du contestant et de la liste des contestants
-      cacheService.invalidate(`/api/v1/contestants/${contestantId}`)
-      cacheService.invalidate('/api/v1/contestants/contest/')
-      cacheService.invalidate('/api/v1/contests/')
-    } catch (error) {
-      console.error(`Error deleting contestant ${contestantId}:`, error)
-      throw error
-    }
-  }
-
-  /**
-   * Récupère les favoris de l'utilisateur courant
-   */
-  async getUserFavorites(): Promise<number[]> {
-    try {
-      const cacheKey = '/api/v1/contestants/favorites'
-
-      // Vérifier le cache
-      const cached = cacheService.get<number[]>(cacheKey)
-      if (cached) {
-        return cached
-      }
-
-      // Si pas en cache, faire la requête
-      const response = await api.get(cacheKey)
-
-      // Mettre en cache
-      cacheService.set(cacheKey, response.data)
-
-      return response.data
-    } catch (error) {
-      console.error('Error fetching user favorites:', error)
-      throw error
-    }
-  }
-
-  /**
-   * Récupérer les détails des votes avec les noms des utilisateurs
-   */
-  async getVoteDetails(contestantId: number): Promise<any> {
-    try {
-      const response = await api.get(`/api/v1/contestants/${contestantId}/votes/details`)
-      return response.data
-    } catch (error) {
-      console.error(`Error fetching vote details for contestant ${contestantId}:`, error)
-      throw error
-    }
-  }
-
-  /**
-   * Récupère les candidatures de l'utilisateur connecté
-   */
-  async getMyApplications(skip: number = 0, limit: number = 10): Promise<ContestantWithAuthorAndStats[]> {
-    try {
-      const cacheKey = '/api/v1/contestants/user/my-entries'
-      const params = { skip, limit }
-
-      // Vérifier le cache
-      const cached = cacheService.get<ContestantWithAuthorAndStats[]>(cacheKey, params)
-      if (cached) {
-        return cached
-      }
-
-      // Si pas en cache, faire la requête
-      const response = await api.get(cacheKey, { params })
-
-      // Mettre en cache
-      cacheService.set(cacheKey, response.data, params)
-
-      return response.data
-    } catch (error) {
-      console.error('Error fetching my applications:', error)
-      throw error
-    }
-  }
-
-  /**
-   * Récupère les votes MyHigh5 de l'utilisateur courant (saisons actives uniquement)
-   * Retourne les 5 contestants pour lesquels l'utilisateur a voté, groupés par season
-   */
-  async getMyHigh5Votes(): Promise<any> {
-    try {
-      const cacheKey = '/api/v1/contestants/user/my-votes'
-
-      // Vérifier le cache
-      const cached = cacheService.get<any>(cacheKey)
-      if (cached) {
-        return cached
-      }
-
-      // Si pas en cache, faire la requête
-      const response = await api.get(cacheKey)
-
-      // Mettre en cache
-      cacheService.set(cacheKey, response.data)
-
-      return response.data
-    } catch (error) {
-      console.error('Error fetching MyHigh5 votes:', error)
-      throw error
-    }
-  }
-
-  /**
-   * Récupère l'historique complet des votes MyHigh5 de l'utilisateur
-   * Inclut toutes les saisons (actives et inactives), groupées par contestant
-   */
-  async getMyHigh5VotesHistory(contestId?: number): Promise<any> {
-    try {
-      const cacheKey = '/api/v1/contestants/user/my-votes/history'
-      const params = contestId ? { contest_id: contestId } : {}
-
-      // Vérifier le cache
-      const cached = cacheService.get<any>(cacheKey, params)
-      if (cached) {
-        return cached
-      }
-
-      // Si pas en cache, faire la requête
-      const response = await api.get(cacheKey, { params })
-
-      // Mettre en cache
-      cacheService.set(cacheKey, response.data, params)
-
-      return response.data
-    } catch (error) {
-      console.error('Error fetching MyHigh5 votes history:', error)
-      throw error
-    }
-  }
-
-  /**
-   * Réordonne les votes MyHigh5 de l'utilisateur pour une season donnée
-   * Le 1er reçoit 5 points, le 2ème 4 points, etc.
-   */
-  async reorderMyHigh5Votes(
-    votes: Array<{ contestant_id: number; position: number }>,
-    seasonId: number
-  ): Promise<void> {
-    try {
-      await api.put('/api/v1/contestants/user/my-votes/reorder', {
-        votes,
-        season_id: seasonId
-      })
-
-      // Invalider le cache des votes MyHigh5
-      cacheService.invalidate('/api/v1/contestants/user/my-votes')
-      cacheService.invalidate('/api/v1/contestants/user/my-votes/history')
-    } catch (error) {
-      console.error('Error reordering MyHigh5 votes:', error)
-      throw error
-    }
-  }
-
-  /**
-   * Récupérer les détails des favoris avec les noms des utilisateurs
-   */
-  async getFavoriteDetails(contestantId: number): Promise<any> {
-    try {
-      const response = await api.get(`/api/v1/contestants/${contestantId}/favorites/details`)
-      return response.data
-    } catch (error) {
-      console.error(`Error fetching favorite details for contestant ${contestantId}:`, error)
-      throw error
-    }
-  }
-
-  /**
-   * Sauvegarde l'ordre des favoris
-   */
-  async reorderFavorites(favorites: Array<{ contestant_id: number; position: number }>): Promise<void> {
-    try {
-      console.log('[REORDER] Sending favorites to backend:', favorites)
-      const response = await api.put('/api/v1/favorites/contestants/reorder', {
-        favorites
-      })
-      console.log('[REORDER] Response:', response.data)
-      console.log('Favorites reordered successfully')
-
-      // Invalider le cache des favoris
-      cacheService.invalidate('/api/v1/contestants/favorites')
-    } catch (error) {
-      console.error('[REORDER] Error reordering favorites:', error)
-      throw error
-    }
-  }
-
-  /**
-   * Récupère le classement d'un contest
-   */
-  async getContestLeaderboard(
-    contestId: string,
-    skip: number = 0,
-    limit: number = 10
-  ): Promise<any[]> {
-    try {
-      const cacheKey = `/api/v1/contestants/leaderboard/contest/${contestId}`
-      const params = { skip, limit }
-
-      // Vérifier le cache
-      const cached = cacheService.get<any[]>(cacheKey, params)
-      if (cached) {
-        return cached
-      }
-
-      // Si pas en cache, faire la requête
-      const response = await api.get(cacheKey, { params })
-
-      // Mettre en cache
-      cacheService.set(cacheKey, response.data, params)
-
-      return response.data
-    } catch (error) {
-      console.error(`Error fetching leaderboard for contest ${contestId}:`, error)
-      throw error
-    }
-  }
-
-  /**
-   * Vote pour une candidature
-   */
-  async voteForContestant(contestantId: number, score: number = 5): Promise<any> {
-    try {
-      const response = await api.post(`/api/v1/contestants/${contestantId}/vote`)
-
-      // Invalider le cache du contestant, du leaderboard et du contest
-      cacheService.invalidate(`/api/v1/contestants/${contestantId}`)
-      cacheService.invalidate('/api/v1/contestants/leaderboard/')
-      cacheService.invalidate('/api/v1/contestants/contest/')
-      cacheService.invalidate('/api/v1/contests/')
-
-      return response.data
-    } catch (error: any) {
-      console.error(`Error voting for contestant ${contestantId}:`, error)
-      throw error
-    }
-  }
-
-  /**
-   * Participe à un contest (ancienne méthode - gardée pour compatibilité)
-   */
-  async participateInContest(contestId: string, mediaId: number): Promise<any> {
-    try {
-      const response = await api.post(`/api/v1/contests/${contestId}/entry`, {
-        media_id: mediaId
-      })
-      return response.data
-    } catch (error) {
-      console.error(`Error participating in contest ${contestId}:`, error)
-      throw error
-    }
-  }
-
-  /**
-   * Récupère les contests filtrés
-   */
-  async getContestsWithFilters(
-    filters: {
-      location_id?: number
-      contest_type?: string
-      active?: boolean
-    },
-    skip: number = 0,
-    limit: number = 10
-  ): Promise<ContestResponse[]> {
-    try {
-      const cacheKey = '/api/v1/contests'
-      const params = { ...filters, skip, limit }
-
-      // Vérifier le cache
-      const cached = cacheService.get<ContestResponse[]>(cacheKey, params)
-      if (cached) {
-        return cached
-      }
-
-      // Si pas en cache, faire la requête
-      const response = await api.get(cacheKey, { params })
-
-      // Mettre en cache
-      cacheService.set(cacheKey, response.data, params)
-
-      return response.data
-    } catch (error) {
-      console.error('Error fetching filtered contests:', error)
-      throw error
-    }
-  }
-
-  /**
-   * Ajoute un contest aux favoris
-   */
   async addContestFavorite(contestId: string): Promise<void> {
-    try {
-      await api.post(`/api/v1/favorites/contests/${contestId}`)
-
-      // Invalider le cache des favoris de contests
-      cacheService.invalidate('/api/v1/favorites/contests')
-      cacheService.invalidate(`/api/v1/favorites/contests/${contestId}/is-favorite`)
-    } catch (error) {
-      console.error('Erreur lors de l\'ajout du contest aux favoris:', error)
-      throw error
-    }
+    return this.addToFavorites(contestId, 'contest');
   }
 
-  /**
-   * Retire un contest des favoris
-   */
   async removeContestFavorite(contestId: string): Promise<void> {
-    try {
-      await api.delete(`/api/v1/favorites/contests/${contestId}`)
-
-      // Invalider le cache des favoris de contests
-      cacheService.invalidate('/api/v1/favorites/contests')
-      cacheService.invalidate(`/api/v1/favorites/contests/${contestId}/is-favorite`)
-    } catch (error) {
-      console.error('Erreur lors de la suppression du contest des favoris:', error)
-      throw error
-    }
+    return this.removeFromFavorites(contestId, 'contest');
   }
 
-  /**
-   * Récupère les contests favoris de l'utilisateur
-   */
-  async getFavoritesContests(skip: number = 0, limit: number = 100): Promise<ContestResponse[]> {
-    try {
-      const cacheKey = '/api/v1/favorites/contests'
-      const params = { skip, limit }
-
-      // Vérifier le cache
-      const cached = cacheService.get<ContestResponse[]>(cacheKey, params)
-      if (cached) {
-        return cached
-      }
-
-      // Si pas en cache, faire la requête
-      const response = await api.get(cacheKey, { params })
-
-      // Mettre en cache
-      cacheService.set(cacheKey, response.data, params)
-
-      return response.data
-    } catch (error) {
-      console.error('Erreur lors du chargement des contests favoris:', error)
-      return []
-    }
-  }
-
-  /**
-   * Vérifie si un contest est dans les favoris
-   */
-  async isContestFavorite(contestId: string): Promise<boolean> {
-    try {
-      const cacheKey = `/api/v1/favorites/contests/${contestId}/is-favorite`
-
-      // Vérifier le cache
-      const cached = cacheService.get<{ is_favorite: boolean }>(cacheKey)
-      if (cached) {
-        return cached.is_favorite
-      }
-
-      // Si pas en cache, faire la requête
-      const response = await api.get(cacheKey)
-
-      // Mettre en cache
-      cacheService.set(cacheKey, response.data)
-
-      return response.data.is_favorite
-    } catch (error) {
-      console.error('Erreur lors de la vérification du favori:', error)
-      return false
-    }
-  }
-
-  /**
-   * Convertit une réponse API en objet Contest pour l'affichage
-   */
-  mapResponseToContest(response: ContestResponse): Contest {
-    // Utiliser season_level si disponible, sinon utiliser level
-    const level = response.season_level || response.level || 'country'
-
-    // Le contest est ouvert pour candidater si le backend dit is_submission_open: true
-    // On fait confiance au backend pour gérer les dates
-    // FIXED: Handle missing date fields gracefully (they may not exist in database)
-    const now = new Date()
-    const submissionStart = (response.submission_start_date && response.submission_start_date !== 'null')
-      ? new Date(response.submission_start_date)
-      : null
-    const submissionEnd = (response.submission_end_date && response.submission_end_date !== 'null')
-      ? new Date(response.submission_end_date)
-      : null
-    const votingStart = (response.voting_start_date && response.voting_start_date !== 'null')
-      ? new Date(response.voting_start_date)
-      : null
-
-    // Faire confiance au backend pour la valeur de is_submission_open
-    const isOpen = response.is_submission_open || false
-
-    // Gérer la couverture : utiliser image_url en priorité, puis cover_image_url, sinon emoji
-    let coverImage = response.image_url || response.cover_image_url || ''
-
-    // Si l'image existe, s'assurer qu'elle est une URL valide
-    if (coverImage && coverImage.trim() !== '') {
-      // Vérifier si c'est un emoji (caractère unicode haut)
-      const firstCodePoint = coverImage.codePointAt(0) || 0
-      const isEmoji = coverImage.length <= 4 && firstCodePoint > 0x1F000
-
-      // Si ce n'est pas un emoji et que ce n'est pas déjà une URL complète
-      if (!isEmoji && !coverImage.startsWith('http') && !coverImage.startsWith('data:')) {
-        // Si c'est un chemin relatif, construire l'URL complète
-        if (coverImage.startsWith('/')) {
-          const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-          coverImage = `${API_BASE_URL}${coverImage}`
-        } else {
-          // Sinon, essayer de construire l'URL
-          const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-          coverImage = `${API_BASE_URL}/${coverImage}`
-        }
-      }
-    }
-
-    // Si toujours pas d'image valide, utiliser l'emoji
-    if (!coverImage || coverImage.trim() === '' || (!coverImage.startsWith('http') && !coverImage.startsWith('/') && !coverImage.startsWith('data:'))) {
-      coverImage = this.getEmojiForType(response.contest_type)
-    }
-
-    return {
-      id: String(response.id),
-      title: response.name,
-      coverImage: coverImage,
-      startDate: submissionStart || new Date(),
-      status: (level as 'city' | 'country' | 'regional' | 'continental' | 'global') || 'country',
-      received: response.total_votes || 0, // Nombre total de votes
-      contestants: response.entries_count || 0, // Nombre de participants
-      likes: 0, // À implémenter plus tard
-      comments: 0, // À implémenter plus tard
-      isOpen: isOpen,
-      contestType: response.contest_type,
-      genderRestriction: (() => {
-        // Priorité: gender_restriction, puis voting_restriction
-        let restriction = response.gender_restriction
-
-        // Si pas de gender_restriction, essayer de l'extraire de voting_restriction
-        if (!restriction && response.voting_restriction) {
-          const votingRestriction = String(response.voting_restriction).toLowerCase().trim()
-          if (votingRestriction === 'male_only') {
-            restriction = 'male'
-          } else if (votingRestriction === 'female_only') {
-            restriction = 'female'
-          }
-        }
-
-        // Vérifier aussi si gender_restriction est directement 'male' ou 'female'
-        if (restriction && typeof restriction === 'string' && restriction.trim() !== '') {
-          const normalized = restriction.toLowerCase().trim()
-          if (normalized === 'male' || normalized === 'female') {
-            return normalized as 'male' | 'female'
-          }
-        }
-        return null
-      })(),
-      participationStartDate: submissionStart || undefined,
-      participationEndDate: submissionEnd || undefined,
-      votingStartDate: votingStart || undefined,
-      // Verification requirements - KYC n'est PAS requis par défaut
-      requiresKyc: response.requires_kyc ?? false,
-      verificationType: (response.verification_type as 'none' | 'visual' | 'voice' | 'brand' | 'content') || 'none',
-      participantType: (response.participant_type as 'individual' | 'pet' | 'club' | 'content') || 'individual',
-      requiresVisualVerification: response.requires_visual_verification ?? false,
-      requiresVoiceVerification: response.requires_voice_verification ?? false,
-      requiresBrandVerification: response.requires_brand_verification ?? false,
-      requiresContentVerification: response.requires_content_verification ?? false,
-      minAge: response.min_age ?? null,
-      maxAge: response.max_age ?? null,
-      // Media requirements
-      requiresVideo: response.requires_video ?? false,
-      maxVideos: response.max_videos ?? 1,
-      videoMaxDuration: response.video_max_duration ?? 3000,
-      videoMaxSizeMb: response.video_max_size_mb ?? 500,
-      minImages: response.min_images ?? 0,
-      maxImages: response.max_images ?? 10,
-      verificationVideoMaxDuration: response.verification_video_max_duration ?? 30,
-      verificationMaxSizeMb: response.verification_max_size_mb ?? 50,
-      // Voting type and level for categorization
-      votingTypeId: response.voting_type_id ?? null,
-      level: response.season_level || response.level || 'country',
-      votingType: response.voting_type ?? null,
-      // Top contestants preview
-      topContestants: response.top_contestants?.map((c, index) => ({
-        id: c.id,
-        author_name: c.author_name,
-        author_avatar_url: c.author_avatar_url,
-        image_url: c.image_url,
-        votes_count: c.votes_count,
-        rank: c.rank ?? (index + 1)
-      })) || [],
-      // Indique si l'utilisateur connecté a déjà participé
-      currentUserContesting: response.current_user_contesting ?? false
-    }
-  }
-
-  /**
-   * Retourne un emoji basé sur le type de contest
-   */
   private getEmojiForType(type: string): string {
     const emojiMap: Record<string, string> = {
       'beauty': '👑',
@@ -1125,8 +316,145 @@ class ContestService {
       'talent': '✨',
       'photography': '📸',
       'default': '💎'
+    };
+    return emojiMap[type] || emojiMap['default'];
+  }
+
+  /**
+   * Map a contest response to a contest object
+   */
+  public mapResponseToContest(response: ContestResponse): Contest {
+    // Convert dates
+    const submissionStart = response.submission_start_date ? new Date(response.submission_start_date) : undefined;
+    const submissionEnd = response.submission_end_date && response.submission_end_date !== 'null' 
+      ? new Date(response.submission_end_date)
+      : undefined;
+    const votingStart = response.voting_start_date && response.voting_start_date !== 'null'
+      ? new Date(response.voting_start_date)
+      : undefined;
+    const votingEnd = response.voting_end_date && response.voting_end_date !== 'null'
+      ? new Date(response.voting_end_date)
+      : undefined;
+    const startDate = response.start_date ? new Date(response.start_date) : new Date();
+    const endDate = response.end_date ? new Date(response.end_date) : undefined;
+    
+    // Process cover image
+    let coverImage = response.cover_image_url || response.image_url || '';
+    
+    // If image exists, ensure it's a valid URL or emoji
+    if (coverImage.trim() !== '') {
+      const firstCodePoint = coverImage.codePointAt(0) || 0;
+      const isEmoji = coverImage.length <= 4 && firstCodePoint > 0x1F000;
+      
+      if (!isEmoji && !coverImage.startsWith('http')) {
+        // If it's not an emoji and not a complete URL, prepend base URL
+        const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        if (coverImage.startsWith('/')) {
+          coverImage = `${API_BASE_URL}${coverImage}`;
+        } else if (coverImage.trim() !== '') {
+          coverImage = `${API_BASE_URL}/${coverImage}`;
+        }
+      }
+      
+      // If still no valid image, use an emoji
+      if (!coverImage || coverImage.trim() === '' || (!coverImage.startsWith('http') && !coverImage.startsWith('/') && !coverImage.startsWith('data:'))) {
+        coverImage = this.getEmojiForType(response.contest_type);
+      }
+    } else {
+      // If no image, use an emoji
+      coverImage = this.getEmojiForType(response.contest_type);
     }
-    return emojiMap[type] || emojiMap['default']
+    
+    // Determine contest status
+    const now = new Date();
+    const isSubmissionOpen = submissionStart && (!submissionEnd || now <= submissionEnd);
+    const isVotingOpen = votingStart && votingEnd ? (votingStart <= now && now <= votingEnd) : false;
+    const isOpen = isSubmissionOpen || isVotingOpen;
+    
+    // Determine contest status level
+    const status = (response.status as 'city' | 'country' | 'regional' | 'continental' | 'global') || 'city';
+    
+    // Map verification type
+    const verificationType = response.verification_type || 'none';
+    
+    // Map voting type if available
+    const votingType = response.voting_type ? {
+      id: response.voting_type.id,
+      name: response.voting_type.name,
+      voting_level: response.voting_type.voting_level,
+      commission_source: response.voting_type.commission_source,
+      commission_rules: response.voting_type.commission_rules
+    } : null;
+    
+    // Map top contestants if available
+    const topContestants = (response.top_contestants || []).map(contestant => ({
+      id: contestant.id,
+      user_id: contestant.user_id || 0,
+      author_name: contestant.author_name || '',
+      author_avatar_url: contestant.author_avatar_url || '',
+      image_url: contestant.image_url || '',
+      votes_count: contestant.votes_count || 0,
+      rank: contestant.rank || 0
+    }));
+    
+    // Create the Contest object
+    return {
+      id: String(response.id),
+      title: response.name || '',
+      name: response.name || '',
+      description: response.description || '',
+      coverImage,
+      startDate,
+      status,
+      received: response.entries_count || 0,
+      contestants: response.contestants?.length || 0,
+      likes: 0,
+      comments: 0,
+      reactions: 0,
+      favorites: 0,
+      isOpen,
+      contestType: response.contest_type || '',
+      genderRestriction: response.gender_restriction || null,
+      participationStartDate: submissionStart,
+      participationEndDate: submissionEnd,
+      votingStartDate: votingStart,
+      votingEndDate: votingEnd,
+      requiresKyc: response.requires_kyc || false,
+      verificationType,
+      // Participant and verification requirements
+      participantType: response.participant_type || 'individual',
+      requiresVisualVerification: verificationType === 'visual',
+      requiresVoiceVerification: verificationType === 'voice',
+      requiresBrandVerification: verificationType === 'brand',
+      requiresContentVerification: verificationType === 'content',
+      minAge: response.min_age || null,
+      maxAge: response.max_age || null,
+      
+      // Media requirements
+      requiresVideo: response.requires_video || false,
+      maxVideos: response.max_videos || 1,
+      videoMaxDuration: response.video_max_duration || 300,
+      videoMaxSizeMb: response.video_max_size_mb || 50,
+      minImages: response.min_images || 1,
+      maxImages: response.max_images || 10,
+      verificationVideoMaxDuration: response.verification_video_max_duration || 60,
+      verificationMaxSizeMb: response.verification_max_size_mb || 20,
+      
+// Voting and contest details
+      votingTypeId: response.voting_type_id || null,
+      level: response.voting_type?.voting_level || response.season_level || 'country',
+      currentUserContesting: response.current_user_contesting || false,
+      votingType,
+      topContestants: response.top_contestants?.map(t => ({
+        id: t.id,
+        user_id: t.user_id,
+        author_name: t.author_name,
+        author_avatar_url: t.author_avatar_url,
+        image_url: t.image_url,
+        votes_count: t.votes_count,
+        rank: t.rank
+      })) || []
+    };
   }
 
   /**
@@ -1180,6 +508,458 @@ class ContestService {
       console.error('Error reporting contestant:', error)
       const errorMessage = error.response?.data?.detail || error.message || 'Erreur lors du signalement'
       throw new Error(errorMessage)
+    }
+  }
+
+  /**
+   * Récupère un participant par son ID
+   */
+  async getContestant(contestantId: number): Promise<ContestantWithAuthorAndStats> {
+    try {
+      const response = await api.get<ContestantWithAuthorAndStats>(`/api/v1/contestants/${contestantId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching contestant:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Récupère la liste des concours avec pagination et recherche
+   */
+  async getContests(
+    skip: number = 0,
+    limit: number = 10,
+    searchTerm?: string,
+    votingLevel?: string,
+    votingTypeId?: number,
+    hasVotingType?: boolean
+  ): Promise<{ contests: Contest[]; total: number }> {
+    try {
+      const params: any = {
+        skip,
+        limit,
+        ...(searchTerm && { search: searchTerm }),
+        ...(votingLevel && { voting_level: votingLevel }),
+        ...(votingTypeId && { voting_type_id: votingTypeId }),
+        ...(hasVotingType !== undefined && { has_voting_type: hasVotingType })
+      };
+      
+      console.log('[ContestService] Fetching contests with params:', params);
+
+      const response = await api.get<{ items: ContestResponse[]; total: number }>('/api/v1/contests', { params });
+      
+      return {
+        contests: response.data.items.map(contest => this.mapResponseToContest(contest)),
+        total: response.data.total
+      };
+    } catch (error) {
+      console.error('Error fetching contests:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all rounds for a specific contest
+   * @param contestId - The ID of the contest
+   * @returns Promise with an array of rounds
+   */
+  async getRoundsForContest(contestId: string | number): Promise<RoundWithStats[]> {
+    try {
+      type ApiResponse = {
+        data: RoundWithStats[];
+      };
+      
+      const response = await api.get<ApiResponse>(`/contests/${contestId}/rounds`);
+      return Array.isArray(response?.data) ? response.data : [];
+    } catch (error) {
+      console.error('Error fetching contest rounds:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Submit a new contestant entry
+   */
+  async submitContestant(
+    contestId: string | number,
+    title: string,
+    description: string,
+    imageMediaIds: string | string[] = [],
+    videoMediaIds: string | string[] = [],
+    nominatorCity?: string,
+    nominatorCountry?: string
+  ): Promise<any> {
+    try {
+      // Convert string media IDs to array if needed
+      const imageIds = Array.isArray(imageMediaIds) 
+        ? imageMediaIds 
+        : imageMediaIds ? [imageMediaIds] : [];
+      
+      const videoIds = Array.isArray(videoMediaIds) 
+        ? videoMediaIds 
+        : videoMediaIds ? [videoMediaIds] : [];
+
+      const response = await api.post(`/contests/${contestId}/participate`, {
+        title,
+        description,
+        image_media_ids: imageIds,
+        video_media_ids: videoIds,
+        nominator_city: nominatorCity,
+        nominator_country: nominatorCountry
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error submitting contestant:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update an existing contestant entry
+   */
+  async updateContestant(
+    contestantId: number,
+    title: string,
+    description: string,
+    imageMediaIds: string | string[] = [],
+    videoMediaIds: string | string[] = [],
+    nominatorCity?: string,
+    nominatorCountry?: string
+  ): Promise<any> {
+    try {
+      // Convert string media IDs to array if needed
+      const imageIds = Array.isArray(imageMediaIds) 
+        ? imageMediaIds 
+        : imageMediaIds ? [imageMediaIds] : [];
+      
+      const videoIds = Array.isArray(videoMediaIds) 
+        ? videoMediaIds 
+        : videoMediaIds ? [videoMediaIds] : [];
+
+      const response = await api.put(`/contestants/${contestantId}`, {
+        title,
+        description,
+        image_media_ids: imageIds,
+        video_media_ids: videoIds,
+        nominator_city: nominatorCity,
+        nominator_country: nominatorCountry
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error updating contestant:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete a contestant entry
+   */
+  async deleteContestant(contestantId: number): Promise<void> {
+    try {
+      await api.delete(`/contestants/${contestantId}`);
+    } catch (error) {
+      console.error('Error deleting contestant:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get user's contest applications
+   */
+  async getMyApplications(skip: number = 0, limit: number = 10): Promise<ContestantWithAuthorAndStats[]> {
+    try {
+      const response = await api.get<{ items: ContestantWithAuthorAndStats[]; total: number }>(
+        '/contestants/me',
+        { params: { skip, limit } }
+      )
+      return response.data.items
+    } catch (error) {
+      console.error('Error fetching my applications:', error)
+      return []
+    }
+  }
+
+  /**
+   * Get user's high 5 votes
+   */
+  async getMyHigh5Votes(): Promise<{ seasons: Array<{
+    season_id: number;
+    season_level: string | null;
+    contest_id: number;
+    contest_name: string | null;
+    votes: Array<{
+      position: number;
+      points: number | null;
+      contestant_id: number;
+      contestant_title: string;
+      contestant_description: string;
+      author_id: number;
+      author_name: string;
+      author_avatar_url: string | null;
+      author_country: string | null;
+      author_city: string | null;
+      votes_count: number;
+      vote_date: string;
+      season_id: number;
+      contest_id: number;
+      season_level: string | null;
+    }>;
+    votes_count: number;
+    remaining_slots: number;
+  }> }> {
+    try {
+      const response = await api.get<{ 
+        seasons: Array<{
+          season_id: number;
+          season_level: string | null;
+          contest_id: number;
+          contest_name: string | null;
+          votes: Array<{
+            position: number;
+            points: number | null;
+            contestant_id: number;
+            contestant_title: string;
+            contestant_description: string;
+            author_id: number;
+            author_name: string;
+            author_avatar_url: string | null;
+            author_country: string | null;
+            author_city: string | null;
+            votes_count: number;
+            vote_date: string;
+            season_id: number;
+            contest_id: number;
+            season_level: string | null;
+          }>;
+          votes_count: number;
+          remaining_slots: number;
+        }> 
+      }>('/api/v1/contestants/user/my-votes');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching high 5 votes:', error);
+      return { seasons: [] };
+    }
+  }
+
+  /**
+   * Get user's high 5 votes history (all votes including inactive seasons)
+   */
+  async getMyHigh5VotesHistory(contestId?: number): Promise<{ history: Array<{
+    contest_id: number;
+    contest_name: string | null;
+    seasons: Array<{
+      season_id: number;
+      season_level: string | null;
+      is_active: boolean;
+      votes: Array<{
+        position: number;
+        points: number | null;
+        contestant_id: number;
+        contestant_title: string;
+        contestant_description: string;
+        author_id: number;
+        author_name: string;
+        author_avatar_url: string | null;
+        author_country: string | null;
+        author_city: string | null;
+        votes_count: number;
+        vote_date: string;
+        season_id: number;
+        contest_id: number;
+        season_level: string | null;
+      }>;
+      votes_count: number;
+    }>;
+  }> }> {
+    try {
+      const response = await api.get<{ history: Array<{
+        contest_id: number;
+        contest_name: string | null;
+        seasons: Array<{
+          season_id: number;
+          season_level: string | null;
+          is_active: boolean;
+          votes: Array<{
+            position: number;
+            points: number | null;
+            contestant_id: number;
+            contestant_title: string;
+            contestant_description: string;
+            author_id: number;
+            author_name: string;
+            author_avatar_url: string | null;
+            author_country: string | null;
+            author_city: string | null;
+            votes_count: number;
+            vote_date: string;
+            season_id: number;
+            contest_id: number;
+            season_level: string | null;
+          }>;
+          votes_count: number;
+        }>;
+      }> }>('/api/v1/contestants/user/my-votes/history', {
+        params: contestId != null ? { contest_id: contestId } : undefined
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching high 5 votes history:', error);
+      return { history: [] };
+    }
+  }
+
+  /**
+   * Get vote details for a contestant (voters list)
+   */
+  async getVoteDetails(contestantId: number): Promise<{
+    contestant_id: number;
+    voters: Array<{
+      id?: number;
+      user_id: number;
+      username?: string;
+      full_name?: string;
+      avatar_url?: string;
+      points: number;
+      vote_date: string;
+      contest_id?: number;
+      season_id?: number;
+    }>;
+  }> {
+    const response = await api.get(`/api/v1/contestants/${contestantId}/votes/details`);
+    return response.data;
+  }
+
+  /**
+   * Get favorite details for a contestant (users who favorited)
+   */
+  async getFavoriteDetails(contestantId: number): Promise<{
+    contestant_id: number;
+    users: Array<{
+      user_id: number;
+      username?: string;
+      full_name?: string;
+      avatar_url?: string;
+      position?: number;
+      added_date: string;
+    }>;
+  }> {
+    const response = await api.get(`/api/v1/contestants/${contestantId}/favorites/details`);
+    return response.data;
+  }
+
+  /**
+   * Vote for a contestant
+   */
+  async voteForContestant(contestantId: number, _points?: number): Promise<void> {
+    await api.post(`/api/v1/contestants/${contestantId}/vote`);
+  }
+
+  /**
+   * Reorder user's MyHigh5 votes for a season
+   */
+  async reorderMyHigh5Votes(
+    votes: Array<{ contestant_id: number; position: number }>,
+    seasonId: number
+  ): Promise<{ message: string; count: number; season_id: number }> {
+    const response = await api.put('/api/v1/contestants/user/my-votes/reorder', {
+      votes,
+      season_id: seasonId
+    });
+    return response.data;
+  }
+
+  /**
+   * Récupère les participants d'un concours avec pagination et filtres optionnels
+   */
+  /**
+   * Get user's favorite contests with pagination
+   */
+  async getFavoritesContests(skip: number = 0, limit: number = 10): Promise<ContestResponse[]> {
+    try {
+      const response = await api.get<{ items: ContestResponse[]; total: number }>(
+        '/favorites/contests',
+        { params: { skip, limit } }
+      )
+      return response.data.items || []
+    } catch (error) {
+      console.error('Error fetching favorite contests:', error)
+      return []
+    }
+  }
+
+  /**
+   * Get user's favorite contestant IDs
+   */
+  async getUserFavorites(): Promise<number[]> {
+    try {
+      const response = await api.get<{ contestant_ids: number[] }>('/favorites')
+      return response.data.contestant_ids || []
+    } catch (error) {
+      console.error('Error fetching user favorites:', error)
+      return []
+    }
+  }
+
+  /**
+   * Get contestant by ID
+   */
+  async getContestantById(id: number): Promise<ContestantWithAuthorAndStats> {
+    try {
+      const response = await api.get<ContestantWithAuthorAndStats>(`/contestants/${id}`)
+      return response.data
+    } catch (error) {
+      console.error(`Error fetching contestant ${id}:`, error)
+      throw error
+    }
+  }
+
+  /**
+   * Reorder favorite contestants
+   */
+  async reorderFavorites(contestantIds: number[]): Promise<void> {
+    try {
+      await api.put('/favorites/reorder', { contestant_ids: contestantIds })
+    } catch (error) {
+      console.error('Error reordering favorites:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Get contestants by contest with pagination and optional filters
+   */
+  async getContestantsByContest(
+    contestId: string | number,
+    skip: number = 0,
+    limit: number = 10,
+    filterCountry?: string,
+    filterRegion?: string
+  ): Promise<ContestantWithAuthorAndStats[]> {
+    try {
+      const cacheKey = `/api/v1/contests/${contestId}/contestants?skip=${skip}&limit=${limit}${filterCountry ? `&country=${filterCountry}` : ''}${filterRegion ? `&region=${filterRegion}` : ''}`
+      
+      // Vérifier le cache
+      const cached = cacheService.get<ContestantWithAuthorAndStats[]>(cacheKey)
+      if (cached) {
+        return cached
+      }
+
+      // Si pas en cache, faire la requête
+      const params: any = { skip, limit }
+      if (filterCountry) params.country = filterCountry
+      if (filterRegion) params.region = filterRegion
+
+      const response = await api.get<ContestantWithAuthorAndStats[]>(`/api/v1/contests/${contestId}/contestants`, { params })
+      
+      // Mettre en cache
+      cacheService.set(cacheKey, response.data)
+      
+      return response.data || []
+    } catch (error) {
+      console.error(`Error fetching contestants for contest ${contestId}:`, error)
+      return []
     }
   }
 }

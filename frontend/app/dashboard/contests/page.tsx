@@ -525,14 +525,14 @@ function ContestsPageContent() {
                   onViewContestants={() => {
                     const params = new URLSearchParams()
                     if (user?.country) params.set('country', user.country)
-                    if (user?.continent) params.set('continent', user.continent)
+                    params.set('continent', 'all')
                     const q = params.toString()
                     router.push(`/dashboard/contests/${contest.id}${q ? `?${q}` : ''}`)
                   }}
                   onOpenDetails={() => {
                     const params = new URLSearchParams()
                     if (user?.country) params.set('country', user.country)
-                    if (user?.continent) params.set('continent', user.continent)
+                    params.set('continent', 'all')
                     const q = params.toString()
                     router.push(`/dashboard/contests/${contest.id}${q ? `?${q}` : ''}`)
                   }}

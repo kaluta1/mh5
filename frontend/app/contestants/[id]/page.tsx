@@ -21,7 +21,7 @@ export default function PublicContestantPage() {
       if (!contestantId) return
 
       try {
-        const data = await contestService.getContestantById(Number(contestantId))
+        const data = await contestService.getContestant(Number(contestantId))
         setContestant(data)
       } catch (error) {
         console.error('Error loading contestant:', error)

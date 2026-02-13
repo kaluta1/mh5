@@ -43,11 +43,14 @@ export default function FavoritesPage() {
         
         // Charger les contests favoris
         const favContests = await contestService.getFavoritesContests(0, 100)
-        const contests: Contest[] = favContests.map(apiContest => 
-          contestService.mapResponseToContest(apiContest)
-        )
+        // Ensure we have valid contest data before mapping
+        const contests: Contest[] = favContests
+          .filter((c): c is ContestResponse => c !== null && c !== undefined)
+          .map(contestService.mapResponseToContest);
+          
         setFavoriteContests(contests)
-        setFavoriteContestIds(favContests.map(c => c.id))
+        // Ensure all IDs are strings
+        setFavoriteContestIds(contests.map(c => String(c.id)))
         
         // Charger les contestants favoris
         try {
@@ -105,8 +108,8 @@ export default function FavoritesPage() {
         // Recharger le contest pour l'ajouter à la liste
         const contest = await contestService.getContestById(contestId)
         if (contest) {
-          const mappedContest = contestService.mapResponseToContest(contest)
-          setFavoriteContests(prev => [...prev, mappedContest])
+          // No need to map since getContestById already returns a Contest object
+          setFavoriteContests(prev => [...prev, contest])
           setFavoriteContestIds(prev => [...prev, contestId])
         }
       }
@@ -117,37 +120,76 @@ export default function FavoritesPage() {
 
   // Drag and drop handlers
   const handleDragStart = (index: number) => {
-    setDraggedItem(index)
-  }
+    setDraggedItem(index);
+  };
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault()
-  }
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+  };
 
-  const handleDrop = async (dropIndex: number) => {
-    if (draggedItem === null || draggedItem === dropIndex) return
-
-    const newFavorites = [...favoriteContestants]
-    const draggedFavorite = newFavorites[draggedItem]
-    newFavorites.splice(draggedItem, 1)
-    newFavorites.splice(dropIndex, 0, draggedFavorite)
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>, index: number) => {
+    e.preventDefault();
+    if (draggedItem === null || draggedItem === index) return;
     
-    setFavoriteContestants(newFavorites)
-    setDraggedItem(null)
+    const items = [...favoriteContestants];
+    const [movedItem] = items.splice(draggedItem, 1);
+    items.splice(index, 0, movedItem);
+    
+    setFavoriteContestants(items);
+    
+    // Update order in backend
+    const contestantIds = items.map(item => item.id);
+    contestService.reorderFavorites(contestantIds)
+      .catch(error => {
+        console.error('Error reordering favorites:', error);
+        // Revert local state on error
+        loadFavorites();
+      });
+      
+    setDraggedItem(null);
+    
+    setDraggedItem(null);
+  };
 
-    // Sauvegarder l'ordre au backend
+  const loadFavorites = async () => {
     try {
-      const favorites = newFavorites.map((contestant, index) => ({
-        contestant_id: contestant.id,
-        position: index + 1
-      }))
-      console.log('[FRONTEND] Favorites to send:', JSON.stringify(favorites, null, 2))
-      await contestService.reorderFavorites(favorites)
-      console.log('[FRONTEND] Reorder successful!')
+      setPageLoading(true);
+      
+      // Load favorite contests
+      const favContests = await contestService.getFavoritesContests(0, 100);
+      const contests = favContests
+        .filter((c): c is ContestResponse => {
+          // Ensure we have a valid ContestResponse
+          if (!c) return false;
+          // Check for required ContestResponse properties
+          return 'contest_type' in c && 'id' in c;
+        })
+        .map(contestService.mapResponseToContest);
+      
+      setFavoriteContests(contests);
+      setFavoriteContestIds(contests.map(c => String(c.id)));
+      
+      // Load favorite contestants
+      try {
+        const favContestantIds = await contestService.getUserFavorites();
+        if (favContestantIds && favContestantIds.length > 0) {
+          const contestants = await Promise.all(
+            favContestantIds.map(id => contestService.getContestantById(id))
+          );
+          setFavoriteContestants(contestants.filter(Boolean));
+        }
+      } catch (error) {
+        console.error('Error loading favorite contestants:', error);
+        setFavoriteContestants([]);
+      }
     } catch (error) {
-      console.error('[FRONTEND] Erreur lors de la sauvegarde de l\'ordre:', error)
+      console.error('Error loading favorites:', error);
+      setFavoriteContests([]);
+      setFavoriteContestants([]);
+    } finally {
+      setPageLoading(false);
     }
-  }
+  };
 
   const handleRemoveFavoriteContestant = async (contestantId: number) => {
     try {
@@ -232,7 +274,7 @@ export default function FavoritesPage() {
                   draggable
                   onDragStart={() => handleDragStart(index)}
                   onDragOver={handleDragOver}
-                  onDrop={() => handleDrop(index)}
+                  onDrop={(e) => handleDrop(e, index)}
                   className={`relative group rounded-xl sm:rounded-2xl overflow-hidden transition-all cursor-move ${
                     draggedItem === index
                       ? 'opacity-50 scale-95'

@@ -22,8 +22,9 @@ interface ContestantsSidebarProps {
   contestId: string
   formatLocation?: (contestant: Contestant) => string
   onShowToast: (message: string, type: 'success' | 'error') => void
-  /** When set, "View all" link includes country filter so contestants page shows same filter */
+  /** When set, "View all" link includes these filters so contestants page shows same list as contest page */
   filterCountry?: string
+  filterContinent?: string
 }
 
 export function ContestantsSidebar({
@@ -31,7 +32,8 @@ export function ContestantsSidebar({
   contestId,
   formatLocation,
   onShowToast,
-  filterCountry
+  filterCountry,
+  filterContinent
 }: ContestantsSidebarProps) {
   const { t, language } = useLanguage()
   const router = useRouter()
@@ -50,16 +52,18 @@ export function ContestantsSidebar({
             <h3 className="text-lg font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">
               {t('dashboard.contests.contestants') || 'Participants'}
             </h3>
-            {contestants.length > 5 && (
+            {contestants.length >= 1 && (
               <Button
                 variant="outline"
                 size="sm"
                 className="text-xs border-myhigh5-primary/30 text-myhigh5-primary hover:bg-myhigh5-primary hover:text-white transition-all"
                 onClick={() => {
-                const url = `/dashboard/contests/${contestId}/contestants`
-                const qs = filterCountry ? `?country=${encodeURIComponent(filterCountry)}` : ''
-                router.push(`${url}${qs}`)
-              }}
+                  const params = new URLSearchParams()
+                  if (filterCountry) params.set('country', filterCountry)
+                  if (filterContinent && filterContinent !== 'all') params.set('continent', filterContinent)
+                  const qs = params.toString()
+                  router.push(`/dashboard/contests/${contestId}/contestants${qs ? `?${qs}` : ''}`)
+                }}
               >
                 {language === 'fr' ? 'Voir tout' : language === 'es' ? 'Ver todo' : language === 'de' ? 'Alle anzeigen' : 'View all'}
               </Button>

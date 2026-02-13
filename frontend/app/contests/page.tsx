@@ -55,7 +55,7 @@ function ContestsPageContent() {
   const [categoryTab, setCategoryTab] = useState<'nomination' | 'participations'>('participations')
   const [activeTab, setActiveTab] = useState<string>('all')
   const [sortBy, setSortBy] = useState<string>('participants') // participants, votes, date, name
-  const [favorites, setFavorites] = useState<string[]>([])
+  const [favorites, setFavorites] = useState<Array<string | number>>([])
   const [showAuthDialog, setShowAuthDialog] = useState(false)
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [selectedContestId, setSelectedContestId] = useState<string | null>(null)
@@ -97,6 +97,42 @@ function ContestsPageContent() {
 
     return typeList
   }, [allContests, t])
+
+  // Handle toggling a contest as favorite
+  const handleToggleFavorite = (contestId: string | number) => {
+    if (!user) {
+      setShowAuthDialog(true);
+      return;
+    }
+    const id = contestId.toString();
+    setFavorites(prev => 
+      prev.some(favId => favId.toString() === id)
+        ? prev.filter(favId => favId.toString() !== id)
+        : [...prev, contestId]
+    );
+    // TODO: Add API call to update favorites on the server
+  };
+
+  // Handle clicking on a contest
+  const handleContestClick = (contestId: string | number) => {
+    if (!isAuthenticated) {
+      setSelectedContestId(contestId.toString());
+      setShowAuthDialog(true);
+      return;
+    }
+    router.push(`/dashboard/contests/${contestId}`);
+  };
+
+  // Handle participate button click
+  const handleParticipateClick = (contestId: string | number) => {
+    if (!isAuthenticated) {
+      setSelectedContestId(contestId.toString());
+      setShouldGoToParticipate(true);
+      setShowAuthDialog(true);
+      return;
+    }
+    router.push(`/dashboard/contests/${contestId}/apply`);
+  };
 
   // Capturer le code de parrainage depuis l'URL
   useEffect(() => {
@@ -198,7 +234,7 @@ function ContestsPageContent() {
 
       console.log(`[ContestsPage] Calling API with hasVotingType: ${hasVotingType}`)
 
-      const response = await contestService.getContests(
+      const { contests, total } = await contestService.getContests(
         0,
         10, // Reduced from 500 to avoid timeout - pagination should be implemented instead
         activeSearchTerm || undefined,
@@ -207,32 +243,25 @@ function ContestsPageContent() {
         hasVotingType
       )
 
-      console.log(`[ContestsPage] API returned ${response?.length || 0} contests`)
-      console.log(`[ContestsPage] Response sample:`, response?.slice(0, 2))
+      console.log(`[ContestsPage] API returned ${contests?.length || 0} contests out of ${total}`)
+      console.log(`[ContestsPage] Response sample:`, contests?.slice(0, 2))
 
-      if (!response || !Array.isArray(response)) {
-        console.error("[ContestsPage] Invalid response format:", response)
+      if (!contests || !Array.isArray(contests)) {
+        console.error("[ContestsPage] Invalid response format:", { contests, total })
         setAllContests([])
         return
       }
 
-      const mappedContests = response
-        .map((c: ContestResponse) => {
-          try {
-            const mapped = contestService.mapResponseToContest(c)
-            console.log(`[ContestsPage] Mapped contest ${c?.id}:`, {
-              id: mapped.id,
-              title: mapped.title,
-              contestants: mapped.contestants,
-              votingType: mapped.votingType,
-              categoryTab: categoryTab
-            })
-            return mapped
-          } catch (error) {
-            console.error(`[ContestsPage] Error mapping contest ${c?.id}:`, error)
-            console.error(`[ContestsPage] Contest data:`, c)
-            return null
-          }
+      // Contests are already mapped in the service
+      const mappedContests = contests.map(contest => {
+        console.log(`[ContestsPage] Contest ${contest.id}:`, {
+          id: contest.id,
+          title: contest.title,
+          contestants: contest.contestants,
+          votingType: contest.votingType,
+          categoryTab: categoryTab
+        });
+        return contest;
         })
         .filter((c: any) => c !== null)
 
@@ -283,35 +312,6 @@ function ContestsPageContent() {
       setActiveSearchTerm('')
     }
   }, [searchTerm, activeSearchTerm])
-
-  const handleToggleFavorite = (contestId: string) => {
-    setFavorites(prev =>
-      prev.includes(contestId)
-        ? prev.filter(id => id !== contestId)
-        : [...prev, contestId]
-    )
-  }
-
-  // Show auth dialog if not authenticated, otherwise go to contest details
-  const handleContestClick = (contestId: string) => {
-    if (isAuthenticated) {
-      router.push(`/dashboard/contests/${contestId}`)
-    } else {
-      setSelectedContestId(contestId)
-      setShowAuthDialog(true)
-    }
-  }
-
-  // Handle participation/nomination click - redirect to apply page
-  const handleParticipateClick = (contestId: string) => {
-    if (isAuthenticated) {
-      router.push(`/dashboard/contests/${contestId}/apply`)
-    } else {
-      setSelectedContestId(contestId)
-      setShouldGoToParticipate(true)
-      setShowAuthDialog(true)
-    }
-  }
 
   const handleLoginClick = () => {
     setShowAuthDialog(false)
@@ -566,7 +566,7 @@ function ContestsPageContent() {
               {filteredContests.map((contest, index) => (
                 <ContestCard
                   key={contest.id}
-                  id={contest.id}
+                  id={contest.id.toString()}
                   title={contest.title}
                   description={contest.description}
                   coverImage={contest.coverImage}
@@ -597,7 +597,7 @@ function ContestsPageContent() {
                   maxAge={contest.maxAge}
                   isNomination={categoryTab === 'nomination'}
                   votingType={contest.votingType}
-                  isFavorite={favorites.includes(contest.id)}
+                  isFavorite={favorites.some(favId => favId.toString() === contest.id.toString())}
                   onToggleFavorite={() => handleToggleFavorite(contest.id)}
                   onViewContestants={() => handleContestClick(contest.id)}
                   onParticipate={() => handleParticipateClick(contest.id)}
