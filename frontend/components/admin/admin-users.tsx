@@ -88,6 +88,7 @@ export default function AdminUsers() {
   const [loadingCommentId, setLoadingCommentId] = useState<number | null>(null)
   const [loadingAction, setLoadingAction] = useState<'hide' | 'delete' | null>(null)
   const [loadingDetails, setLoadingDetails] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   useEffect(() => {
     fetchUsers()
@@ -97,25 +98,6 @@ export default function AdminUsers() {
     try {
       setLoading(true)
       const endpoint = '/api/v1/admin/users'
-      const params: any = {}
-      
-      if (filter === 'admins') {
-        params.is_admin = true
-      } else if (filter === 'inactive') {
-        params.is_active = false
-      } else if (filter === 'verified') {
-        params.is_verified = true
-      }
-      
-      // Vérifier le cache
-      const cachedData = cacheService.get<UserDetails[]>(endpoint, params)
-      if (cachedData) {
-        setUsers(cachedData)
-        setLoading(false)
-        return
-      }
-      
-      // Construire l'URL avec les paramètres
       let url = endpoint
       if (filter === 'admins') {
         url += '?is_admin=true'
@@ -125,18 +107,32 @@ export default function AdminUsers() {
         url += '?is_verified=true'
       }
       
-      // Si pas de cache, faire l'appel API
-      const response = await api.get(url)
+      const response = await api.get(url, { timeout: 60000 })
       const data = response.data
-      setUsers(data)
+      // Handle both array and wrapped { items/data } response
+      const userList = Array.isArray(data) ? data : (data?.items ?? data?.users ?? data?.data ?? [])
+      setUsers(userList)
+      setLoadError(null)
       
-      // Mettre en cache (TTL de 5 minutes)
-      cacheService.set(endpoint, data, params, 5 * 60 * 1000)
+      if (cacheService.isEnabled()) {
+        const params: any = {}
+        if (filter === 'admins') params.is_admin = true
+        else if (filter === 'inactive') params.is_active = false
+        else if (filter === 'verified') params.is_verified = true
+        cacheService.set(endpoint, userList, params, 5 * 60 * 1000)
+      }
     } catch (error: any) {
+      setUsers([])
       const status = error?.response?.status
+      const isTimeout = error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')
       if (status === 403) {
+        setLoadError('access_denied')
         addToast(t('admin.users.access_denied') || 'Vous n\'avez pas les permissions pour accéder à cette section', 'error')
+      } else if (isTimeout) {
+        setLoadError('timeout')
+        addToast(t('admin.users.timeout_error') || 'Le chargement a pris trop de temps. Réessayez.', 'error')
       } else {
+        setLoadError('error')
         addToast(t('admin.users.load_error') || 'Erreur lors du chargement des utilisateurs', 'error')
       }
     } finally {
@@ -345,7 +341,22 @@ export default function AdminUsers() {
       ) : filteredUsers.length === 0 ? (
         <Card>
           <CardContent className="pt-6 text-center text-gray-500">
-            {t('admin.users.no_users') || 'Aucun utilisateur trouvé'}
+            {loadError === 'access_denied' ? (
+              t('admin.users.access_denied') || 'Vous n\'avez pas les permissions pour accéder à cette section'
+            ) : loadError ? (
+              <span className="flex flex-col items-center gap-3">
+                <span>{t('admin.users.load_error') || 'Erreur lors du chargement des utilisateurs.'}</span>
+                <Button
+                  variant="outline"
+                  onClick={() => fetchUsers()}
+                  className="border-myhigh5-primary text-myhigh5-primary hover:bg-myhigh5-primary/10"
+                >
+                  Réessayer
+                </Button>
+              </span>
+            ) : (
+              t('admin.users.no_users') || 'Aucun utilisateur trouvé'
+            )}
           </CardContent>
         </Card>
       ) : (

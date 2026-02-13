@@ -2233,7 +2233,6 @@ async def get_all_users(
     
     try:
         query = db.query(User).filter(User.is_deleted == False)
-        
         if is_admin is not None:
             query = query.filter(User.is_admin == is_admin)
         if is_active is not None:
@@ -2241,43 +2240,47 @@ async def get_all_users(
         if is_verified is not None:
             query = query.filter(User.is_verified == is_verified)
         
-        # Trier du plus récent au plus ancien
-        users = query.order_by(User.created_at.desc()).all()
+        # Trier du plus récent au plus ancien (fallback sur id si created_at absent)
+        try:
+            users = query.order_by(User.created_at.desc()).all()
+        except Exception:
+            users = query.order_by(User.id.desc()).all()
         
-        # Enrichir avec les statistiques
+        # Enrichir avec les statistiques (safe getattr pour colonnes optionnelles)
         result = []
         for user in users:
-            # Compter les participations (contestants créés)
-            participations_count = db.query(Contestant).filter(Contestant.user_id == user.id).count()
-            
-            # Compter les prix (à implémenter selon votre modèle)
+            try:
+                participations_count = db.query(Contestant).filter(Contestant.user_id == user.id).count()
+                contestants_count = participations_count
+                contests_participated = db.query(ContestEntry).filter(ContestEntry.user_id == user.id).count()
+            except Exception:
+                participations_count = contestants_count = contests_participated = 0
             prizes_count = 0
-            
-            # Compter les candidats (contestants créés)
-            contestants_count = db.query(Contestant).filter(Contestant.user_id == user.id).count()
-            
-            # Compter les contests participés
-            contests_participated = db.query(ContestEntry).filter(ContestEntry.user_id == user.id).count()
-            
+
+            created_at = getattr(user, 'created_at', None)
+            date_of_birth = getattr(user, 'date_of_birth', None)
+            verification_date = getattr(user, 'verification_date', None)
+            identity_verified = getattr(user, 'identity_verified', False)
+
             user_dict = {
                 'id': user.id,
                 'email': user.email,
-                'full_name': user.full_name,
-                'first_name': user.first_name,
-                'last_name': user.last_name,
-                'username': user.username,
-                'avatar_url': user.avatar_url,
-                'is_active': user.is_active,
-                'is_verified': user.is_verified,
-                'is_admin': user.is_admin,
-                'created_at': user.created_at,
-                'date_of_birth': user.date_of_birth,
-                'city': user.city,
-                'country': user.country,
-                'continent': user.continent,
-                'region': user.region,
-                'kyc_status': 'verified' if user.identity_verified else 'pending',
-                'kyc_verified_at': user.verification_date,
+                'full_name': getattr(user, 'full_name', None),
+                'first_name': getattr(user, 'first_name', None),
+                'last_name': getattr(user, 'last_name', None),
+                'username': getattr(user, 'username', None),
+                'avatar_url': getattr(user, 'avatar_url', None),
+                'is_active': getattr(user, 'is_active', True),
+                'is_verified': getattr(user, 'is_verified', False),
+                'is_admin': getattr(user, 'is_admin', False),
+                'created_at': created_at.isoformat() if created_at else None,
+                'date_of_birth': date_of_birth.isoformat() if date_of_birth else None,
+                'city': getattr(user, 'city', None),
+                'country': getattr(user, 'country', None),
+                'continent': getattr(user, 'continent', None),
+                'region': getattr(user, 'region', None),
+                'kyc_status': 'verified' if identity_verified else 'pending',
+                'kyc_verified_at': verification_date.isoformat() if verification_date else None,
                 'participations_count': participations_count,
                 'prizes_count': prizes_count,
                 'contestants_count': contestants_count,

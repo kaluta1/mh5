@@ -191,7 +191,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
 
   const fetchUsers = async () => {
     try {
-      const response = await api.get('/api/v1/admin/users')
+      const response = await api.get('/api/v1/admin/users', { timeout: 60000 })
       setUsers(response.data)
     } catch (error: any) {
       if (error?.response?.status !== 403) {

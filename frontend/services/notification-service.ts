@@ -28,12 +28,12 @@ class NotificationService {
   ): Promise<Notification[]> {
     try {
       const response = await api.get('/api/v1/notifications', {
-        params: { skip, limit, unread_only: unreadOnly }
+        params: { skip, limit, unread_only: unreadOnly },
+        timeout: 15000
       })
       return response.data
     } catch (error) {
-      console.error('Erreur lors de la récupération des notifications:', error)
-      throw error
+      return []
     }
   }
 
@@ -42,10 +42,9 @@ class NotificationService {
    */
   async getUnreadCount(): Promise<number> {
     try {
-      const response = await api.get('/api/v1/notifications/unread-count')
-      return response.data.count
+      const response = await api.get('/api/v1/notifications/unread-count', { timeout: 10000 })
+      return response.data?.count ?? 0
     } catch (error) {
-      console.error('Erreur lors de la récupération du nombre de notifications non lues:', error)
       return 0
     }
   }
