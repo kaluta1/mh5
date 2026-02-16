@@ -283,6 +283,10 @@ def read_rounds(
                  }
                  r_dict["contests"].append(c_data)
                  contests_added += 1
+            
+            # Sort contests by participants_count (descending - most contestants first)
+            # This ensures contests with more participants appear at the top
+            r_dict["contests"].sort(key=lambda x: x.get("participants_count", 0), reverse=True)
         
         # Fallback to legacy contest_id logic if specific contest_id column is set and no N:N links found
         # (Only if we didn't already add it via N:N - avoiding duplicates if migration happened)

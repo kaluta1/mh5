@@ -330,7 +330,7 @@ function ContestsPageContent() {
 
   // Filter and Sort Contests for Display
   const displayedContests = useMemo(() => {
-    let filtered = [...rawContests]
+    let filtered = rawContests.slice()
 
     // 1. Filter by Tab (Type)
     if (activeTab !== 'all') {
@@ -348,39 +348,31 @@ function ContestsPageContent() {
       filtered = filtered.filter(c => c.status === filterLevel)
     }
 
-    // 4. Sort
-    filtered.sort((a, b) => {
-      switch (sortBy) {
-        case 'participants': 
-          // Ensure contestants is a number for proper sorting
-          const aContestants = Number(a.contestants) || 0
-          const bContestants = Number(b.contestants) || 0
-          // Sort descending (most contestants first)
-          if (bContestants !== aContestants) {
+    // 4. Sort - Backend already pre-sorts by participants, but we re-sort here for user's sort choice
+    // This is fast because it's just reordering an already-filtered small array
+    if (sortBy !== 'participants') {
+      // Only sort if user selected a different sort option (not the default)
+      filtered.sort((a, b) => {
+        switch (sortBy) {
+          case 'votes': 
+            const aVotes = Number(a.received) || 0
+            const bVotes = Number(b.received) || 0
+            if (bVotes !== aVotes) {
+              return bVotes - aVotes
+            }
+            // Secondary sort by participants if votes are equal
+            return (Number(b.contestants) || 0) - (Number(a.contestants) || 0)
+          case 'name': 
+            return a.title.localeCompare(b.title)
+          default: 
+            // Fallback to participants (backend already sorted this way)
+            const aContestants = Number(a.contestants) || 0
+            const bContestants = Number(b.contestants) || 0
             return bContestants - aContestants
-          }
-          // Secondary sort by votes if participants are equal
-          return (Number(b.received) || 0) - (Number(a.received) || 0)
-        case 'votes': 
-          const aVotes = Number(a.received) || 0
-          const bVotes = Number(b.received) || 0
-          if (bVotes !== aVotes) {
-            return bVotes - aVotes
-          }
-          // Secondary sort by participants if votes are equal
-          return (Number(b.contestants) || 0) - (Number(a.contestants) || 0)
-        case 'name': 
-          return a.title.localeCompare(b.title)
-        default: 
-          // Default: sort by participants (most first)
-          const aContestantsDefault = Number(a.contestants) || 0
-          const bContestantsDefault = Number(b.contestants) || 0
-          if (bContestantsDefault !== aContestantsDefault) {
-            return bContestantsDefault - aContestantsDefault
-          }
-          return (Number(b.received) || 0) - (Number(a.received) || 0)
-      }
-    })
+        }
+      })
+    }
+    // If sortBy is 'participants' (default), backend already sorted correctly, no need to re-sort
 
     return filtered
   }, [rawContests, activeTab, committedSearch, sortBy, categoryTab, filterLevel])
