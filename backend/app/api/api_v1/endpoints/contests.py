@@ -168,6 +168,88 @@ def read_contests(
     return enriched_contests
 
 
+# IMPORTANT: These routes must come BEFORE /{contest_id} to avoid route conflicts
+@router.post("/{contest_id}/participate", status_code=status.HTTP_201_CREATED)
+def participate_in_contest(
+    *,
+    db: Session = Depends(get_db),
+    contest_id: int,
+    current_user: Any = Depends(get_current_active_user),
+    request: ParticipateRequest = Body(...),
+) -> Any:
+    """
+    Submit a nomination/participation for a contest.
+    This endpoint delegates to the contestant creation endpoint.
+    """
+    from app.schemas.contestant import ContestantCreate
+    
+    # Convert media IDs to JSON strings if needed (ContestantCreate expects JSON strings)
+    import json
+    image_ids_str = None
+    if request.image_media_ids:
+        if isinstance(request.image_media_ids, list):
+            image_ids_str = json.dumps(request.image_media_ids)
+        else:
+            image_ids_str = request.image_media_ids
+    
+    video_ids_str = None
+    if request.video_media_ids:
+        if isinstance(request.video_media_ids, list):
+            video_ids_str = json.dumps(request.video_media_ids)
+        else:
+            video_ids_str = request.video_media_ids
+    
+    # Create the contestant data schema
+    contestant_data = ContestantCreate(
+        title=request.title or "",
+        description=request.description or "",
+        image_media_ids=image_ids_str,
+        video_media_ids=video_ids_str,
+        nominator_city=request.nominator_city,
+        nominator_country=request.nominator_country
+    )
+    
+    # Import the create_contestant function from contestant module
+    from app.api.api_v1.endpoints.contestant import create_contestant
+    
+    # Call the contestant endpoint function
+    return create_contestant(
+        db=db,
+        current_user=current_user,
+        contest_id=contest_id,
+        contestant_data=contestant_data
+    )
+
+
+@router.get("/{contest_id}/rounds")
+def get_contest_rounds(
+    *,
+    db: Session = Depends(get_db),
+    contest_id: int,
+    current_user: Optional[Any] = Depends(get_current_active_user_optional),
+) -> Any:
+    """
+    Get all rounds for a specific contest.
+    """
+    from app.crud import round as crud_round
+    
+    # Verify contest exists
+    contest_obj = contest.get(db=db, id=contest_id)
+    if not contest_obj:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Concours non trouvé"
+        )
+    
+    # Get rounds with stats for this contest
+    user_id = current_user.id if current_user else None
+    rounds_with_stats = crud_round.get_rounds_with_stats(
+        db=db, contest_id=contest_id, user_id=user_id
+    )
+    
+    return rounds_with_stats
+
+
 @router.get("/{contest_id}", response_model=ContestWithEnrichedContestants)
 def read_contest(
     *,
@@ -303,85 +385,3 @@ def delete_contest(
     cache_service.invalidate_contests()
     
     return deleted_contest
-
-
-@router.post("/{contest_id}/participate", status_code=status.HTTP_201_CREATED)
-def participate_in_contest(
-    *,
-    db: Session = Depends(get_db),
-    contest_id: int,
-    current_user: Any = Depends(get_current_active_user),
-    request: ParticipateRequest = Body(...),
-) -> Any:
-    """
-    Submit a nomination/participation for a contest.
-    This endpoint delegates to the contestant creation endpoint.
-    """
-    from app.schemas.contestant import ContestantCreate
-    from app.api.api_v1.endpoints import contestant
-    
-    # Convert media IDs to JSON strings if needed (ContestantCreate expects JSON strings)
-    import json
-    image_ids_str = None
-    if request.image_media_ids:
-        if isinstance(request.image_media_ids, list):
-            image_ids_str = json.dumps(request.image_media_ids)
-        else:
-            image_ids_str = request.image_media_ids
-    
-    video_ids_str = None
-    if request.video_media_ids:
-        if isinstance(request.video_media_ids, list):
-            video_ids_str = json.dumps(request.video_media_ids)
-        else:
-            video_ids_str = request.video_media_ids
-    
-    # Create the contestant data schema
-    contestant_data = ContestantCreate(
-        title=request.title or "",
-        description=request.description or "",
-        image_media_ids=image_ids_str,
-        video_media_ids=video_ids_str,
-        nominator_city=request.nominator_city,
-        nominator_country=request.nominator_country
-    )
-    
-    # Import the create_contestant function from contestant module
-    from app.api.api_v1.endpoints.contestant import create_contestant
-    
-    # Call the contestant endpoint function
-    return create_contestant(
-        db=db,
-        current_user=current_user,
-        contest_id=contest_id,
-        contestant_data=contestant_data
-    )
-
-
-@router.get("/{contest_id}/rounds")
-def get_contest_rounds(
-    *,
-    db: Session = Depends(get_db),
-    contest_id: int,
-    current_user: Optional[Any] = Depends(get_current_active_user_optional),
-) -> Any:
-    """
-    Get all rounds for a specific contest.
-    """
-    from app.crud import round as crud_round
-    
-    # Verify contest exists
-    contest_obj = contest.get(db=db, id=contest_id)
-    if not contest_obj:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Concours non trouvé"
-        )
-    
-    # Get rounds with stats for this contest
-    user_id = current_user.id if current_user else None
-    rounds_with_stats = crud_round.get_rounds_with_stats(
-        db=db, contest_id=contest_id, user_id=user_id
-    )
-    
-    return rounds_with_stats
