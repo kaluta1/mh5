@@ -122,8 +122,8 @@ export function ContestCard({
     return () => clearInterval(interval)
   }, [])
 
-  // Debug: Log topContestants data
-  console.log(`Contest ${id} - topContestants:`, topContestants?.length || 0, topContestants?.map(c => ({ id: c.id, image_url: c.image_url?.substring(0, 50) })))
+  // Debug: Log topContestants data (disabled to reduce console noise)
+  // console.log(`Contest ${id} - topContestants:`, topContestants?.length || 0, topContestants?.map(c => ({ id: c.id, image_url: c.image_url?.substring(0, 50) })))
 
   const getStatusColor = (status: string) => {
     switch (status) {

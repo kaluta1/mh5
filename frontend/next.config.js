@@ -58,41 +58,9 @@ const nextConfig = {
   //   optimizeCss: true,
   // },
 
-  // Webpack optimizations
-  webpack: (config, { isServer }) => {
-    if (!isServer) {
-      // Optimize client-side bundle
-      config.optimization = {
-        ...config.optimization,
-        moduleIds: 'deterministic',
-        runtimeChunk: 'single',
-        splitChunks: {
-          chunks: 'all',
-          cacheGroups: {
-            default: false,
-            vendors: false,
-            // Vendor chunk
-            vendor: {
-              name: 'vendor',
-              chunks: 'all',
-              test: /node_modules/,
-              priority: 20,
-            },
-            // Common chunk
-            common: {
-              name: 'common',
-              minChunks: 2,
-              chunks: 'all',
-              priority: 10,
-              reuseExistingChunk: true,
-              enforce: true,
-            },
-          },
-        },
-      }
-    }
-    return config
-  },
+  // Webpack: use Next default optimization to avoid high memory during build (Array buffer allocation failed)
+  // Custom splitChunks was removed to reduce memory pressure; Next.js defaults are sufficient.
+  webpack: (config) => config,
 
   async headers() {
     return [

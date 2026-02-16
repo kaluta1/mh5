@@ -108,21 +108,19 @@ def read_contests(
     # enrich_contest_with_stats retourne un dictionnaire avec toutes les valeurs converties
     enriched_contests = []
     
-    logger.info(f"Found {len(contests)} contests in database, starting enrichment...")
-    
+    # Reduced logging to improve performance
     for c in contests:
         try:
-            logger.debug(f"Enriching contest {c.id} ({c.name})...")
             enriched = contest.enrich_contest_with_stats(
                 db=db, 
                 contest=c, 
                 current_user=current_user,
                 filter_country=filter_country,
                 filter_region=filter_region,
-                filter_continent=filter_continent
+                filter_continent=filter_continent,
+                include_top_contestants=False  # Skip expensive top_contestants query for list views
             )
             if isinstance(enriched, dict):
-                logger.debug(f"Contest {c.id} enriched: entries_count={enriched.get('entries_count', 0)}, total_votes={enriched.get('total_votes', 0)}")
                 enriched_contests.append(enriched)
             else:
                 logger.warning(f"Contest {c.id} enrichment returned non-dict: {type(enriched)}")

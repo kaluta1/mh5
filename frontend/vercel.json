@@ -3,5 +3,8 @@
   "outputDirectory": ".next",
   "framework": "nextjs",
   "installCommand": "npm install",
-  "ignoreCommand": "git diff --quiet HEAD^ HEAD ./"
+  "ignoreCommand": "git diff --quiet HEAD^ HEAD ./",
+  "env": {
+    "NODE_OPTIONS": "--max-old-space-size=4096"
+  }
 }

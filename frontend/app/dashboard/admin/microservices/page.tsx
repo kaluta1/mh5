@@ -17,7 +17,7 @@ export default function MicroservicesPage() {
           </h1>
         </div>
         <p className="text-myhigh5-primary/90 dark:text-myhigh5-secondary/80 font-medium">
-          Gérez et surveillez les microservices
+          {t('admin.microservices.subtitle') || 'Manage and monitor microservices'}
         </p>
       </div>
 
@@ -30,7 +30,7 @@ export default function MicroservicesPage() {
         </CardHeader>
         <CardContent>
           <p className="text-gray-600 dark:text-gray-400">
-            {t('admin.microservices.coming_soon') || 'Cette section est en cours de développement. La gestion des microservices sera disponible prochainement.'}
+            {t('admin.microservices.coming_soon') || 'This section is under development. Microservices management will be available soon.'}
           </p>
         </CardContent>
       </Card>

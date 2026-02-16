@@ -13,11 +13,11 @@ export default function CommissionSettingsPage() {
         <div className="flex items-center gap-3 mb-3">
           <Percent className="h-8 w-8 text-white dark:text-myhigh5-secondary" />
           <h1 className="text-4xl font-bold text-white dark:text-white">
-            {t('admin.nav.commission_settings') || 'Paramètres des commissions'}
+            {t('admin.nav.commission_settings') || 'Commission Settings'}
           </h1>
         </div>
         <p className="text-myhigh5-primary/90 dark:text-myhigh5-secondary/80 font-medium">
-          Configurez les règles et taux de commission
+          {t('admin.commission_settings.subtitle') || 'Configure commission rules and rates'}
         </p>
       </div>
 
@@ -30,7 +30,7 @@ export default function CommissionSettingsPage() {
         </CardHeader>
         <CardContent>
           <p className="text-gray-600 dark:text-gray-400">
-            {t('admin.commission_settings.coming_soon') || 'Cette section est en cours de développement. Les paramètres des commissions seront disponibles prochainement.'}
+            {t('admin.commission_settings.coming_soon') || 'This section is under development. Commission settings will be available soon.'}
           </p>
         </CardContent>
       </Card>

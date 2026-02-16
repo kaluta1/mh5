@@ -467,7 +467,8 @@ class CRUDContest:
         self, db: Session, contest: Contest, current_user: Optional['User'] = None,
         filter_country: Optional[str] = None,
         filter_region: Optional[str] = None,
-        filter_continent: Optional[str] = None
+        filter_continent: Optional[str] = None,
+        include_top_contestants: bool = False
     ) -> Dict[str, Any]:
         """
         Enrichit un contest avec les statistiques (nombre de participants et votes).
@@ -678,93 +679,85 @@ class CRUDContest:
                 ).first()
                 current_user_contesting = user_contestant is not None
         
-        # Récupérer les top 5 contestants par votes
+        # Récupérer les top 5 contestants par votes (seulement si demandé pour optimiser les performances)
         top_contestants = []
-        import logging
-        import json
-        logger = logging.getLogger(__name__)
-        
-        try:
-            from app.models.media import Media
+        if include_top_contestants:
+            import logging
+            import json
+            logger = logging.getLogger(__name__)
             
-            # Récupérer les contestants avec leurs infos utilisateur (sans votes pour simplifier)
-            contestants_with_user = db.query(
-                Contestant,
-                User
-            ).join(
-                User, Contestant.user_id == User.id
-            ).filter(
-                Contestant.season_id == contest.id,
-                Contestant.is_deleted == False
-            ).order_by(
-                Contestant.created_at.desc()
-            ).limit(5).all()
-            
-            logger.info(f"Found {len(contestants_with_user)} contestants for contest {contest.id}")
-            
-            for rank, (contestant, user) in enumerate(contestants_with_user, 1):
-                # Extraire la première image du contestant depuis image_media_ids
-                contestant_image_url = None
-                logger.info(f"Processing contestant {contestant.id} - image_media_ids: {contestant.image_media_ids}")
+            try:
+                from app.models.media import Media
                 
-                if contestant.image_media_ids:
-                    try:
-                        raw_value = contestant.image_media_ids.strip() if isinstance(contestant.image_media_ids, str) else contestant.image_media_ids
-                        
-                        # Cas 1: C'est déjà une URL directe (pas du JSON)
-                        if isinstance(raw_value, str) and raw_value.startswith(('http://', 'https://')):
-                            contestant_image_url = raw_value
-                            logger.debug(f"image_media_ids is direct URL: {raw_value[:50]}")
-                        # Cas 2: C'est du JSON
-                        elif isinstance(raw_value, str) and (raw_value.startswith('[') or raw_value.startswith('{')):
-                            image_ids = json.loads(raw_value)
-                            if isinstance(image_ids, list) and len(image_ids) > 0:
-                                first_image = image_ids[0]
-                                logger.debug(f"First image from JSON: {first_image}")
-                                
-                                # Si c'est une URL directe
-                                if isinstance(first_image, str) and first_image.startswith(('http://', 'https://')):
-                                    contestant_image_url = first_image
-                                # Si c'est un ID de média (int ou string numérique)
-                                else:
-                                    try:
-                                        media_id = int(first_image) if isinstance(first_image, str) else first_image
-                                        # Récupérer l'URL depuis la table Media
-                                        media = db.query(Media).filter(Media.id == media_id).first()
-                                        if media and media.url:
-                                            contestant_image_url = media.url
-                                            logger.debug(f"Got URL from Media table: {media.url[:50] if media.url else 'None'}")
-                                        else:
-                                            logger.warning(f"Media {media_id} not found in database")
-                                    except (ValueError, TypeError) as ve:
-                                        logger.warning(f"Error converting media_id: {ve}")
-                        # Cas 3: C'est peut-être juste un ID
-                        elif raw_value:
-                            try:
-                                media_id = int(raw_value)
-                                media = db.query(Media).filter(Media.id == media_id).first()
-                                if media and media.url:
-                                    contestant_image_url = media.url
-                            except (ValueError, TypeError):
-                                pass
-                    except (json.JSONDecodeError, TypeError) as e:
-                        logger.warning(f"Error parsing image_media_ids for contestant {contestant.id}: {e}")
+                # Récupérer les contestants avec leurs infos utilisateur (sans votes pour simplifier)
+                contestants_with_user = db.query(
+                    Contestant,
+                    User
+                ).join(
+                    User, Contestant.user_id == User.id
+                ).filter(
+                    Contestant.season_id == contest.id,
+                    Contestant.is_deleted == False
+                ).order_by(
+                    Contestant.created_at.desc()
+                ).limit(5).all()
                 
-                logger.info(f"Contestant {contestant.id} - Final image_url: {contestant_image_url}")
-                
-                top_contestants.append({
-                    "id": contestant.id,
-                    "author_name": f"{user.first_name or ''} {user.last_name or ''}".strip() or user.username or "Anonyme",
-                    "author_avatar_url": user.avatar_url,
-                    "image_url": contestant_image_url,
-                    "votes_count": 0,  # Simplified - no vote count for now
-                    "rank": rank
-                })
-        except Exception as e:
-            # En cas d'erreur, on continue sans les top contestants
-            import traceback
-            logger.error(f"Error fetching top contestants for contest {contest.id}: {e}")
-            logger.error(traceback.format_exc())
+                # Reduced logging - only log errors
+                for rank, (contestant, user) in enumerate(contestants_with_user, 1):
+                    # Extraire la première image du contestant depuis image_media_ids
+                    contestant_image_url = None
+                    
+                    if contestant.image_media_ids:
+                        try:
+                            raw_value = contestant.image_media_ids.strip() if isinstance(contestant.image_media_ids, str) else contestant.image_media_ids
+                            
+                            # Cas 1: C'est déjà une URL directe (pas du JSON)
+                            if isinstance(raw_value, str) and raw_value.startswith(('http://', 'https://')):
+                                contestant_image_url = raw_value
+                            # Cas 2: C'est du JSON
+                            elif isinstance(raw_value, str) and (raw_value.startswith('[') or raw_value.startswith('{')):
+                                image_ids = json.loads(raw_value)
+                                if isinstance(image_ids, list) and len(image_ids) > 0:
+                                    first_image = image_ids[0]
+                                    
+                                    # Si c'est une URL directe
+                                    if isinstance(first_image, str) and first_image.startswith(('http://', 'https://')):
+                                        contestant_image_url = first_image
+                                    # Si c'est un ID de média (int ou string numérique)
+                                    else:
+                                        try:
+                                            media_id = int(first_image) if isinstance(first_image, str) else first_image
+                                            # Récupérer l'URL depuis la table Media
+                                            media = db.query(Media).filter(Media.id == media_id).first()
+                                            if media and media.url:
+                                                contestant_image_url = media.url
+                                        except (ValueError, TypeError):
+                                            pass
+                            # Cas 3: C'est peut-être juste un ID
+                            elif raw_value:
+                                try:
+                                    media_id = int(raw_value)
+                                    media = db.query(Media).filter(Media.id == media_id).first()
+                                    if media and media.url:
+                                        contestant_image_url = media.url
+                                except (ValueError, TypeError):
+                                    pass
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+                    
+                    top_contestants.append({
+                        "id": contestant.id,
+                        "author_name": f"{user.first_name or ''} {user.last_name or ''}".strip() or user.username or "Anonyme",
+                        "author_avatar_url": user.avatar_url,
+                        "image_url": contestant_image_url,
+                        "votes_count": 0,  # Simplified - no vote count for now
+                        "rank": rank
+                    })
+            except Exception as e:
+                # En cas d'erreur, on continue sans les top contestants
+                import traceback
+                logger.error(f"Error fetching top contestants for contest {contest.id}: {e}")
+                logger.debug(traceback.format_exc())
         
         # Compter le nombre total de votes
         # Les votes peuvent venir de ContestVote ou être comptés via ContestEntry

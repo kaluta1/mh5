@@ -131,7 +131,7 @@ export default function ContestDetailPage() {
   const [selectedContestantId, setSelectedContestantId] = useState<number | null>(null)
   const [selectedContestantTitle, setSelectedContestantTitle] = useState<string>('')
 
-  // Lire les filtres de localisation depuis l'URL (ou défaut: pays/continent de l'utilisateur)
+  // Read location filters from URL (so "View contestants" from list uses selected country, e.g. Uganda)
   const searchParams = useSearchParams()
   const [filterCountry, setFilterCountry] = React.useState<string>(() => {
     return searchParams.get('country') || ''
@@ -140,7 +140,15 @@ export default function ContestDetailPage() {
     return searchParams.get('continent') || 'all'
   })
 
-  // Au premier chargement sans paramètres URL: afficher par défaut les contestants du pays + continent=all
+  // Sync state from URL when params change (e.g. navigation from list with country=Uganda)
+  React.useEffect(() => {
+    const urlCountry = searchParams.get('country') || ''
+    const urlContinent = searchParams.get('continent') || 'all'
+    setFilterCountry(urlCountry)
+    setFilterContinent(urlContinent)
+  }, [searchParams])
+
+  // When no URL params on first load: default to user's country + continent=all
   React.useEffect(() => {
     const urlCountry = searchParams.get('country')
     const urlContinent = searchParams.get('continent')
@@ -355,31 +363,47 @@ export default function ContestDetailPage() {
     }
   }
 
-  // Client-side location filter - must be before early returns (hooks rules)
+  // Canonical country codes for strict single-country matching (user sees ONLY one country)
+  const getCountryCode = React.useCallback((str: string | undefined): string => {
+    if (!str) return ''
+    const n = (str || '').toLowerCase().trim()
+    const map: Record<string, string> = {
+      uganda: 'ug', ug: 'ug', tanzania: 'tz', tz: 'tz', 'united republic of tanzania': 'tz',
+      kenya: 'ke', ke: 'ke', rwanda: 'rw', rw: 'rw', burundi: 'bi', bi: 'bi',
+      'ivory coast': 'ci', 'côte d\'ivoire': 'ci', 'cote d\'ivoire': 'ci', ci: 'ci',
+      nigeria: 'ng', ng: 'ng', ghana: 'gh', gh: 'gh', senegal: 'sn', sn: 'sn',
+      cameroon: 'cm', cm: 'cm', 'south africa': 'za', za: 'za', ethiopia: 'et', et: 'et',
+      egypt: 'eg', eg: 'eg', morocco: 'ma', ma: 'ma', algeria: 'dz', dz: 'dz',
+    }
+    return map[n] || n
+  }, [])
+
+  // Strict: only show contestants from the selected country (or user's country if none selected)
+  const effectiveCountry = (filterCountry && filterCountry !== 'all' ? filterCountry : (user?.country || '')) || ''
+  const effectiveContinent = (filterContinent && filterContinent !== 'all' ? filterContinent : '') || ''
+
   const locationFilteredContestants = React.useMemo(() => {
     const list = contest?.contestants ?? []
-    if (!filterCountry && (!filterContinent || filterContinent === 'all')) return list
+    if (!effectiveCountry && !effectiveContinent) return list
     return list.filter((c) => {
-      const matchCountry = !filterCountry || filterCountry === 'all' || (() => {
-        const uc = (filterCountry || '').toLowerCase().trim()
+      const matchCountry = !effectiveCountry || (() => {
         const cc = (c.country || '').toLowerCase().trim()
         if (!cc) return false
-        if (uc === cc) return true
-        if (cc.includes(uc) || uc.includes(cc)) return true
-        const alias: Record<string, string[]> = { tz: ['tanzania', 'united republic of tanzania'], ke: ['kenya'] }
-        const uCode = uc.length === 2 ? uc : Object.entries(alias).find(([, names]) => names.some(n => cc.includes(n) || uc.includes(n)))?.[0]
-        const cCode = cc.length === 2 ? cc : Object.entries(alias).find(([, names]) => names.some(n => cc.includes(n)))?.[0]
-        return uCode && cCode && uCode === cCode
+        const codeFilter = getCountryCode(effectiveCountry)
+        const codeContestant = getCountryCode(c.country)
+        if (codeFilter && codeContestant && codeFilter === codeContestant) return true
+        if (effectiveCountry.toLowerCase().trim() === cc) return true
+        if (cc.includes(effectiveCountry.toLowerCase().trim()) || effectiveCountry.toLowerCase().trim().includes(cc)) return true
+        return false
       })()
-      const matchContinent = !filterContinent || filterContinent === 'all' || (() => {
-        const uc = (filterContinent || '').toLowerCase().trim()
+      const matchContinent = !effectiveContinent || (() => {
         const cc = (c.continent || '').toLowerCase().trim()
         if (!cc) return false
-        return cc.includes(uc) || uc.includes(cc) || uc === cc
+        return cc.includes(effectiveContinent.toLowerCase()) || effectiveContinent.toLowerCase().includes(cc) || effectiveContinent.toLowerCase() === cc
       })()
       return matchCountry && matchContinent
     })
-  }, [contest?.contestants, filterCountry, filterContinent])
+  }, [contest?.contestants, effectiveCountry, effectiveContinent, getCountryCode, user?.country])
 
   if (isLoading || pageLoading) {
     return <ContestDetailSkeleton />

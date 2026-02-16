@@ -155,7 +155,6 @@ def generate_monthly_round(db: Session, target_date: Optional[date] = None) -> R
     
     # Récupérer tous les contests actifs
     # FIXED: Use defer() to exclude date columns that don't exist in database
-    from sqlalchemy.orm import defer
     try:
         # Query contests but defer the date columns that don't exist in DB
         contests_query = db.query(Contest).filter(

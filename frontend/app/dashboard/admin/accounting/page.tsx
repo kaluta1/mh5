@@ -1,8 +1,8 @@
 import AdminAccounting from '@/components/admin/admin-accounting'
 
 export const metadata = {
-    title: 'Comptabilité | Admin | MyHigh5',
-    description: 'Gestion comptable et financière',
+    title: 'Accounting | Admin | MyHigh5',
+    description: 'Accounting and financial management',
 }
 
 export default function AccountingPage() {

@@ -1029,6 +1029,14 @@ export interface TranslationKeys {
       error_loading: string
       retry: string
     }
+    commission_settings: {
+      subtitle: string
+      coming_soon: string
+    }
+    microservices: {
+      subtitle: string
+      coming_soon: string
+    }
     users: {
       title: string
       description: string
@@ -2639,6 +2647,14 @@ export const translations: Record<Language, TranslationKeys> = {
         },
         error_loading: "Erreur lors du chargement des données comptables",
         retry: "Réessayer"
+      },
+      commission_settings: {
+        subtitle: "Configurez les règles et taux de commission",
+        coming_soon: "Cette section est en cours de développement. Les paramètres des commissions seront disponibles prochainement."
+      },
+      microservices: {
+        subtitle: "Gérez et surveillez les microservices",
+        coming_soon: "Cette section est en cours de développement. La gestion des microservices sera disponible prochainement."
       },
       users: {
         title: "Gestion des Utilisateurs",
@@ -5136,7 +5152,8 @@ export const translations: Record<Language, TranslationKeys> = {
         commission_settings: "Commission Settings",
         suggested_contests: "Suggested Contests",
         transactions: "Transactions",
-        microservices: "Microservices"
+        microservices: "Microservices",
+        accounting: "Accounting"
       },
       dashboard: {
         total_seasons: "Total seasons",
@@ -5713,6 +5730,41 @@ export const translations: Record<Language, TranslationKeys> = {
         details: "Details",
         search: "Search",
         load_error: "Error loading transactions"
+      },
+      accounting: {
+        title: "Accounting",
+        subtitle: "Financial overview and journal entries",
+        refresh: "Refresh",
+        total_revenue: "Total Revenue",
+        ytd: "Year to date",
+        journal_tab: "General Journal",
+        coa_tab: "Chart of Accounts",
+        journal_title: "Journal Entries",
+        journal_desc: "Last 50 accounting entries",
+        coa_title: "Chart of Accounts",
+        coa_desc: "List of accounts and current balances",
+        table: {
+          date: "Date",
+          ref: "Ref. No.",
+          description: "Description",
+          debit: "Debit",
+          credit: "Credit",
+          status: "Status",
+          code: "Code",
+          account: "Account Name",
+          type: "Type",
+          balance: "Balance"
+        },
+        error_loading: "Error loading accounting data",
+        retry: "Retry"
+      },
+      commission_settings: {
+        subtitle: "Configure commission rules and rates",
+        coming_soon: "This section is under development. Commission settings will be available soon."
+      },
+      microservices: {
+        subtitle: "Manage and monitor microservices",
+        coming_soon: "This section is under development. Microservices management will be available soon."
       },
       users: {
         title: "Manage Users",

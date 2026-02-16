@@ -421,20 +421,24 @@ export default function ContestantsListPage() {
     return countryCodeMap[normalized] || normalized;
   };
 
+  // Strict single-country match: contestant must be from the SAME country only (e.g. Uganda only Uganda, Kenya only Kenya)
   const countriesMatch = (userCountryVal: string, contestantCountryVal: string): boolean => {
-    if (!contestantCountryVal) return false;
+    if (!contestantCountryVal || !userCountryVal) return false;
     const userCode = getCanonicalCountryCode(userCountryVal);
     const contestantCode = getCanonicalCountryCode(contestantCountryVal);
     const normUser = userCountryVal.toString().toLowerCase().trim();
     const normContestant = contestantCountryVal.toString().toLowerCase().trim();
-    // Match by canonical code (e.g. both "TZ" and "Tanzania" -> "tz")
+    // Prefer canonical code match (e.g. "TZ" and "Tanzania" -> "tz" so only Tanzania matches)
     if (userCode && contestantCode && userCode === contestantCode) return true;
-    // Substring match (e.g. "United Republic of Tanzania" contains "Tanzania")
-    if (normContestant.includes(normUser) || normUser.includes(normContestant)) return true;
-    // No-space substring match
-    const noSpaceC = normContestant.replace(/\s+/g, '');
-    const noSpaceU = normUser.replace(/\s+/g, '');
-    return noSpaceC.includes(noSpaceU) || noSpaceU.includes(noSpaceC);
+    // Exact match
+    if (normUser === normContestant) return true;
+    // Same-country name substring only (e.g. "United Republic of Tanzania" contains "Tanzania") - do not match across countries
+    if (normContestant.includes(normUser) || normUser.includes(normContestant)) {
+      // Avoid cross-match: "uganda" must not match "tanzania" etc.
+      if (userCode && contestantCode && userCode !== contestantCode) return false;
+      return true;
+    }
+    return false;
   };
 
 
@@ -447,23 +451,30 @@ export default function ContestantsListPage() {
     return cc.includes(uc) || uc.includes(cc) || uc === cc;
   };
 
-  // Get contestants based on filter - same logic as contest page locationFilteredContestants
+  // Effective country: URL param or user's country - never show "all" when user has a country
+  const effectiveCountry = (userCountry || filterCountry || user?.country || '').trim();
+  const effectiveContinent = (userContinent && userContinent !== 'all' ? userContinent : '').trim();
+
+  // Strict single-country: show ONLY contestants from the selected country (Uganda only Uganda, Kenya only Kenya)
   const contestants = React.useMemo(() => {
-    if (!showMyCountryOnly && (!userContinent || userContinent === 'all')) {
+    if (!showMyCountryOnly && !effectiveContinent) {
       return allContestants;
     }
-    if (!showMyCountryOnly && userContinent && userContinent !== 'all') {
-      return allContestants.filter(c => continentsMatch(userContinent, c.continent));
+    if (!showMyCountryOnly && effectiveContinent) {
+      return allContestants.filter(c => continentsMatch(effectiveContinent, c.continent));
     }
-    if (showMyCountryOnly && !userCountry && (!userContinent || userContinent === 'all')) {
-      return allContestants;
+    if (showMyCountryOnly && effectiveCountry) {
+      return allContestants.filter(contestant => {
+        const matchCountry = countriesMatch(effectiveCountry, contestant.country || '');
+        const matchContinent = continentsMatch(effectiveContinent || 'all', contestant.continent);
+        return matchCountry && matchContinent;
+      });
     }
-    return allContestants.filter(contestant => {
-      const matchCountry = !userCountry || countriesMatch(userCountry, contestant.country || '');
-      const matchContinent = continentsMatch(userContinent, contestant.continent);
-      return matchCountry && matchContinent;
-    });
-  }, [allContestants, showMyCountryOnly, userCountry, userContinent]);
+    if (showMyCountryOnly && user?.country) {
+      return allContestants.filter(contestant => countriesMatch(user.country, contestant.country || '') && continentsMatch('all', contestant.continent));
+    }
+    return allContestants;
+  }, [allContestants, showMyCountryOnly, effectiveCountry, effectiveContinent, user?.country]);
 
   // Count of contestants from user's country
   const countryContestantCount = React.useMemo(() => {

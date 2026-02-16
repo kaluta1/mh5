@@ -124,26 +124,22 @@ function ContestsPageContent() {
     if (typeof window !== 'undefined') localStorage.setItem('contests_category_tab', categoryTab)
   }, [categoryTab])
 
-  // Set default filters based on category tab and user location
-  // This runs when categoryTab changes or when user data becomes available
+  // Set default filters based on category tab and user location (only when no filter is set yet)
   useEffect(() => {
     if (!user) return
 
     if (categoryTab === 'nomination') {
-      // For nominations: default to user's country if not already set
-      if (user.country && filterCountry !== user.country) {
+      // Only set default country when user has not selected a filter (avoid overwriting e.g. Uganda with user.country)
+      if (user.country && !filterCountry) {
         setFilterCountry(user.country)
       }
-      // Reset level filter (not used for nominations)
       if (filterLevel !== 'all') {
         setFilterLevel('all')
       }
     } else if (categoryTab === 'participations') {
-      // For participations: default to city level
       if (filterLevel !== 'city') {
         setFilterLevel('city')
       }
-      // Reset country filter (level filter is used instead)
       if (filterCountry) {
         setFilterCountry('')
       }
@@ -524,15 +520,15 @@ function ContestsPageContent() {
                   onParticipate={() => handleParticipate(contest.id, contest.currentUserParticipated)}
                   onViewContestants={() => {
                     const params = new URLSearchParams()
-                    if (user?.country) params.set('country', user.country)
-                    params.set('continent', 'all')
+                    if (filterCountry && filterCountry !== 'all') params.set('country', filterCountry)
+                    params.set('continent', filterContinent !== 'all' ? filterContinent : 'all')
                     const q = params.toString()
                     router.push(`/dashboard/contests/${contest.id}${q ? `?${q}` : ''}`)
                   }}
                   onOpenDetails={() => {
                     const params = new URLSearchParams()
-                    if (user?.country) params.set('country', user.country)
-                    params.set('continent', 'all')
+                    if (filterCountry && filterCountry !== 'all') params.set('country', filterCountry)
+                    params.set('continent', filterContinent !== 'all' ? filterContinent : 'all')
                     const q = params.toString()
                     router.push(`/dashboard/contests/${contest.id}${q ? `?${q}` : ''}`)
                   }}

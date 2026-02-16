@@ -176,10 +176,13 @@ def get_contest_stats(db: Session, contest_id: int):
             Contestant.verification_status == 'pending'
         ).count()
         
-        print(f"DEBUG: Contest {contest_id} - Total: {total}, Approved: {approved}, Pending: {pending}")
+        # Removed debug print to reduce logging
         return total, approved, pending
     except Exception as e:
-        print(f"Error getting contest stats for contest {contest_id}: {str(e)}")
+        # Log error but don't print for every contest
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error getting contest stats for contest {contest_id}: {str(e)}")
         return 0, 0, 0
 
 # Helper function to auto-generate dates
@@ -293,10 +296,64 @@ async def get_all_contests(
              return None
 
         
+        # Optimize: Batch fetch all contest stats in one query instead of N queries
+        from sqlalchemy import func
+        from app.models.contestant import Contestant
+        
+        contest_ids = [c.id for c in contests]
+        stats_by_contest = {}
+        
+        if contest_ids:
+            # Batch query: Get total counts per contest
+            total_counts = db.query(
+                Contestant.season_id,
+                func.count(Contestant.id).label('total')
+            ).filter(
+                Contestant.season_id.in_(contest_ids),
+                Contestant.is_deleted == False
+            ).group_by(Contestant.season_id).all()
+            
+            # Batch query: Get approved counts per contest
+            approved_counts = db.query(
+                Contestant.season_id,
+                func.count(Contestant.id).label('approved')
+            ).filter(
+                Contestant.season_id.in_(contest_ids),
+                Contestant.verification_status == 'verified',
+                Contestant.is_deleted == False
+            ).group_by(Contestant.season_id).all()
+            
+            # Batch query: Get pending counts per contest
+            pending_counts = db.query(
+                Contestant.season_id,
+                func.count(Contestant.id).label('pending')
+            ).filter(
+                Contestant.season_id.in_(contest_ids),
+                Contestant.verification_status == 'pending',
+                Contestant.is_deleted == False
+            ).group_by(Contestant.season_id).all()
+            
+            # Build stats dictionary
+            for contest_id, total in total_counts:
+                stats_by_contest[contest_id] = {'total': total, 'approved': 0, 'pending': 0}
+            
+            for contest_id, approved in approved_counts:
+                if contest_id not in stats_by_contest:
+                    stats_by_contest[contest_id] = {'total': 0, 'approved': 0, 'pending': 0}
+                stats_by_contest[contest_id]['approved'] = approved
+            
+            for contest_id, pending in pending_counts:
+                if contest_id not in stats_by_contest:
+                    stats_by_contest[contest_id] = {'total': 0, 'approved': 0, 'pending': 0}
+                stats_by_contest[contest_id]['pending'] = pending
+        
         # Ajouter les statistiques pour chaque concours
         result = []
         for contest in contests:
-            total, approved, pending = get_contest_stats(db, contest.id)
+            stats = stats_by_contest.get(contest.id, {'total': 0, 'approved': 0, 'pending': 0})
+            total = stats['total']
+            approved = stats['approved']
+            pending = stats['pending']
             
             active_round = get_display_round(contest_rounds.get(contest.id, []))
             
@@ -354,7 +411,7 @@ async def get_all_contests(
             }
             result.append(contest_dict)
         
-        print(f"DEBUG: Found {len(contests)} contests for user {current_user.id}")
+        # Removed debug print to reduce logging
         return result
     except HTTPException:
         raise
