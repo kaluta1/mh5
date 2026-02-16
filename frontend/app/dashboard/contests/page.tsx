@@ -298,8 +298,8 @@ function ContestsPageContent() {
         coverImage: coverImage,
         startDate: new Date(),
         status: c.level || 'country',
-        received: c.votes_count || 0,
-        contestants: c.participants_count || c.entries_count || 0,
+        received: Number(c.votes_count) || 0,
+        contestants: Number(c.participants_count) || Number(c.entries_count) || 0,
         isOpen: contestsData?.is_submission_open || contestsData?.is_voting_open || false,
         contestType: c.contest_type,
         isSubmissionOpen: contestsData?.is_submission_open,
@@ -351,10 +351,34 @@ function ContestsPageContent() {
     // 4. Sort
     filtered.sort((a, b) => {
       switch (sortBy) {
-        case 'participants': return b.contestants - a.contestants
-        case 'votes': return b.received - a.received
-        case 'name': return a.title.localeCompare(b.title)
-        default: return b.contestants - a.contestants
+        case 'participants': 
+          // Ensure contestants is a number for proper sorting
+          const aContestants = Number(a.contestants) || 0
+          const bContestants = Number(b.contestants) || 0
+          // Sort descending (most contestants first)
+          if (bContestants !== aContestants) {
+            return bContestants - aContestants
+          }
+          // Secondary sort by votes if participants are equal
+          return (Number(b.received) || 0) - (Number(a.received) || 0)
+        case 'votes': 
+          const aVotes = Number(a.received) || 0
+          const bVotes = Number(b.received) || 0
+          if (bVotes !== aVotes) {
+            return bVotes - aVotes
+          }
+          // Secondary sort by participants if votes are equal
+          return (Number(b.contestants) || 0) - (Number(a.contestants) || 0)
+        case 'name': 
+          return a.title.localeCompare(b.title)
+        default: 
+          // Default: sort by participants (most first)
+          const aContestantsDefault = Number(a.contestants) || 0
+          const bContestantsDefault = Number(b.contestants) || 0
+          if (bContestantsDefault !== aContestantsDefault) {
+            return bContestantsDefault - aContestantsDefault
+          }
+          return (Number(b.received) || 0) - (Number(a.received) || 0)
       }
     })
 
