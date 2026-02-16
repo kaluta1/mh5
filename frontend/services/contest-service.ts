@@ -570,7 +570,7 @@ class ContestService {
         data: RoundWithStats[];
       };
       
-      const response = await api.get<ApiResponse>(`/contests/${contestId}/rounds`);
+      const response = await api.get<ApiResponse>(`/api/v1/contests/${contestId}/rounds`);
       return Array.isArray(response?.data) ? response.data : [];
     } catch (error) {
       console.error('Error fetching contest rounds:', error);
@@ -600,7 +600,7 @@ class ContestService {
         ? videoMediaIds 
         : videoMediaIds ? [videoMediaIds] : [];
 
-      const response = await api.post(`/contests/${contestId}/participate`, {
+      const response = await api.post(`/api/v1/contests/${contestId}/participate`, {
         title,
         description,
         image_media_ids: imageIds,
