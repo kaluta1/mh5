@@ -297,55 +297,72 @@ async def get_all_contests(
 
         
         # Optimize: Batch fetch all contest stats in one query instead of N queries
+        # Fallback to original method if batch query fails
         from sqlalchemy import func
         from app.models.contestant import Contestant
         
         contest_ids = [c.id for c in contests]
         stats_by_contest = {}
         
+        # Initialize all contests with zero stats first
+        for contest_id in contest_ids:
+            stats_by_contest[contest_id] = {'total': 0, 'approved': 0, 'pending': 0}
+        
         if contest_ids:
-            # Batch query: Get total counts per contest
-            total_counts = db.query(
-                Contestant.season_id,
-                func.count(Contestant.id).label('total')
-            ).filter(
-                Contestant.season_id.in_(contest_ids),
-                Contestant.is_deleted == False
-            ).group_by(Contestant.season_id).all()
-            
-            # Batch query: Get approved counts per contest
-            approved_counts = db.query(
-                Contestant.season_id,
-                func.count(Contestant.id).label('approved')
-            ).filter(
-                Contestant.season_id.in_(contest_ids),
-                Contestant.verification_status == 'verified',
-                Contestant.is_deleted == False
-            ).group_by(Contestant.season_id).all()
-            
-            # Batch query: Get pending counts per contest
-            pending_counts = db.query(
-                Contestant.season_id,
-                func.count(Contestant.id).label('pending')
-            ).filter(
-                Contestant.season_id.in_(contest_ids),
-                Contestant.verification_status == 'pending',
-                Contestant.is_deleted == False
-            ).group_by(Contestant.season_id).all()
-            
-            # Build stats dictionary
-            for contest_id, total in total_counts:
-                stats_by_contest[contest_id] = {'total': total, 'approved': 0, 'pending': 0}
-            
-            for contest_id, approved in approved_counts:
-                if contest_id not in stats_by_contest:
-                    stats_by_contest[contest_id] = {'total': 0, 'approved': 0, 'pending': 0}
-                stats_by_contest[contest_id]['approved'] = approved
-            
-            for contest_id, pending in pending_counts:
-                if contest_id not in stats_by_contest:
-                    stats_by_contest[contest_id] = {'total': 0, 'approved': 0, 'pending': 0}
-                stats_by_contest[contest_id]['pending'] = pending
+            try:
+                # Batch query: Get total counts per contest (matching original get_contest_stats logic)
+                total_counts = db.query(
+                    Contestant.season_id,
+                    func.count(Contestant.id)
+                ).filter(
+                    Contestant.season_id.in_(contest_ids)
+                ).group_by(Contestant.season_id).all()
+                
+                # Batch query: Get approved counts per contest
+                approved_counts = db.query(
+                    Contestant.season_id,
+                    func.count(Contestant.id)
+                ).filter(
+                    Contestant.season_id.in_(contest_ids),
+                    Contestant.verification_status == 'verified'
+                ).group_by(Contestant.season_id).all()
+                
+                # Batch query: Get pending counts per contest
+                pending_counts = db.query(
+                    Contestant.season_id,
+                    func.count(Contestant.id)
+                ).filter(
+                    Contestant.season_id.in_(contest_ids),
+                    Contestant.verification_status == 'pending'
+                ).group_by(Contestant.season_id).all()
+                
+                # Build stats dictionary
+                for contest_id, total in total_counts:
+                    if contest_id and contest_id in stats_by_contest:
+                        stats_by_contest[contest_id]['total'] = total
+                
+                for contest_id, approved in approved_counts:
+                    if contest_id and contest_id in stats_by_contest:
+                        stats_by_contest[contest_id]['approved'] = approved
+                
+                for contest_id, pending in pending_counts:
+                    if contest_id and contest_id in stats_by_contest:
+                        stats_by_contest[contest_id]['pending'] = pending
+            except Exception as e:
+                # Fallback to individual queries if batch query fails
+                import logging
+                import traceback
+                logger = logging.getLogger(__name__)
+                logger.error(f"Error in batch stats query, falling back to individual queries: {e}")
+                logger.debug(traceback.format_exc())
+                # Use original method for each contest
+                for contest_id in contest_ids:
+                    try:
+                        total, approved, pending = get_contest_stats(db, contest_id)
+                        stats_by_contest[contest_id] = {'total': total, 'approved': approved, 'pending': pending}
+                    except Exception as e2:
+                        logger.error(f"Error getting stats for contest {contest_id}: {e2}")
+                        # Keep zero stats if individual query also fails
         
         # Ajouter les statistiques pour chaque concours
         result = []
