@@ -260,8 +260,9 @@ async def get_all_contests(
         # Fetch active rounds for all contests to get dates
         # This is a bit expensive but necessary since dates are no longer on Contest
         # Optimization: Fetch all active rounds for these contests in one query
-        from app.models.round import Round, RoundStatus
+        from app.models.round import Round, RoundStatus, round_contests
         from datetime import date
+        from sqlalchemy import select
         today = date.today()
         
         # We try to get the "current" active round. Since multiple rounds can exist, 
@@ -269,17 +270,68 @@ async def get_all_contests(
         # For display in admin list, we probably want the one that is currently relevant.
         # Let's fetch the round that is strictly active or otherwise just the latest one string.
         
-        # For now, let's just fetch all rounds for these contests and filter in python to find "active" one
-        all_rounds = db.query(Round).filter(
-            Round.contest_id.in_(contest_ids),
-            Round.status != RoundStatus.CANCELLED
-        ).all()
-        
+        # Query rounds linked to contests via the association table (N:N relationship)
         contest_rounds = {}
-        for r in all_rounds:
-            if r.contest_id not in contest_rounds:
-                contest_rounds[r.contest_id] = []
-            contest_rounds[r.contest_id].append(r)
+        if contest_ids:
+            try:
+                # Get rounds via the round_contests association table
+                round_links = db.execute(
+                    select(round_contests.c.round_id, round_contests.c.contest_id)
+                    .where(round_contests.c.contest_id.in_(contest_ids))
+                ).all()
+                
+                round_ids = list(set([link.round_id for link in round_links])) if round_links else []
+                
+                # Query rounds: via association table OR legacy contest_id
+                from sqlalchemy import or_
+                if round_ids:
+                    all_rounds = db.query(Round).filter(
+                        or_(Round.id.in_(round_ids), Round.contest_id.in_(contest_ids)),
+                        Round.status != RoundStatus.CANCELLED
+                    ).all()
+                else:
+                    # Fallback to legacy contest_id only
+                    all_rounds = db.query(Round).filter(
+                        Round.contest_id.in_(contest_ids),
+                        Round.status != RoundStatus.CANCELLED
+                    ).all()
+                
+                # Build mapping: contest_id -> list of rounds
+                for r in all_rounds:
+                    # Add via association table links
+                    for link in round_links:
+                        if link.round_id == r.id:
+                            if link.contest_id not in contest_rounds:
+                                contest_rounds[link.contest_id] = []
+                            if r not in contest_rounds[link.contest_id]:
+                                contest_rounds[link.contest_id].append(r)
+                    
+                    # Also add via legacy contest_id for backward compatibility
+                    if r.contest_id and r.contest_id in contest_ids:
+                        if r.contest_id not in contest_rounds:
+                            contest_rounds[r.contest_id] = []
+                        if r not in contest_rounds[r.contest_id]:
+                            contest_rounds[r.contest_id].append(r)
+            except Exception as e:
+                # Fallback: try legacy contest_id only
+                import logging
+                import traceback
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Error fetching rounds via association table: {e}")
+                logger.debug(traceback.format_exc())
+                try:
+                    all_rounds = db.query(Round).filter(
+                        Round.contest_id.in_(contest_ids),
+                        Round.status != RoundStatus.CANCELLED
+                    ).all()
+                    for r in all_rounds:
+                        if r.contest_id:
+                            if r.contest_id not in contest_rounds:
+                                contest_rounds[r.contest_id] = []
+                            contest_rounds[r.contest_id].append(r)
+                except Exception as e2:
+                    logger.error(f"Error fetching rounds via legacy contest_id: {e2}")
+                    # Continue with empty contest_rounds dict
             
         def get_display_round(rounds):
              # Find one that is active now
@@ -299,7 +351,7 @@ async def get_all_contests(
         # Optimize: Batch fetch all contest stats in one query instead of N queries
         # Fallback to original method if batch query fails
         from sqlalchemy import func
-        from app.models.contestant import Contestant
+        # Contestant is already imported at the top of the file
         
         contest_ids = [c.id for c in contests]
         stats_by_contest = {}
