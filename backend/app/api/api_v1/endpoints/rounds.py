@@ -25,6 +25,7 @@ def read_rounds(
     filter_continent: Optional[str] = Query(None, alias="filterContinent", description="Filtrer les participants par continent"),
     contest_limit: int = Query(12, alias="contestLimit", description="Nombre maximum de contests par round"),
     contest_skip: int = Query(0, alias="contestSkip", description="Nombre de contests à sauter pour la pagination"),
+    search_term: Optional[str] = Query(None, alias="searchTerm", description="Rechercher dans les noms et descriptions de contests"),
 ) -> Any:
     """
     Récupère les rounds (optionnellement filtrés par contest) avec leurs statistiques.
@@ -48,7 +49,11 @@ def read_rounds(
     # Given the previous error, the client might be calling this without contest_id.
     # Let's support fetching all rounds if contest_id is missing.
     if not contest_id:
-        query = db.query(Round).options(joinedload(Round.contests)).filter(Round.status != "cancelled")
+        # Load contests with their category relationship for efficient search
+        from app.models.contest import Contest
+        query = db.query(Round).options(
+            joinedload(Round.contests).joinedload(Contest.category)
+        ).filter(Round.status != "cancelled")
         if round_id:
             query = query.filter(Round.id == round_id)
         db_rounds = query.order_by(Round.submission_start_date.desc()).offset(skip).limit(limit).all()
@@ -111,11 +116,41 @@ def read_rounds(
             # First, calculate total contests (before filtering/limiting) that match the filter criteria
             total_contests = 0
             for c in r_item.contests:
+                # Filter by voting_type presence if requested
                 if has_voting_type is not None:
                     if has_voting_type and c.voting_type_id is None:
                         continue
                     if not has_voting_type and c.voting_type_id is not None:
                         continue
+                
+                # Filter by search term if provided
+                if search_term:
+                    search_lower = search_term.lower().strip()
+                    if search_lower:  # Only filter if search term is not empty
+                        contest_name = (c.name or "").lower()
+                        contest_description = (c.description or "").lower()
+                        contest_type = (c.contest_type or "").lower()
+                        # Also search in category name if available
+                        category_name = ""
+                        if hasattr(c, 'category') and c.category:
+                            category_name = (c.category.name or "").lower() if hasattr(c.category, 'name') else ""
+                        elif hasattr(c, 'category_id') and c.category_id:
+                            # Try to get category name from relationship if not loaded
+                            try:
+                                from app.models.category import Category
+                                category = db.query(Category).filter(Category.id == c.category_id).first()
+                                if category and hasattr(category, 'name'):
+                                    category_name = (category.name or "").lower()
+                            except:
+                                pass
+                        
+                        # Search in all fields
+                        if (search_lower not in contest_name and 
+                            search_lower not in contest_description and 
+                            search_lower not in contest_type and
+                            search_lower not in category_name):
+                            continue
+                
                 total_contests += 1
             
             r_dict["contests_count"] = total_contests
@@ -130,6 +165,34 @@ def read_rounds(
                      if not has_voting_type and contest.voting_type_id is not None:
                          continue
                  
+                 # Filter by search term if provided
+                 if search_term:
+                     search_lower = search_term.lower().strip()
+                     if search_lower:  # Only filter if search term is not empty
+                         contest_name = (contest.name or "").lower()
+                         contest_description = (contest.description or "").lower()
+                         contest_type = (contest.contest_type or "").lower()
+                         # Also search in category name if available
+                         category_name = ""
+                         if hasattr(contest, 'category') and contest.category:
+                             category_name = (contest.category.name or "").lower() if hasattr(contest.category, 'name') else ""
+                         elif hasattr(contest, 'category_id') and contest.category_id:
+                             # Try to get category name from relationship if not loaded
+                             try:
+                                 from app.models.category import Category
+                                 category = db.query(Category).filter(Category.id == contest.category_id).first()
+                                 if category and hasattr(category, 'name'):
+                                     category_name = (category.name or "").lower()
+                             except:
+                                 pass
+                         
+                         # Search in all fields
+                         if (search_lower not in contest_name and 
+                             search_lower not in contest_description and 
+                             search_lower not in contest_type and
+                             search_lower not in category_name):
+                             continue
+                 
                  # Skip contests for pagination
                  if contests_skipped < contest_skip:
                      contests_skipped += 1
@@ -142,15 +205,67 @@ def read_rounds(
                  # Contestant.season_id stores the contest ID (legacy field name)
                  # Apply location filters if provided
                  from app.models.contests import Contestant
+                 from app.models.round import round_contests
+                 from sqlalchemy import select
+                 
+                 # Find round IDs linked to this contest
+                 round_ids = []
+                 try:
+                     round_ids_via_table = db.execute(
+                         select(round_contests.c.round_id).where(
+                             round_contests.c.contest_id == contest.id
+                         )
+                     ).fetchall()
+                     if round_ids_via_table:
+                         round_ids.extend([r[0] for r in round_ids_via_table])
+                 except Exception:
+                     pass
+                 
+                 # Build query for participant count
                  p_query = db.query(func.count(Contestant.id)).filter(
                      Contestant.season_id == contest.id,
                      Contestant.is_deleted == False
                  )
+                 # Apply country filter with pattern matching (handles "CI" vs "Côte d'Ivoire")
                  if filter_country and filter_country != 'all':
-                     p_query = p_query.filter(Contestant.country == filter_country)
+                     from app.crud.crud_contest import _get_country_match_patterns
+                     country_patterns = _get_country_match_patterns(filter_country)
+                     if country_patterns:
+                         from sqlalchemy import or_
+                         country_conds = [Contestant.country.ilike(pat) for pat in country_patterns]
+                         p_query = p_query.filter(or_(*country_conds))
+                     else:
+                         p_query = p_query.filter(func.lower(Contestant.country) == func.lower(filter_country))
                  if filter_continent and filter_continent != 'all':
-                     p_query = p_query.filter(Contestant.continent == filter_continent)
+                     p_query = p_query.filter(func.lower(Contestant.continent) == func.lower(filter_continent))
                  real_p_count = p_query.scalar() or 0
+                 
+                 # Check if current user has participated in this contest
+                 current_user_contesting = False
+                 if user_id:
+                     try:
+                         user_conditions = [Contestant.season_id == contest.id]
+                         if round_ids:
+                             user_conditions.append(Contestant.round_id.in_(round_ids))
+                         
+                         from sqlalchemy import or_
+                         user_contestant = db.query(Contestant).filter(
+                             Contestant.is_deleted == False,
+                             Contestant.user_id == user_id,
+                             or_(*user_conditions) if len(user_conditions) > 1 else user_conditions[0]
+                         ).first()
+                         current_user_contesting = user_contestant is not None
+                     except Exception:
+                         # Fallback to season_id only
+                         try:
+                             user_contestant = db.query(Contestant).filter(
+                                 Contestant.season_id == contest.id,
+                                 Contestant.user_id == user_id,
+                                 Contestant.is_deleted == False
+                             ).first()
+                             current_user_contesting = user_contestant is not None
+                         except Exception:
+                             current_user_contesting = False
 
                  c_data = {
                      "id": contest.id,
@@ -163,7 +278,8 @@ def read_rounds(
                      "votes_count": 0, # TODO: Fix vote count
                      "image_url": contest.image_url,
                      "created_at": getattr(contest, "created_at", None),
-                     "updated_at": getattr(contest, "updated_at", None)
+                     "updated_at": getattr(contest, "updated_at", None),
+                     "current_user_contesting": current_user_contesting
                  }
                  r_dict["contests"].append(c_data)
                  contests_added += 1

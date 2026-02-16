@@ -56,8 +56,19 @@ const auth = async (req: Request) => {
     console.log("Access token found, length:", accessToken.length);
 
     // Appeler l'endpoint /me pour vérifier le token et récupérer l'utilisateur
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-    const meResponse = await fetch(`${apiUrl}/api/v1/auth/me`, {
+    // Ensure API URL doesn't have trailing slash
+    let apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    apiUrl = apiUrl.replace(/\/+$/, ''); // Remove trailing slashes
+    
+    // Construct the full auth endpoint URL
+    // If API URL already includes /api/v1, use it directly, otherwise add it
+    const authEndpoint = apiUrl.includes('/api/v1') 
+      ? `${apiUrl}/auth/me`
+      : `${apiUrl}/api/v1/auth/me`;
+    
+    console.log("Auth endpoint URL:", authEndpoint);
+    
+    const meResponse = await fetch(authEndpoint, {
       method: "GET",
       headers: {
         "Authorization": `Bearer ${accessToken}`,
@@ -69,7 +80,8 @@ const auth = async (req: Request) => {
       console.warn(`Auth endpoint returned ${meResponse.status}`);
       const errorText = await meResponse.text();
       console.warn("Auth error response:", errorText);
-      throw new UploadThingError("Unauthorized: Invalid token");
+      console.warn("Auth URL used:", `${apiUrl}/auth/me`);
+      throw new UploadThingError(`Unauthorized: Invalid token (${meResponse.status})`);
     }
 
     const user = await meResponse.json();
@@ -78,7 +90,10 @@ const auth = async (req: Request) => {
     return { userId: user.id || user.userId };
   } catch (error) {
     console.error("Auth error:", error);
-    throw new UploadThingError("Unauthorized");
+    if (error instanceof UploadThingError) {
+      throw error;
+    }
+    throw new UploadThingError(`Unauthorized: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 };
 

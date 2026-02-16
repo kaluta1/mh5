@@ -309,7 +309,8 @@ function ContestsPageContent() {
         participationEndDate: contestsData?.submission_end_date,
         votingStartDate: contestsData?.voting_start_date,
         votingEndDate: contestsData?.voting_end_date,
-        currentUserParticipated: false, // Not fetching this specific user status in new query yet
+        currentUserParticipated: c.current_user_contesting || false,
+        currentUserContesting: c.current_user_contesting || false,
         topContestants: [] // Not fetching top contestants per contest in new query yet
       }
     })
@@ -517,7 +518,7 @@ function ContestsPageContent() {
                   isFavorite={false}
                   isNomination={categoryTab === 'nomination'}
                   onToggleFavorite={() => { }}
-                  onParticipate={() => handleParticipate(contest.id, contest.currentUserParticipated)}
+                  onParticipate={() => handleParticipate(contest.id, contest.currentUserContesting || false)}
                   onViewContestants={() => {
                     const params = new URLSearchParams()
                     if (filterCountry && filterCountry !== 'all') params.set('country', filterCountry)
