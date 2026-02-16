@@ -50,7 +50,7 @@ export function ContestantsSidebar({
         <div className="bg-white dark:bg-gray-800/90 rounded-xl border border-gray-200/50 dark:border-gray-700/50 shadow-md backdrop-blur-sm p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">
-              {t('dashboard.contests.contestants') || 'Participants'}
+              {t('dashboard.contests.nominators') || 'Nominators'}
             </h3>
             {contestants.length >= 1 && (
               <Button
