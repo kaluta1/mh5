@@ -255,19 +255,35 @@ def read_rounds(
                          ).first()
                          season_id = season_link.season_id if season_link else None
                          
-                         # Build conditions to check
+                         # Build conditions to check - MUST check all possible relationships
                          conditions = []
                          
-                         # 1. Check via season_id from ContestSeasonLink
+                         # 1. Check via season_id from ContestSeasonLink (new way)
                          if season_id:
                              conditions.append(Contestant.season_id == season_id)
                          
-                         # 2. Check if season_id directly equals contest.id (legacy)
+                         # 2. Check if season_id directly equals contest.id (legacy - very common)
                          conditions.append(Contestant.season_id == contest.id)
                          
-                         # 3. Check via round_id
-                         if round_ids:
+                         # 3. Check via round_id (if contest is linked to rounds)
+                         if round_ids and len(round_ids) > 0:
                              conditions.append(Contestant.round_id.in_(round_ids))
+                         
+                         # IMPORTANT: Also check if contestant.round_id matches ANY round that has this contest
+                         # This handles cases where round_ids wasn't populated correctly
+                         if not round_ids or len(round_ids) == 0:
+                             # Try to find rounds linked to this contest and check those
+                             try:
+                                 all_rounds_for_contest = db.execute(
+                                     select(round_contests.c.round_id).where(
+                                         round_contests.c.contest_id == contest.id
+                                     )
+                                 ).fetchall()
+                                 if all_rounds_for_contest:
+                                     round_ids_for_check = [r[0] for r in all_rounds_for_contest]
+                                     conditions.append(Contestant.round_id.in_(round_ids_for_check))
+                             except Exception:
+                                 pass
                          
                          # Query user contestants matching any condition
                          if conditions:
@@ -278,12 +294,57 @@ def read_rounds(
                              ).first()
                              current_user_contesting = user_contestant is not None
                              
-                             # Debug log
+                             # Enhanced debug logging
                              if current_user_contesting:
-                                 logger.info(f"User {user_id} has nominated in contest {contest.id} ({contest.name})")
+                                 logger.info(f"✅ User {user_id} has nominated in contest {contest.id} ({contest.name}) - Contestant ID: {user_contestant.id}, season_id={user_contestant.season_id}, round_id={user_contestant.round_id}")
+                             else:
+                                 # FALLBACK: If no match found, try a broader search to see if user has ANY contestant
+                                 # that might be related to this contest (for debugging)
+                                 fallback_check = db.query(Contestant).filter(
+                                     Contestant.user_id == user_id,
+                                     Contestant.is_deleted == False
+                                 ).limit(10).all()
+                                 
+                                 if fallback_check:
+                                     logger.debug(f"⚠️  User {user_id} has contestants but none match contest {contest.id} ({contest.name})")
+                                     logger.debug(f"   Contestant season_ids: {[c.season_id for c in fallback_check]}")
+                                     logger.debug(f"   Contestant round_ids: {[c.round_id for c in fallback_check]}")
+                                     logger.debug(f"   Looking for: contest.id={contest.id}, season_id={season_id}, round_ids={round_ids}")
+                                     
+                                     # Try one more fallback: check if ANY contestant's season_id or round_id
+                                     # could potentially link to this contest
+                                     for fc in fallback_check:
+                                         if fc.season_id == contest.id:
+                                             logger.warning(f"   ⚠️  Found contestant {fc.id} with season_id={fc.season_id} == contest.id={contest.id} but query didn't match!")
+                                         if fc.round_id and round_ids and fc.round_id in round_ids:
+                                             logger.warning(f"   ⚠️  Found contestant {fc.id} with round_id={fc.round_id} in round_ids but query didn't match!")
                      except Exception as e:
-                         logger.warning(f"Error checking user participation for contest {contest.id}: {str(e)}")
+                         logger.error(f"Error checking user participation for contest {contest.id}: {str(e)}", exc_info=True)
                          current_user_contesting = False
+                     
+                     # Final fallback: if still False, do a direct query as last resort
+                     if not current_user_contesting:
+                         try:
+                             # Direct check: user has contestant with season_id = contest.id
+                             fallback_conditions = [Contestant.season_id == contest.id]
+                             
+                             # Also check round_ids if available
+                             if round_ids and len(round_ids) > 0:
+                                 fallback_conditions.append(Contestant.round_id.in_(round_ids))
+                             
+                             if fallback_conditions:
+                                 direct_check = db.query(Contestant).filter(
+                                     Contestant.user_id == user_id,
+                                     Contestant.is_deleted == False,
+                                     or_(*fallback_conditions) if len(fallback_conditions) > 1 else fallback_conditions[0]
+                                 ).first()
+                                 
+                                 if direct_check:
+                                     logger.warning(f"⚠️  Fallback check found nomination for user {user_id} in contest {contest.id} - Contestant ID: {direct_check.id}")
+                                     logger.warning(f"   This should have been caught earlier! Check the main query logic.")
+                                     current_user_contesting = True
+                         except Exception as e:
+                             logger.debug(f"Fallback check error: {str(e)}")
 
                  c_data = {
                      "id": contest.id,

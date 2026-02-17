@@ -333,10 +333,20 @@ function ContestsPageContent() {
     // Debug: Log contests where user has nominated
     const nominatedContests = rawContests.filter((c: any) => c.currentUserContesting)
     if (nominatedContests.length > 0) {
-      console.log(`[ContestsPage] User has nominated in ${nominatedContests.length} contest(s):`, 
+      console.log(`[ContestsPage] ✅ User has nominated in ${nominatedContests.length} contest(s):`, 
         nominatedContests.map((c: any) => ({ id: c.id, title: c.title, currentUserContesting: c.currentUserContesting })))
     } else {
-      console.log(`[ContestsPage] User has not nominated in any contest yet`)
+      console.log(`[ContestsPage] ❌ User has not nominated in any contest yet`)
+      // Debug: Show what we received from backend
+      if (rawContests.length > 0) {
+        console.log(`[ContestsPage] Debug - First contest data:`, {
+          id: rawContests[0].id,
+          title: rawContests[0].title,
+          currentUserContesting: rawContests[0].currentUserContesting,
+          currentUserParticipated: rawContests[0].currentUserParticipated,
+          rawData: allContests[0] // Show raw backend response
+        })
+      }
     }
   }, [allContests, contestsData])
 
