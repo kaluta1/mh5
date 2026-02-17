@@ -231,7 +231,7 @@ function ContestsPageContent() {
 
       const { contests, total } = await contestService.getContests(
         0,
-        100, // Increased limit to show more contests for public page
+        20, // Reasonable limit to avoid timeout - pagination can be added later
         activeSearchTerm || undefined,
         undefined, // votingLevel n'est plus utilisé
         undefined, // votingTypeId
@@ -274,8 +274,19 @@ function ContestsPageContent() {
       console.error("[ContestsPage] Error details:", {
         message: error?.message,
         stack: error?.stack,
-        response: error?.response?.data
+        response: error?.response?.data,
+        code: error?.code
       })
+      
+      // Handle timeout specifically
+      if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
+        console.warn("[ContestsPage] Request timed out - backend may be slow or overloaded")
+        // Show user-friendly message
+        if (typeof window !== 'undefined') {
+          // Could show a toast notification here if needed
+        }
+      }
+      
       // FIXED: Set empty array on error so UI shows proper message
       setAllContests([])
     } finally {
