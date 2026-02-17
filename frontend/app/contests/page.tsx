@@ -231,7 +231,7 @@ function ContestsPageContent() {
 
       const { contests, total } = await contestService.getContests(
         0,
-        20, // Reasonable limit to avoid timeout - pagination can be added later
+        10, // Reduced to 10 to avoid timeout - backend is slow
         activeSearchTerm || undefined,
         undefined, // votingLevel n'est plus utilisé
         undefined, // votingTypeId

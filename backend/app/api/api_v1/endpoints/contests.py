@@ -119,49 +119,83 @@ def read_contests(
     # enrich_contest_with_stats retourne un dictionnaire avec toutes les valeurs converties
     enriched_contests = []
     
-    # Reduced logging to improve performance
+    # OPTIMIZED: Use lightweight enrichment for list views to avoid timeout
+    # Batch query for contestant counts to avoid N+1 queries
+    from app.models.contests import Contestant, ContestSeasonLink
+    from sqlalchemy import func, or_
+    
+    contest_ids = [c.id for c in contests]
+    contestant_counts = {}
+    current_user_contesting_map = {}
+    
+    if contest_ids:
+        # Batch query for contestant counts per contest
+        try:
+            # Get season_ids for contests
+            season_links = db.query(ContestSeasonLink).filter(
+                ContestSeasonLink.contest_id.in_(contest_ids),
+                ContestSeasonLink.is_active == True
+            ).all()
+            season_by_contest = {link.contest_id: link.season_id for link in season_links}
+            
+            # Batch count contestants by season_id (legacy) or round_id
+            for contest_id, season_id in season_by_contest.items():
+                count = db.query(func.count(Contestant.id)).filter(
+                    Contestant.season_id == season_id,
+                    Contestant.is_deleted == False
+                ).scalar() or 0
+                contestant_counts[contest_id] = count
+            
+            # Check current_user_contesting in batch if user is authenticated
+            if current_user:
+                user_contestants = db.query(Contestant).filter(
+                    Contestant.user_id == current_user.id,
+                    Contestant.is_deleted == False,
+                    Contestant.season_id.in_(list(season_by_contest.values()))
+                ).all()
+                for uc in user_contestants:
+                    # Find which contest this contestant belongs to
+                    for contest_id, season_id in season_by_contest.items():
+                        if uc.season_id == season_id:
+                            current_user_contesting_map[contest_id] = True
+                            break
+        except Exception as e:
+            logger.warning(f"Error in batch queries: {str(e)}")
+    
+    # Build lightweight response without full enrichment
     for c in contests:
         try:
-            enriched = contest.enrich_contest_with_stats(
-                db=db, 
-                contest=c, 
-                current_user=current_user,
-                filter_country=filter_country,
-                filter_region=filter_region,
-                filter_continent=filter_continent,
-                include_top_contestants=False  # Skip expensive top_contestants query for list views
-            )
-            if isinstance(enriched, dict):
-                enriched_contests.append(enriched)
-            else:
-                logger.warning(f"Contest {c.id} enrichment returned non-dict: {type(enriched)}")
-        except Exception as e:
-            # FIXED: Log full error with traceback for debugging
-            import traceback
-            logger.error(f"Erreur lors de l'enrichissement du contest {c.id}: {str(e)}")
-            logger.error(traceback.format_exc())
-            # FIXED: Return basic contest data even if enrichment fails
-            try:
-                basic_contest = {
-                    "id": c.id,
-                    "name": c.name,
-                    "description": c.description,
-                    "contest_type": c.contest_type,
-                    "cover_image_url": c.cover_image_url or c.image_url,
-                    "image_url": c.image_url,
-                    "is_active": c.is_active,
-                    "is_submission_open": c.is_submission_open,
-                    "is_voting_open": c.is_voting_open,
-                    "level": c.level,
-                    "voting_type_id": getattr(c, 'voting_type_id', None),
-                    "voting_type": None,
-                    "entries_count": 0,
-                    "total_votes": 0,
+            # Get voting type if exists
+            voting_type_dict = None
+            if c.voting_type_id and hasattr(c, 'voting_type') and c.voting_type:
+                voting_type_dict = {
+                    "id": c.voting_type.id,
+                    "name": c.voting_type.name,
+                    "voting_level": c.voting_type.voting_level.value if hasattr(c.voting_type.voting_level, 'value') else str(c.voting_type.voting_level),
+                    "commission_source": c.voting_type.commission_source.value if hasattr(c.voting_type.commission_source, 'value') else str(c.voting_type.commission_source),
                 }
-                enriched_contests.append(basic_contest)
-                logger.info(f"Added basic contest data for contest {c.id} after enrichment error")
-            except Exception as e2:
-                logger.error(f"Failed to create basic contest data for {c.id}: {str(e2)}")
+            
+            basic_contest = {
+                "id": c.id,
+                "name": c.name,
+                "description": c.description,
+                "contest_type": c.contest_type,
+                "cover_image_url": c.cover_image_url or c.image_url,
+                "image_url": c.image_url,
+                "is_active": c.is_active,
+                "is_submission_open": c.is_submission_open,
+                "is_voting_open": c.is_voting_open,
+                "level": c.level,
+                "voting_type_id": getattr(c, 'voting_type_id', None),
+                "voting_type": voting_type_dict,
+                "entries_count": contestant_counts.get(c.id, 0),
+                "contestants": contestant_counts.get(c.id, 0),  # For compatibility
+                "total_votes": 0,  # Skip vote counting for list view
+                "current_user_contesting": current_user_contesting_map.get(c.id, False),
+            }
+            enriched_contests.append(basic_contest)
+        except Exception as e:
+            logger.error(f"Error creating basic contest data for {c.id}: {str(e)}")
             continue
     
     logger.info(f"Successfully enriched {len(enriched_contests)} out of {len(contests)} contests")

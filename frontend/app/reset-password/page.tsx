@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Lock, Eye, EyeOff, Loader2, CheckCircle, XCircle } from 'lucide-react'
-import { useLanguage } from '@/contexts/language-context'
+import { useLanguage } from '@/contexts/language-context' 
 import { useToast } from '@/components/ui/toast'
 import { authService } from '@/lib/api'
 
