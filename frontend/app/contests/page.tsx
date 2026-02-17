@@ -50,9 +50,8 @@ function ContestsPageContent() {
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("") // Terme de recherche dans l'input
   const [activeSearchTerm, setActiveSearchTerm] = useState("") // Terme de recherche actif (utilisé pour l'API)
-  // FIXED: Start with 'participations' as default since most users want to see regular contests first
-  // Users can switch to 'nomination' tab if they want
-  const [categoryTab, setCategoryTab] = useState<'nomination' | 'participations'>('participations')
+  // Default to 'nomination' tab for public page
+  const [categoryTab, setCategoryTab] = useState<'nomination' | 'participations'>('nomination')
   const [activeTab, setActiveTab] = useState<string>('all')
   const [sortBy, setSortBy] = useState<string>('participants') // participants, votes, date, name
   const [favorites, setFavorites] = useState<Array<string | number>>([])
@@ -113,13 +112,9 @@ function ContestsPageContent() {
     // TODO: Add API call to update favorites on the server
   };
 
-  // Handle clicking on a contest
+  // Handle clicking on a contest - allow unauthenticated users to view contestants
   const handleContestClick = (contestId: string | number) => {
-    if (!isAuthenticated) {
-      setSelectedContestId(contestId.toString());
-      setShowAuthDialog(true);
-      return;
-    }
+    // Allow unauthenticated users to view contestants
     router.push(`/dashboard/contests/${contestId}`);
   };
 
@@ -236,7 +231,7 @@ function ContestsPageContent() {
 
       const { contests, total } = await contestService.getContests(
         0,
-        10, // Reduced from 500 to avoid timeout - pagination should be implemented instead
+        100, // Increased limit to show more contests for public page
         activeSearchTerm || undefined,
         undefined, // votingLevel n'est plus utilisé
         undefined, // votingTypeId
@@ -597,6 +592,7 @@ function ContestsPageContent() {
                   maxAge={contest.maxAge}
                   isNomination={categoryTab === 'nomination'}
                   votingType={contest.votingType}
+                  currentUserContesting={contest.currentUserContesting || false}
                   isFavorite={favorites.some(favId => favId.toString() === contest.id.toString())}
                   onToggleFavorite={() => handleToggleFavorite(contest.id)}
                   onViewContestants={() => handleContestClick(contest.id)}

@@ -547,11 +547,18 @@ class ContestService {
       
       console.log('[ContestService] Fetching contests with params:', params);
 
-      const response = await api.get<{ items: ContestResponse[]; total: number }>('/api/v1/contests', { params });
+      // Backend returns List[dict] directly, not wrapped in { items, total }
+      const response = await api.get<ContestResponse[]>('/api/v1/contests', { params });
+      
+      // Handle both response formats (direct array or wrapped)
+      const contestsArray = Array.isArray(response.data) 
+        ? response.data 
+        : (response.data as any)?.items || [];
+      const total = (response.data as any)?.total || contestsArray.length;
       
       return {
-        contests: response.data.items.map(contest => this.mapResponseToContest(contest)),
-        total: response.data.total
+        contests: contestsArray.map(contest => this.mapResponseToContest(contest)),
+        total: total
       };
     } catch (error) {
       console.error('Error fetching contests:', error);

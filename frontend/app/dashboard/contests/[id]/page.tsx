@@ -404,7 +404,8 @@ export default function ContestDetailPage() {
     return <ContestDetailSkeleton />
   }
 
-  if (!isAuthenticated || !user || !contest) {
+  // Allow unauthenticated users to view contest details (they just can't participate)
+  if (!contest) {
     return null
   }
 
