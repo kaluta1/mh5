@@ -139,18 +139,31 @@ def read_contests(
             season_by_contest = {link.contest_id: link.season_id for link in season_links}
             
             # Batch count contestants by season_id (legacy) or round_id
-            for contest_id, season_id in season_by_contest.items():
-                count = db.query(func.count(Contestant.id)).filter(
-                    Contestant.season_id == season_id,
+            # Check both via ContestSeasonLink and direct contest_id (legacy)
+            for contest_id in contest_ids:
+                count = 0
+                # Check via season_id from ContestSeasonLink
+                if contest_id in season_by_contest:
+                    season_id = season_by_contest[contest_id]
+                    count = db.query(func.count(Contestant.id)).filter(
+                        Contestant.season_id == season_id,
+                        Contestant.is_deleted == False
+                    ).scalar() or 0
+                
+                # Also check if season_id directly equals contest_id (legacy)
+                direct_count = db.query(func.count(Contestant.id)).filter(
+                    Contestant.season_id == contest_id,
                     Contestant.is_deleted == False
                 ).scalar() or 0
-                contestant_counts[contest_id] = count
+                
+                # Use the maximum count (in case both exist)
+                contestant_counts[contest_id] = max(count, direct_count)
             
             # Check current_user_contesting in batch if user is authenticated
-            # Need to check both season_id (legacy) and round_id (new) relationships
+            # Need to check: season_id (legacy - can be contest_id directly), round_id (new), and season_id via ContestSeasonLink
             if current_user:
                 from app.models.round import Round, round_contests
-                from sqlalchemy import select
+                from sqlalchemy import select, or_
                 
                 # Get round_ids linked to these contests
                 round_ids_by_contest = {}
@@ -167,41 +180,51 @@ def read_contests(
                 except Exception as e:
                     logger.warning(f"Error fetching round links: {str(e)}")
                 
-                # Query user contestants by season_id (legacy)
-                season_ids = list(season_by_contest.values())
-                user_contestants_by_season = []
-                if season_ids:
-                    user_contestants_by_season = db.query(Contestant).filter(
-                        Contestant.user_id == current_user.id,
-                        Contestant.is_deleted == False,
-                        Contestant.season_id.in_(season_ids)
-                    ).all()
+                # Build all conditions for user contestants
+                conditions = []
                 
-                # Query user contestants by round_id (new)
+                # 1. Check season_id from ContestSeasonLink (new way)
+                season_ids = list(season_by_contest.values())
+                if season_ids:
+                    conditions.append(Contestant.season_id.in_(season_ids))
+                
+                # 2. Check if season_id directly equals contest_id (legacy - contest_id stored in season_id)
+                if contest_ids:
+                    conditions.append(Contestant.season_id.in_(contest_ids))
+                
+                # 3. Check round_id (new way)
                 all_round_ids = []
                 for round_ids in round_ids_by_contest.values():
                     all_round_ids.extend(round_ids)
-                user_contestants_by_round = []
                 if all_round_ids:
-                    user_contestants_by_round = db.query(Contestant).filter(
+                    conditions.append(Contestant.round_id.in_(all_round_ids))
+                
+                # Query all user contestants matching any condition
+                if conditions:
+                    user_contestants = db.query(Contestant).filter(
                         Contestant.user_id == current_user.id,
                         Contestant.is_deleted == False,
-                        Contestant.round_id.in_(all_round_ids)
+                        or_(*conditions) if len(conditions) > 1 else conditions[0]
                     ).all()
-                
-                # Map contestants to contests via season_id
-                for uc in user_contestants_by_season:
-                    for contest_id, season_id in season_by_contest.items():
-                        if uc.season_id == season_id:
-                            current_user_contesting_map[contest_id] = True
-                            break
-                
-                # Map contestants to contests via round_id
-                for uc in user_contestants_by_round:
-                    for contest_id, round_ids in round_ids_by_contest.items():
-                        if uc.round_id in round_ids:
-                            current_user_contesting_map[contest_id] = True
-                            break
+                    
+                    # Map contestants to contests
+                    for uc in user_contestants:
+                        # Check via season_id from ContestSeasonLink
+                        for contest_id, season_id in season_by_contest.items():
+                            if uc.season_id == season_id:
+                                current_user_contesting_map[contest_id] = True
+                                break
+                        
+                        # Check via direct contest_id (legacy - season_id = contest_id)
+                        if uc.season_id in contest_ids:
+                            current_user_contesting_map[uc.season_id] = True
+                        
+                        # Check via round_id
+                        if uc.round_id:
+                            for contest_id, round_ids in round_ids_by_contest.items():
+                                if uc.round_id in round_ids:
+                                    current_user_contesting_map[contest_id] = True
+                                    break
         except Exception as e:
             logger.warning(f"Error in batch queries: {str(e)}")
     
@@ -243,6 +266,9 @@ def read_contests(
         except Exception as e:
             logger.error(f"Error creating basic contest data for {c.id}: {str(e)}")
             continue
+    
+    # Sort contests by participants_count descending (most participants first) for faster display
+    enriched_contests.sort(key=lambda x: x.get("contestants", 0), reverse=True)
     
     logger.info(f"Successfully enriched {len(enriched_contests)} out of {len(contests)} contests")
     return enriched_contests

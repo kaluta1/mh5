@@ -185,29 +185,27 @@ function ContestsPageContent() {
 
     // La recherche est maintenant gérée côté backend, pas besoin de filtrer ici
 
-    // Trier les contests selon l'option sélectionnée
+    // Sort contests by participants count (descending - most first) for consistent display
+    // Backend already sorts, but ensure frontend also sorts correctly
     const sortedContests = [...categoryFiltered].sort((a, b) => {
-      switch (sortBy) {
-        case 'participants':
-          if (b.contestants !== a.contestants) {
-            return b.contestants - a.contestants
-          }
-          return b.received - a.received
-        case 'votes':
-          if (b.received !== a.received) {
-            return b.received - a.received
-          }
-          return b.contestants - a.contestants
-        case 'date':
-          return new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
-        case 'name':
-          return a.title.localeCompare(b.title)
-        default:
-          if (b.contestants !== a.contestants) {
-            return b.contestants - a.contestants
-          }
-          return b.received - a.received
+      // Always prioritize participants count (descending - most first)
+      const aContestants = Number(a.contestants) || 0
+      const bContestants = Number(b.contestants) || 0
+      
+      // Primary sort: participants count (high to low)
+      if (bContestants !== aContestants) {
+        return bContestants - aContestants
       }
+      
+      // Secondary sort: votes if participants are equal
+      const aReceived = Number(a.received) || 0
+      const bReceived = Number(b.received) || 0
+      if (bReceived !== aReceived) {
+        return bReceived - aReceived
+      }
+      
+      // Tertiary sort: by title for consistency
+      return a.title.localeCompare(b.title)
     })
 
     console.log(`[ContestsPage] Final filtered contests: ${sortedContests.length}`)
