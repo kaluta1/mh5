@@ -249,10 +249,17 @@ export default function ContestDetailPage() {
           ...c,
           entries_count: c.entries_count,
           total_votes: c.total_votes,
-          cover_image_url: c.cover_image_url
+          cover_image_url: c.cover_image_url,
+          current_user_contesting: c.current_user_contesting || false  // Ensure this is included
         },
-        contestants: mappedContestants
+        contestants: mappedContestants,
+        current_user_contesting: c.current_user_contesting || false  // Also at top level for easy access
       })
+      
+      // Debug log
+      if (c.current_user_contesting) {
+        console.log(`[ContestDetailPage] User has nominated in contest ${contestId} - showing Edit button`)
+      }
 
       setFavorites(mappedContestants.filter(ct => ct.isFavorite).map(ct => ct.id))
 
@@ -579,14 +586,22 @@ export default function ContestDetailPage() {
                       </p>
                     </div>
 
-                    {/* CTA Button */}
+                    {/* CTA Button - Show Edit if user has already nominated */}
                     <Button
-                      onClick={() => router.push(`/dashboard/contests/${contestId}/apply`)}
+                      onClick={() => {
+                        const hasNominated = contest?.contest?.current_user_contesting || contest?.current_user_contesting
+                        router.push(hasNominated 
+                          ? `/dashboard/contests/${contestId}/apply?edit=true` 
+                          : `/dashboard/contests/${contestId}/apply`
+                        )
+                      }}
                       className="bg-myhigh5-primary hover:bg-myhigh5-blue-700 text-white font-semibold px-8 py-6 text-lg rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
                     >
-                      {isNomination
-                        ? (t('dashboard.contests.nominate') || 'Nommer')
-                        : (t('dashboard.contests.participate') || 'Participer')
+                      {(contest?.contest?.current_user_contesting || contest?.current_user_contesting)
+                        ? (t('dashboard.contests.edit') || 'Modifier')
+                        : isNomination
+                          ? (t('dashboard.contests.nominate') || 'Nommer')
+                          : (t('dashboard.contests.participate') || 'Participer')
                       }
                       <ExternalLink className="w-5 h-5 ml-2" />
                     </Button>

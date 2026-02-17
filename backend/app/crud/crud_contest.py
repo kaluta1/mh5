@@ -657,27 +657,45 @@ class CRUDContest:
             entries_count = entries_query.scalar() or 0
         
         # Vérifier si l'utilisateur connecté participe à ce concours
+        # CRITICAL: Use the EXACT same logic as create_contestant duplicate check
         current_user_contesting = False
         if current_user:
             try:
-                user_conditions = [Contestant.season_id == contest.id]
-                if round_ids:
-                    user_conditions.append(Contestant.round_id.in_(round_ids))
+                from app.models.contests import ContestSeason
+                from app.crud import contestant as crud_contestant
                 
-                user_contestant = db.query(Contestant).filter(
-                    Contestant.is_deleted == False,
-                    Contestant.user_id == current_user.id,
-                    or_(*user_conditions) if len(user_conditions) > 1 else user_conditions[0]
+                # REPLICATE THE EXACT LOGIC FROM create_contestant (lines 860-962):
+                # 1. Try to find a ContestSeason with id == contest.id
+                season = db.query(ContestSeason).filter(
+                    ContestSeason.id == contest.id,
+                    ContestSeason.is_deleted == False
                 ).first()
-                current_user_contesting = user_contestant is not None
-            except Exception:
-                # Fallback to season_id only
-                user_contestant = db.query(Contestant).filter(
-                    Contestant.season_id == contest.id,
-                    Contestant.user_id == current_user.id,
-                    Contestant.is_deleted == False
-                ).first()
-                current_user_contesting = user_contestant is not None
+                
+                # 2. Determine season_id (same logic as create_contestant)
+                if season:
+                    # contest.id IS a ContestSeason ID
+                    season_id = season.id
+                else:
+                    # contest.id is a Contest ID, use it directly as season_id (legacy)
+                    season_id = contest.id
+                
+                # 3. Use the EXACT same check as create_contestant duplicate check
+                # This is the SAME function that throws "You already have a submission for this contest"
+                existing = crud_contestant.get_by_season_and_user(
+                    db, season_id, current_user.id
+                )
+                
+                current_user_contesting = existing is not None
+                
+                if current_user_contesting:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.info(f"✅ User {current_user.id} has nominated in contest {contest.id} ({contest.name}) - Contestant ID: {existing.id}")
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Error checking user participation for contest {contest.id}: {str(e)}", exc_info=True)
+                current_user_contesting = False
         
         # Récupérer les top 5 contestants par votes (seulement si demandé pour optimiser les performances)
         top_contestants = []
