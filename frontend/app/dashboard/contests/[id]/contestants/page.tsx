@@ -227,13 +227,9 @@ export default function ContestantsListPage() {
         }
       })
 
-      mappedContestants.sort((a, b) => {
-        if (a.rank && b.rank) return a.rank - b.rank
-        if (a.rank && !b.rank) return -1
-        if (!a.rank && b.rank) return 1
-        if (b.votes !== a.votes) return b.votes - a.votes
-        return Number(a.id) - Number(b.id)
-      })
+      // Backend already sorts by rank (ascending) and votes (descending)
+      // No need to re-sort - backend provides contestants with most votes first
+      // This ensures instant display without any delay
 
       const updatedContest: Contest = {
         id: c.id,

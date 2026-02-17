@@ -107,6 +107,8 @@ export default function ApplyToContestPage() {
         max_videos: c.max_videos,
         video_max_duration: c.video_max_duration,
         video_max_size_mb: c.video_max_size_mb,
+        current_user_contesting: c.current_user_contesting || false,
+        currentUserContesting: c.current_user_contesting || false,
         min_images: c.min_images,
         max_images: c.max_images,
         verification_video_max_duration: c.verification_video_max_duration,
@@ -117,8 +119,24 @@ export default function ApplyToContestPage() {
 
       setIsNomination(c.voting_type != null)
 
-      // 3. User Participation check - prefer specific contestant when contestantId in URL (from My Applications)
+      // 3. User Participation check - check both current_user_participation and current_user_contesting
+      // Also check if user has any contestant for this contest
       let participationToUse: any = c.current_user_participation
+      
+      // If no participation found but current_user_contesting is true, fetch the contestant
+      if (!participationToUse && (c.current_user_contesting || c.currentUserContesting) && user?.id) {
+        try {
+          // Fetch user's contestant for this contest
+          const userContestants = await contestService.getContestantsByContest(contestId, { user_id: user.id })
+          if (userContestants && userContestants.length > 0) {
+            participationToUse = userContestants[0]
+          }
+        } catch (err) {
+          console.warn('Could not load user contestant:', err)
+        }
+      }
+      
+      // Prefer specific contestant when contestantId in URL (from My Applications)
       if (isEditMode && contestantIdParam && user?.id) {
         try {
           const specificContestant = await contestService.getContestantById(Number(contestantIdParam))
@@ -129,9 +147,12 @@ export default function ApplyToContestPage() {
           console.warn('Could not load specific contestant for edit:', err)
         }
       }
-      if (participationToUse) {
+      
+      if (participationToUse || c.current_user_contesting || c.currentUserContesting) {
         setUserAlreadyParticipating(true)
-        setParticipantId(participationToUse.id)
+        if (participationToUse) {
+          setParticipantId(participationToUse.id)
+        }
 
         let imageUrls: string[] = []
         try {

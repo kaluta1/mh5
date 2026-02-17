@@ -1711,11 +1711,11 @@ class CRUDContest:
                 "has_reported": contestant.id in reported_contestants,  # L'utilisateur a déjà signalé ce contestant
             })
         
-        # Trier par rangs (final_rank) si disponibles, sinon par votes décroissants
-        # Les contestants avec le même rang sont triés par votes décroissants
+        # Sort by votes descending first (most votes first), then by rank
+        # This ensures contestants with most participants/votes appear at top immediately
         enriched_contestants.sort(key=lambda x: (
-            x.get("rank", float('inf')),  # Utiliser le rang si disponible, sinon mettre à la fin
-            -x["votes_count"]  # Ensuite par votes décroissants
+            -x["votes_count"],  # Votes first (descending - most votes first)
+            x.get("rank", float('inf'))  # Then by rank (lower is better)
         ))
         
         # Ajouter les contestants enrichis au résultat

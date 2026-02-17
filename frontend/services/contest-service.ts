@@ -932,13 +932,16 @@ class ContestService {
    */
   async getContestantsByContest(
     contestId: string | number,
-    skip: number = 0,
-    limit: number = 10,
-    filterCountry?: string,
-    filterRegion?: string
+    options?: { skip?: number; limit?: number; filterCountry?: string; filterRegion?: string; user_id?: number }
   ): Promise<ContestantWithAuthorAndStats[]> {
     try {
-      const cacheKey = `/api/v1/contests/${contestId}/contestants?skip=${skip}&limit=${limit}${filterCountry ? `&country=${filterCountry}` : ''}${filterRegion ? `&region=${filterRegion}` : ''}`
+      const skip = options?.skip || 0
+      const limit = options?.limit || 10
+      const filterCountry = options?.filterCountry
+      const filterRegion = options?.filterRegion
+      const user_id = options?.user_id
+      
+      const cacheKey = `/api/v1/contestants/contest/${contestId}?skip=${skip}&limit=${limit}${filterCountry ? `&filter_country=${filterCountry}` : ''}${filterRegion ? `&filter_region=${filterRegion}` : ''}${user_id ? `&user_id=${user_id}` : ''}`
       
       // Vérifier le cache
       const cached = cacheService.get<ContestantWithAuthorAndStats[]>(cacheKey)
@@ -948,10 +951,11 @@ class ContestService {
 
       // Si pas en cache, faire la requête
       const params: any = { skip, limit }
-      if (filterCountry) params.country = filterCountry
-      if (filterRegion) params.region = filterRegion
+      if (filterCountry) params.filter_country = filterCountry
+      if (filterRegion) params.filter_region = filterRegion
+      if (user_id) params.user_id = user_id
 
-      const response = await api.get<ContestantWithAuthorAndStats[]>(`/api/v1/contests/${contestId}/contestants`, { params })
+      const response = await api.get<ContestantWithAuthorAndStats[]>(`/api/v1/contestants/contest/${contestId}`, { params })
       
       // Mettre en cache
       cacheService.set(cacheKey, response.data)

@@ -611,14 +611,15 @@ def get_contest_contestants(
             query = query.filter(Contestant.user_id == user_id)
         
         # Get contestants with relations (limit joins to avoid timeouts)
+        # Note: We'll sort by votes after fetching stats, but order by registration_date as fallback
         try:
             contestants = query.options(
                 joinedload(Contestant.user)
-            ).order_by(Contestant.registration_date.desc()).offset(skip).limit(limit).all()
+            ).order_by(Contestant.registration_date.desc()).offset(skip).limit(limit * 2).all()  # Fetch more to sort properly
         except Exception as e:
             logger.error(f"Error fetching contestants with relations: {e}")
             # Fallback: fetch without relations
-            contestants = query.order_by(Contestant.registration_date.desc()).offset(skip).limit(limit).all()
+            contestants = query.order_by(Contestant.registration_date.desc()).offset(skip).limit(limit * 2).all()
         
         # If no contestants found, try simpler fallback
         if not contestants:
@@ -808,8 +809,12 @@ def get_contest_contestants(
                 "can_vote": can_vote,
             })
         
-        # Sort by votes descending
-        contestants_data.sort(key=lambda x: x["votes_count"], reverse=True)
+        # Sort by votes descending first (most votes first), then by rank
+        # This ensures contestants with most participants/votes appear at top immediately
+        contestants_data.sort(key=lambda x: (
+            -x["votes_count"],  # Votes first (descending - most votes first)
+            x.get("rank", float('inf'))  # Then by rank (lower is better)
+        ))
         
         # Log pour vérifier les données
         if contestants_data and len(contestants_data) > 0:

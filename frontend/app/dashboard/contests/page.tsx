@@ -94,10 +94,8 @@ function ContestsPageContent() {
   const [totalContests, setTotalContests] = useState(0)
   const loaderRef = useRef<HTMLDivElement>(null)
 
-  // 1. Fetch Rounds for Selector
+  // 1. Fetch Rounds for Selector (allow unauthenticated users)
   useEffect(() => {
-    if (!isAuthenticated) return
-
     const fetchRounds = async () => {
       try {
         setRoundsLoading(true)
@@ -159,9 +157,9 @@ function ContestsPageContent() {
     setInitialLoadComplete(false)
   }, [activeRoundId, categoryTab, filterCountry, filterContinent, filterLevel, committedSearch])
 
-  // 2. Fetch Contests for Selected Round (Initial load)
+  // 2. Fetch Contests for Selected Round (Initial load) - allow unauthenticated users
   useEffect(() => {
-    if (!activeRoundId || !isAuthenticated) return
+    if (!activeRoundId) return
 
     const fetchContestsForRound = async () => {
       setContestsLoading(true)
@@ -407,7 +405,7 @@ function ContestsPageContent() {
   }
 
   if (isLoading || (roundsLoading && rounds.length === 0)) return <ContestsSkeleton />
-  if (!isAuthenticated) return null
+  // Allow unauthenticated users to view contests (they just can't participate)
 
   return (
     <div className="min-h-screen bg-gray-900 dark:bg-gray-900">
