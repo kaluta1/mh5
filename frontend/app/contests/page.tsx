@@ -254,7 +254,8 @@ function ContestsPageContent() {
           title: contest.title,
           contestants: contest.contestants,
           votingType: contest.votingType,
-          categoryTab: categoryTab
+          categoryTab: categoryTab,
+          currentUserContesting: contest.currentUserContesting  // Debug: check if user has nominated
         });
         return contest;
         })

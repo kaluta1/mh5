@@ -147,16 +147,59 @@ def read_contests(
                 contestant_counts[contest_id] = count
             
             # Check current_user_contesting in batch if user is authenticated
+            # Need to check both season_id (legacy) and round_id (new) relationships
             if current_user:
-                user_contestants = db.query(Contestant).filter(
-                    Contestant.user_id == current_user.id,
-                    Contestant.is_deleted == False,
-                    Contestant.season_id.in_(list(season_by_contest.values()))
-                ).all()
-                for uc in user_contestants:
-                    # Find which contest this contestant belongs to
+                from app.models.round import Round, round_contests
+                from sqlalchemy import select
+                
+                # Get round_ids linked to these contests
+                round_ids_by_contest = {}
+                try:
+                    round_links = db.execute(
+                        select(round_contests.c.round_id, round_contests.c.contest_id).where(
+                            round_contests.c.contest_id.in_(contest_ids)
+                        )
+                    ).all()
+                    for round_id, contest_id in round_links:
+                        if contest_id not in round_ids_by_contest:
+                            round_ids_by_contest[contest_id] = []
+                        round_ids_by_contest[contest_id].append(round_id)
+                except Exception as e:
+                    logger.warning(f"Error fetching round links: {str(e)}")
+                
+                # Query user contestants by season_id (legacy)
+                season_ids = list(season_by_contest.values())
+                user_contestants_by_season = []
+                if season_ids:
+                    user_contestants_by_season = db.query(Contestant).filter(
+                        Contestant.user_id == current_user.id,
+                        Contestant.is_deleted == False,
+                        Contestant.season_id.in_(season_ids)
+                    ).all()
+                
+                # Query user contestants by round_id (new)
+                all_round_ids = []
+                for round_ids in round_ids_by_contest.values():
+                    all_round_ids.extend(round_ids)
+                user_contestants_by_round = []
+                if all_round_ids:
+                    user_contestants_by_round = db.query(Contestant).filter(
+                        Contestant.user_id == current_user.id,
+                        Contestant.is_deleted == False,
+                        Contestant.round_id.in_(all_round_ids)
+                    ).all()
+                
+                # Map contestants to contests via season_id
+                for uc in user_contestants_by_season:
                     for contest_id, season_id in season_by_contest.items():
                         if uc.season_id == season_id:
+                            current_user_contesting_map[contest_id] = True
+                            break
+                
+                # Map contestants to contests via round_id
+                for uc in user_contestants_by_round:
+                    for contest_id, round_ids in round_ids_by_contest.items():
+                        if uc.round_id in round_ids:
                             current_user_contesting_map[contest_id] = True
                             break
         except Exception as e:
@@ -193,6 +236,9 @@ def read_contests(
                 "total_votes": 0,  # Skip vote counting for list view
                 "current_user_contesting": current_user_contesting_map.get(c.id, False),
             }
+            # Debug log for current_user_contesting
+            if current_user and current_user_contesting_map.get(c.id, False):
+                logger.info(f"Contest {c.id} ({c.name}): User {current_user.id} has already nominated")
             enriched_contests.append(basic_contest)
         except Exception as e:
             logger.error(f"Error creating basic contest data for {c.id}: {str(e)}")
