@@ -127,8 +127,8 @@ function ContestsPageContent() {
     if (!user) return
 
     if (categoryTab === 'nomination') {
-      // Only set default country when user has not selected a filter (avoid overwriting e.g. Uganda with user.country)
-      if (user.country && !filterCountry) {
+      // IMPORTANT: Always set user's country for nominations (contests display according to user country)
+      if (user.country) {
         setFilterCountry(user.country)
       }
       if (filterLevel !== 'all') {
@@ -329,6 +329,15 @@ function ContestsPageContent() {
         topContestants: [] // Not fetching top contestants per contest in new query yet
       }
     })
+    
+    // Debug: Log contests where user has nominated
+    const nominatedContests = rawContests.filter((c: any) => c.currentUserContesting)
+    if (nominatedContests.length > 0) {
+      console.log(`[ContestsPage] User has nominated in ${nominatedContests.length} contest(s):`, 
+        nominatedContests.map((c: any) => ({ id: c.id, title: c.title, currentUserContesting: c.currentUserContesting })))
+    } else {
+      console.log(`[ContestsPage] User has not nominated in any contest yet`)
+    }
   }, [allContests, contestsData])
 
   // Extract contest types from ALL loaded contests (so tabs don't disappear)
@@ -555,6 +564,8 @@ function ContestsPageContent() {
                   isKycVerified={!!user?.identity_verified}
                   isFavorite={false}
                   isNomination={categoryTab === 'nomination'}
+                  votingType={contest.votingType}
+                  currentUserContesting={contest.currentUserContesting || false}
                   onToggleFavorite={() => { }}
                   onParticipate={() => handleParticipate(contest.id, contest.currentUserContesting || false)}
                   onViewContestants={() => {

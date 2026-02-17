@@ -241,31 +241,49 @@ def read_rounds(
                  real_p_count = p_query.scalar() or 0
                  
                  # Check if current user has participated in this contest
+                 # Need to check: season_id via ContestSeasonLink, season_id = contest.id (legacy), and round_id
                  current_user_contesting = False
                  if user_id:
                      try:
-                         user_conditions = [Contestant.season_id == contest.id]
-                         if round_ids:
-                             user_conditions.append(Contestant.round_id.in_(round_ids))
-                         
                          from sqlalchemy import or_
-                         user_contestant = db.query(Contestant).filter(
-                             Contestant.is_deleted == False,
-                             Contestant.user_id == user_id,
-                             or_(*user_conditions) if len(user_conditions) > 1 else user_conditions[0]
+                         from app.models.contests import ContestSeasonLink
+                         
+                         # Get season_id for this contest via ContestSeasonLink
+                         season_link = db.query(ContestSeasonLink).filter(
+                             ContestSeasonLink.contest_id == contest.id,
+                             ContestSeasonLink.is_active == True
                          ).first()
-                         current_user_contesting = user_contestant is not None
-                     except Exception:
-                         # Fallback to season_id only
-                         try:
+                         season_id = season_link.season_id if season_link else None
+                         
+                         # Build conditions to check
+                         conditions = []
+                         
+                         # 1. Check via season_id from ContestSeasonLink
+                         if season_id:
+                             conditions.append(Contestant.season_id == season_id)
+                         
+                         # 2. Check if season_id directly equals contest.id (legacy)
+                         conditions.append(Contestant.season_id == contest.id)
+                         
+                         # 3. Check via round_id
+                         if round_ids:
+                             conditions.append(Contestant.round_id.in_(round_ids))
+                         
+                         # Query user contestants matching any condition
+                         if conditions:
                              user_contestant = db.query(Contestant).filter(
-                                 Contestant.season_id == contest.id,
+                                 Contestant.is_deleted == False,
                                  Contestant.user_id == user_id,
-                                 Contestant.is_deleted == False
+                                 or_(*conditions) if len(conditions) > 1 else conditions[0]
                              ).first()
                              current_user_contesting = user_contestant is not None
-                         except Exception:
-                             current_user_contesting = False
+                             
+                             # Debug log
+                             if current_user_contesting:
+                                 logger.info(f"User {user_id} has nominated in contest {contest.id} ({contest.name})")
+                     except Exception as e:
+                         logger.warning(f"Error checking user participation for contest {contest.id}: {str(e)}")
+                         current_user_contesting = False
 
                  c_data = {
                      "id": contest.id,
