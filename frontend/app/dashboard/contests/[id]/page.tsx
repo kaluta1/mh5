@@ -110,6 +110,7 @@ interface Contestant {
 interface ContestDetail {
   contest: ContestResponse
   contestants: Contestant[]
+  current_user_contesting?: boolean
 }
 
 export default function ContestDetailPage() {
@@ -189,8 +190,8 @@ export default function ContestDetailPage() {
       // Currently getContest returns everything if backend is updated
       // Fetch ALL contestants - backend filter can return 0 due to country format mismatch (TZ vs Tanzania)
       const c = await ApiService.getContest(parseInt(contestId), {
-        filterCountry: 'all',
-        filterContinent: 'all'
+        filterCountry: filterCountry === 'all' ? undefined : filterCountry,
+        filterContinent: filterContinent === 'all' ? undefined : filterContinent
       }) as any
 
       // Map data
@@ -255,7 +256,7 @@ export default function ContestDetailPage() {
         contestants: mappedContestants,
         current_user_contesting: c.current_user_contesting || false  // Also at top level for easy access
       })
-      
+
       // Debug log
       if (c.current_user_contesting) {
         console.log(`[ContestDetailPage] User has nominated in contest ${contestId} - showing Edit button`)
@@ -590,8 +591,8 @@ export default function ContestDetailPage() {
                     <Button
                       onClick={() => {
                         const hasNominated = contest?.contest?.current_user_contesting || contest?.current_user_contesting
-                        router.push(hasNominated 
-                          ? `/dashboard/contests/${contestId}/apply?edit=true` 
+                        router.push(hasNominated
+                          ? `/dashboard/contests/${contestId}/apply?edit=true`
                           : `/dashboard/contests/${contestId}/apply`
                         )
                       }}

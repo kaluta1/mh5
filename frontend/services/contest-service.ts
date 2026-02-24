@@ -43,6 +43,7 @@ export interface Contest {
   status: 'city' | 'country' | 'regional' | 'continental' | 'global'
   received: number
   contestants: number
+  participant_count?: number
   likes: number
   comments: number
   reactions?: number
@@ -97,7 +98,7 @@ export interface ContestResponse {
   cover_image_url?: string
   image_url?: string
   status?: string
-  
+
   // Dates
   start_date?: string
   end_date?: string
@@ -107,7 +108,7 @@ export interface ContestResponse {
   voting_end_date?: string
   created_at?: string
   updated_at?: string
-  
+
   // Contest settings
   is_active?: boolean
   is_public?: boolean
@@ -115,12 +116,12 @@ export interface ContestResponse {
   is_voting_open?: boolean
   max_participants?: number
   max_entries_per_user?: number
-  
+
   // Age and gender restrictions
   min_age?: number | null
   max_age?: number | null
   gender_restriction?: 'male' | 'female' | null
-  
+
   // Verification requirements
   requires_kyc?: boolean
   verification_type?: 'none' | 'visual' | 'voice' | 'brand' | 'content'
@@ -129,7 +130,7 @@ export interface ContestResponse {
   requires_voice_verification?: boolean
   requires_brand_verification?: boolean
   requires_content_verification?: boolean
-  
+
   // Media requirements
   requires_video?: boolean
   max_videos?: number
@@ -139,17 +140,17 @@ export interface ContestResponse {
   max_images?: number
   verification_video_max_duration?: number
   verification_max_size_mb?: number
-  
+
   // Voting and commission
   voting_type_id?: number | null
   voting_restriction?: string
-  
+
   // Location and category
   location_id?: number | null
   season_level?: string
   category_id?: number | null
   template_id?: number | null
-  
+
   // Category details
   category?: {
     id: number
@@ -158,7 +159,7 @@ export interface ContestResponse {
     description?: string
     is_active: boolean
   } | null
-  
+
   // Voting type details
   voting_type?: {
     id: number
@@ -326,7 +327,7 @@ class ContestService {
   public mapResponseToContest(response: ContestResponse): Contest {
     // Convert dates
     const submissionStart = response.submission_start_date ? new Date(response.submission_start_date) : undefined;
-    const submissionEnd = response.submission_end_date && response.submission_end_date !== 'null' 
+    const submissionEnd = response.submission_end_date && response.submission_end_date !== 'null'
       ? new Date(response.submission_end_date)
       : undefined;
     const votingStart = response.voting_start_date && response.voting_start_date !== 'null'
@@ -337,15 +338,15 @@ class ContestService {
       : undefined;
     const startDate = response.start_date ? new Date(response.start_date) : new Date();
     const endDate = response.end_date ? new Date(response.end_date) : undefined;
-    
+
     // Process cover image
     let coverImage = response.cover_image_url || response.image_url || '';
-    
+
     // If image exists, ensure it's a valid URL or emoji
     if (coverImage.trim() !== '') {
       const firstCodePoint = coverImage.codePointAt(0) || 0;
       const isEmoji = coverImage.length <= 4 && firstCodePoint > 0x1F000;
-      
+
       if (!isEmoji && !coverImage.startsWith('http')) {
         // If it's not an emoji and not a complete URL, prepend base URL
         const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -355,7 +356,7 @@ class ContestService {
           coverImage = `${API_BASE_URL}/${coverImage}`;
         }
       }
-      
+
       // If still no valid image, use an emoji
       if (!coverImage || coverImage.trim() === '' || (!coverImage.startsWith('http') && !coverImage.startsWith('/') && !coverImage.startsWith('data:'))) {
         coverImage = this.getEmojiForType(response.contest_type);
@@ -364,19 +365,19 @@ class ContestService {
       // If no image, use an emoji
       coverImage = this.getEmojiForType(response.contest_type);
     }
-    
+
     // Determine contest status
     const now = new Date();
     const isSubmissionOpen = submissionStart && (!submissionEnd || now <= submissionEnd);
     const isVotingOpen = votingStart && votingEnd ? (votingStart <= now && now <= votingEnd) : false;
     const isOpen = isSubmissionOpen || isVotingOpen;
-    
+
     // Determine contest status level
     const status = (response.status as 'city' | 'country' | 'regional' | 'continental' | 'global') || 'city';
-    
+
     // Map verification type
     const verificationType = response.verification_type || 'none';
-    
+
     // Map voting type if available
     const votingType = response.voting_type ? {
       id: response.voting_type.id,
@@ -385,7 +386,7 @@ class ContestService {
       commission_source: response.voting_type.commission_source,
       commission_rules: response.voting_type.commission_rules
     } : null;
-    
+
     // Map top contestants if available
     const topContestants = (response.top_contestants || []).map(contestant => ({
       id: contestant.id,
@@ -396,7 +397,7 @@ class ContestService {
       votes_count: contestant.votes_count || 0,
       rank: contestant.rank || 0
     }));
-    
+
     // Create the Contest object
     return {
       id: String(response.id),
@@ -429,7 +430,7 @@ class ContestService {
       requiresContentVerification: verificationType === 'content',
       minAge: response.min_age || null,
       maxAge: response.max_age || null,
-      
+
       // Media requirements
       requiresVideo: response.requires_video || false,
       maxVideos: response.max_videos || 1,
@@ -439,8 +440,8 @@ class ContestService {
       maxImages: response.max_images || 10,
       verificationVideoMaxDuration: response.verification_video_max_duration || 60,
       verificationMaxSizeMb: response.verification_max_size_mb || 20,
-      
-// Voting and contest details
+
+      // Voting and contest details
       votingTypeId: response.voting_type_id || null,
       level: response.voting_type?.voting_level || response.season_level || 'country',
       currentUserContesting: response.current_user_contesting || false,
@@ -544,18 +545,18 @@ class ContestService {
         ...(votingTypeId && { voting_type_id: votingTypeId }),
         ...(hasVotingType !== undefined && { has_voting_type: hasVotingType })
       };
-      
+
       console.log('[ContestService] Fetching contests with params:', params);
 
       // Backend returns List[dict] directly, not wrapped in { items, total }
       const response = await api.get<ContestResponse[]>('/api/v1/contests', { params });
-      
+
       // Handle both response formats (direct array or wrapped)
-      const contestsArray = Array.isArray(response.data) 
-        ? response.data 
+      const contestsArray = Array.isArray(response.data)
+        ? response.data
         : (response.data as any)?.items || [];
       const total = (response.data as any)?.total || contestsArray.length;
-      
+
       return {
         contests: contestsArray.map(contest => this.mapResponseToContest(contest)),
         total: total
@@ -576,7 +577,7 @@ class ContestService {
       type ApiResponse = {
         data: RoundWithStats[];
       };
-      
+
       const response = await api.get<ApiResponse>(`/api/v1/contests/${contestId}/rounds`);
       return Array.isArray(response?.data) ? response.data : [];
     } catch (error) {
@@ -599,12 +600,12 @@ class ContestService {
   ): Promise<any> {
     try {
       // Convert string media IDs to array if needed
-      const imageIds = Array.isArray(imageMediaIds) 
-        ? imageMediaIds 
+      const imageIds = Array.isArray(imageMediaIds)
+        ? imageMediaIds
         : imageMediaIds ? [imageMediaIds] : [];
-      
-      const videoIds = Array.isArray(videoMediaIds) 
-        ? videoMediaIds 
+
+      const videoIds = Array.isArray(videoMediaIds)
+        ? videoMediaIds
         : videoMediaIds ? [videoMediaIds] : [];
 
       const response = await api.post(`/api/v1/contests/${contestId}/participate`, {
@@ -636,12 +637,12 @@ class ContestService {
   ): Promise<any> {
     try {
       // Convert string media IDs to array if needed
-      const imageIds = Array.isArray(imageMediaIds) 
-        ? imageMediaIds 
+      const imageIds = Array.isArray(imageMediaIds)
+        ? imageMediaIds
         : imageMediaIds ? [imageMediaIds] : [];
-      
-      const videoIds = Array.isArray(videoMediaIds) 
-        ? videoMediaIds 
+
+      const videoIds = Array.isArray(videoMediaIds)
+        ? videoMediaIds
         : videoMediaIds ? [videoMediaIds] : [];
 
       const response = await api.put(`/contestants/${contestantId}`, {
@@ -690,33 +691,35 @@ class ContestService {
   /**
    * Get user's high 5 votes
    */
-  async getMyHigh5Votes(): Promise<{ seasons: Array<{
-    season_id: number;
-    season_level: string | null;
-    contest_id: number;
-    contest_name: string | null;
-    votes: Array<{
-      position: number;
-      points: number | null;
-      contestant_id: number;
-      contestant_title: string;
-      contestant_description: string;
-      author_id: number;
-      author_name: string;
-      author_avatar_url: string | null;
-      author_country: string | null;
-      author_city: string | null;
-      votes_count: number;
-      vote_date: string;
+  async getMyHigh5Votes(): Promise<{
+    seasons: Array<{
       season_id: number;
-      contest_id: number;
       season_level: string | null;
-    }>;
-    votes_count: number;
-    remaining_slots: number;
-  }> }> {
+      contest_id: number;
+      contest_name: string | null;
+      votes: Array<{
+        position: number;
+        points: number | null;
+        contestant_id: number;
+        contestant_title: string;
+        contestant_description: string;
+        author_id: number;
+        author_name: string;
+        author_avatar_url: string | null;
+        author_country: string | null;
+        author_city: string | null;
+        votes_count: number;
+        vote_date: string;
+        season_id: number;
+        contest_id: number;
+        season_level: string | null;
+      }>;
+      votes_count: number;
+      remaining_slots: number;
+    }>
+  }> {
     try {
-      const response = await api.get<{ 
+      const response = await api.get<{
         seasons: Array<{
           season_id: number;
           season_level: string | null;
@@ -741,7 +744,7 @@ class ContestService {
           }>;
           votes_count: number;
           remaining_slots: number;
-        }> 
+        }>
       }>('/api/v1/contestants/user/my-votes');
       return response.data;
     } catch (error) {
@@ -753,61 +756,65 @@ class ContestService {
   /**
    * Get user's high 5 votes history (all votes including inactive seasons)
    */
-  async getMyHigh5VotesHistory(contestId?: number): Promise<{ history: Array<{
-    contest_id: number;
-    contest_name: string | null;
-    seasons: Array<{
-      season_id: number;
-      season_level: string | null;
-      is_active: boolean;
-      votes: Array<{
-        position: number;
-        points: number | null;
-        contestant_id: number;
-        contestant_title: string;
-        contestant_description: string;
-        author_id: number;
-        author_name: string;
-        author_avatar_url: string | null;
-        author_country: string | null;
-        author_city: string | null;
-        votes_count: number;
-        vote_date: string;
+  async getMyHigh5VotesHistory(contestId?: number): Promise<{
+    history: Array<{
+      contest_id: number;
+      contest_name: string | null;
+      seasons: Array<{
         season_id: number;
-        contest_id: number;
         season_level: string | null;
-      }>;
-      votes_count: number;
-    }>;
-  }> }> {
-    try {
-      const response = await api.get<{ history: Array<{
-        contest_id: number;
-        contest_name: string | null;
-        seasons: Array<{
-          season_id: number;
-          season_level: string | null;
-          is_active: boolean;
-          votes: Array<{
-            position: number;
-            points: number | null;
-            contestant_id: number;
-            contestant_title: string;
-            contestant_description: string;
-            author_id: number;
-            author_name: string;
-            author_avatar_url: string | null;
-            author_country: string | null;
-            author_city: string | null;
-            votes_count: number;
-            vote_date: string;
-            season_id: number;
-            contest_id: number;
-            season_level: string | null;
-          }>;
+        is_active: boolean;
+        votes: Array<{
+          position: number;
+          points: number | null;
+          contestant_id: number;
+          contestant_title: string;
+          contestant_description: string;
+          author_id: number;
+          author_name: string;
+          author_avatar_url: string | null;
+          author_country: string | null;
+          author_city: string | null;
           votes_count: number;
+          vote_date: string;
+          season_id: number;
+          contest_id: number;
+          season_level: string | null;
         }>;
-      }> }>('/api/v1/contestants/user/my-votes/history', {
+        votes_count: number;
+      }>;
+    }>
+  }> {
+    try {
+      const response = await api.get<{
+        history: Array<{
+          contest_id: number;
+          contest_name: string | null;
+          seasons: Array<{
+            season_id: number;
+            season_level: string | null;
+            is_active: boolean;
+            votes: Array<{
+              position: number;
+              points: number | null;
+              contestant_id: number;
+              contestant_title: string;
+              contestant_description: string;
+              author_id: number;
+              author_name: string;
+              author_avatar_url: string | null;
+              author_country: string | null;
+              author_city: string | null;
+              votes_count: number;
+              vote_date: string;
+              season_id: number;
+              contest_id: number;
+              season_level: string | null;
+            }>;
+            votes_count: number;
+          }>;
+        }>
+      }>('/api/v1/contestants/user/my-votes/history', {
         params: contestId != null ? { contest_id: contestId } : undefined
       });
       return response.data;
@@ -947,9 +954,9 @@ class ContestService {
       const filterCountry = options?.filterCountry
       const filterRegion = options?.filterRegion
       const user_id = options?.user_id
-      
+
       const cacheKey = `/api/v1/contestants/contest/${contestId}?skip=${skip}&limit=${limit}${filterCountry ? `&filter_country=${filterCountry}` : ''}${filterRegion ? `&filter_region=${filterRegion}` : ''}${user_id ? `&user_id=${user_id}` : ''}`
-      
+
       // Vérifier le cache
       const cached = cacheService.get<ContestantWithAuthorAndStats[]>(cacheKey)
       if (cached) {
@@ -963,10 +970,10 @@ class ContestService {
       if (user_id) params.user_id = user_id
 
       const response = await api.get<ContestantWithAuthorAndStats[]>(`/api/v1/contestants/contest/${contestId}`, { params })
-      
+
       // Mettre en cache
       cacheService.set(cacheKey, response.data)
-      
+
       return response.data || []
     } catch (error) {
       console.error(`Error fetching contestants for contest ${contestId}:`, error)

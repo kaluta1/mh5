@@ -24,7 +24,7 @@ interface NotificationDropdownProps {
 export function NotificationDropdown({ className }: NotificationDropdownProps) {
   const { t, language } = useLanguage()
   const router = useRouter()
-  
+
   // Mapping des langues vers les locales
   const localeMap: Record<string, string> = {
     fr: 'fr-FR',
@@ -61,9 +61,11 @@ export function NotificationDropdown({ className }: NotificationDropdownProps) {
 
   // Charger les notifications au montage et quand le dropdown s'ouvre
   useEffect(() => {
-    loadNotifications()
-    
-    // Rafraîchir le compteur toutes les 30 secondes
+    // Désactivé temporairement (à la demande de l'utilisateur pour le moment)
+    // loadNotifications()
+
+    // Rafraîchir le compteur toutes les 30 secondes a été désactivé
+    /*
     intervalRef.current = setInterval(() => {
       notificationService.getUnreadCount()
         .then(count => {
@@ -74,6 +76,7 @@ export function NotificationDropdown({ className }: NotificationDropdownProps) {
           // Silently fail - don't update state on error
         })
     }, 30000)
+    */
 
     return () => {
       if (intervalRef.current) {
@@ -93,7 +96,7 @@ export function NotificationDropdown({ className }: NotificationDropdownProps) {
     try {
       setIsMarkingAsRead(notificationId)
       await notificationService.markAsRead(notificationId)
-      
+
       // Mettre à jour l'état local
       setNotifications(prev =>
         prev.map(n => n.id === notificationId ? { ...n, is_read: true } : n)
@@ -110,7 +113,7 @@ export function NotificationDropdown({ className }: NotificationDropdownProps) {
     try {
       setIsLoading(true)
       await notificationService.markAllAsRead()
-      
+
       // Mettre à jour l'état local
       setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
       setUnreadCount(0)
@@ -157,9 +160,9 @@ export function NotificationDropdown({ className }: NotificationDropdownProps) {
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger asChild>
-        <Button 
-          variant="ghost" 
-          size="sm" 
+        <Button
+          variant="ghost"
+          size="sm"
           className={`relative p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${className}`}
         >
           <div className="relative">
@@ -195,7 +198,7 @@ export function NotificationDropdown({ className }: NotificationDropdownProps) {
           )}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        
+
         {isLoading && (!notifications || notifications.length === 0) ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
@@ -208,9 +211,8 @@ export function NotificationDropdown({ className }: NotificationDropdownProps) {
           notifications.slice(0, 5).map((notification) => (
             <DropdownMenuItem
               key={notification.id}
-              className={`flex flex-col items-start p-3 cursor-pointer ${
-                !notification.is_read ? 'bg-blue-50 dark:bg-blue-900/20' : ''
-              }`}
+              className={`flex flex-col items-start p-3 cursor-pointer ${!notification.is_read ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                }`}
               onClick={() => !notification.is_read && handleMarkAsRead(notification.id)}
             >
               <div className="flex items-start w-full gap-2">
@@ -250,7 +252,7 @@ export function NotificationDropdown({ className }: NotificationDropdownProps) {
             </DropdownMenuItem>
           ))
         )}
-        
+
         {/* View All Button */}
         <DropdownMenuSeparator />
         <div className="p-2">

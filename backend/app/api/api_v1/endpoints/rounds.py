@@ -82,249 +82,127 @@ def read_rounds(
     # Since we are modifying the response structure significantly and mixing ORM/dicts
     # It is safer to rebuild the response list.
     
-    # Helper to calculate votes count (Mock implementation for migration)
-    def get_round_votes_count(round_id):
-        # TODO: Implement real count query
-        return 0
+    # Function to get search keywords for matching
+    def matches_search(contest, search_lower):
+        if not search_lower:
+            return True
+        contest_name = (contest.name or "").lower()
+        contest_description = (contest.description or "").lower()
+        contest_type = (contest.contest_type or "").lower()
+        category_name = ""
+        if hasattr(contest, 'category') and contest.category:
+            category_name = (contest.category.name or "").lower() if hasattr(contest.category, 'name') else ""
+        return (search_lower in contest_name or 
+                search_lower in contest_description or 
+                search_lower in contest_type or
+                search_lower in category_name)
 
+    search_lower = search_term.lower().strip() if search_term else None
+
+    # Process each round
     for r_item in rounds_iterable:
-        # Normalize to dict
         if hasattr(r_item, '__dict__'):
             r_dict = {k: v for k, v in r_item.__dict__.items() if not k.startswith('_')}
         else:
              r_dict = dict(r_item)
              
-        # Ensure base stats are present if coming from raw ORM
         if "participants_count" not in r_dict:
-             r_id = r_dict["id"]
-             r_dict["participants_count"] = crud.round.count_participants_for_round(db, r_id)
+             r_dict["participants_count"] = crud.round.count_participants_for_round(db, r_dict["id"])
         if "current_user_participated" not in r_dict:
-             r_id = r_dict["id"]
-             r_dict["current_user_participated"] = crud.round.user_participated_in_round(db, r_id, user_id) if user_id else False
+             r_dict["current_user_participated"] = crud.round.user_participated_in_round(db, r_dict["id"], user_id) if user_id else False
         if "is_completed" not in r_dict:
-             # creating a dummy object to use the existing utility
-             # or just copy reuse logic
-             is_completed = False # simplified
-             r_dict["is_completed"] = is_completed
+             r_dict["is_completed"] = False
 
-        # Initialize new fields
         r_dict["contests"] = []
         r_dict["top_contestants"] = []
-        r_dict["votes_count"] = get_round_votes_count(r_dict["id"])
+        r_dict["votes_count"] = 0
         
         if hasattr(r_item, "contests") and r_item.contests:
-            # First, calculate total contests (before filtering/limiting) that match the filter criteria
-            total_contests = 0
+            # 1. Filter contests in memory
+            valid_contests = []
             for c in r_item.contests:
-                # Filter by voting_type presence if requested
                 if has_voting_type is not None:
                     if has_voting_type and c.voting_type_id is None:
                         continue
                     if not has_voting_type and c.voting_type_id is not None:
                         continue
+                if search_lower and not matches_search(c, search_lower):
+                    continue
+                valid_contests.append(c)
+            
+            r_dict["contests_count"] = len(valid_contests)
+            
+            # Apply pagination
+            paginated_contests = valid_contests[contest_skip : contest_skip + contest_limit]
+            contest_ids = [c.id for c in paginated_contests]
+            
+            participant_counts = {}
+            user_participation = {}
+            
+            if contest_ids:
+                from app.models.contests import Contestant
+                from sqlalchemy import select, func, or_
                 
-                # Filter by search term if provided
-                if search_term:
-                    search_lower = search_term.lower().strip()
-                    if search_lower:  # Only filter if search term is not empty
-                        contest_name = (c.name or "").lower()
-                        contest_description = (c.description or "").lower()
-                        contest_type = (c.contest_type or "").lower()
-                        # Also search in category name if available
-                        category_name = ""
-                        if hasattr(c, 'category') and c.category:
-                            category_name = (c.category.name or "").lower() if hasattr(c.category, 'name') else ""
-                        elif hasattr(c, 'category_id') and c.category_id:
-                            # Try to get category name from relationship if not loaded
-                            try:
-                                from app.models.category import Category
-                                category = db.query(Category).filter(Category.id == c.category_id).first()
-                                if category and hasattr(category, 'name'):
-                                    category_name = (category.name or "").lower()
-                            except:
-                                pass
+                # --- Batch Query 1: Participant Counts ---
+                p_query = db.query(
+                    Contestant.season_id, 
+                    func.count(Contestant.id)
+                ).filter(
+                    Contestant.season_id.in_(contest_ids),
+                    Contestant.is_deleted == False
+                )
+                
+                # Apply location filters to the count query
+                if filter_country and filter_country != 'all':
+                    from app.crud.crud_contest import _get_country_match_patterns
+                    country_patterns = _get_country_match_patterns(filter_country)
+                    if country_patterns:
+                        country_conds = [Contestant.country.ilike(pat) for pat in country_patterns]
+                        p_query = p_query.filter(or_(*country_conds))
+                    else:
+                        p_query = p_query.filter(func.lower(Contestant.country) == func.lower(filter_country))
                         
-                        # Search in all fields
-                        if (search_lower not in contest_name and 
-                            search_lower not in contest_description and 
-                            search_lower not in contest_type and
-                            search_lower not in category_name):
-                            continue
-                
-                total_contests += 1
-            
-            r_dict["contests_count"] = total_contests
-            
-            contests_added = 0
-            contests_skipped = 0
-            for contest in r_item.contests:
-                 # Filter by voting_type presence if requested
-                 if has_voting_type is not None:
-                     if has_voting_type and contest.voting_type_id is None:
-                         continue
-                     if not has_voting_type and contest.voting_type_id is not None:
-                         continue
-                 
-                 # Filter by search term if provided
-                 if search_term:
-                     search_lower = search_term.lower().strip()
-                     if search_lower:  # Only filter if search term is not empty
-                         contest_name = (contest.name or "").lower()
-                         contest_description = (contest.description or "").lower()
-                         contest_type = (contest.contest_type or "").lower()
-                         # Also search in category name if available
-                         category_name = ""
-                         if hasattr(contest, 'category') and contest.category:
-                             category_name = (contest.category.name or "").lower() if hasattr(contest.category, 'name') else ""
-                         elif hasattr(contest, 'category_id') and contest.category_id:
-                             # Try to get category name from relationship if not loaded
-                             try:
-                                 from app.models.category import Category
-                                 category = db.query(Category).filter(Category.id == contest.category_id).first()
-                                 if category and hasattr(category, 'name'):
-                                     category_name = (category.name or "").lower()
-                             except:
-                                 pass
-                         
-                         # Search in all fields
-                         if (search_lower not in contest_name and 
-                             search_lower not in contest_description and 
-                             search_lower not in contest_type and
-                             search_lower not in category_name):
-                             continue
-                 
-                 # Skip contests for pagination
-                 if contests_skipped < contest_skip:
-                     contests_skipped += 1
-                     continue
-                     
-                 if contests_added >= contest_limit:
-                     break
+                if filter_continent and filter_continent != 'all':
+                    p_query = p_query.filter(func.lower(Contestant.continent) == func.lower(filter_continent))
+                    
+                counts_result = p_query.group_by(Contestant.season_id).all()
+                participant_counts = {season_id: count for season_id, count in counts_result}
 
-                 # Count participants for this specific contest using the Contestant table
-                 # Contestant.season_id stores the contest ID (legacy field name)
-                 # Apply location filters if provided
-                 from app.models.contests import Contestant
-                 from app.models.round import round_contests
-                 from sqlalchemy import select
-                 
-                 # Find round IDs linked to this contest
-                 round_ids = []
-                 try:
-                     round_ids_via_table = db.execute(
-                         select(round_contests.c.round_id).where(
-                             round_contests.c.contest_id == contest.id
-                         )
-                     ).fetchall()
-                     if round_ids_via_table:
-                         round_ids.extend([r[0] for r in round_ids_via_table])
-                 except Exception:
-                     pass
-                 
-                 # Build query for participant count
-                 p_query = db.query(func.count(Contestant.id)).filter(
-                     Contestant.season_id == contest.id,
-                     Contestant.is_deleted == False
-                 )
-                 # Apply country filter with pattern matching (handles "CI" vs "Côte d'Ivoire")
-                 if filter_country and filter_country != 'all':
-                     from app.crud.crud_contest import _get_country_match_patterns
-                     country_patterns = _get_country_match_patterns(filter_country)
-                     if country_patterns:
-                         from sqlalchemy import or_
-                         country_conds = [Contestant.country.ilike(pat) for pat in country_patterns]
-                         p_query = p_query.filter(or_(*country_conds))
-                     else:
-                         p_query = p_query.filter(func.lower(Contestant.country) == func.lower(filter_country))
-                 if filter_continent and filter_continent != 'all':
-                     p_query = p_query.filter(func.lower(Contestant.continent) == func.lower(filter_continent))
-                 real_p_count = p_query.scalar() or 0
-                 
-                 # Check if current user has participated in this contest
-                 # CRITICAL: Use the EXACT same logic as create_contestant duplicate check
-                 # The duplicate check uses: get_by_season_and_user(db, season_id, user_id)
-                 # where season_id is determined by:
-                 #   1. If contest_id is a ContestSeason ID, use that
-                 #   2. If contest_id is a Contest ID, use contest_id directly as season_id
-                 current_user_contesting = False
-                 if user_id:
-                     try:
-                         from app.models.contests import ContestSeason, ContestSeasonLink
-                         from app.crud import contestant
-                         
-                         # REPLICATE THE EXACT LOGIC FROM create_contestant (lines 860-962):
-                         # 1. Try to find a ContestSeason with id == contest.id
-                         season = db.query(ContestSeason).filter(
-                             ContestSeason.id == contest.id,
-                             ContestSeason.is_deleted == False
-                         ).first()
-                         
-                         # 2. Determine season_id (same logic as create_contestant)
-                         if season:
-                             # contest.id IS a ContestSeason ID
-                             season_id = season.id
-                         else:
-                             # contest.id is a Contest ID, use it directly as season_id (legacy)
-                             season_id = contest.id
-                         
-                         # 3. Use the EXACT same check as create_contestant duplicate check
-                         # This is the SAME function that throws "You already have a submission for this contest"
-                         # Line 955-957 in contestant.py: crud_contestant.get_by_season_and_user(db, season_id, current_user.id)
-                         existing = contestant.get_by_season_and_user(
-                             db, season_id, user_id
-                         )
-                         
-                         current_user_contesting = existing is not None
-                         
-                         if current_user_contesting:
-                             logger.info(f"✅ User {user_id} has nominated in contest {contest.id} ({contest.name}) - Contestant ID: {existing.id}, season_id={existing.season_id}")
-                         else:
-                             # Debug: Check if there are any contestants with this season_id or contest.id
-                             debug_check = db.query(Contestant).filter(
-                                 Contestant.user_id == user_id,
-                                 Contestant.is_deleted == False,
-                                 or_(
-                                     Contestant.season_id == season_id,
-                                     Contestant.season_id == contest.id
-                                 )
-                             ).all()
-                             if debug_check:
-                                 logger.warning(f"⚠️  Found contestants but get_by_season_and_user didn't match!")
-                                 logger.warning(f"   season_id used: {season_id}, contest.id: {contest.id}")
-                                 logger.warning(f"   Contestants found: {[(c.id, c.season_id) for c in debug_check]}")
-                     except Exception as e:
-                         logger.error(f"Error checking user participation for contest {contest.id}: {str(e)}", exc_info=True)
-                         current_user_contesting = False
+                # --- Batch Query 2: Current User Participation ---
+                if user_id:
+                    user_entries = db.query(Contestant.season_id).filter(
+                        Contestant.user_id == user_id,
+                        Contestant.season_id.in_(contest_ids),
+                        Contestant.is_deleted == False
+                    ).all()
+                    # Store as a set/dict for O(1) lookup
+                    user_participation = {row[0]: True for row in user_entries}
 
-                 c_data = {
-                     "id": contest.id,
-                     "name": contest.name,
-                     "description": contest.description,
-                     "contest_type": contest.contest_type,
-                     "cover_image_url": contest.cover_image_url,
-                     "level": contest.level,
-                     "participants_count": real_p_count,
-                     "votes_count": 0, # TODO: Fix vote count
-                     "image_url": contest.image_url,
-                     "created_at": getattr(contest, "created_at", None),
-                     "updated_at": getattr(contest, "updated_at", None),
-                     "current_user_contesting": current_user_contesting
-                 }
-                 r_dict["contests"].append(c_data)
-                 contests_added += 1
+            # 3. Assemble the response
+            for contest in paginated_contests:
+                c_data = {
+                    "id": contest.id,
+                    "name": contest.name,
+                    "description": contest.description,
+                    "contest_type": contest.contest_type,
+                    "cover_image_url": contest.cover_image_url,
+                    "level": contest.level,
+                    "participants_count": participant_counts.get(contest.id, 0),
+                    "votes_count": 0, 
+                    "image_url": contest.image_url,
+                    "created_at": getattr(contest, "created_at", None),
+                    "updated_at": getattr(contest, "updated_at", None),
+                    "current_user_contesting": user_participation.get(contest.id, False)
+                }
+                r_dict["contests"].append(c_data)
             
-            # Sort contests by participants_count (descending - most contestants first)
-            # This ensures contests with more participants appear at the top
+            # Sort contests by participants_count (descending)
             r_dict["contests"].sort(key=lambda x: x.get("participants_count", 0), reverse=True)
         
-        # Fallback to legacy contest_id logic if specific contest_id column is set and no N:N links found
-        # (Only if we didn't already add it via N:N - avoiding duplicates if migration happened)
+        # Fallback to legacy contest_id logic if no N:N links found
         if not r_dict["contests"] and r_dict.get("contest_id"):
-             # It belongs to a specific contest (legacy)
-             # Fetch that contest
              linked_contest = crud.contest.get(db, id=r_dict["contest_id"])
              if linked_contest:
-                 # Minimal contest data
                  c_data = {
                      "id": linked_contest.id,
                      "name": linked_contest.name,
@@ -340,24 +218,19 @@ def read_rounds(
                  }
                  r_dict["contests"].append(c_data)
         
-        # 2. Fetch Top Contestants
-        # Need to query contestants for this round (or contest of this round)
-        # ordered by votes.
-        # Using crud.contestant logic
+        # Fetch Top Contestants
         if r_dict.get("contest_id"):
             top_c = crud.contestant.get_multi_by_contest(
                 db=db, contest_id=r_dict["contest_id"], limit=3, order_by="votes"
             )
             for tc in top_c:
-                 # Map to TopContestantPreview
-                 # Need to fetch author info
                  author = crud.user.get(db, id=tc.user_id)
                  r_dict["top_contestants"].append({
                      "id": tc.id,
                      "author_name": author.username if author else "Unknown",
                      "author_avatar_url": author.avatar_url if author else None,
-                     "image_url": None, # Extract from media
-                     "votes_count": 0, # Need vote count
+                     "image_url": None, 
+                     "votes_count": 0, 
                      "rank": 0
                  })
 

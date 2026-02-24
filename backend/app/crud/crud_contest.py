@@ -62,9 +62,10 @@ class CRUDContest:
         return db.query(Contest).filter(Contest.is_deleted == False).offset(skip).limit(limit).all()
 
     def get_multi_with_filters(self,
-        db: Session, *, skip: int = 0, limit: int = 10, filters: Dict[str, Any] = {}
+        db: Session, *, skip: int = 0, limit: int = 10, filters: Dict[str, Any] = {},
+        sort_by: str = None, sort_order: str = "desc"
     ) -> List[Contest]:
-        """Récupère une liste de concours avec filtres"""
+        """Récupère une liste de concours avec filtres et option de tri"""
         # Note: On ne fait plus de joinedload sur voting_type ici car la table peut ne pas exister
         # Le voting_type est chargé séparément dans enrich_contest_with_stats si nécessaire
         
@@ -143,14 +144,34 @@ class CRUDContest:
         
         # Gérer les autres filtres
         for field, value in filters.items():
-            if field in ["search", "voting_level", "voting_type_id", "has_voting_type"]:
-                continue  # Déjà traité ci-dessus
+            if field in ["search", "voting_level", "voting_type_id", "has_voting_type", "sort_by", "sort_order"]:
+                continue  # Déjà traité ci-dessus ou géré différemment
             try:
                 if hasattr(Contest, field) and value is not None:
                     query = query.filter(getattr(Contest, field) == value)
             except Exception as e:
                 logger.warning(f"Error applying filter {field}={value}: {str(e)}")
                 # Continue with other filters
+        
+        # Apply Sorting logic
+        # Either the client requests a specific sort, or we default to `participant_count` descending
+        try:
+            # Overwrite variables if they are passed in filters as a fallback
+            s_by = sort_by or filters.get("sort_by")
+            s_order = sort_order or filters.get("sort_order", "desc")
+            
+            if s_by and hasattr(Contest, s_by):
+                column = getattr(Contest, s_by)
+                if str(s_order).lower() == "asc":
+                    query = query.order_by(column.asc(), Contest.id.asc())
+                else:
+                    query = query.order_by(column.desc(), Contest.id.desc())
+            else:
+                # Default sorting
+                query = query.order_by(Contest.participant_count.desc(), Contest.id.desc())
+        except Exception as e:
+            logger.warning(f"Error applying sorting logic: {str(e)}")
+            query = query.order_by(Contest.participant_count.desc(), Contest.id.desc())
         
         # FIXED: Increase default limit if not specified to get all active contests
         # This ensures we don't miss contests due to low limits
@@ -661,22 +682,27 @@ class CRUDContest:
         current_user_contesting = False
         if current_user:
             try:
-                from app.models.contests import ContestSeason
+                from app.models.contests import ContestSeason, ContestSeasonLink
                 from app.crud import contestant as crud_contestant
                 
-                # REPLICATE THE EXACT LOGIC FROM create_contestant (lines 860-962):
-                # 1. Try to find a ContestSeason with id == contest.id
-                season = db.query(ContestSeason).filter(
-                    ContestSeason.id == contest.id,
-                    ContestSeason.is_deleted == False
+                # REPLICATE THE EXACT LOGIC FROM get_contest_with_enriched_contestants:
+                # 1. Try to find active ContestSeason via ContestSeasonLink
+                season_link = db.query(ContestSeasonLink).filter(
+                    ContestSeasonLink.contest_id == contest.id,
+                    ContestSeasonLink.is_active == True
                 ).first()
+
+                season_id = None
+                if season_link:
+                    season = db.query(ContestSeason).filter(
+                        ContestSeason.id == season_link.season_id,
+                        ContestSeason.is_deleted == False
+                    ).first()
+                    if season:
+                        season_id = season.id
                 
-                # 2. Determine season_id (same logic as create_contestant)
-                if season:
-                    # contest.id IS a ContestSeason ID
-                    season_id = season.id
-                else:
-                    # contest.id is a Contest ID, use it directly as season_id (legacy)
+                # 2. Fallback to contest.id if no active season found (legacy behavior)
+                if not season_id:
                     season_id = contest.id
                 
                 # 3. Use the EXACT same check as create_contestant duplicate check

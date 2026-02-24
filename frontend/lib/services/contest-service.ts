@@ -41,6 +41,8 @@ export interface Contest extends CreateContestData {
   id: number
   created_at: string
   updated_at: string
+  participant_count?: number
+  contestants?: number
 }
 
 export interface ContestResponse {

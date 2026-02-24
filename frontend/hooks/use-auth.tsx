@@ -41,7 +41,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = React.useState(true)
 
   const isAuthenticated = !!user && authService.isAuthenticated()
-  
+
   // Helper pour vérifier les rôles
   const isAdmin = user?.role?.name === 'admin' || user?.is_admin || false
   const isModerator = user?.role?.name === 'moderator' || isAdmin
@@ -51,25 +51,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const token = localStorage.getItem('access_token')
       if (!token) return
+
+      // Use window-level cache for React Strict Mode duplicate mounts
+      const now = Date.now()
+      if (typeof window !== 'undefined') {
+        const win = window as any
+        if (win._permissionsPromise && now - (win._permissionsCacheTime || 0) < 2000) {
+          const perms = await win._permissionsPromise
+          setPermissions(Array.isArray(perms) ? perms : [])
+          return
+        }
+      }
+
       const baseUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').replace(/\/+$/, '')
-      
+
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 5000)
-      
-      const response = await fetch(`${baseUrl}/api/v1/rbac/me/permissions`, {
+
+      const fetchPromise = fetch(`${baseUrl}/api/v1/rbac/me/permissions`, {
         headers: { 'Authorization': `Bearer ${token}` },
         signal: controller.signal
+      }).then(async (response) => {
+        clearTimeout(timeoutId)
+        if (response.ok) {
+          return await response.json()
+        } else if (response.status === 404 || response.status === 403) {
+          return []
+        }
+        throw new Error('Failed to fetch permissions')
       })
-      
-      clearTimeout(timeoutId)
-      
-      if (response.ok) {
-        const perms = await response.json()
-        setPermissions(Array.isArray(perms) ? perms : [])
-      } else if (response.status === 404 || response.status === 403) {
-        // Endpoint not implemented or user has no RBAC - treat as empty permissions
-        setPermissions([])
+
+      if (typeof window !== 'undefined') {
+        const win = window as any
+        win._permissionsPromise = fetchPromise
+        win._permissionsCacheTime = now
       }
+
+      const perms = await fetchPromise
+      setPermissions(Array.isArray(perms) ? perms : [])
+
     } catch (error) {
       // Silently fail - permissions are not critical for initial load
       if (error instanceof Error && error.name !== 'AbortError') {
@@ -90,7 +110,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             is_active: userData.is_active ?? true,
             is_verified: userData.is_verified ?? false
           } as User)
-          loadPermissions().catch(() => {})
+          loadPermissions().catch(() => { })
         } else {
           setIsLoading(false)
         }
@@ -126,7 +146,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (credentials: { email_or_username: string; password: string }) => {
     // Login et récupérer les tokens
     await authService.login(credentials)
-    
+
     // Récupérer les données utilisateur après connexion
     const userData = await authService.getCurrentUser()
     setUser({
@@ -135,7 +155,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       is_active: userData.is_active ?? true,
       is_verified: userData.is_verified ?? false
     } as User)
-    
+
     // Charger les permissions
     await loadPermissions()
   }

@@ -213,7 +213,7 @@ class Contest(ContestBase):
     rounds: List["Round"] = []
     
     # User specific data
-    current_user_participation: Optional[ContestEntry] = None
+    current_user_contesting: Optional[bool] = None
     
     class Config:
         from_attributes = True

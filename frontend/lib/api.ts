@@ -156,6 +156,9 @@ export interface PasswordResetConfirm {
   new_password: string
 }
 
+let _currentUserPromise: Promise<LoginResponse['user']> | null = null;
+let _currentUserCacheTime = 0;
+
 // Services d'authentification
 export const authService = {
   // Vérifier si l'utilisateur est authentifié
@@ -167,8 +170,18 @@ export const authService = {
 
   // Obtenir les informations de l'utilisateur actuel
   async getCurrentUser(): Promise<LoginResponse['user']> {
-    const response = await api.get('/api/v1/auth/me')
-    return response.data
+    const now = Date.now();
+    if (_currentUserPromise && now - _currentUserCacheTime < 2000) {
+      return _currentUserPromise;
+    }
+
+    _currentUserCacheTime = now;
+    _currentUserPromise = (async () => {
+      const response = await api.get('/api/v1/auth/me')
+      return response.data
+    })();
+
+    return _currentUserPromise;
   },
 
   // Connexion (timeout 60s, 1 retry si timeout ou 503 pour cold start Render)

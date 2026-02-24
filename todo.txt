@@ -1,0 +1,15 @@
+1. Edit Button Not Showing
+- User sees "Nominate" button even after they have already nominated
+- Button only changes to "Edit" after trying to submit 
+  (getting error: "You already have a submission for this contest")
+- Should show "Edit" button immediately when viewing contest where user has nominated
+ 
+## 2. Contest Sorting Not Working
+- Contests not consistently sorted by participant count (high to low)
+- Display shows contests with many participants, then few, then many again (inconsistent)
+- Should always display contests from highest number of participants to lowest
+
+
+Check also category and contestant searching to see if they work properly. I will keep on reviewing after those have been worked on to see if there are other areas.
+After that, we will have to set up a testing template under controlled environment where migration from one stage to another takes 3 hours to see if each stage is properly coded.
+Then we will test the accounting system to see if it works as intended.

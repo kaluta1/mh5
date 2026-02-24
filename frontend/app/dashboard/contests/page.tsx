@@ -29,13 +29,13 @@ const SuggestContestDialog = dynamic(() => import('@/components/dashboard/sugges
 })
 
 const CONTESTS_PER_PAGE = 12
-const CACHE_TTL = 5 * 60 * 1000 // 5 minutes cache
+const CACHE_TTL = 5 * 1000 // 5 seconds cache, preventing stale states for participants
 
 // Simple in-memory cache for contests data
 const contestsCache = new Map<string, { data: any; timestamp: number }>()
 
-function getCacheKey(roundId: string, category: string, country: string, continent: string, search: string, skip: number) {
-  return `${roundId}-${category}-${country}-${continent}-${search}-${skip}`
+function getCacheKey(roundId: string, category: string, country: string, continent: string, search: string, skip: number, userId?: string | number) {
+  return `${roundId}-${category}-${country}-${continent}-${search}-${skip}-${userId || 'anon'}`
 }
 
 function getFromCache(key: string) {
@@ -115,7 +115,8 @@ function ContestsPageContent() {
     }
 
     fetchRounds()
-  }, [isAuthenticated, addToast, activeRoundId])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Save category tab preference
   useEffect(() => {
@@ -169,7 +170,8 @@ function ContestsPageContent() {
       const activeSearch = committedSearch || undefined
 
       // Check cache first
-      const cacheKey = getCacheKey(activeRoundId, categoryTab, activeCountry || 'all', activeContinent || 'all', activeSearch || '', 0)
+      const authKey = isAuthenticated && user ? user.id : 'anon'
+      const cacheKey = getCacheKey(activeRoundId, categoryTab, activeCountry || 'all', activeContinent || 'all', activeSearch || '', 0, authKey)
       const cached = getFromCache(cacheKey)
       if (cached) {
         setContestsData(cached)
@@ -221,7 +223,7 @@ function ContestsPageContent() {
     }
 
     fetchContestsForRound()
-  }, [activeRoundId, isAuthenticated, categoryTab, filterCountry, filterContinent, committedSearch])
+  }, [activeRoundId, categoryTab, filterCountry, filterContinent, committedSearch])
 
   // Load more contests function
   const loadMoreContests = useCallback(async () => {
@@ -324,16 +326,16 @@ function ContestsPageContent() {
         participationEndDate: contestsData?.submission_end_date,
         votingStartDate: contestsData?.voting_start_date,
         votingEndDate: contestsData?.voting_end_date,
-        currentUserParticipated: c.current_user_contesting || false,
-        currentUserContesting: c.current_user_contesting || false,
+        currentUserParticipated: Boolean(c.currentUserParticipated || c.current_user_participated || c.current_user_contesting),
+        currentUserContesting: Boolean(c.currentUserContesting || c.current_user_contesting),
         topContestants: [] // Not fetching top contestants per contest in new query yet
       }
     })
-    
+
     // Debug: Log contests where user has nominated
-    const nominatedContests = rawContests.filter((c: any) => c.currentUserContesting)
+    const nominatedContests = rawContests.filter((c: any) => c.currentUserContesting || c.currentUserParticipated)
     if (nominatedContests.length > 0) {
-      console.log(`[ContestsPage] ✅ User has nominated in ${nominatedContests.length} contest(s):`, 
+      console.log(`[ContestsPage] ✅ User has nominated in ${nominatedContests.length} contest(s):`,
         nominatedContests.map((c: any) => ({ id: c.id, title: c.title, currentUserContesting: c.currentUserContesting })))
     } else {
       console.log(`[ContestsPage] ❌ User has not nominated in any contest yet`)
@@ -385,7 +387,7 @@ function ContestsPageContent() {
     // 4. Always sort - ensure consistent ordering
     filtered.sort((a, b) => {
       switch (sortBy) {
-        case 'participants': 
+        case 'participants':
           // Sort by participants (descending - most first)
           const aContestants = Number(a.contestants) || 0
           const bContestants = Number(b.contestants) || 0
@@ -394,7 +396,7 @@ function ContestsPageContent() {
           }
           // Secondary sort by votes if participants are equal
           return (Number(b.received) || 0) - (Number(a.received) || 0)
-        case 'votes': 
+        case 'votes':
           const aVotes = Number(a.received) || 0
           const bVotes = Number(b.received) || 0
           if (bVotes !== aVotes) {
@@ -402,9 +404,9 @@ function ContestsPageContent() {
           }
           // Secondary sort by participants if votes are equal
           return (Number(b.contestants) || 0) - (Number(a.contestants) || 0)
-        case 'name': 
+        case 'name':
           return a.title.localeCompare(b.title)
-        default: 
+        default:
           // Default: sort by participants (descending - most first)
           const aContestantsDefault = Number(a.contestants) || 0
           const bContestantsDefault = Number(b.contestants) || 0
@@ -473,7 +475,7 @@ function ContestsPageContent() {
             showCountryFilter={categoryTab === 'nomination'} // Only show country filter for nominations
             className="mb-4"
           />
-          
+
           {/* Level Filter for Participations */}
           {categoryTab === 'participations' && (
             <div className="flex items-center gap-4">

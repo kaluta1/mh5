@@ -104,7 +104,7 @@ function ContestsPageContent() {
       return;
     }
     const id = contestId.toString();
-    setFavorites(prev => 
+    setFavorites(prev =>
       prev.some(favId => favId.toString() === id)
         ? prev.filter(favId => favId.toString() !== id)
         : [...prev, contestId]
@@ -189,21 +189,21 @@ function ContestsPageContent() {
     // Backend already sorts, but ensure frontend also sorts correctly
     const sortedContests = [...categoryFiltered].sort((a, b) => {
       // Always prioritize participants count (descending - most first)
-      const aContestants = Number(a.contestants) || 0
-      const bContestants = Number(b.contestants) || 0
-      
+      const aContestants = Number(a.participant_count) || Number(a.contestants) || 0
+      const bContestants = Number(b.participant_count) || Number(b.contestants) || 0
+
       // Primary sort: participants count (high to low)
       if (bContestants !== aContestants) {
         return bContestants - aContestants
       }
-      
+
       // Secondary sort: votes if participants are equal
       const aReceived = Number(a.received) || 0
       const bReceived = Number(b.received) || 0
       if (bReceived !== aReceived) {
         return bReceived - aReceived
       }
-      
+
       // Tertiary sort: by title for consistency
       return a.title.localeCompare(b.title)
     })
@@ -256,7 +256,7 @@ function ContestsPageContent() {
           currentUserContesting: contest.currentUserContesting  // Debug: check if user has nominated
         });
         return contest;
-        })
+      })
         .filter((c: any) => c !== null)
 
       console.log(`[ContestsPage] Successfully mapped ${mappedContests.length} contests`)
@@ -276,7 +276,7 @@ function ContestsPageContent() {
         response: error?.response?.data,
         code: error?.code
       })
-      
+
       // Handle timeout specifically
       if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
         console.warn("[ContestsPage] Request timed out - backend may be slow or overloaded")
@@ -285,7 +285,7 @@ function ContestsPageContent() {
           // Could show a toast notification here if needed
         }
       }
-      
+
       // FIXED: Set empty array on error so UI shows proper message
       setAllContests([])
     } finally {
