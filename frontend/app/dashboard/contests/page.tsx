@@ -213,8 +213,23 @@ function ContestsPageContent() {
           setTotalContests(0)
           setHasMore(false)
         }
-      } catch (error) {
-        console.error('Failed to fetch contests:', error)
+      } catch (error: any) {
+        logger.error('Failed to fetch contests:', error)
+        // Handle API errors gracefully - don't break the page
+        if (error?.response?.status === 404 || error?.response?.status === 500 || error?.response?.status === 503) {
+          logger.warn('Backend unavailable during redeployment, showing empty state')
+          // Set empty state instead of breaking
+          setContestsData(null)
+          setAllContests([])
+          setTotalContests(0)
+          setHasMore(false)
+        } else {
+          // For other errors, still set empty state to prevent page break
+          setContestsData(null)
+          setAllContests([])
+          setTotalContests(0)
+          setHasMore(false)
+        }
       } finally {
         setContestsLoading(false)
         setInitialLoadComplete(true)
@@ -264,8 +279,13 @@ function ContestsPageContent() {
       } else {
         setHasMore(false)
       }
-    } catch (error) {
-      console.error('Failed to load more contests:', error)
+    } catch (error: any) {
+      logger.error('Failed to load more contests:', error)
+      // Handle API errors gracefully
+      if (error?.response?.status === 404 || error?.response?.status === 500 || error?.response?.status === 503) {
+        logger.warn('Backend unavailable, stopping pagination')
+        setHasMore(false) // Stop trying to load more
+      }
     } finally {
       setLoadingMore(false)
     }
