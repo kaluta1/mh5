@@ -193,6 +193,14 @@ export default function ContestDetailPage() {
         filterContinent: 'all'
       }) as any
 
+      // Debug: Log the response to see if current_user_contesting is present
+      console.log(`[ContestDetailPage] Contest ${contestId} response:`, {
+        id: c.id,
+        name: c.name,
+        current_user_contesting: c.current_user_contesting,
+        has_current_user_contesting: 'current_user_contesting' in c
+      })
+
       // Map data
       const parseMediaIds = (mediaIds: string | undefined, type: 'image' | 'video'): Media[] => {
         if (!mediaIds) return []
@@ -244,7 +252,7 @@ export default function ContestDetailPage() {
       // No need to re-sort - backend provides contestants with most votes first
       // This ensures instant display without any delay
 
-      setContest({
+      const contestData = {
         contest: {
           ...c,
           entries_count: c.entries_count,
@@ -252,13 +260,22 @@ export default function ContestDetailPage() {
           cover_image_url: c.cover_image_url,
           current_user_contesting: c.current_user_contesting || false  // Ensure this is included
         },
-        contestants: mappedContestants,
-        current_user_contesting: c.current_user_contesting || false  // Also at top level for easy access
+        contestants: mappedContestants
+      }
+      
+      setContest(contestData)
+      
+      // CRITICAL DEBUG: Log the state we're setting
+      console.log(`[ContestDetailPage] ✅ Setting contest state:`, {
+        contestId: contestId,
+        current_user_contesting: contestData.contest.current_user_contesting,
+        willShowEdit: contestData.contest.current_user_contesting === true
       })
       
-      // Debug log
       if (c.current_user_contesting) {
-        console.log(`[ContestDetailPage] User has nominated in contest ${contestId} - showing Edit button`)
+        console.log(`[ContestDetailPage] ✅✅✅ User HAS nominated in contest ${contestId} - Edit button should appear!`)
+      } else {
+        console.log(`[ContestDetailPage] ❌ User has NOT nominated in contest ${contestId} - Nominate button will show`)
       }
 
       setFavorites(mappedContestants.filter(ct => ct.isFavorite).map(ct => ct.id))
@@ -589,7 +606,7 @@ export default function ContestDetailPage() {
                     {/* CTA Button - Show Edit if user has already nominated */}
                     <Button
                       onClick={() => {
-                        const hasNominated = contest?.contest?.current_user_contesting || contest?.current_user_contesting
+                        const hasNominated = contest?.contest?.current_user_contesting
                         router.push(hasNominated 
                           ? `/dashboard/contests/${contestId}/apply?edit=true` 
                           : `/dashboard/contests/${contestId}/apply`
@@ -597,12 +614,21 @@ export default function ContestDetailPage() {
                       }}
                       className="bg-myhigh5-primary hover:bg-myhigh5-blue-700 text-white font-semibold px-8 py-6 text-lg rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
                     >
-                      {(contest?.contest?.current_user_contesting || contest?.current_user_contesting)
-                        ? (t('dashboard.contests.edit') || 'Modifier')
-                        : isNomination
-                          ? (t('dashboard.contests.nominate') || 'Nommer')
-                          : (t('dashboard.contests.participate') || 'Participer')
-                      }
+                      {(() => {
+                        const hasNominated = contest?.contest?.current_user_contesting
+                        console.log(`[ContestDetailPage] 🎯 Button render check:`, {
+                          hasNominated,
+                          contestExists: !!contest,
+                          contestContestExists: !!contest?.contest,
+                          value: contest?.contest?.current_user_contesting,
+                          isNomination
+                        })
+                        return hasNominated
+                          ? (t('dashboard.contests.edit') || 'Modifier')
+                          : isNomination
+                            ? (t('dashboard.contests.nominate') || 'Nommer')
+                            : (t('dashboard.contests.participate') || 'Participer')
+                      })()}
                       <ExternalLink className="w-5 h-5 ml-2" />
                     </Button>
 

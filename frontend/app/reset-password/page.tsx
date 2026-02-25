@@ -31,7 +31,10 @@ function ResetPasswordPageContent() {
     const tokenParam = searchParams.get('token')
     if (!tokenParam) {
       addToast(t('auth.reset_password.no_token') || 'Token de réinitialisation manquant', 'error')
-      router.push('/forgot-password')
+      // Use setTimeout to avoid navigation during render
+      setTimeout(() => {
+        router.push('/forgot-password')
+      }, 2000)
       return
     }
     setToken(tokenParam)
@@ -96,7 +99,26 @@ function ResetPasswordPageContent() {
   }
 
   if (!token) {
-    return null
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center p-4">
+        <div className="max-w-md w-full">
+          <div className="bg-white/80 dark:bg-gray-800/90 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/20 dark:border-gray-700/50 p-8 text-center">
+            <XCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+              {t('auth.reset_password.no_token_title') || 'Token manquant'}
+            </h2>
+            <p className="text-gray-600 dark:text-gray-400 mb-6">
+              {t('auth.reset_password.no_token_message') || 'Le lien de réinitialisation est invalide ou a expiré.'}
+            </p>
+            <Link href="/forgot-password">
+              <Button className="bg-blue-500 hover:bg-blue-600 text-white">
+                {t('auth.forgot_password.title') || 'Demander un nouveau lien'}
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (

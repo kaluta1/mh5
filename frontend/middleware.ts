@@ -15,6 +15,9 @@ export function middleware(request: NextRequest) {
             '/favicon.ico',
             '/thumbnails.png',
             '/images', // Assuming there might be an images folder
+            '/reset-password', // Allow password reset even during maintenance
+            '/forgot-password', // Allow password reset request even during maintenance
+            '/login', // Allow login even during maintenance
         ]
 
         const { pathname } = request.nextUrl
