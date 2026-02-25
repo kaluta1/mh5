@@ -99,7 +99,7 @@ function ContestsPageContent() {
     const fetchRounds = async () => {
       try {
         setRoundsLoading(true)
-        const data = await ApiService.getRounds({ isActive: false })
+        const data = await ApiService.getRounds()
         setRounds(data)
 
         // Set default active round
@@ -186,7 +186,6 @@ function ContestsPageContent() {
       try {
         const data = await ApiService.getRounds({
           roundId: parseInt(activeRoundId),
-          isActive: false,
           hasVotingType,
           filterCountry: activeCountry,
           filterContinent: activeContinent,

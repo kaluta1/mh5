@@ -89,7 +89,6 @@ export interface TopContestant {
 export const ApiService = {
     // Rounds
     getRounds: async (params?: {
-        isActive?: boolean;
         roundId?: number;
         hasVotingType?: boolean;
         filterCountry?: string;

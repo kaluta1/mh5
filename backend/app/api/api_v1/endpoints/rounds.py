@@ -33,24 +33,35 @@ def read_rounds(
     """
     user_id = current_user.id if current_user else None
     
+    # Load contests with their category relationship for efficient search
+    from app.models.contest import Contest
+    
     if contest_id:
+        # When contest_id is provided, use CRUD method that returns dicts
         rounds_with_stats = crud.round.get_rounds_with_stats(
             db=db, contest_id=contest_id, user_id=user_id
         )
+        # Convert dicts to ORM-like objects for consistent processing
+        db_rounds = []
+        for r_dict in rounds_with_stats:
+            # Create a simple object that mimics ORM Round for processing
+            class RoundDict:
+                def __init__(self, data):
+                    for k, v in data.items():
+                        setattr(self, k, v)
+                    self.contests = []  # Will be populated from round_contests relationship
+            round_obj = RoundDict(r_dict)
+            # Fetch contests linked to this round via round_contests
+            from app.models.round import round_contests
+            linked_contests = db.query(Contest).join(
+                round_contests, Contest.id == round_contests.c.contest_id
+            ).filter(
+                round_contests.c.round_id == r_dict["id"]
+            ).options(joinedload(Contest.category)).all()
+            round_obj.contests = linked_contests
+            db_rounds.append(round_obj)
     else:
-        # Fallback: get all active rounds or recent ones if no contest specified
-        # For now, let's use a new CRUD method or just get all rounds
-        rounds_with_stats = []
-        # TODO: Implement get_all_rounds_with_stats if needed
-        # For now, return empty or implement simple fetch
-        pass 
-       
-    # If no contest_id provided, we might want to return all rounds or filter differently.
-    # Given the previous error, the client might be calling this without contest_id.
-    # Let's support fetching all rounds if contest_id is missing.
-    if not contest_id:
-        # Load contests with their category relationship for efficient search
-        from app.models.contest import Contest
+        # Fetch all rounds (excluding cancelled) when no contest_id provided
         query = db.query(Round).options(
             joinedload(Round.contests).joinedload(Contest.category)
         ).filter(Round.status != "cancelled")
@@ -69,15 +80,8 @@ def read_rounds(
     # Import methods for enrichment
     # We would ideally put this in CRUD or Service layer
     
-    # Prepare list for later use
-    if not contest_id:
-         # Need to iterate over what we fetched from DB
-         rounds_iterable = db_rounds
-    else:
-         # If contest_id, we used CRUD which returned schemas, not ORM objects
-         # We need to re-fetch ORM or be careful.
-         # Actually crud.round.get_rounds_with_stats returns dicts/Pydantic models
-         rounds_iterable = rounds_with_stats
+    # Prepare list for later use - db_rounds is now always a list of objects (ORM or dict-like)
+    rounds_iterable = db_rounds
 
     # Since we are modifying the response structure significantly and mixing ORM/dicts
     # It is safer to rebuild the response list.
