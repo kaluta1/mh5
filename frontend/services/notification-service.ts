@@ -18,6 +18,11 @@ export interface NotificationUnreadCount {
 }
 
 class NotificationService {
+  private _notificationsPromise: Promise<Notification[]> | null = null;
+  private _notificationsCacheTime: number = 0;
+  private _unreadCountPromise: Promise<number> | null = null;
+  private _unreadCountCacheTime: number = 0;
+
   /**
    * Récupère les notifications de l'utilisateur connecté
    */
@@ -26,27 +31,53 @@ class NotificationService {
     limit: number = 50,
     unreadOnly: boolean = false
   ): Promise<Notification[]> {
-    try {
-      const response = await api.get('/api/v1/notifications', {
-        params: { skip, limit, unread_only: unreadOnly },
-        timeout: 15000
-      })
-      return response.data
-    } catch (error) {
-      return []
+    const now = Date.now();
+    const cacheKey = `${skip}-${limit}-${unreadOnly}`;
+    // Simple deduplication for the exact same parameters within a 2-second window
+    if (this._notificationsPromise && now - this._notificationsCacheTime < 2000 && skip === 0 && limit === 20 && !unreadOnly) {
+      return this._notificationsPromise;
     }
+
+    const fetchPromise = (async () => {
+      try {
+        const response = await api.get('/api/v1/notifications', {
+          params: { skip, limit, unread_only: unreadOnly },
+          timeout: 15000
+        })
+        return response.data
+      } catch (error) {
+        return []
+      }
+    })();
+
+    if (skip === 0 && limit === 20 && !unreadOnly) {
+      this._notificationsPromise = fetchPromise;
+      this._notificationsCacheTime = now;
+    }
+
+    return fetchPromise;
   }
 
   /**
    * Récupère le nombre de notifications non lues
    */
   async getUnreadCount(): Promise<number> {
-    try {
-      const response = await api.get('/api/v1/notifications/unread-count', { timeout: 10000 })
-      return response.data?.count ?? 0
-    } catch (error) {
-      return 0
+    const now = Date.now();
+    if (this._unreadCountPromise && now - this._unreadCountCacheTime < 2000) {
+      return this._unreadCountPromise;
     }
+
+    this._unreadCountCacheTime = now;
+    this._unreadCountPromise = (async () => {
+      try {
+        const response = await api.get('/api/v1/notifications/unread-count', { timeout: 10000 })
+        return response.data?.count ?? 0
+      } catch (error) {
+        return 0
+      }
+    })();
+
+    return this._unreadCountPromise;
   }
 
   /**

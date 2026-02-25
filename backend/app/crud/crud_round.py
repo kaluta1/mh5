@@ -247,13 +247,28 @@ class CRUDRound:
         """
         Vérifie si un utilisateur a déjà participé à un round
         """
-        from app.models.contests import Contestant
-        contestant = db.query(Contestant).filter(
-            Contestant.round_id == round_id,
-            Contestant.user_id == user_id,
-            Contestant.is_deleted == False
-        ).first()
-        return contestant is not None
+        # We need to find if there is any Contestant for the active round.
+        # We'll check all contests in this round using the duplicate checker.
+        round_obj = self.get(db, round_id)
+        if not round_obj or not hasattr(round_obj, 'contests') or not round_obj.contests:
+            return False
+            
+        from app.models.contests import ContestSeason
+        from app.crud import contestant as crud_contestant
+        
+        for c in round_obj.contests:
+            # Check if this contest is linked to a season
+            season = db.query(ContestSeason).filter(
+                ContestSeason.id == c.id,
+                ContestSeason.is_deleted == False
+            ).first()
+            
+            season_id = season.id if season else c.id
+            existing = crud_contestant.get_by_season_and_user(db, season_id, user_id)
+            if existing:
+                return True
+                
+        return False
 
     def calculate_current_season_level(self, round_obj: Round) -> Optional[str]:
         """

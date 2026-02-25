@@ -110,6 +110,7 @@ interface Contestant {
 interface ContestDetail {
   contest: ContestResponse
   contestants: Contestant[]
+  current_user_contesting?: boolean
 }
 
 export default function ContestDetailPage() {
@@ -189,8 +190,8 @@ export default function ContestDetailPage() {
       // Currently getContest returns everything if backend is updated
       // Fetch ALL contestants - backend filter can return 0 due to country format mismatch (TZ vs Tanzania)
       const c = await ApiService.getContest(parseInt(contestId), {
-        filterCountry: 'all',
-        filterContinent: 'all'
+        filterCountry: filterCountry === 'all' ? undefined : filterCountry,
+        filterContinent: filterContinent === 'all' ? undefined : filterContinent
       }) as any
 
       // Debug: Log the response to see if current_user_contesting is present
@@ -271,7 +272,8 @@ export default function ContestDetailPage() {
         current_user_contesting: contestData.contest.current_user_contesting,
         willShowEdit: contestData.contest.current_user_contesting === true
       })
-      
+
+      // Debug log
       if (c.current_user_contesting) {
         console.log(`[ContestDetailPage] ✅✅✅ User HAS nominated in contest ${contestId} - Edit button should appear!`)
       } else {
@@ -606,16 +608,21 @@ export default function ContestDetailPage() {
                     {/* CTA Button - Show Edit if user has already nominated */}
                     <Button
                       onClick={() => {
-                        const hasNominated = contest?.contest?.current_user_contesting
-                        router.push(hasNominated 
-                          ? `/dashboard/contests/${contestId}/apply?edit=true` 
+                        const hasNominated = Boolean(
+                          contest?.contest?.current_user_contesting ?? contest?.current_user_contesting
+                        )
+                        router.push(
+                          hasNominated
+                            ? `/dashboard/contests/${contestId}/apply?edit=true`
                           : `/dashboard/contests/${contestId}/apply`
                         )
                       }}
                       className="bg-myhigh5-primary hover:bg-myhigh5-blue-700 text-white font-semibold px-8 py-6 text-lg rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
                     >
                       {(() => {
-                        const hasNominated = contest?.contest?.current_user_contesting
+                        const hasNominated = Boolean(
+                          contest?.contest?.current_user_contesting ?? contest?.current_user_contesting
+                        )
                         console.log(`[ContestDetailPage] 🎯 Button render check:`, {
                           hasNominated,
                           contestExists: !!contest,

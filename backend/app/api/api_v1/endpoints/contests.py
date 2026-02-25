@@ -61,10 +61,12 @@ def read_contests(
     filter_country: str = Query(None, description="Filtrer par pays (pour compter les contestants de ce pays)"),
     filter_region: str = Query(None, description="Filtrer par région (pour compter les contestants de cette région)"),
     filter_continent: str = Query(None, description="Filtrer par continent (pour compter les contestants de ce continent)"),
+    sort_by: str = Query(None, description="Trier par un champ (ex: participant_count)"),
+    sort_order: str = Query("desc", description="Ordre de tri (asc ou desc)"),
     current_user: Optional[Any] = Depends(get_current_active_user_optional),
 ) -> List[dict]:
     """
-    Récupérer tous les concours avec filtrage optionnel et statistiques.
+    Récupérer tous les concours avec filtrage optionnel, tri et statistiques.
     Endpoint public - accessible sans authentification.
     Le nombre de contestants affiché dépend de la saison du contest et de la localisation de l'utilisateur connecté (si authentifié).
     
@@ -92,6 +94,15 @@ def read_contests(
         filters["voting_type_id"] = voting_type_id
     if has_voting_type is not None:
         filters["has_voting_type"] = has_voting_type
+        
+    # Paramètres de tri
+    if sort_by:
+        # Map plural 'participants_count' to actual DB column 'participant_count' if needed
+        if sort_by == "participants_count":
+            sort_by = "participant_count"
+        filters["sort_by"] = sort_by
+    if sort_order:
+        filters["sort_order"] = sort_order
     
     # Récupérer les contests depuis la base de données
     import logging
@@ -229,6 +240,11 @@ def read_contests(
             logger.warning(f"Error in batch queries: {str(e)}")
     
     # Build lightweight response without full enrichment
+    
+    # Sort contests if returning all or by standard search
+    
+    basic_contests = []
+    
     for c in contests:
         try:
             # Get voting type if exists
@@ -256,6 +272,7 @@ def read_contests(
                 "voting_type": voting_type_dict,
                 "entries_count": contestant_counts.get(c.id, 0),
                 "contestants": contestant_counts.get(c.id, 0),  # For compatibility
+                "participant_count": getattr(c, 'participant_count', 0),
                 "total_votes": 0,  # Skip vote counting for list view
                 "current_user_contesting": current_user_contesting_map.get(c.id, False),
             }
@@ -267,8 +284,18 @@ def read_contests(
             logger.error(f"Error creating basic contest data for {c.id}: {str(e)}")
             continue
     
-    # Sort contests by participants_count descending (most participants first) for faster display
-    enriched_contests.sort(key=lambda x: x.get("contestants", 0), reverse=True)
+    # Sort contests by participant count only if not custom sorted
+    # 1. First by actual participant_count in DB (mostly used on frontend)
+    # 2. Then by the dynamically calculated contestants count
+    # 3. Finally by ID to ensure deterministic sorting
+    if not sort_by:
+        enriched_contests.sort(
+            key=lambda x: (
+                x.get("participant_count", 0) or x.get("contestants", 0),
+                x.get("id", 0)
+            ), 
+            reverse=True
+        )
     
     logger.info(f"Successfully enriched {len(enriched_contests)} out of {len(contests)} contests")
     return enriched_contests
@@ -402,16 +429,43 @@ def read_contest(
             detail="Concours non trouvé"
         )
     
-    
     # Enrich with current user participation
     if current_user and enriched_contest:
+        from app.crud import contestant as crud_contestant
+        from app.models.contests import ContestSeasonLink, ContestSeason
+        
+        # 1. Try to find active ContestSeason via ContestSeasonLink
+        season_link = db.query(ContestSeasonLink).filter(
+            ContestSeasonLink.contest_id == contest_id,
+            ContestSeasonLink.is_active == True
+        ).first()
+
+        season_id = None
+        if season_link:
+            season = db.query(ContestSeason).filter(
+                ContestSeason.id == season_link.season_id,
+                ContestSeason.is_deleted == False
+            ).first()
+            if season:
+                season_id = season.id
+        
+        # 2. Fallback to contest.id if no active season found (legacy behavior)
+        if not season_id:
+            season_id = contest_id
+
         # Check if we have participation
-        participation = contest.get_participation_for_user(
+        participation = crud_contestant.get_by_season_and_user(
             db=db, 
-            contest_id=contest_id, 
+            season_id=season_id, 
             user_id=current_user.id
         )
         if participation:
+             # Fetch media for the participation if missing from the object
+             media_obj = participation.media
+             if not media_obj and participation.media_id:
+                 from app.models.media import Media
+                 media_obj = db.query(Media).filter(Media.id == participation.media_id).first()
+
              # Add to response - simplified map
              participation_dict = {
                  "id": participation.id,
@@ -421,12 +475,11 @@ def read_contest(
                  "total_score": participation.total_score,
                  "rank": participation.rank,
                  # We need media object for schema validation
-                 "media": participation.media 
+                 "media": media_obj
              }
              enriched_contest["current_user_participation"] = participation_dict
 
     return enriched_contest
-
 
 @router.put("/{contest_id}", response_model=Contest)
 def update_contest(
