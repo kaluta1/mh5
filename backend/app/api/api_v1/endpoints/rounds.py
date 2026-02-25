@@ -2,7 +2,6 @@ from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
-from sqlalchemy.sql import nullslast
 from datetime import date
 
 from app import crud, models
@@ -67,18 +66,30 @@ def read_rounds(
                 db_rounds.append(round_obj)
         else:
             # Fetch all rounds (excluding cancelled) when no contest_id provided
-            query = db.query(Round).options(
-                joinedload(Round.contests).joinedload(Contest.category)
-            ).filter(Round.status != "cancelled")
-            if round_id:
-                query = query.filter(Round.id == round_id)
-            # Handle NULL submission_start_date by using NULLS LAST
-            # If nullslast is not available, fall back to ordering by id
             try:
-                db_rounds = query.order_by(nullslast(Round.submission_start_date.desc())).offset(skip).limit(limit).all()
-            except (AttributeError, ImportError):
-                # Fallback: order by id if submission_start_date ordering fails
-                db_rounds = query.order_by(Round.id.desc()).offset(skip).limit(limit).all()
+                query = db.query(Round).options(
+                    joinedload(Round.contests).joinedload(Contest.category)
+                ).filter(Round.status != "cancelled")
+                if round_id:
+                    query = query.filter(Round.id == round_id)
+                # Order by submission_start_date (NULLs will be handled naturally)
+                # Try ordering by date, fallback to id if there's an issue
+                try:
+                    db_rounds = query.order_by(Round.submission_start_date.desc()).offset(skip).limit(limit).all()
+                except Exception as order_error:
+                    logger.warning(f"Error ordering by submission_start_date: {str(order_error)}, falling back to id")
+                    db_rounds = query.order_by(Round.id.desc()).offset(skip).limit(limit).all()
+            except Exception as query_error:
+                logger.error(f"Error querying rounds: {str(query_error)}", exc_info=True)
+                # If query fails, try simpler query without joinedload
+                try:
+                    query = db.query(Round).filter(Round.status != "cancelled")
+                    if round_id:
+                        query = query.filter(Round.id == round_id)
+                    db_rounds = query.order_by(Round.id.desc()).offset(skip).limit(limit).all()
+                except Exception as simple_query_error:
+                    logger.error(f"Error with simple query: {str(simple_query_error)}", exc_info=True)
+                    raise
             rounds_with_stats = []
         
         
@@ -92,7 +103,12 @@ def read_rounds(
         # We would ideally put this in CRUD or Service layer
         
         # Prepare list for later use - db_rounds is now always a list of objects (ORM or dict-like)
-        rounds_iterable = db_rounds
+        rounds_iterable = db_rounds if db_rounds else []
+
+        # If no rounds found, return empty list
+        if not rounds_iterable:
+            logger.info("No rounds found matching criteria")
+            return []
 
         # Since we are modifying the response structure significantly and mixing ORM/dicts
         # It is safer to rebuild the response list.
@@ -120,7 +136,7 @@ def read_rounds(
                 r_dict = {k: v for k, v in r_item.__dict__.items() if not k.startswith('_')}
             else:
                 r_dict = dict(r_item)
-                 
+            
             if "participants_count" not in r_dict:
                 r_dict["participants_count"] = crud.round.count_participants_for_round(db, r_dict["id"])
             if "current_user_participated" not in r_dict:
@@ -253,14 +269,27 @@ def read_rounds(
 
             enriched_rounds.append(r_dict)
     
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
     except Exception as e:
         import traceback
+        import os
+        error_traceback = traceback.format_exc()
         logger.error(f"Error in read_rounds endpoint: {str(e)}", exc_info=True)
-        logger.error(f"Full traceback: {traceback.format_exc()}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error fetching rounds: {str(e)}"
-        )
+        logger.error(f"Full traceback: {error_traceback}")
+        # Include traceback in response if DEBUG is enabled
+        error_detail = str(e)
+        if os.getenv("DEBUG") == "true":
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error fetching rounds: {error_detail}\n\nTraceback:\n{error_traceback}"
+            )
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error fetching rounds: {error_detail}. Check server logs for details."
+            )
     
     return enriched_rounds
 
