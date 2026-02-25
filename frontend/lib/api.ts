@@ -7,13 +7,16 @@ const RAW_API_URL = process.env.NEXT_PUBLIC_API_URL || DEFAULT_PUBLIC_API_URL
 // Strip trailing slashes to prevent double-slash URLs (e.g. baseURL/ + /api/v1/... = //api/v1/...)
 const API_BASE_URL = RAW_API_URL.replace(/\/+$/, '')
 
-// Instance axios pour les appels API (timeout pour éviter blocage si backend down/520)
+// Instance axios pour les appels API (optimized for speed)
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 25000, // 25s pour /auth/me et autres appels
+  timeout: 15000, // Reduced to 15s for faster failure detection
   headers: {
     'Content-Type': 'application/json',
   },
+  // Performance optimizations
+  maxRedirects: 3,
+  validateStatus: (status) => status < 500, // Don't throw on 4xx errors
 })
 
 // Instance séparée pour les requêtes d'authentification avec timeout fini
@@ -66,6 +69,8 @@ api.interceptors.response.use(
     // Retry logic pour les erreurs de timeout, réseau, ou backend unavailable (404/500)
     const isAuthRequest = config?.url?.includes('/auth/')
     const isBackendUnavailable = error.response?.status === 404 || error.response?.status === 500 || error.response?.status === 503
+    const retryCount = config?._retryCount || 0
+    const maxRetries = isBackendUnavailable ? 2 : 1 // More retries for backend unavailable
 
     if (
       config &&
@@ -77,9 +82,6 @@ api.interceptors.response.use(
         !error.response ||
         isBackendUnavailable) // Retry on backend unavailable errors
     ) {
-      const retryCount = config._retryCount || 0
-      const maxRetries = isBackendUnavailable ? 2 : 1 // More retries for backend unavailable
-
       if (retryCount < maxRetries) {
         config._retry = true
         config._retryCount = retryCount + 1
@@ -112,7 +114,7 @@ api.interceptors.response.use(
       }
     }
 
-    // For 404/500 errors, don't throw - let components handle gracefully
+    // For 404/500 errors, log but let components handle gracefully
     // This prevents API errors from triggering the not-found page
     if (isBackendUnavailable && retryCount >= maxRetries) {
       // Log but don't prevent the error from propagating

@@ -21,12 +21,15 @@ const getApiUrl = () => {
 
 const API_URL = getApiUrl();
 
-// Create axios instance
+// Create axios instance with performance optimizations
 export const api = axios.create({
     baseURL: API_URL,
+    timeout: 15000, // 15s timeout for faster failure detection
     headers: {
         'Content-Type': 'application/json',
     },
+    maxRedirects: 3,
+    validateStatus: (status) => status < 500, // Don't throw on 4xx errors
 });
 
 // Add auth token interceptor

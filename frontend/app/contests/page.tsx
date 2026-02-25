@@ -145,12 +145,12 @@ function ContestsPageContent() {
   // Filtrer et trier les contests
   useEffect(() => {
     if (allContests.length === 0) {
-      console.log('[ContestsPage] No contests to filter (allContests.length === 0)')
+      // No contests to filter
       setFilteredContests([])
       return
     }
 
-    console.log(`[ContestsPage] Filtering ${allContests.length} contests, categoryTab: ${categoryTab}`)
+    // Filter contests
 
     // FIXED: Backend already filters by has_voting_type, so we don't need to filter again here
     // The backend returns only the contests matching the categoryTab (nomination or participations)
@@ -162,13 +162,13 @@ function ContestsPageContent() {
         : !hasVotingType
 
       if (!matches) {
-        console.log(`[ContestsPage] Contest ${contest.id} filtered out: votingType=${contest.votingType}, categoryTab=${categoryTab}`)
+        // Contest filtered out
       }
 
       return matches
     })
 
-    console.log(`[ContestsPage] After category filter: ${categoryFiltered.length} contests`)
+    // After category filter
 
     // FIXED: Don't exclude contests with 0 contestants - they might have contestants but the count might be wrong
     // Instead, only filter if we're sure there are no contestants (contestants === 0 AND we've verified)
@@ -208,10 +208,7 @@ function ContestsPageContent() {
       return a.title.localeCompare(b.title)
     })
 
-    console.log(`[ContestsPage] Final filtered contests: ${sortedContests.length}`)
-    if (sortedContests.length > 0) {
-      console.log(`[ContestsPage] First contest:`, sortedContests[0])
-    }
+    // Final filtered contests
 
     setFilteredContests(sortedContests)
   }, [allContests, categoryTab, activeTab, sortBy, contestTypes])
@@ -219,67 +216,42 @@ function ContestsPageContent() {
   const loadContests = async () => {
     try {
       setIsLoading(true)
-      console.log(`[ContestsPage] Loading contests for categoryTab: ${categoryTab}`)
 
       // Pour l'onglet Nominations : filtrer les contests qui ont un voting_type (has_voting_type = true)
       // Pour l'onglet Participations : filtrer les contests qui n'ont pas de voting_type (has_voting_type = false)
       const hasVotingType = categoryTab === 'nomination' ? true : categoryTab === 'participations' ? false : undefined
 
-      console.log(`[ContestsPage] Calling API with hasVotingType: ${hasVotingType}`)
-
+      // Reduced initial load for faster display
       const { contests, total } = await contestService.getContests(
         0,
-        10, // Reduced to 10 to avoid timeout - backend is slow
+        6, // Reduced to 6 for faster initial load
         activeSearchTerm || undefined,
         undefined, // votingLevel n'est plus utilisé
         undefined, // votingTypeId
         hasVotingType
       )
 
-      console.log(`[ContestsPage] API returned ${contests?.length || 0} contests out of ${total}`)
-      console.log(`[ContestsPage] Response sample:`, contests?.slice(0, 2))
-
       if (!contests || !Array.isArray(contests)) {
-        console.error("[ContestsPage] Invalid response format:", { contests, total })
+        // Invalid response format
         setAllContests([])
         return
       }
 
       // Contests are already mapped in the service
-      const mappedContests = contests.map(contest => {
-        console.log(`[ContestsPage] Contest ${contest.id}:`, {
-          id: contest.id,
-          title: contest.title,
-          contestants: contest.contestants,
-          votingType: contest.votingType,
-          categoryTab: categoryTab,
-          currentUserContesting: contest.currentUserContesting  // Debug: check if user has nominated
-        });
-        return contest;
-      })
-        .filter((c: any) => c !== null)
+      const mappedContests = contests.filter((c: any) => c !== null)
 
-      console.log(`[ContestsPage] Successfully mapped ${mappedContests.length} contests`)
-      console.log(`[ContestsPage] Sample mapped contest:`, mappedContests[0])
+      // Successfully mapped contests
 
       // DEBUG: Check filtering
-      console.log(`[ContestsPage] Category tab: ${categoryTab}`)
-      console.log(`[ContestsPage] Contests with votingType:`, mappedContests.filter(c => c.votingType != null).length)
-      console.log(`[ContestsPage] Contests without votingType:`, mappedContests.filter(c => c.votingType == null).length)
+      // Category tab filtering complete
 
       setAllContests(mappedContests)
     } catch (error: any) {
-      console.error("[ContestsPage] Error loading contests:", error)
-      console.error("[ContestsPage] Error details:", {
-        message: error?.message,
-        stack: error?.stack,
-        response: error?.response?.data,
-        code: error?.code
-      })
+      // Error loading contests
 
       // Handle timeout specifically
       if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
-        console.warn("[ContestsPage] Request timed out - backend may be slow or overloaded")
+        // Request timed out
         // Show user-friendly message
         if (typeof window !== 'undefined') {
           // Could show a toast notification here if needed

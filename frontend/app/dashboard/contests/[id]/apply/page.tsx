@@ -57,14 +57,19 @@ export default function ApplyToContestPage() {
   const [hasContentVerification, setHasContentVerification] = useState(false)
   const [verificationsCompleted, setVerificationsCompleted] = useState(false)
 
-  // REST Data Fetching
+  // REST Data Fetching - Optimized with error handling
   const fetchContestDetails = useCallback(async () => {
     if (!contestId) return
+
+    const abortController = new AbortController()
 
     try {
       // Need to fetch contest + enrichment (participants etc)
       // Currently getContest returns everything if backend is updated
       const c = await ApiService.getContest(parseInt(contestId)) as any
+
+      // Check if aborted
+      if (abortController.signal.aborted) return
 
       // Fetch rounds for this contest (optional, not blocking submissions)
       try {
@@ -199,9 +204,18 @@ export default function ApplyToContestPage() {
 
       setPageLoading(false)
 
-    } catch (error) {
-      console.error("Failed to fetch contest:", error)
-      addToast(t('dashboard.contests.load_error') || "Failed to load contest", 'error') // Fixed signature
+    } catch (error: any) {
+      // Ignore aborted requests
+      if (error?.name === 'AbortError' || abortController.signal.aborted) {
+        return
+      }
+      
+      // Handle CORS and network errors gracefully
+      if (error?.code === 'ERR_NETWORK' || error?.message?.includes('CORS') || error?.message?.includes('Network Error')) {
+        addToast(t('dashboard.contests.network_error') || "Network error. Please check your connection and try again.", 'error')
+      } else {
+        addToast(t('dashboard.contests.load_error') || "Failed to load contest", 'error')
+      }
       setPageLoading(false)
     }
   }, [contestId, user, isEditMode, contestantIdParam, hasVisualVerification, hasVoiceVerification, hasBrandVerification, hasContentVerification, addToast, t])

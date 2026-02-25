@@ -48,7 +48,7 @@ export function Logo({
           "rounded-xl flex items-center justify-center bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary shadow-lg group-hover:shadow-xl transition-all duration-300 group-hover:scale-105",
           sizes.icon
         )}>
-          {/* Official Logo Image */}
+          {/* Official Logo Image - Fallback to icon if missing */}
           {!logoError ? (
             <Image
               src="/logo.png"
@@ -57,9 +57,10 @@ export function Logo({
               height={size === "sm" ? 24 : size === "md" ? 40 : 56}
               className="object-contain p-1"
               onError={() => {
-                // Fallback to icon if logo doesn't exist
+                // Silently fallback to icon if logo doesn't exist
                 setLogoError(true)
               }}
+              unoptimized
             />
           ) : (
             <Heart className={cn("text-white fill-current", size === "sm" ? "w-4 h-4" : size === "md" ? "w-5 h-5" : "w-7 h-7")} />

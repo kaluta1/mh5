@@ -98,10 +98,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  // Vérifier l'authentification au chargement (avec 1 retry si backend 5xx/réseau)
+  // Vérifier l'authentification au chargement (optimized for speed)
   React.useEffect(() => {
     const checkAuth = async (retryCount = 0) => {
       try {
+        // Check cache first for instant display
+        const cachedUser = cacheService.get('user')
+        if (cachedUser && typeof cachedUser === 'object') {
+          setUser(cachedUser as User)
+          setIsLoading(false) // Show page immediately with cached user
+          // Load fresh data in background
+          if (authService.isAuthenticated()) {
+            authService.getCurrentUser()
+              .then(userData => {
+                setUser({
+                  ...userData,
+                  is_admin: (userData as any).is_admin || false,
+                  is_active: userData.is_active ?? true,
+                  is_verified: userData.is_verified ?? false
+                } as User)
+                cacheService.set('user', userData, 300000) // Cache for 5 minutes
+                loadPermissions().catch(() => { })
+              })
+              .catch(() => { }) // Silent fail - use cached data
+          }
+          return
+        }
+
         if (authService.isAuthenticated()) {
           const userData = await authService.getCurrentUser()
           setUser({
@@ -110,6 +133,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             is_active: userData.is_active ?? true,
             is_verified: userData.is_verified ?? false
           } as User)
+          cacheService.set('user', userData, 300000) // Cache for 5 minutes
           loadPermissions().catch(() => { })
         } else {
           setIsLoading(false)

@@ -268,7 +268,6 @@ export function ContestCard({
             sizes="(max-width: 768px) 100vw, 50vw"
             unoptimized={true}
             onError={() => {
-              console.error(`[ContestCard] Failed to load image: ${coverImage}`)
               setImageError(true)
             }}
           />

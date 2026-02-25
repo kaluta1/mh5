@@ -199,6 +199,31 @@ app.add_middleware(
     max_age=86400,
 )
 
+# Additional CORS handling for edge cases
+import re
+from starlette.middleware.base import BaseHTTPMiddleware
+
+class CORSExtraMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        origin = request.headers.get("origin")
+        if origin:
+            # Check if origin matches our patterns
+            is_allowed = (
+                origin in cors_origins or
+                re.match(r"^https://.*\.vercel\.(app|dev)$", origin) or
+                re.match(r"^https://.*\.onrender\.com$", origin) or
+                re.match(r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$", origin)
+            )
+            if is_allowed:
+                response.headers["Access-Control-Allow-Origin"] = origin
+                response.headers["Access-Control-Allow-Credentials"] = "true"
+                response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD"
+                response.headers["Access-Control-Allow-Headers"] = "*"
+        return response
+
+app.add_middleware(CORSExtraMiddleware)
+
 # Inclusion des routes API
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
