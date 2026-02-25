@@ -38,7 +38,7 @@ def read_rounds(
         user_id = current_user.id if current_user else None
         
         # Load contests with their category relationship for efficient search
-        from app.models.contest import Contest
+        from app.models.contest import Contest as ContestModel
     
         if contest_id:
             # When contest_id is provided, use CRUD method that returns dicts
@@ -57,18 +57,18 @@ def read_rounds(
                 round_obj = RoundDict(r_dict)
                 # Fetch contests linked to this round via round_contests
                 from app.models.round import round_contests
-                linked_contests = db.query(Contest).join(
-                    round_contests, Contest.id == round_contests.c.contest_id
+                linked_contests = db.query(ContestModel).join(
+                    round_contests, ContestModel.id == round_contests.c.contest_id
                 ).filter(
                     round_contests.c.round_id == r_dict["id"]
-                ).options(joinedload(Contest.category)).all()
+                ).options(joinedload(ContestModel.category)).all()
                 round_obj.contests = linked_contests
                 db_rounds.append(round_obj)
         else:
             # Fetch all rounds (excluding cancelled) when no contest_id provided
             try:
                 query = db.query(Round).options(
-                    joinedload(Round.contests).joinedload(Contest.category)
+                    joinedload(Round.contests).joinedload(ContestModel.category)
                 ).filter(Round.status != "cancelled")
                 if round_id:
                     query = query.filter(Round.id == round_id)
@@ -97,7 +97,7 @@ def read_rounds(
         enriched_rounds = []
         
         # Import here to avoid circular dependencies
-        from app.schemas.contest import Contest, TopContestantPreview
+        from app.schemas.contest import Contest as ContestSchema, TopContestantPreview
         
         # Import methods for enrichment
         # We would ideally put this in CRUD or Service layer
@@ -147,6 +147,7 @@ def read_rounds(
             r_dict["contests"] = []
             r_dict["top_contestants"] = []
             r_dict["votes_count"] = 0
+            r_dict["contests_count"] = 0  # Ensure contests_count is always set
             
             if hasattr(r_item, "contests") and r_item.contests:
                 # 1. Filter contests in memory
@@ -267,6 +268,21 @@ def read_rounds(
                         "rank": 0
                     })
 
+            # Ensure all required fields for RoundWithStats are present
+            if "id" not in r_dict:
+                logger.warning(f"Skipping round item missing id: {r_item}")
+                continue
+            if "name" not in r_dict:
+                r_dict["name"] = f"Round {r_dict.get('id', 'Unknown')}"
+            if "status" not in r_dict:
+                r_dict["status"] = "upcoming"
+            # Ensure datetime fields are present (required by schema)
+            from datetime import datetime
+            if "created_at" not in r_dict or r_dict["created_at"] is None:
+                r_dict["created_at"] = datetime.now()
+            if "updated_at" not in r_dict or r_dict["updated_at"] is None:
+                r_dict["updated_at"] = datetime.now()
+            
             enriched_rounds.append(r_dict)
     
     except HTTPException:
