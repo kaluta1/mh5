@@ -168,6 +168,7 @@ cors_origins = [
     "https://myhigh5.com",
     "https://www.myhigh5.com",
     "https://mh5-hbjp.onrender.com",
+    "https://mh5-backend.onrender.com",  # Alternative backend URL
     "https://frontend-rho-eight-72.vercel.app",  # Vercel frontend
     # Note: Wildcards don't work in allow_origins list, use allow_origin_regex instead
 ]
@@ -186,13 +187,13 @@ cors_origins = list(set([origin.strip() for origin in cors_origins if origin]))
 print(f"CORS Origins configured: {cors_origins}")
 
 # IMPORTANT: Ajouter le middleware CORS EN PREMIER
-# Permettre tous les CORS sans restriction pour le développement
+# Use regex to allow all Vercel deployments and localhost
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,  # Use explicit origins list
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://.*\.vercel\.app$|^https://.*\.vercel\.dev$",  # Allow localhost and all Vercel deployments (both .app and .dev)
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://.*\.vercel\.app$|^https://.*\.vercel\.dev$|^https://.*\.onrender\.com$",  # Allow localhost, all Vercel deployments, and all Render deployments
     allow_credentials=True,  # Allow credentials for authentication cookies/tokens
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"],
     allow_headers=["*"],
     expose_headers=["*"],
     max_age=86400,
