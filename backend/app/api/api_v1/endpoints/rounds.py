@@ -149,6 +149,7 @@ def read_rounds(
                     func.count(Contestant.id)
                 ).filter(
                     Contestant.season_id.in_(contest_ids),
+                    Contestant.round_id == r_dict["id"],
                     Contestant.is_deleted == False
                 )
                 
@@ -173,6 +174,7 @@ def read_rounds(
                     user_entries = db.query(Contestant.season_id).filter(
                         Contestant.user_id == user_id,
                         Contestant.season_id.in_(contest_ids),
+                        Contestant.round_id == r_dict["id"],
                         Contestant.is_deleted == False
                     ).all()
                     # Store as a set/dict for O(1) lookup
