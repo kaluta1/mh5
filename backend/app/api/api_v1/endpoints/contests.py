@@ -406,80 +406,102 @@ def read_contest(
     Si filter_country ou filter_continent sont fournis, ils ont priorité sur la localisation de l'utilisateur.
     Si aucun filtre n'est fourni, on utilise la localisation de l'utilisateur connecté par défaut.
     """
-    contest_obj = contest.get(db=db, id=contest_id)
-    if not contest_obj:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Concours non trouvé"
-        )
+    import traceback
+    import logging
+    logger = logging.getLogger(__name__)
     
-    # Utiliser la méthode simplifiée qui utilise directement les champs du Contestant
-    current_user_id = current_user.id if current_user else None
-    enriched_contest = contest.get_contest_with_enriched_contestants(
-        db=db, 
-        contest_id=contest_id, 
-        current_user_id=current_user_id,
-        filter_country=filter_country,
-        filter_continent=filter_continent
-    )
-    
-    if not enriched_contest:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Concours non trouvé"
-        )
-    
-    # Enrich with current user participation
-    if current_user and enriched_contest:
-        from app.crud import contestant as crud_contestant
-        from app.models.contests import ContestSeasonLink, ContestSeason
+    try:
+        contest_obj = contest.get(db=db, id=contest_id)
+        if not contest_obj:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Concours non trouvé"
+            )
         
-        # 1. Try to find active ContestSeason via ContestSeasonLink
-        season_link = db.query(ContestSeasonLink).filter(
-            ContestSeasonLink.contest_id == contest_id,
-            ContestSeasonLink.is_active == True
-        ).first()
-
-        season_id = None
-        if season_link:
-            season = db.query(ContestSeason).filter(
-                ContestSeason.id == season_link.season_id,
-                ContestSeason.is_deleted == False
-            ).first()
-            if season:
-                season_id = season.id
-        
-        # 2. Fallback to contest.id if no active season found (legacy behavior)
-        if not season_id:
-            season_id = contest_id
-
-        # Check if we have participation
-        participation = crud_contestant.get_by_season_and_user(
+        # Utiliser la méthode simplifiée qui utilise directement les champs du Contestant
+        current_user_id = current_user.id if current_user else None
+        enriched_contest = contest.get_contest_with_enriched_contestants(
             db=db, 
-            season_id=season_id, 
-            user_id=current_user.id
+            contest_id=contest_id, 
+            current_user_id=current_user_id,
+            filter_country=filter_country,
+            filter_continent=filter_continent
         )
-        if participation:
-             # Fetch media for the participation if missing from the object
-             media_obj = participation.media
-             if not media_obj and participation.media_id:
-                 from app.models.media import Media
-                 media_obj = db.query(Media).filter(Media.id == participation.media_id).first()
+        
+        if not enriched_contest:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Concours non trouvé"
+            )
+        
+        # Enrich with current user participation
+        if current_user and enriched_contest:
+            try:
+                from app.crud import contestant as crud_contestant
+                from app.models.contests import ContestSeasonLink, ContestSeason
+                
+                # 1. Try to find active ContestSeason via ContestSeasonLink
+                season_link = db.query(ContestSeasonLink).filter(
+                    ContestSeasonLink.contest_id == contest_id,
+                    ContestSeasonLink.is_active == True
+                ).first()
 
-             # Add to response - simplified map
-             participation_dict = {
-                 "id": participation.id,
-                 "contest_id": participation.contest_id,
-                 "user_id": participation.user_id,
-                 "media_id": participation.media_id,
-                 "total_score": participation.total_score,
-                 "rank": participation.rank,
-                 # We need media object for schema validation
-                 "media": media_obj
-             }
-             enriched_contest["current_user_participation"] = participation_dict
+                season_id = None
+                if season_link:
+                    season = db.query(ContestSeason).filter(
+                        ContestSeason.id == season_link.season_id,
+                        ContestSeason.is_deleted == False
+                    ).first()
+                    if season:
+                        season_id = season.id
+                
+                # 2. Fallback to contest.id if no active season found (legacy behavior)
+                if not season_id:
+                    season_id = contest_id
 
-    return enriched_contest
+                # Check if we have participation
+                participation = crud_contestant.get_by_season_and_user(
+                    db=db, 
+                    season_id=season_id, 
+                    user_id=current_user.id
+                )
+                if participation:
+                     # Fetch media for the participation if missing from the object
+                     media_obj = participation.media
+                     if not media_obj and participation.media_id:
+                         from app.models.media import Media
+                         media_obj = db.query(Media).filter(Media.id == participation.media_id).first()
+
+                     # Add to response - simplified map
+                     participation_dict = {
+                         "id": participation.id,
+                         "contest_id": participation.contest_id,
+                         "user_id": participation.user_id,
+                         "media_id": participation.media_id,
+                         "total_score": participation.total_score,
+                         "rank": participation.rank,
+                         # We need media object for schema validation
+                         "media": media_obj
+                     }
+                     enriched_contest["current_user_participation"] = participation_dict
+            except Exception as e:
+                # Log but don't fail the request if participation enrichment fails
+                logger.warning(f"Error enriching user participation for contest {contest_id}: {str(e)}")
+                logger.debug(traceback.format_exc())
+
+        return enriched_contest
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
+    except Exception as e:
+        # Log the full error for debugging
+        logger.error(f"Error fetching contest {contest_id}: {str(e)}")
+        logger.error(traceback.format_exc())
+        # Return a 500 error with a user-friendly message
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de la récupération du concours: {str(e)}"
+        )
 
 @router.put("/{contest_id}", response_model=Contest)
 def update_contest(

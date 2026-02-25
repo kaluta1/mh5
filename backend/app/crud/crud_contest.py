@@ -1350,14 +1350,18 @@ class CRUDContest:
         # Récupérer tous les votes avec utilisateurs (depuis ContestantVoting)
         # Filtrer par season_id pour ne récupérer que les votes de cette saison
         votes_data = []
-        if season:
-            votes_data = db.query(ContestantVoting, User)\
-                .join(User, ContestantVoting.user_id == User.id)\
-                .filter(
-                    ContestantVoting.contestant_id.in_(contestant_ids),
-                    ContestantVoting.season_id == season.id
-                )\
-                .all()
+        try:
+            if season and contestant_ids:
+                votes_data = db.query(ContestantVoting, User)\
+                    .join(User, ContestantVoting.user_id == User.id)\
+                    .filter(
+                        ContestantVoting.contestant_id.in_(contestant_ids),
+                        ContestantVoting.season_id == season.id
+                    )\
+                    .all()
+        except Exception as e:
+            logger.warning(f"Error fetching votes: {e}")
+            votes_data = []
         
         # Grouper les votes par contestant_id
         votes_by_contestant = {}
@@ -1377,15 +1381,21 @@ class CRUDContest:
             })
         
         # Récupérer tous les commentaires avec utilisateurs
-        comments_data = db.query(Comment, User)\
-            .join(User, Comment.user_id == User.id)\
-            .filter(
-                Comment.contestant_id.in_(contestant_ids),
-                Comment.is_hidden == False,
-                Comment.is_deleted == False
-            )\
-            .order_by(Comment.created_at.desc())\
-            .all()
+        comments_data = []
+        try:
+            if contestant_ids:
+                comments_data = db.query(Comment, User)\
+                    .join(User, Comment.user_id == User.id)\
+                    .filter(
+                        Comment.contestant_id.in_(contestant_ids),
+                        Comment.is_hidden == False,
+                        Comment.is_deleted == False
+                    )\
+                    .order_by(Comment.created_at.desc())\
+                    .all()
+        except Exception as e:
+            logger.warning(f"Error fetching comments: {e}")
+            comments_data = []
         
         # Grouper les commentaires par contestant_id
         comments_by_contestant = {}
