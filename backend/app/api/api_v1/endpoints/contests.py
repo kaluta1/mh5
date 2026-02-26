@@ -461,61 +461,39 @@ def read_contest(
             if not season_id:
                 season_id = contest_id
 
-                # Check if we have participation
-                participation = crud_contestant.get_by_season_and_user(
-                    db=db, 
-                    season_id=season_id, 
-                    user_id=current_user.id
-                )
-                if participation:
-                     # Fetch media for the participation if missing from the object
-                     media_obj = participation.media
-                     if not media_obj and participation.media_id:
-                         from app.models.media import Media
-                         media_obj = db.query(Media).filter(Media.id == participation.media_id).first()
             # Check if we have participation
             participation = crud_contestant.get_by_season_and_user(
                 db=db, 
                 season_id=season_id, 
                 user_id=current_user.id
             )
-        if participation:
-             # Fetch media for the participation if missing from the object
-             media_obj = participation.media
-             if not media_obj and participation.media_id:
-                 from app.models.media import Media
-                 media_obj = db.query(Media).filter(Media.id == participation.media_id).first()
 
-                     # Add to response - simplified map
-                     participation_dict = {
-                         "id": participation.id,
-                         "contest_id": participation.contest_id,
-                         "user_id": participation.user_id,
-                         "media_id": participation.media_id,
-                         "total_score": participation.total_score,
-                         "rank": participation.rank,
-                         # We need media object for schema validation
-                         "media": media_obj
-                     }
-                     enriched_contest["current_user_participation"] = participation_dict
+        if participation:
+            try:
+                # Fetch media for the participation if missing from the object
+                media_obj = participation.media
+                if not media_obj and participation.media_id:
+                    from app.models.media import Media
+                    media_obj = db.query(Media).filter(Media.id == participation.media_id).first()
+
+                # Add to response - simplified map
+                participation_dict = {
+                    "id": participation.id,
+                    "contest_id": participation.contest_id,
+                    "user_id": participation.user_id,
+                    "media_id": participation.media_id,
+                    "total_score": participation.total_score,
+                    "rank": participation.rank,
+                    # We need media object for schema validation
+                    "media": media_obj
+                }
+                enriched_contest["current_user_participation"] = participation_dict
             except Exception as e:
                 # Log but don't fail the request if participation enrichment fails
                 logger.warning(f"Error enriching user participation for contest {contest_id}: {str(e)}")
                 logger.debug(traceback.format_exc())
 
         return enriched_contest
-    except HTTPException:
-        # Re-raise HTTP exceptions as-is
-        raise
-    except Exception as e:
-        # Log the full error for debugging
-        logger.error(f"Error fetching contest {contest_id}: {str(e)}")
-        logger.error(traceback.format_exc())
-        # Return a 500 error with a user-friendly message
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la récupération du concours: {str(e)}"
-        )
 
 @router.put("/{contest_id}", response_model=Contest)
 def update_contest(

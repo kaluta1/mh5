@@ -219,10 +219,10 @@ export default function ApplyToContestPage() {
 
     // Check ALL rounds (not just is_submission_open) to get the latest submission_end_date
     // Add 32 days to the round's submission_end_date for both nominations and participations
-    if (activeRounds && activeRounds.length > 0) {
+    if (contest?.rounds && contest.rounds.length > 0) {
       // Find the round with the latest submission_end_date
       let latestRoundDate: Date | null = null
-      for (const round of activeRounds) {
+      for (const round of contest.rounds) {
         if (round.submission_end_date) {
           const roundEndDate = new Date(round.submission_end_date)
           roundEndDate.setHours(23, 59, 59, 999)
@@ -268,7 +268,7 @@ export default function ApplyToContestPage() {
     updateTimeRemaining()
     const interval = setInterval(updateTimeRemaining, 1000)
     return () => clearInterval(interval)
-  }, [contest?.submission_end_date, activeRounds, isNomination])
+  }, [contest?.submission_end_date, contest?.rounds, isNomination])
 
   // Formater le temps restant avec les traductions
   useEffect(() => {
@@ -323,9 +323,9 @@ export default function ApplyToContestPage() {
 
     // Check ALL rounds to get the latest submission_end_date
     // Add 32 days to the round's submission_end_date for both nominations and participations
-    if (activeRounds && activeRounds.length > 0) {
+    if (contestData.rounds && contestData.rounds.length > 0) {
       let latestRoundDate: Date | null = null
-      for (const round of activeRounds) {
+      for (const round of contestData.rounds) {
         if (round.submission_end_date) {
           const roundEndDate = new Date(round.submission_end_date)
           roundEndDate.setHours(23, 59, 59, 999)
@@ -355,7 +355,7 @@ export default function ApplyToContestPage() {
 
     // Submissions are open if deadline hasn't passed (rounds check removed)
     return !isDeadlinePassed
-  }, [activeRounds])
+  }, [])
 
 
 
