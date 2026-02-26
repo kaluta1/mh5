@@ -251,7 +251,7 @@ export default function ApplyToContestPage() {
     let submissionDeadline = defaultDeadline
     
     // Check ALL rounds (not just is_submission_open) to get the latest submission_end_date
-    // This is important for nominations which have +30 days
+    // Add 32 days to the round's submission_end_date for both nominations and participations
     if (activeRounds && activeRounds.length > 0) {
       // Find the round with the latest submission_end_date
       let latestRoundDate: Date | null = null
@@ -259,6 +259,10 @@ export default function ApplyToContestPage() {
         if (round.submission_end_date) {
           const roundEndDate = new Date(round.submission_end_date)
           roundEndDate.setHours(23, 59, 59, 999)
+          
+          // Add 32 days to the deadline for both nominations and participations
+          roundEndDate.setDate(roundEndDate.getDate() + 32)
+          
           if (!latestRoundDate || roundEndDate > latestRoundDate) {
             latestRoundDate = roundEndDate
           }
@@ -297,7 +301,7 @@ export default function ApplyToContestPage() {
     updateTimeRemaining()
     const interval = setInterval(updateTimeRemaining, 1000)
     return () => clearInterval(interval)
-  }, [contest?.submission_end_date, activeRounds])
+  }, [contest?.submission_end_date, activeRounds, isNomination])
 
   // Formater le temps restant avec les traductions
   useEffect(() => {
@@ -355,13 +359,18 @@ export default function ApplyToContestPage() {
     // Use submission_end_date if available, otherwise use default deadline
     let submissionDeadline = defaultDeadline
     
-    // Check ALL rounds to get the latest submission_end_date (for nominations with +30 days)
+    // Check ALL rounds to get the latest submission_end_date
+    // Add 32 days to the round's submission_end_date for both nominations and participations
     if (activeRounds && activeRounds.length > 0) {
       let latestRoundDate: Date | null = null
       for (const round of activeRounds) {
         if (round.submission_end_date) {
           const roundEndDate = new Date(round.submission_end_date)
           roundEndDate.setHours(23, 59, 59, 999)
+          
+          // Add 32 days to the deadline for both nominations and participations
+          roundEndDate.setDate(roundEndDate.getDate() + 32)
+          
           if (!latestRoundDate || roundEndDate > latestRoundDate) {
             latestRoundDate = roundEndDate
           }
@@ -615,14 +624,30 @@ export default function ApplyToContestPage() {
                       {!timeValues.isClosed && (() => {
                         // Get deadline date from round (for nominations with +30 days) or contest
                         let deadlineDate: Date | null = null
+                        // Add 32 days to the round's submission_end_date for both nominations and participations
                         if (activeRounds && activeRounds.length > 0) {
-                          const activeRound = activeRounds.find(r => r.is_submission_open)
-                          if (activeRound?.submission_end_date) {
-                            deadlineDate = new Date(activeRound.submission_end_date)
+                          // Find the round with the latest submission_end_date
+                          let latestRound: any = null
+                          let latestDate: Date | null = null
+                          for (const round of activeRounds) {
+                            if (round.submission_end_date) {
+                              const roundEndDate = new Date(round.submission_end_date)
+                              if (!latestDate || roundEndDate > latestDate) {
+                                latestDate = roundEndDate
+                                latestRound = round
+                              }
+                            }
+                          }
+                          if (latestRound?.submission_end_date) {
+                            deadlineDate = new Date(latestRound.submission_end_date)
+                            // Add 32 days for both nominations and participations
+                            deadlineDate.setDate(deadlineDate.getDate() + 32)
                           }
                         }
                         if (!deadlineDate && contest?.submission_end_date) {
                           deadlineDate = new Date(contest.submission_end_date)
+                          // Add 32 days for both nominations and participations
+                          deadlineDate.setDate(deadlineDate.getDate() + 32)
                         }
                         
                         return deadlineDate ? (
