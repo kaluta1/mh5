@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { useLanguage } from '@/contexts/language-context'
@@ -56,10 +56,12 @@ export default function ApplyToContestPage() {
   const [hasBrandVerification, setHasBrandVerification] = useState(false)
   const [hasContentVerification, setHasContentVerification] = useState(false)
   const [verificationsCompleted, setVerificationsCompleted] = useState(false)
+  const [hasError, setHasError] = useState(false) // Prevent infinite retry loop
+  const errorShownRef = useRef(false) // Track if error was already shown
 
   // REST Data Fetching - Optimized with error handling
   const fetchContestDetails = useCallback(async () => {
-    if (!contestId) return
+    if (!contestId || hasError) return // Don't retry if error occurred
 
     const abortController = new AbortController()
 
@@ -210,19 +212,33 @@ export default function ApplyToContestPage() {
         return
       }
       
-      // Handle CORS and network errors gracefully
-      if (error?.code === 'ERR_NETWORK' || error?.message?.includes('CORS') || error?.message?.includes('Network Error')) {
-        addToast(t('dashboard.contests.network_error') || "Network error. Please check your connection and try again.", 'error')
-      } else {
-        addToast(t('dashboard.contests.load_error') || "Failed to load contest", 'error')
-      }
+      // Set error flag to prevent retry loop
+      setHasError(true)
       setPageLoading(false)
+      
+      // Only show error once per contestId
+      if (!errorShownRef.current) {
+        errorShownRef.current = true
+        // Handle CORS and network errors gracefully
+        if (error?.code === 'ERR_NETWORK' || error?.message?.includes('CORS') || error?.message?.includes('Network Error')) {
+          addToast(t('dashboard.contests.network_error') || "Network error. Please check your connection and try again.", 'error')
+        } else {
+          addToast(t('dashboard.contests.load_error') || "Failed to load contest", 'error')
+        }
+      }
     }
-  }, [contestId, user, isEditMode, contestantIdParam, hasVisualVerification, hasVoiceVerification, hasBrandVerification, hasContentVerification, addToast, t])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contestId, user?.id, isEditMode, contestantIdParam, hasVisualVerification, hasVoiceVerification, hasBrandVerification, hasContentVerification, hasError])
 
   useEffect(() => {
-    fetchContestDetails()
-  }, [fetchContestDetails])
+    // Reset error state when contestId changes
+    if (contestId) {
+      setHasError(false)
+      errorShownRef.current = false
+      fetchContestDetails()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contestId]) // Only depend on contestId to prevent infinite loops
 
   // Calculer le temps restant jusqu'au 28 février 2026 (ou submission_end_date si plus tard)
   useEffect(() => {

@@ -5,7 +5,7 @@ import { useLanguage } from '@/contexts/language-context'
 import { useToast } from '@/components/ui/toast'
 import { Button } from '@/components/ui/button'
 import { UploadButton } from '@/components/ui/upload-button'
-import { User, FileText, Image as ImageIcon } from 'lucide-react'
+import { User, FileText, Image as ImageIcon, MapPin } from 'lucide-react'
 import { API_URL } from '@/lib/config'
 
 interface SettingsProfileTabProps {
@@ -21,12 +21,14 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
   const [lastName, setLastName] = useState('')
   const [avatarUrl, setAvatarUrl] = useState('')
   const [bio, setBio] = useState('')
+  const [city, setCity] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [errors, setErrors] = useState<{
     firstName?: string
     lastName?: string
     avatarUrl?: string
     bio?: string
+    city?: string
   }>({})
 
   // Charger les données de l'utilisateur au montage
@@ -36,6 +38,7 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
       setLastName(user.last_name || '')
       setAvatarUrl(user.avatar_url || '')
       setBio(user.bio || '')
+      setCity(user.city || '')
 
       // Valider et afficher les erreurs par défaut
       const newErrors: typeof errors = {}
@@ -54,6 +57,10 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
 
       if (!user.bio?.trim()) {
         newErrors.bio = t('profile_setup.bio_required') || 'La bio est requise'
+      }
+
+      if (!user.city?.trim()) {
+        newErrors.city = t('profile_setup.city_required') || 'La ville est requise'
       }
 
       setErrors(newErrors)
@@ -77,6 +84,10 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
 
     if (!bio.trim()) {
       newErrors.bio = t('profile_setup.bio_required') || 'La bio est requise'
+    }
+
+    if (!city.trim()) {
+      newErrors.city = t('profile_setup.city_required') || 'La ville est requise'
     }
 
     setErrors(newErrors)
@@ -110,6 +121,7 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
           last_name: lastName,
           avatar_url: avatarUrl,
           bio: bio,
+          city: city,
         }),
       })
 
@@ -133,7 +145,7 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
     }
   }
 
-  const handleFieldChange = (field: 'firstName' | 'lastName' | 'bio', value: string) => {
+  const handleFieldChange = (field: 'firstName' | 'lastName' | 'bio' | 'city', value: string) => {
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: undefined }))
     }
@@ -144,6 +156,8 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
       setLastName(value)
     } else if (field === 'bio') {
       setBio(value.slice(0, 500))
+    } else if (field === 'city') {
+      setCity(value)
     }
   }
 
@@ -316,6 +330,30 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
             </p>
           )}
         </div>
+      </div>
+
+      {/* City */}
+      <div>
+        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2 flex items-center gap-2">
+          <MapPin className="w-4 h-4" />
+          {t('settings.city') || 'Ville'} *
+        </label>
+        <input
+          type="text"
+          value={city}
+          onChange={(e) => handleFieldChange('city', e.target.value)}
+          placeholder={t('auth.register.city_placeholder') || 'Entrez votre ville'}
+          disabled={isLoading}
+          className={`w-full px-4 py-3 border rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 transition-all ${errors.city
+              ? 'border-red-500 dark:border-red-500 focus:ring-red-500 focus:border-red-500'
+              : 'border-gray-300 dark:border-gray-600 focus:ring-myhigh5-primary focus:border-transparent'
+            }`}
+        />
+        {errors.city && (
+          <p className="text-sm text-red-600 dark:text-red-400 mt-1">
+            {errors.city}
+          </p>
+        )}
       </div>
 
       {/* Submit Button */}
