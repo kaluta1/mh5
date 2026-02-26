@@ -59,6 +59,13 @@ export default function MyApplicationsPage() {
         // Récupérer les candidatures de l'utilisateur directement
         const myContestants = await contestService.getMyApplications(0, 500)
 
+        // Ensure myContestants is an array before mapping
+        if (!Array.isArray(myContestants)) {
+          console.warn('getMyApplications returned non-array:', myContestants)
+          setApplications([])
+          return
+        }
+
         const userApplications: Application[] = myContestants.map(c => {
           // Extraire l'image si contestant_image_url n'est pas défini
           let coverImage = c.contestant_image_url
