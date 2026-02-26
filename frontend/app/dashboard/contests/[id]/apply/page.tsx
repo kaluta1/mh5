@@ -240,19 +240,31 @@ export default function ApplyToContestPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contestId]) // Only depend on contestId to prevent infinite loops
 
-  // Calculer le temps restant jusqu'au 28 février 2026 (ou submission_end_date si plus tard)
+  // Calculer le temps restant jusqu'à la date limite de soumission
   useEffect(() => {
     // Default deadline: February 28, 2026
     const defaultDeadline = new Date('2026-02-28')
     defaultDeadline.setHours(23, 59, 59, 999)
     
-    // Use submission_end_date if available, otherwise use default deadline
+    // For nominations, prefer round's submission_end_date (which has +30 days)
+    // Otherwise use contest's submission_end_date
     let submissionDeadline = defaultDeadline
-    if (contest?.submission_end_date) {
+    
+    // Check active rounds first (for nominations, rounds have +30 days)
+    if (activeRounds && activeRounds.length > 0) {
+      const activeRound = activeRounds.find(r => r.is_submission_open)
+      if (activeRound?.submission_end_date) {
+        const roundEndDate = new Date(activeRound.submission_end_date)
+        roundEndDate.setHours(23, 59, 59, 999)
+        submissionDeadline = roundEndDate
+      }
+    }
+    
+    // Fallback to contest submission_end_date if no round date
+    if (submissionDeadline === defaultDeadline && contest?.submission_end_date) {
       const endDate = new Date(contest.submission_end_date)
       endDate.setHours(23, 59, 59, 999)
-      // Use the later date between default deadline and actual end date
-      submissionDeadline = endDate > defaultDeadline ? endDate : defaultDeadline
+      submissionDeadline = endDate
     }
 
     const updateTimeRemaining = () => {
@@ -276,7 +288,7 @@ export default function ApplyToContestPage() {
     updateTimeRemaining()
     const interval = setInterval(updateTimeRemaining, 1000)
     return () => clearInterval(interval)
-  }, [contest?.submission_end_date])
+  }, [contest?.submission_end_date, activeRounds])
 
   // Formater le temps restant avec les traductions
   useEffect(() => {
@@ -573,11 +585,29 @@ export default function ApplyToContestPage() {
                           </div>
                         )}
                       </div>
-                      {!timeValues.isClosed && (
-                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-2">
-                          {t('Deadline countdown') || 'Deadline: February 28, 2026'}
-                        </p>
-                      )}
+                      {!timeValues.isClosed && (() => {
+                        // Get deadline date from round (for nominations with +30 days) or contest
+                        let deadlineDate: Date | null = null
+                        if (activeRounds && activeRounds.length > 0) {
+                          const activeRound = activeRounds.find(r => r.is_submission_open)
+                          if (activeRound?.submission_end_date) {
+                            deadlineDate = new Date(activeRound.submission_end_date)
+                          }
+                        }
+                        if (!deadlineDate && contest?.submission_end_date) {
+                          deadlineDate = new Date(contest.submission_end_date)
+                        }
+                        
+                        return deadlineDate ? (
+                          <p className="text-xs text-gray-600 dark:text-gray-400 mt-2">
+                            {t('dashboard.contests.deadline') || 'Deadline'}: {deadlineDate.toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric'
+                            })}
+                          </p>
+                        ) : null
+                      })()}
                     </div>
                   )}
 
