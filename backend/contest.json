@@ -1,0 +1,1 @@
+{"detail":"Route not found: GET /api/v1/contests/public/1","code":"NOT_FOUND","message":"The requested endpoint does not exist. Please check the API documentation at /docs","path":"/api/v1/contests/public/1","method":"GET"}

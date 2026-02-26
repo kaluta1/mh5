@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, createContext, useContext } from 'react'
 import { AlertCircle, CheckCircle, Info, X } from 'lucide-react'
 
 export type ToastType = 'success' | 'error' | 'info' | 'warning'
@@ -18,22 +18,20 @@ interface ToastContextType {
   removeToast: (id: string) => void
 }
 
-import { createContext, useContext } from 'react'
-
 export const ToastContext = createContext<ToastContextType | undefined>(undefined)
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
 
-  const addToast = (message: string, type: ToastType = 'info', duration = 12000) => {
+  const addToast = useCallback((message: string, type: ToastType = 'info', duration = 12000) => {
     const id = Math.random().toString(36).substr(2, 9)
     const newToast: Toast = { id, message, type, duration }
     setToasts((prev) => [...prev, newToast])
-  }
+  }, [])
 
-  const removeToast = (id: string) => {
+  const removeToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((toast) => toast.id !== id))
-  }
+  }, [])
 
   return (
     <ToastContext.Provider value={{ toasts, addToast, removeToast }}>
@@ -80,7 +78,7 @@ function ToastItem({ toast, onRemove }: ToastItemProps) {
         setIsExiting(true)
         setTimeout(() => onRemove(toast.id), 300)
       }, toast.duration)
-      
+
       return () => clearTimeout(timer)
     }
   }, [toast.duration, toast.id, onRemove])
@@ -133,9 +131,8 @@ function ToastItem({ toast, onRemove }: ToastItemProps) {
 
   return (
     <div
-      className={`${styles.bg} border ${styles.border} rounded-lg p-4 flex items-start gap-3 shadow-lg transition-all duration-300 ${
-        isExiting ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
-      }`}
+      className={`${styles.bg} border ${styles.border} rounded-lg p-4 flex items-start gap-3 shadow-lg transition-all duration-300 ${isExiting ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
+        }`}
     >
       <Icon className={`w-5 h-5 ${styles.icon} flex-shrink-0 mt-0.5`} />
       <p className={`flex-1 text-sm font-medium ${styles.text}`}>{toast.message}</p>

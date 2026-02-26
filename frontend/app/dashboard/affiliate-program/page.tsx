@@ -1,35 +1,19 @@
 'use client'
 
-import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+
+
 import { useAuth } from '@/hooks/use-auth'
 import { useLanguage } from '@/contexts/language-context'
 import { Network, DollarSign, Users, Link2, TrendingUp, Award, CheckCircle2, Share2, Target, ShoppingBag, Megaphone, BookOpen } from 'lucide-react'
 import Link from 'next/link'
 
 export default function AffiliateProgramPage() {
-  const { user, isAuthenticated, isLoading } = useAuth()
+  const { user } = useAuth()
   const { t } = useLanguage()
-  const router = useRouter()
 
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.push('/')
-    }
-  }, [isAuthenticated, isLoading, router])
 
-  if (isLoading) {
-    return (
-      <div className="space-y-6 animate-pulse">
-        <div className="h-8 w-48 bg-gray-200 dark:bg-gray-700 rounded-lg" />
-        <div className="h-96 bg-gray-200 dark:bg-gray-700 rounded-2xl" />
-      </div>
-    )
-  }
 
-  if (!isAuthenticated || !user) {
-    return null
-  }
+
 
   return (
     <div className="space-y-6 pb-10">
@@ -56,7 +40,7 @@ export default function AffiliateProgramPage() {
       {/* Main Content */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden">
         <div className="p-6 sm:p-8 space-y-8">
-          
+
           {/* Overview Section */}
           <section>
             <div className="flex items-center gap-3 mb-6">
@@ -68,7 +52,7 @@ export default function AffiliateProgramPage() {
               </h2>
             </div>
             <p className="text-gray-600 dark:text-gray-400 mb-6">
-              The MyHigh5 Affiliate Program allows you to earn commissions by referring new members to the platform. 
+              The MyHigh5 Affiliate Program allows you to earn commissions by referring new members to the platform.
               Every person you refer becomes part of your network, and you earn commissions on their activities up to 10 levels deep.
             </p>
 
@@ -121,7 +105,7 @@ export default function AffiliateProgramPage() {
                 Commission Structure
               </h2>
             </div>
-           
+
           </section>
 
           {/* What You Can Earn On Section */}
@@ -244,7 +228,7 @@ export default function AffiliateProgramPage() {
                   <p>Nominators: 10% for self, 2.5% for Level 1, 1% for each of Levels 2 to 10.</p>
                 </div>
               </div>
-             
+
             </div>
           </section>
 
@@ -341,7 +325,7 @@ export default function AffiliateProgramPage() {
                 Ready to Start Earning?
               </h2>
               <p className="text-gray-600 dark:text-gray-400 mb-6">
-                Start building your affiliate network today and earn commissions on every referral. 
+                Start building your affiliate network today and earn commissions on every referral.
                 Visit your Affiliates dashboard to get your referral links and start sharing.
               </p>
               <Link href="/dashboard/affiliates">

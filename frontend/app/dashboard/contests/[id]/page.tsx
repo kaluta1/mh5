@@ -111,6 +111,7 @@ interface ContestDetail {
   contest: ContestResponse
   contestants: Contestant[]
   current_user_contesting?: boolean
+  active_round_id?: number | null
 }
 
 export default function ContestDetailPage() {
@@ -591,10 +592,14 @@ export default function ContestDetailPage() {
                     <Button
                       onClick={() => {
                         const hasNominated = contest?.contest?.current_user_contesting || contest?.current_user_contesting
-                        router.push(hasNominated
-                          ? `/dashboard/contests/${contestId}/apply?edit=true`
-                          : `/dashboard/contests/${contestId}/apply`
-                        )
+                        const activeRoundId = contest?.contest?.active_round_id || contest?.active_round_id
+
+                        const queryParams = new URLSearchParams()
+                        if (hasNominated) queryParams.set('edit', 'true')
+                        if (activeRoundId) queryParams.set('roundId', activeRoundId.toString())
+
+                        const queryString = queryParams.toString()
+                        router.push(`/dashboard/contests/${contestId}/apply${queryString ? `?${queryString}` : ''}`)
                       }}
                       className="bg-myhigh5-primary hover:bg-myhigh5-blue-700 text-white font-semibold px-8 py-6 text-lg rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
                     >

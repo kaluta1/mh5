@@ -43,6 +43,7 @@ export interface Contest extends CreateContestData {
   updated_at: string
   participant_count?: number
   contestants?: number
+  active_round_id?: number | null
 }
 
 export interface ContestResponse {
@@ -66,6 +67,7 @@ export interface ContestResponse {
   pending_count: number
   created_at: string
   updated_at: string
+  active_round_id?: number | null
   voting_type_id?: number | null
   voting_type?: {
     id: number

@@ -420,9 +420,12 @@ function ContestsPageContent() {
     return filtered
   }, [rawContests, activeTab, committedSearch, sortBy, categoryTab, filterLevel])
 
-  // Handlers
-  const handleParticipate = (id: string, isEditing: boolean) => {
-    router.push(isEditing ? `/dashboard/contests/${id}/apply?edit=true` : `/dashboard/contests/${id}/apply`)
+  const handleParticipate = (id: string, isEditing: boolean, roundId: string | null) => {
+    const params = new URLSearchParams()
+    if (isEditing) params.set('edit', 'true')
+    if (roundId) params.set('roundId', roundId)
+    const q = params.toString()
+    router.push(`/dashboard/contests/${id}/apply${q ? `?${q}` : ''}`)
   }
 
   if (isLoading || (roundsLoading && rounds.length === 0)) return <ContestsSkeleton />
@@ -579,7 +582,7 @@ function ContestsPageContent() {
                   votingType={contest.votingType}
                   currentUserContesting={contest.currentUserContesting || false}
                   onToggleFavorite={() => { }}
-                  onParticipate={() => handleParticipate(contest.id, contest.currentUserContesting || false)}
+                  onParticipate={() => handleParticipate(contest.id, contest.currentUserContesting || false, activeRoundId)}
                   onViewContestants={() => {
                     const params = new URLSearchParams()
                     if (filterCountry && filterCountry !== 'all') params.set('country', filterCountry)

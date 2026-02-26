@@ -60,17 +60,8 @@ interface Report {
 export default function ReportsPage() {
   const { t, language } = useLanguage()
   const { addToast } = useToast()
-  
-  // Debug: Test translation loading
-  useEffect(() => {
-    const testKey = 'admin.reports.title'
-    const result = t(testKey)
-    if (result === testKey) {
-      console.error('❌ Translation not found for:', testKey, 'Language:', language)
-    } else {
-      console.log('✅ Translation found:', testKey, '→', result, 'Language:', language)
-    }
-  }, [t, language])
+
+
   const [reports, setReports] = useState<Report[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -87,11 +78,11 @@ export default function ReportsPage() {
       setLoading(true)
       const endpoint = '/api/v1/admin/reports'
       const params: any = {}
-      
+
       if (statusFilter !== 'all') {
         params.status = statusFilter
       }
-      
+
       // Vérifier le cache
       const cachedData = cacheService.get<Report[]>(endpoint, params)
       if (cachedData) {
@@ -99,7 +90,7 @@ export default function ReportsPage() {
         setLoading(false)
         return
       }
-      
+
       // Si pas de cache, faire l'appel API
       const urlParams = new URLSearchParams()
       if (statusFilter !== 'all') {
@@ -108,7 +99,7 @@ export default function ReportsPage() {
       const response = await api.get(`${endpoint}?${urlParams.toString()}`)
       const data = response.data || []
       setReports(data)
-      
+
       // Mettre en cache (TTL de 5 minutes)
       cacheService.set(endpoint, data, params, 5 * 60 * 1000)
     } catch (error: any) {
@@ -170,7 +161,7 @@ export default function ReportsPage() {
     try {
       const date = new Date(dateString)
       if (isNaN(date.getTime())) return dateString // Si la date est invalide, retourner la chaîne originale
-      
+
       // Déterminer la locale basée sur la langue actuelle
       const languageMap: Record<string, string> = {
         'fr': 'fr-FR',
@@ -181,7 +172,7 @@ export default function ReportsPage() {
       // S'assurer que language est défini et valide
       const currentLanguage = language && typeof language === 'string' ? language : 'fr'
       const locale = languageMap[currentLanguage] || 'en-US'
-      
+
       return date.toLocaleDateString(locale, {
         year: 'numeric',
         month: 'long',
@@ -196,7 +187,7 @@ export default function ReportsPage() {
   }
 
   const filteredReports = reports.filter((report) => {
-    const matchesSearch = 
+    const matchesSearch =
       report.reason.toLowerCase().includes(searchTerm.toLowerCase()) ||
       report.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       report.author?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -346,7 +337,7 @@ export default function ReportsPage() {
                         <div className="text-sm">
                           <p className="font-medium">{report.author.full_name || report.author.username}</p>
                           <p className="text-gray-500 dark:text-gray-400 text-xs">
-                            {report.author.city && report.author.country 
+                            {report.author.city && report.author.country
                               ? `${report.author.city}, ${report.author.country}`
                               : report.author.email}
                           </p>
@@ -378,7 +369,7 @@ export default function ReportsPage() {
                 </div>
 
                 <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
+                  <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
                     <div className="flex items-center gap-1">
                       <Calendar className="h-3 w-3" />
                       <span>{t('admin.reports.created_at') || 'Created on'} {formatDate(report.created_at)}</span>
@@ -407,7 +398,7 @@ export default function ReportsPage() {
                 {t('admin.reports.report_details_description') || 'Complete information about the report'}
               </DialogDescription>
             </DialogHeader>
-            
+
             <div className="space-y-4">
               <div>
                 <h4 className="font-semibold mb-2">{t('admin.reports.reason_label') || 'Report Reason'}</h4>

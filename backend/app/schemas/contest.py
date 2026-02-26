@@ -211,6 +211,7 @@ class Contest(ContestBase):
     voting_type: Optional["VotingType"] = None  # Type de vote associé
     category: Optional[Dict[str, Any]] = None  # Catégorie associée (id, name, slug, description, is_active)
     rounds: List["Round"] = []
+    active_round_id: Optional[int] = None
     
     # User specific data
     current_user_contesting: Optional[bool] = None

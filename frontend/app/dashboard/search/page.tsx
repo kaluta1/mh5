@@ -25,7 +25,7 @@ interface SearchHistoryItem {
 
 export default function SearchPage() {
   const { t } = useLanguage()
-  const { user, isAuthenticated, isLoading } = useAuth()
+  const { user, isAuthenticated } = useAuth()
   const router = useRouter()
   const [searchTerm, setSearchTerm] = useState('')
   const [results, setResults] = useState<SearchResult[]>([])
@@ -64,13 +64,7 @@ export default function SearchPage() {
     }
   }, [isAuthenticated, user])
 
-  if (isLoading) {
-    return <SearchSkeleton />
-  }
 
-  if (!isAuthenticated || !user) {
-    return null
-  }
 
   const runSearch = async (term: string) => {
     const normalizedTerm = term.replace(/\s+/g, ' ').trim()
@@ -83,17 +77,17 @@ export default function SearchPage() {
     setIsSearching(true)
     try {
       const { searchService } = await import('@/services/search-service')
-      
+
       // Utiliser searchAll pour une meilleure performance avec les résultats catégorisés
       const response = await searchService.searchAll(normalizedTerm, 15)
-      
+
       // Combiner tous les résultats
       const allResults = [
         ...response.contest,
         ...response.contestant,
         ...response.club
       ]
-      
+
       setResults(allResults)
 
       // Enregistrer la recherche dans l'historique backend (même si aucun résultat, si tu préfères tu peux garder la condition)

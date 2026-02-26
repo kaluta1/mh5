@@ -1,34 +1,18 @@
 'use client'
 
-import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+
+
 import { useAuth } from '@/hooks/use-auth'
 import { useLanguage } from '@/contexts/language-context'
 import { BookOpen, DollarSign, Users, Gift, CheckCircle2, AlertCircle } from 'lucide-react'
 
 export default function FoundingMemberPage() {
-  const { user, isAuthenticated, isLoading } = useAuth()
+  const { user } = useAuth()
   const { t } = useLanguage()
-  const router = useRouter()
 
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.push('/')
-    }
-  }, [isAuthenticated, isLoading, router])
 
-  if (isLoading) {
-    return (
-      <div className="space-y-6 animate-pulse">
-        <div className="h-8 w-48 bg-gray-200 dark:bg-gray-700 rounded-lg" />
-        <div className="h-96 bg-gray-200 dark:bg-gray-700 rounded-2xl" />
-      </div>
-    )
-  }
 
-  if (!isAuthenticated || !user) {
-    return null
-  }
+
 
   return (
     <div className="space-y-6 pb-10">
@@ -50,7 +34,7 @@ export default function FoundingMemberPage() {
       {/* Main Content */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden">
         <div className="p-6 sm:p-8 space-y-8">
-          
+
           {/* Exclusive Financial Benefits Section */}
           <section>
             <div className="flex items-center gap-3 mb-6">
@@ -101,7 +85,7 @@ export default function FoundingMemberPage() {
                     <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
                       Annual Profit Pool (10%)
                     </h3>
-                    <p className="text-gray-700 dark:text-gray-300 mb-3"> 
+                    <p className="text-gray-700 dark:text-gray-300 mb-3">
                       Founding Members of MyHigh5 and <a href="https://digitalshoppingmall.net/">Digital Shopping Mall</a>  participate in a combined pool comprising ten percent (10%) of MyHigh5's annual profit after taxes.
                     </p>
                     <div className="space-y-3">

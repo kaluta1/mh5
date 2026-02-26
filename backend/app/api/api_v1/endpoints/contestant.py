@@ -951,14 +951,91 @@ def create_contestant(
                     detail="This contest is reserved for female participants only."
                 )
     
-    # Vérifier que l'utilisateur n'a pas déjà une candidature
-    existing = crud_contestant.get_by_season_and_user(
-        db, season_id, current_user.id
+    # Determine the target round before checking participation
+    target_round_id = contestant_data.round_id
+    from app.models.round import Round
+    
+    # Extract real_contest_id needed for validations
+    real_contest_id = contest.id if hasattr(contest, "id") and contest else contest_id
+    if not contest and season:
+        from app.models.contests import ContestSeasonLink
+        link = db.query(ContestSeasonLink).filter(ContestSeasonLink.season_id == season.id, ContestSeasonLink.is_active == True).first()
+        if link:
+            real_contest_id = link.contest_id
+            
+    if target_round_id:
+        round_obj = db.query(Round).filter(Round.id == target_round_id).first()
+        if not round_obj:
+            raise HTTPException(status_code=404, detail="Round id not found")
+            
+        # The round might belong directly to the contest we found (via legacy contest_id OR via round_contests N:N table).
+        # Check both the legacy column and the many-to-many relationship.
+        from app.models.round import round_contests
+        round_belongs_to_contest = False
+        
+        if real_contest_id:
+            # Check legacy contest_id column
+            if round_obj.contest_id == real_contest_id:
+                round_belongs_to_contest = True
+            else:
+                # Check N:N round_contests association table
+                nn_link = db.query(round_contests).filter(
+                    round_contests.c.round_id == target_round_id,
+                    round_contests.c.contest_id == real_contest_id
+                ).first()
+                if nn_link:
+                    round_belongs_to_contest = True
+        
+        if real_contest_id and not round_belongs_to_contest:
+            # Maybe the user participated directly with the season ID in the URL, verify it matches
+            if season and not contest:
+                link = db.query(ContestSeasonLink).filter(
+                    ContestSeasonLink.season_id == season.id, 
+                    ContestSeasonLink.contest_id == round_obj.contest_id,
+                    ContestSeasonLink.is_active == True
+                ).first()
+                if not link:
+                    # Also check via round_contests N:N table
+                    for rc_contest_id_row in db.query(round_contests.c.contest_id).filter(round_contests.c.round_id == target_round_id).all():
+                        link = db.query(ContestSeasonLink).filter(
+                            ContestSeasonLink.season_id == season.id, 
+                            ContestSeasonLink.contest_id == rc_contest_id_row[0],
+                            ContestSeasonLink.is_active == True
+                        ).first()
+                        if link:
+                            break
+                    if not link:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST, 
+                            detail=f"Requested round does not belong to this contest/season"
+                        )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, 
+                    detail=f"Requested round does not belong to this contest"
+                )
+    else:
+        # Trouver le round actif
+        if real_contest_id:
+            from app import crud
+            active_round = crud.round.get_active_round_for_contest(db, real_contest_id)
+            if active_round:
+                target_round_id = active_round.id
+                
+    if not target_round_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No active round found for this contest. Participation requires an active round."
+        )
+
+    # Vérifier que l'utilisateur n'a pas déjà une candidature POUR CE ROUND
+    existing = crud_contestant.get_by_round_and_user(
+        db, target_round_id, current_user.id
     )
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="You already have a submission for this contest"
+            detail="You already have a submission for this round of the contest"
         )
     
     # ============================================
@@ -1109,57 +1186,7 @@ def create_contestant(
         # Lier automatiquement le contestant à la saison "city"
         from app.services.season_migration import SeasonMigrationService
         from datetime import datetime
-        
-        # ------------------------------------------------------------------
-        # GESTION DU ROUND (Nouveauté)
-        # ------------------------------------------------------------------
-        # 1. Si round_id est fourni, vérifier qu'il existe et est valide pour ce contest
-        # 2. Si non fourni, trouver le round actif pour ce contest
-        target_round_id = contestant_data.round_id
-        
-        from app.models.round import Round, RoundStatus
-        
-        if target_round_id:
-            round_obj = db.query(Round).filter(Round.id == target_round_id).first()
-            if not round_obj:
-                raise HTTPException(status_code=404, detail="Round id not found")
-            if round_obj.contest_id != contest_id: # contest_id here might be season_id or contest_id depending on logic above
-                 # Logic check above: season_id = contest_id if no season found.
-                 # Need to ensure we match the right contest.
-                 # If `season_id` came from a `ContestSeason`, we need `season.contest_id` via link.
-                 # If `season_id` came from `Contest`, it IS the `contest_id` (in this legacy logic).
-                 # Wait, `season_id` var holds the ID to be used for `Contestant.season_id`. 
-                 # If it is a `Contest` ID (legacy), then `round_obj.contest_id` should match it.
-                 # If it is a `ContestSeason` ID, we need to check the link.
-                 pass 
-            # We assume for now if passed, it's correct. Validation could be stricter.
-        else:
-            # Trouver le round actif
-            # On a besoin du VRAI contest_id.
-            # Si `contest` object exists (found earlier), use `contest.id`.
-            real_contest_id = None
-            if contest:
-                real_contest_id = contest.id
-            elif season:
-                # Find linked contest
-                from app.models.contests import ContestSeasonLink
-                link = db.query(ContestSeasonLink).filter(ContestSeasonLink.season_id == season.id).first()
-                if link:
-                    real_contest_id = link.contest_id
-            
-            if real_contest_id:
-                 # Utiliser crud.round (accessible via app.crud if updated, or direct import)
-                 # We need to import it.
-                 from app import crud
-                 active_round = crud.round.get_active_round_for_contest(db, real_contest_id)
-                 if active_round:
-                     target_round_id = active_round.id
-            
-            if not target_round_id:
-                # Fallback: maybe just proceed without round_id (legacy)?
-                # User asked to include round_id. If we can't find one, maybe we should error or warn?
-                # For now let's optionalize it but log warning.
-                logger.warning(f"No active round found for contest {real_contest_id} and no round_id provided.")
+
 
         # Trouver ou créer la saison "city" avant de créer le contestant
         # IMPORTANT: Utiliser le round_id pour scoper la saison

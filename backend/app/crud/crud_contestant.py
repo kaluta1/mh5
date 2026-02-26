@@ -470,6 +470,20 @@ class CRUDContestant:
                 )
             )\
             .first()
+            
+    def get_by_round_and_user(
+        self, db: Session, round_id: int, user_id: int
+    ) -> Optional[Contestant]:
+        """Récupère la candidature d'un utilisateur pour un round spécifique"""
+        return db.query(Contestant)\
+            .filter(
+                and_(
+                    Contestant.round_id == round_id,
+                    Contestant.user_id == user_id,
+                    Contestant.is_deleted == False
+                )
+            )\
+            .first()
     
     def get_multi_by_season(
         self, db: Session, season_id: int, *, skip: int = 0, limit: int = 10
@@ -893,11 +907,9 @@ class CRUDContestant:
         round_id: Optional[int] = None
     ) -> Contestant:
         """Crée une nouvelle candidature"""
-        # Vérifier qu'il n'existe pas déjà une candidature pour cet utilisateur
-        existing = self.get_by_season_and_user(db, season_id, user_id)
-        if existing:
-            raise ValueError("L'utilisateur a déjà une candidature pour cette saison")
-        
+        # We no longer check `get_by_season_and_user` here because the API endpoint
+        # already checks `get_by_round_and_user` to prevent duplicate submissions in the same round,
+        # but allows submissions across different rounds of the same season/contest.
         # Récupérer l'utilisateur pour copier ses données géographiques
         user = db.query(User).filter(User.id == user_id).first()
         if not user:

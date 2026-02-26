@@ -684,32 +684,40 @@ class CRUDContest:
             try:
                 from app.models.contests import ContestSeason, ContestSeasonLink
                 from app.crud import contestant as crud_contestant
+                from app import crud
                 
-                # REPLICATE THE EXACT LOGIC FROM get_contest_with_enriched_contestants:
-                # 1. Try to find active ContestSeason via ContestSeasonLink
-                season_link = db.query(ContestSeasonLink).filter(
-                    ContestSeasonLink.contest_id == contest.id,
-                    ContestSeasonLink.is_active == True
-                ).first()
-
-                season_id = None
-                if season_link:
-                    season = db.query(ContestSeason).filter(
-                        ContestSeason.id == season_link.season_id,
-                        ContestSeason.is_deleted == False
+                # 1. First, check active round as participation is now round-specific
+                active_round = crud.round.get_active_round_for_contest(db, contest.id)
+                target_round_id = active_round.id if active_round else None
+                
+                existing = None
+                if target_round_id:
+                    existing = crud_contestant.get_by_round_and_user(
+                        db, target_round_id, current_user.id
+                    )
+                else:
+                    # 2. Try to find active ContestSeason via ContestSeasonLink (legacy/fallback)
+                    season_link = db.query(ContestSeasonLink).filter(
+                        ContestSeasonLink.contest_id == contest.id,
+                        ContestSeasonLink.is_active == True
                     ).first()
-                    if season:
-                        season_id = season.id
-                
-                # 2. Fallback to contest.id if no active season found (legacy behavior)
-                if not season_id:
-                    season_id = contest.id
-                
-                # 3. Use the EXACT same check as create_contestant duplicate check
-                # This is the SAME function that throws "You already have a submission for this contest"
-                existing = crud_contestant.get_by_season_and_user(
-                    db, season_id, current_user.id
-                )
+
+                    season_id = None
+                    if season_link:
+                        season = db.query(ContestSeason).filter(
+                            ContestSeason.id == season_link.season_id,
+                            ContestSeason.is_deleted == False
+                        ).first()
+                        if season:
+                            season_id = season.id
+                    
+                    # 3. Fallback to contest.id if no active season found (legacy behavior)
+                    if not season_id:
+                        season_id = contest.id
+                    
+                    existing = crud_contestant.get_by_season_and_user(
+                        db, season_id, current_user.id
+                    )
                 
                 current_user_contesting = existing is not None
                 
@@ -1049,6 +1057,7 @@ class CRUDContest:
             "top_contestants": top_contestants,
             # Vérifier si l'utilisateur connecté participe
             "current_user_contesting": current_user_contesting,
+            "active_round_id": active_round.id if active_round else None,
         }
         
         # Log pour vérifier que category_id est bien dans le résultat

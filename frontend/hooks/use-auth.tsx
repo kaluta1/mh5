@@ -206,7 +206,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return perms.every(p => permissions.includes(p))
   }
 
-  const value: AuthContextType = {
+  const value: AuthContextType = React.useMemo(() => ({
     user,
     isLoading,
     isAuthenticated,
@@ -219,7 +219,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     hasAllPermissions,
     isAdmin,
     isModerator
-  }
+  }), [user, isLoading, isAuthenticated, permissions, isAdmin, isModerator])
 
   return (
     <AuthContext.Provider value={value}>

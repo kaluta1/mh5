@@ -18,6 +18,7 @@ class ParticipateRequest(BaseModel):
     video_media_ids: Optional[List[str]] = None
     nominator_city: Optional[str] = None
     nominator_country: Optional[str] = None
+    round_id: Optional[int] = None
 
 router = APIRouter()
 
@@ -171,71 +172,58 @@ def read_contests(
                 contestant_counts[contest_id] = max(count, direct_count)
             
             # Check current_user_contesting in batch if user is authenticated
-            # Need to check: season_id (legacy - can be contest_id directly), round_id (new), and season_id via ContestSeasonLink
+            # We want to know if the user is participating in the ACTIVE round or ACTIVE season
             if current_user:
-                from app.models.round import Round, round_contests
-                from sqlalchemy import select, or_
+                from app.models.round import Round
+                from sqlalchemy import literal
                 
-                # Get round_ids linked to these contests
-                round_ids_by_contest = {}
+                # For each contest, find its active round (if any)
+                active_rounds_by_contest = {}
                 try:
-                    round_links = db.execute(
-                        select(round_contests.c.round_id, round_contests.c.contest_id).where(
-                            round_contests.c.contest_id.in_(contest_ids)
-                        )
+                    # Query active rounds for the given contests
+                    active_rounds = db.query(Round).filter(
+                        Round.contest_id.in_(contest_ids),
+                        Round.is_active == True,
+                        Round.is_deleted == False
                     ).all()
-                    for round_id, contest_id in round_links:
-                        if contest_id not in round_ids_by_contest:
-                            round_ids_by_contest[contest_id] = []
-                        round_ids_by_contest[contest_id].append(round_id)
+                    for r in active_rounds:
+                        active_rounds_by_contest[r.contest_id] = r.id
                 except Exception as e:
-                    logger.warning(f"Error fetching round links: {str(e)}")
+                    logger.warning(f"Error fetching active rounds: {str(e)}")
                 
-                # Build all conditions for user contestants
-                conditions = []
-                
-                # 1. Check season_id from ContestSeasonLink (new way)
-                season_ids = list(season_by_contest.values())
-                if season_ids:
-                    conditions.append(Contestant.season_id.in_(season_ids))
-                
-                # 2. Check if season_id directly equals contest_id (legacy - contest_id stored in season_id)
-                if contest_ids:
-                    conditions.append(Contestant.season_id.in_(contest_ids))
-                
-                # 3. Check round_id (new way)
-                all_round_ids = []
-                for round_ids in round_ids_by_contest.values():
-                    all_round_ids.extend(round_ids)
-                if all_round_ids:
-                    conditions.append(Contestant.round_id.in_(all_round_ids))
-                
-                # Query all user contestants matching any condition
-                if conditions:
+                # Fetch user's contestants that might match
+                # It's safer to just fetch all active contestants for the user
+                # and then match them against active rounds or seasons
+                try:
                     user_contestants = db.query(Contestant).filter(
                         Contestant.user_id == current_user.id,
-                        Contestant.is_deleted == False,
-                        or_(*conditions) if len(conditions) > 1 else conditions[0]
+                        Contestant.is_deleted == False
                     ).all()
                     
-                    # Map contestants to contests
-                    for uc in user_contestants:
-                        # Check via season_id from ContestSeasonLink
-                        for contest_id, season_id in season_by_contest.items():
-                            if uc.season_id == season_id:
+                    for contest_id in contest_ids:
+                        # 1. First, check active round
+                        if contest_id in active_rounds_by_contest:
+                            target_round_id = active_rounds_by_contest[contest_id]
+                            # User is contesting if they have a contestant record for this round
+                            is_contesting = any(uc.round_id == target_round_id for uc in user_contestants)
+                            if is_contesting:
                                 current_user_contesting_map[contest_id] = True
-                                break
-                        
-                        # Check via direct contest_id (legacy - season_id = contest_id)
-                        if uc.season_id in contest_ids:
-                            current_user_contesting_map[uc.season_id] = True
-                        
-                        # Check via round_id
-                        if uc.round_id:
-                            for contest_id, round_ids in round_ids_by_contest.items():
-                                if uc.round_id in round_ids:
-                                    current_user_contesting_map[contest_id] = True
-                                    break
+                                continue
+                                
+                        # 2. Try active Season via links
+                        if contest_id in season_by_contest:
+                            target_season_id = season_by_contest[contest_id]
+                            is_contesting = any(uc.season_id == target_season_id for uc in user_contestants)
+                            if is_contesting:
+                                current_user_contesting_map[contest_id] = True
+                                continue
+                                
+                        # 3. Fallback to contest.id itself (legacy)
+                        is_contesting = any(uc.season_id == contest_id for uc in user_contestants)
+                        if is_contesting:
+                            current_user_contesting_map[contest_id] = True
+                except Exception as e:
+                    logger.warning(f"Error matching user contestants: {str(e)}")
         except Exception as e:
             logger.warning(f"Error in batch queries: {str(e)}")
     
@@ -339,7 +327,8 @@ def participate_in_contest(
         image_media_ids=image_ids_str,
         video_media_ids=video_ids_str,
         nominator_city=request.nominator_city,
-        nominator_country=request.nominator_country
+        nominator_country=request.nominator_country,
+        round_id=request.round_id
     )
     
     # Import the create_contestant function from contestant module
@@ -440,25 +429,44 @@ def read_contest(
             ContestSeasonLink.is_active == True
         ).first()
 
-        season_id = None
-        if season_link:
-            season = db.query(ContestSeason).filter(
-                ContestSeason.id == season_link.season_id,
-                ContestSeason.is_deleted == False
-            ).first()
-            if season:
-                season_id = season.id
-        
-        # 2. Fallback to contest.id if no active season found (legacy behavior)
-        if not season_id:
-            season_id = contest_id
+        from app import crud
+        # First, check active round as participation is now round-specific
+        active_round = crud.round.get_active_round_for_contest(db, contest_id)
+        target_round_id = active_round.id if active_round else None
 
-        # Check if we have participation
-        participation = crud_contestant.get_by_season_and_user(
-            db=db, 
-            season_id=season_id, 
-            user_id=current_user.id
-        )
+        participation = None
+        if target_round_id:
+            participation = crud_contestant.get_by_round_and_user(
+                db=db, 
+                round_id=target_round_id, 
+                user_id=current_user.id
+            )
+        else:
+            # Fallback to season logic if no active round
+            season_link = db.query(ContestSeasonLink).filter(
+                ContestSeasonLink.contest_id == contest_id,
+                ContestSeasonLink.is_active == True
+            ).first()
+
+            season_id = None
+            if season_link:
+                season = db.query(ContestSeason).filter(
+                    ContestSeason.id == season_link.season_id,
+                    ContestSeason.is_deleted == False
+                ).first()
+                if season:
+                    season_id = season.id
+            
+            # 2. Fallback to contest.id if no active season found (legacy behavior)
+            if not season_id:
+                season_id = contest_id
+
+            # Check if we have participation
+            participation = crud_contestant.get_by_season_and_user(
+                db=db, 
+                season_id=season_id, 
+                user_id=current_user.id
+            )
         if participation:
              # Fetch media for the participation if missing from the object
              media_obj = participation.media

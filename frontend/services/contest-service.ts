@@ -108,6 +108,7 @@ export interface ContestResponse {
   voting_end_date?: string
   created_at?: string
   updated_at?: string
+  active_round_id?: number | null
 
   // Contest settings
   is_active?: boolean
@@ -596,7 +597,8 @@ class ContestService {
     imageMediaIds: string | string[] = [],
     videoMediaIds: string | string[] = [],
     nominatorCity?: string,
-    nominatorCountry?: string
+    nominatorCountry?: string,
+    roundId?: number
   ): Promise<any> {
     try {
       // Convert string media IDs to array if needed
@@ -608,14 +610,20 @@ class ContestService {
         ? videoMediaIds
         : videoMediaIds ? [videoMediaIds] : [];
 
-      const response = await api.post(`/api/v1/contests/${contestId}/participate`, {
+      const payload: any = {
         title,
         description,
         image_media_ids: imageIds,
         video_media_ids: videoIds,
         nominator_city: nominatorCity,
         nominator_country: nominatorCountry
-      });
+      };
+
+      if (roundId !== undefined) {
+        payload.round_id = roundId;
+      }
+
+      const response = await api.post(`/api/v1/contests/${contestId}/participate`, payload);
       return response.data;
     } catch (error) {
       console.error('Error submitting contestant:', error);
