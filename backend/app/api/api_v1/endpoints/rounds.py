@@ -210,6 +210,22 @@ def _enrich_round_data(
             # Apply pagination
             paginated_contests = valid_contests[contest_skip:contest_skip + contest_limit]
             
+            # Batch query: find all contests where current user has participated in this round
+            user_contested_contest_ids: set = set()
+            if user_id and valid_contests:
+                try:
+                    from app.models.contests import Contestant
+                    all_contest_ids = [c.id for c in valid_contests]
+                    user_contestants = db.query(Contestant.season_id).filter(
+                        Contestant.user_id == user_id,
+                        Contestant.round_id == round_id,
+                        Contestant.season_id.in_(all_contest_ids),
+                        Contestant.is_deleted == False
+                    ).all()
+                    user_contested_contest_ids = {row.season_id for row in user_contestants}
+                except Exception as e:
+                    logger.warning(f"Error batch-checking user participation for round {round_id}: {str(e)}")
+
             # Build contest data
             for contest in paginated_contests:
                 try:
@@ -254,7 +270,7 @@ def _enrich_round_data(
                         "image_url": getattr(contest, 'image_url', None),
                         "created_at": getattr(contest, 'created_at', None),
                         "updated_at": getattr(contest, 'updated_at', None),
-                        "current_user_contesting": False  # Can be enhanced later
+                        "current_user_contesting": contest.id in user_contested_contest_ids
                     }
                     r_data.setdefault("contests", []).append(contest_data)
                 except Exception as e:
