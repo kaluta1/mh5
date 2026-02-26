@@ -975,8 +975,12 @@ class ContestService {
       cacheService.set(cacheKey, response.data)
 
       return response.data || []
-    } catch (error) {
-      console.error(`Error fetching contestants for contest ${contestId}:`, error)
+    } catch (error: any) {
+      // Silently handle network errors - don't log to console.error to avoid noise
+      // Only log if it's not a network/CORS error
+      if (error?.code !== 'ERR_NETWORK' && error?.message && !error?.message?.includes('Network Error') && !error?.message?.includes('CORS')) {
+        console.warn(`Error fetching contestants for contest ${contestId}:`, error)
+      }
       return []
     }
   }

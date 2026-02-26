@@ -823,15 +823,19 @@ def get_contest_contestants(
         
     except Exception as e:
         import traceback
-        print(f"[ContestantEndpoint] ERROR: {str(e)}")
-        print(traceback.format_exc())
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error fetching contestants: {str(e)}"
-        )
+        logger.error(f"[ContestantEndpoint] ERROR fetching contestants for contest {contest_id}: {str(e)}")
+        logger.error(traceback.format_exc())
+        # Return empty array instead of raising exception to prevent network errors
+        # This allows the frontend to handle gracefully
+        return []
     
     # Convertir en schéma Pydantic
-    result = [ContestantWithAuthorAndStats(**data) for data in contestants_data]
+    try:
+        result = [ContestantWithAuthorAndStats(**data) for data in contestants_data]
+    except Exception as e:
+        logger.error(f"[ContestantEndpoint] ERROR serializing contestants: {str(e)}")
+        # Return empty array if serialization fails
+        return []
     
     return result
 
