@@ -250,13 +250,22 @@ export default function ApplyToContestPage() {
     // Otherwise use contest's submission_end_date
     let submissionDeadline = defaultDeadline
     
-    // Check active rounds first (for nominations, rounds have +30 days)
+    // Check ALL rounds (not just is_submission_open) to get the latest submission_end_date
+    // This is important for nominations which have +30 days
     if (activeRounds && activeRounds.length > 0) {
-      const activeRound = activeRounds.find(r => r.is_submission_open)
-      if (activeRound?.submission_end_date) {
-        const roundEndDate = new Date(activeRound.submission_end_date)
-        roundEndDate.setHours(23, 59, 59, 999)
-        submissionDeadline = roundEndDate
+      // Find the round with the latest submission_end_date
+      let latestRoundDate: Date | null = null
+      for (const round of activeRounds) {
+        if (round.submission_end_date) {
+          const roundEndDate = new Date(round.submission_end_date)
+          roundEndDate.setHours(23, 59, 59, 999)
+          if (!latestRoundDate || roundEndDate > latestRoundDate) {
+            latestRoundDate = roundEndDate
+          }
+        }
+      }
+      if (latestRoundDate) {
+        submissionDeadline = latestRoundDate
       }
     }
     
@@ -345,19 +354,37 @@ export default function ApplyToContestPage() {
     
     // Use submission_end_date if available, otherwise use default deadline
     let submissionDeadline = defaultDeadline
-    if (contestData.submission_end_date) {
+    
+    // Check ALL rounds to get the latest submission_end_date (for nominations with +30 days)
+    if (activeRounds && activeRounds.length > 0) {
+      let latestRoundDate: Date | null = null
+      for (const round of activeRounds) {
+        if (round.submission_end_date) {
+          const roundEndDate = new Date(round.submission_end_date)
+          roundEndDate.setHours(23, 59, 59, 999)
+          if (!latestRoundDate || roundEndDate > latestRoundDate) {
+            latestRoundDate = roundEndDate
+          }
+        }
+      }
+      if (latestRoundDate) {
+        submissionDeadline = latestRoundDate
+      }
+    }
+    
+    // Fallback to contest submission_end_date
+    if (submissionDeadline === defaultDeadline && contestData.submission_end_date) {
       const endDate = new Date(contestData.submission_end_date)
       endDate.setHours(23, 59, 59, 999)
-      // Use the later date between default deadline and actual end date
       submissionDeadline = endDate > defaultDeadline ? endDate : defaultDeadline
     }
     
     // Check if deadline has passed
     const isDeadlinePassed = today > submissionDeadline
     
-    // Submissions are open if deadline hasn't passed (rounds check removed)
+    // Submissions are open if deadline hasn't passed
     return !isDeadlinePassed
-  }, [])
+  }, [activeRounds])
 
 
 

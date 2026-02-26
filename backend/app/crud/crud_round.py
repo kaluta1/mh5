@@ -73,9 +73,9 @@ class CRUDRound:
         # Submission (Mois M)
         s_start, s_end = get_month_range(month, year)
         dates["submission_start_date"] = s_start
-        # For nominations, add 30 days to submission end date
+        # For nominations, add 32 days to submission end date
         if is_nomination:
-            s_end = s_end + timedelta(days=30)
+            s_end = s_end + timedelta(days=32)
         dates["submission_end_date"] = s_end
         
         # Voting (Mois M+1)
