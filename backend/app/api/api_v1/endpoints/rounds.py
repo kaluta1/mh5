@@ -2,7 +2,10 @@ from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
-from datetime import date
+from datetime import date, datetime
+import logging
+import traceback
+import os
 
 from app import crud, models
 from app.schemas import round as round_schema
@@ -11,6 +14,7 @@ from app.models.round import Round
 from app.scripts.generate_monthly_rounds import generate_monthly_round
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 @router.get("/", response_model=List[round_schema.RoundWithStats])
 def read_rounds(
@@ -31,214 +35,258 @@ def read_rounds(
     Récupère les rounds (optionnellement filtrés par contest) avec leurs statistiques.
     Inclut le nombre de participants et si l'utilisateur actuel a participé.
     """
-    user_id = current_user.id if current_user else None
-    
-    if contest_id:
-        rounds_with_stats = crud.round.get_rounds_with_stats(
-            db=db, contest_id=contest_id, user_id=user_id
-        )
-    else:
-        # Fallback: get all active rounds or recent ones if no contest specified
-        # For now, let's use a new CRUD method or just get all rounds
-        rounds_with_stats = []
-        # TODO: Implement get_all_rounds_with_stats if needed
-        # For now, return empty or implement simple fetch
-        pass 
-       
-    # If no contest_id provided, we might want to return all rounds or filter differently.
-    # Given the previous error, the client might be calling this without contest_id.
-    # Let's support fetching all rounds if contest_id is missing.
-    if not contest_id:
-        # Load contests with their category relationship for efficient search
-        from app.models.contest import Contest
-        query = db.query(Round).options(
-            joinedload(Round.contests).joinedload(Contest.category)
-        ).filter(Round.status != "cancelled")
-        if round_id:
-            query = query.filter(Round.id == round_id)
-        db_rounds = query.order_by(Round.submission_start_date.desc()).offset(skip).limit(limit).all()
-        rounds_with_stats = []
-    
-    
-    # Enrich rounds with requested data
-    enriched_rounds = []
-    
-    # Import here to avoid circular dependencies
-    from app.schemas.contest import Contest, TopContestantPreview
-    
-    # Import methods for enrichment
-    # We would ideally put this in CRUD or Service layer
-    
-    # Prepare list for later use
-    if not contest_id:
-         # Need to iterate over what we fetched from DB
-         rounds_iterable = db_rounds
-    else:
-         # If contest_id, we used CRUD which returned schemas, not ORM objects
-         # We need to re-fetch ORM or be careful.
-         # Actually crud.round.get_rounds_with_stats returns dicts/Pydantic models
-         rounds_iterable = rounds_with_stats
-
-    # Since we are modifying the response structure significantly and mixing ORM/dicts
-    # It is safer to rebuild the response list.
-    
-    # Function to get search keywords for matching
-    def matches_search(contest, search_lower):
-        if not search_lower:
-            return True
-        contest_name = (contest.name or "").lower()
-        contest_description = (contest.description or "").lower()
-        contest_type = (contest.contest_type or "").lower()
-        category_name = ""
-        if hasattr(contest, 'category') and contest.category:
-            category_name = (contest.category.name or "").lower() if hasattr(contest.category, 'name') else ""
-        return (search_lower in contest_name or 
-                search_lower in contest_description or 
-                search_lower in contest_type or
-                search_lower in category_name)
-
-    search_lower = search_term.lower().strip() if search_term else None
-
-    # Process each round
-    for r_item in rounds_iterable:
-        if hasattr(r_item, '__dict__'):
-            r_dict = {k: v for k, v in r_item.__dict__.items() if not k.startswith('_')}
-        else:
-             r_dict = dict(r_item)
-             
-        if "participants_count" not in r_dict:
-             r_dict["participants_count"] = crud.round.count_participants_for_round(db, r_dict["id"])
-        if "current_user_participated" not in r_dict:
-             r_dict["current_user_participated"] = crud.round.user_participated_in_round(db, r_dict["id"], user_id) if user_id else False
-        if "is_completed" not in r_dict:
-             r_dict["is_completed"] = False
-
-        r_dict["contests"] = []
-        r_dict["top_contestants"] = []
-        r_dict["votes_count"] = 0
+    try:
+        user_id = current_user.id if current_user else None
         
-        if hasattr(r_item, "contests") and r_item.contests:
-            # 1. Filter contests in memory
+        # Simple query - fetch rounds without complex joins first
+        try:
+            query = db.query(Round).filter(Round.status != "cancelled")
+            if round_id:
+                query = query.filter(Round.id == round_id)
+            if contest_id:
+                # For contest_id, use the CRUD method
+                rounds_data = crud.round.get_rounds_with_stats(db=db, contest_id=contest_id, user_id=user_id)
+                # Convert to RoundWithStats format
+                result = []
+                for r_data in rounds_data:
+                    round_obj = _enrich_round_data(db, r_data, user_id, has_voting_type, filter_country, 
+                                                  filter_continent, search_term, contest_limit, contest_skip)
+                    if round_obj:
+                        result.append(round_obj)
+                return result
+            else:
+                # Fetch all rounds
+                try:
+                    db_rounds = query.order_by(Round.id.desc()).offset(skip).limit(limit).all()
+                except Exception as order_error:
+                    logger.warning(f"Error ordering rounds: {str(order_error)}")
+                    db_rounds = query.offset(skip).limit(limit).all()
+                
+                if not db_rounds:
+                    return []
+                
+                # Convert ORM objects to dict format
+                result = []
+                for r in db_rounds:
+                    try:
+                        r_data = {
+                            "id": r.id,
+                            "contest_id": getattr(r, 'contest_id', None),
+                            "name": r.name or f"Round {r.id}",
+                            "status": r.status.value if hasattr(r.status, 'value') else str(r.status),
+                            "is_submission_open": getattr(r, 'is_submission_open', True),
+                            "is_voting_open": getattr(r, 'is_voting_open', False),
+                            "current_season_level": getattr(r, 'current_season_level', None),
+                            "submission_start_date": getattr(r, 'submission_start_date', None),
+                            "submission_end_date": getattr(r, 'submission_end_date', None),
+                            "voting_start_date": getattr(r, 'voting_start_date', None),
+                            "voting_end_date": getattr(r, 'voting_end_date', None),
+                            "created_at": getattr(r, 'created_at', datetime.now()),
+                            "updated_at": getattr(r, 'updated_at', datetime.now()),
+                        }
+                        round_obj = _enrich_round_data(db, r_data, user_id, has_voting_type, filter_country,
+                                                      filter_continent, search_term, contest_limit, contest_skip)
+                        if round_obj:
+                            result.append(round_obj)
+                    except Exception as round_error:
+                        logger.error(f"Error processing round {r.id}: {str(round_error)}", exc_info=True)
+                        continue
+                
+                return result
+                
+        except Exception as query_error:
+            logger.error(f"Database query error: {str(query_error)}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Database error: {str(query_error)}"
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        error_traceback = traceback.format_exc()
+        logger.error(f"Error in read_rounds endpoint: {str(e)}", exc_info=True)
+        logger.error(f"Full traceback: {error_traceback}")
+        
+        # Return detailed error in response for debugging
+        error_detail = str(e)
+        if os.getenv("DEBUG") == "true" or os.getenv("ENVIRONMENT") != "production":
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error fetching rounds: {error_detail}\n\nTraceback:\n{error_traceback}"
+            )
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error fetching rounds: {error_detail}. Check server logs for details."
+            )
+
+
+def _enrich_round_data(
+    db: Session,
+    r_data: dict,
+    user_id: Optional[int],
+    has_voting_type: Optional[bool],
+    filter_country: Optional[str],
+    filter_continent: Optional[str],
+    search_term: Optional[str],
+    contest_limit: int,
+    contest_skip: int
+) -> Optional[dict]:
+    """Enrich round data with contests and statistics"""
+    try:
+        round_id = r_data.get("id")
+        if not round_id:
+            return None
+        
+        # Get participants count
+        try:
+            participants_count = crud.round.count_participants_for_round(db, round_id)
+        except Exception as e:
+            logger.warning(f"Error counting participants for round {round_id}: {str(e)}")
+            participants_count = 0
+        
+        # Check if user participated
+        try:
+            current_user_participated = crud.round.user_participated_in_round(db, round_id, user_id) if user_id else False
+        except Exception as e:
+            logger.warning(f"Error checking user participation for round {round_id}: {str(e)}")
+            current_user_participated = False
+        
+        # Check if completed
+        try:
+            round_obj = db.query(Round).filter(Round.id == round_id).first()
+            is_completed = crud.round.is_round_completed(round_obj) if round_obj else False
+        except Exception as e:
+            logger.warning(f"Error checking if round {round_id} is completed: {str(e)}")
+            is_completed = False
+        
+        # Get contests for this round
+        contests = []
+        contests_count = 0
+        try:
+            from app.models.contest import Contest as ContestModel
+            from app.models.round import round_contests
+            
+            # Try to get contests via round_contests table
+            try:
+                linked_contests = db.query(ContestModel).join(
+                    round_contests, ContestModel.id == round_contests.c.contest_id
+                ).filter(round_contests.c.round_id == round_id).all()
+                
+                if linked_contests:
+                    contests = linked_contests
+            except Exception as e:
+                logger.warning(f"Error fetching contests via round_contests for round {round_id}: {str(e)}")
+                # Fallback: try legacy contest_id
+                contest_id = r_data.get("contest_id")
+                if contest_id:
+                    contest = crud.contest.get(db, id=contest_id)
+                    if contest:
+                        contests = [contest]
+            
+            # Filter contests
             valid_contests = []
-            for c in r_item.contests:
+            for c in contests:
+                # Filter by voting_type
                 if has_voting_type is not None:
-                    if has_voting_type and c.voting_type_id is None:
+                    if has_voting_type and getattr(c, 'voting_type_id', None) is None:
                         continue
-                    if not has_voting_type and c.voting_type_id is not None:
+                    if not has_voting_type and getattr(c, 'voting_type_id', None) is not None:
                         continue
-                if search_lower and not matches_search(c, search_lower):
-                    continue
+                
+                # Filter by search term
+                if search_term:
+                    search_lower = search_term.lower().strip()
+                    contest_name = (c.name or "").lower()
+                    contest_description = (getattr(c, 'description', None) or "").lower()
+                    if search_lower not in contest_name and search_lower not in contest_description:
+                        continue
+                
                 valid_contests.append(c)
             
-            r_dict["contests_count"] = len(valid_contests)
+            contests_count = len(valid_contests)
             
             # Apply pagination
-            paginated_contests = valid_contests[contest_skip : contest_skip + contest_limit]
-            contest_ids = [c.id for c in paginated_contests]
+            paginated_contests = valid_contests[contest_skip:contest_skip + contest_limit]
             
-            participant_counts = {}
-            user_participation = {}
-            
-            if contest_ids:
-                from app.models.contests import Contestant
-                from sqlalchemy import select, func, or_
-                
-                # --- Batch Query 1: Participant Counts ---
-                p_query = db.query(
-                    Contestant.season_id, 
-                    func.count(Contestant.id)
-                ).filter(
-                    Contestant.season_id.in_(contest_ids),
-                    Contestant.round_id == r_dict["id"],
-                    Contestant.is_deleted == False
-                )
-                
-                # Apply location filters to the count query
-                if filter_country and filter_country != 'all':
-                    from app.crud.crud_contest import _get_country_match_patterns
-                    country_patterns = _get_country_match_patterns(filter_country)
-                    if country_patterns:
-                        country_conds = [Contestant.country.ilike(pat) for pat in country_patterns]
-                        p_query = p_query.filter(or_(*country_conds))
-                    else:
-                        p_query = p_query.filter(func.lower(Contestant.country) == func.lower(filter_country))
-                        
-                if filter_continent and filter_continent != 'all':
-                    p_query = p_query.filter(func.lower(Contestant.continent) == func.lower(filter_continent))
-                    
-                counts_result = p_query.group_by(Contestant.season_id).all()
-                participant_counts = {season_id: count for season_id, count in counts_result}
-
-                # --- Batch Query 2: Current User Participation ---
-                if user_id:
-                    user_entries = db.query(Contestant.season_id).filter(
-                        Contestant.user_id == user_id,
-                        Contestant.season_id.in_(contest_ids),
-                        Contestant.round_id == r_dict["id"],
-                        Contestant.is_deleted == False
-                    ).all()
-                    # Store as a set/dict for O(1) lookup
-                    user_participation = {row[0]: True for row in user_entries}
-
-            # 3. Assemble the response
+            # Build contest data
             for contest in paginated_contests:
-                c_data = {
-                    "id": contest.id,
-                    "name": contest.name,
-                    "description": contest.description,
-                    "contest_type": contest.contest_type,
-                    "cover_image_url": contest.cover_image_url,
-                    "level": contest.level,
-                    "participants_count": participant_counts.get(contest.id, 0),
-                    "votes_count": 0, 
-                    "image_url": contest.image_url,
-                    "created_at": getattr(contest, "created_at", None),
-                    "updated_at": getattr(contest, "updated_at", None),
-                    "current_user_contesting": user_participation.get(contest.id, False)
-                }
-                r_dict["contests"].append(c_data)
+                try:
+                    # Get participant count for this contest in this round
+                    participant_count = 0
+                    try:
+                        from app.models.contests import Contestant
+                        participant_count = db.query(func.count(Contestant.id)).filter(
+                            Contestant.season_id == contest.id,
+                            Contestant.round_id == round_id,
+                            Contestant.is_deleted == False
+                        ).scalar() or 0
+                        
+                        # Apply location filters
+                        if filter_country and filter_country != 'all':
+                            participant_count = db.query(func.count(Contestant.id)).filter(
+                                Contestant.season_id == contest.id,
+                                Contestant.round_id == round_id,
+                                Contestant.is_deleted == False,
+                                func.lower(Contestant.country) == func.lower(filter_country)
+                            ).scalar() or 0
+                        
+                        if filter_continent and filter_continent != 'all':
+                            participant_count = db.query(func.count(Contestant.id)).filter(
+                                Contestant.season_id == contest.id,
+                                Contestant.round_id == round_id,
+                                Contestant.is_deleted == False,
+                                func.lower(Contestant.continent) == func.lower(filter_continent)
+                            ).scalar() or 0
+                    except Exception as e:
+                        logger.warning(f"Error counting participants for contest {contest.id}: {str(e)}")
+                    
+                    contest_data = {
+                        "id": contest.id,
+                        "name": contest.name,
+                        "description": getattr(contest, 'description', None),
+                        "contest_type": getattr(contest, 'contest_type', None),
+                        "cover_image_url": getattr(contest, 'cover_image_url', None),
+                        "level": getattr(contest, 'level', None),
+                        "participants_count": participant_count,
+                        "votes_count": 0,
+                        "image_url": getattr(contest, 'image_url', None),
+                        "created_at": getattr(contest, 'created_at', None),
+                        "updated_at": getattr(contest, 'updated_at', None),
+                        "current_user_contesting": False  # Can be enhanced later
+                    }
+                    r_data.setdefault("contests", []).append(contest_data)
+                except Exception as e:
+                    logger.warning(f"Error processing contest {contest.id}: {str(e)}")
+                    continue
             
-            # Sort contests by participants_count (descending)
-            r_dict["contests"].sort(key=lambda x: x.get("participants_count", 0), reverse=True)
+            # Sort contests by participants_count
+            if "contests" in r_data:
+                r_data["contests"].sort(key=lambda x: x.get("participants_count", 0), reverse=True)
         
-        # Fallback to legacy contest_id logic if no N:N links found
-        if not r_dict["contests"] and r_dict.get("contest_id"):
-             linked_contest = crud.contest.get(db, id=r_dict["contest_id"])
-             if linked_contest:
-                 c_data = {
-                     "id": linked_contest.id,
-                     "name": linked_contest.name,
-                     "description": linked_contest.description,
-                     "contest_type": linked_contest.contest_type,
-                     "cover_image_url": linked_contest.cover_image_url,
-                     "level": linked_contest.level,
-                     "participants_count": linked_contest.participant_count,
-                     "votes_count": 0,
-                     "image_url": linked_contest.image_url,
-                     "created_at": getattr(linked_contest, "created_at", None),
-                     "updated_at": getattr(linked_contest, "updated_at", None)
-                 }
-                 r_dict["contests"].append(c_data)
+        except Exception as e:
+            logger.warning(f"Error enriching contests for round {round_id}: {str(e)}")
+            r_data["contests"] = []
+            contests_count = 0
         
-        # Fetch Top Contestants
-        if r_dict.get("contest_id"):
-            top_c = crud.contestant.get_multi_by_contest(
-                db=db, contest_id=r_dict["contest_id"], limit=3, order_by="votes"
-            )
-            for tc in top_c:
-                 author = crud.user.get(db, id=tc.user_id)
-                 r_dict["top_contestants"].append({
-                     "id": tc.id,
-                     "author_name": author.username if author else "Unknown",
-                     "author_avatar_url": author.avatar_url if author else None,
-                     "image_url": None, 
-                     "votes_count": 0, 
-                     "rank": 0
-                 })
-
-        enriched_rounds.append(r_dict)
-    
-    return enriched_rounds
+        # Build final response
+        result = {
+            **r_data,
+            "participants_count": participants_count,
+            "contests_count": contests_count,
+            "votes_count": 0,
+            "current_user_participated": current_user_participated,
+            "is_completed": is_completed,
+            "top_contestants": [],  # Can be enhanced later
+            "contests": r_data.get("contests", [])
+        }
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error in _enrich_round_data: {str(e)}", exc_info=True)
+        return None
 
 
 @router.post("/ensure-january", response_model=round_schema.Round)
@@ -251,9 +299,6 @@ def ensure_january_round(
     Public endpoint - can be called without authentication for initial setup.
     """
     from app.services.monthly_round_scheduler import monthly_round_scheduler
-    
-    import logging
-    logger = logging.getLogger(__name__)
     
     try:
         logger.info("Starting ensure_january_round_exists...")
@@ -268,22 +313,16 @@ def ensure_january_round(
                 detail="Failed to create or retrieve January round (returned None)"
             )
     except HTTPException:
-        # Re-raise HTTP exceptions as-is
         raise
     except Exception as e:
-        import traceback
         error_traceback = traceback.format_exc()
         logger.error(f"Error in ensure_january_round endpoint: {str(e)}", exc_info=True)
         logger.error(f"Full traceback: {error_traceback}")
         
-        # Return more detailed error message
         error_detail = str(e)
         if "Failed to ensure" in error_detail:
-            # Extract the underlying error
             error_detail = error_detail.split(": ", 1)[-1] if ": " in error_detail else error_detail
         
-        # Include more context in debug mode
-        import os
         if os.getenv("DEBUG") == "true":
             raise HTTPException(
                 status_code=500,
@@ -368,4 +407,3 @@ def delete_round(
     db.delete(round)
     db.commit()
     return round
-

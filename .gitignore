@@ -56,3 +56,4 @@ Thumbs.db
 *.env.test.example
 *.env.test.local.example
 
+.vercel

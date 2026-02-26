@@ -181,19 +181,22 @@ export default function ContestDetailPage() {
     router.replace(newUrl, { scroll: false })
   }, [router, contestId])
 
-  // REST Data Fetching
+  // REST Data Fetching - Optimized for speed
   const fetchContestDetails = React.useCallback(async () => {
     if (!contestId) return
 
+    const abortController = new AbortController()
+
     try {
       setPageLoading(true)
-      // Need to fetch contest + enrichment (participants etc)
-      // Currently getContest returns everything if backend is updated
-      // Fetch ALL contestants - backend filter can return 0 due to country format mismatch (TZ vs Tanzania)
+      // Fetch contest data
       const c = await ApiService.getContest(parseInt(contestId), {
         filterCountry: filterCountry === 'all' ? undefined : filterCountry,
         filterContinent: filterContinent === 'all' ? undefined : filterContinent
       }) as any
+
+      // Check if aborted
+      if (abortController.signal.aborted) return
 
       // Map data
       const parseMediaIds = (mediaIds: string | undefined, type: 'image' | 'video'): Media[] => {
@@ -246,7 +249,7 @@ export default function ContestDetailPage() {
       // No need to re-sort - backend provides contestants with most votes first
       // This ensures instant display without any delay
 
-      setContest({
+      const contestData = {
         contest: {
           ...c,
           entries_count: c.entries_count,
@@ -254,27 +257,30 @@ export default function ContestDetailPage() {
           cover_image_url: c.cover_image_url,
           current_user_contesting: c.current_user_contesting || false  // Ensure this is included
         },
-        contestants: mappedContestants,
-        current_user_contesting: c.current_user_contesting || false  // Also at top level for easy access
-      })
-
-      // Debug log
-      if (c.current_user_contesting) {
-        console.log(`[ContestDetailPage] User has nominated in contest ${contestId} - showing Edit button`)
+        contestants: mappedContestants
       }
+
+      setContest(contestData)
 
       setFavorites(mappedContestants.filter(ct => ct.isFavorite).map(ct => ct.id))
 
-    } catch (error) {
-      console.error("Failed to fetch contest:", error)
+    } catch (error: any) {
+      // Ignore aborted requests
+      if (error?.name === 'AbortError' || abortController.signal.aborted) {
+        return
+      }
+      // Failed to fetch contest
       setToast({ message: "Failed to load contest", type: "error" })
     } finally {
-      setPageLoading(false)
+      if (!abortController.signal.aborted) {
+        setPageLoading(false)
+      }
     }
-  }, [contestId, t])
+  }, [contestId, filterCountry, filterContinent, t])
 
   useEffect(() => {
     fetchContestDetails()
+    // Cleanup handled in fetchContestDetails via abortController
   }, [fetchContestDetails])
 
   const handleReportClick = (contestantId: string) => {
@@ -293,7 +299,7 @@ export default function ContestDetailPage() {
       await fetchContestDetails()
       showToast(t('common.deleted_successfully') || `Candidature supprimée avec succès`, 'success')
     } catch (err: any) {
-      console.error('Erreur lors de la suppression:', err)
+      // Error during deletion
       const errorMessage = err?.response?.data?.detail || err?.message || t('common.delete_error') || 'Erreur lors de la suppression'
       showToast(errorMessage, 'error')
       throw err
@@ -363,7 +369,7 @@ export default function ContestDetailPage() {
     } catch (error: any) {
       const errorMessage = error.response?.data?.detail || 'Une erreur est survenue'
       showToast(errorMessage, 'error')
-      console.error('Erreur lors de la modification des favoris:', error)
+      // Error updating favorites
     }
   }
 
@@ -603,12 +609,16 @@ export default function ContestDetailPage() {
                       }}
                       className="bg-myhigh5-primary hover:bg-myhigh5-blue-700 text-white font-semibold px-8 py-6 text-lg rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
                     >
-                      {(contest?.contest?.current_user_contesting || contest?.current_user_contesting)
-                        ? (t('dashboard.contests.edit') || 'Modifier')
-                        : isNomination
-                          ? (t('dashboard.contests.nominate') || 'Nommer')
-                          : (t('dashboard.contests.participate') || 'Participer')
-                      }
+                      {(() => {
+                        const hasNominated = Boolean(
+                          contest?.contest?.current_user_contesting ?? contest?.current_user_contesting
+                        )
+                        return hasNominated
+                          ? (t('dashboard.contests.edit') || 'Modifier')
+                          : isNomination
+                            ? (t('dashboard.contests.nominate') || 'Nommer')
+                            : (t('dashboard.contests.participate') || 'Participer')
+                      })()}
                       <ExternalLink className="w-5 h-5 ml-2" />
                     </Button>
 

@@ -685,13 +685,17 @@ class ContestService {
    */
   async getMyApplications(skip: number = 0, limit: number = 10): Promise<ContestantWithAuthorAndStats[]> {
     try {
-      const response = await api.get<{ items: ContestantWithAuthorAndStats[]; total: number }>(
-        '/contestants/me',
+      const response = await api.get<ContestantWithAuthorAndStats[]>(
+        '/api/v1/contestants/user/my-entries',
         { params: { skip, limit } }
       )
-      return response.data.items
-    } catch (error) {
-      console.error('Error fetching my applications:', error)
+      // Backend returns a list directly, not an object with items
+      return Array.isArray(response.data) ? response.data : []
+    } catch (error: any) {
+      // Silently handle network errors
+      if (error?.code !== 'ERR_NETWORK' && error?.message && !error?.message?.includes('Network Error') && !error?.message?.includes('CORS')) {
+        console.warn('Error fetching my applications:', error)
+      }
       return []
     }
   }
@@ -983,8 +987,12 @@ class ContestService {
       cacheService.set(cacheKey, response.data)
 
       return response.data || []
-    } catch (error) {
-      console.error(`Error fetching contestants for contest ${contestId}:`, error)
+    } catch (error: any) {
+      // Silently handle network errors - don't log to console.error to avoid noise
+      // Only log if it's not a network/CORS error
+      if (error?.code !== 'ERR_NETWORK' && error?.message && !error?.message?.includes('Network Error') && !error?.message?.includes('CORS')) {
+        console.warn(`Error fetching contestants for contest ${contestId}:`, error)
+      }
       return []
     }
   }

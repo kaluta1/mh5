@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { useLanguage } from '@/contexts/language-context'
@@ -56,10 +56,14 @@ export default function ApplyToContestPage() {
   const [hasBrandVerification, setHasBrandVerification] = useState(false)
   const [hasContentVerification, setHasContentVerification] = useState(false)
   const [verificationsCompleted, setVerificationsCompleted] = useState(false)
+  const [hasError, setHasError] = useState(false) // Prevent infinite retry loop
+  const errorShownRef = useRef(false) // Track if error was already shown
 
-  // REST Data Fetching
+  // REST Data Fetching - Optimized with error handling
   const fetchContestDetails = useCallback(async () => {
-    if (!contestId) return
+    if (!contestId || hasError) return // Don't retry if error occurred
+
+    const abortController = new AbortController()
 
     try {
       // Fetch contest details only, as roundId is passed via URL if specific round is targeted
@@ -195,10 +199,16 @@ export default function ApplyToContestPage() {
   }, [contestId, user?.id, isEditMode, contestantIdParam, addToast, t])
 
   useEffect(() => {
-    fetchContestDetails()
-  }, [fetchContestDetails])
+    // Reset error state when contestId changes
+    if (contestId) {
+      setHasError(false)
+      errorShownRef.current = false
+      fetchContestDetails()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contestId]) // Only depend on contestId to prevent infinite loops
 
-  // Calculer le temps restant jusqu'au 28 février 2026 (ou submission_end_date si plus tard)
+  // Calculer le temps restant jusqu'à la date limite de soumission
   useEffect(() => {
     // Default deadline: February 28, 2026
     const defaultDeadline = new Date('2026-02-28')
@@ -206,11 +216,35 @@ export default function ApplyToContestPage() {
 
     // Use submission_end_date if available, otherwise use default deadline
     let submissionDeadline = defaultDeadline
-    if (contest?.submission_end_date) {
+
+    // Check ALL rounds (not just is_submission_open) to get the latest submission_end_date
+    // Add 32 days to the round's submission_end_date for both nominations and participations
+    if (activeRounds && activeRounds.length > 0) {
+      // Find the round with the latest submission_end_date
+      let latestRoundDate: Date | null = null
+      for (const round of activeRounds) {
+        if (round.submission_end_date) {
+          const roundEndDate = new Date(round.submission_end_date)
+          roundEndDate.setHours(23, 59, 59, 999)
+
+          // Add 32 days to the deadline for both nominations and participations
+          roundEndDate.setDate(roundEndDate.getDate() + 32)
+
+          if (!latestRoundDate || roundEndDate > latestRoundDate) {
+            latestRoundDate = roundEndDate
+          }
+        }
+      }
+      if (latestRoundDate) {
+        submissionDeadline = latestRoundDate
+      }
+    }
+
+    // Fallback to contest submission_end_date if no round date
+    if (submissionDeadline === defaultDeadline && contest?.submission_end_date) {
       const endDate = new Date(contest.submission_end_date)
       endDate.setHours(23, 59, 59, 999)
-      // Use the later date between default deadline and actual end date
-      submissionDeadline = endDate > defaultDeadline ? endDate : defaultDeadline
+      submissionDeadline = endDate
     }
 
     const updateTimeRemaining = () => {
@@ -234,7 +268,7 @@ export default function ApplyToContestPage() {
     updateTimeRemaining()
     const interval = setInterval(updateTimeRemaining, 1000)
     return () => clearInterval(interval)
-  }, [contest?.submission_end_date])
+  }, [contest?.submission_end_date, activeRounds, isNomination])
 
   // Formater le temps restant avec les traductions
   useEffect(() => {
@@ -286,10 +320,33 @@ export default function ApplyToContestPage() {
 
     // Use submission_end_date if available, otherwise use default deadline
     let submissionDeadline = defaultDeadline
-    if (contestData.submission_end_date) {
+
+    // Check ALL rounds to get the latest submission_end_date
+    // Add 32 days to the round's submission_end_date for both nominations and participations
+    if (activeRounds && activeRounds.length > 0) {
+      let latestRoundDate: Date | null = null
+      for (const round of activeRounds) {
+        if (round.submission_end_date) {
+          const roundEndDate = new Date(round.submission_end_date)
+          roundEndDate.setHours(23, 59, 59, 999)
+
+          // Add 32 days to the deadline for both nominations and participations
+          roundEndDate.setDate(roundEndDate.getDate() + 32)
+
+          if (!latestRoundDate || roundEndDate > latestRoundDate) {
+            latestRoundDate = roundEndDate
+          }
+        }
+      }
+      if (latestRoundDate) {
+        submissionDeadline = latestRoundDate
+      }
+    }
+
+    // Fallback to contest submission_end_date
+    if (submissionDeadline === defaultDeadline && contestData.submission_end_date) {
       const endDate = new Date(contestData.submission_end_date)
       endDate.setHours(23, 59, 59, 999)
-      // Use the later date between default deadline and actual end date
       submissionDeadline = endDate > defaultDeadline ? endDate : defaultDeadline
     }
 
@@ -298,7 +355,7 @@ export default function ApplyToContestPage() {
 
     // Submissions are open if deadline hasn't passed (rounds check removed)
     return !isDeadlinePassed
-  }, [])
+  }, [activeRounds])
 
 
 

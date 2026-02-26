@@ -122,7 +122,46 @@ export default function RootLayout({
 
   return (
     <html lang={htmlLang} suppressHydrationWarning>
+      <head>
+        {/* Preconnect to API for faster requests */}
+        <link rel="preconnect" href={process.env.NEXT_PUBLIC_API_URL || 'https://mh5-hbjp.onrender.com'} crossOrigin="anonymous" />
+        {/* DNS prefetch for external resources */}
+        <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
+        <link rel="dns-prefetch" href="https://fonts.gstatic.com" />
+      </head>
       <body className={inter.className}>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              // Initialize performance optimizations immediately
+              (function() {
+                if (typeof window === 'undefined') return;
+                // Preconnect to API
+                const apiUrl = '${process.env.NEXT_PUBLIC_API_URL || 'https://mh5-hbjp.onrender.com'}';
+                const link = document.createElement('link');
+                link.rel = 'preconnect';
+                link.href = apiUrl;
+                link.crossOrigin = 'anonymous';
+                document.head.appendChild(link);
+                // Setup link prefetching
+                document.addEventListener('DOMContentLoaded', function() {
+                  const links = document.querySelectorAll('a[href]');
+                  links.forEach(function(link) {
+                    const href = link.getAttribute('href');
+                    if (href && !href.startsWith('#') && !href.startsWith('mailto:') && !href.startsWith('tel:')) {
+                      link.addEventListener('mouseenter', function() {
+                        const prefetchLink = document.createElement('link');
+                        prefetchLink.rel = 'prefetch';
+                        prefetchLink.href = href;
+                        document.head.appendChild(prefetchLink);
+                      }, { once: true });
+                    }
+                  });
+                });
+              })();
+            `,
+          }}
+        />
         <ThemeProvider
           attribute="class"
           defaultTheme="dark"

@@ -28,7 +28,8 @@ const SuggestContestDialog = dynamic(() => import('@/components/dashboard/sugges
   ssr: false
 })
 
-const CONTESTS_PER_PAGE = 12
+const CONTESTS_PER_PAGE = 8 // Reduced from 12 for faster initial load
+const INITIAL_CONTESTS = 6 // Even smaller initial load for instant display
 const CACHE_TTL = 5 * 1000 // 5 seconds cache, preventing stale states for participants
 
 // Simple in-memory cache for contests data
@@ -94,27 +95,43 @@ function ContestsPageContent() {
   const [totalContests, setTotalContests] = useState(0)
   const loaderRef = useRef<HTMLDivElement>(null)
 
-  // 1. Fetch Rounds for Selector (allow unauthenticated users)
+  // 1. Fetch Rounds for Selector (allow unauthenticated users) - Optimized for speed
   useEffect(() => {
+    const abortController = new AbortController()
+    
     const fetchRounds = async () => {
       try {
         setRoundsLoading(true)
-        const data = await ApiService.getRounds({ isActive: false })
+        // Fetch rounds with minimal data for faster response
+        const data = await ApiService.getRounds({ contestLimit: 1 }) // Minimal data for round selector
+        
+        // Check if aborted
+        if (abortController.signal.aborted) return
+        
         setRounds(data)
 
-        // Set default active round
+        // Set default active round immediately
         if (data.length > 0 && !activeRoundId) {
           setActiveRoundId(String(data[0].id))
         }
-      } catch (error) {
-        console.error('Failed to fetch rounds:', error)
+      } catch (error: any) {
+        if (error.name === 'AbortError' || abortController.signal.aborted) {
+          return
+        }
+        logger.error('Failed to fetch rounds:', error)
         addToast("Failed to load rounds", "error")
       } finally {
-        setRoundsLoading(false)
+        if (!abortController.signal.aborted) {
+          setRoundsLoading(false)
+        }
       }
     }
 
     fetchRounds()
+    
+    return () => {
+      abortController.abort()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -162,6 +179,9 @@ function ContestsPageContent() {
   useEffect(() => {
     if (!activeRoundId) return
 
+    // AbortController for request cancellation
+    const abortController = new AbortController()
+
     const fetchContestsForRound = async () => {
       setContestsLoading(true)
       const hasVotingType = categoryTab === 'nomination'
@@ -184,25 +204,32 @@ function ContestsPageContent() {
       }
 
       try {
+        // Use smaller initial load for faster display
         const data = await ApiService.getRounds({
           roundId: parseInt(activeRoundId),
-          isActive: false,
           hasVotingType,
           filterCountry: activeCountry,
           filterContinent: activeContinent,
           searchTerm: activeSearch,
-          contestLimit: CONTESTS_PER_PAGE
+          contestLimit: INITIAL_CONTESTS // Load fewer contests initially for speed
         })
+
+        // Check if request was aborted
+        if (abortController.signal.aborted) return
 
         if (data && data.length > 0) {
           setContestsData(data[0])
           const contests = data[0].contests || []
-          // Sort contests by participants_count descending (most participants first)
-          contests.sort((a: any, b: any) => {
-            const aCount = Number(a.participants_count) || 0
-            const bCount = Number(b.participants_count) || 0
-            return bCount - aCount
-          })
+          // Backend should already sort, but ensure it's sorted by participants_count descending
+          // Use a more efficient sort (only if needed)
+          if (contests.length > 1) {
+            contests.sort((a: any, b: any) => {
+              const aCount = Number(a.participants_count) || 0
+              const bCount = Number(b.participants_count) || 0
+              return bCount - aCount
+            })
+          }
+          // Set state immediately for instant display
           setAllContests(contests)
           setTotalContests(data[0].contests_count || contests.length || 0)
           setHasMore(contests.length < (data[0].contests_count || 0))
@@ -214,16 +241,42 @@ function ContestsPageContent() {
           setTotalContests(0)
           setHasMore(false)
         }
-      } catch (error) {
-        console.error('Failed to fetch contests:', error)
+      } catch (error: any) {
+        // Ignore aborted requests
+        if (error.name === 'AbortError' || abortController.signal.aborted) {
+          return
+        }
+        logger.error('Failed to fetch contests:', error)
+        // Handle API errors gracefully - don't break the page
+        if (error?.response?.status === 404 || error?.response?.status === 500 || error?.response?.status === 503) {
+          logger.warn('Backend unavailable during redeployment, showing empty state')
+          // Set empty state instead of breaking
+          setContestsData(null)
+          setAllContests([])
+          setTotalContests(0)
+          setHasMore(false)
+        } else {
+          // For other errors, still set empty state to prevent page break
+          setContestsData(null)
+          setAllContests([])
+          setTotalContests(0)
+          setHasMore(false)
+        }
       } finally {
-        setContestsLoading(false)
-        setInitialLoadComplete(true)
+        if (!abortController.signal.aborted) {
+          setContestsLoading(false)
+          setInitialLoadComplete(true)
+        }
       }
     }
 
     fetchContestsForRound()
-  }, [activeRoundId, categoryTab, filterCountry, filterContinent, committedSearch])
+
+    // Cleanup: abort request if component unmounts or dependencies change
+    return () => {
+      abortController.abort()
+    }
+  }, [activeRoundId, categoryTab, filterCountry, filterContinent, committedSearch, isAuthenticated, user])
 
   // Load more contests function
   const loadMoreContests = useCallback(async () => {
@@ -238,7 +291,6 @@ function ContestsPageContent() {
     try {
       const data = await ApiService.getRounds({
         roundId: parseInt(activeRoundId),
-        isActive: false,
         hasVotingType,
         filterCountry: activeCountry,
         filterContinent: activeContinent,
@@ -266,8 +318,13 @@ function ContestsPageContent() {
       } else {
         setHasMore(false)
       }
-    } catch (error) {
-      console.error('Failed to load more contests:', error)
+    } catch (error: any) {
+      logger.error('Failed to load more contests:', error)
+      // Handle API errors gracefully
+      if (error?.response?.status === 404 || error?.response?.status === 500 || error?.response?.status === 503) {
+        logger.warn('Backend unavailable, stopping pagination')
+        setHasMore(false) // Stop trying to load more
+      }
     } finally {
       setLoadingMore(false)
     }
@@ -291,6 +348,9 @@ function ContestsPageContent() {
     return () => observer.disconnect()
   }, [hasMore, loadingMore, loadMoreContests])
 
+  // Cache API_BASE_URL to avoid repeated lookups
+  const API_BASE_URL = useMemo(() => process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000', [])
+
   // Raw Contests List (Before filtering by type) - Now uses allContests for infinite scroll
   const rawContests = useMemo(() => {
     if (!allContests || allContests.length === 0) return []
@@ -298,13 +358,13 @@ function ContestsPageContent() {
     return allContests.map((c: any) => {
       // Stats are now directly on the contest object in the new schema
       // Fallback multiple pour l'image
-      const rawImage = c.cover_image_url || c.image_url || '/placeholder.png'
+      // Use emoji as fallback instead of missing placeholder.png
+      const rawImage = c.cover_image_url || c.image_url || '💎'
 
       const isEmoji = rawImage?.length <= 4 && rawImage?.codePointAt(0) > 0x1F000
       let coverImage = rawImage
 
       if (!isEmoji && coverImage && !coverImage.startsWith('http') && !coverImage.startsWith('data:') && !coverImage.startsWith('/')) {
-        const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
         coverImage = `${API_BASE_URL}/${coverImage}`
       }
 
@@ -332,24 +392,7 @@ function ContestsPageContent() {
       }
     })
 
-    // Debug: Log contests where user has nominated
-    const nominatedContests = rawContests.filter((c: any) => c.currentUserContesting || c.currentUserParticipated)
-    if (nominatedContests.length > 0) {
-      console.log(`[ContestsPage] ✅ User has nominated in ${nominatedContests.length} contest(s):`,
-        nominatedContests.map((c: any) => ({ id: c.id, title: c.title, currentUserContesting: c.currentUserContesting })))
-    } else {
-      console.log(`[ContestsPage] ❌ User has not nominated in any contest yet`)
-      // Debug: Show what we received from backend
-      if (rawContests.length > 0) {
-        console.log(`[ContestsPage] Debug - First contest data:`, {
-          id: rawContests[0].id,
-          title: rawContests[0].title,
-          currentUserContesting: rawContests[0].currentUserContesting,
-          currentUserParticipated: rawContests[0].currentUserParticipated,
-          rawData: allContests[0] // Show raw backend response
-        })
-      }
-    }
+    // Removed debug logs for performance
   }, [allContests, contestsData])
 
   // Extract contest types from ALL loaded contests (so tabs don't disappear)
@@ -428,7 +471,10 @@ function ContestsPageContent() {
     router.push(`/dashboard/contests/${id}/apply${q ? `?${q}` : ''}`)
   }
 
-  if (isLoading || (roundsLoading && rounds.length === 0)) return <ContestsSkeleton />
+  // Show skeleton only if we have no data at all
+  if (isLoading || (roundsLoading && rounds.length === 0 && !allContests.length)) {
+    return <ContestsSkeleton />
+  }
   // Allow unauthenticated users to view contests (they just can't participate)
 
   return (

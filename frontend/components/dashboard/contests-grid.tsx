@@ -30,14 +30,7 @@ export function ContestsGrid({
 }: ContestsGridProps) {
   const { t } = useLanguage()
 
-  // Debug logs
-  React.useEffect(() => {
-    console.log('[ContestsGrid] Rendered with:', {
-      contestsCount: contests.length,
-      isLoading,
-      contests: contests.slice(0, 2) // Log first 2 contests
-    })
-  }, [contests, isLoading])
+  // Removed debug logs for performance
 
   if (isLoading) {
     return (

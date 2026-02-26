@@ -54,24 +54,41 @@ export default function DashboardPage() {
     }
   }, [isAuthenticated, isLoading, router])
 
-  // Fetch analytics data
+  // Fetch analytics data - Optimized for speed
   useEffect(() => {
+    const abortController = new AbortController()
+    
     const fetchAnalytics = async () => {
       if (!isAuthenticated) return
       
       try {
         setAnalyticsLoading(true)
+        // Show default analytics immediately, then load real data
+        setAnalytics(analyticsService.getDefaultAnalytics())
+        
         const data = await analyticsService.getDashboardAnalytics()
+        
+        // Check if aborted
+        if (abortController.signal.aborted) return
+        
         setAnalytics(data)
       } catch (error) {
-        logger.error('Error fetching analytics:', error)
-        setAnalytics(analyticsService.getDefaultAnalytics())
+        if (error instanceof Error && error.name !== 'AbortError') {
+          logger.error('Error fetching analytics:', error)
+        }
+        // Keep default analytics on error
       } finally {
-        setAnalyticsLoading(false)
+        if (!abortController.signal.aborted) {
+          setAnalyticsLoading(false)
+        }
       }
     }
 
     fetchAnalytics()
+    
+    return () => {
+      abortController.abort()
+    }
   }, [isAuthenticated])
 
   if (isLoading || analyticsLoading) {

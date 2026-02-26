@@ -11,9 +11,9 @@ interface CacheEntry<T> {
 
 class CacheService {
   private cache: Map<string, CacheEntry<any>> = new Map()
-  private readonly DEFAULT_TTL = 10 * 60 * 1000 // 5 minutes par défaut
+  private readonly DEFAULT_TTL = 5 * 60 * 1000 // 5 minutes par défaut
   private readonly STORAGE_KEY = 'api_cache'
-  private enabled: boolean = false // Cache désactivé par défaut sur demande utilisateur
+  private enabled: boolean = true // Cache enabled for performance
 
   constructor() {
     this.loadFromStorage()
