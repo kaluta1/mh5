@@ -211,18 +211,52 @@ def _enrich_round_data(
             paginated_contests = valid_contests[contest_skip:contest_skip + contest_limit]
             
             # Batch query: find all contests where current user has participated in this round
+            # Also check if user has nominated in any voting_type (category) to show Edit for all contests in that category
             user_contested_contest_ids: set = set()
-            if user_id and valid_contests:
+            user_nominated_voting_type_ids: set = set()
+            if user_id:
                 try:
                     from app.models.contests import Contestant
-                    all_contest_ids = [c.id for c in valid_contests]
-                    user_contestants = db.query(Contestant.season_id).filter(
+                    from app.models.contest import Contest as ContestModel
+                    from app.models.round import round_contests
+                    
+                    # Get ALL user contestants across ALL rounds (not just this round)
+                    # This allows checking if user has nominated in any category
+                    all_user_contestants = db.query(Contestant).filter(
                         Contestant.user_id == user_id,
-                        Contestant.round_id == round_id,
-                        Contestant.season_id.in_(all_contest_ids),
                         Contestant.is_deleted == False
                     ).all()
-                    user_contested_contest_ids = {row.season_id for row in user_contestants}
+                    
+                    # Build set of voting_type_ids where user has nominated (across ALL rounds)
+                    for uc in all_user_contestants:
+                        if uc.round_id:
+                            try:
+                                # Get contests linked to this round
+                                linked_contests = db.query(ContestModel).join(
+                                    round_contests, ContestModel.id == round_contests.c.contest_id
+                                ).filter(round_contests.c.round_id == uc.round_id).all()
+                                for contest in linked_contests:
+                                    if contest.voting_type_id:
+                                        user_nominated_voting_type_ids.add(contest.voting_type_id)
+                            except Exception as e:
+                                logger.warning(f"Error fetching contests via round_contests for round {uc.round_id}: {str(e)}")
+                        
+                        # Also check via season_id (legacy - season_id can be contest_id)
+                        if uc.season_id:
+                            try:
+                                contest = db.query(ContestModel).filter(ContestModel.id == uc.season_id).first()
+                                if contest and contest.voting_type_id:
+                                    user_nominated_voting_type_ids.add(contest.voting_type_id)
+                            except Exception as e:
+                                logger.warning(f"Error fetching contest {uc.season_id} for voting_type check: {str(e)}")
+                    
+                    # Now check for this specific round
+                    if valid_contests:
+                        all_contest_ids = [c.id for c in valid_contests]
+                        # Get user contestants for THIS round only
+                        user_contestants = [uc for uc in all_user_contestants if uc.round_id == round_id]
+                        # Build set of contest IDs where user has directly participated in this round
+                        user_contested_contest_ids = {uc.season_id for uc in user_contestants if uc.season_id}
                 except Exception as e:
                     logger.warning(f"Error batch-checking user participation for round {round_id}: {str(e)}")
 
@@ -258,6 +292,12 @@ def _enrich_round_data(
                     except Exception as e:
                         logger.warning(f"Error counting participants for contest {contest.id}: {str(e)}")
                     
+                    # Check if user has nominated in this voting_type (category)
+                    # If yes, show "Edit" for ALL contests with this voting_type_id
+                    is_contesting = contest.id in user_contested_contest_ids
+                    if not is_contesting and contest.voting_type_id and contest.voting_type_id in user_nominated_voting_type_ids:
+                        is_contesting = True
+                    
                     contest_data = {
                         "id": contest.id,
                         "name": contest.name,
@@ -270,14 +310,15 @@ def _enrich_round_data(
                         "image_url": getattr(contest, 'image_url', None),
                         "created_at": getattr(contest, 'created_at', None),
                         "updated_at": getattr(contest, 'updated_at', None),
-                        "current_user_contesting": contest.id in user_contested_contest_ids
+                        "voting_type_id": getattr(contest, 'voting_type_id', None),
+                        "current_user_contesting": is_contesting
                     }
                     r_data.setdefault("contests", []).append(contest_data)
                 except Exception as e:
                     logger.warning(f"Error processing contest {contest.id}: {str(e)}")
                     continue
             
-            # Sort contests by participants_count
+            # Sort contests by participants_count (descending - highest first)
             if "contests" in r_data:
                 r_data["contests"].sort(key=lambda x: x.get("participants_count", 0), reverse=True)
         

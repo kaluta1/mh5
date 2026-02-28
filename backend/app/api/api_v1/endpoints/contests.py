@@ -195,13 +195,50 @@ def read_contests(
                 # It's safer to just fetch all active contestants for the user
                 # and then match them against active rounds or seasons
                 try:
+                    from app.models.contest import Contest as ContestModel
                     user_contestants = db.query(Contestant).filter(
                         Contestant.user_id == current_user.id,
                         Contestant.is_deleted == False
                     ).all()
                     
+                    # Build a set of voting_type_ids where user has nominated
+                    # This allows showing "Edit" for all contests in the same category
+                    user_nominated_voting_type_ids = set()
+                    for uc in user_contestants:
+                        # Method 1: Check via round_contests table
+                        if uc.round_id:
+                            try:
+                                from app.models.round import round_contests
+                                linked_contests = db.query(ContestModel).join(
+                                    round_contests, ContestModel.id == round_contests.c.contest_id
+                                ).filter(round_contests.c.round_id == uc.round_id).all()
+                                for contest in linked_contests:
+                                    if contest.voting_type_id:
+                                        user_nominated_voting_type_ids.add(contest.voting_type_id)
+                            except Exception as e:
+                                logger.warning(f"Error fetching contests via round_contests for round {uc.round_id}: {str(e)}")
+                        
+                        # Method 2: Check via season_id (legacy - season_id can be contest_id)
+                        if uc.season_id:
+                            try:
+                                contest = db.query(ContestModel).filter(ContestModel.id == uc.season_id).first()
+                                if contest and contest.voting_type_id:
+                                    user_nominated_voting_type_ids.add(contest.voting_type_id)
+                            except Exception as e:
+                                logger.warning(f"Error fetching contest {uc.season_id} for voting_type check: {str(e)}")
+                    
                     for contest_id in contest_ids:
-                        # 1. First, check active round
+                        contest_obj = next((c for c in contests if c.id == contest_id), None)
+                        if not contest_obj:
+                            continue
+                            
+                        # Check if user has nominated in this voting_type (category)
+                        # If yes, show "Edit" for ALL contests with this voting_type_id
+                        if contest_obj.voting_type_id and contest_obj.voting_type_id in user_nominated_voting_type_ids:
+                            current_user_contesting_map[contest_id] = True
+                            continue
+                        
+                        # 1. First, check active round (contest-specific check)
                         if contest_id in active_rounds_by_contest:
                             target_round_id = active_rounds_by_contest[contest_id]
                             # User is contesting if they have a contestant record for this round
@@ -272,17 +309,18 @@ def read_contests(
             logger.error(f"Error creating basic contest data for {c.id}: {str(e)}")
             continue
     
-    # Sort contests by participant count only if not custom sorted
-    # 1. First by actual participant_count in DB (mostly used on frontend)
-    # 2. Then by the dynamically calculated contestants count
+    # Sort contests by participant count (descending - highest first) only if not custom sorted
+    # Use the dynamically calculated contestants count (entries_count) which is accurate
+    # 1. First by contestants count (entries_count) - most participants first
+    # 2. Then by participant_count from DB as fallback
     # 3. Finally by ID to ensure deterministic sorting
     if not sort_by:
         enriched_contests.sort(
             key=lambda x: (
-                x.get("participant_count", 0) or x.get("contestants", 0),
+                x.get("contestants", 0) or x.get("entries_count", 0) or x.get("participant_count", 0),
                 x.get("id", 0)
             ), 
-            reverse=True
+            reverse=True  # Descending order - highest participant count first
         )
     
     logger.info(f"Successfully enriched {len(enriched_contests)} out of {len(contests)} contests")
