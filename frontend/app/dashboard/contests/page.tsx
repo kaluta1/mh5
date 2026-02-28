@@ -95,28 +95,31 @@ function ContestsPageContent() {
   const [totalContests, setTotalContests] = useState(0)
   const loaderRef = useRef<HTMLDivElement>(null)
 
-  // 1. Fetch Rounds for Selector (allow unauthenticated users) - Optimized for speed
+  // 1. Fetch Rounds for Selector (allow unauthenticated users) - FIXED: Fetch ALL rounds without contest limit
   useEffect(() => {
     const abortController = new AbortController()
     
     const fetchRounds = async () => {
       try {
         setRoundsLoading(true)
-        // Fetch rounds with minimal data for faster response
-        const data = await ApiService.getRounds({ contestLimit: 1 }) // Minimal data for round selector
+        // Fetch ALL rounds - don't limit contests here, just get round list
+        const data = await ApiService.getRounds({ limit: 100 }) // Get all rounds
         
         // Check if aborted
         if (abortController.signal.aborted) return
         
-        setRounds(data)
+        logger.info(`[ContestsPage] Fetched ${data.length} rounds`)
+        setRounds(data || [])
 
         // Set default active round immediately to trigger contests fetch
-        if (data.length > 0) {
+        if (data && data.length > 0) {
           // Always set the first round as active if not already set
           if (!activeRoundId) {
+            logger.info(`[ContestsPage] Setting active round to: ${data[0].id}`)
             setActiveRoundId(String(data[0].id))
           }
         } else {
+          logger.warn('[ContestsPage] No rounds returned from API')
           // No rounds available - mark as complete
           setInitialLoadComplete(true)
         }
@@ -124,16 +127,12 @@ function ContestsPageContent() {
         if (error.name === 'AbortError' || abortController.signal.aborted) {
           return
         }
-        // Silently handle timeout errors - don't set initialLoadComplete here, let contests fetch handle it
-        if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
-          logger.warn('Rounds fetch timeout, will retry with contests fetch')
-          setRounds([])
-          // Don't set initialLoadComplete here - let contests fetch complete first
-          return
-        }
-        logger.error('Failed to fetch rounds:', error)
+        logger.error('[ContestsPage] Failed to fetch rounds:', error)
+        // Show error to user
         addToast("Failed to load rounds", "error")
-        // Don't set initialLoadComplete here - let contests fetch complete first
+        setRounds([])
+        // Set initial load complete so page doesn't hang
+        setInitialLoadComplete(true)
       } finally {
         if (!abortController.signal.aborted) {
           setRoundsLoading(false)
@@ -243,14 +242,17 @@ function ContestsPageContent() {
         // Check if request was aborted
         if (abortController.signal.aborted) return
 
-        if (data && data.length > 0) {
+        if (data && data.length > 0 && data[0]) {
           setContestsData(data[0])
           const contests = data[0].contests || []
           
           // Debug logging to track data flow
-          logger.info(`[ContestsPage] Fetched ${contests.length} contests for round ${activeRoundId}, category: ${categoryTab}`)
+          logger.info(`[ContestsPage] Fetched ${contests.length} contests for round ${activeRoundId}, category: ${categoryTab}, hasVotingType: ${hasVotingType}`)
+          logger.info(`[ContestsPage] Filters: country=${activeCountry}, continent=${activeContinent}, search=${activeSearch}`)
           if (contests.length > 0) {
-            logger.info(`[ContestsPage] Sample contest: ${contests[0].name}, participants: ${contests[0].participants_count}`)
+            logger.info(`[ContestsPage] Sample contest: ${contests[0].name}, participants: ${contests[0].participants_count}, voting_type_id: ${contests[0].voting_type_id}`)
+          } else {
+            logger.warn(`[ContestsPage] Round ${activeRoundId} returned but contests array is empty!`)
           }
           
           // Backend should already sort, but ensure it's sorted by participants_count descending
@@ -269,7 +271,8 @@ function ContestsPageContent() {
           // Cache the result
           setToCache(cacheKey, data[0])
         } else {
-          logger.warn(`[ContestsPage] No contests returned for round ${activeRoundId}, category: ${categoryTab}`)
+          logger.warn(`[ContestsPage] No contests returned for round ${activeRoundId}, category: ${categoryTab}, hasVotingType: ${hasVotingType}`)
+          logger.warn(`[ContestsPage] API response: data=${data ? 'exists' : 'null'}, length=${data?.length || 0}`)
           setContestsData(null)
           setAllContests([])
           setTotalContests(0)
@@ -536,7 +539,7 @@ function ContestsPageContent() {
 
   // Show loading skeleton while waiting for initial data
   // Only show skeleton if we're still loading rounds AND have no contests AND haven't completed initial load
-  if ((roundsLoading || contestsLoading) && rounds.length === 0 && !allContests.length && !initialLoadComplete) {
+  if (roundsLoading && rounds.length === 0 && !initialLoadComplete) {
     return <ContestsSkeleton />
   }
   // Allow unauthenticated users to view contests (they just can't participate)
@@ -554,22 +557,27 @@ function ContestsPageContent() {
         </div>
 
         {/* Round Selector (Top Tabs) */}
-        <div className="mb-6">
-          <div className="flex space-x-2 overflow-x-auto pb-2 scrollbar-hide">
-            {rounds.map((round: any) => (
-              <button
-                key={round.id}
-                onClick={() => setActiveRoundId(String(round.id))}
-                className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all whitespace-nowrap ${activeRoundId === String(round.id)
-                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25'
-                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white'
-                  }`}
-              >
-                {round.name} <span className="ml-1 opacity-70">({round.contests_count !== undefined ? round.contests_count : (round.contests?.length || 0)})</span>
-              </button>
-            ))}
+        {rounds.length > 0 && (
+          <div className="mb-6">
+            <div className="flex space-x-2 overflow-x-auto pb-2 scrollbar-hide">
+              {rounds.map((round: any) => (
+                <button
+                  key={round.id}
+                  onClick={() => {
+                    logger.info(`[ContestsPage] Round clicked: ${round.id}`)
+                    setActiveRoundId(String(round.id))
+                  }}
+                  className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all whitespace-nowrap ${activeRoundId === String(round.id)
+                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25'
+                    : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white'
+                    }`}
+                >
+                  {round.name || `Round ${round.id}`} <span className="ml-1 opacity-70">({round.contests_count !== undefined ? round.contests_count : (round.contests?.length || 0)})</span>
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Location Filter Bar */}
         <div className="mb-6">
