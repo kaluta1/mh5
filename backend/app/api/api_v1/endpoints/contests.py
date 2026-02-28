@@ -2,6 +2,8 @@ from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Body
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
+import logging
+import traceback
 
 from app.api.deps import get_current_active_user, get_current_active_user_optional
 from app.crud import contest
@@ -21,6 +23,7 @@ class ParticipateRequest(BaseModel):
     round_id: Optional[int] = None
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 @router.post("/", response_model=Contest, status_code=status.HTTP_201_CREATED)
 def create_contest(
@@ -106,9 +109,6 @@ def read_contests(
         filters["sort_order"] = sort_order
     
     # Récupérer les contests depuis la base de données
-    import logging
-    logger = logging.getLogger(__name__)
-    
     try:
         logger.info(f"Fetching contests with filters: {filters}")
         contests = contest.get_multi_with_filters(
@@ -494,7 +494,7 @@ def read_contest(
                 logger.warning(f"Error enriching user participation for contest {contest_id}: {str(e)}")
                 logger.debug(traceback.format_exc())
 
-        return enriched_contest
+    return enriched_contest
 
 @router.put("/{contest_id}", response_model=Contest)
 def update_contest(
