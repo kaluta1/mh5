@@ -489,8 +489,8 @@ function ContestsPageContent() {
     router.push(`/dashboard/contests/${id}/apply${q ? `?${q}` : ''}`)
   }
 
-  // Show skeleton only if we have no data at all
-  if (isLoading || (roundsLoading && rounds.length === 0 && !allContests.length)) {
+  // Do not block contests page on auth loading; it is viewable for unauthenticated users.
+  if (roundsLoading && rounds.length === 0 && !allContests.length) {
     return <ContestsSkeleton />
   }
   // Allow unauthenticated users to view contests (they just can't participate)
