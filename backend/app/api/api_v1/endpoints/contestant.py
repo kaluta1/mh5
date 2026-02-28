@@ -1032,14 +1032,37 @@ def create_contestant(
             detail="No active round found for this contest. Participation requires an active round."
         )
 
-    # Vérifier que l'utilisateur n'a pas déjà une candidature POUR CE ROUND
-    existing = crud_contestant.get_by_round_and_user(
-        db, target_round_id, current_user.id
+    # Check duplicates with category-aware scope:
+    # - Nomination: one submission per category/contest (show Edit afterwards)
+    # - Participation: one submission per contest in the current round
+    from app.models.contests import ContestSeasonLink
+
+    contest_season_ids = set()
+    if real_contest_id:
+        contest_season_ids.add(real_contest_id)
+        linked_seasons = db.query(ContestSeasonLink).filter(
+            ContestSeasonLink.contest_id == real_contest_id
+        ).all()
+        for link in linked_seasons:
+            if link.season_id:
+                contest_season_ids.add(link.season_id)
+    if season_id:
+        contest_season_ids.add(season_id)
+
+    is_nomination_category = bool(contest and getattr(contest, "voting_type_id", None))
+    duplicate_query = db.query(Contestant).filter(
+        Contestant.user_id == current_user.id,
+        Contestant.is_deleted == False,
+        Contestant.season_id.in_(list(contest_season_ids))
     )
+    if not is_nomination_category:
+        duplicate_query = duplicate_query.filter(Contestant.round_id == target_round_id)
+
+    existing = duplicate_query.first()
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="You already have a submission for this round of the contest"
+            detail="You already have a submission in this category. Please edit your existing application."
         )
     
     # ============================================
