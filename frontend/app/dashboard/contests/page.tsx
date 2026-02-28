@@ -110,28 +110,30 @@ function ContestsPageContent() {
         
         setRounds(data)
 
-        // Set default active round immediately
-        if (data.length > 0 && !activeRoundId) {
-          setActiveRoundId(String(data[0].id))
+        // Set default active round immediately to trigger contests fetch
+        if (data.length > 0) {
+          // Always set the first round as active if not already set
+          if (!activeRoundId) {
+            setActiveRoundId(String(data[0].id))
+          }
+        } else {
+          // No rounds available - mark as complete
+          setInitialLoadComplete(true)
         }
       } catch (error: any) {
         if (error.name === 'AbortError' || abortController.signal.aborted) {
           return
         }
-        // Silently handle timeout errors
+        // Silently handle timeout errors - don't set initialLoadComplete here, let contests fetch handle it
         if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
-          logger.warn('Rounds fetch timeout, showing empty state')
+          logger.warn('Rounds fetch timeout, will retry with contests fetch')
           setRounds([])
-          setInitialLoadComplete(true)
-          setContestsData(null)
-          setAllContests([])
-          setTotalContests(0)
-          setHasMore(false)
+          // Don't set initialLoadComplete here - let contests fetch complete first
           return
         }
         logger.error('Failed to fetch rounds:', error)
         addToast("Failed to load rounds", "error")
-        setInitialLoadComplete(true)
+        // Don't set initialLoadComplete here - let contests fetch complete first
       } finally {
         if (!abortController.signal.aborted) {
           setRoundsLoading(false)
@@ -189,6 +191,12 @@ function ContestsPageContent() {
 
   // 2. Fetch Contests for Selected Round (Initial load) - allow unauthenticated users
   useEffect(() => {
+    // If no active round and rounds are loaded but empty, mark as complete
+    if (!activeRoundId && !roundsLoading && rounds.length === 0) {
+      setInitialLoadComplete(true)
+      return
+    }
+    
     if (!activeRoundId) return
 
     // AbortController for request cancellation
@@ -260,13 +268,13 @@ function ContestsPageContent() {
         }
         // Silently handle timeout errors - don't log to avoid noise
         if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
-          logger.warn('Request timeout, showing empty state')
+          logger.warn('Contests fetch timeout, showing empty state')
           setContestsData(null)
           setAllContests([])
           setTotalContests(0)
           setHasMore(false)
           setContestsLoading(false)
-          setInitialLoadComplete(true)
+          setInitialLoadComplete(true) // Only set here after contests fetch completes
           return
         }
         logger.error('Failed to fetch contests:', error)
@@ -299,7 +307,7 @@ function ContestsPageContent() {
     return () => {
       abortController.abort()
     }
-  }, [activeRoundId, categoryTab, filterCountry, filterContinent, committedSearch, isAuthenticated, user])
+  }, [activeRoundId, categoryTab, filterCountry, filterContinent, committedSearch, isAuthenticated, user, roundsLoading, rounds.length])
 
   // Load more contests function
   const loadMoreContests = useCallback(async () => {
@@ -495,8 +503,9 @@ function ContestsPageContent() {
     router.push(`/dashboard/contests/${id}/apply${q ? `?${q}` : ''}`)
   }
 
-  // Do not block contests page on auth loading; it is viewable for unauthenticated users.
-  if (roundsLoading && rounds.length === 0 && !allContests.length) {
+  // Show loading skeleton while waiting for initial data
+  // Only show skeleton if we're still loading rounds AND have no contests AND haven't completed initial load
+  if ((roundsLoading || contestsLoading) && rounds.length === 0 && !allContests.length && !initialLoadComplete) {
     return <ContestsSkeleton />
   }
   // Allow unauthenticated users to view contests (they just can't participate)
@@ -636,7 +645,7 @@ function ContestsPageContent() {
         )}
 
         {/* Contests Grid */}
-        {contestsLoading && !contestsData ? (
+        {(!initialLoadComplete && (contestsLoading || roundsLoading)) ? (
           <ContestsSkeleton />
         ) : displayedContests.length > 0 ? (
           <>
@@ -686,10 +695,10 @@ function ContestsPageContent() {
               )}
             </div>
           </>
-        ) : !initialLoadComplete ? (
+        ) : !initialLoadComplete || contestsLoading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
             <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
-            <p className="text-gray-500">{t('common.loading') || 'Loading...'}</p>
+            <p className="text-gray-500">{t('common.loading') || 'Loading contests...'}</p>
           </div>
         ) : (
           <div className="text-center py-20">
