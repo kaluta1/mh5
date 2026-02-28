@@ -224,17 +224,26 @@ def _enrich_round_data(
             except Exception as e:
                 logger.warning(f"Error fetching contest season links for round {round_id}: {str(e)}")
 
-            # User submissions in this round, with legacy fallback for null round_id
-            user_contested_season_ids_in_scope = set()
+            # User submissions split by scope:
+            # - all rounds (nomination categories)
+            # - current round/legacy-null only (participation categories)
+            user_contested_season_ids_all = set()
+            user_contested_season_ids_current_round = set()
             if user_id:
                 try:
                     from app.models.contests import Contestant
-                    scoped_user_contestants = db.query(Contestant).filter(
+                    all_user_contestants = db.query(Contestant).filter(
                         Contestant.user_id == user_id,
                         Contestant.is_deleted == False
                     ).all()
-                    user_contested_season_ids_in_scope = {
-                        uc.season_id for uc in scoped_user_contestants if uc.season_id
+
+                    user_contested_season_ids_all = {
+                        uc.season_id for uc in all_user_contestants if uc.season_id
+                    }
+                    user_contested_season_ids_current_round = {
+                        uc.season_id
+                        for uc in all_user_contestants
+                        if uc.season_id and (uc.round_id == round_id or uc.round_id is None)
                     }
                 except Exception as e:
                     logger.warning(f"Error fetching scoped user contestants for round {round_id}: {str(e)}")
@@ -245,6 +254,7 @@ def _enrich_round_data(
                     contest_season_ids = {contest.id}
                     linked_season_ids = contest_season_ids_map.get(contest.id, set())
                     contest_season_ids.update(linked_season_ids)
+                    is_nomination_category = getattr(contest, "voting_type_id", None) is not None
 
                     # Get participant count for this contest in this round
                     participant_count = 0
@@ -254,6 +264,11 @@ def _enrich_round_data(
                             Contestant.season_id.in_(list(contest_season_ids)),
                             Contestant.is_deleted == False
                         )
+                        # Participation categories are round-specific; nomination categories aggregate by category.
+                        if not is_nomination_category:
+                            participant_query = participant_query.filter(
+                                or_(Contestant.round_id == round_id, Contestant.round_id.is_(None))
+                            )
                         
                         # Apply location filters
                         if filter_country and filter_country != 'all':
@@ -274,7 +289,12 @@ def _enrich_round_data(
                         logger.warning(f"Error counting participants for contest {contest.id}: {str(e)}")
                     
                     # Strict per-contest check: only true when the user has already contested THIS contest.
-                    is_contesting = len(contest_season_ids.intersection(user_contested_season_ids_in_scope)) > 0
+                    user_season_scope = (
+                        user_contested_season_ids_all
+                        if is_nomination_category
+                        else user_contested_season_ids_current_round
+                    )
+                    is_contesting = len(contest_season_ids.intersection(user_season_scope)) > 0
                     
                     contest_data = {
                         "id": contest.id,
