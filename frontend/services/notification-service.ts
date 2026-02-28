@@ -42,7 +42,7 @@ class NotificationService {
       try {
         const response = await api.get('/api/v1/notifications', {
           params: { skip, limit, unread_only: unreadOnly },
-          timeout: 15000
+          timeout: 30000
         })
         return response.data
       } catch (error) {

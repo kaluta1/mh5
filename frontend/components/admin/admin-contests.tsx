@@ -69,8 +69,11 @@ export default function AdminContests() {
       }
 
     } catch (error) {
-      console.error('Error loading shared data', error)
-      addToast(t('admin.common.load_error') || 'Erreur de chargement des données', 'error')
+      // Silently handle timeout errors
+      if (error?.code !== 'ECONNABORTED' && error?.message && !error?.message?.includes('timeout')) {
+        console.warn('Error loading shared data', error)
+        addToast(t('admin.common.load_error') || 'Erreur de chargement des données', 'error')
+      }
     } finally {
       setLoadingShared(false)
     }

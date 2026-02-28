@@ -50,9 +50,15 @@ export function ContestList({ seasons, votingTypes, categories }: ContestListPro
             setLoading(true)
             const data = await contestService.getAllContests()
             setContests(data)
-        } catch (error) {
-            console.error('Error fetching contests:', error)
-            addToast(t('admin.contests.load_error') || 'Erreur lors du chargement des concours', 'error')
+        } catch (error: any) {
+            // Silently handle timeout errors
+            if (error?.code !== 'ECONNABORTED' && error?.message && !error?.message?.includes('timeout')) {
+                console.warn('Error fetching contests:', error)
+            }
+            // Only show toast for non-timeout errors
+            if (error?.code !== 'ECONNABORTED' && !error?.message?.includes('timeout')) {
+                addToast(t('admin.contests.load_error') || 'Erreur lors du chargement des concours', 'error')
+            }
         } finally {
             setLoading(false)
         }

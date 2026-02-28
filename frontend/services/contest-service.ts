@@ -563,8 +563,12 @@ class ContestService {
         total: total
       };
     } catch (error) {
-      console.error('Error fetching contests:', error);
-      throw error;
+      // Silently handle timeout errors
+      if (error?.code !== 'ECONNABORTED' && error?.message && !error?.message?.includes('timeout')) {
+        console.warn('Error fetching contests:', error);
+      }
+      // Return empty result instead of throwing to prevent UI crashes
+      return { contests: [], total: 0 };
     }
   }
 

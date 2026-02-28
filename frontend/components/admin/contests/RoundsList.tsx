@@ -33,11 +33,17 @@ export function RoundsList() {
     const fetchRounds = async () => {
         try {
             setLoading(true)
-            const response = await api.get('/api/v1/rounds/')
+            const response = await api.get('/api/v1/rounds/', { timeout: 30000 })
             setRounds(response.data)
-        } catch (error) {
-            console.error('Error fetching rounds:', error)
-            addToast(t('admin.rounds.load_error') || 'Erreur lors du chargement des rounds', 'error')
+        } catch (error: any) {
+            // Silently handle timeout errors
+            if (error?.code !== 'ECONNABORTED' && error?.message && !error?.message?.includes('timeout')) {
+                console.warn('Error fetching rounds:', error)
+            }
+            // Only show toast for non-timeout errors
+            if (error?.code !== 'ECONNABORTED' && !error?.message?.includes('timeout')) {
+                addToast(t('admin.rounds.load_error') || 'Erreur lors du chargement des rounds', 'error')
+            }
         } finally {
             setLoading(false)
         }
@@ -47,8 +53,11 @@ export function RoundsList() {
         try {
             const data = await contestService.getAllContests()
             setContests(data)
-        } catch (error) {
-            console.error('Error fetching contests for rounds:', error)
+        } catch (error: any) {
+            // Silently handle timeout errors
+            if (error?.code !== 'ECONNABORTED' && error?.message && !error?.message?.includes('timeout')) {
+                console.warn('Error fetching contests for rounds:', error)
+            }
         }
     }
 

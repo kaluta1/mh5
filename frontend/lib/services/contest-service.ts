@@ -120,16 +120,20 @@ class ContestService {
         return cached
       }
 
-      // Si pas en cache, faire la requête
-      const response = await api.get(cacheKey)
+      // Si pas en cache, faire la requête avec increased timeout
+      const response = await api.get(cacheKey, { timeout: 30000 })
 
       // Mettre en cache
       cacheService.set(cacheKey, response.data)
 
       return response.data
-    } catch (error) {
-      console.error('Erreur lors de la récupération des concours:', error)
-      throw error
+    } catch (error: any) {
+      // Silently handle timeout errors - don't log to console.error to avoid noise
+      if (error?.code !== 'ECONNABORTED' && error?.message && !error?.message?.includes('timeout')) {
+        console.warn('Error fetching contests:', error)
+      }
+      // Return empty array instead of throwing to prevent UI crashes
+      return []
     }
   }
 

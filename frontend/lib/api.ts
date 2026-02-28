@@ -10,7 +10,7 @@ const API_BASE_URL = RAW_API_URL.replace(/\/+$/, '')
 // Instance axios pour les appels API (optimized for speed)
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000, // Reduced to 15s for faster failure detection
+  timeout: 30000, // Increased to 30s to handle slow backend responses (Render cold starts)
   headers: {
     'Content-Type': 'application/json',
   },

@@ -118,6 +118,12 @@ function ContestsPageContent() {
         if (error.name === 'AbortError' || abortController.signal.aborted) {
           return
         }
+        // Silently handle timeout errors
+        if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
+          logger.warn('Rounds fetch timeout, showing empty state')
+          setRounds([])
+          return
+        }
         logger.error('Failed to fetch rounds:', error)
         addToast("Failed to load rounds", "error")
       } finally {
@@ -244,6 +250,17 @@ function ContestsPageContent() {
       } catch (error: any) {
         // Ignore aborted requests
         if (error.name === 'AbortError' || abortController.signal.aborted) {
+          return
+        }
+        // Silently handle timeout errors - don't log to avoid noise
+        if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
+          logger.warn('Request timeout, showing empty state')
+          setContestsData(null)
+          setAllContests([])
+          setTotalContests(0)
+          setHasMore(false)
+          setContestsLoading(false)
+          setInitialLoadComplete(true)
           return
         }
         logger.error('Failed to fetch contests:', error)

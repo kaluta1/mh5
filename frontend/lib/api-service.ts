@@ -24,7 +24,7 @@ const API_URL = getApiUrl();
 // Create axios instance with performance optimizations
 export const api = axios.create({
     baseURL: API_URL,
-    timeout: 15000, // 15s timeout for faster failure detection
+    timeout: 30000, // Increased to 30s to handle slow backend responses (Render cold starts)
     headers: {
         'Content-Type': 'application/json',
     },
