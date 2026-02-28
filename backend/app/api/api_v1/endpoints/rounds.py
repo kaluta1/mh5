@@ -232,8 +232,7 @@ def _enrich_round_data(
                     from app.models.contests import Contestant
                     scoped_user_contestants = db.query(Contestant).filter(
                         Contestant.user_id == user_id,
-                        Contestant.is_deleted == False,
-                        or_(Contestant.round_id == round_id, Contestant.round_id.is_(None))
+                        Contestant.is_deleted == False
                     ).all()
                     user_contested_season_ids_in_scope = {
                         uc.season_id for uc in scoped_user_contestants if uc.season_id
@@ -261,7 +260,10 @@ def _enrich_round_data(
                         # Apply location filters
                         if filter_country and filter_country != 'all':
                             participant_query = participant_query.filter(
-                                func.lower(Contestant.country) == func.lower(filter_country)
+                                or_(
+                                    func.lower(Contestant.country) == func.lower(filter_country),
+                                    func.lower(Contestant.nominator_country) == func.lower(filter_country)
+                                )
                             )
                         
                         if filter_continent and filter_continent != 'all':
