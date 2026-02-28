@@ -74,7 +74,7 @@ interface ContestantDetail {
 
 export default function ContestantDetailPage() {
   const { t } = useLanguage()
-  const { user, isAuthenticated, isLoading } = useAuth()
+  const { user, isLoading } = useAuth()
   const router = useRouter()
   const params = useParams()
   const contestantId = params.contestantId as string
@@ -104,12 +104,6 @@ export default function ContestantDetailPage() {
   const [showShareDialog, setShowShareDialog] = useState(false)
   const [shareLink, setShareLink] = useState('')
 
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.push('/')
-    }
-  }, [isAuthenticated, isLoading, router])
-
   // Charger les données du contestant
   useEffect(() => {
     const loadContestant = async () => {
@@ -138,10 +132,10 @@ export default function ContestantDetailPage() {
       }
     }
 
-    if (!isLoading && isAuthenticated && user && contestantId) {
+    if (contestantId) {
       loadContestant()
     }
-  }, [isLoading, isAuthenticated, user, contestantId])
+  }, [contestantId])
 
   useEffect(() => {
     const loadFollowStatus = async () => {
@@ -452,11 +446,12 @@ export default function ContestantDetailPage() {
     }
   }, [toast])
 
-  if (isLoading || pageLoading) {
+  // Do not block contestant details on auth loading; page is viewable without auth.
+  if (pageLoading) {
     return <ContestantDetailSkeleton />
   }
 
-  if (!isAuthenticated || !user || !contestant) {
+  if (!contestant) {
     return null
   }
 
