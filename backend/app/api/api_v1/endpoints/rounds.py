@@ -1,7 +1,7 @@
 from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from datetime import date, datetime
 import logging
 import traceback
@@ -210,63 +210,71 @@ def _enrich_round_data(
             # Apply pagination
             paginated_contests = valid_contests[contest_skip:contest_skip + contest_limit]
             
-            # Batch query: find all contests where current user has participated in this round
-            # IMPORTANT: "Edit" must be shown only for the exact contest/category where
-            # the user already has a nomination/participation, not every contest sharing voting_type.
-            user_contested_contest_ids: set = set()
+            # Build contest -> active season mapping for robust matching/counting
+            contest_season_ids_map = {}
+            try:
+                from app.models.contests import ContestSeasonLink
+                contest_ids_for_page = [c.id for c in paginated_contests]
+                if contest_ids_for_page:
+                    season_links = db.query(ContestSeasonLink).filter(
+                        ContestSeasonLink.contest_id.in_(contest_ids_for_page),
+                        ContestSeasonLink.is_active == True
+                    ).all()
+                    for link in season_links:
+                        contest_season_ids_map.setdefault(link.contest_id, set()).add(link.season_id)
+            except Exception as e:
+                logger.warning(f"Error fetching contest season links for round {round_id}: {str(e)}")
+
+            # User submissions in this round, with legacy fallback for null round_id
+            user_contested_season_ids_in_scope = set()
             if user_id:
                 try:
                     from app.models.contests import Contestant
-                    
-                    # Get all user contestants once, then restrict to this round
-                    all_user_contestants = db.query(Contestant).filter(
+                    scoped_user_contestants = db.query(Contestant).filter(
                         Contestant.user_id == user_id,
-                        Contestant.is_deleted == False
+                        Contestant.is_deleted == False,
+                        or_(Contestant.round_id == round_id, Contestant.round_id.is_(None))
                     ).all()
-                    
-                    # Now check for this specific round
-                    if valid_contests:
-                        # Get user contestants for THIS round only
-                        user_contestants = [uc for uc in all_user_contestants if uc.round_id == round_id]
-                        # Build set of contest IDs where user has directly participated in this round
-                        user_contested_contest_ids = {uc.season_id for uc in user_contestants if uc.season_id}
+                    user_contested_season_ids_in_scope = {
+                        uc.season_id for uc in scoped_user_contestants if uc.season_id
+                    }
                 except Exception as e:
-                    logger.warning(f"Error batch-checking user participation for round {round_id}: {str(e)}")
+                    logger.warning(f"Error fetching scoped user contestants for round {round_id}: {str(e)}")
 
             # Build contest data
             for contest in paginated_contests:
                 try:
+                    contest_season_ids = {contest.id}
+                    linked_season_ids = contest_season_ids_map.get(contest.id, set())
+                    contest_season_ids.update(linked_season_ids)
+
                     # Get participant count for this contest in this round
                     participant_count = 0
                     try:
                         from app.models.contests import Contestant
-                        participant_count = db.query(func.count(Contestant.id)).filter(
-                            Contestant.season_id == contest.id,
-                            Contestant.round_id == round_id,
+                        participant_query = db.query(func.count(Contestant.id)).filter(
+                            Contestant.season_id.in_(list(contest_season_ids)),
+                            or_(Contestant.round_id == round_id, Contestant.round_id.is_(None)),
                             Contestant.is_deleted == False
-                        ).scalar() or 0
+                        )
                         
                         # Apply location filters
                         if filter_country and filter_country != 'all':
-                            participant_count = db.query(func.count(Contestant.id)).filter(
-                                Contestant.season_id == contest.id,
-                                Contestant.round_id == round_id,
-                                Contestant.is_deleted == False,
+                            participant_query = participant_query.filter(
                                 func.lower(Contestant.country) == func.lower(filter_country)
-                            ).scalar() or 0
+                            )
                         
                         if filter_continent and filter_continent != 'all':
-                            participant_count = db.query(func.count(Contestant.id)).filter(
-                                Contestant.season_id == contest.id,
-                                Contestant.round_id == round_id,
-                                Contestant.is_deleted == False,
+                            participant_query = participant_query.filter(
                                 func.lower(Contestant.continent) == func.lower(filter_continent)
-                            ).scalar() or 0
+                            )
+                        
+                        participant_count = participant_query.scalar() or 0
                     except Exception as e:
                         logger.warning(f"Error counting participants for contest {contest.id}: {str(e)}")
                     
                     # Strict per-contest check: only true when the user has already contested THIS contest.
-                    is_contesting = contest.id in user_contested_contest_ids
+                    is_contesting = len(contest_season_ids.intersection(user_contested_season_ids_in_scope)) > 0
                     
                     contest_data = {
                         "id": contest.id,
