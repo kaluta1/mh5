@@ -31,7 +31,6 @@ const SuggestContestDialog = dynamic(() => import('@/components/dashboard/sugges
 const CONTESTS_PER_PAGE = 8 // Reduced from 12 for faster initial load
 const INITIAL_CONTESTS = 6 // Even smaller initial load for instant display
 const CACHE_TTL = 5 * 1000 // 5 seconds cache, preventing stale states for participants
-const ROUNDS_UI_TIMEOUT_MS = 1200 // Keep UI responsive even when backend is slow
 
 // Simple in-memory cache for contests data
 const contestsCache = new Map<string, { data: any; timestamp: number }>()
@@ -51,18 +50,6 @@ function getFromCache(key: string) {
 
 function setToCache(key: string, data: any) {
   contestsCache.set(key, { data, timestamp: Date.now() })
-}
-
-async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
-  let timeoutId: ReturnType<typeof setTimeout> | undefined
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    timeoutId = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs)
-  })
-  try {
-    return await Promise.race([promise, timeoutPromise]) as T
-  } finally {
-    if (timeoutId) clearTimeout(timeoutId)
-  }
 }
 
 function ContestsPageContent() {
@@ -115,12 +102,8 @@ function ContestsPageContent() {
     const fetchRounds = async () => {
       try {
         setRoundsLoading(true)
-        // Fetch rounds with a short UI timeout so page doesn't get stuck in loading state.
-        const data = await withTimeout(
-          ApiService.getRounds({ contestLimit: 1 }),
-          ROUNDS_UI_TIMEOUT_MS,
-          'ROUNDS_UI_TIMEOUT'
-        )
+        // Fetch rounds with minimal data for faster response
+        const data = await ApiService.getRounds({ contestLimit: 1 }) // Minimal data for round selector
         
         // Check if aborted
         if (abortController.signal.aborted) return
@@ -133,16 +116,6 @@ function ContestsPageContent() {
         }
       } catch (error: any) {
         if (error.name === 'AbortError' || abortController.signal.aborted) {
-          return
-        }
-        if (error?.message === 'ROUNDS_UI_TIMEOUT') {
-          logger.warn('Rounds fetch UI timeout, opening page with empty state')
-          setRounds([])
-          setInitialLoadComplete(true)
-          setContestsData(null)
-          setAllContests([])
-          setTotalContests(0)
-          setHasMore(false)
           return
         }
         // Silently handle timeout errors
