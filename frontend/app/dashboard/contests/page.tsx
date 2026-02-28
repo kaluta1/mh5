@@ -156,12 +156,17 @@ function ContestsPageContent() {
 
   // Set default filters based on category tab and user location (only when no filter is set yet)
   useEffect(() => {
-    if (!user) return
-
+    // Don't set filters if user is not loaded yet - wait for auth to complete
+    if (isLoading) return
+    
     if (categoryTab === 'nomination') {
       // IMPORTANT: Always set user's country for nominations (contests display according to user country)
-      if (user.country) {
+      // Only set if user exists and has a country, otherwise leave empty (show all)
+      if (user?.country) {
         setFilterCountry(user.country)
+      } else {
+        // If no user or no country, don't filter by country (show all contests)
+        setFilterCountry('')
       }
       if (filterLevel !== 'all') {
         setFilterLevel('all')
@@ -175,7 +180,7 @@ function ContestsPageContent() {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categoryTab, user?.country])
+  }, [categoryTab, user?.country, isLoading])
 
   // Handle Search Execution
   const handleSearch = () => {
@@ -205,7 +210,8 @@ function ContestsPageContent() {
     const fetchContestsForRound = async () => {
       setContestsLoading(true)
       const hasVotingType = categoryTab === 'nomination'
-      const activeCountry = filterCountry !== 'all' ? filterCountry : undefined
+      // Only pass country filter if it's a non-empty string (not 'all' or empty)
+      const activeCountry = filterCountry && filterCountry !== 'all' ? filterCountry : undefined
       const activeContinent = filterContinent !== 'all' ? filterContinent : undefined
       const activeSearch = committedSearch || undefined
 
@@ -240,6 +246,13 @@ function ContestsPageContent() {
         if (data && data.length > 0) {
           setContestsData(data[0])
           const contests = data[0].contests || []
+          
+          // Debug logging to track data flow
+          logger.info(`[ContestsPage] Fetched ${contests.length} contests for round ${activeRoundId}, category: ${categoryTab}`)
+          if (contests.length > 0) {
+            logger.info(`[ContestsPage] Sample contest: ${contests[0].name}, participants: ${contests[0].participants_count}`)
+          }
+          
           // Backend should already sort, but ensure it's sorted by participants_count descending
           // Use a more efficient sort (only if needed)
           if (contests.length > 1) {
@@ -256,6 +269,7 @@ function ContestsPageContent() {
           // Cache the result
           setToCache(cacheKey, data[0])
         } else {
+          logger.warn(`[ContestsPage] No contests returned for round ${activeRoundId}, category: ${categoryTab}`)
           setContestsData(null)
           setAllContests([])
           setTotalContests(0)
@@ -315,7 +329,8 @@ function ContestsPageContent() {
 
     setLoadingMore(true)
     const hasVotingType = categoryTab === 'nomination'
-    const activeCountry = filterCountry !== 'all' ? filterCountry : undefined
+    // Only pass country filter if it's a non-empty string (not 'all' or empty)
+    const activeCountry = filterCountry && filterCountry !== 'all' ? filterCountry : undefined
     const activeContinent = filterContinent !== 'all' ? filterContinent : undefined
     const activeSearch = committedSearch || undefined
 
@@ -384,7 +399,14 @@ function ContestsPageContent() {
 
   // Raw Contests List (Before filtering by type) - Now uses allContests for infinite scroll
   const rawContests = useMemo(() => {
-    if (!allContests || allContests.length === 0) return []
+    if (!allContests || allContests.length === 0) {
+      if (initialLoadComplete) {
+        logger.warn(`[ContestsPage] No contests in allContests array. initialLoadComplete=${initialLoadComplete}, contestsLoading=${contestsLoading}`)
+      }
+      return []
+    }
+
+    logger.info(`[ContestsPage] Processing ${allContests.length} contests into rawContests`)
 
     return allContests.map((c: any) => {
       // Stats are now directly on the contest object in the new schema
@@ -443,9 +465,18 @@ function ContestsPageContent() {
   const displayedContests = useMemo(() => {
     let filtered = rawContests.slice()
 
+    // Debug logging
+    if (rawContests.length > 0 && filtered.length === 0) {
+      logger.warn(`[ContestsPage] All ${rawContests.length} contests filtered out. Filters: activeTab=${activeTab}, search="${committedSearch}", level=${filterLevel}, categoryTab=${categoryTab}`)
+    }
+
     // 1. Filter by Tab (Type)
     if (activeTab !== 'all') {
+      const before = filtered.length
       filtered = filtered.filter(c => c.contestType === activeTab)
+      if (before > 0 && filtered.length === 0) {
+        logger.warn(`[ContestsPage] All contests filtered out by type tab: ${activeTab}`)
+      }
     }
 
     // 2. Filter by Search
