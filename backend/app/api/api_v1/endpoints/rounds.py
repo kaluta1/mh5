@@ -211,75 +211,21 @@ def _enrich_round_data(
             paginated_contests = valid_contests[contest_skip:contest_skip + contest_limit]
             
             # Batch query: find all contests where current user has participated in this round
-            # Also check if user has nominated in any voting_type (category) to show Edit for all contests in that category
+            # IMPORTANT: "Edit" must be shown only for the exact contest/category where
+            # the user already has a nomination/participation, not every contest sharing voting_type.
             user_contested_contest_ids: set = set()
-            user_nominated_voting_type_ids: set = set()
             if user_id:
                 try:
                     from app.models.contests import Contestant
-                    from app.models.contest import Contest as ContestModel
-                    from app.models.round import round_contests
                     
-                    # Get ALL user contestants across ALL rounds (not just this round)
-                    # This allows checking if user has nominated in any category
+                    # Get all user contestants once, then restrict to this round
                     all_user_contestants = db.query(Contestant).filter(
                         Contestant.user_id == user_id,
                         Contestant.is_deleted == False
                     ).all()
                     
-                    # Build set of voting_type_ids where user has nominated (across ALL rounds)
-                    # Only add valid, non-None voting_type_ids from contests where user actually has a contestant
-                    # IMPORTANT: Only add voting_type_id if we can definitively match the contestant to a specific contest
-                    for uc in all_user_contestants:
-                        # Method 1: Check via season_id (most reliable - directly links contestant to contest)
-                        # This is the direct match - user's season_id equals contest.id
-                        if uc.season_id:
-                            try:
-                                contest = db.query(ContestModel).filter(ContestModel.id == uc.season_id).first()
-                                # Only add if:
-                                # 1. Contest exists
-                                # 2. voting_type_id is not None and is a valid integer
-                                # 3. This is a direct match (season_id == contest.id), so we know user nominated in this contest
-                                if contest and contest.voting_type_id is not None and isinstance(contest.voting_type_id, int):
-                                    user_nominated_voting_type_ids.add(contest.voting_type_id)
-                                    logger.info(f"[NOMINATION CHECK] User {user_id} nominated in voting_type_id {contest.voting_type_id} (contest {contest.id}, contestant {uc.id})")
-                            except Exception as e:
-                                logger.warning(f"Error fetching contest {uc.season_id} for voting_type check: {str(e)}")
-                        
-                        # Method 2: Check via round_contests table (only if season_id doesn't match)
-                        # Only check if we don't have a direct season_id match
-                        # BE VERY CONSERVATIVE: Only add if there's exactly one contest in the round
-                        # This prevents false positives when a round has multiple contests
-                        elif uc.round_id:
-                            try:
-                                # Get contests linked to this round
-                                linked_contests = db.query(ContestModel).join(
-                                    round_contests, ContestModel.id == round_contests.c.contest_id
-                                ).filter(round_contests.c.round_id == uc.round_id).all()
-                                
-                                # Only add voting_type_id if:
-                                # 1. There's exactly one contest in the round (unambiguous match)
-                                # 2. voting_type_id is valid
-                                if len(linked_contests) == 1:
-                                    contest = linked_contests[0]
-                                    if contest.voting_type_id is not None and isinstance(contest.voting_type_id, int):
-                                        user_nominated_voting_type_ids.add(contest.voting_type_id)
-                                        logger.info(f"[NOMINATION CHECK] User {user_id} nominated in voting_type_id {contest.voting_type_id} (contest {contest.id} via round {uc.round_id}, contestant {uc.id})")
-                                elif len(linked_contests) > 1:
-                                    # Multiple contests in round - can't definitively match, skip
-                                    logger.debug(f"[NOMINATION CHECK] Skipping round {uc.round_id} - has {len(linked_contests)} contests, can't definitively match contestant {uc.id}")
-                            except Exception as e:
-                                logger.warning(f"Error fetching contests via round_contests for round {uc.round_id}: {str(e)}")
-                    
-                    # Log the final set for debugging
-                    if user_nominated_voting_type_ids:
-                        logger.info(f"[NOMINATION CHECK] User {user_id} has nominated in voting_type_ids: {user_nominated_voting_type_ids}")
-                    else:
-                        logger.debug(f"[NOMINATION CHECK] User {user_id} has not nominated in any voting_type categories")
-                    
                     # Now check for this specific round
                     if valid_contests:
-                        all_contest_ids = [c.id for c in valid_contests]
                         # Get user contestants for THIS round only
                         user_contestants = [uc for uc in all_user_contestants if uc.round_id == round_id]
                         # Build set of contest IDs where user has directly participated in this round
@@ -319,30 +265,8 @@ def _enrich_round_data(
                     except Exception as e:
                         logger.warning(f"Error counting participants for contest {contest.id}: {str(e)}")
                     
-                    # Check if user has nominated in this voting_type (category)
-                    # If yes, show "Edit" for ALL contests with this voting_type_id
-                    is_contesting = False  # Default to False - user has NOT nominated
-                    
-                    # First check: User directly contested this specific contest
-                    if contest.id in user_contested_contest_ids:
-                        is_contesting = True
-                        logger.debug(f"[NOMINATION CHECK] Contest {contest.id}: User {user_id} directly contested (in user_contested_contest_ids)")
-                    # Second check: User nominated in this voting_type (category)
-                    # Only check voting_type_id if:
-                    # 1. User hasn't directly contested this specific contest
-                    # 2. Contest has a voting_type_id (is a nomination category)
-                    # 3. User has nominated in this voting_type_id category
-                    elif (contest.voting_type_id is not None 
-                          and isinstance(contest.voting_type_id, int)
-                          and contest.voting_type_id in user_nominated_voting_type_ids):
-                        is_contesting = True
-                        logger.debug(f"[NOMINATION CHECK] Contest {contest.id}: User {user_id} nominated in voting_type_id {contest.voting_type_id}")
-                    else:
-                        # Log why it's False for debugging
-                        if contest.voting_type_id is None:
-                            logger.debug(f"[NOMINATION CHECK] Contest {contest.id}: No voting_type_id (not a nomination category)")
-                        elif contest.voting_type_id not in user_nominated_voting_type_ids:
-                            logger.debug(f"[NOMINATION CHECK] Contest {contest.id}: voting_type_id {contest.voting_type_id} not in user_nominated_voting_type_ids {user_nominated_voting_type_ids}")
+                    # Strict per-contest check: only true when the user has already contested THIS contest.
+                    is_contesting = contest.id in user_contested_contest_ids
                     
                     contest_data = {
                         "id": contest.id,
