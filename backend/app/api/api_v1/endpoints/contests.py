@@ -319,7 +319,7 @@ def read_contests(
                 "contestants": contestant_counts.get(c.id, 0),  # For compatibility
                 "participant_count": getattr(c, 'participant_count', 0),
                 "total_votes": 0,  # Skip vote counting for list view
-                "current_user_contesting": current_user_contesting_map.get(c.id, False),
+                "current_user_contesting": bool(current_user_contesting_map.get(c.id, False)),  # Explicitly convert to bool, default False
             }
             # Debug log for current_user_contesting
             if current_user and current_user_contesting_map.get(c.id, False):

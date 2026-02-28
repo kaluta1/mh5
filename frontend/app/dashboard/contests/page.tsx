@@ -404,7 +404,8 @@ function ContestsPageContent() {
         votingStartDate: contestsData?.voting_start_date,
         votingEndDate: contestsData?.voting_end_date,
         currentUserParticipated: Boolean(c.currentUserParticipated || c.current_user_participated || c.current_user_contesting),
-        currentUserContesting: Boolean(c.currentUserContesting || c.current_user_contesting),
+        // Explicitly check for true value - default to false if undefined/null
+        currentUserContesting: Boolean(c.currentUserContesting === true || c.current_user_contesting === true),
         topContestants: [] // Not fetching top contestants per contest in new query yet
       }
     })
