@@ -217,8 +217,7 @@ def _enrich_round_data(
                 contest_ids_for_page = [c.id for c in paginated_contests]
                 if contest_ids_for_page:
                     season_links = db.query(ContestSeasonLink).filter(
-                        ContestSeasonLink.contest_id.in_(contest_ids_for_page),
-                        ContestSeasonLink.is_active == True
+                        ContestSeasonLink.contest_id.in_(contest_ids_for_page)
                     ).all()
                     for link in season_links:
                         contest_season_ids_map.setdefault(link.contest_id, set()).add(link.season_id)
@@ -253,7 +252,6 @@ def _enrich_round_data(
                         from app.models.contests import Contestant
                         participant_query = db.query(func.count(Contestant.id)).filter(
                             Contestant.season_id.in_(list(contest_season_ids)),
-                            or_(Contestant.round_id == round_id, Contestant.round_id.is_(None)),
                             Contestant.is_deleted == False
                         )
                         
