@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { ThumbsUp, MessageCircle, Heart, Smile, ThumbsDown, Star, Reply } from 'lucide-react'
 import { useLanguage } from '@/contexts/language-context'
 import { commentsService, Comment } from '@/lib/services/comments-service'
@@ -31,6 +32,7 @@ export function CommentItem({
   commenters = []
 }: CommentItemProps) {
   const { t } = useLanguage()
+  const router = useRouter()
   const { addToast } = useToast()
   const [showReplyForm, setShowReplyForm] = useState(false)
   const [replyText, setReplyText] = useState('')
@@ -144,24 +146,29 @@ export function CommentItem({
       <div className={`border-b border-gray-200 dark:border-gray-700 last:border-b-0 pb-3 last:pb-0 ${isReply ? 'pl-4 md:pl-6 border-l-2 border-gray-200 dark:border-gray-700 ml-4 md:ml-6' : ''}`}>
         <div className="flex gap-3">
           <div className="flex-shrink-0">
+            <div className="cursor-pointer" onClick={() => comment.user_id && router.push(`/dashboard/users/${comment.user_id}`)}>
             {comment.author_avatar ? (
               <Image
                 src={comment.author_avatar}
                 alt={comment.author_name}
                 width={40}
                 height={40}
-                className="w-10 h-10 rounded-full"
+                className="w-10 h-10 rounded-full hover:ring-2 hover:ring-myhigh5-primary transition-all"
               />
             ) : (
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-myhigh5-primary to-myhigh5-primary-dark flex items-center justify-center text-white">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-myhigh5-primary to-myhigh5-primary-dark flex items-center justify-center text-white hover:ring-2 hover:ring-myhigh5-primary transition-all">
                 {comment.author_name.charAt(0).toUpperCase()}
               </div>
             )}
+            </div>
           </div>
           <div className="flex-1 min-w-0">
             <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
               <div className="flex items-center gap-2">
-                <p className="font-semibold text-sm text-gray-900 dark:text-white">
+                <p
+                  className="font-semibold text-sm text-gray-900 dark:text-white hover:text-myhigh5-primary cursor-pointer transition-colors"
+                  onClick={() => comment.user_id && router.push(`/dashboard/users/${comment.user_id}`)}
+                >
                   {comment.author_name}
                 </p>
                 {isReply && (
@@ -186,36 +193,33 @@ export function CommentItem({
             </div>
             
             {/* Actions bar */}
-            <div className="flex items-center gap-4 mt-2 text-xs text-gray-500 dark:text-gray-400">
-              <button
-                onClick={handleLike}
-                className={`flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors ${
-                  isLiked ? 'text-blue-600 dark:text-blue-400' : ''
-                }`}
-              >
-                <ThumbsUp className={`w-4 h-4 ${isLiked ? 'fill-current' : ''}`} />
-                <span>{likeCount > 0 ? likeCount : ''}</span>
-              </button>
-              
-              {!isMaxDepth && (
-                <button
-                  onClick={() => setShowReplyForm(!showReplyForm)}
-                  className="flex items-center gap-1 text-myhigh5-primary dark:text-myhigh5-primary-light hover:text-myhigh5-primary-dark dark:hover:text-myhigh5-primary transition-colors ml-auto"
-                >
-                  <Reply className="w-4 h-4" />
-                  <span>{t('dashboard.contests.reply') || 'Répondre'}</span>
-                </button>
-              )}
-              
+            <div className="flex items-center gap-3 mt-2 text-xs text-gray-500 dark:text-gray-400">
               <span className="text-xs">
                 {new Date(comment.created_at).toLocaleDateString('fr-FR', {
                   day: 'numeric',
                   month: 'short',
-                  year: 'numeric',
                   hour: '2-digit',
                   minute: '2-digit'
                 })}
               </span>
+
+              <button
+                onClick={handleLike}
+                className={`flex items-center gap-1 font-medium hover:text-blue-600 dark:hover:text-blue-400 transition-colors ${
+                  isLiked ? 'text-blue-600 dark:text-blue-400' : ''
+                }`}
+              >
+                <ThumbsUp className={`w-3.5 h-3.5 ${isLiked ? 'fill-current' : ''}`} />
+                <span>{likeCount > 0 ? likeCount : t('dashboard.contests.like') || "J\u2019aime"}</span>
+              </button>
+
+              <button
+                onClick={() => setShowReplyForm(!showReplyForm)}
+                className="flex items-center gap-1 font-medium hover:text-myhigh5-primary dark:hover:text-myhigh5-primary-light transition-colors"
+              >
+                <Reply className="w-3.5 h-3.5" />
+                <span>{t('dashboard.contests.reply') || 'R\u00e9pondre'}</span>
+              </button>
             </div>
 
             {/* Reply form */}

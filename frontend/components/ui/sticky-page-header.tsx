@@ -66,7 +66,7 @@ export function StickyPageHeader({
                   <HelpCircle className={isScrolled ? 'w-4 h-4' : 'w-5 h-5'} />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent className="bg-gray-800 text-white border-gray-700">
+              <TooltipContent className="bg-white text-gray-900 border-gray-200 shadow-lg dark:bg-gray-800 dark:text-white dark:border-gray-700">
                 <p className="text-xs">{infoTooltip || t('dashboard.contests.tooltip_info') || 'Voir les détails'}</p>
               </TooltipContent>
             </Tooltip>

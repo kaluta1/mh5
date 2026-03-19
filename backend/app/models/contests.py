@@ -146,6 +146,9 @@ class Contestant(Base):
     nominator_city: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     nominator_country: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     
+    # Type d'entrée : 'nomination' ou 'participation'
+    entry_type: Mapped[str] = mapped_column(String(20), default="participation", nullable=False)
+    
     registration_date: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     verification_status: Mapped[str] = mapped_column(String(50), default="pending")  # pending, verified, rejected
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)

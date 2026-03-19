@@ -128,8 +128,8 @@ export function VerificationRequirementsDialog({
   const completedCount = verificationItems.filter(item => item.completed).length
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-md">
+    <Dialog open={isOpen} onOpenChange={() => {}}>
+      <DialogContent className="max-w-md [&>button]:hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Shield className="w-5 h-5 text-myhigh5-primary" />

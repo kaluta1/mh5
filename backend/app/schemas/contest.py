@@ -68,7 +68,7 @@ class ContestBase(BaseModel):
     voting_restriction: Optional[str] = None
     max_entries_per_user: int = 1
     template_id: Optional[int] = None
-    voting_type_id: Optional[int] = None
+    contest_mode: str = "participation"  # 'nomination' ou 'participation'
     category_id: Optional[int] = None
     
     # ============== VERIFICATION REQUIREMENTS ==============
@@ -118,7 +118,7 @@ class ContestUpdate(BaseModel):
     voting_restriction: Optional[str] = None
     max_entries_per_user: Optional[int] = None
     template_id: Optional[int] = None
-    voting_type_id: Optional[int] = None
+    contest_mode: Optional[str] = None
     category_id: Optional[int] = None
     image_url: Optional[str] = None
     # Verification requirements - accept strings for flexibility
@@ -205,10 +205,10 @@ class Contest(ContestBase):
     entries_count: int = 0  # Nombre de participants
     participants_count: int = 0  # Alias for entries_count (used by rounds endpoint)
     total_votes: int = 0  # Nombre total de votes
+    total_points: int = 0  # Nombre total de points
     season_level: Optional[str] = None  # Niveau depuis la season
     image_url: Optional[str] = None  # URL de l'image principale
     top_contestants: List[TopContestantPreview] = []  # Top contestants preview
-    voting_type: Optional["VotingType"] = None  # Type de vote associé
     category: Optional[Dict[str, Any]] = None  # Catégorie associée (id, name, slug, description, is_active)
     rounds: List["Round"] = []
     active_round_id: Optional[int] = None
@@ -280,6 +280,7 @@ class ContestantEnriched(BaseModel):
     # Stats
     rank: Optional[int] = None
     votes_count: int = 0
+    total_points: int = 0
     images_count: int = 0
     videos_count: int = 0
     favorites_count: int = 0
@@ -301,6 +302,8 @@ class ContestantEnriched(BaseModel):
     # État du vote pour l'utilisateur courant
     has_voted: bool = False
     can_vote: bool = False
+    vote_restriction_reason: Optional[str] = None
+    is_voting_open_for_round: bool = True
     
     # État du signalement pour l'utilisateur courant
     has_reported: bool = False  # Si l'utilisateur courant a déjà signalé ce contestant

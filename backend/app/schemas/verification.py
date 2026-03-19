@@ -84,9 +84,15 @@ class UserVerificationsResponse(BaseModel):
     has_selfie: bool = False
     has_voice: bool = False
     has_video: bool = False
+    has_brand: bool = False
+    has_content: bool = False
     selfie_status: Optional[str] = None
     voice_status: Optional[str] = None
     video_status: Optional[str] = None
+    brand_status: Optional[str] = None
+    content_status: Optional[str] = None
     selfie_url: Optional[str] = None
     voice_url: Optional[str] = None
     video_url: Optional[str] = None
+    brand_url: Optional[str] = None
+    content_url: Optional[str] = None

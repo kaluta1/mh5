@@ -28,8 +28,9 @@ export function ContestantDescription({ description, maxLength = 200 }: Contesta
     )
   }
 
-  const shouldTruncate = description.length > maxLength
-  const truncatedDescription = shouldTruncate ? description.substring(0, maxLength) + '...' : description
+  // Extraire le texte brut du HTML pour la troncature
+  const plainText = description.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim()
+  const shouldTruncate = plainText.length > maxLength
 
   const dialogTitle =
     language === 'fr'
@@ -42,18 +43,22 @@ export function ContestantDescription({ description, maxLength = 200 }: Contesta
 
   return (
     <>
-      <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
-        {truncatedDescription}
-        {shouldTruncate && (
-          <Button
-            variant="link"
-            className="ml-1 p-0 h-auto text-myhigh5-primary dark:text-myhigh5-secondary underline"
-            onClick={() => setIsOpen(true)}
-          >
-            {t('common.view_more') || (language === 'fr' ? 'Voir plus' : language === 'es' ? 'Ver más' : language === 'de' ? 'Mehr anzeigen' : 'View more')}
-          </Button>
+      <div className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
+        {shouldTruncate ? (
+          <>
+            <span>{plainText.substring(0, maxLength)}...</span>
+            <Button
+              variant="link"
+              className="ml-1 p-0 h-auto text-myhigh5-primary dark:text-myhigh5-secondary underline"
+              onClick={() => setIsOpen(true)}
+            >
+              {t('common.view_more') || (language === 'fr' ? 'Voir plus' : language === 'es' ? 'Ver más' : language === 'de' ? 'Mehr anzeigen' : 'View more')}
+            </Button>
+          </>
+        ) : (
+          <div className="prose prose-sm dark:prose-invert max-w-none [&>*]:m-0 [&>p]:mb-1" dangerouslySetInnerHTML={{ __html: description }} />
         )}
-      </p>
+      </div>
 
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
@@ -61,9 +66,7 @@ export function ContestantDescription({ description, maxLength = 200 }: Contesta
             <DialogTitle>{dialogTitle}</DialogTitle>
           </DialogHeader>
           <div className="mt-3">
-            <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
-              {description}
-            </p>
+            <div className="prose prose-sm dark:prose-invert max-w-none text-sm text-gray-700 dark:text-gray-300 leading-relaxed" dangerouslySetInnerHTML={{ __html: description }} />
           </div>
         </DialogContent>
       </Dialog>

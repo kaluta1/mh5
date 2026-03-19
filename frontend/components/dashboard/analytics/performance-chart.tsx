@@ -42,7 +42,8 @@ export function PerformanceChart({
           <p className="text-sm text-gray-500 dark:text-gray-400">{chartSubtitle}</p>
         </div>
       </div>
-      <div className="h-80">
+      <div className="h-80 overflow-x-auto">
+        <div className="min-w-[500px] h-full">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} barGap={8}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
@@ -71,6 +72,7 @@ export function PerformanceChart({
             <Bar dataKey="comments" name={commentsLabel} fill="#f59e0b" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
+        </div>
       </div>
     </div>
   )

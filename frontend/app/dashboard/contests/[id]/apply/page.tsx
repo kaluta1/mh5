@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
+import { ArrowLeft } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { useLanguage } from '@/contexts/language-context'
 import { useToast } from '@/components/ui/toast'
@@ -10,6 +11,7 @@ import { ParticipationForm } from '@/components/dashboard/participation-form'
 import { contestService } from '@/services/contest-service'
 // REST API
 import ApiService from '@/lib/api-service'
+import { verificationService } from '@/services/verification-service'
 import {
   VerificationRequirementsDialog,
   SelfieVerificationDialog,
@@ -30,6 +32,7 @@ export default function ApplyToContestPage() {
   const roundIdParam = searchParams.get('roundId')
   const isEditMode = searchParams.get('edit') === 'true'
   const contestantIdParam = searchParams.get('contestantId')
+  const entryTypeParam = searchParams.get('entryType') || 'participation'
   const [pageLoading, setPageLoading] = useState(true)
   const [needsProfileSetup, setNeedsProfileSetup] = useState(false)
   const [needsKYC, setNeedsKYC] = useState(false)
@@ -44,6 +47,7 @@ export default function ApplyToContestPage() {
   const [existingParticipationData, setExistingParticipationData] = useState<any>(null)
   const [participantId, setParticipantId] = useState<number | null>(null)
   const [hasActiveSubmissionRound, setHasActiveSubmissionRound] = useState<boolean>(true)
+  const [roundData, setRoundData] = useState<any>(null)
 
   // Verification states
   const [showVerificationDialog, setShowVerificationDialog] = useState(false)
@@ -56,6 +60,7 @@ export default function ApplyToContestPage() {
   const [hasBrandVerification, setHasBrandVerification] = useState(false)
   const [hasContentVerification, setHasContentVerification] = useState(false)
   const [verificationsCompleted, setVerificationsCompleted] = useState(false)
+  const [verificationStatusLoaded, setVerificationStatusLoaded] = useState(false)
   const [hasError, setHasError] = useState(false) // Prevent infinite retry loop
   const errorShownRef = useRef(false) // Track if error was already shown
 
@@ -105,23 +110,53 @@ export default function ApplyToContestPage() {
         max_images: c.max_images,
         verification_video_max_duration: c.verification_video_max_duration,
         verification_max_size_mb: c.verification_max_size_mb,
-        voting_type: c.voting_type,
+        contest_mode: c.contest_mode,
         participant_type: c.participant_type
       })
 
-      setIsNomination(c.voting_type != null)
+      setIsNomination(entryTypeParam === 'nomination')
 
-      // 3. User Participation check - check both current_user_participation and current_user_contesting
-      // Also check if user has any contestant for this contest
-      let participationToUse: any = c.current_user_participation
+      // 3. User Participation check
+      // The backend returns current_user_participation by season (ignores round_id and entry_type)
+      // We must filter it ourselves to allow: different rounds + nomination vs participation
+      let participationToUse: any = null
 
-      // If no participation found but current_user_contesting is true, fetch the contestant
-      if (!participationToUse && (c.current_user_contesting || c.currentUserContesting) && user?.id) {
+      // First try backend's current_user_participation (filtered by contest_mode on backend)
+      const expectedEntryType = entryTypeParam || (c.contest_mode === 'nomination' ? 'nomination' : 'participation')
+      if (c.current_user_participation) {
+        const p = c.current_user_participation
+        const pRoundId = p.round_id
+        const pSeasonId = p.season_id
+        const pEntryType = p.entry_type
+
+        // Match by round, contest AND entry_type
+        const roundMatch = !roundIdParam || !pRoundId || pRoundId === parseInt(roundIdParam)
+        const contestMatch = !pSeasonId || pSeasonId === parseInt(contestId)
+        const typeMatch = !pEntryType || pEntryType === expectedEntryType
+
+        if (roundMatch && contestMatch && typeMatch) {
+          participationToUse = p
+        }
+      }
+
+      // If not found via backend, try fetching all user contestants and filter properly
+      if (!participationToUse && user?.id) {
         try {
-          // Fetch user's contestant for this contest
           const userContestants = await contestService.getContestantsByContest(contestId, { user_id: user.id })
           if (userContestants && userContestants.length > 0) {
-            participationToUse = userContestants[0]
+            // Find a contestant matching round_id, contest AND entry_type
+            const matchingEntry = userContestants.find((uc: any) => {
+              const ucRoundId = uc.round_id
+              const ucSeasonId = uc.season_id
+              const ucEntryType = uc.entry_type
+              const roundMatch = !roundIdParam || !ucRoundId || ucRoundId === parseInt(roundIdParam)
+              const contestMatch = !ucSeasonId || ucSeasonId === parseInt(contestId)
+              const typeMatch = !ucEntryType || ucEntryType === expectedEntryType
+              return roundMatch && contestMatch && typeMatch
+            })
+            if (matchingEntry) {
+              participationToUse = matchingEntry
+            }
           }
         } catch (err) {
           console.warn('Could not load user contestant:', err)
@@ -132,19 +167,22 @@ export default function ApplyToContestPage() {
       if (isEditMode && contestantIdParam && user?.id) {
         try {
           const specificContestant = await contestService.getContestantById(Number(contestantIdParam))
-          if (specificContestant && Number(specificContestant.contest_id) === Number(contestId) && specificContestant.user_id === user.id) {
-            participationToUse = specificContestant
+          // Use season_id to verify contest ownership (contestants have no contest_id column)
+          if (specificContestant && specificContestant.user_id === user.id) {
+            const scSeasonId = specificContestant.season_id
+            if (!scSeasonId || scSeasonId === parseInt(contestId)) {
+              participationToUse = specificContestant
+            }
           }
         } catch (err) {
           console.warn('Could not load specific contestant for edit:', err)
         }
       }
 
-      if (participationToUse || c.current_user_contesting || c.currentUserContesting) {
+      // Only block if we found a contestant matching the SAME entry_type AND round
+      if (participationToUse) {
         setUserAlreadyParticipating(true)
-        if (participationToUse) {
-          setParticipantId(participationToUse.id)
-        }
+        setParticipantId(participationToUse.id)
 
         let imageUrls: string[] = []
         try {
@@ -166,7 +204,8 @@ export default function ApplyToContestPage() {
           nominatorCountry: participationToUse?.nominator_country || ''
         })
 
-        if (isEditMode) setIsEditingParticipation(true)
+        // Toujours activer le mode édition si une participation existe
+        setIsEditingParticipation(true)
       }
 
       // 4. Verification Check
@@ -189,6 +228,16 @@ export default function ApplyToContestPage() {
         }
       }
 
+      // Fetch round data if roundId provided in URL
+      if (roundIdParam) {
+        try {
+          const round = await ApiService.getRound(parseInt(roundIdParam))
+          setRoundData(round)
+        } catch (err) {
+          console.warn('Could not load round data:', err)
+        }
+      }
+
       setPageLoading(false)
 
     } catch (error) {
@@ -208,44 +257,36 @@ export default function ApplyToContestPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contestId]) // Only depend on contestId to prevent infinite loops
 
-  // Calculer le temps restant jusqu'à la date limite de soumission
+  // Load real verification status from backend API
   useEffect(() => {
-    // Default deadline: February 28, 2026
-    const defaultDeadline = new Date('2026-02-28')
-    defaultDeadline.setHours(23, 59, 59, 999)
-
-    // Use submission_end_date if available, otherwise use default deadline
-    let submissionDeadline = defaultDeadline
-
-    // Check ALL rounds (not just is_submission_open) to get the latest submission_end_date
-    // Add 32 days to the round's submission_end_date for both nominations and participations
-    if (contest?.rounds && contest.rounds.length > 0) {
-      // Find the round with the latest submission_end_date
-      let latestRoundDate: Date | null = null
-      for (const round of contest.rounds) {
-        if (round.submission_end_date) {
-          const roundEndDate = new Date(round.submission_end_date)
-          roundEndDate.setHours(23, 59, 59, 999)
-
-          // Add 32 days to the deadline for both nominations and participations
-          roundEndDate.setDate(roundEndDate.getDate() + 32)
-
-          if (!latestRoundDate || roundEndDate > latestRoundDate) {
-            latestRoundDate = roundEndDate
-          }
+    if (!user?.id || verificationStatusLoaded) return
+    const loadVerificationStatus = async () => {
+      try {
+        const status = await verificationService.getMyVerificationsStatus()
+        if (status) {
+          // has_selfie covers selfie/selfie_with_pet/selfie_with_document
+          if (status.has_selfie) setHasVisualVerification(true)
+          if (status.has_voice) setHasVoiceVerification(true)
+          if (status.has_brand) setHasBrandVerification(true)
+          if (status.has_content) setHasContentVerification(true)
+          setVerificationStatusLoaded(true)
         }
+      } catch (err) {
+        console.warn('Could not load verification status:', err)
       }
-      if (latestRoundDate) {
-        submissionDeadline = latestRoundDate
-      }
+    }
+    loadVerificationStatus()
+  }, [user?.id, verificationStatusLoaded])
+
+  // Calculer le temps restant jusqu'à la date limite de soumission du round
+  useEffect(() => {
+    if (!roundData?.submission_end_date) {
+      setTimeValues({ days: 0, hours: 0, minutes: 0, seconds: 0, isClosed: false, isNA: true })
+      return
     }
 
-    // Fallback to contest submission_end_date if no round date
-    if (submissionDeadline === defaultDeadline && contest?.submission_end_date) {
-      const endDate = new Date(contest.submission_end_date)
-      endDate.setHours(23, 59, 59, 999)
-      submissionDeadline = endDate
-    }
+    const submissionDeadline = new Date(roundData.submission_end_date)
+    submissionDeadline.setHours(23, 59, 59, 999)
 
     const updateTimeRemaining = () => {
       const now = new Date().getTime()
@@ -268,7 +309,7 @@ export default function ApplyToContestPage() {
     updateTimeRemaining()
     const interval = setInterval(updateTimeRemaining, 1000)
     return () => clearInterval(interval)
-  }, [contest?.submission_end_date, contest?.rounds, isNomination])
+  }, [roundData?.submission_end_date])
 
   // Formater le temps restant avec les traductions
   useEffect(() => {
@@ -306,56 +347,16 @@ export default function ApplyToContestPage() {
 
   // Auth redirect is handled by dashboard/layout.tsx
 
-  // Helper function to check if submissions are actually open
-  // Only checks deadline date - allows submissions regardless of active rounds
-  const isSubmissionActuallyOpen = useCallback((contestData: any): boolean => {
-    if (!contestData) return false
+  // Vérifie si les soumissions sont encore ouvertes (basé sur la date du round)
+  const isSubmissionActuallyOpen = useCallback((_contestData: any): boolean => {
+    if (!roundData?.submission_end_date) return true
 
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
+    const now = new Date()
+    const submissionDeadline = new Date(roundData.submission_end_date)
+    submissionDeadline.setHours(23, 59, 59, 999)
 
-    // Default deadline: February 28, 2026
-    const defaultDeadline = new Date('2026-02-28')
-    defaultDeadline.setHours(23, 59, 59, 999)
-
-    // Use submission_end_date if available, otherwise use default deadline
-    let submissionDeadline = defaultDeadline
-
-    // Check ALL rounds to get the latest submission_end_date
-    // Add 32 days to the round's submission_end_date for both nominations and participations
-    if (contestData.rounds && contestData.rounds.length > 0) {
-      let latestRoundDate: Date | null = null
-      for (const round of contestData.rounds) {
-        if (round.submission_end_date) {
-          const roundEndDate = new Date(round.submission_end_date)
-          roundEndDate.setHours(23, 59, 59, 999)
-
-          // Add 32 days to the deadline for both nominations and participations
-          roundEndDate.setDate(roundEndDate.getDate() + 32)
-
-          if (!latestRoundDate || roundEndDate > latestRoundDate) {
-            latestRoundDate = roundEndDate
-          }
-        }
-      }
-      if (latestRoundDate) {
-        submissionDeadline = latestRoundDate
-      }
-    }
-
-    // Fallback to contest submission_end_date
-    if (submissionDeadline === defaultDeadline && contestData.submission_end_date) {
-      const endDate = new Date(contestData.submission_end_date)
-      endDate.setHours(23, 59, 59, 999)
-      submissionDeadline = endDate > defaultDeadline ? endDate : defaultDeadline
-    }
-
-    // Check if deadline has passed
-    const isDeadlinePassed = today > submissionDeadline
-
-    // Submissions are open if deadline hasn't passed (rounds check removed)
-    return !isDeadlinePassed
-  }, [])
+    return now <= submissionDeadline
+  }, [roundData?.submission_end_date])
 
 
 
@@ -407,12 +408,37 @@ export default function ApplyToContestPage() {
           videoMediaIds,
           nominatorCity,
           nominatorCountry,
-          roundId
+          roundId,
+          entryTypeParam
         )
       }
 
       setSubmitSuccess(true)
       setUserAlreadyParticipating(true)
+
+      // Mettre à jour les données existantes avec les nouvelles valeurs
+      if (isEditingParticipation) {
+        let updatedImageUrls: string[] = []
+        try {
+          updatedImageUrls = imageMediaIds ? JSON.parse(typeof imageMediaIds === 'string' ? imageMediaIds : JSON.stringify(imageMediaIds)) : []
+          if (!Array.isArray(updatedImageUrls)) updatedImageUrls = []
+        } catch { updatedImageUrls = [] }
+
+        let updatedVideoUrl = ''
+        try {
+          const vids = videoMediaIds ? JSON.parse(typeof videoMediaIds === 'string' ? videoMediaIds : JSON.stringify(videoMediaIds)) : []
+          updatedVideoUrl = Array.isArray(vids) && vids.length > 0 ? vids[0] : ''
+        } catch { updatedVideoUrl = '' }
+
+        setExistingParticipationData({
+          title: title || '',
+          description: description || '',
+          imageUrls: updatedImageUrls,
+          videoUrl: updatedVideoUrl,
+          nominatorCity: nominatorCity || '',
+          nominatorCountry: nominatorCountry || ''
+        })
+      }
 
       // Afficher un toast de succès
       addToast(
@@ -492,14 +518,23 @@ export default function ApplyToContestPage() {
 
 
   return (
-    <div className="min-h-[calc(100vh-10rem)] flex items-start justify-center py-8 overflow-hidden">
-      <div className="w-full max-w-3xl relative px-4">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-4 sm:py-6 md:py-8">
+      <div className="max-w-3xl mx-auto px-3 sm:px-4 md:px-6">
+        {/* Back Button */}
+        <button
+          onClick={() => router.back()}
+          className="mb-4 flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          {t('common.back') || 'Retour'}
+        </button>
+
         {/* Participation Form - Always visible, no skeleton wrapper */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-1 md:p-1 sticky top-4 space-y-6">
+        <div className="bg-white dark:bg-gray-800/90 backdrop-blur-sm rounded-xl sm:rounded-2xl border border-gray-200 dark:border-gray-700/50 shadow-xl p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6">
           {/* Already Participating Alert */}
           {userAlreadyParticipating && !isEditingParticipation && !submitSuccess && (
-            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg space-y-3">
-              <p className="text-blue-900 dark:text-blue-200">
+            <div className="p-3 sm:p-4 bg-blue-900/20 border border-blue-800/50 rounded-xl space-y-3">
+              <p className="text-blue-200">
                 {t('dashboard.contests.participation_form.already_participating')}
               </p>
               {isSubmissionActuallyOpen(contest) && (
@@ -518,7 +553,7 @@ export default function ApplyToContestPage() {
           {/* Header */}
           {(!userAlreadyParticipating || isEditingParticipation) && !submitSuccess && (
             <>
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-1 sm:mb-2">
                 {isEditingParticipation
                   ? (t('dashboard.contests.participation_form.edit_title') || 'Edit a Contestant')
                   : isNomination
@@ -526,60 +561,16 @@ export default function ApplyToContestPage() {
                     : (t('dashboard.contests.participation_form.title') || 'Participate in Contest')
                 }
               </h2>
-              <p className="text-gray-600 dark:text-gray-400 mb-4 text-sm">
+              <p className="text-gray-500 dark:text-gray-400 mb-3 sm:mb-4 text-xs sm:text-sm">
                 {isEditingParticipation
                   ? (t('dashboard.contests.participation_form.edit_description') || 'Update your submission details')
                   : isNomination
-                    ? (t('dashboard.contests.participation_form.nominate_description') || 'Import your video from YouTube or Vimeo')
+                    ? (t('dashboard.contests.participation_form.nominate_description') || 'Import your video from YouTube or TikTok')
                     : t('dashboard.contests.participation_form.description')
                 }
               </p>
 
-              {/* Deadline Countdown - Show for nominations and participations */}
-              {!isEditingParticipation && !submitSuccess && timeValues && !timeValues.isNA && (
-                <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                  <div className="flex items-center justify-between flex-wrap gap-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                      <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                        {isNomination
-                          ? (t('dashboard.contests.time_remaining_to_nominate') || 'Time remaining to nominate')
-                          : (t('dashboard.contests.time_remaining_to_participate') || 'Time remaining to participate')
-                        }:
-                      </span>
-                    </div>
-                    {timeValues.isClosed ? (
-                      <span className="text-red-600 dark:text-red-400 font-bold text-lg">
-                        {t('dashboard.contests.closed') || 'Closed'}
-                      </span>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        {timeValues.days > 0 && (
-                          <span className="px-3 py-1 bg-blue-500 text-white rounded-lg font-bold text-lg">
-                            {timeValues.days}{t('dashboard.contests.time_unit_days') || 'd'}
-                          </span>
-                        )}
-                        <span className="px-3 py-1 bg-blue-500 text-white rounded-lg font-bold text-lg">
-                          {String(timeValues.hours).padStart(2, '0')}{t('dashboard.contests.time_unit_hours') || 'h'}
-                        </span>
-                        <span className="px-3 py-1 bg-blue-500 text-white rounded-lg font-bold text-lg">
-                          {String(timeValues.minutes).padStart(2, '0')}{t('dashboard.contests.time_unit_minutes') || 'm'}
-                        </span>
-                        {timeValues.days === 0 && (
-                          <span className="px-3 py-1 bg-purple-500 text-white rounded-lg font-bold text-lg animate-pulse">
-                            {String(timeValues.seconds).padStart(2, '0')}{t('dashboard.contests.time_unit_seconds') || 's'}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  {!timeValues.isClosed && (
-                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-2">
-                      {'Deadline: February 28, 2026'}
-                    </p>
-                  )}
-                </div>
-              )}
+              {/* Countdown is now integrated in the ParticipationForm stepper */}
 
               {/* Participation Form - DISPLAYED FIRST */}
               <ParticipationForm
@@ -602,12 +593,13 @@ export default function ApplyToContestPage() {
                   minImages: isNomination ? 0 : contest?.min_images,
                   maxImages: contest?.max_images
                 }}
+                roundData={roundData}
               />
 
               {/* Profile Setup Alert - DISPLAYED AFTER FORM */}
               {needsProfileSetup && (
-                <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg mb-4">
-                  <p className="text-yellow-900 dark:text-yellow-200 mb-3 text-sm">
+                <div className="p-3 sm:p-4 bg-yellow-900/20 border border-yellow-800/50 rounded-xl mb-3 sm:mb-4">
+                  <p className="text-yellow-200 mb-3 text-sm">
                     {t('participation.profile_incomplete_title')} {t('participation.profile_incomplete_message')}
                   </p>
                   <button
@@ -621,8 +613,8 @@ export default function ApplyToContestPage() {
 
               {/* KYC Notification (optionnel) - Ne pas afficher pour les nominations */}
               {needsKYC && !isNomination && (
-                <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg mb-4">
-                  <p className="text-amber-900 dark:text-amber-200 text-sm">
+                <div className="p-3 sm:p-4 bg-amber-900/20 border border-amber-800/50 rounded-xl mb-3 sm:mb-4">
+                  <p className="text-amber-200 text-sm">
                     {t('participation.kyc_notification') || '⚠️ Votre identité n\'a pas été vérifiée. Nous vous recommandons de compléter votre vérification KYC pour une meilleure expérience.'}
                   </p>
                 </div>
@@ -630,11 +622,11 @@ export default function ApplyToContestPage() {
 
               {/* Submission Closed Alert */}
               {contest && !isSubmissionActuallyOpen(contest) && (
-                <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg mb-4">
-                  <p className="text-red-900 dark:text-red-200 font-medium">
+                <div className="p-3 sm:p-4 bg-red-900/20 border border-red-800/50 rounded-xl mb-3 sm:mb-4">
+                  <p className="text-red-200 font-medium">
                     🚫 {t('dashboard.contests.submission_closed') || 'Submissions are closed for this contest.'}
                   </p>
-                  <p className="text-red-700 dark:text-red-300 text-sm mt-1">
+                  <p className="text-red-300 text-sm mt-1">
                     {t('dashboard.contests.submission_closed_message') || 'The submission deadline has passed.'}
                   </p>
                 </div>
@@ -644,7 +636,7 @@ export default function ApplyToContestPage() {
 
           {/* Success Message */}
           {submitSuccess && (
-            <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg space-y-3">
+            <div className="p-3 sm:p-4 bg-green-900/20 border border-green-800/50 rounded-xl space-y-3">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center">
                   <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -652,10 +644,10 @@ export default function ApplyToContestPage() {
                   </svg>
                 </div>
                 <div>
-                  <p className="text-green-900 dark:text-green-200 font-semibold">
+                  <p className="text-green-200 font-semibold">
                     {t('dashboard.contests.participation_form.success_title') || '✅ Candidature soumise avec succès !'}
                   </p>
-                  <p className="text-green-700 dark:text-green-300 text-sm mt-1">
+                  <p className="text-green-300 text-sm mt-1">
                     {isEditingParticipation
                       ? t('dashboard.contests.participation_form.success_edit') || 'Votre candidature a été mise à jour avec succès.'
                       : t('dashboard.contests.participation_form.success') || 'Votre candidature a été soumise avec succès. Elle sera examinée par notre équipe.'}

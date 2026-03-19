@@ -31,6 +31,7 @@ interface Application {
   totalShares?: number
   coverImage?: string
   isLive?: boolean
+  entryType?: string
 }
 
 export default function MyApplicationsPage() {
@@ -44,6 +45,8 @@ export default function MyApplicationsPage() {
   const [error, setError] = useState<string | null>(null)
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [hasMore, setHasMore] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
 
   useEffect(() => {
     const loadApplications = async () => {
@@ -56,8 +59,8 @@ export default function MyApplicationsPage() {
         setPageLoading(true)
         setError(null)
 
-        // Récupérer les candidatures de l'utilisateur directement
-        const myContestants = await contestService.getMyApplications(0, 500)
+        // Récupérer les candidatures de l'utilisateur (première page)
+        const myContestants = await contestService.getMyApplications(0, 10)
 
         // Ensure myContestants is an array before mapping
         if (!Array.isArray(myContestants)) {
@@ -65,6 +68,9 @@ export default function MyApplicationsPage() {
           setApplications([])
           return
         }
+
+        // S'il y a exactement 10 résultats, il y en a peut-être plus
+        setHasMore(myContestants.length === 10)
 
         const userApplications: Application[] = myContestants.map(c => {
           // Extraire l'image si contestant_image_url n'est pas défini
@@ -96,7 +102,8 @@ export default function MyApplicationsPage() {
             totalFavorites: c.favorites_count || 0,
             totalShares: c.shares_count || 0,
             coverImage: coverImage,
-            isLive: false
+            isLive: false,
+            entryType: c.entry_type || 'participation'
           }
         })
 
@@ -196,6 +203,52 @@ export default function MyApplicationsPage() {
     }
   }
 
+  const loadMore = async () => {
+    if (loadingMore || !hasMore) return
+    setLoadingMore(true)
+    try {
+      const more = await contestService.getMyApplications(applications.length, 10)
+      if (!Array.isArray(more) || more.length === 0) {
+        setHasMore(false)
+        return
+      }
+      const newApps: Application[] = more.map(c => {
+        let coverImage = c.contestant_image_url
+        if (!coverImage && c.image_media_ids) {
+          try {
+            const imageIds = JSON.parse(c.image_media_ids)
+            if (Array.isArray(imageIds) && imageIds.length > 0) coverImage = imageIds[0]
+          } catch (e) {}
+        }
+        return {
+          id: c.id,
+          contestId: c.contest_id || c.season_id,
+          contestName: c.contest_title || t('common.unknown') || 'Unknown',
+          contestLevel: c.contest_level,
+          title: c.title || '',
+          description: c.description || '',
+          rank: c.rank,
+          registrationDate: c.registration_date,
+          status: c.is_qualified ? 'approved' : 'pending',
+          totalVotes: c.votes_count,
+          totalComments: c.comments_count || 0,
+          totalLikes: c.reactions_count || 0,
+          totalFavorites: c.favorites_count || 0,
+          totalShares: c.shares_count || 0,
+          coverImage,
+          isLive: false,
+          entryType: c.entry_type || 'participation'
+        }
+      })
+      setApplications(prev => [...prev, ...newApps])
+      setHasMore(more.length === 10)
+    } catch (err) {
+      console.error('Erreur chargement suivant:', err)
+    } finally {
+      setLoadingMore(false)
+    }
+  }
+
   const columns: Column<Application>[] = [
     {
       key: 'contest',
@@ -213,6 +266,13 @@ export default function MyApplicationsPage() {
             <p className="font-semibold text-gray-900 dark:text-white">{app.contestName}</p>
             {app.contestLevel && (
               <p className="text-xs text-gray-500 dark:text-gray-400">{getLevelLabel(app.contestLevel)}</p>
+            )}
+            {app.entryType && (
+              <Badge className={app.entryType === 'nomination'
+                ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-[10px] mt-1'
+                : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-[10px] mt-1'}>
+                {app.entryType === 'nomination' ? (t('dashboard.contests.nomination') || 'Nomination') : (t('dashboard.contests.participations') || 'Participation')}
+              </Badge>
             )}
           </div>
         </div>
@@ -305,7 +365,7 @@ export default function MyApplicationsPage() {
           >
             <Eye className="w-4 h-4" />
           </Button>
-          <Link href={`/dashboard/contests/${app.contestId}/apply?edit=true&contestantId=${app.id}`}>
+          <Link href={`/dashboard/contests/${app.contestId}/apply?edit=true&contestantId=${app.id}&entryType=${app.entryType || 'participation'}`}>
             <Button
               variant="outline"
               size="sm"
@@ -343,8 +403,8 @@ export default function MyApplicationsPage() {
   ]
 
   return (
-    <div className="min-h-[calc(100vh-10rem)] px-0 md:px-4 py-8">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-[calc(100vh-10rem)] py-4">
+      <div className="w-full">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
@@ -383,6 +443,20 @@ export default function MyApplicationsPage() {
           onRowClick={(app) => handleViewDetails(app)}
           rowClassName="cursor-pointer"
         />
+
+        {/* Load more */}
+        {hasMore && (
+          <div className="flex justify-center mt-6">
+            <Button
+              variant="outline"
+              onClick={loadMore}
+              disabled={loadingMore}
+              className="px-8"
+            >
+              {loadingMore ? (t('common.loading') || 'Chargement...') : (t('common.load_more') || 'Charger plus')}
+            </Button>
+          </div>
+        )}
 
         {/* Delete Confirmation Dialog */}
         {deleteConfirmId !== null && (

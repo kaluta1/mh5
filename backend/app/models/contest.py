@@ -101,8 +101,8 @@ class Contest(Base):
     level: Mapped[str] = mapped_column(String(20), nullable=False)  # 'city', 'country', 'region', 'continent', 'global'
     location_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("location.id"), nullable=True)
     
-    # Type de vote (optionnel)
-    voting_type_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("voting_type.id"), nullable=True)
+    # Mode du concours: 'nomination' ou 'participation'
+    contest_mode: Mapped[str] = mapped_column(String(20), default='participation', nullable=False)
     
     # Catégorie (optionnel)
     category_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("categories.id"), nullable=True)
@@ -110,7 +110,6 @@ class Contest(Base):
     # Relations
     template: Mapped[Optional["ContestTemplate"]] = relationship("ContestTemplate", back_populates="contests")
     location: Mapped[Optional["Location"]] = relationship("Location", back_populates="contests")
-    voting_type: Mapped[Optional["VotingType"]] = relationship("VotingType")
     category: Mapped[Optional["Category"]] = relationship("Category", back_populates="contests")
     entries: Mapped[List["ContestEntry"]] = relationship("ContestEntry", back_populates="contest")
     transactions: Mapped[List["UserTransaction"]] = relationship("UserTransaction", back_populates="contest")

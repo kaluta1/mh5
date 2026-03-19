@@ -47,7 +47,8 @@ export function AffiliatesGrowthChart({
           <p className="text-sm text-gray-500 dark:text-gray-400">{chartSubtitle}</p>
         </div>
       </div>
-      <div className="h-80">
+      <div className="h-80 overflow-x-auto">
+        <div className="min-w-[500px] h-full">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={translatedData}>
             <defs>
@@ -92,6 +93,7 @@ export function AffiliatesGrowthChart({
             />
           </AreaChart>
         </ResponsiveContainer>
+        </div>
       </div>
     </div>
   )
@@ -128,7 +130,8 @@ export function CommissionsChart({
           <p className="text-sm text-gray-500 dark:text-gray-400">{chartSubtitle}</p>
         </div>
       </div>
-      <div className="h-64">
+      <div className="h-64 overflow-x-auto">
+        <div className="min-w-[500px] h-full">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={translatedData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
@@ -156,6 +159,7 @@ export function CommissionsChart({
             />
           </BarChart>
         </ResponsiveContainer>
+        </div>
       </div>
     </div>
   )

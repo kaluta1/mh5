@@ -23,8 +23,10 @@ class ContestStatusService:
         Règles:
         - is_submission_open = True si AU MOINS UN round actif accepte les soumissions
         - is_voting_open = True si AU MOINS UN round actif est en phase de vote
+        
+        Utilise la table round_contests pour la relation N:N (Round.contest_id est toujours NULL).
         """
-        from app.models.round import Round, RoundStatus
+        from app.models.round import Round, RoundStatus, round_contests
         
         today = date.today()
         updated_count = 0
@@ -40,9 +42,11 @@ class ContestStatusService:
             old_submission_open = contest.is_submission_open
             old_voting_open = contest.is_voting_open
             
-            # Récupérer les rounds actifs pour ce contest
-            active_rounds = db.query(Round).filter(
-                Round.contest_id == contest.id,
+            # Récupérer les rounds actifs pour ce contest via round_contests (N:N)
+            active_rounds = db.query(Round).join(
+                round_contests, round_contests.c.round_id == Round.id
+            ).filter(
+                round_contests.c.contest_id == contest.id,
                 Round.status != RoundStatus.CANCELLED
             ).all()
             
@@ -99,7 +103,7 @@ class ContestStatusService:
         Returns:
             (is_allowed, error_message)
         """
-        from app.models.round import Round, RoundStatus
+        from app.models.round import Round, RoundStatus, round_contests
         
         contest = db.query(Contest).filter(
             Contest.id == contest_id,
@@ -123,9 +127,11 @@ class ContestStatusService:
             # If deadline hasn't passed, allow submission
             return True, ""
         
-        # If no submission_end_date, check for active rounds as fallback
-        active_submission_round = db.query(Round).filter(
-            Round.contest_id == contest_id,
+        # If no submission_end_date, check for active rounds as fallback via round_contests
+        active_submission_round = db.query(Round).join(
+            round_contests, round_contests.c.round_id == Round.id
+        ).filter(
+            round_contests.c.contest_id == contest_id,
             Round.status != RoundStatus.CANCELLED,
             Round.submission_start_date <= today,
             Round.submission_end_date >= today
@@ -135,18 +141,20 @@ class ContestStatusService:
             return True, ""
             
         # If no rounds and no deadline, allow submission (default behavior)
-        # This allows submissions regardless of rounds
         return True, ""
     
     @staticmethod
     def check_voting_allowed(db: Session, contest_id: int) -> tuple[bool, str]:
         """
-        Vérifie si le vote est autorisé pour un contest (i.e., il y a un round actif en phase de vote).
+        Vérifie si le vote est autorisé pour un contest.
+        Un round doit être en phase de vote (voting_start_date <= today <= voting_end_date).
+        
+        Utilise la table round_contests pour la relation N:N (Round.contest_id est toujours NULL).
         
         Returns:
             (is_allowed, error_message)
         """
-        from app.models.round import Round, RoundStatus
+        from app.models.round import Round, RoundStatus, round_contests
         
         contest = db.query(Contest).filter(
             Contest.id == contest_id,
@@ -160,11 +168,13 @@ class ContestStatusService:
         if not contest.is_active:
             return False, "This contest is not active"
         
-        # Vérifier si un round permet le vote aujourd'hui
+        # Vérifier si un round permet le vote aujourd'hui via round_contests (N:N)
         today = date.today()
         
-        active_voting_round = db.query(Round).filter(
-            Round.contest_id == contest_id,
+        active_voting_round = db.query(Round).join(
+            round_contests, round_contests.c.round_id == Round.id
+        ).filter(
+            round_contests.c.contest_id == contest_id,
             Round.status != RoundStatus.CANCELLED,
             Round.voting_start_date <= today,
             Round.voting_end_date >= today
@@ -173,15 +183,30 @@ class ContestStatusService:
         if active_voting_round:
             return True, ""
             
-        # Message utile si pas de vote
-        next_voting_round = db.query(Round).filter(
-            Round.contest_id == contest_id,
+        # Message utile si pas de vote — chercher le prochain round de vote
+        next_voting_round = db.query(Round).join(
+            round_contests, round_contests.c.round_id == Round.id
+        ).filter(
+            round_contests.c.contest_id == contest_id,
             Round.status != RoundStatus.CANCELLED,
             Round.voting_start_date > today
         ).order_by(Round.voting_start_date.asc()).first()
         
         if next_voting_round:
             return False, f"Voting for the next round ({next_voting_round.name}) will start on {next_voting_round.voting_start_date}"
+        
+        # Vérifier si on est en phase de soumission (round actif mais pas encore en vote)
+        active_submission_round = db.query(Round).join(
+            round_contests, round_contests.c.round_id == Round.id
+        ).filter(
+            round_contests.c.contest_id == contest_id,
+            Round.status != RoundStatus.CANCELLED,
+            Round.submission_start_date <= today,
+            Round.submission_end_date >= today
+        ).first()
+        
+        if active_submission_round:
+            return False, f"Submission phase is active for {active_submission_round.name}. Voting will start on {active_submission_round.voting_start_date}"
             
         return False, "Voting is not open for any round at this time"
 
@@ -261,4 +286,3 @@ class ContestStatusScheduler:
 
 # Instance globale du scheduler
 contest_status_scheduler = ContestStatusScheduler()
-

@@ -76,28 +76,29 @@ def generate_monthly_round(db: Session, target_date: Optional[date] = None) -> R
     # Voting commence le mois suivant (M+1)
     next_year, next_month = get_next_month(submission_end)
     
-    # City Season (M+1) - pour contests SANS voting_type_id
+    # City Season (M+1) - Participation commence ici
     city_start = get_month_start(next_year, next_month)
     city_end = get_month_end(next_year, next_month)
     
-    # Country Season (M+1) - pour contests AVEC voting_type_id
-    country_start = city_start
-    country_end = city_end
-    
-    # Regional Season (M+2)
+    # Country Season (M+2) - Participation 2e mois
     m2_year, m2_month = get_next_month(city_end)
-    regional_start = get_month_start(m2_year, m2_month)
-    regional_end = get_month_end(m2_year, m2_month)
+    country_start = get_month_start(m2_year, m2_month)
+    country_end = get_month_end(m2_year, m2_month)
     
-    # Continental Season (M+3)
-    m3_year, m3_month = get_next_month(regional_end)
-    continental_start = get_month_start(m3_year, m3_month)
-    continental_end = get_month_end(m3_year, m3_month)
+    # Regional Season (M+3)
+    m3_year, m3_month = get_next_month(country_end)
+    regional_start = get_month_start(m3_year, m3_month)
+    regional_end = get_month_end(m3_year, m3_month)
     
-    # Global Season (M+4)
-    m4_year, m4_month = get_next_month(continental_end)
-    global_start = get_month_start(m4_year, m4_month)
-    global_end = get_month_end(m4_year, m4_month)
+    # Continental Season (M+4)
+    m4_year, m4_month = get_next_month(regional_end)
+    continental_start = get_month_start(m4_year, m4_month)
+    continental_end = get_month_end(m4_year, m4_month)
+    
+    # Global Season (M+5)
+    m5_year, m5_month = get_next_month(continental_end)
+    global_start = get_month_start(m5_year, m5_month)
+    global_end = get_month_end(m5_year, m5_month)
     
     # Créer le round
     # FIXED: Create round with only required fields first, then add optional date fields

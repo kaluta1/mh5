@@ -75,6 +75,22 @@ def debug_get_all_contestants(
 # Routes spécifiques d'abord (avant les routes génériques avec {id})
 # IMPORTANT: Les routes plus spécifiques DOIVENT venir avant les routes générales
 
+@router.get("/user/{user_id}/entries", response_model=List[ContestantWithAuthorAndStats])
+def get_user_contestants(
+    *,
+    db: Session = Depends(deps.get_db),
+    user_id: int,
+    current_user: User = Depends(deps.get_current_active_user),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100)
+) -> List[ContestantWithAuthorAndStats]:
+    """Récupère les candidatures d'un utilisateur spécifique avec stats enrichies"""
+    contestants = crud_contestant.get_multi_by_user_with_stats(
+        db, user_id, skip=skip, limit=limit
+    )
+    return contestants
+
+
 @router.get("/user/my-entries", response_model=List[ContestantWithAuthorAndStats])
 def get_my_contestants(
     *,
@@ -95,7 +111,8 @@ def get_my_votes(
     *,
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
-    season_id: Optional[int] = Query(None, description="Filter by season_id")
+    season_id: Optional[int] = Query(None, description="Filter by season_id"),
+    contest_id: Optional[int] = Query(None, description="Filter by contest_id")
 ) -> dict:
     """
     Récupère les votes de l'utilisateur connecté (MyHigh5), groupés par season.
@@ -126,6 +143,10 @@ def get_my_votes(
     # Filtrer par season_id si fourni
     if season_id:
         query = query.filter(ContestantVoting.season_id == season_id)
+
+    # Filtrer par contest_id si fourni
+    if contest_id:
+        query = query.filter(ContestantVoting.contest_id == contest_id)
     
     # Récupérer tous les votes
     all_votes = query.order_by(
@@ -509,7 +530,8 @@ def get_contest_contestants(
     
     # FIXED: Simplified query to avoid database errors and 503 responses
     from app.models.round import Round
-    from app.models.contests import round_contests, Contestant
+    from app.models.round import round_contests
+    from app.models.contests import Contestant
     from sqlalchemy import or_, func
     from sqlalchemy.orm import joinedload
     import logging
@@ -572,31 +594,8 @@ def get_contest_contestants(
         # Step 2: Build simplified query - try season_id first (most common)
         query = db.query(Contestant).filter(Contestant.is_deleted == False)
         
-        # Build OR conditions (comprehensive - handle all cases)
-        conditions = []
-        
-        # Condition 1: season_id matches contest_id
-        conditions.append(Contestant.season_id == contest_id)
-        
-        # Condition 2: round_id matches any of the found rounds
-        if all_round_ids:
-            conditions.append(Contestant.round_id.in_(all_round_ids))
-        
-        # Condition 3: Handle NULL season_id but valid round_id (for migrated data)
-        if all_round_ids:
-            conditions.append(
-                and_(
-                    Contestant.season_id.is_(None),
-                    Contestant.round_id.in_(all_round_ids)
-                )
-            )
-        
-        # Apply OR condition
-        if conditions:
-            query = query.filter(or_(*conditions))
-        else:
-            # Fallback: if no conditions, just query by season_id
-            query = query.filter(Contestant.season_id == contest_id)
+        # Filter by season_id only (round_id is shared between ALL contests)
+        query = query.filter(Contestant.season_id == contest_id)
         
         # Apply geographic filters
         if filter_country:
@@ -637,28 +636,9 @@ def get_contest_contestants(
             except Exception as e:
                 logger.error(f"Error in fallback 1: {e}")
             
-            # Fallback 2: Try by round_id only (if we have round_ids)
-            if not contestants and all_round_ids:
-                try:
-                    fallback2 = db.query(Contestant).filter(
-                        Contestant.is_deleted == False,
-                        Contestant.round_id.in_(all_round_ids)
-                    ).limit(limit).all()
-                    logger.info(f"[get_contest_contestants] Fallback 2 (round_id only): Found {len(fallback2)} contestants")
-                    if fallback2:
-                        contestants = fallback2
-                except Exception as e:
-                    logger.error(f"Error in fallback 2: {e}")
+
             
-            # Fallback 3: Try ANY non-deleted contestant (for debugging)
-            if not contestants:
-                try:
-                    fallback3 = db.query(Contestant).filter(
-                        Contestant.is_deleted == False
-                    ).limit(5).all()
-                    logger.warning(f"[get_contest_contestants] Fallback 3 (ANY contestant): Found {len(fallback3)} contestants. Sample IDs: {[c.id for c in fallback3]}")
-                except Exception as e:
-                    logger.error(f"Error in fallback 3: {e}")
+
             
             # Apply geographic filters to fallback results if we found any
             if contestants and (filter_country or filter_region or filter_continent or filter_city):
@@ -780,6 +760,7 @@ def get_contest_contestants(
                 "user_id": contestant.user_id,
                 "season_id": contestant.season_id,
                 "round_id": contestant.round_id,
+                "entry_type": getattr(contestant, "entry_type", "participation"),
                 "title": contestant.title,
                 "description": contestant.description,
                 "image_media_ids": contestant.image_media_ids,
@@ -1032,9 +1013,17 @@ def create_contestant(
             detail="No active round found for this contest. Participation requires an active round."
         )
 
-    # Vérifier que l'utilisateur n'a pas déjà une candidature POUR CE ROUND
+    # Déterminer le type d'entrée (nomination ou participation)
+    # Le contest_mode du concours détermine toujours le type d'entrée (source de vérité)
+    if contest and hasattr(contest, 'contest_mode') and contest.contest_mode == 'nomination':
+        submission_entry_type = "nomination"
+    else:
+        submission_entry_type = "participation"
+    
+    # Vérifier que l'utilisateur n'a pas déjà une candidature POUR CE ROUND ET CE CONTEST
+    # Un seul entry par contest par round (peu importe le type nomination/participation)
     existing = crud_contestant.get_by_round_and_user(
-        db, target_round_id, current_user.id
+        db, target_round_id, current_user.id, season_id=season_id
     )
     if existing:
         raise HTTPException(
@@ -1084,6 +1073,30 @@ def create_contestant(
             return media.url if media else None
         return None
     
+
+    # ============================================
+    # VERIFICATION UNICITE DES LIENS VIDEO
+    # ============================================
+    if contestant_data.video_media_ids:
+        try:
+            _video_refs = json.loads(contestant_data.video_media_ids)
+            if isinstance(_video_refs, list):
+                for _vref in _video_refs:
+                    _vurl = str(_vref).strip()
+                    if not _vurl:
+                        continue
+                    _dup = db.query(Contestant).filter(
+                        Contestant.is_deleted == False,
+                        Contestant.video_media_ids.ilike(f'%{_vurl}%')
+                    ).first()
+                    if _dup:
+                        raise HTTPException(
+                            status_code=status.HTTP_409_CONFLICT,
+                            detail=f"Ce lien vid\u00e9o est d\u00e9j\u00e0 utilis\u00e9 par un autre participant : {_vurl}"
+                        )
+        except json.JSONDecodeError:
+            pass
+
     # Modérer les images si présentes
     if contestant_data.image_media_ids:
         logger.info(f"Moderating images: {contestant_data.image_media_ids[:100]}")
@@ -1212,6 +1225,7 @@ def create_contestant(
             video_media_ids=contestant_data.video_media_ids,
             nominator_city=contestant_data.nominator_city,
             nominator_country=contestant_data.nominator_country,
+            entry_type=submission_entry_type,
             round_id=target_round_id
         )
         
@@ -1472,6 +1486,31 @@ def update_contestant(
             return media.url if media else None
         return None
     
+
+    # ============================================
+    # VERIFICATION UNICITE DES LIENS VIDEO
+    # ============================================
+    if contestant_data.video_media_ids:
+        try:
+            _video_refs = json.loads(contestant_data.video_media_ids)
+            if isinstance(_video_refs, list):
+                for _vref in _video_refs:
+                    _vurl = str(_vref).strip()
+                    if not _vurl:
+                        continue
+                    _dup = db.query(Contestant).filter(
+                        Contestant.is_deleted == False,
+                        Contestant.video_media_ids.ilike(f'%{_vurl}%'),
+                        Contestant.id != contestant_id
+                    ).first()
+                    if _dup:
+                        raise HTTPException(
+                            status_code=status.HTTP_409_CONFLICT,
+                            detail=f"Ce lien vid\u00e9o est d\u00e9j\u00e0 utilis\u00e9 par un autre participant : {_vurl}"
+                        )
+        except json.JSONDecodeError:
+            pass
+
     # Modérer les images si présentes
     if contestant_data.image_media_ids:
         logger.info(f"Moderating images: {contestant_data.image_media_ids[:100]}")
@@ -1720,6 +1759,26 @@ def vote_for_contestant(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=error_message
         )
+    
+    # Vérifier que le round du contestant est en phase de vote (pas en soumission)
+    if contestant.round_id:
+        from app.models.round import Round as RoundModel
+        from datetime import date as date_type
+        contestant_round = db.query(RoundModel).filter(RoundModel.id == contestant.round_id).first()
+        if contestant_round:
+            today = date_type.today()
+            # Si le round a des dates de vote définies, vérifier qu'on est dans la fenêtre de vote
+            if contestant_round.voting_start_date and contestant_round.voting_end_date:
+                if today < contestant_round.voting_start_date:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Voting for {contestant_round.name} has not started yet. Submission phase is active until {contestant_round.submission_end_date}. Voting starts on {contestant_round.voting_start_date}."
+                    )
+                elif today > contestant_round.voting_end_date:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Voting for {contestant_round.name} has ended on {contestant_round.voting_end_date}."
+                    )
 
     # Règles de vote basées sur la localisation et le niveau de la saison
     # city      -> seuls les utilisateurs de la même ville (et même pays) peuvent voter
@@ -1858,8 +1917,11 @@ def vote_for_contestant(
             f"Existing vote ID: {existing_vote.id}, vote_date: {existing_vote.vote_date}"
         )
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"You have already voted for this contestant in this season."
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "already_voted",
+                "message": "You have already voted for this contestant in this season."
+            }
         )
     
     logger.info(
@@ -1867,68 +1929,66 @@ def vote_for_contestant(
         f"(no existing vote found for this season)"
     )
     
-    # Import pour case
-    from sqlalchemy import case
-    
-    # Récupérer tous les votes existants de l'utilisateur pour cette saison
-    # Triés par position (1-5) puis par date (le plus ancien en premier)
+    # Compter les votes existants de l'utilisateur pour cette saison
+    from sqlalchemy import case, func as sa_func
+
     existing_votes_for_season = db.query(ContestantVoting).filter(
         ContestantVoting.user_id == current_user.id,
         ContestantVoting.season_id == season.id
     ).order_by(
-        # Les votes avec position définie d'abord, triés par position
-        # Puis les votes sans position, triés par date (le plus ancien en premier)
         case(
             (ContestantVoting.position.isnot(None), ContestantVoting.position),
             else_=1000
         ),
         ContestantVoting.vote_date.asc()
     ).all()
-    
-    # Si on a déjà 5 votes, supprimer le 5ème (le plus ancien ou celui avec position=5)
-    if len(existing_votes_for_season) >= 5:
-        # Le 5ème vote à supprimer (le plus ancien ou celui avec position=5)
-        vote_to_remove = existing_votes_for_season[4]  # Index 4 = 5ème élément
+
+    votes_count = len(existing_votes_for_season)
+
+    # Si max 5 votes atteint, retourner 409 pour le dialogue de confirmation frontend
+    if votes_count >= 5:
+        fifth_vote = existing_votes_for_season[4]
+        fifth_contestant = db.query(Contestant).filter(Contestant.id == fifth_vote.contestant_id).first()
+        fifth_name = fifth_contestant.title if fifth_contestant else "Unknown"
+
         logger.info(
-            f"[VOTE REPLACE] Removing 5th vote (ID: {vote_to_remove.id}, "
-            f"contestant_id: {vote_to_remove.contestant_id}, position: {vote_to_remove.position}) "
-            f"to make room for new vote"
+            f"[VOTE MAX] User {current_user.id} has {votes_count} votes in season {season.id}. "
+            f"5th vote: contestant {fifth_vote.contestant_id} ({fifth_name})"
         )
-        db.delete(vote_to_remove)
-        # Retirer ce vote de la liste
-        existing_votes_for_season = existing_votes_for_season[:4]
-    
-    # Créer le nouveau vote avec position=1 (le plus récent devient le 1er)
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "max_votes_reached",
+                "message": f"You already have 5 votes in this season. Replace {fifth_name}?",
+                "replaced_contestant": {
+                    "id": fifth_vote.contestant_id,
+                    "name": fifth_name,
+                    "position": 5
+                },
+                "current_votes_count": votes_count
+            }
+        )
+
+    # Créer le nouveau vote à la position suivante
+    new_position = votes_count + 1  # 1er vote = position 1, 2e = position 2, etc.
+    new_points = 6 - new_position   # position 1 = 5pts, 2 = 4pts, ..., 5 = 1pt
+
     new_voting = ContestantVoting(
         user_id=current_user.id,
         contestant_id=contestant_id,
         contest_id=contest.id,
         season_id=season.id,
-        position=1,  # Le nouveau vote est toujours en position 1
-        points=5     # Position 1 = 5 points
+        position=new_position,
+        points=new_points
     )
-    
+
     try:
         db.add(new_voting)
-        db.flush()  # Flush pour obtenir l'ID sans commit
-        
-        # Réorganiser les positions des votes existants
-        # Le nouveau vote est en position 1, les autres descendent (2, 3, 4, 5)
-        for idx, existing_vote in enumerate(existing_votes_for_season, start=2):
-            new_position = idx
-            new_points = 6 - new_position  # 5, 4, 3, 2, 1 -> 4, 3, 2, 1 pour les positions 2-5
-            existing_vote.position = new_position
-            existing_vote.points = new_points
-            logger.info(
-                f"[VOTE REORDER] Updated vote ID {existing_vote.id}: "
-                f"position={new_position}, points={new_points}"
-            )
-        
         db.commit()
         db.refresh(new_voting)
         logger.info(
             f"[VOTE SUCCESS] Vote created: user {current_user.id}, contestant {contestant_id}, "
-            f"season {season.id}, voting_id: {new_voting.id}, position=1, points=5"
+            f"season {season.id}, voting_id: {new_voting.id}, position={new_position}, points={new_points}"
         )
     except Exception as e:
         db.rollback()
@@ -1937,52 +1997,15 @@ def vote_for_contestant(
             f"[VOTE ERROR] Error creating vote: {e}. "
             f"User {current_user.id}, contestant {contestant_id}, season {season.id}"
         )
-        
-        # Si c'est une erreur de contrainte unique, c'est qu'un vote existe déjà
-        if "uq_contestant_voting" in str(e) or "unique constraint" in error_str or "duplicate key" in error_str:
-            # Vérifier si c'est l'ancienne contrainte (user_id, contestant_id, contest_id) ou la nouvelle (user_id, season_id)
-            error_message = str(e)
-            if "(user_id, contestant_id, contest_id)" in error_message:
-                # L'ancienne contrainte est encore active - la migration n'a pas été exécutée
-                logger.error(
-                    f"[VOTE ERROR] Old unique constraint still active. "
-                    f"Database migration needs to be run. "
-                    f"User {current_user.id}, contestant {contestant_id}, contest {contest.id}, season {season.id}. "
-                    f"Error: {error_message}"
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Database migration required. The voting system needs to be updated. Please run: alembic upgrade head OR execute the SQL script in backend/migrations/fix_contestant_voting_constraint.sql"
-                )
-            
-            # Si c'est la nouvelle contrainte (user_id, season_id), vérifier à nouveau
-            existing_vote_check = db.query(ContestantVoting).filter(
-                ContestantVoting.user_id == current_user.id,
-                ContestantVoting.season_id == season.id
-            ).first()
-            
-            if existing_vote_check:
-                logger.warning(
-                    f"[VOTE ERROR] Duplicate vote detected: user {current_user.id}, "
-                    f"season {season.id}, existing vote ID: {existing_vote_check.id}, "
-                    f"existing_contestant_id: {existing_vote_check.contestant_id}"
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"You have already voted in this {season_level or 'season'} season. You can only vote once per season (regardless of which contestant you vote for)."
-                )
-            else:
-                # Contrainte unique mais pas de vote trouvé - peut-être que la migration n'a pas été exécutée complètement
-                logger.error(
-                    f"[VOTE ERROR] Unique constraint violation but no vote found. "
-                    f"This might indicate the database migration hasn't been run or completed. "
-                    f"User {current_user.id}, season {season.id}, error: {error_message}"
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Database migration may be incomplete. Please run: alembic upgrade head OR execute the SQL script in backend/migrations/fix_contestant_voting_constraint.sql"
-                )
-        # Sinon, propager l'erreur
+
+        if "unique constraint" in error_str or "duplicate key" in error_str:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "code": "already_voted",
+                    "message": "You have already voted for this contestant in this season."
+                }
+            )
         raise
     
     # Mettre à jour les rangs de tous les contestants du contest pour cette saison
@@ -2015,6 +2038,329 @@ def vote_for_contestant(
         "voting_id": new_voting.id,
         "season_id": season.id,
         "season_level": season_level
+    }
+
+
+@router.post("/{contestant_id}/vote/replace", status_code=status.HTTP_200_OK)
+def replace_fifth_vote(
+    *,
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_active_user),
+    contestant_id: int
+) -> dict:
+    """
+    Remplace le 5e vote de l'utilisateur par un nouveau contestant.
+    Appelé après confirmation de l'utilisateur via le dialogue frontend.
+    """
+    from app.services.contest_status import contest_status_service
+    from app.models.contests import ContestSeasonLink, ContestSeason, ContestantSeason
+    from app.models.contest import Contest as MyfavContest
+    from sqlalchemy import case
+    import logging
+    logger = logging.getLogger(__name__)
+
+    # Vérifier que le contestant existe
+    contestant = crud_contestant.get(db, contestant_id)
+    if not contestant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
+
+    # Vérifier que l'utilisateur ne vote pas pour sa propre candidature
+    if contestant.user_id == current_user.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot vote for your own submission")
+
+    # Récupérer la saison active du contestant
+    contestant_season_link = db.query(ContestantSeason).filter(
+        ContestantSeason.contestant_id == contestant_id,
+        ContestantSeason.is_active == True
+    ).first()
+
+    if not contestant_season_link:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This contestant is not active in any season")
+
+    season = db.query(ContestSeason).filter(
+        ContestSeason.id == contestant_season_link.season_id,
+        ContestSeason.is_deleted == False
+    ).first()
+
+    if not season:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Season not found")
+
+    # Récupérer le contest
+    contest_season_link_obj = db.query(ContestSeasonLink).filter(
+        ContestSeasonLink.season_id == season.id,
+        ContestSeasonLink.is_active == True
+    ).first()
+
+    if not contest_season_link_obj:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No active contest found")
+
+    contest = db.query(MyfavContest).filter(
+        MyfavContest.id == contest_season_link_obj.contest_id,
+        MyfavContest.is_deleted == False
+    ).first()
+
+    if not contest:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Contest not found")
+
+    # Vérifier que le vote est ouvert
+    is_allowed, error_message = contest_status_service.check_voting_allowed(db, contest.id)
+    if not is_allowed:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_message)
+    
+    # Vérifier que le round du contestant est en phase de vote
+    if contestant.round_id:
+        from app.models.round import Round as RoundModel
+        from datetime import date as date_type
+        contestant_round = db.query(RoundModel).filter(RoundModel.id == contestant.round_id).first()
+        if contestant_round and contestant_round.voting_start_date and contestant_round.voting_end_date:
+            today = date_type.today()
+            if today < contestant_round.voting_start_date:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Voting for {contestant_round.name} has not started yet. Voting starts on {contestant_round.voting_start_date}."
+                )
+            elif today > contestant_round.voting_end_date:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Voting for {contestant_round.name} has ended on {contestant_round.voting_end_date}."
+                )
+
+    # Vérifier que l'utilisateur n'a pas déjà voté pour ce contestant
+    existing_vote_for_contestant = db.query(ContestantVoting).filter(
+        ContestantVoting.user_id == current_user.id,
+        ContestantVoting.contestant_id == contestant_id,
+        ContestantVoting.season_id == season.id
+    ).first()
+
+    if existing_vote_for_contestant:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "already_voted", "message": "You have already voted for this contestant."}
+        )
+
+    # Récupérer tous les votes de l'utilisateur pour cette saison, triés par position
+    existing_votes = db.query(ContestantVoting).filter(
+        ContestantVoting.user_id == current_user.id,
+        ContestantVoting.season_id == season.id
+    ).order_by(
+        case(
+            (ContestantVoting.position.isnot(None), ContestantVoting.position),
+            else_=1000
+        ),
+        ContestantVoting.vote_date.asc()
+    ).all()
+
+    if len(existing_votes) < 5:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You have less than 5 votes. Use the regular vote endpoint."
+        )
+
+    # Supprimer le 5e vote (dernier dans le classement)
+    vote_to_remove = existing_votes[4]
+    removed_contestant_id = vote_to_remove.contestant_id
+    logger.info(
+        f"[VOTE REPLACE] Removing 5th vote: ID={vote_to_remove.id}, "
+        f"contestant_id={removed_contestant_id}, replacing with contestant_id={contestant_id}"
+    )
+    db.delete(vote_to_remove)
+    db.flush()
+
+    # Créer le nouveau vote en position 5 (1 point)
+    new_voting = ContestantVoting(
+        user_id=current_user.id,
+        contestant_id=contestant_id,
+        contest_id=contest.id,
+        season_id=season.id,
+        position=5,
+        points=1
+    )
+    db.add(new_voting)
+
+    try:
+        db.commit()
+        db.refresh(new_voting)
+    except Exception as e:
+        db.rollback()
+        logger.error(f"[VOTE REPLACE ERROR] {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error replacing vote")
+
+    # Mettre à jour les rankings des deux contestants
+    from app.crud.crud_contest import contest as crud_contest
+    try:
+        crud_contest.update_contestant_rankings(db, contest.id, season.id)
+    except Exception as e:
+        logger.error(f"Error updating rankings after vote replace: {e}")
+
+    # Notification au propriétaire du nouveau contestant voté
+    from app.crud.crud_notification import crud_notification
+    from app.models.notification import NotificationType
+
+    voter_name = current_user.full_name or current_user.username or "Someone"
+    crud_notification.create(
+        db,
+        user_id=contestant.user_id,
+        type=NotificationType.CONTEST,
+        title="New vote",
+        message=f"{voter_name} voted for your application",
+        related_contestant_id=contestant_id,
+        related_contest_id=contest.id
+    )
+    db.commit()
+
+    return {
+        "message": "Vote replaced successfully",
+        "voting_id": new_voting.id,
+        "replaced_contestant_id": removed_contestant_id,
+        "new_contestant_id": contestant_id,
+        "position": 5,
+        "points": 1,
+        "season_id": season.id
+    }
+
+
+
+@router.post("/{contestant_id}/vote/replace", status_code=status.HTTP_200_OK)
+def replace_fifth_vote(
+    *,
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_active_user),
+    contestant_id: int
+) -> dict:
+    """
+    Remplace le 5e vote de l'utilisateur par un nouveau contestant.
+    Appelé après confirmation via le dialogue frontend.
+    """
+    from app.services.contest_status import contest_status_service
+    from app.models.contests import ContestSeasonLink, ContestSeason, ContestantSeason
+    from app.models.contest import Contest as MyfavContest
+    from sqlalchemy import case
+    import logging
+    logger = logging.getLogger(__name__)
+
+    contestant = crud_contestant.get(db, contestant_id)
+    if not contestant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
+
+    if contestant.user_id == current_user.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot vote for your own submission")
+
+    contestant_season_link = db.query(ContestantSeason).filter(
+        ContestantSeason.contestant_id == contestant_id,
+        ContestantSeason.is_active == True
+    ).first()
+    if not contestant_season_link:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This contestant is not active in any season")
+
+    season = db.query(ContestSeason).filter(
+        ContestSeason.id == contestant_season_link.season_id,
+        ContestSeason.is_deleted == False
+    ).first()
+    if not season:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Season not found")
+
+    contest_season_link_obj = db.query(ContestSeasonLink).filter(
+        ContestSeasonLink.season_id == season.id,
+        ContestSeasonLink.is_active == True
+    ).first()
+    if not contest_season_link_obj:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No active contest found")
+
+    contest = db.query(MyfavContest).filter(
+        MyfavContest.id == contest_season_link_obj.contest_id,
+        MyfavContest.is_deleted == False
+    ).first()
+    if not contest:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Contest not found")
+
+    is_allowed, error_message = contest_status_service.check_voting_allowed(db, contest.id)
+    if not is_allowed:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_message)
+
+    existing_vote_for_contestant = db.query(ContestantVoting).filter(
+        ContestantVoting.user_id == current_user.id,
+        ContestantVoting.contestant_id == contestant_id,
+        ContestantVoting.season_id == season.id
+    ).first()
+    if existing_vote_for_contestant:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "already_voted", "message": "You have already voted for this contestant."}
+        )
+
+    existing_votes = db.query(ContestantVoting).filter(
+        ContestantVoting.user_id == current_user.id,
+        ContestantVoting.season_id == season.id
+    ).order_by(
+        case(
+            (ContestantVoting.position.isnot(None), ContestantVoting.position),
+            else_=1000
+        ),
+        ContestantVoting.vote_date.asc()
+    ).all()
+
+    if len(existing_votes) < 5:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You have less than 5 votes. Use the regular vote endpoint."
+        )
+
+    vote_to_remove = existing_votes[4]
+    removed_contestant_id = vote_to_remove.contestant_id
+    logger.info(
+        f"[VOTE REPLACE] Removing 5th vote: ID={vote_to_remove.id}, "
+        f"contestant_id={removed_contestant_id}, replacing with contestant_id={contestant_id}"
+    )
+    db.delete(vote_to_remove)
+    db.flush()
+
+    new_voting = ContestantVoting(
+        user_id=current_user.id,
+        contestant_id=contestant_id,
+        contest_id=contest.id,
+        season_id=season.id,
+        position=5,
+        points=1
+    )
+    db.add(new_voting)
+
+    try:
+        db.commit()
+        db.refresh(new_voting)
+    except Exception as e:
+        db.rollback()
+        logger.error(f"[VOTE REPLACE ERROR] {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error replacing vote")
+
+    from app.crud.crud_contest import contest as crud_contest
+    try:
+        crud_contest.update_contestant_rankings(db, contest.id, season.id)
+    except Exception as e:
+        logger.error(f"Error updating rankings after vote replace: {e}")
+
+    from app.crud.crud_notification import crud_notification
+    from app.models.notification import NotificationType
+
+    voter_name = current_user.full_name or current_user.username or "Someone"
+    crud_notification.create(
+        db,
+        user_id=contestant.user_id,
+        type=NotificationType.CONTEST,
+        title="New vote",
+        message=f"{voter_name} voted for your application",
+        related_contestant_id=contestant_id,
+        related_contest_id=contest.id
+    )
+    db.commit()
+
+    return {
+        "message": "Vote replaced successfully",
+        "voting_id": new_voting.id,
+        "replaced_contestant_id": removed_contestant_id,
+        "new_contestant_id": contestant_id,
+        "position": 5,
+        "points": 1,
+        "season_id": season.id
     }
 
 

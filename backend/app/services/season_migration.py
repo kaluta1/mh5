@@ -161,9 +161,10 @@ class SeasonMigrationService:
             print(f"[Migration]     - Contestants non qualifiés: {contestants_not_qualified}")
             return {}
         
-        # Récupérer les votes par contestant depuis ContestantVoting (par season_id)
-        vote_counts = db.query(
+        # Récupérer les points par contestant depuis ContestantVoting (par season_id)
+        points_data = db.query(
             ContestantVoting.contestant_id,
+            func.coalesce(func.sum(ContestantVoting.points), 0).label('total_points'),
             func.count(ContestantVoting.id).label('vote_count')
         ).filter(
             ContestantVoting.season_id == season_id
@@ -171,9 +172,10 @@ class SeasonMigrationService:
             ContestantVoting.contestant_id
         ).all()
         
-        votes_by_contestant = {vc.contestant_id: vc.vote_count for vc in vote_counts}
-        logger.info(f"  - Votes trouvés pour {len(votes_by_contestant)} contestants")
-        print(f"[Migration]   Votes trouvés pour {len(votes_by_contestant)} contestants")
+        points_by_contestant = {p.contestant_id: p.total_points for p in points_data}
+        votes_by_contestant = {p.contestant_id: p.vote_count for p in points_data}
+        logger.info(f"  - Points/Votes trouvés pour {len(points_by_contestant)} contestants")
+        print(f"[Migration]   Points/Votes trouvés pour {len(points_by_contestant)} contestants")
         
         # Grouper par localisation
         grouped = {}
@@ -200,10 +202,10 @@ class SeasonMigrationService:
         result = {}
         logger.info(f"  - Groupes par localisation: {len(grouped)}")
         for location_value, location_contestants in grouped.items():
-            # Trier par nombre de votes décroissant
+            # Trier par points décroissants, puis votes décroissants
             sorted_contestants = sorted(
                 location_contestants,
-                key=lambda c: votes_by_contestant.get(c.id, 0),
+                key=lambda c: (points_by_contestant.get(c.id, 0), votes_by_contestant.get(c.id, 0)),
                 reverse=True
             )
             
@@ -325,16 +327,22 @@ class SeasonMigrationService:
         ).first()
         
         if not city_stage:
-            # Utiliser les dates de la saison city du contest
-            start_date = contest.city_season_start_date
-            end_date = contest.city_season_end_date
+            # Utiliser les dates de la saison city du round (pas du contest car NULL)
+            start_date = round_obj.city_season_start_date
+            end_date = round_obj.city_season_end_date
             
             if not start_date or not end_date:
-                # Fallback : calculer à partir de voting_start_date
-                start_date = contest.voting_start_date
-                if isinstance(start_date, date):
+                # Fallback : calculer à partir de voting_start_date du round
+                start_date = round_obj.voting_start_date
+                if isinstance(start_date, date) and not isinstance(start_date, datetime):
                     start_date = datetime.combine(start_date, datetime.min.time())
-                end_date = start_date + timedelta(days=30)
+                if start_date:
+                    end_date = start_date + timedelta(days=30)
+                else:
+                    # Dernier fallback: mois suivant
+                    now = datetime.utcnow()
+                    start_date = now
+                    end_date = now + timedelta(days=30)
             
             city_stage = ContestStage(
                 season_id=city_season.id,
@@ -515,16 +523,14 @@ class SeasonMigrationService:
             # Compter les votes par contestant dans cette saison
             vote_counts = db.query(
                 ContestantVoting.contestant_id,
+                func.coalesce(func.sum(ContestantVoting.points), 0).label('total_points'),
                 func.count(ContestantVoting.id).label('vote_count')
             ).filter(
                 ContestantVoting.season_id == from_season.id
             ).group_by(
                 ContestantVoting.contestant_id
             ).order_by(
-                func.count(ContestantVoting.id).desc()
-            ).group_by(
-                ContestantVoting.contestant_id
-            ).order_by(
+                func.coalesce(func.sum(ContestantVoting.points), 0).desc(),
                 func.count(ContestantVoting.id).desc()
             ).limit(limit).all()
             
@@ -542,11 +548,12 @@ class SeasonMigrationService:
                 )
             ).all()
             
-            # Trier selon l'ordre des votes
+            # Trier par points puis votes
+            points_dict = {vc.contestant_id: vc.total_points for vc in vote_counts}
             vote_dict = {vc.contestant_id: vc.vote_count for vc in vote_counts}
             selected_contestants = sorted(
                 selected_contestants,
-                key=lambda c: vote_dict.get(c.id, 0),
+                key=lambda c: (points_dict.get(c.id, 0), vote_dict.get(c.id, 0)),
                 reverse=True
             )
             
@@ -735,91 +742,178 @@ class SeasonMigrationService:
     def check_and_process_migrations(db: Session) -> dict:
         """
         Vérifie et traite toutes les migrations nécessaires pour tous les rounds actifs.
-        Basé sur les dates définies dans le Round.
+        Utilise round_contests (N:N) car Round.contest_id est toujours NULL.
+        
+        Lifecycle d'un round :
+        1. Création du round (1er du mois) → is_submission_open=True, is_voting_open=False
+        2. Fin du mois → is_submission_open=False 
+        3. Mois suivant (M+1) → is_voting_open=True, migration vers CITY (participation) ou COUNTRY (nomination)
+        4. Fin M+1 → top 5 par ville/pays promus vers le niveau suivant
+        5. M+2 → top 5 par pays promus vers régional
+        6. M+3 → top 5 par région promus vers continental
+        7. M+4 → top 5 par continent promus vers global
+        8. M+5 → fin, round terminé
         """
         import logging
         logger = logging.getLogger(__name__)
+        from app.models.round import round_contests as rc_table
         from app.services.contest_status import contest_status_service
-        
-        # TODO: Mettre à jour les statuts des rounds ?
-        # status_update_result = contest_status_service.update_contest_statuses(db)
-        status_update_result = {}
         
         results = []
         today = date.today()
         logger.info(f"Checking season migrations for date: {today}")
+        print(f"[Migration] Checking migrations for {today}")
         
-        # 1. PARTICIPATION: Start at CITY
-        # Query Rounds with city_season_start_date reached
-        rounds_to_migrate_city = db.query(Round).join(Contest).filter(
+        # ============================================================
+        # STEP 0: Auto-close submission / open voting on rounds
+        # ============================================================
+        active_rounds = db.query(Round).filter(
+            Round.status != RoundStatus.CANCELLED
+        ).all()
+        
+        for round_obj in active_rounds:
+            changed = False
+            
+            # Fermer la soumission si la date est passée
+            if (round_obj.is_submission_open and 
+                round_obj.submission_end_date and 
+                today > round_obj.submission_end_date):
+                round_obj.is_submission_open = False
+                changed = True
+                logger.info(f"  Round {round_obj.id} ({round_obj.name}): submission closed")
+                print(f"[Migration] Round {round_obj.id}: soumission fermée")
+            
+            # Ouvrir le vote si la date est atteinte
+            if (not round_obj.is_voting_open and 
+                round_obj.voting_start_date and 
+                today >= round_obj.voting_start_date and
+                round_obj.voting_end_date and
+                today <= round_obj.voting_end_date):
+                round_obj.is_voting_open = True
+                changed = True
+                logger.info(f"  Round {round_obj.id} ({round_obj.name}): voting opened")
+                print(f"[Migration] Round {round_obj.id}: vote ouvert")
+            
+            # Fermer le vote si la date est passée
+            if (round_obj.is_voting_open and 
+                round_obj.voting_end_date and 
+                today > round_obj.voting_end_date):
+                round_obj.is_voting_open = False
+                round_obj.status = RoundStatus.COMPLETED
+                changed = True
+                logger.info(f"  Round {round_obj.id} ({round_obj.name}): voting closed, round completed")
+                print(f"[Migration] Round {round_obj.id}: vote fermé, round terminé")
+            
+            if changed:
+                db.commit()
+        
+        # Mettre à jour les statuts des contests (basé sur les rounds via round_contests)
+        try:
+            contest_status_service.update_contest_statuses(db)
+        except Exception as e:
+            logger.warning(f"Error updating contest statuses: {e}")
+        
+        # ============================================================
+        # STEP 1: Init seasons - PARTICIPATION → CITY, NOMINATION → COUNTRY
+        # Utilise round_contests (N:N) pour trouver les contests liés aux rounds
+        # ============================================================
+        
+        # Récupérer tous les rounds dont la city_season_start_date est atteinte
+        rounds_ready = db.query(Round).filter(
             and_(
                 Round.city_season_start_date <= today,
-                Round.status != RoundStatus.CANCELLED,
-                Contest.voting_type_id == None  # Participation
+                Round.status != RoundStatus.CANCELLED
             )
         ).all()
         
-        for round_obj in rounds_to_migrate_city:
-            # Check if season exists
-            existing_link = db.query(ContestSeasonLink).join(ContestSeason).filter(
-                and_(
-                    ContestSeasonLink.contest_id == round_obj.contest_id,
-                    ContestSeason.round_id == round_obj.id,
-                    ContestSeason.level == SeasonLevel.CITY
-                )
-            ).first()
+        for round_obj in rounds_ready:
+            # Trouver les contests liés à ce round via round_contests
+            from sqlalchemy import select
+            contest_ids_result = db.execute(
+                select(rc_table.c.contest_id).where(rc_table.c.round_id == round_obj.id)
+            ).fetchall()
+            contest_ids = [r[0] for r in contest_ids_result]
             
-            if not existing_link:
-                result = SeasonMigrationService.migrate_to_city_season(db, round_obj.contest_id, round_obj.id)
-                results.append({"contest_id": round_obj.contest_id, "round_id": round_obj.id, "action": "init_participation_city", "result": result})
-
-        # 1b. NOMINATION: Start at COUNTRY
-        rounds_to_start_country = db.query(Round).join(Contest).filter(
-            and_(
-                Round.country_season_start_date <= today,
-                Round.status != RoundStatus.CANCELLED,
-                Contest.voting_type_id != None  # Nomination
-            )
-        ).all()
+            for cid in contest_ids:
+                contest = db.query(Contest).filter(Contest.id == cid).first()
+                if not contest:
+                    continue
+                
+                contest_mode = getattr(contest, 'contest_mode', None)
+                
+                if contest_mode == "participation":
+                    # PARTICIPATION → init CITY
+                    existing_link = db.query(ContestSeasonLink).join(ContestSeason).filter(
+                        and_(
+                            ContestSeasonLink.contest_id == cid,
+                            ContestSeason.round_id == round_obj.id,
+                            ContestSeason.level == SeasonLevel.CITY
+                        )
+                    ).first()
+                    
+                    if not existing_link:
+                        try:
+                            result = SeasonMigrationService.migrate_to_city_season(db, cid, round_obj.id)
+                            results.append({"contest_id": cid, "round_id": round_obj.id, "action": "init_participation_city", "result": result})
+                        except Exception as e:
+                            logger.error(f"Error migrating contest {cid} to city: {e}")
+                            results.append({"contest_id": cid, "round_id": round_obj.id, "action": "init_participation_city", "result": {"error": str(e)}})
+                
+                elif contest_mode == "nomination":
+                    # NOMINATION → init COUNTRY
+                    existing_link = db.query(ContestSeasonLink).join(ContestSeason).filter(
+                        and_(
+                            ContestSeasonLink.contest_id == cid,
+                            ContestSeason.round_id == round_obj.id,
+                            ContestSeason.level == SeasonLevel.COUNTRY
+                        )
+                    ).first()
+                    
+                    if not existing_link:
+                        try:
+                            result = SeasonMigrationService.migrate_to_country_start(db, cid, round_obj.id)
+                            results.append({"contest_id": cid, "round_id": round_obj.id, "action": "init_nomination_country", "result": result})
+                        except Exception as e:
+                            logger.error(f"Error migrating contest {cid} to country: {e}")
+                            results.append({"contest_id": cid, "round_id": round_obj.id, "action": "init_nomination_country", "result": {"error": str(e)}})
         
-        for round_obj in rounds_to_start_country:
-             existing_link = db.query(ContestSeasonLink).join(ContestSeason).filter(
-                and_(
-                    ContestSeasonLink.contest_id == round_obj.contest_id,
-                    ContestSeason.round_id == round_obj.id,
-                    ContestSeason.level == SeasonLevel.COUNTRY
-                )
-            ).first()
-            
-             if not existing_link:
-                result = SeasonMigrationService.migrate_to_country_start(db, round_obj.contest_id, round_obj.id)
-                results.append({"contest_id": round_obj.contest_id, "round_id": round_obj.id, "action": "init_nomination_country", "result": result})
-
-        # 2. PROMOTIONS (Generic loop based on existing Seasons linked to Rounds)
-        # We look for active Seasons and check if they should end based on Round dates
-        
-        active_seasons = db.query(ContestSeason).join(Round).filter(
+        # ============================================================
+        # STEP 2: Promotions - basé sur les saisons actives liées aux rounds
+        # ============================================================
+        active_seasons = db.query(ContestSeason).filter(
             and_(
                 ContestSeason.is_deleted == False,
-                Round.status != RoundStatus.CANCELLED
+                ContestSeason.round_id.isnot(None)
             )
         ).all()
         
         for season in active_seasons:
             if not season.round:
                 continue
-                
-            round_obj = season.round
-            contest_id = round_obj.contest_id
-            contest = round_obj.contest
             
-            # Check promotion criteria based on level
+            round_obj = season.round
+            if round_obj.status == RoundStatus.CANCELLED:
+                continue
+            
+            # Trouver le contest lié à cette saison via ContestSeasonLink
+            contest_link = db.query(ContestSeasonLink).filter(
+                and_(
+                    ContestSeasonLink.season_id == season.id,
+                    ContestSeasonLink.is_active == True
+                )
+            ).first()
+            
+            if not contest_link:
+                continue
+            
+            contest_id = contest_link.contest_id
+            
+            # Déterminer si une promotion est nécessaire
             next_level = None
             limit = 5
             should_promote = False
             
             if season.level == SeasonLevel.CITY:
-                # City -> Country
                 if round_obj.city_season_end_date and round_obj.city_season_end_date <= today:
                     should_promote = True
                 elif round_obj.country_season_start_date and round_obj.country_season_start_date <= today:
@@ -827,7 +921,6 @@ class SeasonMigrationService:
                 next_level = SeasonLevel.COUNTRY
                 
             elif season.level == SeasonLevel.COUNTRY:
-                # Country -> Regional
                 if round_obj.country_season_end_date and round_obj.country_season_end_date <= today:
                     should_promote = True
                 elif round_obj.regional_start_date and round_obj.regional_start_date <= today:
@@ -835,24 +928,13 @@ class SeasonMigrationService:
                 next_level = SeasonLevel.REGIONAL
                 
             elif season.level == SeasonLevel.REGIONAL:
-                # Regional -> ...
-                if contest.voting_type_id is None:
-                     # Participation: Regional -> Global
-                    if round_obj.regional_end_date and round_obj.regional_end_date <= today:
-                        should_promote = True
-                    elif round_obj.global_start_date and round_obj.global_start_date <= today:
-                        should_promote = True
-                    next_level = SeasonLevel.GLOBAL
-                else:
-                    # Nomination: Regional -> Continent
-                    if round_obj.regional_end_date and round_obj.regional_end_date <= today:
-                        should_promote = True
-                    elif round_obj.continental_start_date and round_obj.continental_start_date <= today:
-                        should_promote = True
-                    next_level = SeasonLevel.CONTINENT
+                if round_obj.regional_end_date and round_obj.regional_end_date <= today:
+                    should_promote = True
+                elif round_obj.continental_start_date and round_obj.continental_start_date <= today:
+                    should_promote = True
+                next_level = SeasonLevel.CONTINENT
                     
             elif season.level == SeasonLevel.CONTINENT:
-                # Continent -> Global
                 if round_obj.continental_end_date and round_obj.continental_end_date <= today:
                     should_promote = True
                 elif round_obj.global_start_date and round_obj.global_start_date <= today:
@@ -860,7 +942,7 @@ class SeasonMigrationService:
                 next_level = SeasonLevel.GLOBAL
             
             if should_promote and next_level:
-                # Check duplication
+                # Vérifier qu'on n'a pas déjà promu
                 existing_next = db.query(ContestSeason).filter(
                     and_(
                         ContestSeason.round_id == round_obj.id,
@@ -869,20 +951,34 @@ class SeasonMigrationService:
                 ).first()
                 
                 if not existing_next:
-                    result = SeasonMigrationService.promote_to_next_level(
-                        db, season.level, next_level, contest_id, limit=limit
-                    )
-                    results.append({
-                        "contest_id": contest_id, 
-                        "round_id": round_obj.id, 
-                        "action": f"promote_{season.level.value}_to_{next_level.value}", 
-                        "result": result
-                    })
+                    try:
+                        result = SeasonMigrationService.promote_to_next_level(
+                            db, season.level, next_level, contest_id, limit=limit
+                        )
+                        results.append({
+                            "contest_id": contest_id, 
+                            "round_id": round_obj.id, 
+                            "action": f"promote_{season.level.value}_to_{next_level.value}", 
+                            "result": result
+                        })
+                    except Exception as e:
+                        logger.error(f"Error promoting contest {contest_id}: {e}")
+                        results.append({
+                            "contest_id": contest_id,
+                            "round_id": round_obj.id,
+                            "action": f"promote_{season.level.value}_to_{next_level.value}",
+                            "result": {"error": str(e)}
+                        })
 
+        processed = len(results)
+        if processed > 0:
+            print(f"[Migration] Processed {processed} migrations")
+        else:
+            print(f"[Migration] No migrations needed")
+        
         return {
-            "processed": len(results),
-            "results": results,
-            "contest_status_updates": status_update_result
+            "processed": processed,
+            "results": results
         }
 
 

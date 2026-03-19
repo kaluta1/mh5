@@ -70,6 +70,8 @@ export function UserProgressChart({ data, title, period = 'week', onPeriodChange
         </div>
       </CardHeader>
       <CardContent>
+        <div className="overflow-x-auto">
+        <div className="min-w-[500px]">
         <ResponsiveContainer width="100%" height={300}>
           <AreaChart data={data} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
             <defs>
@@ -132,6 +134,8 @@ export function UserProgressChart({ data, title, period = 'week', onPeriodChange
             />
           </AreaChart>
         </ResponsiveContainer>
+        </div>
+        </div>
       </CardContent>
     </Card>
   )

@@ -147,7 +147,7 @@ class CRUDRound:
         # Check contest type
         cid = contest_id if contest_id else obj_in.contest_id
         contest = db.query(Contest).filter(Contest.id == cid).first()
-        is_nomination = contest.voting_type_id is not None if contest else False
+        is_nomination = (contest.contest_mode == "nomination") if contest else False
         
         # Calculate dates if not provided
         computed_dates = self.calculate_dates_for_month(target_month, target_year, is_nomination)

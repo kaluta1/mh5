@@ -244,6 +244,9 @@ export interface TranslationKeys {
     network_error: string
     optional: string
     save: string
+    unknown: string
+    load_more: string
+    actions: string
   }
   settings: {
     title: string
@@ -395,9 +398,22 @@ export interface TranslationKeys {
     nominator_location_description: string
     nominator_country: string
     select_country: string
+    nominator_country_note: string
     nominator_city: string
     nominator_city_placeholder: string
+    select_city: string
+    select_country_first: string
     ad_revenue_warning: string
+    // Stepper
+    step_info: string
+    step_media: string
+    step_review: string
+    time_remaining: string
+    deadline: string
+    submission_period_ended: string
+    review_title: string
+    supported_platforms: string
+    unrecognized_video_link: string
     errors: {
       content_title_required: string
       content_title_min_length: string
@@ -440,10 +456,14 @@ export interface TranslationKeys {
     favorites: {
       title: string
       description: string
+      description_contestants: string
       contests_tab: string
       contestants_tab: string
       no_favorite_contests: string
       no_favorite_contestants: string
+      no_favorites_yet: string
+      no_favorites_hint: string
+      browse_contests: string
     }
   }
   cta: {
@@ -640,6 +660,22 @@ export interface TranslationKeys {
         refresh: string
         no_data_available: string
       }
+      profile: {
+        participations: string
+        total_votes: string
+        total_favorites: string
+        followers: string
+        following: string
+        contestants: string
+        all_rounds: string
+        no_entries: string
+        verified: string
+        years: string
+        follow: string
+        unfollow: string
+        followed: string
+        unfollowed: string
+      }
     }
     rounds: {
       title: string
@@ -704,6 +740,7 @@ export interface TranslationKeys {
       level: string
       level_city: string
       level_country: string
+      filter_level: string
       level_regional: string
       level_continent: string
       level_global: string
@@ -1328,6 +1365,10 @@ export interface TranslationKeys {
         all: string
         nomination: string
         participations: string
+        filter_level: string
+        level_city: string
+        level_country: string
+        all_levels: string
         nominate: string
         edit_nomination: string
         edit_participation: string
@@ -1379,6 +1420,7 @@ export interface TranslationKeys {
         contestant: string
         view_contestants: string
         view_all_contestants: string
+        top_contestants: string
         view_contestants_count: string
         view_contestants_empty: string
         view_contestants_description: string
@@ -1393,6 +1435,7 @@ export interface TranslationKeys {
         vote: string
         view_details: string
         already_voted: string
+        already_voted_message: string
         cannot_vote: string
         owner_cannot_vote: string
         own_cannot_vote: string
@@ -1450,6 +1493,7 @@ export interface TranslationKeys {
         rank: string
         reaction: string
         search_contestant: string
+        filtered_by_country: string
         no_contestants: string
         no_contestants_found: string
         like: string
@@ -1473,6 +1517,17 @@ export interface TranslationKeys {
         already_voted_error: string
         cannot_vote_own: string
         vote_success: string
+        vote_replaced: string
+        my_votes: string
+        no_votes_yet: string
+        replace_vote_title: string
+        replace_vote_message: string
+        replace_vote_position: string
+        replace_vote_confirm: string
+        max_votes_reached: string
+        empty_slot: string
+        votes_remaining: string
+        drag_to_reorder: string
         vote_gender_restriction_male: string
         vote_gender_restriction_female: string
         vote_gender_not_set: string
@@ -1613,10 +1668,14 @@ export interface TranslationKeys {
       favorites: {
         title: string
         description: string
+        description_contestants: string
         contests_tab: string
         contestants_tab: string
         no_favorite_contests: string
         no_favorite_contestants: string
+        no_favorites_yet: string
+        no_favorites_hint: string
+        browse_contests: string
       }
     }
   }
@@ -2020,7 +2079,10 @@ export const translations: Record<Language, TranslationKeys> = {
       refresh: "Actualiser",
       network_error: "Erreur réseau",
       optional: "(optionnel)",
-      save: "Enregistrer"
+      save: "Enregistrer",
+      unknown: "Inconnu",
+      load_more: "Charger plus",
+      actions: "Actions"
     },
     admin: {
       title: "Panneau d'administration",
@@ -2107,6 +2169,22 @@ export const translations: Record<Language, TranslationKeys> = {
           no_data_available: "Aucune donnée disponible"
         }
       },
+      profile: {
+        participations: "Participations",
+        total_votes: "Votes",
+        total_favorites: "Favoris",
+        followers: "Abonnés",
+        following: "Abonnements",
+        contestants: "Participations",
+        all_rounds: "Tous",
+        no_entries: "Aucune participation pour le moment",
+        verified: "Vérifié",
+        years: "ans",
+        follow: "Suivre",
+        unfollow: "Ne plus suivre",
+        followed: "Vous suivez cet utilisateur",
+        unfollowed: "Vous ne suivez plus cet utilisateur"
+      },
       rounds: {
         title: "Gestion des Rounds",
         description: "Gérez les rounds de concours",
@@ -2170,6 +2248,7 @@ export const translations: Record<Language, TranslationKeys> = {
         level: "Niveau",
         level_city: "Ville",
         level_country: "Pays",
+          filter_level: "Niveau",
         level_regional: "Régional",
         level_continent: "Continent",
         level_global: "Global",
@@ -2278,6 +2357,7 @@ export const translations: Record<Language, TranslationKeys> = {
         // List translations
         level_city: "Ville",
         level_country: "Pays",
+          filter_level: "Niveau",
         level_region: "Région",
         level_continent: "Continent",
         level_global: "Mondial",
@@ -2964,12 +3044,17 @@ export const translations: Record<Language, TranslationKeys> = {
       },
       contests: {
         title: "Concours",
+        subtitle: "Découvrez et participez aux concours de votre ville et de votre pays",
         description: "Découvrez et participez aux concours les plus populaires",
         no_contests: "Aucun concours disponible",
         no_description: "Aucune description disponible",
         all: "Tout",
         nomination: "Nominations",
         participations: "Participations",
+        filter_level: "Niveau",
+        level_city: "Ville",
+        level_country: "Pays",
+        all_levels: "Tous les niveaux",
         nomination_hint: "Nominez d'autres personnes pour les faire participer aux compétitions. Votez pour les candidats nominés par leurs fans.",
         participations_hint: "Participez vous-même aux compétitions. Les candidats s'inscrivent directement pour concourir.",
         nominate: "Nommer",
@@ -2988,6 +3073,8 @@ export const translations: Record<Language, TranslationKeys> = {
         filter_continent: "Continent",
         filter_country: "Pays",
         all_countries: "Tous les pays",
+        search_country_placeholder: "Rechercher un pays...",
+        no_country_found: "Aucun pays trouvé",
         continents: {
           all: "Tous les continents",
           africa: "Afrique",
@@ -3030,7 +3117,7 @@ export const translations: Record<Language, TranslationKeys> = {
         tip_nomination_required: "Vidéo obligatoire",
         tip_nomination_required_desc: "Les vidéos sont obligatoires pour les nominations.",
         tip_nomination_platforms: "Plateformes supportées",
-        tip_nomination_platforms_desc: "YouTube (y compris YouTube Shorts), TikTok, ou liens vidéo directs. Facebook et Vimeo ne sont pas autorisés.",
+        tip_nomination_platforms_desc: "YouTube et TikTok uniquement. Les YouTube Shorts, Instagram, Snapchat et Facebook ne sont pas acceptés.",
         tip_participation_content: "Utilisez votre propre contenu",
         tip_participation_content_desc: "Partagez vos propres photos et vidéos pour participer au concours.",
         tip_participation_media: "Médias requis",
@@ -3090,6 +3177,8 @@ export const translations: Record<Language, TranslationKeys> = {
         view: "Voir",
         contestant: "participant",
         view_contestants: "Voir les participants",
+        view_all_contestants: "Voir tous les participants",
+        top_contestants: "Top Contestants",
         time_remaining: "Temps restant",
         time_unit_days: "j",
         time_unit_hours: "h",
@@ -3100,6 +3189,7 @@ export const translations: Record<Language, TranslationKeys> = {
         vote: "Voter",
         view_details: "Voir les détails",
         already_voted: "Déjà voté",
+        already_voted_message: "Vous avez déjà voté pour ce participant.",
         cannot_vote: "Vous ne pouvez pas voter pour ce participant",
         owner_cannot_vote: "Propriétaire, ne peut pas voter",
         own_cannot_vote: "Ma candidature, ne peut pas voter",
@@ -3166,6 +3256,7 @@ export const translations: Record<Language, TranslationKeys> = {
         rank: "Classement",
         reaction: "Réaction",
         search_contestant: "Rechercher un participant...",
+        filtered_by_country: "Filtré par votre pays",
         no_contestants: "Aucun participant pour le moment",
         no_contestants_found: "Aucun participant trouvé",
         like: "J'aime",
@@ -3187,6 +3278,28 @@ export const translations: Record<Language, TranslationKeys> = {
         already_voted_error: "Déjà voté.",
         cannot_vote_own: "Vous ne pouvez pas voter pour votre propre candidature.",
         vote_success: "Vote enregistré avec succès!",
+        vote_replaced: "Vote remplacé avec succès !",
+        my_votes: "Mes votes",
+        no_votes_yet: "Votez pour vos contestants préférés !",
+        replace_vote_title: "Remplacer un vote",
+        replace_vote_message: "Vous avez déjà 5 votes. Voulez-vous remplacer",
+        replace_vote_position: "(5e position, 1 point) par ce participant ?",
+        replace_vote_confirm: "Remplacer",
+        max_votes_reached: "Vous avez atteint le maximum de 5 votes",
+        empty_slot: "Emplacement vide",
+        votes_remaining: "{n} vote(s) restant(s)",
+        drag_to_reorder: "Glissez pour réordonner",
+        vote_replaced: "Vote remplacé avec succès !",
+        my_votes: "Mes votes",
+        no_votes_yet: "Votez pour vos contestants préférés !",
+        replace_vote_title: "Remplacer un vote",
+        replace_vote_message: "Vous avez déjà 5 votes. Voulez-vous remplacer",
+        replace_vote_position: "(5e position, 1 point) par ce participant ?",
+        replace_vote_confirm: "Remplacer",
+        max_votes_reached: "Vous avez atteint le maximum de 5 votes",
+        empty_slot: "Emplacement vide",
+        votes_remaining: "{n} vote(s) restant(s)",
+        drag_to_reorder: "Glissez pour réordonner",
         vote_gender_restriction_male: "Ce concours est réservé aux participants masculins. Seules les participantes féminines peuvent voter.",
         vote_gender_restriction_female: "Ce concours est réservé aux participantes féminines. Seuls les participants masculins peuvent voter.",
         vote_gender_not_set: "Votre profil ne contient pas d'information de genre. Veuillez compléter votre profil pour voter dans ce concours.",
@@ -3279,7 +3392,7 @@ export const translations: Record<Language, TranslationKeys> = {
           edit_title: "Modifier un Candidat",
           edit_description: "Mettez à jour les détails de votre soumission",
           nominate_title: "Nommer un Candidat",
-          nominate_description: "Importez votre vidéo depuis YouTube ou Vimeo",
+          nominate_description: "Importez votre vidéo depuis YouTube ou TikTok",
           select_media: "Sélectionner votre média",
           drag_drop: "Glissez-déposez votre fichier ici",
           file_info: "ou cliquez pour sélectionner (Images: JPG, PNG, GIF | Vidéos: MP4, WebM | Max: 100MB)",
@@ -3315,10 +3428,14 @@ export const translations: Record<Language, TranslationKeys> = {
       favorites: {
         title: "Mes Favoris",
         description: "Consultez vos contests et candidats favoris",
+        description_contestants: "Organisez vos contestants favoris par glisser-déposer",
         contests_tab: "Concours",
         contestants_tab: "Candidats",
         no_favorite_contests: "Vous n'avez pas encore de concours favoris",
-        no_favorite_contestants: "Vous n'avez pas encore de candidats favoris"
+        no_favorite_contestants: "Vous n'avez pas encore de candidats favoris",
+        no_favorites_yet: "Aucun favori pour le moment",
+        no_favorites_hint: "Ajoutez des contestants à vos favoris depuis la page d'un concours en cliquant sur l'étoile.",
+        browse_contests: "Parcourir les concours"
       },
       myhigh5: {
         title: "MyHigh5",
@@ -3558,7 +3675,10 @@ export const translations: Record<Language, TranslationKeys> = {
       access_denied: "Accès refusé",
       no_permission: "Vous n'avez pas les permissions pour accéder à cette page.",
       refresh: "Actualiser",
-      view_more: "Voir plus"
+      view_more: "Voir plus",
+      unknown: "Inconnu",
+      load_more: "Charger plus",
+      actions: "Actions"
     },
     affiliates: {
       grow_network: "Développez Votre Réseau",
@@ -3704,9 +3824,15 @@ export const translations: Record<Language, TranslationKeys> = {
       add: "Ajouter",
       image_url_placeholder: "https://exemple.com/image.jpg",
       video_url_placeholder: "https://youtube.com/watch?v=... ou https://exemple.com/video.mp4",
-      invalid_video_url: "URL vidéo non supportée. Formats acceptés : YouTube (y compris YouTube Shorts), TikTok, ou fichiers vidéo directs (MP4, WebM, MOV, etc.). Les liens Facebook et Vimeo ne sont pas autorisés pour les nominations.",
-      video_platform_not_allowed: "Cette plateforme vidéo n'est pas autorisée pour les nominations. Veuillez utiliser YouTube (y compris YouTube Shorts), TikTok, ou un lien de fichier vidéo direct (MP4, WebM, MOV, etc.).",
-      video_file_not_allowed: "Les fichiers vidéo ne sont pas autorisés pour les nominations. Veuillez utiliser une URL YouTube (y compris YouTube Shorts), TikTok, ou un autre lien vidéo.",
+      invalid_video_url: "Lien non autorisé. Seuls YouTube et TikTok sont acceptés.",
+      unsupported_platform: "Lien non autorisé",
+      open_link: "Ouvrir le lien",
+      view_on_tiktok: "Voir sur TikTok",
+      view_on_youtube: "Voir sur YouTube",
+      only_youtube_tiktok: "Seuls YouTube et TikTok sont acceptés",
+      invalid_url: "URL vidéo non valide",
+      video_platform_not_allowed: "Plateforme vidéo non acceptée. Seuls YouTube et TikTok sont supportés.",
+      video_file_not_allowed: "Les fichiers vidéo ne sont pas autorisés. Veuillez utiliser une URL YouTube ou TikTok.",
       youtube_shorts_not_allowed: "Les YouTube Shorts ne sont pas autorisés. Veuillez utiliser une vidéo YouTube standard.",
       url_required: "URL requise",
       invalid_url: "URL invalide",
@@ -3732,10 +3858,23 @@ export const translations: Record<Language, TranslationKeys> = {
       nominator_location: "Localisation du candidat",
       nominator_location_description: "Veuillez indiquer la localisation de la personne que vous nominez.",
       nominator_country: "Pays",
+      nominator_country_note: "Le pays doit correspondre à votre pays de profil. Vous ne pouvez nommer que des candidats de votre propre pays.",
       select_country: "Sélectionnez un pays",
       nominator_city: "Ville",
       nominator_city_placeholder: "Entrez le nom de la ville",
+      select_city: "Sélectionnez une ville",
+      select_country_first: "Sélectionnez d'abord un pays",
       ad_revenue_warning: "Attention : Vous ne serez pas rémunéré sur les revenus publicitaires générés par votre contenu si nous détectons que le contenu ne provient pas de votre pays.",
+      // Stepper
+      step_info: "Informations",
+      step_media: "Médias",
+      step_review: "Vérification",
+      time_remaining: "Temps de participation restant",
+      deadline: "Date limite",
+      submission_period_ended: "La période de soumission est terminée",
+      review_title: "Vérifiez votre candidature",
+      supported_platforms: "Plateformes supportées",
+      unrecognized_video_link: "Lien vidéo non reconnu",
       // Errors
       errors: {
         content_title_required: "Titre du contenu",
@@ -3796,10 +3935,14 @@ export const translations: Record<Language, TranslationKeys> = {
       favorites: {
         title: "Mes Favoris",
         description: "Consultez vos contests et candidats favoris",
+        description_contestants: "Organisez vos contestants favoris par glisser-déposer",
         contests_tab: "Concours",
         contestants_tab: "Candidats",
         no_favorite_contests: "Vous n'avez pas encore de concours favoris",
-        no_favorite_contestants: "Vous n'avez pas encore de candidats favoris"
+        no_favorite_contestants: "Vous n'avez pas encore de candidats favoris",
+        no_favorites_yet: "Aucun favori pour le moment",
+        no_favorites_hint: "Ajoutez des contestants à vos favoris depuis la page d'un concours en cliquant sur l'étoile.",
+        browse_contests: "Parcourir les concours"
       },
       myhigh5: {
         title: "MyHigh5",
@@ -4425,6 +4568,10 @@ export const translations: Record<Language, TranslationKeys> = {
         all: "Tout",
         nomination: "Nominations",
         participations: "Participations",
+        filter_level: "Niveau",
+        level_city: "Ville",
+        level_country: "Pays",
+        all_levels: "Tous les niveaux",
         nomination_hint: "Nominez d'autres personnes pour les faire participer aux compétitions. Votez pour les candidats nominés par leurs fans.",
         participations_hint: "Participez vous-même aux compétitions. Les candidats s'inscrivent directement pour concourir.",
         nominate: "Nommer",
@@ -4507,12 +4654,15 @@ export const translations: Record<Language, TranslationKeys> = {
         top_participants: "Top Participants",
         top_5_description: "Les 5 meilleurs participants du concours",
         view_contestants: "Voir les participants",
+        view_all_contestants: "Voir tous les participants",
+        top_contestants: "Top Contestants",
         time_remaining: "Temps restant",
         candidacy_ends: "Fin des candidatures",
         participation_ongoing: "Les candidatures sont encore ouvertes",
         vote: "Voter",
         view_details: "Voir les détails",
         already_voted: "Déjà voté",
+        already_voted_message: "Vous avez déjà voté pour ce participant.",
         cannot_vote: "Vous ne pouvez pas voter pour ce participant",
         votes: "votes",
         submission: "Soumission",
@@ -4538,6 +4688,7 @@ export const translations: Record<Language, TranslationKeys> = {
         rank: "Classement",
         reaction: "Réaction",
         search_contestant: "Rechercher un participant...",
+        filtered_by_country: "Filtré par votre pays",
         no_contestants: "Aucun participant pour le moment",
         no_contestants_found: "Aucun participant trouvé",
         like: "J'aime",
@@ -4651,7 +4802,7 @@ export const translations: Record<Language, TranslationKeys> = {
           edit_title: "Modifier un Candidat",
           edit_description: "Mettez à jour les détails de votre soumission",
           nominate_title: "Nommer un Candidat",
-          nominate_description: "Importez votre vidéo depuis YouTube ou Vimeo",
+          nominate_description: "Importez votre vidéo depuis YouTube ou TikTok",
           select_media: "Sélectionner votre média",
           drag_drop: "Glissez-déposez votre fichier ici",
           file_info: "ou cliquez pour sélectionner (Images: JPG, PNG, GIF | Vidéos: MP4, WebM | Max: 100MB)",
@@ -4687,10 +4838,14 @@ export const translations: Record<Language, TranslationKeys> = {
       favorites: {
         title: "Mes Favoris",
         description: "Consultez vos contests et candidats favoris",
+        description_contestants: "Organisez vos contestants favoris par glisser-déposer",
         contests_tab: "Concours",
         contestants_tab: "Candidats",
         no_favorite_contests: "Vous n'avez pas encore de concours favoris",
-        no_favorite_contestants: "Vous n'avez pas encore de candidats favoris"
+        no_favorite_contestants: "Vous n'avez pas encore de candidats favoris",
+        no_favorites_yet: "Aucun favori pour le moment",
+        no_favorites_hint: "Ajoutez des contestants à vos favoris depuis la page d'un concours en cliquant sur l'étoile.",
+        browse_contests: "Parcourir les concours"
       },
       myhigh5: {
         title: "MyHigh5",
@@ -5132,7 +5287,10 @@ export const translations: Record<Language, TranslationKeys> = {
       refresh: "Refresh",
       network_error: "Network error",
       optional: "(optional)",
-      save: "Save"
+      save: "Save",
+      unknown: "Unknown",
+      load_more: "Load more",
+      actions: "Actions"
     },
     admin: {
       title: "Administration Panel",
@@ -5219,6 +5377,22 @@ export const translations: Record<Language, TranslationKeys> = {
           no_data_available: "No data available"
         }
       },
+      profile: {
+        participations: "Participations",
+        total_votes: "Votes",
+        total_favorites: "Favorites",
+        followers: "Followers",
+        following: "Following",
+        contestants: "Entries",
+        all_rounds: "All",
+        no_entries: "No entries yet",
+        verified: "Verified",
+        years: "years old",
+        follow: "Follow",
+        unfollow: "Unfollow",
+        followed: "You are now following this user",
+        unfollowed: "You unfollowed this user"
+      },
       rounds: {
         title: "Manage Rounds",
         description: "Manage contest rounds",
@@ -5282,6 +5456,7 @@ export const translations: Record<Language, TranslationKeys> = {
         level: "Level",
         level_city: "City",
         level_country: "Country",
+          filter_level: "Level",
         level_regional: "Regional",
         level_continent: "Continent",
         level_global: "Global",
@@ -5391,6 +5566,7 @@ export const translations: Record<Language, TranslationKeys> = {
         // List translations
         level_city: "City",
         level_country: "Country",
+          filter_level: "Level",
         level_region: "Region",
         level_continent: "Continent",
         level_global: "Global",
@@ -6091,7 +6267,10 @@ export const translations: Record<Language, TranslationKeys> = {
       access_denied: "Access Denied",
       no_permission: "You do not have permission to access this page.",
       refresh: "Refresh",
-      view_more: "View more"
+      view_more: "View more",
+      unknown: "Unknown",
+      load_more: "Load more",
+      actions: "Actions"
     },
     affiliates: {
       grow_network: "Grow Your Network",
@@ -6237,9 +6416,15 @@ export const translations: Record<Language, TranslationKeys> = {
       add: "Add",
       image_url_placeholder: "https://example.com/image.jpg",
       video_url_placeholder: "https://youtube.com/watch?v=... or https://example.com/video.mp4",
-      invalid_video_url: "Unsupported video URL. Accepted formats: YouTube (including YouTube Shorts), TikTok, or direct video files (MP4, WebM, MOV, etc.). Facebook and Vimeo links are not allowed for nominations.",
-      video_platform_not_allowed: "This video platform is not allowed for nominations. Please use YouTube (including YouTube Shorts), TikTok, or a direct video file link (MP4, WebM, MOV, etc.).",
-      video_file_not_allowed: "Video file uploads are not allowed for nominations. Please use a YouTube URL (including YouTube Shorts), TikTok, or another video link.",
+      invalid_video_url: "Unauthorized link. Only YouTube and TikTok are accepted.",
+      unsupported_platform: "Unauthorized link",
+      open_link: "Open link",
+      view_on_tiktok: "View on TikTok",
+      view_on_youtube: "View on YouTube",
+      only_youtube_tiktok: "Only YouTube and TikTok are accepted",
+      invalid_url: "Invalid video URL",
+      video_platform_not_allowed: "This video platform is not accepted. Only YouTube and TikTok are supported.",
+      video_file_not_allowed: "Video file uploads are not allowed. Please use a YouTube or TikTok URL.",
       youtube_shorts_not_allowed: "YouTube Shorts are not allowed. Please use a standard YouTube video.",
       url_required: "URL required",
       invalid_url: "Invalid URL",
@@ -6265,10 +6450,23 @@ export const translations: Record<Language, TranslationKeys> = {
       nominator_location: "Contestant Location",
       nominator_location_description: "Please provide the location of the person you are nominating.",
       nominator_country: "Country",
+      nominator_country_note: "The country must match your profile country. You can only nominate contestants from your own country.",
       select_country: "Select a country",
       nominator_city: "City",
       nominator_city_placeholder: "Enter the city name",
+      select_city: "Select a city",
+      select_country_first: "Select a country first",
       ad_revenue_warning: "Warning: You will not be paid for ad revenue generated by your content if we detect that the content does not originate from your country.",
+      // Stepper
+      step_info: "Information",
+      step_media: "Media",
+      step_review: "Review",
+      time_remaining: "Remaining participation time",
+      deadline: "Deadline",
+      submission_period_ended: "The submission period has ended",
+      review_title: "Review your submission",
+      supported_platforms: "Supported platforms",
+      unrecognized_video_link: "Unrecognized video link",
       // Errors
       errors: {
         content_title_required: "Content Title",
@@ -6384,10 +6582,14 @@ export const translations: Record<Language, TranslationKeys> = {
       favorites: {
         title: "My Favorites",
         description: "View your favorite contests and contestants",
+        description_contestants: "Organize your favorite contestants by drag and drop",
         contests_tab: "Contests",
         contestants_tab: "Contestants",
         no_favorite_contests: "You don't have any favorite contests yet",
-        no_favorite_contestants: "You don't have any favorite contestants yet"
+        no_favorite_contestants: "You don't have any favorite contestants yet",
+        no_favorites_yet: "No favorites yet",
+        no_favorites_hint: "Add contestants to your favorites from a contest page by clicking the star.",
+        browse_contests: "Browse contests"
       },
       myhigh5: {
         title: "MyHigh5",
@@ -7060,12 +7262,17 @@ export const translations: Record<Language, TranslationKeys> = {
       },
       contests: {
         title: "Contests",
+        subtitle: "Discover and participate in contests from your city and country",
         description: "Discover and participate in the most popular contests",
         no_contests: "No contests available",
         no_description: "No description available",
         all: "All",
         nomination: "Nominations",
         participations: "Participations",
+        filter_level: "Level",
+        level_city: "City",
+        level_country: "Country",
+        all_levels: "All levels",
         nomination_hint: "Nominate others to enter into competitions. Vote for contestants who have been nominated by their fans.",
         participations_hint: "Participate yourself in competitions. Contestants sign up directly to compete.",
         nominate: "Nominate",
@@ -7084,6 +7291,8 @@ export const translations: Record<Language, TranslationKeys> = {
         filter_continent: "Continent",
         filter_country: "Country",
         all_countries: "All countries",
+        search_country_placeholder: "Search for a country...",
+        no_country_found: "No country found",
         continents: {
           all: "All continents",
           africa: "Africa",
@@ -7126,7 +7335,7 @@ export const translations: Record<Language, TranslationKeys> = {
         tip_nomination_required: "Video required",
         tip_nomination_required_desc: "Videos are required for nominations.",
         tip_nomination_platforms: "Supported platforms",
-        tip_nomination_platforms_desc: "YouTube (including YouTube Shorts), TikTok, or direct video links. Facebook and Vimeo are not allowed.",
+        tip_nomination_platforms_desc: "YouTube and TikTok only. YouTube Shorts, Instagram, Snapchat and Facebook are not accepted.",
         tip_participation_content: "Use your own content",
         tip_participation_content_desc: "Share your own photos and videos to participate in the contest.",
         tip_participation_media: "Required media",
@@ -7200,6 +7409,7 @@ export const translations: Record<Language, TranslationKeys> = {
         contestant: "contestant",
         view_contestants: "View contestants",
         view_all_contestants: "View all contestants",
+        top_contestants: "Top Contestants",
         view_contestants_count: "contestant",
         view_contestants_empty: "No contestants",
         view_contestants_description: "Discover all contestants and vote for your favorites",
@@ -7214,6 +7424,7 @@ export const translations: Record<Language, TranslationKeys> = {
         vote: "Vote",
         view_details: "View Details",
         already_voted: "Already voted",
+        already_voted_message: "You have already voted for this contestant.",
         cannot_vote: "You cannot vote for this contestant",
         owner_cannot_vote: "Owner, cannot vote",
         own_cannot_vote: "Own, cannot vote",
@@ -7298,6 +7509,7 @@ export const translations: Record<Language, TranslationKeys> = {
         rank: "Rank",
         reaction: "Reaction",
         search_contestant: "Search for a contestant...",
+        filtered_by_country: "Filtered by your country",
         no_contestants: "No participants yet",
         no_contestants_found: "No contestants found",
         like: "Like",
@@ -7319,6 +7531,17 @@ export const translations: Record<Language, TranslationKeys> = {
         already_voted_error: "Already voted.",
         cannot_vote_own: "You cannot vote for your own entry.",
         vote_success: "Vote recorded successfully!",
+        vote_replaced: "Vote replaced successfully!",
+        my_votes: "My votes",
+        no_votes_yet: "Vote for your favorite contestants!",
+        replace_vote_title: "Replace a vote",
+        replace_vote_message: "You already have 5 votes. Do you want to replace",
+        replace_vote_position: "(5th position, 1 point) with this contestant?",
+        replace_vote_confirm: "Replace",
+        max_votes_reached: "You have reached the maximum of 5 votes",
+        empty_slot: "Empty slot",
+        votes_remaining: "{n} vote(s) remaining",
+        drag_to_reorder: "Drag to reorder",
         vote_gender_restriction_male: "This contest is reserved for male participants. Only female participants can vote.",
         vote_gender_restriction_female: "This contest is reserved for female participants. Only male participants can vote.",
         vote_gender_not_set: "Your profile does not contain gender information. Please complete your profile to vote in this contest.",
@@ -7366,7 +7589,7 @@ export const translations: Record<Language, TranslationKeys> = {
           edit_title: "Edit a Contestant",
           edit_description: "Update your submission details",
           nominate_title: "Nominate a Contestant",
-          nominate_description: "Import your video from YouTube or Vimeo",
+          nominate_description: "Import your video from YouTube or TikTok",
           select_media: "Select your media",
           drag_drop: "Drag and drop your file here",
           file_info: "or click to select (Images: JPG, PNG, GIF | Videos: MP4, WebM | Max: 100MB)",
@@ -7455,10 +7678,14 @@ export const translations: Record<Language, TranslationKeys> = {
       favorites: {
         title: "My Favorites",
         description: "View your favorite contests and contestants",
+        description_contestants: "Organize your favorite contestants by drag and drop",
         contests_tab: "Contests",
         contestants_tab: "Contestants",
         no_favorite_contests: "You don't have any favorite contests yet",
-        no_favorite_contestants: "You don't have any favorite contestants yet"
+        no_favorite_contestants: "You don't have any favorite contestants yet",
+        no_favorites_yet: "No favorites yet",
+        no_favorites_hint: "Add contestants to your favorites from a contest page by clicking the star.",
+        browse_contests: "Browse contests"
       },
       myhigh5: {
         title: "MyHigh5",
@@ -7969,6 +8196,22 @@ export const translations: Record<Language, TranslationKeys> = {
           no_data_available: "No hay datos disponibles"
         }
       },
+      profile: {
+        participations: "Participaciones",
+        total_votes: "Votos",
+        total_favorites: "Favoritos",
+        followers: "Seguidores",
+        following: "Siguiendo",
+        contestants: "Participaciones",
+        all_rounds: "Todos",
+        no_entries: "Sin participaciones por el momento",
+        verified: "Verificado",
+        years: "años",
+        follow: "Seguir",
+        unfollow: "Dejar de seguir",
+        followed: "Ahora sigues a este usuario",
+        unfollowed: "Dejaste de seguir a este usuario"
+      },
       seasons: {
         title: "Gestionar Temporadas",
         description: "Crear, editar y gestionar temporadas de concursos",
@@ -8005,6 +8248,7 @@ export const translations: Record<Language, TranslationKeys> = {
         level: "Nivel",
         level_city: "Ciudad",
         level_country: "País",
+          filter_level: "Nivel",
         level_regional: "Regional",
         level_continent: "Continente",
         level_global: "Global",
@@ -8700,7 +8944,10 @@ export const translations: Record<Language, TranslationKeys> = {
       access_denied: "Acceso Denegado",
       no_permission: "No tienes permiso para acceder a esta página.",
       refresh: "Actualizar",
-      view_more: "Ver más"
+      view_more: "Ver más",
+      unknown: "Desconocido",
+      load_more: "Cargar más",
+      actions: "Acciones"
     },
     affiliates: {
       grow_network: "Haz Crecer Tu Red",
@@ -8846,9 +9093,15 @@ export const translations: Record<Language, TranslationKeys> = {
       add: "Agregar",
       image_url_placeholder: "https://ejemplo.com/imagen.jpg",
       video_url_placeholder: "https://youtube.com/watch?v=... o https://ejemplo.com/video.mp4",
-      invalid_video_url: "URL de video no soportada. Formatos aceptados: YouTube (incluyendo YouTube Shorts), TikTok, o archivos de video directos (MP4, WebM, MOV, etc.). Los enlaces de Facebook y Vimeo no están permitidos para nominaciones.",
-      video_platform_not_allowed: "Esta plataforma de video no está permitida para nominaciones. Por favor use YouTube (incluyendo YouTube Shorts), TikTok, o un enlace de archivo de video directo (MP4, WebM, MOV, etc.).",
-      video_file_not_allowed: "La carga de archivos de video no está permitida para nominaciones. Por favor use una URL de YouTube (incluyendo YouTube Shorts), TikTok, u otro enlace de video.",
+      invalid_video_url: "Enlace no autorizado. Solo se aceptan YouTube y TikTok.",
+      unsupported_platform: "Enlace no autorizado",
+      open_link: "Abrir enlace",
+      view_on_tiktok: "Ver en TikTok",
+      view_on_youtube: "Ver en YouTube",
+      only_youtube_tiktok: "Solo se aceptan YouTube y TikTok",
+      invalid_url: "URL de video no válida",
+      video_platform_not_allowed: "Plataforma de video no aceptada. Solo YouTube y TikTok son soportados.",
+      video_file_not_allowed: "La carga de archivos de video no está permitida. Por favor use una URL de YouTube o TikTok.",
       youtube_shorts_not_allowed: "Los YouTube Shorts no están permitidos. Por favor use un video de YouTube estándar.",
       url_required: "URL requerida",
       invalid_url: "URL inválida",
@@ -8874,10 +9127,23 @@ export const translations: Record<Language, TranslationKeys> = {
       nominator_location: "Ubicación del Candidato",
       nominator_location_description: "Por favor proporcione la ubicación de la persona que está nominando.",
       nominator_country: "País",
+      nominator_country_note: "El país debe coincidir con el país de su perfil. Solo puede nominar candidatos de su propio país.",
       select_country: "Seleccione un país",
       nominator_city: "Ciudad",
       nominator_city_placeholder: "Ingrese el nombre de la ciudad",
+      select_city: "Seleccione una ciudad",
+      select_country_first: "Seleccione un país primero",
       ad_revenue_warning: "Advertencia: No recibirá el pago de los ingresos publicitarios generados por su contenido si detectamos que el contenido no proviene de su país.",
+      // Stepper
+      step_info: "Información",
+      step_media: "Medios",
+      step_review: "Verificación",
+      time_remaining: "Tiempo de participación restante",
+      deadline: "Fecha límite",
+      submission_period_ended: "El período de envío ha terminado",
+      review_title: "Verifique su candidatura",
+      supported_platforms: "Plataformas soportadas",
+      unrecognized_video_link: "Enlace de video no reconocido",
       // Errors
       errors: {
         content_title_required: "Título del Contenido",
@@ -9449,12 +9715,17 @@ export const translations: Record<Language, TranslationKeys> = {
       },
       contests: {
         title: "Concursos",
+        subtitle: "Descubre y participa en concursos de tu ciudad y país",
         description: "Descubre y participa en los concursos más populares",
         no_contests: "No hay concursos disponibles",
         no_description: "No hay descripción disponible",
         all: "Todos",
         nomination: "Nominaciones",
         participations: "Participaciones",
+        filter_level: "Nivel",
+        level_city: "Ciudad",
+        level_country: "País",
+        all_levels: "Todos los niveles",
         nomination_hint: "Nomina a otras personas para que participen en competencias. Vota por los concursantes nominados por sus fans.",
         participations_hint: "Participa tú mismo en competencias. Los concursantes se inscriben directamente para competir.",
         nominate: "Nominar",
@@ -9574,6 +9845,7 @@ export const translations: Record<Language, TranslationKeys> = {
         contestant: "participante",
         view_contestants: "Ver participantes",
         view_all_contestants: "Ver todos los participantes",
+        top_contestants: "Top Contestants",
         view_contestants_count: "participante",
         view_contestants_empty: "Sin participantes",
         view_contestants_description: "Descubre todos los participantes y vota por tus favoritos",
@@ -9634,6 +9906,7 @@ export const translations: Record<Language, TranslationKeys> = {
         rank: "Clasificación",
         reaction: "Reacción",
         search_contestant: "Buscar un participante...",
+        filtered_by_country: "Filtrado por su país",
         no_contestants: "Aún no hay participantes",
         no_contestants_found: "No se encontraron participantes",
         like: "Me gusta",
@@ -9655,6 +9928,17 @@ export const translations: Record<Language, TranslationKeys> = {
         already_voted_error: "Ya votado.",
         cannot_vote_own: "No puedes votar por tu propia candidatura.",
         vote_success: "¡Voto registrado con éxito!",
+        vote_replaced: "¡Voto reemplazado con éxito!",
+        my_votes: "Mis votos",
+        no_votes_yet: "¡Vota por tus concursantes favoritos!",
+        replace_vote_title: "Reemplazar un voto",
+        replace_vote_message: "Ya tienes 5 votos. ¿Quieres reemplazar a",
+        replace_vote_position: "(5ª posición, 1 punto) por este participante?",
+        replace_vote_confirm: "Reemplazar",
+        max_votes_reached: "Has alcanzado el máximo de 5 votos",
+        empty_slot: "Espacio vacío",
+        votes_remaining: "{n} voto(s) restante(s)",
+        drag_to_reorder: "Arrastra para reordenar",
         vote_gender_restriction_male: "Este concurso está reservado para participantes masculinos. Solo las participantes femeninas pueden votar.",
         vote_gender_restriction_female: "Este concurso está reservado para participantes femeninas. Solo los participantes masculinos pueden votar.",
         vote_gender_not_set: "Su perfil no contiene información de género. Por favor complete su perfil para votar en este concurso.",
@@ -9702,7 +9986,7 @@ export const translations: Record<Language, TranslationKeys> = {
           edit_title: "Editar un Candidato",
           edit_description: "Actualiza los detalles de tu envío",
           nominate_title: "Nominar un Candidato",
-          nominate_description: "Importa tu video desde YouTube o Vimeo",
+          nominate_description: "Importa tu video desde YouTube o TikTok",
           select_media: "Selecciona tu media",
           drag_drop: "Arrastra y suelta tu archivo aquí",
           file_info: "o haz clic para seleccionar (Imágenes: JPG, PNG, GIF | Videos: MP4, WebM | Máx: 100MB)",
@@ -10307,6 +10591,22 @@ export const translations: Record<Language, TranslationKeys> = {
           no_data_available: "Keine Daten verfügbar"
         }
       },
+      profile: {
+        participations: "Teilnahmen",
+        total_votes: "Stimmen",
+        total_favorites: "Favoriten",
+        followers: "Follower",
+        following: "Folge ich",
+        contestants: "Teilnahmen",
+        all_rounds: "Alle",
+        no_entries: "Noch keine Teilnahmen",
+        verified: "Verifiziert",
+        years: "Jahre",
+        follow: "Folgen",
+        unfollow: "Entfolgen",
+        followed: "Du folgst diesem Benutzer",
+        unfollowed: "Du folgst diesem Benutzer nicht mehr"
+      },
       seasons: {
         title: "Jahreszeiten verwalten",
         description: "Erstellen, bearbeiten und verwalten Sie Wettbewerbsjahreszeiten",
@@ -10343,6 +10643,7 @@ export const translations: Record<Language, TranslationKeys> = {
         level: "Ebene",
         level_city: "Stadt",
         level_country: "Land",
+          filter_level: "Stufe",
         level_regional: "Regional",
         level_continent: "Kontinent",
         level_global: "Global",
@@ -10446,6 +10747,7 @@ export const translations: Record<Language, TranslationKeys> = {
         // List translations
         level_city: "Stadt",
         level_country: "Land",
+          filter_level: "Stufe",
         level_region: "Region",
         level_continent: "Kontinent",
         level_global: "Global",
@@ -11038,7 +11340,10 @@ export const translations: Record<Language, TranslationKeys> = {
       access_denied: "Zugriff verweigert",
       no_permission: "Sie haben keine Berechtigung, auf diese Seite zuzugreifen.",
       refresh: "Aktualisieren",
-      view_more: "Mehr anzeigen"
+      view_more: "Mehr anzeigen",
+      unknown: "Unbekannt",
+      load_more: "Mehr laden",
+      actions: "Aktionen"
     },
     affiliates: {
       grow_network: "Bauen Sie Ihr Netzwerk aus",
@@ -11184,8 +11489,14 @@ export const translations: Record<Language, TranslationKeys> = {
       add: "Hinzufügen",
       image_url_placeholder: "https://beispiel.com/bild.jpg",
       video_url_placeholder: "https://youtube.com/watch?v=... oder https://beispiel.com/video.mp4",
-      invalid_video_url: "Nicht unterstützte Video-URL. Akzeptierte Formate: YouTube (einschließlich YouTube Shorts), TikTok oder direkte Videodateien (MP4, WebM, MOV, etc.). Facebook- und Vimeo-Links sind für Nominierungen nicht erlaubt.",
-      video_platform_not_allowed: "Diese Videoplattform ist für Nominierungen nicht erlaubt. Bitte verwenden Sie YouTube (einschließlich YouTube Shorts), TikTok oder einen direkten Videodatei-Link (MP4, WebM, MOV, etc.).",
+      invalid_video_url: "Nicht autorisierter Link. Nur YouTube und TikTok werden akzeptiert.",
+      unsupported_platform: "Nicht autorisierter Link",
+      open_link: "Link öffnen",
+      view_on_tiktok: "Auf TikTok ansehen",
+      view_on_youtube: "Auf YouTube ansehen",
+      only_youtube_tiktok: "Nur YouTube und TikTok werden akzeptiert",
+      invalid_url: "Ungültige Video-URL",
+      video_platform_not_allowed: "Diese Videoplattform wird nicht akzeptiert. Nur YouTube und TikTok werden unterstützt.",
       video_file_not_allowed: "Das Hochladen von Videodateien ist für Nominierungen nicht erlaubt. Bitte verwenden Sie eine YouTube-URL (einschließlich YouTube Shorts), TikTok oder einen anderen Video-Link.",
       youtube_shorts_not_allowed: "YouTube Shorts sind nicht erlaubt. Bitte verwenden Sie ein Standard-YouTube-Video.",
       url_required: "URL erforderlich",
@@ -11212,11 +11523,25 @@ export const translations: Record<Language, TranslationKeys> = {
       nominator_location: "Standort des Kandidaten",
       nominator_location_description: "Bitte geben Sie den Standort der Person an, die Sie nominieren.",
       nominator_country: "Land",
+      nominator_country_note: "Das Land muss mit Ihrem Profilland übereinstimmen. Sie können nur Kandidaten aus Ihrem eigenen Land nominieren.",
       select_country: "Land auswählen",
       nominator_city: "Stadt",
       nominator_city_placeholder: "Geben Sie den Stadtnamen ein",
+      select_city: "Stadt auswählen",
+      select_country_first: "Wählen Sie zuerst ein Land",
       ad_revenue_warning: "Warnung: Sie werden nicht für Werbeeinnahmen bezahlt, die durch Ihren Inhalt generiert werden, wenn wir feststellen, dass der Inhalt nicht aus Ihrem Land stammt.",
       // Errors
+      
+      // Stepper
+      step_info: "Informationen",
+      step_media: "Medien",
+      step_review: "Überprüfung",
+      time_remaining: "Verbleibende Teilnahmezeit",
+      deadline: "Frist",
+      submission_period_ended: "Die Einreichungsfrist ist abgelaufen",
+      review_title: "Überprüfen Sie Ihre Bewerbung",
+      supported_platforms: "Unterstützte Plattformen",
+      unrecognized_video_link: "Nicht erkannter Videolink",
       errors: {
         content_title_required: "Inhaltstitel",
         content_title_min_length: "Der Inhaltstitel muss mindestens 5 Zeichen enthalten",
@@ -11783,12 +12108,17 @@ export const translations: Record<Language, TranslationKeys> = {
       },
       contests: {
         title: "Wettbewerbe",
+        subtitle: "Entdecken Sie Wettbewerbe aus Ihrer Stadt und Ihrem Land und nehmen Sie teil",
         description: "Entdecken Sie die beliebtesten Wettbewerbe und nehmen Sie teil",
         no_contests: "Keine Wettbewerbe verfügbar",
         no_description: "Keine Beschreibung verfügbar",
         all: "Alle",
         nomination: "Nominierung",
         participations: "Teilnahmen",
+        filter_level: "Stufe",
+        level_city: "Stadt",
+        level_country: "Land",
+        all_levels: "Alle Stufen",
         nomination_hint: "Nominieren Sie andere zur Teilnahme an Wettbewerben. Stimmen Sie für Teilnehmer ab, die von ihren Fans nominiert wurden.",
         participations_hint: "Nehmen Sie selbst an Wettbewerben teil. Teilnehmer melden sich direkt an, um zu konkurrieren.",
         nominate: "Nominieren",
@@ -11910,6 +12240,7 @@ export const translations: Record<Language, TranslationKeys> = {
         contestant: "Teilnehmer",
         view_contestants: "Teilnehmer anzeigen",
         view_all_contestants: "Alle Teilnehmer anzeigen",
+        top_contestants: "Top Teilnehmer",
         time_remaining: "Verbleibende Zeit",
         time_remaining_to_participate: "Verbleibende Zeit zur Teilnahme",
         time_unit_days: "T",
@@ -11958,6 +12289,7 @@ export const translations: Record<Language, TranslationKeys> = {
         copied: "Kopiert",
         share_natively: "Nativ teilen",
         search_contestant: "Nach einem Teilnehmer suchen...",
+        filtered_by_country: "Gefiltert nach Ihrem Land",
         no_contestants: "Noch keine Teilnehmer",
         no_contestants_found: "Keine Teilnehmer gefunden",
         like: "Gefällt mir",
@@ -11979,6 +12311,17 @@ export const translations: Record<Language, TranslationKeys> = {
         already_voted_error: "Bereits abgestimmt.",
         cannot_vote_own: "Sie können nicht für Ihre eigene Kandidatur abstimmen.",
         vote_success: "Stimme erfolgreich registriert!",
+        vote_replaced: "Stimme erfolgreich ersetzt!",
+        my_votes: "Meine Stimmen",
+        no_votes_yet: "Stimmen Sie für Ihre Lieblingskandidaten!",
+        replace_vote_title: "Stimme ersetzen",
+        replace_vote_message: "Sie haben bereits 5 Stimmen. Möchten Sie ersetzen",
+        replace_vote_position: "(5. Position, 1 Punkt) durch diesen Teilnehmer?",
+        replace_vote_confirm: "Ersetzen",
+        max_votes_reached: "Sie haben die maximale Anzahl von 5 Stimmen erreicht",
+        empty_slot: "Leerer Platz",
+        votes_remaining: "{n} Stimme(n) verbleibend",
+        drag_to_reorder: "Ziehen zum Neuordnen",
         vote_gender_restriction_male: "Dieser Wettbewerb ist für männliche Teilnehmer reserviert. Nur weibliche Teilnehmerinnen können abstimmen.",
         vote_gender_restriction_female: "Dieser Wettbewerb ist für weibliche Teilnehmerinnen reserviert. Nur männliche Teilnehmer können abstimmen.",
         vote_gender_not_set: "Ihr Profil enthält keine Geschlechtsangabe. Bitte vervollständigen Sie Ihr Profil, um an diesem Wettbewerb abstimmen zu können.",
@@ -12035,7 +12378,7 @@ export const translations: Record<Language, TranslationKeys> = {
           edit_title: "Kandidat bearbeiten",
           edit_description: "Aktualisiere deine Einreichungsdetails",
           nominate_title: "Kandidat nominieren",
-          nominate_description: "Importiere dein Video von YouTube oder Vimeo",
+          nominate_description: "Importiere dein Video von YouTube, TikTok, Instagram, Snapchat oder Facebook",
           select_media: "Wählen Sie Ihre Medien",
           drag_drop: "Ziehen Sie Ihre Datei hierher",
           file_info: "oder klicken Sie zum Auswählen (Bilder: JPG, PNG, GIF | Videos: MP4, WebM | Max: 100MB)",

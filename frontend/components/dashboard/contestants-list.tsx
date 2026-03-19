@@ -155,46 +155,11 @@ export function ContestantsList({
     onReport(contestantId)
   }
 
-  const getRankBadgeColor = (rank?: number) => {
-    if (!rank) return 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-    if (rank === 1) return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700'
-    if (rank === 2) return 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600'
-    if (rank === 3) return 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700'
-    return 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
-  }
 
-  const getRankText = (rank?: number) => {
-    if (!rank) return ''
-    if (language === 'fr') {
-      if (rank === 1) return '1er'
-      if (rank === 2) return '2ème'
-      if (rank === 3) return '3ème'
-      return `${rank}ème`
-    } else if (language === 'es') {
-      if (rank === 1) return '1º'
-      if (rank === 2) return '2º'
-      if (rank === 3) return '3º'
-      return `${rank}º`
-    } else if (language === 'de') {
-      if (rank === 1) return '1.'
-      if (rank === 2) return '2.'
-      if (rank === 3) return '3.'
-      return `${rank}.`
-    } else {
-      if (rank === 1) return '1st'
-      if (rank === 2) return '2nd'
-      if (rank === 3) return '3rd'
-      return `${rank}th`
-    }
-  }
 
-  const getRankIcon = (rank?: number) => {
-    if (!rank) return null
-    if (rank === 1) return '🥇'
-    if (rank === 2) return '🥈'
-    if (rank === 3) return '🥉'
-    return `#${rank}`
-  }
+
+
+
 
   if (contestants.length === 0) {
     return (
@@ -219,33 +184,9 @@ export function ContestantsList({
   }
 
   return (
-    <div className="space-y-6 max-w-2xl mx-auto lg:mx-0">
+    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
       {contestants.map((contestant) => (
-        <div key={contestant.id} className="relative transform transition-all duration-200 hover:scale-[1.01]">
-          {/* Rank Badge */}
-          {contestant.rank && (
-            <div className="absolute -top-2 -left-2 z-10">
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Badge 
-                      className={`${getRankBadgeColor(contestant.rank)} border-2 font-bold text-sm px-3 py-1.5 shadow-lg flex items-center gap-1 cursor-help`}
-                    >
-                      <span>{getRankIcon(contestant.rank)}</span>
-                      <span className="hidden sm:inline">
-                        {getRankText(contestant.rank)}
-                      </span>
-                    </Badge>
-                  </TooltipTrigger>
-                  <TooltipContent className="bg-gray-800 text-white border-gray-700">
-                    <p className="text-xs">
-                      {t('dashboard.contests.tooltip_rank') || `Classement ${contestant.rank === 1 ? 'premier' : contestant.rank === 2 ? 'deuxième' : contestant.rank === 3 ? 'troisième' : `${contestant.rank}ème`} dans ce concours`}
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-          )}
+        <div key={contestant.id}>
           
           <ContestantCard
             id={contestant.id}

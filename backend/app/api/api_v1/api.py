@@ -4,7 +4,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    from app.api.api_v1.endpoints import auth, users, media, contests, votes, kyc, contestant, geography, favorites, search, search_history, comments, admin, season_migration, notifications, analytics, affiliate, payments, roles, verifications, wallet, voting_types, suggested_contests, social, private_messages, contact, categories, newsletter, share, follow, rounds
+    from app.api.api_v1.endpoints import auth, users, media, contests, votes, kyc, contestant, geography, favorites, search, search_history, comments, admin, season_migration, notifications, analytics, affiliate, payments, roles, verifications, wallet, suggested_contests, social, private_messages, contact, categories, newsletter, share, follow, rounds
     from app.api.api_v1.endpoints import feed_groups, feed_messages, feed_posts, feed, feed_keys, groups
     logger.info("All endpoints imported successfully")
 except ImportError as e:
@@ -20,13 +20,12 @@ api_router.include_router(rounds.router, prefix="/rounds", tags=["Rounds"])
 
 # Enregistrer le router categories avec logging
 try:
+    from app.api.api_v1.endpoints import auth, users, media, contests, votes, kyc, contestant, geography, favorites, search, search_history, comments, admin, season_migration, notifications, analytics, affiliate, payments, roles, verifications, wallet, suggested_contests, social, private_messages, contact, categories, newsletter, share, follow, rounds
     api_router.include_router(categories.router, prefix="/categories", tags=["Catégories"])
     logger.info("Categories router registered successfully at /categories")
 except Exception as e:
     logger.error(f"Error registering categories router: {e}", exc_info=True)
     raise
-# IMPORTANT: voting-types doit être inclus AVANT votes pour éviter les conflits de routes
-api_router.include_router(voting_types.router, prefix="/voting-types", tags=["Types de vote"])
 api_router.include_router(suggested_contests.router, prefix="/suggested-contests", tags=["Suggestions de concours"])
 api_router.include_router(votes.router, prefix="/votes", tags=["Votes"])
 api_router.include_router(kyc.router, prefix="/kyc", tags=["Vérification KYC"])

@@ -50,12 +50,18 @@ export interface UserVerificationsStatus {
   has_selfie: boolean
   has_voice: boolean
   has_video: boolean
+  has_brand: boolean
+  has_content: boolean
   selfie_status?: VerificationStatus
   voice_status?: VerificationStatus
   video_status?: VerificationStatus
+  brand_status?: VerificationStatus
+  content_status?: VerificationStatus
   selfie_url?: string
   voice_url?: string
   video_url?: string
+  brand_url?: string
+  content_url?: string
 }
 
 class VerificationService {

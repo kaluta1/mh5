@@ -48,7 +48,7 @@ class ContestCreateRequest(BaseModel):
     global_end_date: Optional[str] = None
     image_url: Optional[str] = None
     voting_restriction: str = "none"
-    voting_type_id: Optional[int] = None
+    contest_mode: str = "participation"
     category_id: Optional[int] = None
     # Verification requirements
     requires_kyc: bool = False
@@ -91,8 +91,7 @@ class ContestResponse(BaseModel):
     image_url: Optional[str] = None
     cover_image_url: Optional[str] = None
     voting_restriction: str
-    voting_type_id: Optional[int] = None
-    voting_type: Optional[Dict[str, Any]] = None
+    contest_mode: str = "participation"
     category_id: Optional[int] = None
     category: Optional[Dict[str, Any]] = None
     participant_count: int = 0
@@ -233,7 +232,6 @@ async def get_all_contests(
     
     try:
         query = db.query(Contest).filter(Contest.is_deleted == False).options(
-            joinedload(Contest.voting_type),
             joinedload(Contest.category)
         )
         
@@ -503,7 +501,6 @@ async def get_contest(
     check_admin(current_user)
     
     contest = db.query(Contest).filter(Contest.id == contest_id, Contest.is_deleted == False).options(
-        joinedload(Contest.voting_type),
         joinedload(Contest.category)
     ).first()
     if not contest:
@@ -551,13 +548,7 @@ async def get_contest(
         'image_url': contest.image_url,
         'cover_image_url': contest.cover_image_url,
         'voting_restriction': contest.voting_restriction.value if contest.voting_restriction else 'none',
-        'voting_type_id': contest.voting_type_id,
-        'voting_type': {
-            "id": contest.voting_type.id,
-            "name": contest.voting_type.name,
-            "voting_level": contest.voting_type.voting_level.value if hasattr(contest.voting_type.voting_level, 'value') else str(contest.voting_type.voting_level),
-            "commission_source": contest.voting_type.commission_source.value if hasattr(contest.voting_type.commission_source, 'value') else str(contest.voting_type.commission_source),
-        } if contest.voting_type else None,
+        'contest_mode': getattr(contest, 'contest_mode', 'participation'),
         'category_id': contest.category_id,
         'category': {
             "id": contest.category.id,
@@ -1028,8 +1019,7 @@ async def create_contest(
         except (ValueError, TypeError):
             participant_type = ParticipantType.INDIVIDUAL
         
-        # Convertir voting_type_id=0 en None pour éviter les violations de FK
-        voting_type_id = contest_data.voting_type_id if contest_data.voting_type_id and contest_data.voting_type_id > 0 else None
+        contest_mode = getattr(contest_data, "contest_mode", "participation") or "participation"
         category_id = contest_data.category_id if contest_data.category_id and contest_data.category_id > 0 else None
         
         # Si category_id est fourni, valider et récupérer la catégorie pour mettre à jour contest_type
@@ -1051,7 +1041,7 @@ async def create_contest(
             is_voting_open=contest_data.is_voting_open,
             image_url=contest_data.image_url,
             voting_restriction=contest_data.voting_restriction,
-            voting_type_id=voting_type_id,
+            contest_mode=contest_mode,
             category_id=category_id,
             # Verification fields
 
@@ -1193,8 +1183,7 @@ async def create_contest(
             'image_url': new_contest.image_url,
             'cover_image_url': new_contest.cover_image_url,
             'voting_restriction': new_contest.voting_restriction.value if new_contest.voting_restriction else 'none',
-            'voting_type_id': new_contest.voting_type_id,
-            'voting_type': None, # Newly created, relationship might not be loaded yet
+            'contest_mode': getattr(new_contest, 'contest_mode', 'participation'),
             'category_id': new_contest.category_id,
             'category': None, # Newly created, relationship might not be loaded yet
             'participant_count': total,
@@ -1274,8 +1263,7 @@ async def update_contest(
         contest.is_voting_open = contest_data.is_voting_open
         contest.image_url = contest_data.image_url
         contest.voting_restriction = contest_data.voting_restriction
-        # Convertir voting_type_id=0 en None pour éviter les violations de FK
-        contest.voting_type_id = contest_data.voting_type_id if contest_data.voting_type_id and contest_data.voting_type_id > 0 else None
+        contest.contest_mode = getattr(contest_data, "contest_mode", None) or contest.contest_mode
         
         # Gestion de category_id
         contest.category_id = contest_data.category_id if contest_data.category_id and contest_data.category_id > 0 else None
@@ -1458,13 +1446,7 @@ async def update_contest(
             'image_url': contest.image_url,
             'cover_image_url': contest.cover_image_url,
             'voting_restriction': contest.voting_restriction.value if contest.voting_restriction else 'none',
-            'voting_type_id': contest.voting_type_id,
-            'voting_type': {
-                "id": contest.voting_type.id,
-                "name": contest.voting_type.name,
-                "voting_level": contest.voting_type.voting_level.value if hasattr(contest.voting_type.voting_level, 'value') else str(contest.voting_type.voting_level),
-                "commission_source": contest.voting_type.commission_source.value if hasattr(contest.voting_type.commission_source, 'value') else str(contest.voting_type.commission_source),
-            } if contest.voting_type else None,
+            'contest_mode': getattr(contest, 'contest_mode', 'participation'),
             'category_id': contest.category_id,
             'category': {
                 "id": contest.category.id,

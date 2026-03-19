@@ -11,7 +11,7 @@ import { reactionsService, ReactionDetails } from '@/services/reactions-service'
 import { sharesService, ShareStats } from '@/services/shares-service'
 import { MediaViewerModal } from '@/components/media/media-viewer-modal'
 import { VideoEmbed } from '@/components/ui/video-embed'
-import { detectVideoPlatform } from '@/lib/utils/video-platforms'
+import { detectVideoPlatform , cleanVideoUrl } from '@/lib/utils/video-platforms'
 
 interface ApplicationDetailsDialogProps {
   isOpen: boolean

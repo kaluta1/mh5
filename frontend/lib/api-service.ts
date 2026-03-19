@@ -93,7 +93,7 @@ export const ApiService = {
     // Rounds
     getRounds: async (params?: {
         roundId?: number;
-        hasVotingType?: boolean;
+        contestMode?: string;
         filterCountry?: string;
         filterContinent?: string;
         searchTerm?: string;
@@ -118,11 +118,13 @@ export const ApiService = {
     getContest: async (id: number, params?: {
         filterCountry?: string;
         filterContinent?: string;
+        entryType?: string;
     }) => {
         const response = await api.get<Contest>(`/contests/${id}`, {
             params: {
                 filter_country: params?.filterCountry,
-                filter_continent: params?.filterContinent
+                filter_continent: params?.filterContinent,
+                entry_type: params?.entryType
             }
         });
         return response.data;

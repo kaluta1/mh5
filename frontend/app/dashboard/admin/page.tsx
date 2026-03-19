@@ -463,6 +463,8 @@ export default function AdminDashboard() {
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
                 </div>
               ) : stats.deposits.chart_data && stats.deposits.chart_data.length > 0 ? (
+                <div className="overflow-x-auto">
+                <div className="min-w-[500px]">
                 <ResponsiveContainer width="100%" height={300}>
                   <AreaChart data={stats.deposits.chart_data} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                     <defs>
@@ -516,6 +518,8 @@ export default function AdminDashboard() {
                     />
                   </AreaChart>
                 </ResponsiveContainer>
+                </div>
+                </div>
               ) : (
                 <div className="flex justify-center items-center h-[300px] text-gray-500 dark:text-gray-400">
                   {t('admin.dashboard.statistics.no_data_available') || 'Aucune donnée disponible'}
@@ -552,6 +556,8 @@ export default function AdminDashboard() {
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600"></div>
                 </div>
               ) : stats.withdrawals.chart_data && stats.withdrawals.chart_data.length > 0 ? (
+                <div className="overflow-x-auto">
+                <div className="min-w-[500px]">
                 <ResponsiveContainer width="100%" height={300}>
                   <AreaChart data={stats.withdrawals.chart_data} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                     <defs>
@@ -605,6 +611,8 @@ export default function AdminDashboard() {
                     />
                   </AreaChart>
                 </ResponsiveContainer>
+                </div>
+                </div>
               ) : (
                 <div className="flex justify-center items-center h-[300px] text-gray-500 dark:text-gray-400">
                   {t('admin.dashboard.statistics.no_data_available') || 'Aucune donnée disponible'}
@@ -642,6 +650,8 @@ export default function AdminDashboard() {
                 </div>
               ) : userProgressData && userProgressData.length > 0 ? (
       <div>
+                  <div className="overflow-x-auto">
+                  <div className="min-w-[500px]">
                   <ResponsiveContainer width="100%" height={300}>
                     <AreaChart data={userProgressData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                       <defs>
@@ -701,6 +711,8 @@ export default function AdminDashboard() {
                       />
                     </AreaChart>
                   </ResponsiveContainer>
+                  </div>
+                  </div>
                 </div>
               ) : (
                 <div className="flex justify-center items-center h-[300px] text-gray-500 dark:text-gray-400">
@@ -724,6 +736,8 @@ export default function AdminDashboard() {
       </div>
               </CardHeader>
               <CardContent>
+                <div className="overflow-x-auto">
+                <div className="min-w-[500px]">
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={stats.categories.chart_data} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-700" />
@@ -751,6 +765,8 @@ export default function AdminDashboard() {
                     <Bar dataKey="contests" fill="#3b82f6" name={t('admin.dashboard.statistics.contests')} />
                   </BarChart>
                 </ResponsiveContainer>
+                </div>
+                </div>
               </CardContent>
             </Card>
           )}

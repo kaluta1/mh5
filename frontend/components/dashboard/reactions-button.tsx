@@ -81,13 +81,13 @@ export function ReactionsButton({ contestantId, selectedReaction, onReactionSele
           e.stopPropagation()
           setShowPopover(!showPopover)
         }}
-        className={`flex items-center justify-center gap-2 py-3 px-2 text-sm font-medium transition-colors w-full ${
+        className={`flex items-center justify-center gap-1.5 py-2.5 px-1 text-xs font-medium transition-colors w-full ${
           selectedReaction
             ? 'text-purple-600 dark:text-purple-400'
             : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
         }`}
       >
-        <IconComponent className={`w-5 h-5 ${selectedReaction ? 'fill-current' : ''}`} />
+        <IconComponent className={`w-4 h-4 flex-shrink-0 ${selectedReaction ? 'fill-current' : ''}`} />
         <span className="hidden sm:inline">{t('dashboard.contests.reaction') || 'Réaction'}</span>
         {reactionsCount > 0 && (
           <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">

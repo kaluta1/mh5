@@ -16,10 +16,8 @@ interface ContestDialogProps {
     onSave: (data: any) => Promise<void>
     initialData?: any
     seasons: any[]
-    votingTypes: any[]
-    categories: any[]
-    isVotingTypeDisabled?: boolean
-}
+      categories: any[]
+  }
 
 export function ContestDialog({
     isOpen,
@@ -27,9 +25,7 @@ export function ContestDialog({
     onSave,
     initialData,
     seasons,
-    votingTypes,
     categories,
-    isVotingTypeDisabled = false
 }: ContestDialogProps) {
     const { t } = useLanguage()
     const [activeTab, setActiveTab] = useState('general')
@@ -61,7 +57,7 @@ export function ContestDialog({
         max_images: 10,
         verification_video_max_duration: 30,
         verification_max_size_mb: 50,
-        voting_type_id: null,
+        contest_mode: "participation",
         category_id: null
     })
     const [uploadedImage, setUploadedImage] = useState<string>('')
@@ -105,7 +101,7 @@ export function ContestDialog({
                 max_images: initialData.max_images ?? 10,
                 verification_video_max_duration: initialData.verification_video_max_duration ?? 30,
                 verification_max_size_mb: initialData.verification_max_size_mb ?? 50,
-                voting_type_id: initialData.voting_type_id ?? null
+                contest_mode: initialData.contest_mode || "participation"
             })
             if (initialData.cover_image_url || initialData.image_url) {
                 setUploadedImage(initialData.cover_image_url || initialData.image_url || '')
@@ -139,7 +135,7 @@ export function ContestDialog({
                 max_images: 10,
                 verification_video_max_duration: 30,
                 verification_max_size_mb: 50,
-                voting_type_id: null,
+                contest_mode: "participation",
                 category_id: null
             })
             setUploadedImage('')
@@ -163,8 +159,8 @@ export function ContestDialog({
             newErrors.image = t('admin.contests.error_image_required') || "L'image est obligatoire"
         }
         // Contest type is required for nomination contests
-        if (isNomination && !formData.voting_type_id) {
-            newErrors.voting_type_id = t('admin.contests.error_contest_type_required') || 'Le type de compétition est obligatoire pour les nominations'
+        if (false) { // contest_mode is always set
+            newErrors.contest_mode = t('admin.contests.error_contest_type_required') || 'Le type de compétition est obligatoire pour les nominations'
         }
 
         console.log('Validation errors:', newErrors)
@@ -288,33 +284,24 @@ export function ContestDialog({
                                         </Select>
                                         {errors.category_id && <p className="text-red-500 text-xs mt-1">{errors.category_id}</p>}
                                     </div>
-                                    {isNomination && (
-                                        <div>
-                                            <label className="block text-sm font-medium mb-1 dark:text-gray-200">
-                                                {t('admin.contests.voting_type') || 'Type de compétition'} <span className="text-red-500">*</span>
-                                            </label>
-                                            <Select
-                                                value={formData.voting_type_id?.toString() || ''}
-                                                onValueChange={(value) => {
-                                                    setFormData({ ...formData, voting_type_id: parseInt(value) })
-                                                    setErrors(prev => ({ ...prev, voting_type_id: '' }))
-                                                }}
-                                                disabled={isVotingTypeDisabled}
-                                            >
-                                                <SelectTrigger className={`dark:bg-gray-700 dark:border-gray-600 dark:text-white ${errors.voting_type_id ? 'border-red-500' : ''}`}>
-                                                    <SelectValue placeholder={t('admin.contests.select_voting_type') || 'Sélectionner un type'} />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {votingTypes.map((type) => (
-                                                        <SelectItem key={type.id} value={type.id.toString()}>
-                                                            {type.name} ({type.voting_level})
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                            {errors.voting_type_id && <p className="text-red-500 text-xs mt-1">{errors.voting_type_id}</p>}
-                                        </div>
-                                    )}
+                                    {/* contest_mode est déterminé par le type: nomination ou participation */}
+                                    <div className="mb-2">
+                                        <label className="block text-sm font-medium mb-1 dark:text-gray-200">
+                                            Mode du concours
+                                        </label>
+                                        <Select
+                                            value={formData.contest_mode || "participation"}
+                                            onValueChange={(value) => setFormData({ ...formData, contest_mode: value })}
+                                        >
+                                            <SelectTrigger className="dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="participation">Participation</SelectItem>
+                                                <SelectItem value="nomination">Nomination</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4">

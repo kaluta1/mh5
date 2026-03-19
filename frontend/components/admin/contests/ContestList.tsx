@@ -15,11 +15,10 @@ import api from '@/lib/api'
 
 interface ContestListProps {
     seasons: any[]
-    votingTypes: any[]
-    categories: any[]
+      categories: any[]
 }
 
-export function ContestList({ seasons, votingTypes, categories }: ContestListProps) {
+export function ContestList({ seasons, categories }: ContestListProps) {
     const { t } = useLanguage()
     const { addToast } = useToast()
     const router = useRouter()
@@ -80,13 +79,13 @@ export function ContestList({ seasons, votingTypes, categories }: ContestListPro
             }
         }
 
-        const initialVotingTypeId = type === 'nomination' && votingTypes.length > 0 ? votingTypes[0].id : null
+        const initialContestMode = type === 'nomination' ? 'nomination' : 'participation'
 
         // Pass this pre-filled state to the dialog via a new way or just rely on the dialog knowing it's a new contest
         // actually, we can pass a partial object as initialData even for new contests if we want specific fields pre-filled
         setEditingContest({
             isNew: true, // Marker to tell dialog this is a new contest creation
-            voting_type_id: initialVotingTypeId,
+            contest_mode: initialContestMode,
             season_id: initialSeasonId,
             type: type // 'participation' or 'nomination'
         })
@@ -124,7 +123,7 @@ export function ContestList({ seasons, votingTypes, categories }: ContestListPro
             ...data,
             season_id: data.season_id ? parseInt(data.season_id) : null,
             category_id: data.category_id ? parseInt(data.category_id) : null,
-            voting_type_id: data.voting_type_id ? parseInt(data.voting_type_id) : null
+            contest_mode: data.contest_mode || 'participation'
         }
 
         if (editingContest && editingContest.id) {
@@ -231,10 +230,8 @@ export function ContestList({ seasons, votingTypes, categories }: ContestListPro
                 onSave={handleSave}
                 initialData={editingContest}
                 seasons={seasons}
-                votingTypes={votingTypes}
-                categories={categories}
-                isVotingTypeDisabled={false}
-            />
+                  categories={categories}
+              />
 
             <ConfirmDialog
                 open={showDeleteDialog}

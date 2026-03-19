@@ -13,7 +13,7 @@
     --card-foreground: 222.2 84% 4.9%;
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
+    --primary: 228 57% 52%;
     --primary-foreground: 210 40% 98%;
     --secondary: 210 40% 96%;
     --secondary-foreground: 222.2 84% 4.9%;
@@ -53,7 +53,7 @@
   
   /* Classes DSM pour le dark theme */
   .dark .dsm-bg-primary {
-    background: linear-gradient(to bottom right, #1e40af, #0891b2);
+    background: linear-gradient(to bottom right, #3448c5, #0891b2);
   }
   
   .dark .dsm-bg-light {
@@ -66,7 +66,7 @@
   }
   
   .dark .dsm-bg-hero {
-    background: linear-gradient(to bottom right, #1e40af, #0891b2);
+    background: linear-gradient(to bottom right, #3448c5, #0891b2);
   }
   
   .dark .dsm-bg-glass {
@@ -136,7 +136,7 @@
 @layer components {
   /* Couleurs de fond DSM */
   .dsm-bg-primary {
-    background: linear-gradient(to bottom right, #1e40af, #0891b2);
+    background: linear-gradient(to bottom right, #3448c5, #0891b2);
   }
   
   .dsm-bg-light {
@@ -149,7 +149,7 @@
   }
   
   .dsm-bg-hero {
-    background: linear-gradient(to bottom right, #1e40af, #0891b2);
+    background: linear-gradient(to bottom right, #3448c5, #0891b2);
   }
   
   .dsm-bg-glass {
@@ -159,7 +159,7 @@
   
   /* Couleurs de texte DSM */
   .dsm-text-primary {
-    color: #1e40af;
+    color: #3448c5;
   }
   
   .dsm-text-white {
@@ -176,14 +176,14 @@
   
   /* Boutons DSM */
   .dsm-btn-primary {
-    background: linear-gradient(to bottom right, #1e40af, #0891b2);
+    background: linear-gradient(to bottom right, #3448c5, #0891b2);
     color: #ffffff;
     border: none;
     transition: all 0.3s ease;
   }
   
   .dsm-btn-primary:hover {
-    background: linear-gradient(to bottom right, #1e40af, #FFFF79);
+    background: linear-gradient(to bottom right, #3448c5, #FFFF79);
     transform: translateY(-2px);
   }
   
@@ -202,7 +202,7 @@
   
   /* Icônes DSM */
   .dsm-icon-primary {
-    color: #1e40af;
+    color: #3448c5;
   }
   
   .dsm-icon-yellow {
@@ -226,14 +226,14 @@
   }
   
   .dsm-hover-link:hover {
-    color: #1e40af;
+    color: #3448c5;
     transform: translateY(-1px);
   }
   
   /* Typographie DSM */
   .dsm-title {
     font-weight: 900;
-    color: #1e40af;
+    color: #3448c5;
   }
   
   .dsm-subtitle {

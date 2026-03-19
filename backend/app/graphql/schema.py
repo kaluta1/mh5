@@ -12,11 +12,11 @@ import os
 
 from app.graphql.types import (
     ContestType, RoundType, ContestantType, VoteType, 
-    UserType, SeasonType, VotingTypeType, ContestInRoundType,
+    UserType, SeasonType, ContestInRoundType,
     AccountTypeEnum, EntryStatusEnum, ChartOfAccountsType, JournalEntryType, JournalLineType
 )
 from app.db.session import SessionLocal
-from app.models.contest import Contest, VotingType
+from app.models.contest import Contest
 from app.models.round import Round, round_contests
 from app.models.contests import Contestant, ContestantRanking, ContestSeasonLink, ContestSeason, SeasonLevel
 from app.models.user import User
@@ -315,7 +315,7 @@ def map_round_to_type(
     filter_region: Optional[str] = None, 
     filter_continent: Optional[str] = None, 
     search_term: Optional[str] = None,
-    has_voting_type: Optional[bool] = None  # Added argument
+    contest_mode: Optional[str] = None  # Added argument
 ) -> RoundType:
     """Convert SQLAlchemy Round to GraphQL RoundType"""
     # 0. Initialize lists
@@ -385,11 +385,11 @@ def map_round_to_type(
     linked_contests = list(all_contests_dict.values())
     
     # Apply filters to the combined list
-    if has_voting_type is not None:
-        if has_voting_type:
-            linked_contests = [c for c in linked_contests if c.voting_type_id is not None]
+    if contest_mode is not None:
+        if contest_mode:
+            linked_contests = [c for c in linked_contests if c.contest_mode == 'nomination']
         else:
-            linked_contests = [c for c in linked_contests if c.voting_type_id is None]
+            linked_contests = [c for c in linked_contests if c.contest_mode != 'nomination']
         
     # Filter linked contests by search term (Name or Description)
     if search_term:
@@ -509,16 +509,9 @@ def map_contest_to_type(contest: Contest, db: Session, include_rounds: bool = Tr
                 rounds.append(map_round_to_type(round_obj, db, include_contestants=False, filter_by_contest_id=contest.id, current_user=current_user))
     
     # Get voting type
-    voting_type = None
-    if contest.voting_type_id:
-        vt = db.query(VotingType).filter(VotingType.id == contest.voting_type_id).first()
+    # contest_mode est un simple string sur le modèle Contest
         if vt:
-            voting_type = VotingTypeType(
-                id=vt.id,
-                name=vt.name,
-                voting_level=vt.voting_level.value if vt.voting_level else "city",
-                commission_source=vt.commission_source.value if vt.commission_source else None
-            )
+            pass  # contest_mode is already on the model
 
     contestants_list = []
     # If specifically requested for detail view (we assume if include_rounds is True, we might want contestants for the detail view too? 
@@ -685,7 +678,7 @@ def map_contest_to_type(contest: Contest, db: Session, include_rounds: bool = Tr
         entries_count=entries_count_val,
         total_votes=total_votes_val,
         rounds=rounds,
-        voting_type=voting_type,
+        contest_mode=getattr(contest, "contest_mode", "participation"),
         contestants=contestants_list,
         current_user_participation=user_participation
     )
@@ -753,7 +746,7 @@ class Query:
         skip: int = 0,
         limit: int = 10,
         contest_type: Optional[str] = None,
-        has_voting_type: Optional[bool] = None,
+        contest_mode: Optional[str] = None,
         is_active: bool = True,
         round_id: Optional[int] = None
     ) -> List[ContestType]:
@@ -776,11 +769,11 @@ class Query:
             if contest_type:
                 query = query.filter(Contest.contest_type == contest_type)
             
-            if has_voting_type is not None:
-                if has_voting_type:
-                    query = query.filter(Contest.voting_type_id.isnot(None))
+            if contest_mode is not None:
+                if contest_mode:
+                    query = query.filter(Contest.contest_mode == 'nomination')
                 else:
-                    query = query.filter(Contest.voting_type_id.is_(None))
+                    query = query.filter(Contest.contest_mode != 'nomination')
             
             contests = query.offset(skip).limit(limit).all()
             return [map_contest_to_type(c, db, current_user=current_user) for c in contests]
@@ -813,7 +806,7 @@ class Query:
         limit: int = 20,
         is_active: bool = True,
         # Filtres indirects via Contest
-        has_voting_type: Optional[bool] = None,
+        contest_mode: Optional[str] = None,
         contest_type: Optional[str] = None,
         # Nouveaux filtres explicites
         filter_country: Optional[str] = None,
@@ -847,7 +840,7 @@ class Query:
             rounds = query.offset(skip).limit(limit).all()
             
             # If we have filters that require contest data, filter rounds after fetching
-            if contest_id or has_voting_type is not None or contest_type or is_active is True:
+            if contest_id or contest_mode is not None or contest_type or is_active is True:
                 # Get round IDs that match the contest filters via round_contests table
                 contest_query = db.query(round_contests.c.round_id).distinct()
                 contest_query = contest_query.join(Contest, Contest.id == round_contests.c.contest_id)
@@ -868,11 +861,11 @@ class Query:
                 if contest_type:
                     contest_query = contest_query.filter(Contest.contest_type == contest_type)
                     
-                if has_voting_type is not None:
-                    if has_voting_type:
-                        contest_query = contest_query.filter(Contest.voting_type_id.isnot(None))
+                if contest_mode is not None:
+                    if contest_mode:
+                        contest_query = contest_query.filter(Contest.contest_mode == 'nomination')
                     else:
-                        contest_query = contest_query.filter(Contest.voting_type_id.is_(None))
+                        contest_query = contest_query.filter(Contest.contest_mode != 'nomination')
                 
                 # Get round IDs that match filters
                 filtered_round_ids = set([r[0] for r in contest_query.all()] + legacy_round_ids)
@@ -898,7 +891,7 @@ class Query:
                 filter_region=filter_region,
                 filter_continent=filter_continent,
                 search_term=search_term,
-                has_voting_type=has_voting_type # Added argument
+                contest_mode=contest_mode # Added argument
             ) for r in rounds]
         finally:
             db.close()

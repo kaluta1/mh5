@@ -68,14 +68,7 @@ export interface ContestResponse {
   created_at: string
   updated_at: string
   active_round_id?: number | null
-  voting_type_id?: number | null
-  voting_type?: {
-    id: number
-    name: string
-    voting_level: string
-    commission_source: string
-    commission_rules?: any
-  }
+  contest_mode?: string | null
   category_id?: number | null
   category?: {
     id: number

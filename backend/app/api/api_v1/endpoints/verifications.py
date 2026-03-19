@@ -7,6 +7,7 @@ from app.api.deps import get_current_user, get_current_admin_user
 from app.models.user import User
 from app.models.verification import VerificationStatus
 from app.schemas.verification import (
+    VerificationType,
     VerificationCreate,
     VerificationUpdate,
     VerificationResponse,
@@ -51,6 +52,31 @@ async def create_verification(
             )
     
     verification = verification_crud.create(db, current_user.id, verification_in)
+
+    # ============================================
+    # AUTO-APPROVAL LOGIC
+    # ============================================
+    # Selfie: auto-approve if moderation passed (already checked above)
+    # Voice: auto-approve (no moderation available for audio)
+    # Brand/Content: keep pending (requires manual admin review)
+    # KYC: keep pending (requires manual admin review)
+    auto_approve_types = [
+        VerificationType.SELFIE.value,
+        VerificationType.SELFIE_WITH_PET.value,
+        VerificationType.SELFIE_WITH_DOCUMENT.value,
+        VerificationType.VOICE.value,
+    ]
+
+    if verification_in.verification_type.value in auto_approve_types:
+        # Auto-approve: moderation already passed (or N/A for audio)
+        from app.models.verification import VerificationStatus as VS
+        verification.status = VS.APPROVED.value
+        verification.reviewed_by = current_user.id  # Self-approved via auto-moderation
+        from datetime import datetime
+        verification.reviewed_at = datetime.utcnow()
+        db.commit()
+        db.refresh(verification)
+
     return verification
 
 

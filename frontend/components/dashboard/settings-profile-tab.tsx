@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button'
 import { UploadButton } from '@/components/ui/upload-button'
 import { User, FileText, Image as ImageIcon, MapPin } from 'lucide-react'
 import { API_URL } from '@/lib/config'
+import geographyData from '@/lib/geography-data-complete.json'
+import { getCitiesByCountry } from '@/lib/geography'
 
 interface SettingsProfileTabProps {
   user: any
@@ -22,6 +24,7 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
   const [avatarUrl, setAvatarUrl] = useState('')
   const [bio, setBio] = useState('')
   const [city, setCity] = useState('')
+  const [availableCities, setAvailableCities] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [errors, setErrors] = useState<{
     firstName?: string
@@ -39,6 +42,24 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
       setAvatarUrl(user.avatar_url || '')
       setBio(user.bio || '')
       setCity(user.city || '')
+
+      // Charger les villes du pays de l'utilisateur
+      if (user.country) {
+        const countryName = user.country.trim().toLowerCase()
+        const countryData = geographyData.countries.find(
+          (c: any) => c.name.trim().toLowerCase() === countryName
+        )
+        if (countryData?.code) {
+          try {
+            const cities = getCitiesByCountry(countryData.code.toUpperCase())
+            if (Array.isArray(cities) && cities.length > 0) {
+              setAvailableCities(cities)
+            }
+          } catch (e) {
+            console.error('Error loading cities:', e)
+          }
+        }
+      }
 
       // Valider et afficher les erreurs par défaut
       const newErrors: typeof errors = {}
@@ -338,17 +359,20 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
           <MapPin className="w-4 h-4" />
           {t('settings.city') || 'Ville'} *
         </label>
-        <input
-          type="text"
+        <select
           value={city}
           onChange={(e) => handleFieldChange('city', e.target.value)}
-          placeholder={t('auth.register.city_placeholder') || 'Entrez votre ville'}
           disabled={isLoading}
-          className={`w-full px-4 py-3 border rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 transition-all ${errors.city
+          className={`w-full px-4 py-3 border rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 transition-all ${errors.city
               ? 'border-red-500 dark:border-red-500 focus:ring-red-500 focus:border-red-500'
               : 'border-gray-300 dark:border-gray-600 focus:ring-myhigh5-primary focus:border-transparent'
             }`}
-        />
+        >
+          <option value="">{t('participation.select_city') || 'S\u00e9lectionnez une ville'}</option>
+          {availableCities.map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
         {errors.city && (
           <p className="text-sm text-red-600 dark:text-red-400 mt-1">
             {errors.city}

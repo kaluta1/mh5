@@ -98,53 +98,17 @@ class CRUDContest:
         
         # Gérer le filtre par voting_level
         # Note: On vérifie d'abord si la table voting_type existe avant de faire des joins
+        # voting_level filter removed - VotingType table no longer used
         if "voting_level" in filters and filters["voting_level"]:
-            try:
-                from app.models.contest import VotingType
-                from sqlalchemy import inspect as sa_inspect
-                
-                # Vérifier si la table voting_type existe
-                insp = sa_inspect(db.bind)
-                if 'voting_type' in insp.get_table_names():
-                    # Pour "country", on veut seulement les contests avec voting_type et voting_level = "country"
-                    if filters["voting_level"].lower() == "country":
-                        query = query.join(VotingType, Contest.voting_type_id == VotingType.id)\
-                            .filter(VotingType.voting_level == filters["voting_level"])
-                    else:
-                        # Pour les autres cas, utiliser outerjoin
-                        query = query.outerjoin(VotingType, Contest.voting_type_id == VotingType.id)\
-                            .filter(
-                                or_(
-                                    VotingType.voting_level == filters["voting_level"],
-                                    Contest.voting_type_id.is_(None)
-                                )
-                            )
-                # Si la table n'existe pas, on ignore ce filtre
-            except Exception:
-                # En cas d'erreur, on ignore ce filtre
-                pass
+            pass
         
-        # Gérer le filtre par voting_type_id (pour filtrer les contests avec un voting_type)
-        if "voting_type_id" in filters:
-            voting_type_id_value = filters["voting_type_id"]
-            if voting_type_id_value is not None:
-                # Si voting_type_id est fourni, filtrer par cet ID
-                query = query.filter(Contest.voting_type_id == voting_type_id_value)
-            # Si voting_type_id est explicitement None ou une valeur spéciale, on peut filtrer les contests sans voting_type
-        
-        # Gérer le filtre has_voting_type (pour filtrer les contests avec/sans voting_type)
-        if "has_voting_type" in filters:
-            has_voting_type_value = filters["has_voting_type"]
-            if has_voting_type_value is True:
-                # Filtrer les contests qui ont un voting_type_id (non null)
-                query = query.filter(Contest.voting_type_id.isnot(None))
-            elif has_voting_type_value is False:
-                # Filtrer les contests qui n'ont pas de voting_type_id (null)
-                query = query.filter(Contest.voting_type_id.is_(None))
-        
-        # Gérer les autres filtres
+        # Filtrer par contest_mode si fourni
+        if "contest_mode" in filters and filters["contest_mode"]:
+            query = query.filter(Contest.contest_mode == filters["contest_mode"])
+
+        # Appliquer les filtres restants dynamiquement
         for field, value in filters.items():
-            if field in ["search", "voting_level", "voting_type_id", "has_voting_type", "sort_by", "sort_order"]:
+            if field in ["search", "voting_level", "voting_type_id", "has_voting_type", "contest_mode", "sort_by", "sort_order"]:
                 continue  # Déjà traité ci-dessus ou géré différemment
             try:
                 if hasattr(Contest, field) and value is not None:
@@ -222,7 +186,8 @@ class CRUDContest:
         # Convertir location_id=0 en None pour éviter les violations de FK
         location_id = obj_in.location_id if obj_in.location_id and obj_in.location_id > 0 else None
         template_id = obj_in.template_id if obj_in.template_id and obj_in.template_id > 0 else None
-        voting_type_id = obj_in.voting_type_id if obj_in.voting_type_id and obj_in.voting_type_id > 0 else None
+        # voting_type_id removed - using contest_mode
+        contest_mode_value = getattr(obj_in, 'contest_mode', 'participation')
         category_id = obj_in.category_id if obj_in.category_id and obj_in.category_id > 0 else None
         
         # Si category_id est fourni, récupération de la catégorie (inchangé)
@@ -263,7 +228,7 @@ class CRUDContest:
             gender_restriction=obj_in.gender_restriction,
             max_entries_per_user=obj_in.max_entries_per_user,
             template_id=template_id,
-            voting_type_id=voting_type_id,
+            # voting_type_id removed
             category_id=category_id,
             # Verification requirements
             # Verification requirements
@@ -289,7 +254,7 @@ class CRUDContest:
         try:
             from app.crud.crud_round import round as crud_round
             now = date.today()
-            computed_dates = crud_round.calculate_dates_for_month(now.month, now.year, is_nomination=bool(voting_type_id))
+            computed_dates = crud_round.calculate_dates_for_month(now.month, now.year, is_nomination=(contest_mode_value == 'nomination'))
             db_obj.submission_start_date = computed_dates["submission_start_date"]
             db_obj.submission_end_date = computed_dates["submission_end_date"]
             db_obj.voting_start_date = computed_dates["voting_start_date"]
@@ -402,7 +367,7 @@ class CRUDContest:
                         value = f"High5 {value}"
                 
                 # Convertir les IDs 0 en None
-                elif field in ('location_id', 'template_id', 'voting_type_id', 'category_id') and value == 0:
+                elif field in ('location_id', 'template_id', 'category_id') and value == 0:
                     value = None
                     
                 # Si category_id est fourni
@@ -489,7 +454,8 @@ class CRUDContest:
         filter_country: Optional[str] = None,
         filter_region: Optional[str] = None,
         filter_continent: Optional[str] = None,
-        include_top_contestants: bool = False
+        include_top_contestants: bool = False,
+        entry_type: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Enrichit un contest avec les statistiques (nombre de participants et votes).
@@ -567,19 +533,21 @@ class CRUDContest:
         # Always include season_id condition (legacy support)
         conditions.append(Contestant.season_id == contest.id)
         
-        # Add round_id condition if rounds are linked
-        if round_ids:
-            conditions.append(Contestant.round_id.in_(round_ids))
+        # round_id condition removed: rounds are global/shared between ALL contests
         
         # FIXED: If no rounds linked, still show the contest (it will have 0 contestants until rounds are created)
         # This ensures contests are visible even before rounds are set up
         
         # FIXED: Always count ALL contestants for the contest first (without location filters)
         # This ensures the count is accurate even when no user is logged in
+        # Filter by entry_type based on contest_mode to show correct count per tab
+        # Utiliser entry_type explicite si fourni, sinon déduire du contest_mode
+        contest_entry_type = entry_type if entry_type else ('nomination' if getattr(contest, 'contest_mode', 'participation') == 'nomination' else 'participation')
         if conditions:
             base_entries_query = db.query(func.count(Contestant.id.distinct()))\
                 .filter(
                     Contestant.is_deleted == False,
+                    Contestant.entry_type == contest_entry_type,
                     or_(*conditions) if len(conditions) > 1 else conditions[0]
                 )
         else:
@@ -595,6 +563,7 @@ class CRUDContest:
             entries_query = db.query(func.count(Contestant.id.distinct()))\
                 .filter(
                     Contestant.is_deleted == False,
+                    Contestant.entry_type == contest_entry_type,
                     or_(*conditions) if len(conditions) > 1 else conditions[0]
                 )
         else:
@@ -691,9 +660,13 @@ class CRUDContest:
                 target_round_id = active_round.id if active_round else None
                 
                 existing = None
+                # Déterminer le entry_type attendu basé sur le contest_mode
+                expected_entry_type = 'nomination' if getattr(contest, 'contest_mode', 'participation') == 'nomination' else 'participation'
                 if target_round_id:
                     existing = crud_contestant.get_by_round_and_user(
-                        db, target_round_id, current_user.id
+                        db, target_round_id, current_user.id,
+                        entry_type=expected_entry_type,
+                        season_id=contest.id
                     )
                 else:
                     # 2. Try to find active ContestSeason via ContestSeasonLink (legacy/fallback)
@@ -811,18 +784,27 @@ class CRUDContest:
                 logger.error(f"Error fetching top contestants for contest {contest.id}: {e}")
                 logger.debug(traceback.format_exc())
         
-        # Compter le nombre total de votes
-        # Les votes peuvent venir de ContestVote ou être comptés via ContestEntry
-        total_votes = db.query(func.count(ContestVote.id))\
-            .join(ContestEntry, ContestVote.entry_id == ContestEntry.id)\
-            .filter(ContestEntry.contest_id == contest.id)\
+        # Compter le nombre total de votes et points via ContestantVoting (nouveau systeme)
+        from app.models.voting import ContestantVoting as CV
+        total_votes = db.query(func.count(CV.id))\
+            .filter(CV.contest_id == contest.id)\
             .scalar() or 0
         
-        # Si pas de votes via ContestVote, compter les ContestEntry comme votes
+        total_points_contest = db.query(func.coalesce(func.sum(CV.points), 0))\
+            .filter(CV.contest_id == contest.id)\
+            .scalar() or 0
+        
+        # Fallback sur l'ancien systeme si aucun vote via ContestantVoting
         if total_votes == 0:
-            total_votes = db.query(func.count(ContestEntry.id))\
+            total_votes = db.query(func.count(ContestVote.id))\
+                .join(ContestEntry, ContestVote.entry_id == ContestEntry.id)\
                 .filter(ContestEntry.contest_id == contest.id)\
                 .scalar() or 0
+            
+            if total_votes == 0:
+                total_votes = db.query(func.count(ContestEntry.id))\
+                    .filter(ContestEntry.contest_id == contest.id)\
+                    .scalar() or 0
         
         # Construire l'URL complète de l'image de couverture si elle existe
         # Priorité: image_url > cover_image_url
@@ -895,9 +877,9 @@ class CRUDContest:
             else:
                 participant_type_value = str(contest.participant_type)
         
-        # Charger l'objet voting_type si voting_type_id existe
+        # Charger l'objet voting_type si voting_type_id existe (legacy)
         voting_type_data = None
-        if contest.voting_type_id:
+        if getattr(contest, 'voting_type_id', None):
             try:
                 from app.models.contest import VotingType
                 from sqlalchemy import inspect as sa_inspect
@@ -905,7 +887,7 @@ class CRUDContest:
                 # Vérifier si la table voting_type existe
                 insp = sa_inspect(db.bind)
                 if 'voting_type' in insp.get_table_names():
-                    voting_type = db.query(VotingType).filter(VotingType.id == contest.voting_type_id).first()
+                    voting_type = db.query(VotingType).filter(VotingType.id == getattr(contest, 'voting_type_id', 0)).first()
                     if voting_type:
                         voting_type_data = {
                             "id": voting_type.id,
@@ -1023,6 +1005,7 @@ class CRUDContest:
             "gender_restriction": final_gender_restriction,
             "voting_restriction": voting_restriction_str,  # TOUJOURS retourner, même si 'none'
             "max_entries_per_user": contest.max_entries_per_user,
+            "contest_mode": getattr(contest, 'contest_mode', 'participation'),
             "template_id": contest.template_id,
             "voting_type_id": getattr(contest, 'voting_type_id', None),
             "voting_type": voting_type_data,  # Objet voting_type complet (déjà un dict)
@@ -1030,8 +1013,9 @@ class CRUDContest:
             "category": category_data,  # Objet category complet (déjà un dict) ou None
             "created_at": contest.created_at,
             "updated_at": contest.updated_at,
-            "entries_count": entries_count,
+            "entries_count": total_entries_count,  # Always show total (not geo-filtered) for header display
             "total_votes": total_votes,
+            "total_points": total_points_contest,
             # Season dates
             "city_season_start_date": getattr(contest, 'city_season_start_date', None),
             "city_season_end_date": getattr(contest, 'city_season_end_date', None),
@@ -1070,7 +1054,8 @@ class CRUDContest:
 
     def get_contest_with_enriched_contestants(
         self, db: Session, contest_id: int, current_user_id: Optional[int] = None,
-        filter_country: Optional[str] = None, filter_continent: Optional[str] = None
+        filter_country: Optional[str] = None, filter_continent: Optional[str] = None,
+        entry_type: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Récupère un contest avec tous ses contestants enrichis de toutes les informations :
@@ -1105,7 +1090,7 @@ class CRUDContest:
             current_user = db.query(User).filter(User.id == current_user_id).first()
         
         # Enrichir le contest avec les stats
-        contest_data = self.enrich_contest_with_stats(db, contest_obj, current_user=current_user)
+        contest_data = self.enrich_contest_with_stats(db, contest_obj, current_user=current_user, entry_type=entry_type)
         
         # Récupérer la saison active d'abord
         from app.models.contests import ContestantSeason
@@ -1144,49 +1129,31 @@ class CRUDContest:
         
         round_ids = list(set(round_ids))
         
-        # Build conditions based on active season
-        # IMPORTANT: Use season.id (active season) NOT contest_id
-        conditions = []
-        
-        if season:
-            # Primary condition: contestants from the ACTIVE season
-            conditions.append(Contestant.season_id == season.id)
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.info(f"[get_contest_with_enriched_contestants] Filtering by ACTIVE season_id={season.id} for contest_id={contest_id}")
-        else:
-            # Fallback: no active season, use contest_id (legacy behavior)
-            conditions.append(Contestant.season_id == contest_id)
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.warning(f"[get_contest_with_enriched_contestants] No active season found, using contest_id={contest_id} as fallback")
-            
-            # Only use round_ids as fallback when no active season
-            if round_ids:
-                conditions.append(Contestant.round_id.in_(round_ids))
-        
-        # Query contestants - when active season exists, use ONLY season_id filter
-        if conditions:
-            contestants_query = db.query(Contestant)\
-                .filter(
-                    Contestant.is_deleted == False,
-                    or_(*conditions)
-                )\
-                .join(User) \
-                .options(
-                    contains_eager(Contestant.user)
-                )
-        else:
-            # Fallback: just season_id
-            contestants_query = db.query(Contestant)\
-                .filter(
-                    Contestant.is_deleted == False,
-                    Contestant.season_id == contest_id
-                )\
-                .join(User) \
-                .options(
-                    contains_eager(Contestant.user)
-                )
+        # IMPORTANT: Contestant.season_id = contest_id (legacy naming)
+        # ContestSeason is for migration tracking, NOT for filtering contestants
+        # Always use contest_id to find contestants
+        import logging
+        logger = logging.getLogger(__name__)
+
+        # Determine the effective season_id filter - ALWAYS contest_id
+        filter_season_id = contest_id
+        logger.info(f"[get_contest_with_enriched_contestants] Filtering contestants by contest_id={contest_id}")
+
+        # Query contestants by season_id only (rounds are global/shared)
+        contestants_query = db.query(Contestant)\
+            .filter(
+                Contestant.is_deleted == False,
+                Contestant.season_id == filter_season_id
+            )\
+            .join(User) \
+            .options(
+                contains_eager(Contestant.user)
+            )
+        # Filtrer par entry_type basé sur le contest_mode (données corrigées)
+        contest_mode = getattr(contest_obj, 'contest_mode', 'participation')
+        effective_entry_type = entry_type or ('nomination' if contest_mode == 'nomination' else 'participation')
+        contestants_query = contestants_query.filter(Contestant.entry_type == effective_entry_type)
+        logger.info(f"[get_contest_with_enriched_contestants] Querying by season_id={filter_season_id}, entry_type={effective_entry_type}")
         
         # Appliquer le filtrage géographique selon le niveau de la saison et l'utilisateur connecté
         # Récupérer l'utilisateur courant pour le filtrage géographique
@@ -1221,8 +1188,11 @@ class CRUDContest:
         
         # Check for explicit "ALL" intention
         # If user explicitly requests "all", we should NOT fallback to their location
-        is_explicit_all_country = filter_country and str(filter_country).lower().strip() == "all"
-        is_explicit_all_continent = filter_continent and str(filter_continent).lower().strip() == "all"
+        # Treat empty string, None, or "all" as explicit "show all" (no location-based filtering)
+        filter_country_str = str(filter_country).lower().strip() if filter_country else ""
+        filter_continent_str = str(filter_continent).lower().strip() if filter_continent else ""
+        is_explicit_all_country = not filter_country_str or filter_country_str == "all"
+        is_explicit_all_continent = not filter_continent_str or filter_continent_str == "all"
         
         if is_explicit_all_country:
             # User wants ALL countries
@@ -1299,18 +1269,19 @@ class CRUDContest:
             logger.info(f"[DEBUG] Sample of all contestants in DB: {[(c.id, c.season_id, c.round_id) for c in debug_sample]}")
             
             # Log query details for debugging
-            logger.info(f"[get_contest_with_enriched_contestants] Querying contestants for contest_id={contest_id}, round_ids={round_ids}")
-            logger.info(f"[get_contest_with_enriched_contestants] OR conditions: season_id={contest_id}, round_ids={round_ids}")
+            logger.info(f"[get_contest_with_enriched_contestants] Querying contestants for contest_id={contest_id}, filter_season_id={filter_season_id}")
+            logger.info(f"[get_contest_with_enriched_contestants] Filter: season_id={filter_season_id}")
             contestants = contestants_query.all()
             logger.info(f"[get_contest_with_enriched_contestants] Found {len(contestants)} contestants")
             
             # If no contestants, try fallbacks
-            # IMPORTANT: Only try fallbacks if we DID NOT apply a location filter.
-            # If we applied a location filter and got 0 results, that means there are simply no contestants in that location.
+            # IMPORTANT: Only try fallbacks if we DID NOT apply a location or entry_type filter.
+            # If we applied a filter and got 0 results, that means there are simply no contestants matching.
             # We should NOT fallback to showing all contestants in that case.
             applied_location_filter = effective_country is not None or effective_continent is not None
-            
-            if not contestants and not applied_location_filter:
+            applied_entry_type_filter = effective_entry_type is not None
+
+            if not contestants and not applied_location_filter and not applied_entry_type_filter:
                 logger.warning(f"[get_contest_with_enriched_contestants] No contestants found. Trying fallbacks...")
                 
                 # Fallback 1: season_id only
@@ -1325,18 +1296,8 @@ class CRUDContest:
                 except Exception as e1:
                     logger.error(f"Error in fallback 1: {e1}")
                 
-                # Fallback 2: round_id only
-                if not contestants and round_ids:
-                    try:
-                        fallback2 = db.query(Contestant).filter(
-                            Contestant.is_deleted == False,
-                            Contestant.round_id.in_(round_ids)
-                        ).options(joinedload(Contestant.user)).limit(100).all()
-                        logger.info(f"[get_contest_with_enriched_contestants] Fallback 2 (round_ids={round_ids}): Found {len(fallback2)}")
-                        if fallback2:
-                            contestants = fallback2
-                    except Exception as e2:
-                        logger.error(f"Error in fallback 2: {e2}")
+                # Fallback 2 disabled: round_ids are global, would return wrong contestants
+                pass
                 
                 # Fallback 3: ANY contestant (for debugging)
                 if not contestants:
@@ -1383,7 +1344,7 @@ class CRUDContest:
                 "username": user.username,
                 "full_name": user.full_name,
                 "avatar_url": user.avatar_url,
-                "points": 5,  # Par défaut, on peut ajuster si nécessaire
+                "points": voting.points if voting.points is not None else 0,
                 "vote_date": voting.vote_date,
                 "contest_id": voting.contest_id,  # ID du contest
                 "season_id": voting.season_id  # ID de la saison
@@ -1541,10 +1502,13 @@ class CRUDContest:
             if isinstance(season_level, str):
                 season_level = season_level.lower()
         
-        # Compter les votes pour chaque contestant
+        # Compter les votes et sommer les points pour chaque contestant
         votes_count_by_contestant = {}
+        points_by_contestant = {}
         for contestant_id in contestant_ids:
-            votes_count_by_contestant[contestant_id] = len(votes_by_contestant.get(contestant_id, []))
+            votes_list = votes_by_contestant.get(contestant_id, [])
+            votes_count_by_contestant[contestant_id] = len(votes_list)
+            points_by_contestant[contestant_id] = sum(v.get("points", 0) for v in votes_list)
         
         ranks: Dict[int, int] = {}
         # Calculer les rangs (on ignore les rangs éventuellement stockés en base
@@ -1582,7 +1546,7 @@ class CRUDContest:
         for group_ids in groups.values():
             ranked_contestants = sorted(
                 group_ids,
-                key=lambda cid: votes_count_by_contestant.get(cid, 0),
+                key=lambda cid: (points_by_contestant.get(cid, 0), votes_count_by_contestant.get(cid, 0)),
                 reverse=True,
             )
             for position, cid in enumerate(ranked_contestants, start=1):
@@ -1637,6 +1601,18 @@ class CRUDContest:
             else:
                 # Global ou niveau inconnu -> pas de restriction géographique
                 return True
+
+        # Helper : vérifier si le vote est ouvert pour le round du contestant
+        def _is_voting_open_for_round(c):
+            if not c.round_id:
+                return True  # Pas de round = pas de restriction
+            from app.models.round import Round as RoundModel
+            from datetime import date as date_type
+            r = db.query(RoundModel).filter(RoundModel.id == c.round_id).first()
+            if not r or not r.voting_start_date or not r.voting_end_date:
+                return True
+            today = date_type.today()
+            return r.voting_start_date <= today <= r.voting_end_date
 
         # Construire la liste des contestants enrichis
         enriched_contestants = []
@@ -1711,7 +1687,12 @@ class CRUDContest:
                             has_voted = False
                             # Plus de restriction géographique pour le vote
                             # L'utilisateur peut voter s'il n'a pas déjà voté et ce n'est pas sa propre candidature
-                            can_vote = True
+                            # Vérifier que le round est en phase de vote
+                            if _is_voting_open_for_round(contestant):
+                                can_vote = True
+                            else:
+                                can_vote = False
+                                vote_restriction_reason = "voting_not_open"
            
            
             else:
@@ -1723,7 +1704,7 @@ class CRUDContest:
             author_name = None
             author_avatar_url = None
             if contestant.user:
-                author_name = contestant.user.full_name or f"{contestant.user.first_name or ''} {contestant.user.last_name or ''}".strip()
+                author_name = contestant.user.full_name or f"{contestant.user.first_name or ''} {contestant.user.last_name or ''}".strip() or contestant.user.username or "Anonyme"
                 author_avatar_url = contestant.user.avatar_url
             
             enriched_contestants.append({
@@ -1747,6 +1728,7 @@ class CRUDContest:
                 # Stats
                 "rank": ranks.get(contestant.id),
                 "votes_count": votes_count_by_contestant.get(contestant.id, 0),
+                "total_points": points_by_contestant.get(contestant.id, 0),
                 "images_count": images_count,
                 "videos_count": videos_count,
                 "favorites_count": len(favorites_by_contestant.get(contestant.id, [])),
@@ -1770,6 +1752,7 @@ class CRUDContest:
                 "has_voted": has_voted,  # L'utilisateur a déjà voté dans cette saison
                 "can_vote": can_vote,  # L'utilisateur peut voter pour ce contestant dans cette saison
                 "vote_restriction_reason": vote_restriction_reason,  # Raison de restriction si can_vote est False
+                "is_voting_open_for_round": _is_voting_open_for_round(contestant),
                 # État du signalement
                 "has_reported": contestant.id in reported_contestants,  # L'utilisateur a déjà signalé ce contestant
             })
@@ -1777,7 +1760,8 @@ class CRUDContest:
         # Sort by votes descending first (most votes first), then by rank
         # This ensures contestants with most participants/votes appear at top immediately
         enriched_contestants.sort(key=lambda x: (
-            -x["votes_count"],  # Votes first (descending - most votes first)
+            -x["total_points"],  # Points first (descending - most points first)
+            -x["votes_count"],   # Then votes (descending)
             x.get("rank", float('inf'))  # Then by rank (lower is better)
         ))
         
@@ -1843,8 +1827,9 @@ class CRUDContest:
             Contestant.is_deleted == False
         ).all()
         
-        # Compter les votes pour chaque contestant (par saison)
+        # Compter les votes ET sommer les points pour chaque contestant (par saison)
         votes_by_contestant = {}
+        points_by_contestant = {}
         for contestant in contestants:
             votes_count = db.query(func.count(ContestantVoting.id))\
                 .filter(
@@ -1853,41 +1838,46 @@ class CRUDContest:
                 )\
                 .scalar() or 0
             votes_by_contestant[contestant.id] = votes_count
-        
-        # Trier les contestants par votes décroissants
+
+            total_points = db.query(func.coalesce(func.sum(ContestantVoting.points), 0))\
+                .filter(
+                    ContestantVoting.contestant_id == contestant.id,
+                    ContestantVoting.season_id == season_id
+                )\
+                .scalar() or 0
+            points_by_contestant[contestant.id] = total_points
+
+        # Trier les contestants par points décroissants, puis par votes décroissants
         ranked_contestants = sorted(
-            [(c.id, votes_by_contestant.get(c.id, 0)) for c in contestants],
-            key=lambda x: x[1],
-            reverse=True
+            [(c.id, votes_by_contestant.get(c.id, 0), points_by_contestant.get(c.id, 0)) for c in contestants],
+            key=lambda x: (-x[2], -x[1])  # Points desc, puis votes desc
         )
-        
+
         # Créer ou mettre à jour les rangs
-        for rank, (contestant_id, votes_count) in enumerate(ranked_contestants, start=1):
-            # Chercher un rang existant pour ce contestant et ce stage
+        for rank, (contestant_id, votes_count, total_pts) in enumerate(ranked_contestants, start=1):
             ranking = db.query(ContestantRanking).filter(
                 ContestantRanking.contestant_id == contestant_id,
                 ContestantRanking.stage_id == stage_id
             ).first()
-            
+
             if ranking:
-                # Mettre à jour le rang existant
                 ranking.total_votes = votes_count
+                ranking.total_points = total_pts
                 ranking.final_rank = rank
                 ranking.last_updated = datetime.utcnow()
             else:
-                # Créer un nouveau rang
                 ranking = ContestantRanking(
                     contestant_id=contestant_id,
                     stage_id=stage_id,
                     total_votes=votes_count,
-                    total_points=0,  # Pour l'instant, on ne gère que les votes
+                    total_points=total_pts,
                     page_views=0,
                     likes=0,
                     final_rank=rank,
                     last_updated=datetime.utcnow()
                 )
                 db.add(ranking)
-        
+
         db.commit()
 
 

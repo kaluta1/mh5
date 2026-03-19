@@ -35,7 +35,7 @@ const config: Config = {
           foreground: "#000000",
         },
         myhigh5: {
-          primary: "#1e40af",
+          primary: "#3448c5",
           secondary: "#0891b2",
           accent: "#FFFF79",
           blue: {

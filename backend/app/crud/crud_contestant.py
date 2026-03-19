@@ -458,31 +458,35 @@ class CRUDContestant:
         }
     
     def get_by_season_and_user(
-        self, db: Session, season_id: int, user_id: int
+        self, db: Session, season_id: int, user_id: int, entry_type: str = None
     ) -> Optional[Contestant]:
         """Récupère la candidature d'un utilisateur pour une saison"""
+        filters = [
+            Contestant.season_id == season_id,
+            Contestant.user_id == user_id,
+            Contestant.is_deleted == False
+        ]
+        if entry_type:
+            filters.append(Contestant.entry_type == entry_type)
         return db.query(Contestant)\
-            .filter(
-                and_(
-                    Contestant.season_id == season_id,
-                    Contestant.user_id == user_id,
-                    Contestant.is_deleted == False
-                )
-            )\
+            .filter(and_(*filters))\
             .first()
             
     def get_by_round_and_user(
-        self, db: Session, round_id: int, user_id: int
+        self, db: Session, round_id: int, user_id: int, entry_type: str = None, season_id: int = None
     ) -> Optional[Contestant]:
-        """Récupère la candidature d'un utilisateur pour un round spécifique"""
+        """Récupère la candidature d'un utilisateur pour un round spécifique et un contest (season_id)"""
+        filters = [
+            Contestant.round_id == round_id,
+            Contestant.user_id == user_id,
+            Contestant.is_deleted == False
+        ]
+        if entry_type:
+            filters.append(Contestant.entry_type == entry_type)
+        if season_id is not None:
+            filters.append(Contestant.season_id == season_id)
         return db.query(Contestant)\
-            .filter(
-                and_(
-                    Contestant.round_id == round_id,
-                    Contestant.user_id == user_id,
-                    Contestant.is_deleted == False
-                )
-            )\
+            .filter(and_(*filters))\
             .first()
     
     def get_multi_by_season(
@@ -648,6 +652,7 @@ class CRUDContestant:
                 "user_id": contestant.user_id,
                 "season_id": contestant.season_id,
                 "round_id": contestant.round_id,
+                "entry_type": contestant.entry_type or "participation",
                 "title": contestant.title,
                 "description": contestant.description,
                 "image_media_ids": contestant.image_media_ids,
@@ -904,7 +909,8 @@ class CRUDContestant:
         video_media_ids: Optional[str] = None,
         nominator_city: Optional[str] = None,
         nominator_country: Optional[str] = None,
-        round_id: Optional[int] = None
+        round_id: Optional[int] = None,
+        entry_type: str = "participation"
     ) -> Contestant:
         """Crée une nouvelle candidature"""
         # We no longer check `get_by_season_and_user` here because the API endpoint
@@ -935,6 +941,7 @@ class CRUDContestant:
             nominator_city=nominator_city,
             nominator_country=nominator_country,
             round_id=round_id,
+            entry_type=entry_type,
             registration_date=datetime.utcnow(),
             verification_status="pending",
             is_active=True
@@ -1280,52 +1287,65 @@ class CRUDContestant:
         from app.models.contest import Contest as MyfavContest
         
         contest_info_by_season = {}
-        season_ids = list(set([c.season_id for c in contestants]))
-        
-        if season_ids:
-            # Récupérer les liens saison -> contest
-            season_links = db.query(ContestSeasonLink).filter(
-                ContestSeasonLink.season_id.in_(season_ids),
-                ContestSeasonLink.is_active == True
-            ).all()
-            
-            season_to_contest_map = {link.season_id: link.contest_id for link in season_links}
-            contest_ids = list(set(season_to_contest_map.values()))
-            
-            # Récupérer les infos des contests
+        # Note: contestants.season_id contient le contest_id (pas l'id de la saison)
+        contestant_season_ids = list(set([c.season_id for c in contestants]))
+
+        if contestant_season_ids:
+            # D'abord chercher directement dans la table contest
             contests_data = db.query(MyfavContest).filter(
-                MyfavContest.id.in_(contest_ids)
+                MyfavContest.id.in_(contestant_season_ids)
             ).all()
             contest_map = {c.id: c for c in contests_data}
-            
-            # Récupérer les infos des saisons (pour fallback)
-            seasons_data = db.query(ContestSeason).filter(
-                ContestSeason.id.in_(season_ids)
-            ).all()
-            season_map = {s.id: s for s in seasons_data}
-            
-            for season_id in season_ids:
-                contest_id = season_to_contest_map.get(season_id)
-                if contest_id and contest_id in contest_map:
-                    contest = contest_map[contest_id]
-                    contest_info_by_season[season_id] = {
+
+            for cid in contestant_season_ids:
+                if cid in contest_map:
+                    contest = contest_map[cid]
+                    contest_info_by_season[cid] = {
                         "contest_title": contest.name,
-                        "contest_level": contest.level,
-                        "contest_image_url": contest.image_url or contest.cover_image_url,
-                        "contest_id": contest_id  # Use actual contest ID
+                        "contest_level": contest.level if hasattr(contest, 'level') else None,
+                        "contest_image_url": getattr(contest, 'image_url', None) or getattr(contest, 'cover_image_url', None),
+                        "contest_id": cid
                     }
-                elif season_id in season_map:
-                    season = season_map[season_id]
-                    level_val = None
-                    if hasattr(season, 'level') and season.level:
-                        level_val = season.level.value if hasattr(season.level, 'value') else str(season.level)
-                        
-                    contest_info_by_season[season_id] = {
-                        "contest_title": season.title,
-                        "contest_level": level_val,
-                        "contest_image_url": None,
-                        "contest_id": season_id  # Fallback to season ID
-                    }
+
+            # Fallback: si certains IDs sont de vraies season_ids
+            missing_ids = [cid for cid in contestant_season_ids if cid not in contest_info_by_season]
+            if missing_ids:
+                season_links = db.query(ContestSeasonLink).filter(
+                    ContestSeasonLink.season_id.in_(missing_ids),
+                    ContestSeasonLink.is_active == True
+                ).all()
+                link_contest_ids = list(set([link.contest_id for link in season_links]))
+                if link_contest_ids:
+                    linked_contests = db.query(MyfavContest).filter(
+                        MyfavContest.id.in_(link_contest_ids)
+                    ).all()
+                    linked_map = {c.id: c for c in linked_contests}
+                    for link in season_links:
+                        if link.contest_id in linked_map:
+                            contest = linked_map[link.contest_id]
+                            contest_info_by_season[link.season_id] = {
+                                "contest_title": contest.name,
+                                "contest_level": contest.level if hasattr(contest, 'level') else None,
+                                "contest_image_url": getattr(contest, 'image_url', None) or getattr(contest, 'cover_image_url', None),
+                                "contest_id": link.contest_id
+                            }
+
+                # Dernier fallback: ContestSeason
+                still_missing = [cid for cid in missing_ids if cid not in contest_info_by_season]
+                if still_missing:
+                    seasons_data = db.query(ContestSeason).filter(
+                        ContestSeason.id.in_(still_missing)
+                    ).all()
+                    for season in seasons_data:
+                        level_val = None
+                        if hasattr(season, 'level') and season.level:
+                            level_val = season.level.value if hasattr(season.level, 'value') else str(season.level)
+                        contest_info_by_season[season.id] = {
+                            "contest_title": season.title,
+                            "contest_level": level_val,
+                            "contest_image_url": None,
+                            "contest_id": season.id
+                        }
         
         
         # Construire la réponse enrichie
@@ -1359,6 +1379,7 @@ class CRUDContestant:
                 "user_id": contestant.user_id,
                 "season_id": contestant.season_id,
                 "round_id": contestant.round_id,
+                "entry_type": contestant.entry_type or "participation",
                 "title": contestant.title,
                 "description": contestant.description,
                 "image_media_ids": contestant.image_media_ids,

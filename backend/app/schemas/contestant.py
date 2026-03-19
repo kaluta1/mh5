@@ -1,6 +1,7 @@
-from typing import Optional, List
+from typing import Optional, List, Union, Any
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+import json
 
 
 class ContestantCreate(BaseModel):
@@ -12,6 +13,16 @@ class ContestantCreate(BaseModel):
     nominator_city: Optional[str] = None
     nominator_country: Optional[str] = None
     round_id: Optional[int] = None
+    entry_type: Optional[str] = "participation"  # 'nomination' ou 'participation'
+
+    @field_validator('image_media_ids', 'video_media_ids', mode='before')
+    @classmethod
+    def normalize_media_ids(cls, v: Any) -> Optional[str]:
+        if v is None:
+            return None
+        if isinstance(v, list):
+            return json.dumps(v)
+        return v
 
 
 class ContestantResponse(BaseModel):
@@ -26,6 +37,7 @@ class ContestantResponse(BaseModel):
     nominator_city: Optional[str] = None
     nominator_country: Optional[str] = None
     round_id: Optional[int] = None
+    entry_type: Optional[str] = "participation"
     registration_date: datetime
     verification_status: str
     is_active: bool
@@ -46,6 +58,7 @@ class ContestantListResponse(BaseModel):
     nominator_city: Optional[str] = None
     nominator_country: Optional[str] = None
     round_id: Optional[int] = None
+    entry_type: Optional[str] = "participation"
     is_qualified: bool
     registration_date: datetime
 
@@ -78,6 +91,7 @@ class ContestantWithAuthorAndStats(BaseModel):
     nominator_city: Optional[str] = None
     nominator_country: Optional[str] = None
     round_id: Optional[int] = None
+    entry_type: Optional[str] = "participation"
     contestant_image_url: Optional[str] = None
     registration_date: Optional[datetime] = None
     is_qualified: bool = False

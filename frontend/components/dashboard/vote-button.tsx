@@ -32,7 +32,7 @@ export function VoteButton({ contestantId, canVote, hasVoted, isVoting, onVote, 
       return t('contestant_detail.voting') || 'Voting...'
     }
     if (isAuthor) {
-      return t('dashboard.contests.owner_cannot_vote') || 'Owner, cannot vote'
+      return t('dashboard.contests.vote') || 'Vote'
     }
     if (hasVoted) {
       return t('dashboard.contests.already_voted') || 'Already voted'
@@ -55,6 +55,8 @@ export function VoteButton({ contestantId, canVote, hasVoted, isVoting, onVote, 
           return t('dashboard.contests.restriction_not_authenticated') || 'Please login to vote'
         case 'geographic_restriction':
           return t('dashboard.contests.restriction_geographic') || 'Geographic restriction'
+        case 'voting_not_open':
+          return t('dashboard.contests.vote') || 'Vote'
         case 'user_not_found':
           return t('dashboard.contests.restriction_user_not_found') || 'User not found'
         default:
@@ -86,6 +88,8 @@ export function VoteButton({ contestantId, canVote, hasVoted, isVoting, onVote, 
           return t('dashboard.contests.restriction_not_authenticated_desc') || 'Please login to vote'
         case 'geographic_restriction':
           return t('dashboard.contests.restriction_geographic_desc') || 'You cannot vote due to geographic restrictions'
+        case 'voting_not_open':
+          return t('dashboard.contests.voting_not_open') || "Le vote n'est pas encore ouvert"
         case 'user_not_found':
           return t('dashboard.contests.restriction_user_not_found_desc') || 'User not found'
         default:
@@ -146,7 +150,7 @@ export function VoteButton({ contestantId, canVote, hasVoted, isVoting, onVote, 
           if (canVote && !isAuthor) onVote()
         }}
         disabled={!canVote || isVoting || isAuthor}
-        className={`flex items-center justify-center gap-2 py-3 px-2 text-sm font-medium transition-colors ${
+        className={`flex items-center justify-center gap-1.5 py-2.5 px-1 text-xs font-medium transition-colors w-full truncate ${
           hasVoted
             ? 'text-blue-600 dark:text-blue-400'
             : isAuthor
@@ -157,8 +161,8 @@ export function VoteButton({ contestantId, canVote, hasVoted, isVoting, onVote, 
         } ${!canVote || isVoting || isAuthor ? 'opacity-50 cursor-not-allowed' : ''}`}
         title={isAuthor ? (t('dashboard.contests.owner_cannot_vote') || 'Owner, cannot vote') : getVoteButtonTitle()}
       >
-        <ThumbsUp className={`w-5 h-5 ${hasVoted ? 'fill-current' : ''}`} />
-        <span className="hidden sm:inline">{getVoteButtonText()}</span>
+        <ThumbsUp className={`w-4 h-4 flex-shrink-0 ${hasVoted ? 'fill-current' : ''}`} />
+        <span className="hidden sm:inline truncate">{getVoteButtonText()}</span>
         {votesCount > 0 && (
           <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
             {votesCount}

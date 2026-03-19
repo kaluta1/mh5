@@ -109,21 +109,15 @@ async def lifespan(app: FastAPI):
             logger.info("Starting monthly round scheduler...")
             await monthly_round_scheduler.start()
             
-            # Ensure January round exists
-            logger.info("Ensuring January round exists...")
+            # Ensure rounds exist for all months up to current month
+            logger.info("Ensuring current month round exists...")
             try:
-                # Run in thread pool to avoid blocking async loop if it does heavy sync work
-                # ensure_january_round_exists is synchronous DB code
                 loop = asyncio.get_event_loop()
-                january_round = await loop.run_in_executor(None, monthly_round_scheduler.ensure_january_round_exists)
-                
-                if january_round:
-                    logger.info(f"✅ January round ready (id={january_round.id})")
-                else:
-                    logger.warn("⚠️ Could not create/verify January round")
+                await loop.run_in_executor(None, monthly_round_scheduler.ensure_current_month_round)
+                logger.info("Current month round ready")
             except Exception as e:
-                logger.error(f"⚠️ Error ensuring January round: {e}")
-                
+                logger.error(f"Error ensuring current month round: {e}")
+
         # Fire and forget the async task
         asyncio.create_task(_delayed_start())
 

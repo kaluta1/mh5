@@ -78,7 +78,7 @@ export function ContestDetailsHeader({
                   <HelpCircle className="w-5 h-5" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent className="bg-gray-800 text-white border-gray-700">
+              <TooltipContent className="bg-white text-gray-900 border-gray-200 shadow-lg dark:bg-gray-800 dark:text-white dark:border-gray-700">
                 <p className="text-xs">{t('dashboard.contests.tooltip_info') || 'Voir les détails et les conditions du concours'}</p>
               </TooltipContent>
             </Tooltip>
@@ -95,7 +95,7 @@ export function ContestDetailsHeader({
                     {getStatusLabel(contest.level)}
                   </Badge>
                 </TooltipTrigger>
-                <TooltipContent className="bg-gray-800 text-white border-gray-700">
+                <TooltipContent className="bg-white text-gray-900 border-gray-200 shadow-lg dark:bg-gray-800 dark:text-white dark:border-gray-700">
                   <p className="text-xs">
                     {contest.level === 'city' 
                       ? (t('dashboard.contests.tooltip_level_city') || 'Concours au niveau de la ville')
@@ -123,7 +123,7 @@ export function ContestDetailsHeader({
                     {contest.is_submission_open ? t('dashboard.contests.open') : t('dashboard.contests.closed')}
                   </Badge>
                 </TooltipTrigger>
-                <TooltipContent className="bg-gray-800 text-white border-gray-700">
+                <TooltipContent className="bg-white text-gray-900 border-gray-200 shadow-lg dark:bg-gray-800 dark:text-white dark:border-gray-700">
                   <p className="text-xs">
                     {contest.is_submission_open 
                       ? (t('dashboard.contests.tooltip_open') || 'Le concours est actuellement ouvert. Vous pouvez concourir à ce concours.')
@@ -140,7 +140,7 @@ export function ContestDetailsHeader({
                       🗳️ {t('dashboard.contests.voting')} {t('dashboard.contests.open')}
                     </Badge>
                   </TooltipTrigger>
-                  <TooltipContent className="bg-gray-800 text-white border-gray-700">
+                  <TooltipContent className="bg-white text-gray-900 border-gray-200 shadow-lg dark:bg-gray-800 dark:text-white dark:border-gray-700">
                     <p className="text-xs">
                       {t('dashboard.contests.tooltip_voting_open') || 'Le vote est actuellement ouvert. Vous pouvez voter pour les participants.'}
                     </p>
@@ -156,7 +156,7 @@ export function ContestDetailsHeader({
                     <span>{t('dashboard.contests.contestants')}</span>
                   </div>
                 </TooltipTrigger>
-                <TooltipContent className="bg-gray-800 text-white border-gray-700">
+                <TooltipContent className="bg-white text-gray-900 border-gray-200 shadow-lg dark:bg-gray-800 dark:text-white dark:border-gray-700">
                   <p className="text-xs">
                     {t('dashboard.contests.tooltip_contestants') || `${participantsCount} participant${participantsCount > 1 ? 's' : ''} dans ce concours`}
                   </p>

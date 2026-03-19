@@ -1,7 +1,7 @@
 from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from datetime import date, datetime
 import logging
 import traceback
@@ -24,7 +24,7 @@ def read_rounds(
     contest_id: Optional[int] = Query(None, description="ID du contest pour récupérer ses rounds"),
     round_id: Optional[int] = Query(None, alias="roundId", description="ID du round spécifique"),
     current_user: Optional[models.User] = Depends(deps.get_current_active_user_optional),
-    has_voting_type: Optional[bool] = Query(None, alias="hasVotingType", description="Filtrer les contests par présence de type de vote"),
+    contest_mode: Optional[str] = Query(None, alias="contestMode", description="Filtrer par mode: nomination ou participation"),
     filter_country: Optional[str] = Query(None, alias="filterCountry", description="Filtrer les participants par pays"),
     filter_continent: Optional[str] = Query(None, alias="filterContinent", description="Filtrer les participants par continent"),
     contest_limit: int = Query(12, alias="contestLimit", description="Nombre maximum de contests par round"),
@@ -49,7 +49,7 @@ def read_rounds(
                 # Convert to RoundWithStats format
                 result = []
                 for r_data in rounds_data:
-                    round_obj = _enrich_round_data(db, r_data, user_id, has_voting_type, filter_country, 
+                    round_obj = _enrich_round_data(db, r_data, user_id, contest_mode, filter_country, 
                                                   filter_continent, search_term, contest_limit, contest_skip)
                     if round_obj:
                         result.append(round_obj)
@@ -84,7 +84,7 @@ def read_rounds(
                             "created_at": getattr(r, 'created_at', datetime.now()),
                             "updated_at": getattr(r, 'updated_at', datetime.now()),
                         }
-                        round_obj = _enrich_round_data(db, r_data, user_id, has_voting_type, filter_country,
+                        round_obj = _enrich_round_data(db, r_data, user_id, contest_mode, filter_country,
                                                       filter_continent, search_term, contest_limit, contest_skip)
                         if round_obj:
                             result.append(round_obj)
@@ -126,7 +126,7 @@ def _enrich_round_data(
     db: Session,
     r_data: dict,
     user_id: Optional[int],
-    has_voting_type: Optional[bool],
+    contest_mode: Optional[str],
     filter_country: Optional[str],
     filter_continent: Optional[str],
     search_term: Optional[str],
@@ -188,11 +188,10 @@ def _enrich_round_data(
             # Filter contests
             valid_contests = []
             for c in contests:
-                # Filter by voting_type
-                if has_voting_type is not None:
-                    if has_voting_type and getattr(c, 'voting_type_id', None) is None:
-                        continue
-                    if not has_voting_type and getattr(c, 'voting_type_id', None) is not None:
+                # Filter by contest_mode
+                if contest_mode is not None:
+                    c_mode = getattr(c, 'contest_mode', 'participation')
+                    if c_mode != contest_mode:
                         continue
                 
                 # Filter by search term
@@ -206,8 +205,36 @@ def _enrich_round_data(
                 valid_contests.append(c)
             
             contests_count = len(valid_contests)
-            
-            # Apply pagination
+
+            # Pre-sort contests by participant count (desc) BEFORE pagination
+            # so that contests with the most participants appear first
+            from app.models.contests import Contestant as ContestantModel
+            contest_participant_counts = {}
+            for vc in valid_contests:
+                try:
+                    # Déterminer le entry_type attendu basé sur le contest_mode
+                    vc_mode = getattr(vc, 'contest_mode', 'participation')
+                    expected_entry_type = 'nomination' if vc_mode == 'nomination' else 'participation'
+                    pcount_query = db.query(func.count(ContestantModel.id)).filter(
+                        ContestantModel.season_id == vc.id,
+                        ContestantModel.round_id == round_id,
+                        ContestantModel.is_deleted == False,
+                        ContestantModel.entry_type == expected_entry_type
+                    )
+                    if filter_country and filter_country != 'all':
+                        pcount_query = pcount_query.filter(
+                            or_(
+                                func.lower(ContestantModel.country) == func.lower(filter_country),
+                                ContestantModel.country == None  # Include contestants without country set
+                            )
+                        )
+                    contest_participant_counts[vc.id] = pcount_query.scalar() or 0
+                except Exception:
+                    contest_participant_counts[vc.id] = 0
+
+            valid_contests.sort(key=lambda c: contest_participant_counts.get(c.id, 0), reverse=True)
+
+            # Apply pagination AFTER sorting
             paginated_contests = valid_contests[contest_skip:contest_skip + contest_limit]
             
             # Batch query: find all contests where current user has participated in this round
@@ -224,46 +251,27 @@ def _enrich_round_data(
                         Contestant.is_deleted == False
                     ).all()
                     
-                    # Now check for this specific round
+                    # Now check for this specific round, filtered by entry_type
                     if valid_contests:
                         # Get user contestants for THIS round only
                         user_contestants = [uc for uc in all_user_contestants if uc.round_id == round_id]
-                        # Build set of contest IDs where user has directly participated in this round
-                        user_contested_contest_ids = {uc.season_id for uc in user_contestants if uc.season_id}
+                        # Déterminer le entry_type attendu pour ce tab
+                        expected_type = 'nomination' if contest_mode == 'nomination' else 'participation'
+                        # Filtrer par entry_type ET par contest valide
+                        valid_contest_ids = {vc.id for vc in valid_contests}
+                        user_contested_contest_ids = {
+                            uc.season_id for uc in user_contestants
+                            if uc.season_id and uc.season_id in valid_contest_ids
+                            and getattr(uc, 'entry_type', 'participation') == expected_type
+                        }
                 except Exception as e:
                     logger.warning(f"Error batch-checking user participation for round {round_id}: {str(e)}")
 
             # Build contest data
             for contest in paginated_contests:
                 try:
-                    # Get participant count for this contest in this round
-                    participant_count = 0
-                    try:
-                        from app.models.contests import Contestant
-                        participant_count = db.query(func.count(Contestant.id)).filter(
-                            Contestant.season_id == contest.id,
-                            Contestant.round_id == round_id,
-                            Contestant.is_deleted == False
-                        ).scalar() or 0
-                        
-                        # Apply location filters
-                        if filter_country and filter_country != 'all':
-                            participant_count = db.query(func.count(Contestant.id)).filter(
-                                Contestant.season_id == contest.id,
-                                Contestant.round_id == round_id,
-                                Contestant.is_deleted == False,
-                                func.lower(Contestant.country) == func.lower(filter_country)
-                            ).scalar() or 0
-                        
-                        if filter_continent and filter_continent != 'all':
-                            participant_count = db.query(func.count(Contestant.id)).filter(
-                                Contestant.season_id == contest.id,
-                                Contestant.round_id == round_id,
-                                Contestant.is_deleted == False,
-                                func.lower(Contestant.continent) == func.lower(filter_continent)
-                            ).scalar() or 0
-                    except Exception as e:
-                        logger.warning(f"Error counting participants for contest {contest.id}: {str(e)}")
+                    # Use pre-calculated participant count (already computed for sorting)
+                    participant_count = contest_participant_counts.get(contest.id, 0)
                     
                     # Strict per-contest check: only true when the user has already contested THIS contest.
                     is_contesting = contest.id in user_contested_contest_ids
@@ -280,7 +288,7 @@ def _enrich_round_data(
                         "image_url": getattr(contest, 'image_url', None),
                         "created_at": getattr(contest, 'created_at', None),
                         "updated_at": getattr(contest, 'updated_at', None),
-                        "voting_type_id": getattr(contest, 'voting_type_id', None),
+                        "contest_mode": getattr(contest, 'contest_mode', 'participation'),
                         "current_user_contesting": bool(is_contesting)  # Explicitly convert to bool
                     }
                     r_data.setdefault("contests", []).append(contest_data)
@@ -314,6 +322,54 @@ def _enrich_round_data(
     except Exception as e:
         logger.error(f"Error in _enrich_round_data: {str(e)}", exc_info=True)
         return None
+
+
+@router.get("/{id}", response_model=round_schema.RoundWithStats)
+def read_round(
+    *,
+    db: Session = Depends(deps.get_db),
+    id: int,
+):
+    """Get a single round by ID with enriched stats"""
+    db_round = db.query(Round).filter(Round.id == id).first()
+    if not db_round:
+        raise HTTPException(status_code=404, detail=f"Round {id} not found")
+    # Convert ORM object to dict for _enrich_round_data
+    round_dict = {
+        "id": db_round.id,
+        "name": db_round.name,
+        "status": db_round.status,
+        "is_submission_open": db_round.is_submission_open,
+        "is_voting_open": db_round.is_voting_open,
+        "current_season_level": db_round.current_season_level,
+        "submission_start_date": db_round.submission_start_date,
+        "submission_end_date": db_round.submission_end_date,
+        "voting_start_date": db_round.voting_start_date,
+        "voting_end_date": db_round.voting_end_date,
+        "city_season_start_date": getattr(db_round, 'city_season_start_date', None),
+        "city_season_end_date": getattr(db_round, 'city_season_end_date', None),
+        "country_season_start_date": getattr(db_round, 'country_season_start_date', None),
+        "country_season_end_date": getattr(db_round, 'country_season_end_date', None),
+        "regional_start_date": getattr(db_round, 'regional_start_date', None),
+        "regional_end_date": getattr(db_round, 'regional_end_date', None),
+        "continental_start_date": getattr(db_round, 'continental_start_date', None),
+        "continental_end_date": getattr(db_round, 'continental_end_date', None),
+        "global_start_date": getattr(db_round, 'global_start_date', None),
+        "global_end_date": getattr(db_round, 'global_end_date', None),
+        "contest_id": db_round.contest_id,
+        "created_at": db_round.created_at,
+        "updated_at": db_round.updated_at,
+    }
+    return _enrich_round_data(
+        db, round_dict,
+        user_id=None,
+        contest_mode=None,
+        filter_country=None,
+        filter_continent=None,
+        search_term=None,
+        contest_limit=50,
+        contest_skip=0
+    )
 
 
 @router.post("/ensure-january", response_model=round_schema.Round)

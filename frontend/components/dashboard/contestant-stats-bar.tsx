@@ -84,14 +84,6 @@ export function ContestantStatsBar({
       bg: 'bg-red-500'
     },
     {
-      key: 'rank',
-      value: rank ?? 0,
-      label: t('contestant_detail.rank') || t('dashboard.contests.rank') || 'Rang',
-      icon: <Medal className="w-4 h-4 text-white" />,
-      bg: 'bg-amber-500',
-      display: rank ? getRankText(rank) : '-'
-    },
-    {
       key: 'comments',
       value: comments,
       label: t('contestant_detail.comments') || t('dashboard.contests.comments') || 'Commentaires',
@@ -135,8 +127,7 @@ export function ContestantStatsBar({
         <div className="container mx-auto px-4 md:px-6 lg:px-8 py-4">
           <div className="flex items-center gap-3 md:gap-4 min-w-max">
           {items.map((item) => {
-            const isRank = item.key === 'rank'
-            const displayValue = isRank ? item.display : item.value
+            const displayValue = item.value
             const onClick = clickHandlers[item.key] || (() => {})
             const clickable = !!clickHandlers[item.key]
             return (

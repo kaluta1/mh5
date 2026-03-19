@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useLanguage } from '@/contexts/language-context'
 import { useAuth } from '@/hooks/use-auth'
 import { ContestantDetailSkeleton } from '@/components/ui/skeleton'
+import { cleanVideoUrl } from '@/lib/utils/video-platforms'
 import { Button } from '@/components/ui/button'
 import { ContestantHeader } from '@/components/contestant'
 import { MediaGallery, MediaViewerModal } from '@/components/media'
@@ -468,7 +469,7 @@ export default function ContestantDetailPage() {
       return ids.map((id: string, index: number) => ({
         id: `${type}-${index}`,
         type,
-        url: id,
+        url: cleanVideoUrl(id) || id,
         thumbnail: undefined
       }))
     } catch {

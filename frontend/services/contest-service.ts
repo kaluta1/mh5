@@ -76,16 +76,8 @@ export interface Contest {
   verificationVideoMaxDuration?: number
   verificationMaxSizeMb?: number
   // Voting type and level for categorization
-  votingTypeId?: number | null
   level?: string
-  votingType?: {
-    id: number
-    name: string
-    voting_level: string
-    commission_source: string
-    commission_rules?: any
-  } | null
-  // Indique si l'utilisateur connecté a déjà participé à ce concours
+  contest_mode?: string | null
   currentUserContesting?: boolean
 }
 
@@ -143,7 +135,6 @@ export interface ContestResponse {
   verification_max_size_mb?: number
 
   // Voting and commission
-  voting_type_id?: number | null
   voting_restriction?: string
 
   // Location and category
@@ -161,14 +152,8 @@ export interface ContestResponse {
     is_active: boolean
   } | null
 
-  // Voting type details
-  voting_type?: {
-    id: number
-    name: string
-    voting_level: string
-    commission_source: string
-    commission_rules?: any
-  } | null
+  contest_mode?: string | null
+  currentUserContesting?: boolean
   top_contestants?: Array<{
     id: number
     user_id?: number
@@ -182,6 +167,7 @@ export interface ContestResponse {
   current_user_contesting?: boolean
   entries_count?: number
   total_votes?: number
+  total_points?: number
   level?: string
 }
 
@@ -196,6 +182,10 @@ export interface ContestantWithAuthorAndStats {
   contestant_image_url?: string
   registration_date: string
   is_qualified: boolean
+  entry_type?: string
+  nominator_city?: string
+  nominator_country?: string
+  round_id?: number
   author_name?: string
   author_country?: string
   author_city?: string
@@ -380,13 +370,7 @@ class ContestService {
     const verificationType = response.verification_type || 'none';
 
     // Map voting type if available
-    const votingType = response.voting_type ? {
-      id: response.voting_type.id,
-      name: response.voting_type.name,
-      voting_level: response.voting_type.voting_level,
-      commission_source: response.voting_type.commission_source,
-      commission_rules: response.voting_type.commission_rules
-    } : null;
+;
 
     // Map top contestants if available
     const topContestants = (response.top_contestants || []).map(contestant => ({
@@ -443,10 +427,9 @@ class ContestService {
       verificationMaxSizeMb: response.verification_max_size_mb || 20,
 
       // Voting and contest details
-      votingTypeId: response.voting_type_id || null,
-      level: response.voting_type?.voting_level || response.season_level || 'country',
+      level: response.season_level || 'country',
       currentUserContesting: response.current_user_contesting || false,
-      votingType,
+      contest_mode: response.contest_mode || 'participation',
       topContestants: response.top_contestants?.map(t => ({
         id: t.id,
         user_id: t.user_id,
@@ -534,8 +517,7 @@ class ContestService {
     limit: number = 10,
     searchTerm?: string,
     votingLevel?: string,
-    votingTypeId?: number,
-    hasVotingType?: boolean
+    contestMode?: string
   ): Promise<{ contests: Contest[]; total: number }> {
     try {
       const params: any = {
@@ -543,8 +525,7 @@ class ContestService {
         limit,
         ...(searchTerm && { search: searchTerm }),
         ...(votingLevel && { voting_level: votingLevel }),
-        ...(votingTypeId && { voting_type_id: votingTypeId }),
-        ...(hasVotingType !== undefined && { has_voting_type: hasVotingType })
+        ...(contestMode && { contest_mode: contestMode })
       };
 
       console.log('[ContestService] Fetching contests with params:', params);
@@ -602,7 +583,8 @@ class ContestService {
     videoMediaIds: string | string[] = [],
     nominatorCity?: string,
     nominatorCountry?: string,
-    roundId?: number
+    roundId?: number,
+    entryType?: string
   ): Promise<any> {
     try {
       // Convert string media IDs to array if needed
@@ -626,6 +608,9 @@ class ContestService {
       if (roundId !== undefined) {
         payload.round_id = roundId;
       }
+      if (entryType) {
+        payload.entry_type = entryType;
+      }
 
       const response = await api.post(`/api/v1/contests/${contestId}/participate`, payload);
       return response.data;
@@ -648,16 +633,32 @@ class ContestService {
     nominatorCountry?: string
   ): Promise<any> {
     try {
-      // Convert string media IDs to array if needed
-      const imageIds = Array.isArray(imageMediaIds)
-        ? imageMediaIds
-        : imageMediaIds ? [imageMediaIds] : [];
+      // Normaliser les media IDs : accepter string JSON ou array
+      let imageIds: string[] = [];
+      if (Array.isArray(imageMediaIds)) {
+        imageIds = imageMediaIds;
+      } else if (typeof imageMediaIds === 'string' && imageMediaIds) {
+        try {
+          const parsed = JSON.parse(imageMediaIds);
+          imageIds = Array.isArray(parsed) ? parsed : [imageMediaIds];
+        } catch {
+          imageIds = [imageMediaIds];
+        }
+      }
 
-      const videoIds = Array.isArray(videoMediaIds)
-        ? videoMediaIds
-        : videoMediaIds ? [videoMediaIds] : [];
+      let videoIds: string[] = [];
+      if (Array.isArray(videoMediaIds)) {
+        videoIds = videoMediaIds;
+      } else if (typeof videoMediaIds === 'string' && videoMediaIds) {
+        try {
+          const parsed = JSON.parse(videoMediaIds);
+          videoIds = Array.isArray(parsed) ? parsed : [videoMediaIds];
+        } catch {
+          videoIds = [videoMediaIds];
+        }
+      }
 
-      const response = await api.put(`/contestants/${contestantId}`, {
+      const response = await api.put(`/api/v1/contestants/${contestantId}`, {
         title,
         description,
         image_media_ids: imageIds,
@@ -665,6 +666,11 @@ class ContestService {
         nominator_city: nominatorCity,
         nominator_country: nominatorCountry
       });
+
+      // Invalider tous les caches liés aux contests et contestants
+      cacheService.invalidate('/api/v1/contests/');
+      cacheService.invalidate('/api/v1/contestants/');
+
       return response.data;
     } catch (error) {
       console.error('Error updating contestant:', error);
@@ -677,7 +683,7 @@ class ContestService {
    */
   async deleteContestant(contestantId: number): Promise<void> {
     try {
-      await api.delete(`/contestants/${contestantId}`);
+      await api.delete(`/api/v1/contestants/${contestantId}`);
     } catch (error) {
       console.error('Error deleting contestant:', error);
       throw error;
@@ -882,8 +888,46 @@ class ContestService {
   /**
    * Vote for a contestant
    */
-  async voteForContestant(contestantId: number, _points?: number): Promise<void> {
-    await api.post(`/api/v1/contestants/${contestantId}/vote`);
+  async voteForContestant(contestantId: number, _points?: number): Promise<{
+    success: boolean;
+    data?: any;
+    code?: string;
+    replacedContestant?: { id: number; name: string; position: number };
+  }> {
+    try {
+      const response = await api.post(`/api/v1/contestants/${contestantId}/vote`);
+      return { success: true, data: response.data };
+    } catch (error: any) {
+      if (error.response?.status === 409) {
+        const detail = error.response.data?.detail;
+        if (typeof detail === 'object' && detail.code) {
+          return {
+            success: false,
+            code: detail.code,
+            replacedContestant: detail.replaced_contestant,
+          };
+        }
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Replace the 5th vote with a new contestant (after user confirmation)
+   */
+  async replaceVote(contestantId: number): Promise<any> {
+    const response = await api.post(`/api/v1/contestants/${contestantId}/vote/replace`);
+    return response.data;
+  }
+
+  /**
+   * Get user's votes for a specific contest
+   */
+  async getMyVotesForContest(contestId: number): Promise<any> {
+    const response = await api.get(`/api/v1/contestants/user/my-votes`, {
+      params: { contest_id: contestId }
+    });
+    return response.data;
   }
 
   /**
@@ -909,7 +953,7 @@ class ContestService {
   async getFavoritesContests(skip: number = 0, limit: number = 10): Promise<ContestResponse[]> {
     try {
       const response = await api.get<{ items: ContestResponse[]; total: number }>(
-        '/favorites/contests',
+        '/api/v1/favorites/contests',
         { params: { skip, limit } }
       )
       return response.data.items || []
@@ -924,8 +968,8 @@ class ContestService {
    */
   async getUserFavorites(): Promise<number[]> {
     try {
-      const response = await api.get<{ contestant_ids: number[] }>('/favorites')
-      return response.data.contestant_ids || []
+      const response = await api.get<number[]>('/api/v1/contestants/favorites')
+      return response.data || []
     } catch (error) {
       console.error('Error fetching user favorites:', error)
       return []
@@ -937,7 +981,7 @@ class ContestService {
    */
   async getContestantById(id: number): Promise<ContestantWithAuthorAndStats> {
     try {
-      const response = await api.get<ContestantWithAuthorAndStats>(`/contestants/${id}`)
+      const response = await api.get<ContestantWithAuthorAndStats>(`/api/v1/contestants/${id}`)
       return response.data
     } catch (error) {
       console.error(`Error fetching contestant ${id}:`, error)
@@ -950,7 +994,11 @@ class ContestService {
    */
   async reorderFavorites(contestantIds: number[]): Promise<void> {
     try {
-      await api.put('/favorites/reorder', { contestant_ids: contestantIds })
+      const favorites = contestantIds.map((id, index) => ({
+        contestant_id: id,
+        position: index + 1
+      }))
+      await api.put('/api/v1/favorites/contestants/reorder', { favorites })
     } catch (error) {
       console.error('Error reordering favorites:', error)
       throw error

@@ -17,7 +17,6 @@ export default function AdminContests() {
 
   // Shared state for lists
   const [seasons, setSeasons] = useState<any[]>([])
-  const [votingTypes, setVotingTypes] = useState<any[]>([])
   const [categories, setCategories] = useState<any[]>([])
   const [loadingShared, setLoadingShared] = useState(true)
   const [activeTab, setActiveTab] = useState('contests')
@@ -45,8 +44,7 @@ export default function AdminContests() {
       try {
         const vtResponse = await api.get('/api/v1/voting-types')
         if (vtResponse.data && Array.isArray(vtResponse.data)) {
-          setVotingTypes(vtResponse.data)
-        }
+          }
       } catch (err) {
         console.warn('Voting types fetch error', err)
       }
@@ -111,7 +109,7 @@ export default function AdminContests() {
         </TabsList>
 
         <TabsContent value="contests">
-          <ContestList seasons={seasons} votingTypes={votingTypes} categories={categories} />
+          <ContestList seasons={seasons} categories={categories} />
         </TabsContent>
 
         <TabsContent value="rounds">

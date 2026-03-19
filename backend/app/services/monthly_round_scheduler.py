@@ -250,5 +250,53 @@ class MonthlyRoundScheduler:
             db.close()
 
 
+    def ensure_current_month_round(self):
+        """
+        Ensure a round exists for the current month.
+        Creates the round if missing and links all active contests.
+        """
+        today = date.today()
+        month_name = today.strftime("%B %Y")
+        round_name = f"Round {month_name}"
+
+        logger.info(f"Ensuring round exists for {month_name}...")
+
+        db = SessionLocal()
+        try:
+            existing = db.query(Round).filter(Round.name == round_name).first()
+            if existing:
+                logger.info(f"Round '{round_name}' already exists (id={existing.id})")
+
+                # Ensure all active contests are linked
+                active_contests = db.query(Contest).filter(Contest.is_active == True).all()
+                links = db.execute(
+                    select(round_contests).where(round_contests.c.round_id == existing.id)
+                ).all()
+                linked = {l.contest_id for l in links}
+
+                unlinked = [c for c in active_contests if c.id not in linked]
+                if unlinked:
+                    for c in unlinked:
+                        try:
+                            db.execute(insert(round_contests).values(
+                                round_id=existing.id, contest_id=c.id
+                            ))
+                        except Exception:
+                            pass
+                    db.commit()
+                    logger.info(f"Linked {len(unlinked)} new contests to {round_name}")
+                return existing
+            else:
+                logger.info(f"Creating {round_name}...")
+                round_obj = generate_monthly_round(db, target_date=today)
+                logger.info(f"{round_name} created (id={round_obj.id})")
+                return round_obj
+        except Exception as e:
+            logger.error(f"Error ensuring current month round: {e}")
+            db.rollback()
+        finally:
+            db.close()
+
+
 # Instance globale du scheduler
 monthly_round_scheduler = MonthlyRoundScheduler()

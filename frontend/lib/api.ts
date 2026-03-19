@@ -245,6 +245,16 @@ export const authService = {
       : '/api/v1/auth/register'
 
     const response = await api.post(url, userDataWithoutSponsor)
+
+    // Vérifier que l'inscription a réussi (validateStatus accepte les 4xx)
+    if (response.status >= 400) {
+      const error: any = new Error(
+        response.data?.detail || response.data?.message || "Erreur lors de l'inscription"
+      )
+      error.response = response
+      throw error
+    }
+
     return response.data
   },
 

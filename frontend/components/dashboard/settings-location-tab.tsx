@@ -6,6 +6,9 @@ import { useToast } from '@/components/ui/toast'
 import { Button } from '@/components/ui/button'
 import { LocationSelectorSimple } from '@/components/auth/location-selector-simple'
 import { MapPin, AlertCircle } from 'lucide-react'
+import { countries } from '@/lib/countries'
+import { getCitiesByCountry } from '@/lib/geography'
+import geographyData from '@/lib/geography-data-complete.json'
 import { API_URL } from '@/lib/config'
 
 interface SettingsLocationTabProps {
@@ -30,6 +33,8 @@ export function SettingsLocationTab({ user, onUpdate }: SettingsLocationTabProps
     country?: string
     city?: string
   }>({})
+  const [availableCities, setAvailableCities] = useState<string[]>([])
+  const [loadingCities, setLoadingCities] = useState(false)
 
   // Charger les données de l'utilisateur et vérifier la participation
   useEffect(() => {
@@ -67,6 +72,45 @@ export function SettingsLocationTab({ user, onUpdate }: SettingsLocationTabProps
       setErrors(newErrors)
     }
   }, [isCheckingParticipation, hasParticipation, continent, region, country, city, t])
+
+  // Charger les villes quand le pays change
+  useEffect(() => {
+    setAvailableCities([])
+    setLoadingCities(false)
+
+    if (!country || !country.trim()) return
+
+    const trimmedCountryName = country.trim().toLowerCase()
+
+    // Chercher le code pays dans les deux sources
+    let countryCode = ''
+    const fromCountries = countries.find(c => c.name.trim().toLowerCase() === trimmedCountryName)
+    if (fromCountries?.code) {
+      countryCode = fromCountries.code.toUpperCase().trim()
+    } else {
+      // Fallback: chercher dans geographyData
+      const fromGeo = geographyData.countries.find(
+        (c: any) => c.name.trim().toLowerCase() === trimmedCountryName
+      )
+      if (fromGeo?.code) {
+        countryCode = fromGeo.code.toUpperCase().trim()
+      }
+    }
+
+    if (!countryCode || !/^[A-Z]{2}$/.test(countryCode)) return
+
+    setLoadingCities(true)
+    try {
+      const cities = getCitiesByCountry(countryCode)
+      let cleanCities = Array.isArray(cities) ? Array.from(cities) : []
+      if (cleanCities.length > 0) setAvailableCities(cleanCities)
+    } catch (error) {
+      console.error('Error loading cities:', error)
+      setAvailableCities([])
+    } finally {
+      setLoadingCities(false)
+    }
+  }, [country])
 
   const checkUserParticipation = async () => {
     try {
@@ -258,21 +302,28 @@ export function SettingsLocationTab({ user, onUpdate }: SettingsLocationTabProps
               selectedCity={city}
             />
 
-            {/* City Input */}
+            {/* City Select */}
             {country && (
               <div>
                 <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
                   <MapPin className="inline mr-2 h-4 w-4" />
-                  {t('auth.register.city') || 'Ville'} *
+                  {t('settings.city') || 'Ville'} *
                 </label>
-                <input
-                  type="text"
+                <select
                   value={city}
                   onChange={(e) => handleLocationChange('city', e.target.value)}
-                  placeholder={t('auth.register.city_placeholder') || 'Entrez votre ville'}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myhigh5-primary"
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myhigh5-primary"
                   required
-                />
+                >
+                  <option value="">
+                    {loadingCities
+                      ? (t('common.loading') || 'Chargement...')
+                      : (t('participation.select_city') || 'S\u00e9lectionnez une ville')}
+                  </option>
+                  {availableCities.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
               </div>
             )}
 

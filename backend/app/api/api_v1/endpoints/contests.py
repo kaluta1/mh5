@@ -6,8 +6,12 @@ from pydantic import BaseModel
 from app.api.deps import get_current_active_user, get_current_active_user_optional
 from app.crud import contest
 from app.db.session import get_db
-from app.schemas.contest import Contest, ContestCreate, ContestUpdate, ContestWithEntries, ContestWithEnrichedContestants, VotingType
+from app.schemas.contest import Contest, ContestCreate, ContestUpdate, ContestWithEntries, ContestWithEnrichedContestants
 from app.core.cache import cache_service
+import traceback
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class ParticipateRequest(BaseModel):
@@ -57,8 +61,7 @@ def read_contests(
     active: bool = Query(None),
     search: str = Query(None, description="Recherche par nom de concours"),
     voting_level: str = Query(None, description="Filtrer par niveau de vote (country pour Nomination)"),
-    voting_type_id: int = Query(None, description="Filtrer par ID du type de vote (pour Nominations)"),
-    has_voting_type: bool = Query(None, description="Filtrer les contests avec/sans voting_type (True = avec, False = sans)"),
+    contest_mode: str = Query(None, description="Filtrer par mode: nomination ou participation"),
     filter_country: str = Query(None, description="Filtrer par pays (pour compter les contestants de ce pays)"),
     filter_region: str = Query(None, description="Filtrer par région (pour compter les contestants de cette région)"),
     filter_continent: str = Query(None, description="Filtrer par continent (pour compter les contestants de ce continent)"),
@@ -91,10 +94,8 @@ def read_contests(
         filters["search"] = search
     if voting_level:
         filters["voting_level"] = voting_level
-    if voting_type_id:
-        filters["voting_type_id"] = voting_type_id
-    if has_voting_type is not None:
-        filters["has_voting_type"] = has_voting_type
+    if contest_mode:
+        filters["contest_mode"] = contest_mode
         
     # Paramètres de tri
     if sort_by:
@@ -152,24 +153,32 @@ def read_contests(
             
             # Batch count contestants by season_id (legacy) or round_id
             # Check both via ContestSeasonLink and direct contest_id (legacy)
+            # Build contest_mode map for entry_type filtering
+            contest_mode_map = {c.id: getattr(c, 'contest_mode', 'participation') for c in contests}
+
             for contest_id in contest_ids:
                 count = 0
+                # Determine expected entry_type based on contest_mode
+                expected_entry_type = 'nomination' if contest_mode_map.get(contest_id) == 'nomination' else 'participation'
                 # Check via season_id from ContestSeasonLink
                 if contest_id in season_by_contest:
                     season_id = season_by_contest[contest_id]
                     count = db.query(func.count(Contestant.id)).filter(
                         Contestant.season_id == season_id,
-                        Contestant.is_deleted == False
+                        Contestant.is_deleted == False,
+                        Contestant.entry_type == expected_entry_type
                     ).scalar() or 0
                 
                 # Also check if season_id directly equals contest_id (legacy)
                 direct_count = db.query(func.count(Contestant.id)).filter(
                     Contestant.season_id == contest_id,
-                    Contestant.is_deleted == False
+                    Contestant.is_deleted == False,
+                    Contestant.entry_type == expected_entry_type
                 ).scalar() or 0
                 
-                # Use the maximum count (in case both exist)
-                contestant_counts[contest_id] = max(count, direct_count)
+                # Prefer direct_count (season_id == contest_id) as it is contest-specific
+                # ContestSeasonLink seasons may be shared across contests
+                contestant_counts[contest_id] = direct_count if direct_count > 0 else count
             
             # Check current_user_contesting in batch if user is authenticated
             # We want to know if the user is participating in the ACTIVE round or ACTIVE season
@@ -180,14 +189,24 @@ def read_contests(
                 # For each contest, find its active round (if any)
                 active_rounds_by_contest = {}
                 try:
-                    # Query active rounds for the given contests
-                    active_rounds = db.query(Round).filter(
-                        Round.contest_id.in_(contest_ids),
-                        Round.is_active == True,
-                        Round.is_deleted == False
+                    # Query active rounds via round_contests N:N table
+                    from app.models.round import round_contests
+                    from datetime import date
+                    today = date.today()
+
+                    active_round_links = db.query(
+                        round_contests.c.contest_id,
+                        Round.id
+                    ).join(
+                        Round, Round.id == round_contests.c.round_id
+                    ).filter(
+                        round_contests.c.contest_id.in_(contest_ids),
+                        Round.submission_start_date <= today,
+                        Round.submission_end_date >= today,
+                        Round.status != 'cancelled'
                     ).all()
-                    for r in active_rounds:
-                        active_rounds_by_contest[r.contest_id] = r.id
+                    for link in active_round_links:
+                        active_rounds_by_contest[link[0]] = link[1]
                 except Exception as e:
                     logger.warning(f"Error fetching active rounds: {str(e)}")
                 
@@ -201,24 +220,23 @@ def read_contests(
                     ).all()
                     
                     for contest_id in contest_ids:
+                        # Determine expected season_id for this contest
+                        expected_sid = season_by_contest.get(contest_id, contest_id)
+
                         # 1. First, check active round (contest-specific check)
                         if contest_id in active_rounds_by_contest:
                             target_round_id = active_rounds_by_contest[contest_id]
                             # User is contesting if they have a contestant record for this round
-                            is_contesting = any(uc.round_id == target_round_id for uc in user_contestants)
+                            # AND the contestant belongs to THIS specific contest (via season_id)
+                            is_contesting = any(
+                                uc.round_id == target_round_id and uc.season_id == expected_sid
+                                for uc in user_contestants
+                            )
                             if is_contesting:
                                 current_user_contesting_map[contest_id] = True
                                 continue
                                 
-                        # 2. Try active Season via links
-                        if contest_id in season_by_contest:
-                            target_season_id = season_by_contest[contest_id]
-                            is_contesting = any(uc.season_id == target_season_id for uc in user_contestants)
-                            if is_contesting:
-                                current_user_contesting_map[contest_id] = True
-                                continue
-                                
-                        # 3. Fallback to contest.id itself (legacy)
+                        # 2. Fallback: check season_id == contest_id (no active round)
                         is_contesting = any(uc.season_id == contest_id for uc in user_contestants)
                         if is_contesting:
                             current_user_contesting_map[contest_id] = True
@@ -235,15 +253,6 @@ def read_contests(
     
     for c in contests:
         try:
-            # Get voting type if exists
-            voting_type_dict = None
-            if c.voting_type_id and hasattr(c, 'voting_type') and c.voting_type:
-                voting_type_dict = {
-                    "id": c.voting_type.id,
-                    "name": c.voting_type.name,
-                    "voting_level": c.voting_type.voting_level.value if hasattr(c.voting_type.voting_level, 'value') else str(c.voting_type.voting_level),
-                    "commission_source": c.voting_type.commission_source.value if hasattr(c.voting_type.commission_source, 'value') else str(c.voting_type.commission_source),
-                }
             
             basic_contest = {
                 "id": c.id,
@@ -256,8 +265,7 @@ def read_contests(
                 "is_submission_open": c.is_submission_open,
                 "is_voting_open": c.is_voting_open,
                 "level": c.level,
-                "voting_type_id": getattr(c, 'voting_type_id', None),
-                "voting_type": voting_type_dict,
+                "contest_mode": getattr(c, 'contest_mode', 'participation'),
                 "entries_count": contestant_counts.get(c.id, 0),
                 "contestants": contestant_counts.get(c.id, 0),  # For compatibility
                 "participant_count": getattr(c, 'participant_count', 0),
@@ -380,6 +388,7 @@ def read_contest(
     contest_id: int,
     filter_country: str = Query(None, description="Filtrer par pays"),
     filter_continent: str = Query(None, description="Filtrer par continent"),
+    entry_type: str = Query(None, description="Filtrer par type: nomination ou participation"),
     current_user: Optional[Any] = Depends(get_current_active_user_optional),
 ) -> Any:
     """
@@ -410,7 +419,8 @@ def read_contest(
         contest_id=contest_id, 
         current_user_id=current_user_id,
         filter_country=filter_country,
-        filter_continent=filter_continent
+        filter_continent=filter_continent,
+        entry_type=entry_type
     )
     
     if not enriched_contest:
@@ -437,10 +447,13 @@ def read_contest(
 
         participation = None
         if target_round_id:
+            # Pass season_id to scope to THIS specific contest (rounds are shared)
+            # Don't filter by entry_type here - frontend filters via URL entryType param
             participation = crud_contestant.get_by_round_and_user(
-                db=db, 
-                round_id=target_round_id, 
-                user_id=current_user.id
+                db=db,
+                round_id=target_round_id,
+                user_id=current_user.id,
+                season_id=contest_id
             )
         else:
             # Fallback to season logic if no active round
@@ -464,37 +477,35 @@ def read_contest(
 
             # Check if we have participation
             participation = crud_contestant.get_by_season_and_user(
-                db=db, 
-                season_id=season_id, 
+                db=db,
+                season_id=season_id,
                 user_id=current_user.id
             )
 
         if participation:
             try:
-                # Fetch media for the participation if missing from the object
-                media_obj = participation.media
-                if not media_obj and participation.media_id:
-                    from app.models.media import Media
-                    media_obj = db.query(Media).filter(Media.id == participation.media_id).first()
-
-                # Add to response - simplified map
                 participation_dict = {
                     "id": participation.id,
-                    "contest_id": participation.contest_id,
                     "user_id": participation.user_id,
-                    "media_id": participation.media_id,
-                    "total_score": participation.total_score,
-                    "rank": participation.rank,
-                    # We need media object for schema validation
-                    "media": media_obj
+                    "title": getattr(participation, 'title', None),
+                    "description": getattr(participation, 'description', None),
+                    "image_media_ids": getattr(participation, 'image_media_ids', None),
+                    "video_media_ids": getattr(participation, 'video_media_ids', None),
+                    "total_score": getattr(participation, 'total_score', None),
+                    "rank": getattr(participation, 'rank', None),
+                    "entry_type": getattr(participation, 'entry_type', 'participation'),
+                    "round_id": getattr(participation, 'round_id', None),
+                    "season_id": getattr(participation, 'season_id', None),
+                    "nominator_country": getattr(participation, 'nominator_country', None),
+                    "nominator_city": getattr(participation, 'nominator_city', None),
                 }
                 enriched_contest["current_user_participation"] = participation_dict
+                enriched_contest["current_user_contesting"] = True
             except Exception as e:
-                # Log but don't fail the request if participation enrichment fails
                 logger.warning(f"Error enriching user participation for contest {contest_id}: {str(e)}")
                 logger.debug(traceback.format_exc())
 
-        return enriched_contest
+    return enriched_contest
 
 @router.put("/{contest_id}", response_model=Contest)
 def update_contest(

@@ -170,7 +170,7 @@ class ContestType:
     
     # Relations
     rounds: List[RoundType] = strawberry.field(default_factory=list)
-    voting_type: Optional[VotingTypeType] = None
+    contest_mode: Optional[str] = None
     contestants: List[ContestantType] = strawberry.field(default_factory=list)
     current_user_participation: Optional[ContestantType] = None
 

@@ -8,7 +8,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useToast } from '@/components/ui/toast'
 import { ContestsSkeleton } from '@/components/ui/skeleton'
-import { Lightbulb, Loader2, MapPin } from 'lucide-react'
+import { Lightbulb, Loader2, MapPin, Lock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { logger } from '@/lib/logger'
@@ -28,8 +28,8 @@ const SuggestContestDialog = dynamic(() => import('@/components/dashboard/sugges
   ssr: false
 })
 
-const CONTESTS_PER_PAGE = 8 // Reduced from 12 for faster initial load
-const INITIAL_CONTESTS = 6 // Even smaller initial load for instant display
+const CONTESTS_PER_PAGE = 9 // Reduced from 12 for faster initial load
+const INITIAL_CONTESTS = 9 // 8 contests per load
 const CACHE_TTL = 5 * 1000 // 5 seconds cache, preventing stale states for participants
 
 // Simple in-memory cache for contests data
@@ -77,9 +77,15 @@ function ContestsPageContent() {
   const [searchTerm, setSearchTerm] = useState('')
   const [committedSearch, setCommittedSearch] = useState('') // New state for executed search
   const [sortBy, setSortBy] = useState<string>('participants')
-  const [filterContinent, setFilterContinent] = useState<string>('all')
-  const [filterCountry, setFilterCountry] = useState<string>('')
-  const [filterLevel, setFilterLevel] = useState<string>('city') // Level filter for participations: 'city', 'country', 'all'
+  const [filterContinent, setFilterContinent] = useState<string>(() => {
+    const urlContinent = searchParams.get('continent')
+    return urlContinent || 'all'
+  })
+  const [filterCountry, setFilterCountry] = useState<string>(() => {
+    const urlCountry = searchParams.get('country')
+    return urlCountry || ''
+  })
+  const [filterLevel, setFilterLevel] = useState<string>('all') // Level filter for participations: 'city', 'country', 'all'
 
   // Data States
   const [rounds, setRounds] = useState<Round[]>([])
@@ -110,9 +116,12 @@ function ContestsPageContent() {
         
         setRounds(data)
 
-        // Set default active round immediately
+        // Set default to current month's round
         if (data.length > 0 && !activeRoundId) {
-          setActiveRoundId(String(data[0].id))
+          const now = new Date()
+          const currentMonthName = now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+          const currentRound = data.find((r: any) => r.name?.includes(currentMonthName))
+          setActiveRoundId(String(currentRound ? currentRound.id : data[0].id))
         }
       } catch (error: any) {
         if (error.name === 'AbortError' || abortController.signal.aborted) {
@@ -146,21 +155,38 @@ function ContestsPageContent() {
     if (typeof window !== 'undefined') localStorage.setItem('contests_category_tab', categoryTab)
   }, [categoryTab])
 
+  // Sync filters to URL for persistence on refresh
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString())
+    if (filterCountry && filterCountry !== 'all') {
+      params.set('country', filterCountry)
+    } else {
+      params.delete('country')
+    }
+    if (filterContinent && filterContinent !== 'all') {
+      params.set('continent', filterContinent)
+    } else {
+      params.delete('continent')
+    }
+    const newUrl = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname
+    window.history.replaceState(null, '', newUrl)
+  }, [filterCountry, filterContinent, searchParams])
+
   // Set default filters based on category tab and user location (only when no filter is set yet)
   useEffect(() => {
     if (!user) return
 
     if (categoryTab === 'nomination') {
-      // IMPORTANT: Always set user's country for nominations (contests display according to user country)
-      if (user.country) {
+      // Set user's country for nominations only if no country already set (from URL or manual selection)
+      if (user.country && !filterCountry) {
         setFilterCountry(user.country)
       }
       if (filterLevel !== 'all') {
         setFilterLevel('all')
       }
     } else if (categoryTab === 'participations') {
-      if (filterLevel !== 'city') {
-        setFilterLevel('city')
+      if (filterLevel !== 'all') {
+        setFilterLevel('all')
       }
       if (filterCountry) {
         setFilterCountry('')
@@ -179,7 +205,7 @@ function ContestsPageContent() {
     setAllContests([])
     setHasMore(true)
     setInitialLoadComplete(false)
-  }, [activeRoundId, categoryTab, filterCountry, filterContinent, filterLevel, committedSearch])
+  }, [activeRoundId, categoryTab, filterCountry, filterContinent, committedSearch])
 
   // 2. Fetch Contests for Selected Round (Initial load) - allow unauthenticated users
   useEffect(() => {
@@ -190,7 +216,7 @@ function ContestsPageContent() {
 
     const fetchContestsForRound = async () => {
       setContestsLoading(true)
-      const hasVotingType = categoryTab === 'nomination'
+      const contestMode = categoryTab === 'nomination' ? 'nomination' : categoryTab === 'participations' ? 'participation' : undefined
       const activeCountry = filterCountry !== 'all' ? filterCountry : undefined
       const activeContinent = filterContinent !== 'all' ? filterContinent : undefined
       const activeSearch = committedSearch || undefined
@@ -213,11 +239,11 @@ function ContestsPageContent() {
         // Use smaller initial load for faster display
         const data = await ApiService.getRounds({
           roundId: parseInt(activeRoundId),
-          hasVotingType,
+          contestMode,
           filterCountry: activeCountry,
           filterContinent: activeContinent,
           searchTerm: activeSearch,
-          contestLimit: INITIAL_CONTESTS // Load fewer contests initially for speed
+          contestLimit: INITIAL_CONTESTS
         })
 
         // Check if request was aborted
@@ -300,7 +326,7 @@ function ContestsPageContent() {
     if (loadingMore || !hasMore || !activeRoundId) return
 
     setLoadingMore(true)
-    const hasVotingType = categoryTab === 'nomination'
+    const contestMode = categoryTab === 'nomination' ? 'nomination' : categoryTab === 'participations' ? 'participation' : undefined
     const activeCountry = filterCountry !== 'all' ? filterCountry : undefined
     const activeContinent = filterContinent !== 'all' ? filterContinent : undefined
     const activeSearch = committedSearch || undefined
@@ -308,7 +334,7 @@ function ContestsPageContent() {
     try {
       const data = await ApiService.getRounds({
         roundId: parseInt(activeRoundId),
-        hasVotingType,
+        contestMode,
         filterCountry: activeCountry,
         filterContinent: activeContinent,
         searchTerm: activeSearch,
@@ -481,10 +507,17 @@ function ContestsPageContent() {
     return filtered
   }, [rawContests, activeTab, committedSearch, sortBy, categoryTab, filterLevel])
 
+  // Déterminer si le round actif est fermé (soumissions terminées)
+  const activeRoundData = rounds.find((r: any) => String(r.id) === activeRoundId)
+  const isRoundClosed = activeRoundData ? new Date(activeRoundData.submission_end_date + 'T23:59:59') < new Date() : false
+
   const handleParticipate = (id: string, isEditing: boolean, roundId: string | null) => {
     const params = new URLSearchParams()
     if (isEditing) params.set('edit', 'true')
     if (roundId) params.set('roundId', roundId)
+    // Passer le type d'entrée selon l'onglet actif
+    const entryType = categoryTab === 'nomination' ? 'nomination' : 'participation'
+    params.set('entryType', entryType)
     const q = params.toString()
     router.push(`/dashboard/contests/${id}/apply${q ? `?${q}` : ''}`)
   }
@@ -496,14 +529,17 @@ function ContestsPageContent() {
   // Allow unauthenticated users to view contests (they just can't participate)
 
   return (
-    <div className="min-h-screen bg-gray-900 dark:bg-gray-900">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
         {/* Header & Suggest Button */}
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-2xl font-bold text-white">Contests</h1>
-          <Button onClick={() => setShowSuggestDialog(true)} className="bg-blue-600 hover:bg-blue-700 text-white">
-            <Lightbulb className="w-4 h-4 mr-2" /> Suggest
+          <div>
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">{t('dashboard.contests.title') || 'Contests'}</h1>
+            <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">{t('dashboard.contests.subtitle') || 'Discover and participate in contests'}</p>
+          </div>
+          <Button onClick={() => setShowSuggestDialog(true)} className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-600/20">
+            <Lightbulb className="w-4 h-4 mr-2" /> {t('dashboard.contests.suggest_contest.button') || 'Suggest'}
           </Button>
         </div>
 
@@ -514,12 +550,20 @@ function ContestsPageContent() {
               <button
                 key={round.id}
                 onClick={() => setActiveRoundId(String(round.id))}
-                className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all whitespace-nowrap ${activeRoundId === String(round.id)
-                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25'
-                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white'
+                className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 whitespace-nowrap ${activeRoundId === String(round.id)
+                  ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-500/30 scale-105'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-900 dark:bg-gray-800/80 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white hover:scale-[1.02]'
                   }`}
               >
-                {round.name} <span className="ml-1 opacity-70">({round.contests_count !== undefined ? round.contests_count : (round.contests?.length || 0)})</span>
+                {(() => {
+                  const isPast = new Date(round.submission_end_date + 'T23:59:59') < new Date()
+                  return (
+                    <>
+                      {isPast && <Lock className="w-3 h-3 mr-1 inline opacity-60" />}
+                      {round.name} <span className="ml-1 opacity-70">({round.contests_count !== undefined ? round.contests_count : (round.contests?.length || 0)})</span>
+                    </>
+                  )
+                })()}
               </button>
             ))}
           </div>
@@ -539,39 +583,38 @@ function ContestsPageContent() {
             onCountryChange={setFilterCountry}
             sortBy={sortBy}
             onSortChange={setSortBy}
-            showCountryFilter={categoryTab === 'nomination'} // Only show country filter for nominations
+            showCountryFilter={true}
             className="mb-4"
           />
 
           {/* Level Filter for Participations */}
           {categoryTab === 'participations' && (
-            <div className="flex items-center gap-4">
-              <label className="text-sm font-medium text-gray-300 whitespace-nowrap">
-                {t('dashboard.contests.filter_level') || 'Level:'}
-              </label>
-              <Select value={filterLevel} onValueChange={setFilterLevel}>
-                <SelectTrigger className="w-48 bg-gray-800 border-gray-700 text-white">
-                  <MapPin className="w-4 h-4 mr-2" />
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-gray-800 border-gray-700">
-                  <SelectItem value="city">
-                    {t('dashboard.contests.level_city') || 'City'}
-                  </SelectItem>
-                  <SelectItem value="country">
-                    {t('dashboard.contests.level_country') || 'Country'}
-                  </SelectItem>
-                  <SelectItem value="all">
-                    {t('dashboard.contests.all_levels') || 'All Levels'}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-gray-400 dark:text-gray-500" />
+              <span className="text-sm text-gray-500 mr-1">{t('dashboard.contests.filter_level') || 'Level'}:</span>
+              {[
+                { value: 'city', label: t('dashboard.contests.level_city') || 'City' },
+                { value: 'country', label: t('dashboard.contests.level_country') || 'Country' },
+                { value: 'all', label: t('dashboard.contests.all_levels') || 'All' },
+              ].map((level) => (
+                <button
+                  key={level.value}
+                  onClick={() => setFilterLevel(level.value)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                    filterLevel === level.value
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-900 dark:bg-gray-800/60 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-300'
+                  }`}
+                >
+                  {level.label}
+                </button>
+              ))}
             </div>
           )}
         </div>
 
         {/* Main Category Tabs (Nomination / Participations) */}
-        <div className="mb-6 border-b border-gray-800">
+        <div className="mb-6 border-b border-gray-200 dark:border-gray-800">
           <div className="flex space-x-1">
             <button
               onClick={() => {
@@ -588,7 +631,7 @@ function ContestsPageContent() {
                 }
                 setFilterLevel('all'); // Reset level filter
               }}
-              className={`px-6 py-3 text-base font-semibold transition-colors border-b-2 ${categoryTab === 'nomination' ? 'border-blue-500 text-blue-500' : 'border-transparent text-gray-400 hover:text-gray-300'}`}
+              className={`px-6 py-3 text-base font-semibold transition-colors border-b-2 ${categoryTab === 'nomination' ? 'border-blue-500 text-blue-600 dark:text-blue-400 bg-blue-500/5' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}`}
             >
               {t('dashboard.contests.nomination') || 'Nomination'}
             </button>
@@ -600,9 +643,9 @@ function ContestsPageContent() {
                 setCommittedSearch('');
                 setFilterCountry(''); // Reset country filter for participations
                 setFilterContinent('all');
-                setFilterLevel('city'); // Default to city level for participations
+                setFilterLevel('all'); // Default to all levels for participations
               }}
-              className={`px-6 py-3 text-base font-semibold transition-colors border-b-2 ${categoryTab === 'participations' ? 'border-blue-500 text-blue-500' : 'border-transparent text-gray-400 hover:text-gray-300'}`}
+              className={`px-6 py-3 text-base font-semibold transition-colors border-b-2 ${categoryTab === 'participations' ? 'border-blue-500 text-blue-600 dark:text-blue-400 bg-blue-500/5' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}`}
             >
               {t('dashboard.contests.participations') || 'Participations'}
             </button>
@@ -611,7 +654,7 @@ function ContestsPageContent() {
 
         {/* Type Tabs (Generated from ALL contests in round) */}
         {contestTypes.length > 1 && (
-          <div className="mb-8 border-b border-gray-800">
+          <div className="mb-8 border-b border-gray-200 dark:border-gray-800">
             <div className="flex space-x-6 overflow-x-auto scrollbar-hide">
               {contestTypes.map((type) => (
                 <button
@@ -619,7 +662,7 @@ function ContestsPageContent() {
                   onClick={() => setActiveTab(type.id || 'all')}
                   className={`pb-4 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${activeTab === (type.id || 'all')
                     ? 'border-blue-500 text-blue-500'
-                    : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-700'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:border-gray-700'
                     }`}
                 >
                   {type.label}
@@ -634,23 +677,25 @@ function ContestsPageContent() {
           <ContestsSkeleton />
         ) : displayedContests.length > 0 ? (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6">
               {displayedContests.map((contest: any) => (
                 <ContestCard
                   key={contest.id}
                   {...contest}
-                  canParticipate={true}
+                  canParticipate={!filterCountry || filterCountry === 'all' || filterCountry === '' || (!!user?.country && filterCountry.toLowerCase() === user.country.toLowerCase())}
                   isKycVerified={!!user?.identity_verified}
                   isFavorite={false}
                   isNomination={categoryTab === 'nomination'}
-                  votingType={contest.votingType}
+                  contest_mode={contest.contest_mode}
                   currentUserContesting={contest.currentUserContesting || false}
                   onToggleFavorite={() => { }}
+                  isRoundClosed={isRoundClosed}
                   onParticipate={() => handleParticipate(contest.id, contest.currentUserContesting || false, activeRoundId)}
                   onViewContestants={() => {
                     const params = new URLSearchParams()
                     if (filterCountry && filterCountry !== 'all') params.set('country', filterCountry)
                     params.set('continent', filterContinent !== 'all' ? filterContinent : 'all')
+                    params.set('entryType', categoryTab === 'nomination' ? 'nomination' : 'participation')
                     const q = params.toString()
                     router.push(`/dashboard/contests/${contest.id}${q ? `?${q}` : ''}`)
                   }}
@@ -658,6 +703,7 @@ function ContestsPageContent() {
                     const params = new URLSearchParams()
                     if (filterCountry && filterCountry !== 'all') params.set('country', filterCountry)
                     params.set('continent', filterContinent !== 'all' ? filterContinent : 'all')
+                    params.set('entryType', categoryTab === 'nomination' ? 'nomination' : 'participation')
                     const q = params.toString()
                     router.push(`/dashboard/contests/${contest.id}${q ? `?${q}` : ''}`)
                   }}
@@ -668,14 +714,14 @@ function ContestsPageContent() {
             {/* Infinite scroll loader */}
             <div ref={loaderRef} className="flex justify-center py-8">
               {loadingMore && (
-                <div className="flex items-center gap-2 text-gray-400">
+                <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>Loading more...</span>
+                  <span>Chargement...</span>
                 </div>
               )}
               {!hasMore && allContests.length > 0 && (
-                <span className="text-gray-500">
-                  {t('admin.contests.all_loaded') || `Showing all ${totalContests} contests`}
+                <span className="text-gray-500 dark:text-gray-400">
+                  {t('admin.contests.all_loaded') || `${totalContests} concours affichés`}
                 </span>
               )}
             </div>
@@ -683,11 +729,11 @@ function ContestsPageContent() {
         ) : !initialLoadComplete ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
             <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
-            <p className="text-gray-500">{t('common.loading') || 'Loading...'}</p>
+            <p className="text-gray-500 dark:text-gray-400">{t('common.loading') || 'Loading...'}</p>
           </div>
         ) : (
           <div className="text-center py-20">
-            <p className="text-gray-500">{t('contests.no_contests') || 'No contests found matching criteria.'}</p>
+            <p className="text-gray-500 dark:text-gray-400">{t('contests.no_contests') || 'Aucun concours trouvé correspondant aux critères.'}</p>
           </div>
         )}
 

@@ -156,10 +156,10 @@ function ContestsPageContent() {
     // The backend returns only the contests matching the categoryTab (nomination or participations)
     // However, we keep a safety check in case the backend filter didn't work
     let categoryFiltered = allContests.filter(contest => {
-      const hasVotingType = contest.votingType != null
+      const isNomination = contest.contest_mode === 'nomination'
       const matches = categoryTab === 'nomination'
-        ? hasVotingType
-        : !hasVotingType
+        ? isNomination
+        : !isNomination
 
       if (!matches) {
         // Contest filtered out
@@ -219,16 +219,16 @@ function ContestsPageContent() {
 
       // Pour l'onglet Nominations : filtrer les contests qui ont un voting_type (has_voting_type = true)
       // Pour l'onglet Participations : filtrer les contests qui n'ont pas de voting_type (has_voting_type = false)
-      const hasVotingType = categoryTab === 'nomination' ? true : categoryTab === 'participations' ? false : undefined
+      const contestMode = categoryTab === 'nomination' ? 'nomination' : categoryTab === 'participations' ? 'participation' : undefined
 
       // Reduced initial load for faster display
       const { contests, total } = await contestService.getContests(
         0,
-        6, // Reduced to 6 for faster initial load
+        8, // 8 contests per load
         activeSearchTerm || undefined,
         undefined, // votingLevel n'est plus utilisé
-        undefined, // votingTypeId
-        hasVotingType
+        
+        contestMode
       )
 
       if (!contests || !Array.isArray(contests)) {
@@ -500,8 +500,8 @@ function ContestsPageContent() {
           </div>
 
           {isLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
-              {[...Array(6)].map((_, i) => (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6">
+              {[...Array(8)].map((_, i) => (
                 <ContestCardSkeleton key={i} />
               ))}
             </div>
@@ -516,16 +516,6 @@ function ContestsPageContent() {
               <p className="text-gray-500 dark:text-gray-400 mb-6 max-w-md mx-auto">
                 {t('pages.contests.try_different_filter') || "Essayez un autre filtre ou terme de recherche"}
               </p>
-              {/* DEBUG INFO */}
-              <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-900 rounded text-left text-xs text-gray-600 dark:text-gray-400 max-w-md mx-auto">
-                <p><strong>Debug Info:</strong></p>
-                <p>All Contests: {allContests.length}</p>
-                <p>Filtered Contests: {filteredContests.length}</p>
-                <p>Category Tab: {categoryTab}</p>
-                <p>Active Tab: {activeTab}</p>
-                <p>Is Loading: {isLoading ? 'Yes' : 'No'}</p>
-                <p>Search Term: {activeSearchTerm || 'None'}</p>
-              </div>
               <Button
                 variant="outline"
                 onClick={() => {
@@ -539,7 +529,7 @@ function ContestsPageContent() {
               </Button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6">
               {filteredContests.map((contest, index) => (
                 <ContestCard
                   key={contest.id}
@@ -573,7 +563,7 @@ function ContestsPageContent() {
                   minAge={contest.minAge}
                   maxAge={contest.maxAge}
                   isNomination={categoryTab === 'nomination'}
-                  votingType={contest.votingType}
+                  contest_mode={contest.contest_mode}
                   currentUserContesting={contest.currentUserContesting || false}
                   isFavorite={favorites.some(favId => favId.toString() === contest.id.toString())}
                   onToggleFavorite={() => handleToggleFavorite(contest.id)}

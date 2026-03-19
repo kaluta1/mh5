@@ -64,6 +64,12 @@ class CRUDVerification:
             "selfie_url": None,
             "voice_url": None,
             "video_url": None,
+            "has_brand": False,
+            "has_content": False,
+            "brand_status": None,
+            "content_status": None,
+            "brand_url": None,
+            "content_url": None,
         }
         
         for v in verifications:

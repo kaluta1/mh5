@@ -1,15 +1,26 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { useState, useEffect, useRef } from 'react'
 import * as React from 'react'
-import { Play, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Play, ChevronLeft, ChevronRight, Clock, Info, Lock, ThumbsUp } from 'lucide-react'
 import { useLanguage } from '@/contexts/language-context'
 import { useAuth } from '@/hooks/use-auth'
 import { VideoPreviewDialog } from '@/components/ui/video-preview-dialog'
 import { MediaViewerModal } from '@/components/media/media-viewer-modal'
 import { VideoEmbed } from '@/components/ui/video-embed'
-import { detectVideoPlatform } from '@/lib/utils/video-platforms'
+import { detectVideoPlatform, convertToEmbedUrl } from '@/lib/utils/video-platforms'
 import { contestService } from '@/services/contest-service'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { reactionsService } from '@/services/reactions-service'
 import { sharesService } from '@/services/shares-service'
 import { useToast } from '@/components/ui/toast'
@@ -31,8 +42,9 @@ function DescriptionWithPopover({ description, maxLength = 150 }: { description:
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  const shouldTruncate = description && description.length > maxLength
-  const truncatedDescription = shouldTruncate ? description.substring(0, maxLength) + '...' : description
+  const plainText = description ? description.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim() : ''
+  const shouldTruncate = plainText.length > maxLength
+  const truncatedDescription = shouldTruncate ? plainText.substring(0, maxLength) + '...' : plainText
 
   const handleMouseEnter = () => {
     if (timeoutRef.current) {
@@ -61,9 +73,7 @@ function DescriptionWithPopover({ description, maxLength = 150 }: { description:
 
   if (!shouldTruncate) {
     return (
-      <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words">
-        {description}
-      </p>
+      <div className="text-sm text-gray-700 dark:text-gray-300 prose prose-sm dark:prose-invert max-w-none [&>*]:m-0 [&>p]:mb-1" dangerouslySetInnerHTML={{ __html: description }} />
     )
   }
 
@@ -87,13 +97,13 @@ function DescriptionWithPopover({ description, maxLength = 150 }: { description:
         >
           <div className="space-y-2">
             <h4 className="font-semibold text-sm text-gray-900 dark:text-white">Description complète</h4>
-            <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap break-words">
-              {description}
-            </p>
+            <div className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed prose prose-sm dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: description }} />
           </div>
         </div>
       )}
     </div>
+
+
   )
 }
 
@@ -117,6 +127,8 @@ interface ContestantCardProps {
   avatar: string
   participationTitle?: string
   votes: number
+  totalPoints?: number
+  isVotingOpenForRound?: boolean
   rank?: number
   imagesCount?: number
   videosCount?: number
@@ -163,6 +175,8 @@ export function ContestantCard({
   avatar,
   participationTitle,
   votes,
+  totalPoints = 0,
+  isVotingOpenForRound = true,
   rank,
   imagesCount = 0,
   videosCount = 0,
@@ -206,9 +220,16 @@ export function ContestantCard({
   const [selectedMedia, setSelectedMedia] = useState<Media | null>(null)
   const [showShareDialog, setShowShareDialog] = useState(false)
   const [shareLink, setShareLink] = useState('')
+  const router = useRouter()
   const [showCommentsDialog, setShowCommentsDialog] = useState(false)
   const [isVoting, setIsVoting] = useState(false)
+  const [showReplaceDialog, setShowReplaceDialog] = useState(false)
+  const [replacedContestant, setReplacedContestant] = useState<{ id: number; name: string; position: number } | null>(null)
   const [currentVotes, setCurrentVotes] = useState(votes)
+  
+  // Override canVote si le round n'est pas en phase de vote
+  const effectiveCanVote = isVotingOpenForRound ? canVote : false
+  const effectiveVoteRestrictionReason = !isVotingOpenForRound ? 'voting_not_open' : voteRestrictionReason
   const [currentComments, setCurrentComments] = useState(comments)
   const [selectedReaction, setSelectedReaction] = useState<string | null>(null)
   const [reactionsCount, setReactionsCount] = useState(reactions || 0)
@@ -268,44 +289,63 @@ export function ContestantCard({
   }
 
   const handleVote = async () => {
-    if (!canVote || isVoting) return
+    if (!effectiveCanVote || isVoting) return
 
     try {
       setIsVoting(true)
-      await contestService.voteForContestant(Number(id), 5)
-      setIsLiked(true)
-      setCurrentVotes(prev => prev + 1)
-      addToast(t('dashboard.contests.vote_success') || 'Vote enregistré avec succès!', 'success')
-      onVote()
+      const result = await contestService.voteForContestant(Number(id))
+
+      if (result.success) {
+        setIsLiked(true)
+        setCurrentVotes(prev => prev + 1)
+        addToast(t('dashboard.contests.vote_success') || 'Vote enregistré avec succès!', 'success')
+        onVote()
+      } else if (result.code === 'max_votes_reached') {
+        // Ouvrir le dialogue de confirmation pour remplacer le 5e vote
+        setReplacedContestant(result.replacedContestant || null)
+        setShowReplaceDialog(true)
+      } else if (result.code === 'already_voted') {
+        addToast(t('dashboard.contests.already_voted_error') || 'Vous avez déjà voté pour ce participant.', 'info')
+      }
     } catch (error: any) {
       console.error('Error voting:', error)
       const errorMessage = error.response?.data?.detail || ''
+      const errorStr = typeof errorMessage === 'string' ? errorMessage : (errorMessage.message || '')
 
-      // Déterminer le message d'erreur approprié selon la réponse du backend
       let toastMessage = t('dashboard.contests.vote_error') || 'Erreur lors du vote. Veuillez réessayer.'
+      const errorLower = errorStr.toLowerCase()
 
-      const errorLower = errorMessage.toLowerCase()
-
-      if (errorLower.includes('vote') && errorLower.includes('ouvert')) {
+      if ((errorLower.includes('vote') && errorLower.includes('ouvert')) || errorLower.includes('not started yet') || errorLower.includes('has ended') || errorLower.includes('voting is not open')) {
         toastMessage = t('dashboard.contests.voting_not_open') || 'Le vote n\'est pas encore ouvert pour ce concours.'
-      } else if (errorLower.includes('déjà voté') || errorLower.includes('already voted')) {
-        toastMessage = t('dashboard.contests.already_voted_error') || 'Vous avez déjà voté pour ce participant.'
-      } else if (errorLower.includes('propre candidature') || errorLower.includes('own entry')) {
+      } else if (errorLower.includes('propre candidature') || errorLower.includes('own')) {
         toastMessage = t('dashboard.contests.cannot_vote_own') || 'Vous ne pouvez pas voter pour votre propre candidature.'
-      } else if (errorLower.includes('masculins') && errorLower.includes('féminines') && errorLower.includes('voter')) {
-        toastMessage = t('dashboard.contests.vote_gender_restriction_male') || 'Ce concours est réservé aux participants masculins. Seules les participantes féminines peuvent voter.'
-      } else if (errorLower.includes('féminines') && errorLower.includes('masculins') && errorLower.includes('voter')) {
-        toastMessage = t('dashboard.contests.vote_gender_restriction_female') || 'Ce concours est réservé aux participantes féminines. Seuls les participants masculins peuvent voter.'
-      } else if (errorLower.includes('genre') && errorLower.includes('voter')) {
-        toastMessage = t('dashboard.contests.vote_gender_not_set') || 'Votre profil ne contient pas d\'information de genre. Veuillez compléter votre profil pour voter dans ce concours.'
-      } else if (errorMessage) {
-        // Utiliser le message d'erreur du backend s'il est disponible
-        toastMessage = errorMessage
+      } else if (errorLower.includes('gender') || errorLower.includes('genre')) {
+        toastMessage = t('dashboard.contests.vote_gender_not_set') || 'Veuillez compléter votre profil pour voter.'
+      } else if (errorStr) {
+        toastMessage = errorStr
       }
 
       addToast(toastMessage, 'error')
     } finally {
       setIsVoting(false)
+    }
+  }
+
+  const handleReplaceVote = async () => {
+    try {
+      setIsVoting(true)
+      setShowReplaceDialog(false)
+      await contestService.replaceVote(Number(id))
+      setIsLiked(true)
+      setCurrentVotes(prev => prev + 1)
+      addToast(t('dashboard.contests.vote_replaced') || 'Vote remplacé avec succès!', 'success')
+      onVote()
+    } catch (error: any) {
+      console.error('Error replacing vote:', error)
+      addToast(t('dashboard.contests.vote_error') || 'Erreur lors du remplacement du vote.', 'error')
+    } finally {
+      setIsVoting(false)
+      setReplacedContestant(null)
     }
   }
 
@@ -397,9 +437,9 @@ export function ContestantCard({
   return (
     <>
       {/* Modern Post Card */}
-      <div className="bg-white dark:bg-gray-800/90 rounded-xl border border-gray-200/50 dark:border-gray-700/50 shadow-md hover:shadow-xl transition-all duration-300 max-w-2xl mx-auto backdrop-blur-sm overflow-hidden">
+      <div className="bg-white dark:bg-gray-800/90 rounded-2xl border border-gray-200/60 dark:border-gray-700/50 shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden flex flex-col h-full">
         {/* Header */}
-        <div className="p-5 pb-4 bg-gradient-to-r from-gray-50/50 to-transparent dark:from-gray-800/50 border-b border-gray-100 dark:border-gray-700/50">
+        <div className="p-3 pb-2 border-b border-gray-100 dark:border-gray-700/30">
           <div className="flex items-start justify-between">
             {participationTitle && (
               <h4
@@ -407,7 +447,7 @@ export function ContestantCard({
                   e.stopPropagation()
                   onViewDetails()
                 }}
-                className="text-lg font-bold text-gray-900 dark:text-white hover:text-myhigh5-primary dark:hover:text-myhigh5-blue-400 transition-colors cursor-pointer flex-1 line-clamp-2"
+                className="text-sm font-bold text-gray-900 dark:text-white hover:text-myhigh5-primary dark:hover:text-white transition-colors cursor-pointer flex-1 line-clamp-2"
               >
                 {participationTitle}
               </h4>
@@ -449,13 +489,59 @@ export function ContestantCard({
                       </div>
                     </div>
                   </>
-                ) : (
-                  <VideoEmbed
-                    url={firstVideo.url}
-                    className="w-full h-full"
-                    allowFullscreen={true}
-                  />
-                )}
+                ) : (() => {
+                  const _platform = detectVideoPlatform(firstVideo.url)
+                  const _info = convertToEmbedUrl(firstVideo.url)
+                  // YouTube: use thumbnail, others: gradient placeholder
+                  const _ytThumb = _platform === 'youtube' && _info?.videoId
+                    ? `https://img.youtube.com/vi/${_info.videoId}/hqdefault.jpg`
+                    : null
+                  const _platformLabels: Record<string, string> = {
+                    tiktok: 'TikTok', youtube: 'YouTube', instagram: 'Instagram',
+                    vimeo: 'Vimeo', facebook: 'Facebook', snapchat: 'Snapchat'
+                  }
+                  const _platformColors: Record<string, string> = {
+                    tiktok: 'from-gray-900 via-gray-800 to-gray-900',
+                    youtube: 'from-red-900 via-red-800 to-red-900',
+                    instagram: 'from-purple-900 via-pink-800 to-orange-900',
+                    vimeo: 'from-blue-900 via-blue-800 to-blue-900',
+                    facebook: 'from-blue-900 via-blue-800 to-blue-900',
+                    snapchat: 'from-yellow-900 via-yellow-800 to-yellow-900',
+                  }
+                  return (
+                    <div className="relative w-full h-full">
+                      {_ytThumb ? (
+                        <img src={_ytThumb} alt="Video thumbnail" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className={`w-full h-full bg-gradient-to-br ${_platformColors[_platform] || 'from-gray-800 to-gray-900'} flex items-center justify-center`}>
+                          <div className="text-center">
+                            <div className="text-4xl mb-2 opacity-30">▶</div>
+                            <span className="text-white/40 text-xs font-medium uppercase tracking-wider">{_platformLabels[_platform] || 'Vidéo'}</span>
+                          </div>
+                        </div>
+                      )}
+                      {/* Play overlay */}
+                      <div className="absolute inset-0 bg-black/30 group-hover:bg-black/40 transition-all flex items-center justify-center">
+                        <div className="w-16 h-16 rounded-full bg-white/90 dark:bg-gray-800/90 flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg">
+                          <Play className="w-8 h-8 text-myhigh5-primary ml-0.5" fill="currentColor" />
+                        </div>
+                      </div>
+                      {/* Platform badge */}
+                      <div className="absolute top-3 left-3">
+                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold text-white shadow-md ${
+                          _platform === 'tiktok' ? 'bg-black' :
+                          _platform === 'youtube' ? 'bg-red-600' :
+                          _platform === 'instagram' ? 'bg-gradient-to-r from-purple-600 via-pink-500 to-orange-400' :
+                          _platform === 'vimeo' ? 'bg-blue-500' :
+                          _platform === 'facebook' ? 'bg-blue-600' :
+                          'bg-gray-700'
+                        }`}>
+                          {_platformLabels[_platform] || 'Vidéo'}
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })()}
               </div>
             </div>
           </div>
@@ -525,24 +611,25 @@ export function ContestantCard({
         )}
 
         {/* Author and Description - Moved to bottom */}
-        <div className="px-5 pt-4 pb-3 border-t border-gray-100 dark:border-gray-700/50 bg-gradient-to-b from-transparent to-gray-50/30 dark:to-gray-800/30">
+        <div className="px-4 sm:px-5 pt-3 sm:pt-4 pb-3">
           <div className="flex items-start gap-3 mb-3">
             {/* Avatar */}
-            <div className="flex-shrink-0 relative">
-              {avatar && (avatar.startsWith('http') || avatar.startsWith('/')) ? (
-                <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-myhigh5-primary/20 to-myhigh5-secondary/20 ring-2 ring-gray-200 dark:ring-gray-700">
-                  <img src={avatar} alt={name} className="w-full h-full object-cover" />
+            <div className="flex-shrink-0 relative cursor-pointer" onClick={() => userId && router.push(`/dashboard/users/${userId}`)}>
+              {avatar && avatar !== '/default-avatar.png' && (avatar.startsWith('http') || avatar.startsWith('/')) ? (
+                <div className="w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary ring-2 ring-gray-200 dark:ring-gray-700 hover:ring-myhigh5-primary transition-all">
+                  <img
+                    src={avatar}
+                    alt=""
+                    className="w-full h-full object-cover"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                  />
                 </div>
               ) : (
-                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary flex items-center justify-center text-lg ring-2 ring-gray-200 dark:ring-gray-700">
-                  {avatar || '👤'}
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary flex items-center justify-center ring-2 ring-gray-200 dark:ring-gray-700 hover:ring-myhigh5-primary transition-all flex-shrink-0">
+                  <span className="text-sm font-bold text-white">{name?.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase() || '?'}</span>
                 </div>
               )}
-              {rank && rank <= 3 && (
-                <span className="absolute -top-1 -right-1 text-[10px] font-bold bg-gradient-to-br from-yellow-400 to-amber-500 text-white rounded-full w-5 h-5 flex items-center justify-center shadow-lg">
-                  {rank === 1 ? '🥇' : rank === 2 ? '🥈' : '🥉'}
-                </span>
-              )}
+
             </div>
 
             {/* Name and Location */}
@@ -552,34 +639,20 @@ export function ContestantCard({
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <h3
-                        className="text-base font-bold text-gray-900 dark:text-white hover:text-myhigh5-primary dark:hover:text-myhigh5-blue-400 transition-colors cursor-help"
+                        className="text-sm font-semibold text-gray-900 dark:text-white hover:text-myhigh5-primary dark:hover:text-myhigh5-primary-light transition-colors cursor-pointer truncate"
+                        onClick={() => userId && router.push(`/dashboard/users/${userId}`)}
                         onMouseEnter={onHoverAuthor}
                         onMouseLeave={onHoverEnd}
                       >
                         {name}
                       </h3>
                     </TooltipTrigger>
-                    <TooltipContent className="bg-gray-800 text-white border-gray-700">
+                    <TooltipContent className="bg-white text-gray-900 border-gray-200 shadow-lg dark:bg-gray-800 dark:text-white dark:border-gray-700">
                       <p className="text-xs">{t('dashboard.contests.tooltip_author') || 'Voir le profil du participant'}</p>
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
-                {rank && (
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className="text-xs font-bold bg-gradient-to-r from-myhigh5-primary to-myhigh5-secondary text-white px-2.5 py-1 rounded-full cursor-help shadow-sm">
-                          #{rank}
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent className="bg-gray-800 text-white border-gray-700">
-                        <p className="text-xs">
-                          {t('dashboard.contests.tooltip_rank') || `Classement ${rank === 1 ? 'premier' : rank === 2 ? 'deuxième' : rank === 3 ? 'troisième' : `${rank}ème`} dans ce concours`}
-                        </p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                )}
+
               </div>
               <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 flex items-center gap-1">
                 <span className="w-1 h-1 rounded-full bg-gray-400"></span>
@@ -593,10 +666,10 @@ export function ContestantCard({
                       onMouseEnter={currentUserId === userId ? onHoverVotes : undefined}
                       onMouseLeave={currentUserId === userId ? onHoverEnd : undefined}
                     >
-                      {currentVotes} {t('dashboard.contests.votes')}
+                      {totalPoints} pts
                     </p>
                   </TooltipTrigger>
-                  <TooltipContent className="bg-gray-800 text-white border-gray-700">
+                  <TooltipContent className="bg-white text-gray-900 border-gray-200 shadow-lg dark:bg-gray-800 dark:text-white dark:border-gray-700">
                     <p className="text-xs">
                       {currentUserId === userId
                         ? (t('dashboard.contests.tooltip_votes_author') || `${currentVotes} vote${currentVotes > 1 ? 's' : ''} reçu${currentVotes > 1 ? 's' : ''}. Survolez pour voir la liste.`)
@@ -605,62 +678,85 @@ export function ContestantCard({
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
-              {/* Affichage de la restriction de vote */}
-              {!canVote && voteRestrictionReason && currentUserId && currentUserId !== userId && (
-                <div className="mt-1.5 flex items-center gap-1.5 text-xs">
-                  <span className="text-amber-600 dark:text-amber-400 font-medium">
-                    {(() => {
-                      switch (voteRestrictionReason) {
-                        case 'already_voted':
-                          return t('dashboard.contests.already_voted') || 'Already voted'
-                        case 'different_city':
-                          return t('dashboard.contests.restriction_different_city') || 'Different city'
-                        case 'different_country':
-                          return t('dashboard.contests.restriction_different_country') || 'Different country'
-                        case 'different_region':
-                          return t('dashboard.contests.restriction_different_region') || 'Different region'
-                        case 'different_continent':
-                          return t('dashboard.contests.restriction_different_continent') || 'Different continent'
-                        case 'own_contestant':
-                          return t('dashboard.contests.restriction_own_contestant') || 'Your own contestant'
-                        case 'not_authenticated':
-                          return t('dashboard.contests.restriction_not_authenticated') || 'Login required'
-                        case 'geographic_restriction':
-                          return t('dashboard.contests.restriction_geographic') || 'Geographic restriction'
-                        case 'user_not_found':
-                          return t('dashboard.contests.restriction_user_not_found') || 'User not found'
-                        default:
-                          return t('dashboard.contests.cannot_vote') || 'Cannot vote'
-                      }
-                    })()}
-                  </span>
-                </div>
-              )}
+
             </div>
           </div>
 
           {/* Description */}
-          <div className="ml-[52px]">
-            <ContestantDescription description={description} maxLength={150} />
+          <div className="mt-1">
+            <ContestantDescription description={description} maxLength={60} />
           </div>
         </div>
 
+        {/* Vote Status Banner */}
+        {!effectiveCanVote && effectiveVoteRestrictionReason && currentUserId && currentUserId !== userId && (
+          <div className={`mx-4 mb-2 rounded-xl px-3.5 py-2.5 flex items-start gap-2.5 text-sm ${
+            voteRestrictionReason === 'voting_not_open'
+              ? 'bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/50'
+              : voteRestrictionReason === 'already_voted'
+              ? 'bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-800/50'
+              : 'bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/50'
+          }`}>
+            {voteRestrictionReason === 'voting_not_open' ? (
+              <Clock className="w-4 h-4 text-blue-500 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+            ) : voteRestrictionReason === 'already_voted' ? (
+              <ThumbsUp className="w-4 h-4 text-green-500 dark:text-green-400 flex-shrink-0 mt-0.5 fill-current" />
+            ) : (
+              <Info className="w-4 h-4 text-amber-500 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+            )}
+            <div className="flex-1 min-w-0">
+              <p className={`text-xs font-medium leading-relaxed ${
+                voteRestrictionReason === 'voting_not_open'
+                  ? 'text-blue-700 dark:text-blue-300'
+                  : voteRestrictionReason === 'already_voted'
+                  ? 'text-green-700 dark:text-green-300'
+                  : 'text-amber-700 dark:text-amber-300'
+              }`}>
+                {(() => {
+                  switch (voteRestrictionReason) {
+                    case 'voting_not_open':
+                      return t('dashboard.contests.voting_not_open') || "Le vote n'est pas encore ouvert pour ce concours."
+                    case 'already_voted':
+                      return t('dashboard.contests.already_voted_message') || "Vous avez d\u00e9j\u00e0 vot\u00e9 pour ce participant."
+                    case 'own_contestant':
+                      return t('dashboard.contests.restriction_own_contestant_desc') || 'Vous ne pouvez pas voter pour votre propre candidature.'
+                    case 'not_authenticated':
+                      return t('dashboard.contests.restriction_not_authenticated_desc') || 'Veuillez vous connecter pour voter.'
+                    case 'different_city':
+                      return t('dashboard.contests.restriction_different_city_desc') || 'Vous ne pouvez voter que pour les candidats de votre ville.'
+                    case 'different_country':
+                      return t('dashboard.contests.restriction_different_country_desc') || 'Vous ne pouvez voter que pour les candidats de votre pays.'
+                    case 'different_region':
+                      return t('dashboard.contests.restriction_different_region_desc') || 'Vous ne pouvez voter que pour les candidats de votre r\u00e9gion.'
+                    case 'different_continent':
+                      return t('dashboard.contests.restriction_different_continent_desc') || 'Vous ne pouvez voter que pour les candidats de votre continent.'
+                    case 'geographic_restriction':
+                      return t('dashboard.contests.restriction_geographic_desc') || 'Restriction g\u00e9ographique.'
+                    default:
+                      return t('dashboard.contests.cannot_vote') || 'Le vote est indisponible.'
+                  }
+                })()}
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Action Buttons - Facebook Style with Counts */}
-        <div className="px-2 border-t border-gray-100 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-800/30">
-          <div className="grid grid-cols-4 divide-x divide-gray-200/50 dark:divide-gray-700/50">
+        <div className="px-1 border-t border-gray-100 dark:border-gray-700/30">
+          <div className="grid grid-cols-4">
             <div
               onMouseEnter={currentUserId === userId ? onHoverVotes : undefined}
               onMouseLeave={currentUserId === userId ? onHoverEnd : undefined}
             >
               <VoteButton
                 contestantId={Number(id)}
-                canVote={canVote}
+                canVote={effectiveCanVote}
                 hasVoted={isLiked}
                 isVoting={isVoting}
                 onVote={handleVote}
                 isAuthor={currentUserId === userId}
                 votesCount={currentVotes}
-                voteRestrictionReason={voteRestrictionReason}
+                voteRestrictionReason={effectiveVoteRestrictionReason}
               />
             </div>
             <CommentsButton
@@ -708,6 +804,18 @@ export function ContestantCard({
             setShowVideoDialog(false)
             setSelectedVideo(null)
           }}
+          canVote={effectiveCanVote}
+          hasVoted={isLiked}
+          isVoting={isVoting}
+          isAuthor={currentUserId === userId}
+          votesCount={currentVotes}
+          onVote={handleVote}
+          voteRestrictionReason={effectiveVoteRestrictionReason}
+          authorName={name}
+          authorAvatar={avatar}
+          rank={rank}
+          contestantId={id}
+          commentsCount={currentComments}
         />
       )}
 
@@ -780,6 +888,30 @@ export function ContestantCard({
         isLoading={isDeleting}
         isDangerous={true}
       />
+
+      {/* Dialogue de confirmation de remplacement du 5e vote */}
+      <AlertDialog open={showReplaceDialog} onOpenChange={setShowReplaceDialog}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t('dashboard.contests.replace_vote_title') || 'Remplacer un vote'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('dashboard.contests.replace_vote_message') || 'Vous avez déjà 5 votes. Voulez-vous remplacer'}{' '}
+              <strong>{replacedContestant?.name}</strong>{' '}
+              {t('dashboard.contests.replace_vote_position') || '(5e position, 1 point) par ce participant ?'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setReplacedContestant(null)}>
+              {t('common.cancel') || 'Annuler'}
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleReplaceVote} className="bg-myhigh5-primary hover:bg-myhigh5-primary/90">
+              {t('dashboard.contests.replace_vote_confirm') || 'Remplacer'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   )
 }
