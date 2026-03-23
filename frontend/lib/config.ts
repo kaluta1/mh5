@@ -4,7 +4,7 @@
  */
 
 /** Default backend URL when NEXT_PUBLIC_API_URL is not set (e.g. production Render service name) */
-export const DEFAULT_PUBLIC_API_URL = 'https://mh5-hbjp.onrender.com'
+export const DEFAULT_PUBLIC_API_URL = 'https://mh5-backend.onrender.com'
 
 const normalizeApiUrl = (url: string): string => {
   if (!url) return ''
