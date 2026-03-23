@@ -9,6 +9,7 @@ import { cleanVideoUrl } from '@/lib/utils/video-platforms'
 import { Button } from '@/components/ui/button'
 import { ContestantHeader } from '@/components/contestant'
 import { MediaGallery, MediaViewerModal } from '@/components/media'
+import { VideoEmbed } from '@/components/ui/video-embed'
 import { CommentsSection } from '@/components/comments'
 import { CommentsSection as CommentsDialog } from '@/components/dashboard/comments-section'
 import { ContestantStatsBar } from '@/components/dashboard/contestant-stats-bar'
@@ -62,6 +63,7 @@ interface ContestantDetail {
   registration_date?: string
   contest_title?: string
   contest_id?: number
+  entry_type?: string
   total_participants?: number
   favorites_count?: number
   reactions_count?: number
@@ -480,6 +482,7 @@ export default function ContestantDetailPage() {
   const images = parseMediaIds(contestant.image_media_ids, 'image')
   const videos = parseMediaIds(contestant.video_media_ids, 'video')
   const allMedia = [...images, ...videos]
+  const isNomination = contestant.entry_type === 'nomination'
 
   return (
     <div className="min-h-screen ">
@@ -637,8 +640,18 @@ export default function ContestantDetailPage() {
                 />
               </div>
 
-              {/* Media Gallery */}
-              {allMedia.length > 0 && (
+              {/* Media: Video embed for nominations, Gallery for participations */}
+              {isNomination && videos.length > 0 ? (
+                <div className="rounded-2xl overflow-hidden shadow-lg">
+                  <div className="aspect-video w-full">
+                    <VideoEmbed
+                      url={videos[0].url}
+                      className="w-full h-full"
+                      allowFullscreen={true}
+                    />
+                  </div>
+                </div>
+              ) : allMedia.length > 0 && (
                 <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-3xl p-6 md:p-8 shadow-lg border border-gray-100 dark:border-gray-700/50 hover:shadow-xl transition-all duration-300">
                   <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
                     {t('contestant_detail.gallery')}
