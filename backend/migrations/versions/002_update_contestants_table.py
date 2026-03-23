@@ -17,15 +17,32 @@ depends_on = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    insp = sa.inspect(bind)
+
+    def has_table(name: str) -> bool:
+        return name in insp.get_table_names()
+
+    def has_column(table: str, column: str) -> bool:
+        if not has_table(table):
+            return False
+        return column in {c["name"] for c in insp.get_columns(table)}
+
     # Supprimer les colonnes inutiles
-    op.drop_column('contestants', 'category_id')
-    op.drop_column('contestants', 'city_id')
+    if has_column('contestants', 'category_id'):
+        op.drop_column('contestants', 'category_id')
+    if has_column('contestants', 'city_id'):
+        op.drop_column('contestants', 'city_id')
     
     # Ajouter les nouvelles colonnes
-    op.add_column('contestants', sa.Column('title', sa.String(200), nullable=True))
-    op.add_column('contestants', sa.Column('description', sa.Text(), nullable=True))
-    op.add_column('contestants', sa.Column('image_media_ids', sa.String(1000), nullable=True))
-    op.add_column('contestants', sa.Column('video_media_id', sa.Integer(), nullable=True))
+    if not has_column('contestants', 'title'):
+        op.add_column('contestants', sa.Column('title', sa.String(200), nullable=True))
+    if not has_column('contestants', 'description'):
+        op.add_column('contestants', sa.Column('description', sa.Text(), nullable=True))
+    if not has_column('contestants', 'image_media_ids'):
+        op.add_column('contestants', sa.Column('image_media_ids', sa.String(1000), nullable=True))
+    if not has_column('contestants', 'video_media_id'):
+        op.add_column('contestants', sa.Column('video_media_id', sa.Integer(), nullable=True))
 
 
 def downgrade() -> None:
