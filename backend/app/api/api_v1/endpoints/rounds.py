@@ -207,30 +207,42 @@ def _enrich_round_data(
             contests_count = len(valid_contests)
 
             # Pre-sort contests by participant count (desc) BEFORE pagination
-            # so that contests with the most participants appear first
+            # OPTIMIZED: Single batch query instead of N individual queries
             from app.models.contests import Contestant as ContestantModel
             contest_participant_counts = {}
-            for vc in valid_contests:
+            if valid_contests:
                 try:
-                    # Déterminer le entry_type attendu basé sur le contest_mode
-                    vc_mode = getattr(vc, 'contest_mode', 'participation')
-                    expected_entry_type = 'nomination' if vc_mode == 'nomination' else 'participation'
-                    pcount_query = db.query(func.count(ContestantModel.id)).filter(
-                        ContestantModel.season_id == vc.id,
+                    valid_ids = [vc.id for vc in valid_contests]
+                    # Build contest_mode map for entry_type filtering
+                    mode_map = {vc.id: getattr(vc, 'contest_mode', 'participation') for vc in valid_contests}
+
+                    # Single query: count per season_id grouped
+                    batch_query = db.query(
+                        ContestantModel.season_id,
+                        ContestantModel.entry_type,
+                        func.count(ContestantModel.id)
+                    ).filter(
+                        ContestantModel.season_id.in_(valid_ids),
                         ContestantModel.round_id == round_id,
-                        ContestantModel.is_deleted == False,
-                        ContestantModel.entry_type == expected_entry_type
+                        ContestantModel.is_deleted == False
                     )
                     if filter_country and filter_country != 'all':
-                        pcount_query = pcount_query.filter(
+                        batch_query = batch_query.filter(
                             or_(
                                 func.lower(ContestantModel.country) == func.lower(filter_country),
-                                ContestantModel.country == None  # Include contestants without country set
+                                ContestantModel.country == None
                             )
                         )
-                    contest_participant_counts[vc.id] = pcount_query.scalar() or 0
-                except Exception:
-                    contest_participant_counts[vc.id] = 0
+                    batch_results = batch_query.group_by(
+                        ContestantModel.season_id, ContestantModel.entry_type
+                    ).all()
+
+                    for sid, etype, cnt in batch_results:
+                        expected = 'nomination' if mode_map.get(sid) == 'nomination' else 'participation'
+                        if etype == expected:
+                            contest_participant_counts[sid] = cnt
+                except Exception as e:
+                    logger.warning(f"Batch count failed: {e}")
 
             valid_contests.sort(key=lambda c: contest_participant_counts.get(c.id, 0), reverse=True)
 
