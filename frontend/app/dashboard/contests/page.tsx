@@ -217,7 +217,7 @@ function ContestsPageContent() {
     const fetchContestsForRound = async () => {
       setContestsLoading(true)
       const contestMode = categoryTab === 'nomination' ? 'nomination' : categoryTab === 'participations' ? 'participation' : undefined
-      const activeCountry = filterCountry !== 'all' ? filterCountry : undefined
+      const activeCountry = (filterCountry && filterCountry !== 'all') ? filterCountry : undefined
       const activeContinent = filterContinent !== 'all' ? filterContinent : undefined
       const activeSearch = committedSearch || undefined
 
@@ -327,7 +327,7 @@ function ContestsPageContent() {
 
     setLoadingMore(true)
     const contestMode = categoryTab === 'nomination' ? 'nomination' : categoryTab === 'participations' ? 'participation' : undefined
-    const activeCountry = filterCountry !== 'all' ? filterCountry : undefined
+    const activeCountry = (filterCountry && filterCountry !== 'all') ? filterCountry : undefined
     const activeContinent = filterContinent !== 'all' ? filterContinent : undefined
     const activeSearch = committedSearch || undefined
 
