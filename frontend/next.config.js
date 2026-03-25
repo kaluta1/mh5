@@ -1,11 +1,25 @@
 /** @type {import('next').NextConfig} */
+const nextVersion = (() => {
+  try {
+    // next.config.js is evaluated by Node, so we can read Next's version at runtime.
+    // This keeps the config compatible with both Next 14 (no `turbopack` key)
+    // and Next 16+ (where Turbopack is enabled by default).
+    return require('next/package.json')?.version || ''
+  } catch {
+    return ''
+  }
+})()
+
+const nextMajor = Number(String(nextVersion).split('.')[0] || 0)
+const turbopackConfig = nextMajor >= 16 ? { turbopack: {} } : {}
+
 const nextConfig = {
+  ...turbopackConfig,
+
   // Enable compression
   compress: true,
 
   // Optimize production builds
-  swcMinify: true,
-
   // Enable React strict mode for better performance
   reactStrictMode: true,
 
