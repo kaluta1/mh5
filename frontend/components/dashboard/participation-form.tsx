@@ -108,12 +108,22 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
       }
       if (initialData.title) setTitle(initialData.title)
       if (initialData.description) setDescription(initialData.description)
-      if (initialData.imageUrls && initialData.imageUrls.length > 0) setImageUrls(initialData.imageUrls)
+      // Legal/safety: nominations must not contain images uploaded by the nominator.
+      // Participation contests require images, nominations do not.
+      if (!isNomination && initialData.imageUrls && initialData.imageUrls.length > 0) {
+        setImageUrls(initialData.imageUrls)
+      }
       if (initialData.videoUrl) setVideoUrl(initialData.videoUrl)
       if (initialData.nominatorCountry) setNominatorCountry(initialData.nominatorCountry)
       if (initialData.nominatorCity) setNominatorCity(initialData.nominatorCity)
     }
-  }, [initialData])
+  }, [initialData, isNomination])
+
+  // If the form is in nomination mode, forcibly clear any images already present in state.
+  // This prevents accidental resubmission of images for nominations.
+  useEffect(() => {
+    if (isNomination) setImageUrls([])
+  }, [isNomination])
   const [isSubmitting, setIsSubmitting] = useState(externalIsSubmitting || false)
   const [accessToken, setAccessToken] = useState<string>('')
   const [previewImageUrl, setPreviewImageUrl] = useState<string>('')
@@ -222,6 +232,8 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
   const imageUpload = useModeratedUpload({
     accessToken,
     onSuccess: (result) => {
+      // Extra safety: never accept image uploads in nomination mode.
+      if (isNomination) return
       setImageUrls(prev => [...prev, result.url])
       addToast(t('participation.image_added') || 'Image ajoutée', 'success')
     },
@@ -332,7 +344,17 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
     try {
       setIsSubmitting(true)
       if (onSubmit) {
-        await onSubmit(title, description, JSON.stringify(imageUrls), videoUrl ? JSON.stringify([videoUrl]) : undefined, isNomination ? nominatorCity : undefined, isNomination ? nominatorCountry : undefined)
+        const imageMediaIdsForSubmit = isNomination ? undefined : JSON.stringify(imageUrls)
+        const videoMediaIdsForSubmit = videoUrl ? JSON.stringify([videoUrl]) : undefined
+
+        await onSubmit(
+          title,
+          description,
+          imageMediaIdsForSubmit,
+          videoMediaIdsForSubmit,
+          isNomination ? nominatorCity : undefined,
+          isNomination ? nominatorCountry : undefined
+        )
       }
     } catch (err: any) {
       console.error('Erreur lors de la soumission:', err)

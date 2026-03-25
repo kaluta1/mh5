@@ -497,6 +497,7 @@ export default function ContestantDetailPage() {
         followersCount={followersCount}
         rank={contestant.rank}
         total_participants={contestant.total_participants}
+        titlePrefix={isNomination ? 'Nominator' : 'Contestant'}
         isFavorite={isFavorite}
         coverImage={images.length > 0 ? images[0].url : undefined}
         onBack={() => router.back()}

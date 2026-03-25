@@ -10,6 +10,7 @@ export interface ContestantHeaderProps {
   author_city?: string
   author_continent?: string
   author_avatar_url?: string
+  titlePrefix?: string
   votes_count?: number
   followersCount?: number | null
   rank?: number
@@ -32,6 +33,7 @@ export function ContestantHeader({
   author_city,
   author_continent,
   author_avatar_url,
+  titlePrefix = 'Contestant',
   votes_count = 0,
   followersCount = null,
   rank,
@@ -100,7 +102,7 @@ export function ContestantHeader({
           {/* Info */}
           <div className="flex-1 pb-2">
             <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">
-              Contestant :  {author_name || 'Contestant'}
+              {titlePrefix}: {author_name || titlePrefix}
             </h1>
 
             {/* Stats */}
