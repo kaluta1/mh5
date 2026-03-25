@@ -135,6 +135,7 @@ export default function ContestDetailPage() {
   const [showVotesPanel, setShowVotesPanel] = useState(false)
   const [selectedContestantId, setSelectedContestantId] = useState<number | null>(null)
   const [selectedContestantTitle, setSelectedContestantTitle] = useState<string>('')
+  const [userHasEntry, setUserHasEntry] = useState(false)
 
   // Read location filters from URL (so "View contestants" from list uses selected country, e.g. Uganda)
   const searchParams = useSearchParams()
@@ -282,6 +283,49 @@ export default function ContestDetailPage() {
       }
     }
   }, [contestId, filterCountry, filterContinent, t])
+
+  // Decide if the current user already submitted (so the CTA should show "Edit").
+  // This is needed because `current_user_contesting` from the API can be inaccurate for nominations.
+  React.useEffect(() => {
+    const computeUserEntry = async () => {
+      if (!user?.id || !contest) {
+        setUserHasEntry(false)
+        return
+      }
+
+      const contestMode = contest?.contest?.contest_mode
+      const desiredEntryType = contestMode === 'nomination' ? 'nomination' : 'participation'
+      const activeRoundId = contest?.contest?.active_round_id ?? contest?.active_round_id ?? null
+      const seasonId = parseInt(contestId)
+
+      try {
+        const userEntries = await contestService.getContestantsByContest(contestId, {
+          user_id: user.id,
+          skip: 0,
+          limit: 50
+        })
+
+        const hasMatch = userEntries.some((e: any) => {
+          const entryType = e?.entry_type
+          // If the backend doesn't provide entry_type, fall back to "any entry matches".
+          const typeMatch = !entryType || entryType === desiredEntryType
+          if (!typeMatch) return false
+
+          const seasonMatch = e?.season_id ? e.season_id === seasonId : true
+          if (!seasonMatch) return false
+
+          const roundMatch = activeRoundId ? (!e?.round_id || e.round_id === activeRoundId) : true
+          return roundMatch
+        })
+
+        setUserHasEntry(hasMatch)
+      } catch {
+        setUserHasEntry(false)
+      }
+    }
+
+    computeUserEntry()
+  }, [user?.id, contestId, contest?.contest?.contest_mode, contest?.contest?.active_round_id])
 
   useEffect(() => {
     fetchContestDetails()
@@ -683,7 +727,7 @@ export default function ContestDetailPage() {
                     {isUserCountrySelected ? (
                     <Button
                       onClick={() => {
-                        const hasNominated = contest?.contest?.current_user_contesting || contest?.current_user_contesting
+                        const hasNominated = userHasEntry
                         const activeRoundId = contest?.contest?.active_round_id || contest?.active_round_id
 
                         const queryParams = new URLSearchParams()
@@ -696,10 +740,7 @@ export default function ContestDetailPage() {
                       className="bg-myhigh5-primary hover:bg-myhigh5-blue-700 text-white font-semibold px-8 py-6 text-lg rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
                     >
                       {(() => {
-                        const hasNominated = Boolean(
-                          contest?.contest?.current_user_contesting ?? contest?.current_user_contesting
-                        )
-                        return hasNominated
+                        return userHasEntry
                           ? (t('dashboard.contests.edit') || 'Modifier')
                           : isNomination
                             ? (t('dashboard.contests.nominate') || 'Nommer')

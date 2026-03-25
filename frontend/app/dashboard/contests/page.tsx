@@ -699,10 +699,10 @@ function ContestsPageContent() {
                   isFavorite={false}
                   isNomination={categoryTab === 'nomination'}
                   contest_mode={contest.contest_mode}
-                  currentUserContesting={contest.currentUserContesting || false}
+                  currentUserContesting={(categoryTab === 'nomination' ? contest.currentUserParticipated : contest.currentUserContesting) || false}
                   onToggleFavorite={() => { }}
                   isRoundClosed={isRoundClosed}
-                  onParticipate={() => handleParticipate(contest.id, contest.currentUserContesting || false, activeRoundId)}
+                  onParticipate={() => handleParticipate(contest.id, (categoryTab === 'nomination' ? contest.currentUserParticipated : contest.currentUserContesting) || false, activeRoundId)}
                   onViewContestants={() => {
                     const params = new URLSearchParams()
                     if (filterCountry && filterCountry !== 'all') params.set('country', filterCountry)

@@ -32,7 +32,9 @@ export default function ApplyToContestPage() {
   const roundIdParam = searchParams.get('roundId')
   const isEditMode = searchParams.get('edit') === 'true'
   const contestantIdParam = searchParams.get('contestantId')
-  const entryTypeParam = searchParams.get('entryType') || 'participation'
+  // If `entryType` is missing in the URL, do NOT default to 'participation' here.
+  // We must default based on the contest's `contest_mode` once the contest is loaded.
+  const entryTypeParam = searchParams.get('entryType')
   const [pageLoading, setPageLoading] = useState(true)
   const [needsProfileSetup, setNeedsProfileSetup] = useState(false)
   const [needsKYC, setNeedsKYC] = useState(false)
@@ -114,7 +116,10 @@ export default function ApplyToContestPage() {
         participant_type: c.participant_type
       })
 
-      setIsNomination(entryTypeParam === 'nomination')
+      // Determine effective entry type based on query param (if present) or contest mode.
+      // If the URL param is missing and we don't find a match, we'll retry the "other" entry type.
+      let expectedEntryType = entryTypeParam || (c.contest_mode === 'nomination' ? 'nomination' : 'participation')
+      setIsNomination(expectedEntryType === 'nomination')
 
       // 3. User Participation check
       // The backend returns current_user_participation by season (ignores round_id and entry_type)
@@ -122,7 +127,8 @@ export default function ApplyToContestPage() {
       let participationToUse: any = null
 
       // First try backend's current_user_participation (filtered by contest_mode on backend)
-      const expectedEntryType = entryTypeParam || (c.contest_mode === 'nomination' ? 'nomination' : 'participation')
+      // Reuse the same effective entry type for participation matching.
+      // (expectedEntryType already computed above)
       if (c.current_user_participation) {
         const p = c.current_user_participation
         const pRoundId = p.round_id
@@ -145,17 +151,30 @@ export default function ApplyToContestPage() {
           const userContestants = await contestService.getContestantsByContest(contestId, { user_id: user.id })
           if (userContestants && userContestants.length > 0) {
             // Find a contestant matching round_id, contest AND entry_type
-            const matchingEntry = userContestants.find((uc: any) => {
-              const ucRoundId = uc.round_id
-              const ucSeasonId = uc.season_id
-              const ucEntryType = uc.entry_type
-              const roundMatch = !roundIdParam || !ucRoundId || ucRoundId === parseInt(roundIdParam)
-              const contestMatch = !ucSeasonId || ucSeasonId === parseInt(contestId)
-              const typeMatch = !ucEntryType || ucEntryType === expectedEntryType
-              return roundMatch && contestMatch && typeMatch
-            })
+            const findMatchingEntryForType = (desiredEntryType: string) => {
+              return userContestants.find((uc: any) => {
+                const ucRoundId = uc.round_id
+                const ucSeasonId = uc.season_id
+                const ucEntryType = uc.entry_type
+                const roundMatch = !roundIdParam || !ucRoundId || ucRoundId === parseInt(roundIdParam)
+                const contestMatch = !ucSeasonId || ucSeasonId === parseInt(contestId)
+                const typeMatch = !ucEntryType || ucEntryType === desiredEntryType
+                return roundMatch && contestMatch && typeMatch
+              })
+            }
+
+            // First attempt with expectedEntryType
+            const matchingEntry = findMatchingEntryForType(expectedEntryType)
             if (matchingEntry) {
               participationToUse = matchingEntry
+            } else if (entryTypeParam === null) {
+              // URL entryType missing: retry with the other entry type
+              const altEntryType = expectedEntryType === 'nomination' ? 'participation' : 'nomination'
+              const altMatch = findMatchingEntryForType(altEntryType)
+              if (altMatch) {
+                expectedEntryType = altEntryType
+                participationToUse = altMatch
+              }
             }
           }
         } catch (err) {
@@ -181,6 +200,10 @@ export default function ApplyToContestPage() {
 
       // Only block if we found a contestant matching the SAME entry_type AND round
       if (participationToUse) {
+        // Keep UI mode consistent with the actual entry type we found.
+        if (participationToUse?.entry_type) {
+          setIsNomination(participationToUse.entry_type === 'nomination')
+        }
         setUserAlreadyParticipating(true)
         setParticipantId(participationToUse.id)
 
@@ -409,7 +432,7 @@ export default function ApplyToContestPage() {
           nominatorCity,
           nominatorCountry,
           roundId,
-          entryTypeParam
+          isNomination ? 'nomination' : 'participation'
         )
       }
 
