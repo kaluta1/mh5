@@ -208,6 +208,12 @@ function ContestsPageContent() {
   }, [activeRoundId, categoryTab, filterCountry, filterContinent, committedSearch])
 
   // 2. Fetch Contests for Selected Round (Initial load) - allow unauthenticated users
+  // Use a ref to track current user id without triggering re-fetches
+  const userIdRef = useRef<number | null>(null)
+  useEffect(() => {
+    userIdRef.current = user?.id ?? null
+  }, [user?.id])
+
   useEffect(() => {
     if (!activeRoundId) return
 
@@ -217,12 +223,12 @@ function ContestsPageContent() {
     const fetchContestsForRound = async () => {
       setContestsLoading(true)
       const contestMode = categoryTab === 'nomination' ? 'nomination' : categoryTab === 'participations' ? 'participation' : undefined
-      const activeCountry = filterCountry !== 'all' ? filterCountry : undefined
-      const activeContinent = filterContinent !== 'all' ? filterContinent : undefined
+      const activeCountry = (filterCountry && filterCountry !== 'all') ? filterCountry : undefined
+      const activeContinent = (filterContinent && filterContinent !== 'all') ? filterContinent : undefined
       const activeSearch = committedSearch || undefined
 
       // Check cache first
-      const authKey = isAuthenticated && user ? user.id : 'anon'
+      const authKey = userIdRef.current || 'anon'
       const cacheKey = getCacheKey(activeRoundId, categoryTab, activeCountry || 'all', activeContinent || 'all', activeSearch || '', 0, authKey)
       const cached = getFromCache(cacheKey)
       if (cached) {
@@ -236,7 +242,6 @@ function ContestsPageContent() {
       }
 
       try {
-        // Use smaller initial load for faster display
         const data = await ApiService.getRounds({
           roundId: parseInt(activeRoundId),
           contestMode,
@@ -252,8 +257,6 @@ function ContestsPageContent() {
         if (data && data.length > 0) {
           setContestsData(data[0])
           const contests = data[0].contests || []
-          // Backend should already sort, but ensure it's sorted by participants_count descending
-          // Use a more efficient sort (only if needed)
           if (contests.length > 1) {
             contests.sort((a: any, b: any) => {
               const aCount = Number(a.participants_count) || 0
@@ -261,11 +264,9 @@ function ContestsPageContent() {
               return bCount - aCount
             })
           }
-          // Set state immediately for instant display
           setAllContests(contests)
           setTotalContests(data[0].contests_count || contests.length || 0)
           setHasMore(contests.length < (data[0].contests_count || 0))
-          // Cache the result
           setToCache(cacheKey, data[0])
         } else {
           setContestsData(null)
@@ -274,13 +275,34 @@ function ContestsPageContent() {
           setHasMore(false)
         }
       } catch (error: any) {
-        // Ignore aborted requests
         if (error.name === 'AbortError' || abortController.signal.aborted) {
           return
         }
-        // Silently handle timeout errors - don't log to avoid noise
+        // On timeout (Render cold start), retry once automatically
         if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
-          logger.warn('Request timeout, showing empty state')
+          logger.warn('Request timeout, retrying once...')
+          try {
+            const retryData = await ApiService.getRounds({
+              roundId: parseInt(activeRoundId),
+              contestMode,
+              filterCountry: activeCountry,
+              filterContinent: activeContinent,
+              searchTerm: activeSearch,
+              contestLimit: INITIAL_CONTESTS
+            })
+            if (!abortController.signal.aborted && retryData && retryData.length > 0) {
+              setContestsData(retryData[0])
+              const contests = retryData[0].contests || []
+              setAllContests(contests)
+              setTotalContests(retryData[0].contests_count || contests.length || 0)
+              setHasMore(contests.length < (retryData[0].contests_count || 0))
+              setContestsLoading(false)
+              setInitialLoadComplete(true)
+              return
+            }
+          } catch {
+            // Retry also failed
+          }
           setContestsData(null)
           setAllContests([])
           setTotalContests(0)
@@ -290,21 +312,10 @@ function ContestsPageContent() {
           return
         }
         logger.error('Failed to fetch contests:', error)
-        // Handle API errors gracefully - don't break the page
-        if (error?.response?.status === 404 || error?.response?.status === 500 || error?.response?.status === 503) {
-          logger.warn('Backend unavailable during redeployment, showing empty state')
-          // Set empty state instead of breaking
-          setContestsData(null)
-          setAllContests([])
-          setTotalContests(0)
-          setHasMore(false)
-        } else {
-          // For other errors, still set empty state to prevent page break
-          setContestsData(null)
-          setAllContests([])
-          setTotalContests(0)
-          setHasMore(false)
-        }
+        setContestsData(null)
+        setAllContests([])
+        setTotalContests(0)
+        setHasMore(false)
       } finally {
         if (!abortController.signal.aborted) {
           setContestsLoading(false)
@@ -315,11 +326,12 @@ function ContestsPageContent() {
 
     fetchContestsForRound()
 
-    // Cleanup: abort request if component unmounts or dependencies change
     return () => {
       abortController.abort()
     }
-  }, [activeRoundId, categoryTab, filterCountry, filterContinent, committedSearch, isAuthenticated, user])
+    // isAuthenticated/user removed: prevents race condition where auth resolve
+    // aborts in-flight request. userIdRef handles cache key without re-triggering.
+  }, [activeRoundId, categoryTab, filterCountry, filterContinent, committedSearch])
 
   // Load more contests function
   const loadMoreContests = useCallback(async () => {
@@ -327,7 +339,7 @@ function ContestsPageContent() {
 
     setLoadingMore(true)
     const contestMode = categoryTab === 'nomination' ? 'nomination' : categoryTab === 'participations' ? 'participation' : undefined
-    const activeCountry = filterCountry !== 'all' ? filterCountry : undefined
+    const activeCountry = (filterCountry && filterCountry !== 'all') ? filterCountry : undefined
     const activeContinent = filterContinent !== 'all' ? filterContinent : undefined
     const activeSearch = committedSearch || undefined
 

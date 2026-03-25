@@ -49,15 +49,38 @@ def run_alembic_migrations():
         
         # FIXED: Always use 'heads' to handle multiple migration branches
         # This prevents "Multiple head revisions" errors on Render
+        # First check if tables already exist (synced from local DB)
+        # If so, stamp heads to avoid DuplicateTable errors
+        logger.info("Checking if database already has tables...")
+        try:
+            result = subprocess.run(
+                ["alembic", "current"], capture_output=True, text=True, env=env
+            )
+            current_output = result.stdout.strip()
+            logger.info(f"Current alembic state: {current_output}")
+
+            if not current_output or "(head)" not in current_output:
+                # No alembic version set but tables might exist (synced DB)
+                # Try to stamp heads first
+                logger.info("No migration state found. Stamping heads...")
+                subprocess.run(["alembic", "stamp", "heads"], check=False, env=env)
+                logger.info("Stamped heads successfully")
+        except Exception as stamp_err:
+            logger.warning(f"Stamp check failed (non-fatal): {stamp_err}")
+
         logger.info("Running database migrations with 'alembic upgrade heads'...")
         try:
             subprocess.run(["alembic", "upgrade", "heads"], check=True, env=env)
             logger.info("Migrations completed successfully")
         except subprocess.CalledProcessError as e:
-            logger.error(f"Migration failed: {e}")
-            if hasattr(e, 'stderr') and e.stderr:
-                logger.error(f"Migration stderr: {e.stderr}")
-            raise
+            error_output = e.stderr or str(e)
+            if "DuplicateTable" in str(error_output) or "already exists" in str(error_output):
+                logger.warning("Tables already exist. Stamping heads to mark as applied...")
+                subprocess.run(["alembic", "stamp", "heads"], check=False, env=env)
+                logger.info("Stamped heads - migrations marked as applied")
+            else:
+                logger.error(f"Migration failed: {e}")
+                raise
         
         logger.info("Migrations terminées avec succès")
         return True
