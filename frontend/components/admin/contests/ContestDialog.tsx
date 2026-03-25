@@ -375,7 +375,7 @@ export function ContestDialog({
                                         </div>
                                     )}
                                     <UploadButton
-                                        endpoint="profileImageUploader"
+                                        endpoint="imageUploader"
                                         onClientUploadComplete={(res) => {
                                             if (res?.[0]) {
                                                 setUploadedImage(res[0].url)

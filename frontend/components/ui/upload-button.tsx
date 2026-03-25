@@ -8,7 +8,7 @@ import { useLanguage } from '@/contexts/language-context'
 interface UploadButtonProps {
   endpoint: keyof OurFileRouter
   onClientUploadComplete?: (res: any) => void
-  onUploadError?: (error: Error) => void
+  onUploadError?: (error: unknown) => void
   className?: string
   content?: {
     button?: (props: any) => React.ReactNode
@@ -51,8 +51,20 @@ export function UploadButton({
     return sizes[endpoint] || '10MB'
   }
 
-  const handleUploadError = (error: Error) => {
-    let errorMessage = error.message
+  const handleUploadError = (error: unknown) => {
+    // uploadthing can pass different error shapes; never assume `error` is an Error instance.
+    let errorMessage = ''
+    if (error instanceof Error) {
+      errorMessage = error.message
+    } else if (typeof error === 'string') {
+      errorMessage = error
+    } else {
+      try {
+        errorMessage = JSON.stringify(error)
+      } catch {
+        errorMessage = String(error)
+      }
+    }
 
     // Handle FileSizeMismatch error with clear message
     if (errorMessage.includes('FileSizeMismatch') || errorMessage.includes('Invalid config')) {
