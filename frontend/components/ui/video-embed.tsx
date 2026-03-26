@@ -14,54 +14,49 @@ interface VideoEmbedProps {
   height?: string | number
 }
 
-interface TikTokMeta {
-  videoId: string | null
-  thumbnailUrl: string | null
-  authorName: string | null
-  title: string | null
-  loading: boolean
-  failed: boolean
-}
-
 /**
- * Fetches TikTok oEmbed metadata (thumbnail, author, title, video ID) server-side.
+ * Résout une URL TikTok (courte ou longue) en ID numérique
+ * Utilise l'API route /api/tiktok-resolve qui suit les redirections côté serveur
  */
-function useTikTokMeta(url: string | undefined): TikTokMeta {
-  const [meta, setMeta] = useState<TikTokMeta>({
-    videoId: null,
-    thumbnailUrl: null,
-    authorName: null,
-    title: null,
-    loading: false,
-    failed: false,
-  })
+function useTikTokResolve(url: string | undefined, videoId: string | undefined) {
+  const [resolvedId, setResolvedId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [failed, setFailed] = useState(false)
 
   useEffect(() => {
+    // Si on a déjà un ID numérique, pas besoin de résoudre
+    if (videoId && /^\d+$/.test(videoId)) {
+      setResolvedId(videoId)
+      return
+    }
+
     if (!url) return
 
-    setMeta(m => ({ ...m, loading: true, failed: false }))
+    setLoading(true)
+    setFailed(false)
 
+    // Utiliser notre API route serveur pour résoudre l'URL
     fetch(`/api/tiktok-resolve?url=${encodeURIComponent(url)}`)
       .then(res => {
         if (!res.ok) throw new Error('Resolve failed')
         return res.json()
       })
       .then(data => {
-        setMeta({
-          videoId: data.videoId || null,
-          thumbnailUrl: data.thumbnailUrl || null,
-          authorName: data.authorName || null,
-          title: data.title || null,
-          loading: false,
-          failed: !data.videoId && !data.thumbnailUrl,
-        })
+        if (data.videoId) {
+          setResolvedId(data.videoId)
+        } else {
+          setFailed(true)
+        }
       })
       .catch(() => {
-        setMeta(m => ({ ...m, loading: false, failed: true }))
+        setFailed(true)
       })
-  }, [url])
+      .finally(() => {
+        setLoading(false)
+      })
+  }, [url, videoId])
 
-  return meta
+  return { resolvedId, loading, failed }
 }
 
 export function VideoEmbed({
@@ -73,25 +68,28 @@ export function VideoEmbed({
   height = '100%'
 }: VideoEmbedProps) {
   const { t } = useLanguage()
+  const [iframeError, setIframeError] = useState(false)
 
   const cleanedUrl = url ? cleanVideoUrl(url) : ''
   const videoInfo: VideoInfo = cleanedUrl ? convertToEmbedUrl(cleanedUrl) : { platform: 'unknown', embedUrl: '', originalUrl: '' }
 
-  const tiktokMeta = useTikTokMeta(
-    videoInfo.platform === 'tiktok' ? videoInfo.originalUrl : undefined
+  // Résoudre TikTok URL courte → ID numérique
+  const tiktokResolve = useTikTokResolve(
+    videoInfo.platform === 'tiktok' ? videoInfo.originalUrl : undefined,
+    videoInfo.platform === 'tiktok' ? videoInfo.videoId : undefined
   )
 
   if (!url) {
     return (
       <div className={`flex items-center justify-center bg-gray-100 dark:bg-gray-800 rounded-lg ${className}`} style={{ width, height }}>
         <p className="text-gray-500 dark:text-gray-400 text-sm">
-          {t('participation.invalid_url') || 'Invalid video URL'}
+          {t('participation.invalid_url') || 'URL vidéo non valide'}
         </p>
       </div>
     )
   }
 
-  // ── Direct video file ──
+  // ── Vidéo directe ──
   if (videoInfo.platform === 'direct') {
     return (
       <video
@@ -105,7 +103,7 @@ export function VideoEmbed({
     )
   }
 
-  // ── Unknown / unsupported platform ──
+  // ── Plateforme inconnue / non autorisée ──
   if (videoInfo.platform === 'unknown') {
     return (
       <div className={`flex flex-col items-center justify-center bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-6 ${className}`} style={{ width, height }}>
@@ -113,10 +111,10 @@ export function VideoEmbed({
           <ExternalLink className="w-5 h-5 text-red-500" />
         </div>
         <p className="text-red-600 dark:text-red-400 text-sm font-medium text-center">
-          {t('participation.unsupported_platform') || 'Link not allowed'}
+          {t('participation.unsupported_platform') || 'Lien non autorisé'}
         </p>
         <p className="text-red-400 dark:text-red-500 text-xs mt-1 text-center">
-          {t('participation.only_youtube_tiktok') || 'Only YouTube and TikTok are accepted'}
+          {t('participation.only_youtube_tiktok') || 'Seuls YouTube et TikTok sont acceptés'}
         </p>
       </div>
     )
@@ -124,90 +122,50 @@ export function VideoEmbed({
 
   // ── TikTok ──
   if (videoInfo.platform === 'tiktok') {
-    const openUrl = videoInfo.originalUrl
-
-    if (tiktokMeta.loading) {
+    // Chargement de la résolution
+    if (tiktokResolve.loading) {
       return (
         <div className={`${className} flex flex-col items-center justify-center bg-black rounded-xl`} style={{ width, height }}>
           <Loader2 className="w-8 h-8 text-white animate-spin mb-3" />
-          <p className="text-white/60 text-sm">{t('common.loading') || 'Loading...'}</p>
+          <p className="text-white/60 text-sm">{t('common.loading') || 'Chargement...'}</p>
         </div>
       )
     }
 
-    // Thumbnail available → show YouTube-like preview card
-    if (tiktokMeta.thumbnailUrl) {
-      return (
-        <a
-          href={openUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={`${className} relative block cursor-pointer group rounded-xl overflow-hidden bg-black`}
-          style={{ width, height }}
-          title={tiktokMeta.title || 'Watch on TikTok'}
-        >
-          {/* Thumbnail image */}
-          <img
-            src={tiktokMeta.thumbnailUrl}
-            alt={tiktokMeta.title || 'TikTok video'}
-            className="w-full h-full object-cover"
-          />
-
-          {/* Hover overlay */}
-          <div className="absolute inset-0 bg-black/10 group-hover:bg-black/30 transition-colors duration-200" />
-
-          {/* Play button */}
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-14 h-14 rounded-full bg-white/90 group-hover:bg-white flex items-center justify-center shadow-xl group-hover:scale-110 transition-transform duration-200">
-              <Play className="w-7 h-7 text-black ml-1" fill="black" />
-            </div>
-          </div>
-
-          {/* TikTok branding — bottom right */}
-          <div className="absolute bottom-3 right-3 flex items-center gap-1.5 bg-black/60 rounded-full px-2.5 py-1">
-            <svg viewBox="0 0 24 24" className="w-4 h-4 fill-white" xmlns="http://www.w3.org/2000/svg">
-              <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.8a8.18 8.18 0 004.78 1.52V6.87a4.85 4.85 0 01-1.01-.18z"/>
-            </svg>
-            <span className="text-white text-xs font-semibold">TikTok</span>
-          </div>
-
-          {/* Author name — bottom left */}
-          {tiktokMeta.authorName && (
-            <div className="absolute bottom-3 left-3 text-white text-xs font-medium drop-shadow-md">
-              @{tiktokMeta.authorName}
-            </div>
-          )}
-        </a>
-      )
-    }
-
-    // No thumbnail, but we have a video ID → try iframe embed
-    if (tiktokMeta.videoId && /^\d+$/.test(tiktokMeta.videoId)) {
+    // ID numérique résolu → iframe embed
+    const tiktokId = tiktokResolve.resolvedId
+    if (tiktokId && /^\d+$/.test(tiktokId) && !iframeError) {
       return (
         <div className={`${className} flex items-center justify-center bg-black rounded-xl overflow-hidden`} style={{ width, height }}>
           <iframe
-            src={`https://www.tiktok.com/embed/v2/${tiktokMeta.videoId}`}
+            src={`https://www.tiktok.com/embed/v2/${tiktokId}`}
             className="rounded-lg"
             style={{ width: '100%', maxWidth: '325px', height: '100%', minHeight: '500px', border: 'none' }}
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen={allowFullscreen}
             title="TikTok video"
+            onError={() => setIframeError(true)}
           />
         </div>
       )
     }
 
-    // Full fallback — plain "Watch on TikTok" card
+    // Fallback: resolution failed or no numeric ID — show a direct link to TikTok
+    const tiktokFallbackUrl = videoInfo.originalUrl
     return (
       <div
         className={`${className} flex flex-col items-center justify-center bg-black rounded-xl overflow-hidden gap-4 p-6`}
         style={{ width, height }}
       >
+        {/* TikTok logo-like icon */}
         <svg viewBox="0 0 24 24" className="w-12 h-12 fill-white" xmlns="http://www.w3.org/2000/svg">
           <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.8a8.18 8.18 0 004.78 1.52V6.87a4.85 4.85 0 01-1.01-.18z"/>
         </svg>
+        <p className="text-white/80 text-sm text-center font-medium">
+          {t('participation.tiktok_preview_unavailable') || 'Preview unavailable — watch on TikTok'}
+        </p>
         <a
-          href={openUrl}
+          href={tiktokFallbackUrl}
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center gap-2 bg-white text-black font-semibold text-sm px-5 py-2.5 rounded-full hover:bg-gray-100 transition-colors"
@@ -219,7 +177,7 @@ export function VideoEmbed({
     )
   }
 
-  // ── YouTube ──
+  // ── YouTube (tous formats) ──
   if (videoInfo.platform === 'youtube') {
     if (videoInfo.videoId) {
       const iframeParams = new URLSearchParams()
@@ -242,6 +200,7 @@ export function VideoEmbed({
       )
     }
 
+    // YouTube URL reconnue mais ID non extrait → essayer d'embed l'URL directement
     return (
       <iframe
         src={videoInfo.originalUrl}
@@ -292,14 +251,14 @@ export function VideoEmbed({
     )
   }
 
-  // ── Other unsupported platforms ──
+  // ── Autres (Instagram, Snapchat) → non autorisé ──
   return (
     <div className={`flex flex-col items-center justify-center bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-6 ${className}`} style={{ width, height }}>
       <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/40 flex items-center justify-center mb-3">
         <ExternalLink className="w-5 h-5 text-red-500" />
       </div>
       <p className="text-red-600 dark:text-red-400 text-sm font-medium text-center">
-        {t('participation.unsupported_platform') || 'Link not allowed'}
+        {t('participation.unsupported_platform') || 'Lien non autorisé'}
       </p>
     </div>
   )

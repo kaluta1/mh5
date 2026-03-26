@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 /**
- * API route to resolve TikTok URLs and fetch oEmbed metadata (thumbnail, author, title).
- * GET /api/tiktok-resolve?url=https://www.tiktok.com/@user/video/12345
+ * API route to resolve short TikTok URLs into a numeric video ID.
+ * Handles all TikTok short-link domains: vt / vm / t / v.tiktok.com
+ * GET /api/tiktok-resolve?url=https://vt.tiktok.com/ZSuwmaM8B/
  */
 
 const BROWSER_HEADERS = {
@@ -10,10 +11,16 @@ const BROWSER_HEADERS = {
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
   'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
   'Accept-Language': 'en-US,en;q=0.9',
+  'Accept-Encoding': 'gzip, deflate, br',
   'Cache-Control': 'no-cache',
+  'Pragma': 'no-cache',
+  'Sec-Fetch-Dest': 'document',
+  'Sec-Fetch-Mode': 'navigate',
+  'Sec-Fetch-Site': 'none',
+  'Upgrade-Insecure-Requests': '1',
 }
 
-/** Extract numeric video ID from any full TikTok URL */
+/** Extract numeric video ID from any TikTok URL */
 function extractVideoId(url: string): string | null {
   const m = url.match(/\/video\/(\d{10,25})/)
   return m ? m[1] : null
@@ -24,39 +31,53 @@ async function followRedirects(startUrl: string, maxHops = 6): Promise<string> {
   let current = startUrl
 
   for (let i = 0; i < maxHops; i++) {
+    // Try HEAD first (lighter)
     let location: string | null = null
-
     try {
       const res = await fetch(current, {
         method: 'HEAD',
         redirect: 'manual',
-        signal: AbortSignal.timeout(6000),
+        signal: AbortSignal.timeout(8000),
         headers: BROWSER_HEADERS,
       })
       location = res.headers.get('location')
-    } catch { /* ignore */ }
+    } catch {
+      // HEAD failed, try GET
+    }
 
+    // If HEAD gave no Location, try GET (some servers ignore HEAD)
     if (!location) {
       try {
         const res = await fetch(current, {
           method: 'GET',
           redirect: 'manual',
-          signal: AbortSignal.timeout(6000),
+          signal: AbortSignal.timeout(8000),
           headers: BROWSER_HEADERS,
         })
         location = res.headers.get('location')
-        if (!location) break
+
+        // If still no Location, we've reached the final page
+        if (!location) {
+          // Check if the final URL itself contains a video ID
+          const finalId = extractVideoId(res.url || current)
+          if (finalId) return `https://www.tiktok.com/video/${finalId}`
+          break
+        }
       } catch {
         break
       }
     }
 
+    // Resolve relative redirects
     if (location.startsWith('/')) {
       const base = new URL(current)
       location = `${base.protocol}//${base.host}${location}`
     }
 
-    if (extractVideoId(location)) return location
+    // If the redirect URL already has a video ID, we're done
+    const id = extractVideoId(location)
+    if (id) return location
+
     current = location
   }
 
@@ -71,53 +92,22 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Resolve short URL to full URL first if needed
-    let resolvedUrl = url
+    // Fast path: URL already contains a numeric video ID
     const directId = extractVideoId(url)
-    if (!directId) {
-      resolvedUrl = await followRedirects(url)
+    if (directId) {
+      return NextResponse.json({ videoId: directId, source: 'direct' })
     }
 
-    // Build a clean full TikTok URL for oEmbed
-    const videoId = directId || extractVideoId(resolvedUrl)
-    const oembedTargetUrl = videoId
-      ? `https://www.tiktok.com/video/${videoId}`
-      : resolvedUrl
+    // Follow the redirect chain to find the full TikTok URL
+    const finalUrl = await followRedirects(url)
+    const videoId = extractVideoId(finalUrl)
 
-    // Call TikTok's official oEmbed endpoint — returns thumbnail, author, title
-    try {
-      const oembedRes = await fetch(
-        `https://www.tiktok.com/oembed?url=${encodeURIComponent(oembedTargetUrl)}`,
-        {
-          headers: {
-            ...BROWSER_HEADERS,
-            'Accept': 'application/json',
-          },
-          signal: AbortSignal.timeout(8000),
-        }
-      )
-
-      if (oembedRes.ok) {
-        const data = await oembedRes.json()
-        // embed_product_id is the numeric video ID in oEmbed response
-        const resolvedId = data.embed_product_id || videoId || null
-        return NextResponse.json({
-          videoId: resolvedId,
-          thumbnailUrl: data.thumbnail_url || null,
-          authorName: data.author_name || null,
-          title: data.title || null,
-          source: 'oembed',
-        })
-      }
-    } catch { /* oEmbed failed, return what we have */ }
-
-    // oEmbed failed but we may still have the video ID from URL parsing
     if (videoId) {
-      return NextResponse.json({ videoId, source: 'direct' })
+      return NextResponse.json({ videoId, fullUrl: finalUrl, source: 'resolved' })
     }
 
     return NextResponse.json(
-      { error: 'Could not resolve TikTok video', finalUrl: resolvedUrl },
+      { error: 'Could not resolve TikTok video ID', finalUrl },
       { status: 404 }
     )
   } catch (err: any) {
