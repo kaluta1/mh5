@@ -41,6 +41,7 @@ async def lifespan(app: FastAPI):
         """Run alembic migrations in background"""
         import subprocess
         import os
+        import sys
         import logging
         
         logger = logging.getLogger("uvicorn.error")
@@ -54,9 +55,19 @@ async def lifespan(app: FastAPI):
                 env['PYTHONPATH'] = f"{project_root}{os.pathsep}{env['PYTHONPATH']}"
             else:
                 env['PYTHONPATH'] = project_root
-                
+
+            # Use the same Python interpreter (and its venv) that is running this process
+            # This ensures alembic is found even when PATH doesn't include the venv bin dir
+            alembic_path = os.path.join(os.path.dirname(sys.executable), "alembic")
+            if not os.path.isfile(alembic_path):
+                alembic_path = "alembic"  # fallback to PATH
+
             # Run alembic upgrade heads
-            result = subprocess.run(["alembic", "upgrade", "heads"], check=True, env=env, capture_output=True, text=True)
+            result = subprocess.run(
+                [alembic_path, "upgrade", "heads"],
+                check=True, env=env, capture_output=True, text=True,
+                cwd=project_root
+            )
             logger.info("✅ Database migrations completed successfully")
             logger.info(result.stdout)
             
