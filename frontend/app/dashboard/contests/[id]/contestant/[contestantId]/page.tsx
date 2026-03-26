@@ -64,6 +64,8 @@ interface ContestantDetail {
   contest_title?: string
   contest_id?: number
   entry_type?: string
+  nominator_city?: string
+  nominator_country?: string
   total_participants?: number
   favorites_count?: number
   reactions_count?: number
@@ -482,7 +484,10 @@ export default function ContestantDetailPage() {
   const images = parseMediaIds(contestant.image_media_ids, 'image')
   const videos = parseMediaIds(contestant.video_media_ids, 'video')
   const allMedia = [...images, ...videos]
-  const isNomination = contestant.entry_type === 'nomination'
+  const isNomination =
+    contestant.entry_type === 'nomination' ||
+    !!contestant.nominator_country ||
+    !!contestant.nominator_city
 
   return (
     <div className="min-h-screen ">
@@ -497,7 +502,7 @@ export default function ContestantDetailPage() {
         followersCount={followersCount}
         rank={contestant.rank}
         total_participants={contestant.total_participants}
-        titlePrefix={isNomination ? 'Nominator' : 'Contestant'}
+        titlePrefix={isNomination ? (t('contestant_detail.nominator_label') || 'Nominator') : (t('contestant_detail.contestant_label') || 'Contestant')}
         isFavorite={isFavorite}
         coverImage={images.length > 0 ? images[0].url : undefined}
         onBack={() => router.back()}

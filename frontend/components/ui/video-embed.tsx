@@ -134,7 +134,7 @@ export function VideoEmbed({
 
     // ID numérique résolu → iframe embed
     const tiktokId = tiktokResolve.resolvedId
-    if (tiktokId && !iframeError) {
+    if (tiktokId && /^\d+$/.test(tiktokId) && !iframeError) {
       return (
         <div className={`${className} flex items-center justify-center bg-black rounded-xl overflow-hidden`} style={{ width, height }}>
           <iframe
@@ -150,17 +150,29 @@ export function VideoEmbed({
       )
     }
 
-    // Fallback : embed avec l'URL originale via oEmbed blockquote
+    // Fallback: resolution failed or no numeric ID — show a direct link to TikTok
+    const tiktokFallbackUrl = videoInfo.originalUrl
     return (
-      <div className={`${className} flex items-center justify-center bg-black rounded-xl overflow-hidden`} style={{ width, height }}>
-        <iframe
-          src={`https://www.tiktok.com/embed/v2/${videoInfo.videoId || ''}`}
-          className="rounded-lg"
-          style={{ width: '100%', maxWidth: '325px', height: '100%', minHeight: '500px', border: 'none' }}
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen={allowFullscreen}
-          title="TikTok video"
-        />
+      <div
+        className={`${className} flex flex-col items-center justify-center bg-black rounded-xl overflow-hidden gap-4 p-6`}
+        style={{ width, height }}
+      >
+        {/* TikTok logo-like icon */}
+        <svg viewBox="0 0 24 24" className="w-12 h-12 fill-white" xmlns="http://www.w3.org/2000/svg">
+          <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.8a8.18 8.18 0 004.78 1.52V6.87a4.85 4.85 0 01-1.01-.18z"/>
+        </svg>
+        <p className="text-white/80 text-sm text-center font-medium">
+          {t('participation.tiktok_preview_unavailable') || 'Preview unavailable — watch on TikTok'}
+        </p>
+        <a
+          href={tiktokFallbackUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 bg-white text-black font-semibold text-sm px-5 py-2.5 rounded-full hover:bg-gray-100 transition-colors"
+        >
+          <Play className="w-4 h-4" />
+          {t('participation.watch_on_tiktok') || 'Watch on TikTok'}
+        </a>
       </div>
     )
   }

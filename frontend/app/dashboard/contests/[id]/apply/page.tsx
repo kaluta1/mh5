@@ -406,6 +406,8 @@ export default function ApplyToContestPage() {
 
     try {
       let response
+      // Legal guard: nominations must never carry image uploads.
+      const safeImageMediaIds = isNomination ? undefined : imageMediaIds
 
       if (isEditingParticipation && participantId) {
         // Mettre à jour la candidature existante
@@ -413,7 +415,7 @@ export default function ApplyToContestPage() {
           participantId,
           title,
           description,
-          imageMediaIds,
+          safeImageMediaIds,
           videoMediaIds,
           nominatorCity,
           nominatorCountry
@@ -427,7 +429,7 @@ export default function ApplyToContestPage() {
           contestId,
           title,
           description,
-          imageMediaIds,
+          safeImageMediaIds,
           videoMediaIds,
           nominatorCity,
           nominatorCountry,
@@ -443,7 +445,7 @@ export default function ApplyToContestPage() {
       if (isEditingParticipation) {
         let updatedImageUrls: string[] = []
         try {
-          updatedImageUrls = imageMediaIds ? JSON.parse(typeof imageMediaIds === 'string' ? imageMediaIds : JSON.stringify(imageMediaIds)) : []
+          updatedImageUrls = safeImageMediaIds ? JSON.parse(typeof safeImageMediaIds === 'string' ? safeImageMediaIds : JSON.stringify(safeImageMediaIds)) : []
           if (!Array.isArray(updatedImageUrls)) updatedImageUrls = []
         } catch { updatedImageUrls = [] }
 

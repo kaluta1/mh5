@@ -375,6 +375,8 @@ export interface TranslationKeys {
     video_platform_not_allowed: string
     video_file_not_allowed: string
     youtube_shorts_not_allowed: string
+    tiktok_preview_unavailable: string
+    watch_on_tiktok: string
     url_required: string
     invalid_url: string
     max_images_reached: string
@@ -575,6 +577,8 @@ export interface TranslationKeys {
     media_preview: string
     close: string
     of: string
+    contestant_label: string
+    nominator_label: string
   }
   admin: {
     title: string
@@ -3834,6 +3838,8 @@ export const translations: Record<Language, TranslationKeys> = {
       video_platform_not_allowed: "Plateforme vidéo non acceptée. Seuls YouTube et TikTok sont supportés.",
       video_file_not_allowed: "Les fichiers vidéo ne sont pas autorisés. Veuillez utiliser une URL YouTube ou TikTok.",
       youtube_shorts_not_allowed: "Les YouTube Shorts ne sont pas autorisés. Veuillez utiliser une vidéo YouTube standard.",
+      tiktok_preview_unavailable: "Aperçu indisponible — regardez sur TikTok",
+      watch_on_tiktok: "Regarder sur TikTok",
       url_required: "URL requise",
       invalid_url: "URL invalide",
       max_images_reached: "Nombre maximum d'images atteint",
@@ -4196,7 +4202,9 @@ export const translations: Record<Language, TranslationKeys> = {
       like_comment: "J'aime",
       media_preview: "Aperçu du média",
       close: "Fermer",
-      of: "de"
+      of: "de",
+      contestant_label: "Participant",
+      nominator_label: "Nominateur"
     },
     dashboard: {
       welcome: "Bienvenue",
@@ -6426,6 +6434,8 @@ export const translations: Record<Language, TranslationKeys> = {
       video_platform_not_allowed: "This video platform is not accepted. Only YouTube and TikTok are supported.",
       video_file_not_allowed: "Video file uploads are not allowed. Please use a YouTube or TikTok URL.",
       youtube_shorts_not_allowed: "YouTube Shorts are not allowed. Please use a standard YouTube video.",
+      tiktok_preview_unavailable: "Preview unavailable — watch on TikTok",
+      watch_on_tiktok: "Watch on TikTok",
       url_required: "URL required",
       invalid_url: "Invalid URL",
       max_images_reached: "Maximum number of images reached",
@@ -6575,7 +6585,9 @@ export const translations: Record<Language, TranslationKeys> = {
       like_comment: "Like",
       media_preview: "Media Preview",
       close: "Close",
-      of: "of"
+      of: "of",
+      contestant_label: "Contestant",
+      nominator_label: "Nominator"
     },
     testimonials: {
       title: "What our users say",
@@ -9103,6 +9115,8 @@ export const translations: Record<Language, TranslationKeys> = {
       video_platform_not_allowed: "Plataforma de video no aceptada. Solo YouTube y TikTok son soportados.",
       video_file_not_allowed: "La carga de archivos de video no está permitida. Por favor use una URL de YouTube o TikTok.",
       youtube_shorts_not_allowed: "Los YouTube Shorts no están permitidos. Por favor use un video de YouTube estándar.",
+      tiktok_preview_unavailable: "Vista previa no disponible — ver en TikTok",
+      watch_on_tiktok: "Ver en TikTok",
       url_required: "URL requerida",
       invalid_url: "URL inválida",
       max_images_reached: "Número máximo de imágenes alcanzado",
@@ -10121,7 +10135,9 @@ export const translations: Record<Language, TranslationKeys> = {
       like_comment: "Me gusta",
       media_preview: "Vista previa del medio",
       close: "Cerrar",
-      of: "de"
+      of: "de",
+      contestant_label: "Participante",
+      nominator_label: "Nominador"
     },
     kyc: {
       verification_required: "Verificación de Identidad Requerida",
@@ -11499,6 +11515,8 @@ export const translations: Record<Language, TranslationKeys> = {
       video_platform_not_allowed: "Diese Videoplattform wird nicht akzeptiert. Nur YouTube und TikTok werden unterstützt.",
       video_file_not_allowed: "Das Hochladen von Videodateien ist für Nominierungen nicht erlaubt. Bitte verwenden Sie eine YouTube-URL (einschließlich YouTube Shorts), TikTok oder einen anderen Video-Link.",
       youtube_shorts_not_allowed: "YouTube Shorts sind nicht erlaubt. Bitte verwenden Sie ein Standard-YouTube-Video.",
+      tiktok_preview_unavailable: "Vorschau nicht verfügbar — auf TikTok ansehen",
+      watch_on_tiktok: "Auf TikTok ansehen",
       url_required: "URL erforderlich",
       invalid_url: "Ungültige URL",
       max_images_reached: "Maximale Anzahl an Bildern erreicht",
@@ -12513,7 +12531,9 @@ export const translations: Record<Language, TranslationKeys> = {
       like_comment: "Mag ich",
       media_preview: "Medienvorschau",
       close: "Schließen",
-      of: "von"
+      of: "von",
+      contestant_label: "Teilnehmer",
+      nominator_label: "Nominierender"
     },
     kyc: {
       verification_required: "Identitätsverifizierung erforderlich",
