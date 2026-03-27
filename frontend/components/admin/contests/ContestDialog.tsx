@@ -1,14 +1,17 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { UploadButton } from '@/components/ui/upload-button'
-import { X } from 'lucide-react'
+import { X, ImagePlus, Loader2 } from 'lucide-react'
 import { useLanguage } from '@/contexts/language-context'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { generateReactHelpers } from '@uploadthing/react'
+import type { OurFileRouter } from '@/app/api/uploadthing/core'
+
+const { useUploadThing } = generateReactHelpers<OurFileRouter>()
 
 interface ContestDialogProps {
     isOpen: boolean
@@ -62,7 +65,41 @@ export function ContestDialog({
     })
     const [uploadedImage, setUploadedImage] = useState<string>('')
     const [isSubmitting, setIsSubmitting] = useState(false)
+    const [isUploading, setIsUploading] = useState(false)
+    const [uploadError, setUploadError] = useState<string>('')
     const [errors, setErrors] = useState<Record<string, string>>({})
+    const fileInputRef = useRef<HTMLInputElement>(null)
+
+    const { startUpload } = useUploadThing('imageUploader', {
+        onClientUploadComplete: (res) => {
+            if (res?.[0]) {
+                const url = res[0].url
+                setUploadedImage(url)
+                setFormData(prev => ({ ...prev, image_url: url, cover_image_url: url }))
+                setErrors(prev => ({ ...prev, image: '' }))
+            }
+            setIsUploading(false)
+        },
+        onUploadError: (error) => {
+            setUploadError(error.message || 'Upload failed')
+            setIsUploading(false)
+        },
+    })
+
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (!file) return
+        setUploadError('')
+
+        // Show instant local preview
+        const reader = new FileReader()
+        reader.onloadend = () => setUploadedImage(reader.result as string)
+        reader.readAsDataURL(file)
+
+        // Upload to UploadThing
+        setIsUploading(true)
+        await startUpload([file])
+    }
 
     // Determine contest mode from initialData
     const contestMode = initialData?.type || 'participation'
@@ -367,26 +404,79 @@ export function ContestDialog({
                                 {/* Image Upload */}
                                 <div>
                                     <label className="block text-sm font-medium mb-3 text-gray-900 dark:text-white">
-                                        📸 {t('admin.contests.image') || 'Image du concours'} <span className="text-red-500">*</span>
+                                        📸 {t('admin.contests.image') || 'Contest Image'} <span className="text-red-500">*</span>
                                     </label>
-                                    {uploadedImage && (
-                                        <div className="mb-3 relative">
-                                            <img src={uploadedImage} alt="Preview" className="h-40 w-40 object-cover rounded-lg border-2 border-myhigh5-primary/20" />
-                                        </div>
-                                    )}
-                                    <UploadButton
-                                        endpoint="imageUploader"
-                                        onClientUploadComplete={(res) => {
-                                            if (res?.[0]) {
-                                                setUploadedImage(res[0].url)
-                                                setFormData({ ...formData, image_url: res[0].url, cover_image_url: res[0].url })
-                                                setErrors(prev => ({ ...prev, image: '' }))
-                                            }
-                                        }}
-                                        onUploadError={(error) => {
-                                            console.error('Upload error:', error)
-                                        }}
+
+                                    {/* Hidden file input */}
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        accept="image/*"
+                                        className="hidden"
+                                        onChange={handleFileChange}
                                     />
+
+                                    {/* Preview + change button */}
+                                    {uploadedImage ? (
+                                        <div className="flex items-start gap-4">
+                                            <img
+                                                src={uploadedImage}
+                                                alt="Preview"
+                                                className="h-40 w-40 object-cover rounded-lg border-2 border-myhigh5-primary/30 shadow"
+                                            />
+                                            <div className="flex flex-col gap-2 mt-2">
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => fileInputRef.current?.click()}
+                                                    disabled={isUploading}
+                                                    className="dark:bg-gray-700 dark:text-white"
+                                                >
+                                                    {isUploading ? (
+                                                        <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Uploading...</>
+                                                    ) : (
+                                                        <><ImagePlus className="w-4 h-4 mr-2" /> Change Image</>
+                                                    )}
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => {
+                                                        setUploadedImage('')
+                                                        setFormData(prev => ({ ...prev, image_url: '', cover_image_url: '' }))
+                                                        if (fileInputRef.current) fileInputRef.current.value = ''
+                                                    }}
+                                                    className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                                                >
+                                                    <X className="w-4 h-4 mr-1" /> Remove
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            onClick={() => fileInputRef.current?.click()}
+                                            disabled={isUploading}
+                                            className="flex flex-col items-center justify-center w-full h-36 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl hover:border-myhigh5-primary hover:bg-myhigh5-primary/5 transition-colors cursor-pointer disabled:opacity-50"
+                                        >
+                                            {isUploading ? (
+                                                <>
+                                                    <Loader2 className="w-8 h-8 text-myhigh5-primary animate-spin mb-2" />
+                                                    <span className="text-sm text-gray-500">Uploading...</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <ImagePlus className="w-8 h-8 text-gray-400 mb-2" />
+                                                    <span className="text-sm font-medium text-gray-600 dark:text-gray-300">Click to upload image</span>
+                                                    <span className="text-xs text-gray-400 mt-1">PNG, JPG up to 8MB</span>
+                                                </>
+                                            )}
+                                        </button>
+                                    )}
+
+                                    {uploadError && <p className="text-red-500 text-xs mt-2">{uploadError}</p>}
                                     {errors.image && <p className="text-red-500 text-xs mt-1">{errors.image}</p>}
                                 </div>
                             </TabsContent>
