@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useEffect, useState, Suspense } from 'react'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useLanguage } from '@/contexts/language-context'
 import { useAuth } from '@/hooks/use-auth'
 import { ContestantDetailSkeleton } from '@/components/ui/skeleton'
@@ -77,15 +77,17 @@ interface ContestantDetail {
 }
 
 
-export default function ContestantDetailPage() {
+function ContestantDetailContent() {
   const { t } = useLanguage()
   const { user, isAuthenticated, isLoading } = useAuth()
   const router = useRouter()
   const params = useParams()
+  const searchParams = useSearchParams()
   const contestantId = params.contestantId as string
   const contestId = params.id as string
 
   const [contestant, setContestant] = useState<ContestantDetail | null>(null)
+  const [contestMode, setContestMode] = useState<string | null>(null)
   const [pageLoading, setPageLoading] = useState(true)
   const [selectedMedia, setSelectedMedia] = useState<Media | null>(null)
   const [isFavorite, setIsFavorite] = useState(false)
@@ -127,6 +129,12 @@ export default function ContestantDetailPage() {
         const data = response.data
 
         setContestant(data)
+
+        // Fetch contest mode to reliably detect nomination vs participation
+        try {
+          const contestRes = await api.get(`/api/v1/contests/${data.contest_id || contestId}`)
+          setContestMode(contestRes.data?.contest_mode || contestRes.data?.entry_type || null)
+        } catch { /* ignore, fallback to other checks */ }
 
         // Vérifier si c'est un favori
         try {
@@ -484,8 +492,12 @@ export default function ContestantDetailPage() {
   const images = parseMediaIds(contestant.image_media_ids, 'image')
   const videos = parseMediaIds(contestant.video_media_ids, 'video')
   const allMedia = [...images, ...videos]
+  // Detect nomination using all available signals (URL param, API fields, contest mode)
+  const urlEntryType = searchParams.get('entryType')
   const isNomination =
+    urlEntryType === 'nomination' ||
     contestant.entry_type === 'nomination' ||
+    contestMode === 'nomination' ||
     !!contestant.nominator_country ||
     !!contestant.nominator_city
 
@@ -754,5 +766,13 @@ export default function ContestantDetailPage() {
         description={contestant.description}
       />
     </div>
+  )
+}
+
+export default function ContestantDetailPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen" />}>
+      <ContestantDetailContent />
+    </Suspense>
   )
 }
