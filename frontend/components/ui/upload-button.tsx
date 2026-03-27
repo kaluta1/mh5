@@ -91,7 +91,7 @@ export function UploadButton({
   }
 
   return (
-    <UTUploadButton<OurFileRouter, typeof endpoint>
+    <UTUploadButton
       endpoint={endpoint}
       onClientUploadComplete={onClientUploadComplete}
       onUploadError={handleUploadError}
