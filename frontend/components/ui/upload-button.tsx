@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { UploadButton as UTUploadButton } from '@uploadthing/react'
+import { UploadButton as UTUploadButton } from '@/lib/uploadthing'
 import type { OurFileRouter } from '@/app/api/uploadthing/core'
 import { useLanguage } from '@/contexts/language-context'
 

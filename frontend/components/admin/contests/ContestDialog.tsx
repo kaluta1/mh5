@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { generateReactHelpers } from '@uploadthing/react'
 import type { OurFileRouter } from '@/app/api/uploadthing/core'
 
-const { useUploadThing } = generateReactHelpers<OurFileRouter>()
+const { useUploadThing } = generateReactHelpers<OurFileRouter>({ url: "/ut" })
 
 interface ContestDialogProps {
     isOpen: boolean
