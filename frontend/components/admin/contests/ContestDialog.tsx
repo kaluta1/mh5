@@ -68,9 +68,16 @@ export function ContestDialog({
     const [isUploading, setIsUploading] = useState(false)
     const [uploadError, setUploadError] = useState<string>('')
     const [errors, setErrors] = useState<Record<string, string>>({})
+    const [accessToken, setAccessToken] = useState<string>('')
     const fileInputRef = useRef<HTMLInputElement>(null)
 
+    useEffect(() => {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') || '' : ''
+        setAccessToken(token)
+    }, [])
+
     const { startUpload } = useUploadThing('imageUploader', {
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
         onClientUploadComplete: (res) => {
             if (res?.[0]) {
                 const url = res[0].url
