@@ -640,6 +640,19 @@ export default function ContestantDetailPage() {
                     </button>
                   </div>
                 </div>
+
+                {/* For nominations: show which contest/category they are nominating for */}
+                {isNomination && contestant.contest_title && (
+                  <div className="mb-4 flex items-center gap-2 px-4 py-2.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-xl">
+                    <span className="text-blue-500 dark:text-blue-400 text-sm font-medium whitespace-nowrap">
+                      {t('contestant_detail.nominated_for') || 'Nominated for:'}
+                    </span>
+                    <span className="text-blue-700 dark:text-blue-300 text-sm font-semibold">
+                      {contestant.contest_title}
+                    </span>
+                  </div>
+                )}
+
                 <ContestantDescription
                   description={contestant.description || ''}
                   maxLength={200}

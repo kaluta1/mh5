@@ -579,6 +579,7 @@ export interface TranslationKeys {
     of: string
     contestant_label: string
     nominator_label: string
+    nominated_for: string
   }
   admin: {
     title: string
@@ -4204,7 +4205,8 @@ export const translations: Record<Language, TranslationKeys> = {
       close: "Fermer",
       of: "de",
       contestant_label: "Participant",
-      nominator_label: "Nominateur"
+      nominator_label: "Nominateur",
+      nominated_for: "Nominé pour :"
     },
     dashboard: {
       welcome: "Bienvenue",
@@ -6587,7 +6589,8 @@ export const translations: Record<Language, TranslationKeys> = {
       close: "Close",
       of: "of",
       contestant_label: "Contestant",
-      nominator_label: "Nominator"
+      nominator_label: "Nominator",
+      nominated_for: "Nominated for:"
     },
     testimonials: {
       title: "What our users say",
@@ -10137,7 +10140,8 @@ export const translations: Record<Language, TranslationKeys> = {
       close: "Cerrar",
       of: "de",
       contestant_label: "Participante",
-      nominator_label: "Nominador"
+      nominator_label: "Nominador",
+      nominated_for: "Nominado para:"
     },
     kyc: {
       verification_required: "Verificación de Identidad Requerida",
@@ -12533,7 +12537,8 @@ export const translations: Record<Language, TranslationKeys> = {
       close: "Schließen",
       of: "von",
       contestant_label: "Teilnehmer",
-      nominator_label: "Nominierender"
+      nominator_label: "Nominierender",
+      nominated_for: "Nominiert für:"
     },
     kyc: {
       verification_required: "Identitätsverifizierung erforderlich",
