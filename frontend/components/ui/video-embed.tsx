@@ -100,7 +100,7 @@ function useTikTokMeta(url: string | undefined): TikTokMeta {
 
     setMeta(m => ({ ...m, loading: true, failed: false }))
 
-    fetch(`/api/tiktok-resolve?url=${encodeURIComponent(url)}`)
+    fetch(`/tiktok-resolve?url=${encodeURIComponent(url)}`)
       .then(res => {
         if (!res.ok) throw new Error('Resolve failed')
         return res.json()
