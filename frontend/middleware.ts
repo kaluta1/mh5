@@ -27,8 +27,14 @@ export function middleware(request: NextRequest) {
             return NextResponse.next()
         }
 
-        // Redirect everything else to maintenance page
-        return NextResponse.redirect(new URL('/maintenance', request.url))
+        // Serve maintenance content without creating an indexable redirect target.
+        const response = NextResponse.rewrite(new URL('/maintenance', request.url))
+        response.headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive')
+        response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+        response.headers.set('Pragma', 'no-cache')
+        response.headers.set('Expires', '0')
+        response.headers.set('Retry-After', '3600')
+        return response
     }
 
     // If NOT in maintenance mode

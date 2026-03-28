@@ -58,7 +58,7 @@ function getNestedTranslation(lang: Language, keys: string[]): string {
 }
 
 export function getMetadataTranslations(lang: Language = 'en'): MetadataTranslations {
-  const siteName = 'High5'
+  const siteName = 'MyHigh5'
   
   // Récupérer les traductions
   // Certaines langues ont hero.title directement, d'autres ont title_line1, title_line2, title_line3
@@ -113,11 +113,11 @@ export function getMetadataTranslations(lang: Language = 'en'): MetadataTranslat
 
   return {
     siteName,
-    defaultTitle: heroTitle || 'High5 - Compete & Earn',
+    defaultTitle: 'MyHigh5 - Global Contest Platform',
     defaultDescription: heroDescription || 'Join contests, build your network, and earn through our 10-level affiliate program.',
     pages: {
       home: {
-        title: `${heroTitle || 'Compete & Earn'} | ${heroSubtitle || 'Global Contest Platform'}`,
+        title: 'MyHigh5 | Global Contest Platform',
         description: heroDescription || 'Join contests, build your network, and earn through our 10-level affiliate program. Every vote, every referral generates income.',
       },
       contests: {
