@@ -29,6 +29,15 @@ const localeMap: Record<string, any> = {
   de: enUS
 }
 
+function parseFeedDate(value: string): Date {
+  // Backend often returns naive UTC timestamps without a trailing timezone marker.
+  if (/Z$|[+-]\d{2}:\d{2}$/.test(value)) {
+    return new Date(value)
+  }
+
+  return new Date(`${value}Z`)
+}
+
 interface PostCardProps {
   post: Post
   currentUserId?: number
@@ -97,7 +106,7 @@ export function PostCard({
               </span>
               <span className="text-gray-500 dark:text-gray-400">·</span>
               <span className="text-gray-500 dark:text-gray-400 text-[15px]">
-                {formatDistanceToNow(new Date(post.created_at), { addSuffix: true, locale: dateLocale })}
+                {formatDistanceToNow(parseFeedDate(post.created_at), { addSuffix: true, locale: dateLocale })}
               </span>
             </div>
             <DropdownMenu>
