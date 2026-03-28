@@ -307,8 +307,25 @@ def create_comment(
     
     if background_tasks:
         background_tasks.add_task(notify_comment)
-    
-    return comment
+
+    return {
+        "id": comment.id,
+        "post_id": comment.post_id,
+        "author_id": comment.author_id,
+        "content": comment.content,
+        "parent_id": comment.parent_id,
+        "like_count": comment.like_count,
+        "reply_count": comment.reply_count,
+        "created_at": comment.created_at,
+        "updated_at": comment.updated_at,
+        "author": {
+            "id": comment.author.id,
+            "username": comment.author.username,
+            "avatar_url": comment.author.avatar_url
+        } if comment.author else None,
+        "user_reaction": None,
+        "replies": []
+    }
 
 
 @router.get("/posts/{post_id}/comments", response_model=List[PostCommentResponse])
