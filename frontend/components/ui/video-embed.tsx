@@ -26,11 +26,15 @@ interface TikTokMeta {
 
 function TikTokOEmbed({
   embedHtml,
+  originalUrl,
+  title,
   className,
   width,
   height,
 }: {
   embedHtml: string
+  originalUrl?: string
+  title?: string | null
   className: string
   width: string | number
   height: string | number
@@ -41,7 +45,19 @@ function TikTokOEmbed({
     const container = containerRef.current
     if (!container) return
 
-    const sanitizedHtml = embedHtml.replace(/<script[\s\S]*?<\/script>/gi, '').trim()
+    const fallbackHtml = `
+      <blockquote
+        class="tiktok-embed"
+        cite="${originalUrl || ''}"
+        style="max-width: 605px; min-width: 325px; margin: 0 auto;"
+      >
+        <section>
+          <a target="_blank" href="${originalUrl || '#'}">${title || 'Watch this video on TikTok'}</a>
+        </section>
+      </blockquote>
+    `
+
+    const sanitizedHtml = (embedHtml || fallbackHtml).replace(/<script[\s\S]*?<\/script>/gi, '').trim()
     container.innerHTML = sanitizedHtml
 
     const script = document.createElement('script')
@@ -53,7 +69,7 @@ function TikTokOEmbed({
     return () => {
       container.innerHTML = ''
     }
-  }, [embedHtml])
+  }, [embedHtml, originalUrl, title])
 
   return (
     <div
@@ -206,6 +222,21 @@ export function VideoEmbed({
       return (
         <TikTokOEmbed
           embedHtml={tiktokMeta.embedHtml}
+          originalUrl={openUrl}
+          title={tiktokMeta.title}
+          className={className}
+          width={width}
+          height={height}
+        />
+      )
+    }
+
+    if (openUrl) {
+      return (
+        <TikTokOEmbed
+          embedHtml=""
+          originalUrl={openUrl}
+          title={tiktokMeta.title}
           className={className}
           width={width}
           height={height}
