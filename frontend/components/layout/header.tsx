@@ -154,7 +154,7 @@ export function Header({ user, onLoginClick, onLogout }: HeaderProps) {
                   user={authUser}
                   onLogout={handleLogout}
                   onProfile={() => router.push('/profile')}
-                  onSettings={() => router.push('/settings')}
+                  onSettings={() => router.push('/dashboard/settings')}
                 />
               ) : (
                 <div className="hidden sm:flex items-center gap-2">

@@ -628,7 +628,7 @@ export default function ApplyToContestPage() {
                     {t('participation.profile_incomplete_title')} {t('participation.profile_incomplete_message')}
                   </p>
                   <button
-                    onClick={() => router.push('/settings')}
+                    onClick={() => router.push('/dashboard/settings')}
                     className="w-full px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg font-medium transition text-sm"
                   >
                     {t('participation.complete_profile_button')}
