@@ -6,12 +6,13 @@ import { fr, enUS } from 'date-fns/locale'
 import { Send, Heart } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
 import { UserAvatar } from '@/components/user/user-avatar'
 import { socialService, PostComment } from '@/services/social-service'
 import { cn } from '@/lib/utils'
 import { useLanguage } from '@/contexts/language-context'
 import { useToast } from '@/components/ui/toast'
+import { MentionTextarea } from '@/components/feed/mention-textarea'
+import { MentionText } from '@/components/feed/mention-text'
 
 interface CommentDialogProps {
   open: boolean
@@ -104,7 +105,7 @@ export function CommentDialog({ open, onOpenChange, postId, onCommentAdded }: Co
                       </span>
                     </div>
                     <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-                      {comment.content}
+                      <MentionText text={comment.content} />
                     </p>
                   </div>
                   <div className="flex items-center gap-4 mt-1 ml-2">
@@ -126,10 +127,10 @@ export function CommentDialog({ open, onOpenChange, postId, onCommentAdded }: Co
         </div>
 
         <div className="border-t pt-4 space-y-2">
-          <Textarea
+          <MentionTextarea
             placeholder={t('dashboard.feed.add_comment_placeholder') || 'Add a comment...'}
             value={content}
-            onChange={(e) => setContent(e.target.value)}
+            onChange={setContent}
             className="min-h-[80px] resize-none"
             onKeyDown={(e) => {
               if (e.key === 'Enter' && e.ctrlKey) {

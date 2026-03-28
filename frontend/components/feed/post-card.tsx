@@ -19,6 +19,7 @@ import { ReactionButton } from './reaction-button'
 import { PostMediaGallery } from './post-media-gallery'
 import { PostPoll } from './post-poll'
 import { LinkPreview } from './link-preview'
+import { MentionText } from './mention-text'
 import { cn } from '@/lib/utils'
 import { useLanguage } from '@/contexts/language-context'
 
@@ -143,7 +144,7 @@ export function PostCard({
             "text-gray-900 dark:text-white text-[15px] leading-6 whitespace-pre-wrap break-words mb-3",
             !showFullContent && "line-clamp-none"
           )}>
-            {post.content}
+            <MentionText text={post.content} />
           </div>
 
           {/* Media */}

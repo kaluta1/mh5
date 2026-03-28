@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 import { X, BarChart3, Globe, Users, Lock, Smile, MapPin, Calendar, Plus } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { UploadButton } from '@/components/ui/upload-button'
 import { socialService, CreatePostRequest, Post } from '@/services/social-service'
@@ -13,6 +12,7 @@ import { UserAvatar } from '@/components/user/user-avatar'
 import { cn } from '@/lib/utils'
 import { useLanguage } from '@/contexts/language-context'
 import { useToast } from '@/components/ui/toast'
+import { MentionTextarea } from '@/components/feed/mention-textarea'
 
 interface PostDialogProps {
   open: boolean
@@ -58,12 +58,6 @@ export function PostDialog({ open, onOpenChange, onPostCreated, postToEdit, onPo
     setActiveTab('post')
     setCharCount(0)
   }, [open, postToEdit])
-
-  const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const value = e.target.value
-    setContent(value)
-    setCharCount(value.length)
-  }
 
   const handleSubmit = async () => {
     if (!content.trim() && mediaIds.length === 0 && !poll) return
@@ -202,10 +196,13 @@ export function PostDialog({ open, onOpenChange, onPostCreated, postToEdit, onPo
                 <UserAvatar user={user} className="w-12 h-12 flex-shrink-0" />
                 <div className="flex-1 space-y-4">
                   <div>
-                    <Textarea
+                    <MentionTextarea
                       placeholder={t('dashboard.feed.post_placeholder') || "What's on your mind?"}
                       value={content}
-                      onChange={handleContentChange}
+                      onChange={(nextValue) => {
+                        setContent(nextValue)
+                        setCharCount(nextValue.length)
+                      }}
                       className="min-h-[150px] resize-none border-0 text-lg p-0 focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent placeholder:text-gray-400 dark:placeholder:text-gray-500"
                       autoFocus
                     />
@@ -348,10 +345,10 @@ export function PostDialog({ open, onOpenChange, onPostCreated, postToEdit, onPo
                 <UserAvatar user={user} className="w-12 h-12 flex-shrink-0" />
                 <div className="flex-1 space-y-4">
                   <div>
-                    <Textarea
+                    <MentionTextarea
                       placeholder={t('dashboard.feed.poll_question_placeholder') || 'Ask your question...'}
                       value={poll?.question || ''}
-                      onChange={(e) => setPoll(poll ? { ...poll, question: e.target.value } : { question: e.target.value, options: ['', ''] })}
+                      onChange={(nextValue) => setPoll(poll ? { ...poll, question: nextValue } : { question: nextValue, options: ['', ''] })}
                       className="min-h-[100px] resize-none border-0 text-lg p-0 focus-visible:ring-0 bg-transparent placeholder:text-gray-400 dark:placeholder:text-gray-500"
                       autoFocus
                     />

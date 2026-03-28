@@ -1,7 +1,7 @@
 from typing import Any, List
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_active_user
@@ -117,6 +117,29 @@ def get_suggested_users(
         UserModel.id != current_user.id,
         ~UserModel.id.in_(following_ids)
     ).offset(skip).limit(limit).all()
+
+    return _build_follow_users(db, users, current_user.id)
+
+
+@router.get("/search", response_model=List[FollowUserResponse])
+def search_users(
+    q: str = Query(..., min_length=1, max_length=100),
+    limit: int = Query(10, ge=1, le=20),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+) -> Any:
+    """Search users by username or full name for mentions."""
+    search_term = f"%{q.strip()}%"
+
+    users = db.query(UserModel).filter(
+        UserModel.id != current_user.id,
+        or_(
+            UserModel.username.ilike(search_term),
+            UserModel.full_name.ilike(search_term),
+            UserModel.first_name.ilike(search_term),
+            UserModel.last_name.ilike(search_term),
+        )
+    ).limit(limit).all()
 
     return _build_follow_users(db, users, current_user.id)
 
