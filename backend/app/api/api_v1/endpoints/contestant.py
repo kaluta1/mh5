@@ -169,11 +169,29 @@ def _extract_canonical_video_urls(db: Session, video_media_ids: Optional[str]) -
     except json.JSONDecodeError:
         video_refs = [video_media_ids]
 
-    if not isinstance(video_refs, list):
-        video_refs = [video_refs]
+    refs_to_process = video_refs if isinstance(video_refs, list) else [video_refs]
 
     normalized_urls: Set[str] = set()
-    for ref in video_refs:
+    while refs_to_process:
+        ref = refs_to_process.pop(0)
+        if ref is None:
+            continue
+
+        if isinstance(ref, list):
+            refs_to_process = list(ref) + refs_to_process
+            continue
+
+        if isinstance(ref, str):
+            stripped_ref = ref.strip()
+            if stripped_ref and stripped_ref[0] in ('[', '"'):
+                try:
+                    nested_ref = json.loads(stripped_ref)
+                except json.JSONDecodeError:
+                    nested_ref = None
+                if nested_ref is not None and nested_ref != ref:
+                    refs_to_process.insert(0, nested_ref)
+                    continue
+
         resolved_url = _resolve_media_url(db, ref)
         candidate = resolved_url or str(ref).strip()
         canonical = _canonicalize_social_media_url(candidate)
@@ -181,6 +199,29 @@ def _extract_canonical_video_urls(db: Session, video_media_ids: Optional[str]) -
             normalized_urls.add(canonical)
 
     return normalized_urls
+
+
+def _get_contest_ids_from_season(db: Session, season_id: Optional[int]) -> Set[int]:
+    if not season_id:
+        return set()
+
+    contest_ids: Set[int] = set()
+
+    direct_contest = db.query(Contest).filter(
+        Contest.id == season_id,
+        Contest.is_deleted == False
+    ).first()
+    if direct_contest:
+        contest_ids.add(direct_contest.id)
+
+    from app.models.contests import ContestSeasonLink
+    linked_ids = db.query(ContestSeasonLink.contest_id).filter(
+        ContestSeasonLink.season_id == season_id,
+        ContestSeasonLink.is_active == True
+    ).all()
+    contest_ids.update(contest_id for contest_id, in linked_ids if contest_id is not None)
+
+    return contest_ids
 
 
 def _get_contest_context_from_season(db: Session, season_id: Optional[int]) -> Set[Tuple[Optional[int], Optional[str]]]:
@@ -219,6 +260,7 @@ def _find_duplicate_video_submission(
     target_round_id: Optional[int],
     current_category_id: Optional[int],
     current_contest_mode: Optional[str],
+    current_contest_ids: Optional[Set[int]] = None,
     exclude_contestant_id: Optional[int] = None
 ) -> Optional[Tuple[Contestant, str]]:
     submitted_urls = _extract_canonical_video_urls(db, video_media_ids)
@@ -230,16 +272,26 @@ def _find_duplicate_video_submission(
         Contestant.video_media_ids.isnot(None)
     )
 
-    if target_round_id is not None:
-        duplicate_query = duplicate_query.filter(Contestant.round_id == target_round_id)
-
     if exclude_contestant_id is not None:
         duplicate_query = duplicate_query.filter(Contestant.id != exclude_contestant_id)
 
     current_context = (current_category_id, current_contest_mode)
     strict_context_match = current_category_id is not None or current_contest_mode is not None
+    normalized_current_contest_ids = current_contest_ids or set()
 
     for existing_contestant in duplicate_query.all():
+        if target_round_id is not None:
+            same_round = existing_contestant.round_id == target_round_id
+
+            # Legacy submissions can belong to the same contest but have no stored round_id.
+            # In that case, still block duplicates within the same contest/category context.
+            if not same_round and existing_contestant.round_id is None and normalized_current_contest_ids:
+                existing_contest_ids = _get_contest_ids_from_season(db, existing_contestant.season_id)
+                same_round = bool(existing_contest_ids.intersection(normalized_current_contest_ids))
+
+            if not same_round:
+                continue
+
         existing_contexts = _get_contest_context_from_season(db, existing_contestant.season_id)
         if strict_context_match:
             if not existing_contexts or current_context not in existing_contexts:
@@ -1288,12 +1340,14 @@ def create_contestant(
     # VERIFICATION UNICITE DES LIENS VIDEO (même round/concours)
     # ============================================
     if contestant_data.video_media_ids:
+        current_contest_ids = {real_contest_id} if real_contest_id else _get_contest_ids_from_season(db, season_id)
         duplicate_submission = _find_duplicate_video_submission(
             db,
             video_media_ids=contestant_data.video_media_ids,
             target_round_id=target_round_id,
             current_category_id=contest.category_id if contest else None,
-            current_contest_mode=contest.contest_mode if contest else None
+            current_contest_mode=contest.contest_mode if contest else None,
+            current_contest_ids=current_contest_ids
         )
         if duplicate_submission:
             raise HTTPException(
@@ -1686,12 +1740,14 @@ def update_contestant(
     if contestant_data.video_media_ids:
         current_contexts = _get_contest_context_from_season(db, contestant.season_id)
         current_category_id, current_contest_mode = next(iter(current_contexts), (None, None))
+        current_contest_ids = _get_contest_ids_from_season(db, contestant.season_id)
         duplicate_submission = _find_duplicate_video_submission(
             db,
             video_media_ids=contestant_data.video_media_ids,
             target_round_id=contestant.round_id,
             current_category_id=current_category_id,
             current_contest_mode=current_contest_mode,
+            current_contest_ids=current_contest_ids,
             exclude_contestant_id=contestant_id
         )
         if duplicate_submission:
