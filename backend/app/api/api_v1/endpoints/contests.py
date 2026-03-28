@@ -24,6 +24,13 @@ class ParticipateRequest(BaseModel):
     nominator_country: Optional[str] = None
     round_id: Optional[int] = None
 
+
+class VideoLinkValidationRequest(BaseModel):
+    """Request schema for validating a contestant video link before submission."""
+    video_media_ids: List[str]
+    round_id: Optional[int] = None
+    contestant_id: Optional[int] = None
+
 router = APIRouter()
 
 @router.post("/", response_model=Contest, status_code=status.HTTP_201_CREATED)
@@ -299,6 +306,118 @@ def read_contests(
 
 
 # IMPORTANT: These routes must come BEFORE /{contest_id} to avoid route conflicts
+@router.post("/{contest_id}/validate-video-link", status_code=status.HTTP_200_OK)
+def validate_contest_video_link(
+    *,
+    db: Session = Depends(get_db),
+    contest_id: int,
+    current_user: Any = Depends(get_current_active_user),
+    request: VideoLinkValidationRequest = Body(...),
+) -> Any:
+    """
+    Validate a video link before the user proceeds to the next participation step.
+    Blocks duplicate content links from the same social platform in the same category/round.
+    """
+    import json
+
+    from app.api.api_v1.endpoints.contestant import (
+        _find_duplicate_video_submission,
+        _get_contest_context_from_season,
+        _get_contest_ids_from_season,
+    )
+    from app.models.contest import Contest as ContestModel
+    from app.models.contests import ContestSeason, ContestSeasonLink
+    from app.models.round import Round
+
+    contest_obj = db.query(ContestModel).filter(
+        ContestModel.id == contest_id,
+        ContestModel.is_deleted == False
+    ).first()
+
+    season = None
+    if not contest_obj:
+        season = db.query(ContestSeason).filter(
+            ContestSeason.id == contest_id,
+            ContestSeason.is_deleted == False
+        ).first()
+        if not season:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Contest not found"
+            )
+
+    real_contest_id = contest_obj.id if contest_obj else contest_id
+    if not contest_obj and season:
+        link = db.query(ContestSeasonLink).filter(
+            ContestSeasonLink.season_id == season.id,
+            ContestSeasonLink.is_active == True
+        ).first()
+        if link:
+            real_contest_id = link.contest_id
+            contest_obj = db.query(ContestModel).filter(
+                ContestModel.id == real_contest_id,
+                ContestModel.is_deleted == False
+            ).first()
+
+    target_round_id = request.round_id
+    if target_round_id is None and real_contest_id:
+        from app import crud
+        active_round = crud.round.get_active_round_for_contest(db, real_contest_id)
+        if active_round:
+            target_round_id = active_round.id
+
+    if target_round_id:
+        round_obj = db.query(Round).filter(Round.id == target_round_id).first()
+        if not round_obj:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Round id not found"
+            )
+
+    video_media_ids = json.dumps(request.video_media_ids or [])
+    season_id_for_context = real_contest_id or (season.id if season else None)
+    current_contexts = _get_contest_context_from_season(db, season_id_for_context)
+    current_category_id, current_contest_mode = next(
+        iter(current_contexts),
+        (
+            contest_obj.category_id if contest_obj else None,
+            contest_obj.contest_mode if contest_obj else None
+        )
+    )
+    current_contest_ids = (
+        {real_contest_id}
+        if real_contest_id
+        else _get_contest_ids_from_season(db, season_id_for_context)
+    )
+
+    duplicate_submission = _find_duplicate_video_submission(
+        db,
+        video_media_ids=video_media_ids,
+        target_round_id=target_round_id,
+        current_category_id=current_category_id,
+        current_contest_mode=current_contest_mode,
+        current_contest_ids=current_contest_ids,
+        exclude_contestant_id=request.contestant_id,
+    )
+
+    if duplicate_submission:
+        existing_contestant, matched_url = duplicate_submission
+        return {
+            "is_duplicate": True,
+            "detail": (
+                "This content link has already been submitted by another participant "
+                "on the same social media in this category and round."
+            ),
+            "matched_url": matched_url,
+            "existing_contestant_id": existing_contestant.id,
+        }
+
+    return {
+        "is_duplicate": False,
+        "detail": "Video link is available for submission."
+    }
+
+
 @router.post("/{contest_id}/participate", status_code=status.HTTP_201_CREATED)
 def participate_in_contest(
     *,

@@ -15,6 +15,7 @@ import { useToast } from '@/components/ui/toast'
 import { isValidVideoUrl, detectVideoPlatform, cleanVideoUrl } from '@/lib/utils/video-platforms'
 import { countries } from '@/lib/countries'
 import { getCitiesByCountry } from '@/lib/geography'
+import { contestService } from '@/services/contest-service'
 
 // WYSIWYG Editor - chargé dynamiquement pour éviter les erreurs SSR
 const ReactQuill = dynamic(() => import('react-quill'), { ssr: false, loading: () => <div className="w-full h-40 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center"><Loader2 className="w-6 h-6 text-gray-400 animate-spin" /></div> })
@@ -56,6 +57,8 @@ interface ParticipationFormProps {
     submission_end_date?: string
     name?: string
   } | null
+  roundId?: number
+  contestantId?: number
 }
 
 const QUILL_MODULES = {
@@ -81,7 +84,7 @@ const VIDEO_PLATFORMS = [
   { name: 'Vimeo', bg: 'bg-cyan-500/10 dark:bg-cyan-500/20 border-cyan-500/30 text-cyan-600 dark:text-cyan-300', url: 'https://vimeo.com' },
 ]
 
-export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting: externalIsSubmitting, isEditing = false, initialData, mediaRequirements, isNomination = false, roundData }: ParticipationFormProps) {
+export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting: externalIsSubmitting, isEditing = false, initialData, mediaRequirements, isNomination = false, roundData, roundId, contestantId }: ParticipationFormProps) {
   const { t } = useLanguage()
   const router = useRouter()
   const { addToast } = useToast()
@@ -136,6 +139,8 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
   const [showVideoUrlInput, setShowVideoUrlInput] = useState(false)
   const [imageUrlInput, setImageUrlInput] = useState('')
   const [videoUrlInput, setVideoUrlInput] = useState('')
+  const [videoDuplicateError, setVideoDuplicateError] = useState('')
+  const [isValidatingVideoLink, setIsValidatingVideoLink] = useState(false)
 
   // Nomination location states
   const [nominatorCountry, setNominatorCountry] = useState<string>(initialData?.nominatorCountry || '')
@@ -250,6 +255,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
   const videoUpload = useModeratedUpload({
     accessToken,
     onSuccess: (result) => {
+      setVideoDuplicateError('')
       setVideoUrl(result.url)
       addToast(t('participation.video_added') || 'Vidéo ajoutée', 'success')
     },
@@ -289,7 +295,10 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
   }
 
   const handleRemoveImage = (index: number) => setImageUrls(imageUrls.filter((_, i) => i !== index))
-  const handleRemoveVideo = () => setVideoUrl('')
+  const handleRemoveVideo = () => {
+    setVideoUrl('')
+    setVideoDuplicateError('')
+  }
 
   const isValidUrl = (url: string) => {
     try { new URL(url); return true } catch { return false }
@@ -309,15 +318,44 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
     addToast(t('participation.image_added') || 'Image ajoutée', 'success')
   }
 
-  const handleAddVideoByUrl = () => {
+  const handleAddVideoByUrl = async () => {
     if (!videoUrlInput.trim()) { addToast(t('participation.url_required') || 'URL requise', 'error'); return }
     if (!isValidUrl(videoUrlInput)) { addToast(t('participation.invalid_url') || 'URL invalide', 'error'); return }
     // Plateformes vidéo acceptées : YouTube et TikTok (pas de connexion requise pour visionner)
     if (!isVideoUrlValid(videoUrlInput)) { addToast(t('participation.invalid_video_url'), 'error'); return }
-    setVideoUrl(cleanVideoUrl(videoUrlInput))
-    setVideoUrlInput('')
-    setShowVideoUrlInput(false)
-    addToast(t('participation.video_added') || 'Vidéo ajoutée', 'success')
+
+    const cleanedUrl = cleanVideoUrl(videoUrlInput)
+
+    try {
+      setIsValidatingVideoLink(true)
+      setVideoDuplicateError('')
+
+      const validation = await contestService.validateContestantVideoLink(
+        contestId,
+        cleanedUrl,
+        roundId,
+        contestantId
+      )
+
+      if (validation.is_duplicate) {
+        const detail = validation.detail || 'This content link has already been submitted in this category and round.'
+        setVideoDuplicateError(detail)
+        addToast(detail, 'error')
+        return
+      }
+
+      setVideoUrl(cleanedUrl)
+      setVideoUrlInput('')
+      setShowVideoUrlInput(false)
+      setVideoDuplicateError('')
+      addToast(t('participation.video_added') || 'Vidéo ajoutée', 'success')
+    } catch (error: any) {
+      const detail = error?.response?.data?.detail || error?.message || 'Unable to validate this video link.'
+      setVideoDuplicateError(detail)
+      addToast(detail, 'error')
+    } finally {
+      setIsValidatingVideoLink(false)
+    }
   }
 
   // Extraire le texte brut du HTML pour la validation de longueur
@@ -338,6 +376,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
     if (plainDescriptionLength < 20) { addToast(t('participation.errors.content_description_min_length') || 'La description doit contenir au moins 20 caractères', 'error'); return }
     if (plainDescriptionLength > 500) { addToast(t('participation.errors.content_description_max_length') || 'La description ne doit pas dépasser 500 caractères', 'error'); return }
     if (!isNomination && imageUrls.length === 0) { addToast(t('participation.errors.content_image_required') || 'Au moins une image est requise', 'error'); return }
+    if (videoDuplicateError) { addToast(videoDuplicateError, 'error'); return }
     if (requiresVideo && !videoUrl) { addToast(t('participation.errors.content_video_required') || 'Une vidéo est requise', 'error'); return }
     if (isNomination && !nominatorCountry) { addToast(t('participation.errors.nominator_country_required') || 'Le pays est obligatoire', 'error'); return }
 
@@ -369,13 +408,13 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
   const hasTitleError = title.trim().length > 0 && (title.trim().length < 5 || title.trim().length > 100)
   const hasDescriptionError = plainDescriptionLength > 0 && (plainDescriptionLength < 20 || plainDescriptionLength > 500)
   const hasImageError = !isNomination && imageUrls.length === 0
-  const hasVideoError = requiresVideo && !videoUrl
+  const hasVideoError = (requiresVideo && !videoUrl) || !!videoDuplicateError
   const hasNominatorCountryError = isNomination && !nominatorCountry
 
   const isStep1Valid = title.trim().length >= 5 && title.trim().length <= 100 && plainDescriptionLength >= 20 && plainDescriptionLength <= 500
   const isStep2Valid = isNomination
-    ? (!!nominatorCountry && (requiresVideo ? !!videoUrl : true))
-    : (imageUrls.length >= minImages && (requiresVideo ? !!videoUrl : true))
+    ? (!!nominatorCountry && !videoDuplicateError && (requiresVideo ? !!videoUrl : true))
+    : (imageUrls.length >= minImages && !videoDuplicateError && (requiresVideo ? !!videoUrl : true))
 
   const stepLabels = [
     t('participation.step_info') || 'Information',
@@ -390,6 +429,10 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
   }
 
   const goNext = () => {
+    if (videoDuplicateError) {
+      addToast(videoDuplicateError, 'error')
+      return
+    }
     if (canGoNext() && currentStep < totalSteps - 1) setCurrentStep(currentStep + 1)
   }
   const goPrev = () => {
@@ -745,10 +788,16 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
                 {showVideoUrlInput && (
                   <div className="space-y-2">
                     <div className="flex flex-col sm:flex-row gap-2">
-                      <Input type="url" value={videoUrlInput} onChange={(e) => setVideoUrlInput(e.target.value)}
+                      <Input type="url" value={videoUrlInput} onChange={(e) => {
+                        setVideoUrlInput(e.target.value)
+                        if (videoDuplicateError) setVideoDuplicateError('')
+                      }}
                         placeholder="https://youtube.com/shorts/... ou https://tiktok.com/..."
                         className="flex-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white" />
-                      <Button type="button" onClick={handleAddVideoByUrl} className="gap-1 w-full sm:w-auto"><Plus className="w-4 h-4" /> {t('participation.add') || 'Ajouter'}</Button>
+                      <Button type="button" onClick={handleAddVideoByUrl} disabled={isValidatingVideoLink} className="gap-1 w-full sm:w-auto">
+                        {isValidatingVideoLink ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                        {isValidatingVideoLink ? (t('common.loading') || 'Loading...') : (t('participation.add') || 'Ajouter')}
+                      </Button>
                     </div>
                     {videoUrlInput && isValidUrl(videoUrlInput) && (
                       <div className="flex items-center gap-2 text-xs">
@@ -763,6 +812,12 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
                             {t('participation.unrecognized_video_link') || 'Lien vidéo non reconnu'}
                           </span>
                         )}
+                      </div>
+                    )}
+                    {videoDuplicateError && (
+                      <div className="flex items-start gap-2 text-xs text-red-400">
+                        <AlertCircle className="mt-0.5 h-3 w-3 flex-shrink-0" />
+                        <span>{videoDuplicateError}</span>
                       </div>
                     )}
                   </div>
@@ -892,14 +947,14 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
         )}
 
         {currentStep < totalSteps - 1 ? (
-          <Button type="button" onClick={goNext} disabled={!canGoNext() || isSubmitting} className="flex-1 h-11 sm:h-10 bg-blue-600 hover:bg-blue-700 text-white font-bold gap-2">
+          <Button type="button" onClick={goNext} disabled={!canGoNext() || isSubmitting || isValidatingVideoLink} className="flex-1 h-11 sm:h-10 bg-blue-600 hover:bg-blue-700 text-white font-bold gap-2">
             {t('common.next') || 'Suivant'} <ChevronRight className="w-4 h-4" />
           </Button>
         ) : (
           <Button
             type="button"
             onClick={handleSubmit}
-            disabled={!isStep1Valid || !isStep2Valid || isSubmitting}
+            disabled={!isStep1Valid || !isStep2Valid || isSubmitting || isValidatingVideoLink}
             className="flex-1 h-11 sm:h-10 bg-green-600 hover:bg-green-700 text-white font-bold gap-2"
           >
             {isSubmitting

@@ -621,6 +621,26 @@ class ContestService {
     }
   }
 
+  async validateContestantVideoLink(
+    contestId: string | number,
+    videoUrl: string,
+    roundId?: number,
+    contestantId?: number
+  ): Promise<{
+    is_duplicate: boolean;
+    detail?: string;
+    matched_url?: string;
+    existing_contestant_id?: number;
+  }> {
+    const response = await api.post(`/api/v1/contests/${contestId}/validate-video-link`, {
+      video_media_ids: [videoUrl],
+      round_id: roundId,
+      contestant_id: contestantId,
+    });
+
+    return response.data;
+  }
+
   /**
    * Update an existing contestant entry
    */

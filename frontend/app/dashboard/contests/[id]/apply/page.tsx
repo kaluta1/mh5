@@ -619,6 +619,8 @@ export default function ApplyToContestPage() {
                   maxImages: contest?.max_images
                 }}
                 roundData={roundData}
+                roundId={roundIdParam ? parseInt(roundIdParam, 10) : undefined}
+                contestantId={participantId ?? undefined}
               />
 
               {/* Profile Setup Alert - DISPLAYED AFTER FORM */}
