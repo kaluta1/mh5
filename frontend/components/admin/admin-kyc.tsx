@@ -48,10 +48,13 @@ export default function AdminKYC() {
   const fetchVerifications = async () => {
     try {
       setLoading(true)
-      const response = await api.get(`/api/v1/admin/kyc?status=${filter}`)
-      setVerifications(response.data)
+      const response = await api.get('/api/v1/kyc/admin/verifications', {
+        params: { status_filter: filter }
+      })
+      setVerifications(Array.isArray(response.data) ? response.data : [])
     } catch (error) {
       console.error('Error loading KYC:', error)
+      setVerifications([])
     } finally {
       setLoading(false)
     }
@@ -59,7 +62,7 @@ export default function AdminKYC() {
 
   const handleApprove = async (id: number) => {
     try {
-      await api.put(`/api/v1/admin/kyc/${id}/approve`)
+      await api.post(`/api/v1/kyc/admin/verification/${id}/approve`)
       fetchVerifications()
     } catch (error) {
       console.error('Error approving:', error)
@@ -68,17 +71,27 @@ export default function AdminKYC() {
 
   const handleReject = async (id: number, reason: string) => {
     try {
-      await api.put(`/api/v1/admin/kyc/${id}/reject`, { reason })
+      const payload = new URLSearchParams()
+      payload.set('reason', reason)
+
+      await api.post(`/api/v1/kyc/admin/verification/${id}/reject`, payload, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
+      })
       fetchVerifications()
     } catch (error) {
       console.error('Error rejecting:', error)
     }
   }
 
-  const filteredVerifications = verifications.filter((v) =>
-    v.user?.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    v.user?.full_name?.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  const filteredVerifications = (Array.isArray(verifications) ? verifications : []).filter((v) => {
+    const email = v.user?.email?.toLowerCase() || ''
+    const fullName = v.user?.full_name?.toLowerCase() || ''
+    const query = searchTerm.toLowerCase()
+
+    return email.includes(query) || fullName.includes(query)
+  })
 
   const getStatusBadge = (status: string) => {
     const badges: Record<string, { bg: string; text: string; label: string }> = {
