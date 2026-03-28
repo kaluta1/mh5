@@ -90,6 +90,16 @@ class CRUDContestant:
                     ).first()
                     if season:
                         contest_id = contest_link.contest_id
+
+        # Dernier fallback: dans le mode legacy, season_id peut être directement le Contest.id
+        # même si un ContestSeason portant le même ID existe aussi.
+        if contest_id is None and contestant.season_id is not None:
+            direct_contest = db.query(Contest).filter(
+                Contest.id == contestant.season_id,
+                Contest.is_deleted == False
+            ).first()
+            if direct_contest:
+                contest_id = direct_contest.id
         
         # Déterminer le niveau de la saison
         season_level: Optional[str] = None
