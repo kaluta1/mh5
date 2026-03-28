@@ -1,13 +1,13 @@
 'use client'
 
-import { useState } from 'react'
-import { X, Image as ImageIcon, Video, BarChart3, Globe, Users, Lock, Smile, MapPin, Calendar, Plus } from 'lucide-react'
-import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { useEffect, useState } from 'react'
+import { X, BarChart3, Globe, Users, Lock, Smile, MapPin, Calendar, Plus } from 'lucide-react'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { UploadButton } from '@/components/ui/upload-button'
-import { socialService, CreatePostRequest } from '@/services/social-service'
+import { socialService, CreatePostRequest, Post } from '@/services/social-service'
 import { useAuth } from '@/hooks/use-auth'
 import { UserAvatar } from '@/components/user/user-avatar'
 import { cn } from '@/lib/utils'
@@ -18,9 +18,11 @@ interface PostDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onPostCreated?: () => void
+  postToEdit?: Post | null
+  onPostUpdated?: (post: Post) => void
 }
 
-export function PostDialog({ open, onOpenChange, onPostCreated }: PostDialogProps) {
+export function PostDialog({ open, onOpenChange, onPostCreated, postToEdit, onPostUpdated }: PostDialogProps) {
   const { user } = useAuth()
   const { t } = useLanguage()
   const { addToast } = useToast()
@@ -31,8 +33,31 @@ export function PostDialog({ open, onOpenChange, onPostCreated }: PostDialogProp
   const [isLoading, setIsLoading] = useState(false)
   const [activeTab, setActiveTab] = useState<'post' | 'poll'>('post')
   const [charCount, setCharCount] = useState(0)
+  const isEditing = Boolean(postToEdit)
 
   const maxChars = 280
+
+  useEffect(() => {
+    if (!open) return
+
+    if (postToEdit) {
+      const nextContent = postToEdit.content || ''
+      setContent(nextContent)
+      setVisibility(postToEdit.visibility || 'public')
+      setMediaIds([])
+      setPoll(null)
+      setActiveTab('post')
+      setCharCount(nextContent.length)
+      return
+    }
+
+    setContent('')
+    setVisibility('public')
+    setMediaIds([])
+    setPoll(null)
+    setActiveTab('post')
+    setCharCount(0)
+  }, [open, postToEdit])
 
   const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value
@@ -42,28 +67,41 @@ export function PostDialog({ open, onOpenChange, onPostCreated }: PostDialogProp
 
   const handleSubmit = async () => {
     if (!content.trim() && mediaIds.length === 0 && !poll) return
+    if (poll) {
+      addToast(t('dashboard.feed.poll_not_supported') || 'Poll posting is not available yet.', 'error')
+      return
+    }
 
     setIsLoading(true)
     try {
+      const validMediaIds = mediaIds.filter((id) => Number.isInteger(id) && id > 0)
       const postData: CreatePostRequest = {
         content: content.trim(),
         visibility,
-        media_ids: mediaIds.length > 0 ? mediaIds : undefined,
-        poll: poll ? {
-          question: poll.question,
-          options: poll.options.filter(opt => opt.trim()),
-          expires_at: undefined
-        } : undefined
+        media_ids: validMediaIds.length > 0 ? validMediaIds : undefined,
       }
 
-      await socialService.createPost(postData)
-      onPostCreated?.()
+      if (postToEdit) {
+        const updatedPost = await socialService.updatePost(postToEdit.id, {
+          content: postData.content,
+          visibility: postData.visibility,
+        })
+        onPostUpdated?.(updatedPost)
+        addToast('Post updated successfully!', 'success')
+      } else {
+        await socialService.createPost(postData)
+        onPostCreated?.()
+        addToast(t('dashboard.feed.post_success') || 'Post created successfully!', 'success')
+      }
       handleClose()
-      // Show success message
-      addToast(t('dashboard.feed.post_success') || 'Post created successfully!', 'success')
     } catch (error) {
-      console.error('Error creating post:', error)
-      addToast(t('dashboard.feed.post_error') || 'Failed to create post. Please try again.', 'error')
+      console.error(`Error ${postToEdit ? 'updating' : 'creating'} post:`, error)
+      addToast(
+        postToEdit
+          ? (t('dashboard.feed.post_error') || 'Failed to update post. Please try again.')
+          : (t('dashboard.feed.post_error') || 'Failed to create post. Please try again.'),
+        'error'
+      )
     } finally {
       setIsLoading(false)
     }
@@ -104,10 +142,18 @@ export function PostDialog({ open, onOpenChange, onPostCreated }: PostDialogProp
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl p-0 gap-0 bg-white dark:bg-gray-900 rounded-2xl overflow-hidden">
+      <DialogContent className="max-w-2xl max-h-[90vh] p-0 gap-0 bg-white dark:bg-gray-900 rounded-2xl overflow-hidden flex flex-col">
+        <DialogHeader className="sr-only">
+          <DialogTitle>{isEditing ? (t('edit') || 'Edit post') : (t('dashboard.feed.create_post_dialog_title') || 'Create a post')}</DialogTitle>
+          <DialogDescription>
+            {isEditing
+              ? 'Update your post before saving your changes.'
+              : (t('dashboard.feed.post_placeholder') || "Write your post and publish it to your feed.")}
+          </DialogDescription>
+        </DialogHeader>
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-800">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-col gap-3 px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-gray-800 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3 min-w-0">
             <Button
               variant="ghost"
               size="icon"
@@ -116,33 +162,39 @@ export function PostDialog({ open, onOpenChange, onPostCreated }: PostDialogProp
             >
               <X className="h-5 w-5" />
             </Button>
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white">{t('dashboard.feed.create_post_dialog_title') || 'Create a post'}</h2>
+            <h2 className="truncate text-lg sm:text-xl font-bold text-gray-900 dark:text-white">
+              {isEditing ? (t('edit') || 'Edit post') : (t('dashboard.feed.create_post_dialog_title') || 'Create a post')}
+            </h2>
           </div>
           <Button
             onClick={handleSubmit}
             disabled={!canPost || isLoading}
-            className="rounded-full bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white font-semibold px-6 h-9 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full sm:w-auto rounded-full bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white font-semibold px-6 h-10 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isLoading ? (t('dashboard.feed.posting') || 'Posting...') : (t('dashboard.feed.post') || 'Post')}
+            {isLoading
+              ? (isEditing ? 'Saving...' : (t('dashboard.feed.posting') || 'Posting...'))
+              : (isEditing ? 'Save changes' : (t('dashboard.feed.post') || 'Post'))}
           </Button>
         </div>
 
         {/* Content */}
-        <div className="px-6 py-4">
+        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4">
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'post' | 'poll')}>
-            <TabsList className="grid w-full grid-cols-2 mb-6 bg-gray-100 dark:bg-gray-800 rounded-xl p-1">
+            <TabsList className={`grid w-full ${isEditing ? 'grid-cols-1' : 'grid-cols-2'} mb-6 bg-gray-100 dark:bg-gray-800 rounded-xl p-1`}>
               <TabsTrigger 
                 value="post" 
                 className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 data-[state=active]:shadow-sm"
               >
                 {t('dashboard.feed.post_tab') || 'Post'}
               </TabsTrigger>
-              <TabsTrigger 
-                value="poll"
-                className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 data-[state=active]:shadow-sm"
-              >
-                {t('dashboard.feed.poll_tab') || 'Poll'}
-              </TabsTrigger>
+              {!isEditing && (
+                <TabsTrigger 
+                  value="poll"
+                  className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 data-[state=active]:shadow-sm"
+                >
+                  {t('dashboard.feed.poll_tab') || 'Poll'}
+                </TabsTrigger>
+              )}
             </TabsList>
 
             <TabsContent value="post" className="mt-0 space-y-4">
@@ -169,37 +221,47 @@ export function PostDialog({ open, onOpenChange, onPostCreated }: PostDialogProp
                   </div>
 
                   {/* Action Bar */}
-                  <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-800">
-                    <div className="flex items-center gap-1">
-                      <UploadButton
-                        endpoint="imageUploader"
-                        onClientUploadComplete={(res) => {
-                          if (res) {
-                            setMediaIds([...mediaIds, ...res.map(r => parseInt(r.key))])
-                          }
-                        }}
-                        onUploadError={(error) => {
-                          console.error('Upload error:', error)
-                        }}
-                      />
-                      <UploadButton
-                        endpoint="videoUploader"
-                        onClientUploadComplete={(res) => {
-                          if (res) {
-                            setMediaIds([...mediaIds, ...res.map(r => parseInt(r.key))])
-                          }
-                        }}
-                        onUploadError={(error) => {
-                          console.error('Upload error:', error)
-                        }}
-                      />
-                      <button 
-                        onClick={() => setActiveTab('poll')}
-                        className="p-2.5 rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors group"
-                        title={t('dashboard.feed.poll') || 'Poll'}
-                      >
-                        <BarChart3 className="h-5 w-5 text-blue-500 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" />
-                      </button>
+                  <div className="flex flex-col gap-3 pt-4 border-t border-gray-200 dark:border-gray-800 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex flex-wrap items-center gap-1">
+                      {!isEditing && (
+                        <>
+                          <UploadButton
+                            endpoint="imageUploader"
+                            onClientUploadComplete={(res) => {
+                              if (res) {
+                                const uploadedIds = res
+                                  .map((r: any) => Number.parseInt(String(r?.key ?? ''), 10))
+                                  .filter((id: number) => Number.isInteger(id) && id > 0)
+                                setMediaIds([...mediaIds, ...uploadedIds])
+                              }
+                            }}
+                            onUploadError={(error) => {
+                              console.error('Upload error:', error)
+                            }}
+                          />
+                          <UploadButton
+                            endpoint="videoUploader"
+                            onClientUploadComplete={(res) => {
+                              if (res) {
+                                const uploadedIds = res
+                                  .map((r: any) => Number.parseInt(String(r?.key ?? ''), 10))
+                                  .filter((id: number) => Number.isInteger(id) && id > 0)
+                                setMediaIds([...mediaIds, ...uploadedIds])
+                              }
+                            }}
+                            onUploadError={(error) => {
+                              console.error('Upload error:', error)
+                            }}
+                          />
+                          <button 
+                            onClick={() => setActiveTab('poll')}
+                            className="p-2.5 rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors group"
+                            title={t('dashboard.feed.poll') || 'Poll'}
+                          >
+                            <BarChart3 className="h-5 w-5 text-blue-500 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" />
+                          </button>
+                        </>
+                      )}
                       <button 
                         className="p-2.5 rounded-full hover:bg-yellow-50 dark:hover:bg-yellow-900/20 transition-colors group"
                         title={t('dashboard.feed.emoji') || 'Emoji'}
@@ -219,7 +281,7 @@ export function PostDialog({ open, onOpenChange, onPostCreated }: PostDialogProp
                         <MapPin className="h-5 w-5 text-red-500 group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors" />
                       </button>
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between lg:justify-end lg:gap-4">
                       {charCount > 0 && (
                         <span className={cn(
                           "text-sm font-medium",
@@ -228,7 +290,7 @@ export function PostDialog({ open, onOpenChange, onPostCreated }: PostDialogProp
                           {charCount}/{maxChars}
                         </span>
                       )}
-                      <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-full p-1">
+                      <div className="flex flex-wrap items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-2xl p-1">
                         <Button
                           variant="ghost"
                           size="sm"

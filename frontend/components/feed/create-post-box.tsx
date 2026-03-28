@@ -23,7 +23,7 @@ export function CreatePostBox({ user, onPostCreated, onOpenDialog }: CreatePostB
   const { t } = useLanguage()
 
   return (
-    <div className="flex gap-3">
+    <div className="flex items-start gap-3">
       {/* Avatar */}
       <div className="flex-shrink-0">
         <UserAvatar user={user} className="w-12 h-12" />
@@ -52,8 +52,8 @@ export function CreatePostBox({ user, onPostCreated, onOpenDialog }: CreatePostB
         </button>
 
         {/* Action Buttons */}
-        <div className="flex items-center justify-between mt-3 px-1">
-          <div className="flex items-center gap-4">
+        <div className="mt-3 flex flex-col gap-3 px-1 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-4">
             <button
               onClick={onOpenDialog}
               className="group flex items-center justify-center w-9 h-9 rounded-full hover:bg-blue-100 dark:hover:bg-blue-900/20 transition-colors"
@@ -100,7 +100,7 @@ export function CreatePostBox({ user, onPostCreated, onOpenDialog }: CreatePostB
 
           <Button
             onClick={onOpenDialog}
-            className="rounded-full bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white font-semibold px-4 h-9 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full sm:w-auto rounded-full bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white font-semibold px-4 h-10 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {t('dashboard.feed.publish') || 'Publish'}
           </Button>

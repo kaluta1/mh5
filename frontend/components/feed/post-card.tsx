@@ -31,20 +31,24 @@ const localeMap: Record<string, any> = {
 
 interface PostCardProps {
   post: Post
+  currentUserId?: number
   onLike?: (postId: number) => void
   onComment?: (postId: number) => void
   onShare?: (postId: number) => void
   onReact?: (postId: number, reactionType: string) => void
+  onEdit?: (post: Post) => void
   onDelete?: (postId: number) => void
   showFullContent?: boolean
 }
 
 export function PostCard({ 
   post, 
+  currentUserId,
   onLike, 
   onComment, 
   onShare, 
   onReact,
+  onEdit,
   onDelete,
   showFullContent = false 
 }: PostCardProps) {
@@ -52,6 +56,7 @@ export function PostCard({
   const dateLocale = localeMap[language] || enUS
   const [isLiked, setIsLiked] = useState(post.is_liked)
   const [likesCount, setLikesCount] = useState(post.likes_count)
+  const canManagePost = currentUserId === post.author_id
 
   const handleLike = () => {
     setIsLiked(!isLiked)
@@ -68,7 +73,7 @@ export function PostCard({
       <div className="flex gap-3 md:gap-4">
         {/* Avatar */}
         <div className="flex-shrink-0">
-          <Link href={`/profile/${post.author_id}`}>
+          <Link href={`/dashboard/users/${post.author_id}`}>
             <UserAvatar 
               user={post.author}
               className="w-12 h-12"
@@ -82,7 +87,7 @@ export function PostCard({
           <div className="flex items-start justify-between mb-1">
             <div className="flex items-center gap-2 flex-wrap">
               <Link 
-                href={`/profile/${post.author_id}`}
+                href={`/dashboard/users/${post.author_id}`}
                 className="font-semibold text-gray-900 dark:text-white hover:underline"
               >
                 {post.author?.full_name || post.author?.username}
@@ -106,7 +111,12 @@ export function PostCard({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                {onDelete && (
+                {canManagePost && onEdit && (
+                  <DropdownMenuItem onClick={() => onEdit(post)}>
+                    {t('edit') || 'Edit'}
+                  </DropdownMenuItem>
+                )}
+                {canManagePost && onDelete && (
                   <DropdownMenuItem 
                     onClick={() => onDelete(post.id)}
                     className="text-red-600 dark:text-red-400"

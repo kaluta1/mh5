@@ -37,6 +37,7 @@ export default function FeedPage() {
   const [posts, setPosts] = useState<Post[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isPostDialogOpen, setIsPostDialogOpen] = useState(false)
+  const [editingPost, setEditingPost] = useState<Post | null>(null)
   const [commentPostId, setCommentPostId] = useState<number | null>(null)
   const [skip, setSkip] = useState(0)
   const [hasMore, setHasMore] = useState(true)
@@ -49,12 +50,11 @@ export default function FeedPage() {
     loadFeed()
   }, [isAuthenticated, router])
 
-  const loadFeed = async () => {
+  const loadFeed = async (nextSkip: number = 0) => {
     setIsLoading(true)
     try {
-      // Use new feed endpoint
-      const data = await socialService.getFeed(skip, 20)
-      if (skip === 0) {
+      const data = await socialService.getFeed(nextSkip, 20)
+      if (nextSkip === 0) {
         setPosts(data)
       } else {
         setPosts(prev => [...prev, ...data])
@@ -73,15 +73,22 @@ export default function FeedPage() {
 
   const loadMore = () => {
     if (!isLoading && hasMore) {
-      setSkip(prev => prev + 20)
-      loadFeed()
+      const nextSkip = skip + 20
+      setSkip(nextSkip)
+      loadFeed(nextSkip)
     }
   }
 
   const handlePostCreated = () => {
     setSkip(0)
     setPosts([])
-    loadFeed()
+    loadFeed(0)
+  }
+
+  const handlePostUpdated = (updatedPost: Post) => {
+    setPosts(prev => prev.map((post) => (post.id === updatedPost.id ? updatedPost : post)))
+    setEditingPost(null)
+    setIsPostDialogOpen(false)
   }
 
   const handleLike = async (postId: number) => {
@@ -178,10 +185,15 @@ export default function FeedPage() {
                   <PostCard
                     key={post.id}
                     post={post}
+                    currentUserId={user?.id}
                     onLike={handleLike}
                     onComment={handleComment}
                     onShare={handleShare}
                     onReact={handleReact}
+                    onEdit={(selectedPost) => {
+                      setEditingPost(selectedPost)
+                      setIsPostDialogOpen(true)
+                    }}
                     onDelete={handleDelete}
                   />
                 ))}
@@ -220,8 +232,15 @@ export default function FeedPage() {
       {/* Dialogs */}
       <PostDialog
         open={isPostDialogOpen}
-        onOpenChange={setIsPostDialogOpen}
+        onOpenChange={(open) => {
+          setIsPostDialogOpen(open)
+          if (!open) {
+            setEditingPost(null)
+          }
+        }}
         onPostCreated={handlePostCreated}
+        postToEdit={editingPost}
+        onPostUpdated={handlePostUpdated}
       />
       {commentPostId && (
         <CommentDialog

@@ -60,8 +60,37 @@ def create_post(
             print(f"Erreur notification Socket.IO: {e}")
     
     background_tasks.add_task(notify_post)
-    
-    return post
+
+    return {
+        "id": post.id,
+        "author_id": post.author_id,
+        "content": post.content,
+        "post_type": post.post_type,
+        "visibility": post.visibility,
+        "group_id": post.group_id,
+        "like_count": post.like_count,
+        "comment_count": post.comment_count,
+        "share_count": post.share_count,
+        "view_count": post.view_count,
+        "is_pinned": post.is_pinned,
+        "is_archived": post.is_archived,
+        "created_at": post.created_at,
+        "updated_at": post.updated_at,
+        "author": {
+            "id": post.author.id,
+            "username": post.author.username,
+            "avatar_url": post.author.avatar_url
+        } if post.author else None,
+        "media": [
+            {
+                "id": pm.id,
+                "media_id": pm.media_id,
+                "order": pm.order,
+                "url": pm.media.url if pm.media else None
+            } for pm in post.media
+        ],
+        "user_reaction": None
+    }
 
 
 @router.get("/posts", response_model=PostListResponse)
@@ -246,7 +275,8 @@ def create_comment(
     db: Session = Depends(get_db),
     post_id: int,
     comment_in: PostCommentCreate,
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
+    background_tasks: BackgroundTasks = None
 ) -> Any:
     """Créer un commentaire sur un post"""
     # Vérifier que le post existe
@@ -275,7 +305,8 @@ def create_comment(
         except Exception as e:
             print(f"Erreur notification Socket.IO: {e}")
     
-    background_tasks.add_task(notify_comment)
+    if background_tasks:
+        background_tasks.add_task(notify_comment)
     
     return comment
 

@@ -6,18 +6,20 @@ import { ArrowLeft, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { PostCard } from '@/components/feed/post-card'
 import { CommentDialog } from '@/components/feed/comment-dialog'
+import { PostDialog } from '@/components/feed/post-dialog'
 import { socialService, Post } from '@/services/social-service'
 import { useAuth } from '@/hooks/use-auth'
 
 export default function PostDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, user } = useAuth()
   const postId = parseInt(params.id as string)
   
   const [post, setPost] = useState<Post | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [commentPostId, setCommentPostId] = useState<number | null>(null)
+  const [isPostDialogOpen, setIsPostDialogOpen] = useState(false)
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -79,6 +81,17 @@ export default function PostDetailPage() {
     setCommentPostId(postId)
   }
 
+  const handleDelete = async (postIdToDelete: number) => {
+    if (!confirm('Are you sure you want to delete this post?')) return
+
+    try {
+      await socialService.deletePost(postIdToDelete)
+      router.push('/dashboard/feed')
+    } catch (error) {
+      console.error('Error deleting post:', error)
+    }
+  }
+
   if (!isAuthenticated) {
     return null
   }
@@ -104,10 +117,13 @@ export default function PostDetailPage() {
         ) : post ? (
           <PostCard
             post={post}
+            currentUserId={user?.id}
             onLike={handleLike}
             onComment={handleComment}
             onShare={handleShare}
             onReact={handleReact}
+            onEdit={() => setIsPostDialogOpen(true)}
+            onDelete={handleDelete}
             showFullContent={true}
           />
         ) : (
@@ -126,6 +142,17 @@ export default function PostDetailPage() {
           onOpenChange={(open) => !open && setCommentPostId(null)}
           postId={commentPostId}
           onCommentAdded={loadPost}
+        />
+      )}
+      {post && (
+        <PostDialog
+          open={isPostDialogOpen}
+          onOpenChange={setIsPostDialogOpen}
+          postToEdit={post}
+          onPostUpdated={(updatedPost) => {
+            setPost(updatedPost)
+            setIsPostDialogOpen(false)
+          }}
         />
       )}
     </div>

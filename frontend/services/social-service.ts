@@ -200,24 +200,58 @@ export interface CreateGroupRequest {
   avatar_url?: string
 }
 
+function normalizePost(post: any): Post {
+  return {
+    id: post.id,
+    author_id: post.author_id,
+    author: post.author,
+    content: post.content || '',
+    visibility: post.visibility || 'public',
+    media: Array.isArray(post.media)
+      ? post.media.map((item: any, index: number) => ({
+          id: item.id,
+          post_id: item.post_id ?? post.id,
+          media_id: item.media_id ?? 0,
+          media_type: item.media_type || 'image',
+          url: item.url || item.media_url || '',
+          thumbnail_url: item.thumbnail_url,
+          order: item.order ?? index,
+        }))
+      : [],
+    poll: post.poll,
+    likes_count: post.likes_count ?? post.like_count ?? 0,
+    comments_count: post.comments_count ?? post.comment_count ?? 0,
+    shares_count: post.shares_count ?? post.share_count ?? 0,
+    reactions_count: post.reactions_count ?? 0,
+    is_liked: post.is_liked ?? post.user_reaction === 'like',
+    is_shared: post.is_shared ?? false,
+    user_reaction: typeof post.user_reaction === 'string' ? post.user_reaction : undefined,
+    created_at: post.created_at,
+    updated_at: post.updated_at,
+  }
+}
+
 export const socialService = {
   // Posts - Legacy endpoints (keeping for backward compatibility)
   // For new feed system, use feedService from './feed-service'
   async getFeed(skip: number = 0, limit: number = 20): Promise<Post[]> {
-    // Use new feed endpoint
-    return apiService.get(`/api/v1/feed?skip=${skip}&limit=${limit}`)
+    const response = await apiService.get<{ posts?: any[] }>(`/api/v1/social/posts?skip=${skip}&limit=${limit}`)
+    return Array.isArray(response?.posts) ? response.posts.map(normalizePost) : []
   },
 
   async getPost(postId: number): Promise<Post> {
-    return apiService.get(`/api/v1/social/posts/${postId}`)
+    const response = await apiService.get<any>(`/api/v1/social/posts/${postId}`)
+    return normalizePost(response)
   },
 
   async createPost(data: CreatePostRequest): Promise<Post> {
-    return apiService.post('/api/v1/social/posts', data)
+    const response = await apiService.post<any>('/api/v1/social/posts', data)
+    return normalizePost(response)
   },
 
   async updatePost(postId: number, data: Partial<CreatePostRequest>): Promise<Post> {
-    return apiService.put(`/api/v1/social/posts/${postId}`, data)
+    const response = await apiService.put<any>(`/api/v1/social/posts/${postId}`, data)
+    return normalizePost(response)
   },
 
   async deletePost(postId: number): Promise<void> {
@@ -225,19 +259,19 @@ export const socialService = {
   },
 
   async likePost(postId: number): Promise<void> {
-    return apiService.post(`/api/v1/social/posts/${postId}/like`)
+    return apiService.post(`/api/v1/social/posts/${postId}/reactions?reaction_type=like`)
   },
 
   async unlikePost(postId: number): Promise<void> {
-    return apiService.delete(`/api/v1/social/posts/${postId}/like`)
+    return apiService.delete(`/api/v1/social/posts/${postId}/reactions`)
   },
 
   async reactToPost(postId: number, reactionType: string): Promise<void> {
-    return apiService.post(`/api/v1/social/posts/${postId}/react`, { reaction_type: reactionType })
+    return apiService.post(`/api/v1/social/posts/${postId}/reactions?reaction_type=${encodeURIComponent(reactionType)}`)
   },
 
   async sharePost(postId: number): Promise<void> {
-    return apiService.post(`/api/v1/social/posts/${postId}/share`)
+    return apiService.post(`/api/v1/social/posts/${postId}/shares`, {})
   },
 
   // Comments
