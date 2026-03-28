@@ -221,24 +221,45 @@ function ContestsPageContent() {
       // Pour l'onglet Participations : filtrer les contests qui n'ont pas de voting_type (has_voting_type = false)
       const contestMode = categoryTab === 'nomination' ? 'nomination' : categoryTab === 'participations' ? 'participation' : undefined
 
-      // Reduced initial load for faster display
-      const { contests, total } = await contestService.getContests(
-        0,
-        8, // 8 contests per load
-        activeSearchTerm || undefined,
-        undefined, // votingLevel n'est plus utilisé
-        
-        contestMode
-      )
+      const pageSize = 50
+      const loadedContests: Contest[] = []
+      let skip = 0
 
-      if (!contests || !Array.isArray(contests)) {
+      while (true) {
+        const { contests } = await contestService.getContests(
+          skip,
+          pageSize,
+          activeSearchTerm || undefined,
+          undefined, // votingLevel n'est plus utilisé
+          contestMode
+        )
+
+        if (!contests || !Array.isArray(contests) || contests.length === 0) {
+          break
+        }
+
+        loadedContests.push(...contests)
+
+        if (contests.length < pageSize) {
+          break
+        }
+
+        skip += pageSize
+
+        // Safety guard against unexpected backend pagination behavior
+        if (skip >= 1000) {
+          break
+        }
+      }
+
+      if (!Array.isArray(loadedContests)) {
         // Invalid response format
         setAllContests([])
         return
       }
 
       // Contests are already mapped in the service
-      const mappedContests = contests.filter((c: any) => c !== null)
+      const mappedContests = loadedContests.filter((c: any) => c !== null)
 
       // Successfully mapped contests
 

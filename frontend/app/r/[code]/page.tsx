@@ -25,8 +25,8 @@ export default function ReferralRedirectPage() {
         logger.error('Failed to track referral click', error)
       })
       
-      // Rediriger vers la page d'inscription avec le code
-      router.push(`/register?ref=${code}`)
+      // Redirect to home with referral code — home page handles register CTA for guests
+      router.push(`/?ref=${code}`)
     }
   }, [code, router])
 

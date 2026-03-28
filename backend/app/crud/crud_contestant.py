@@ -362,6 +362,7 @@ class CRUDContestant:
         
         # Récupérer les infos du contest (saison)
         contest_title = None
+        contest_category = None
         contest_image_url = None
         
         if season:
@@ -380,6 +381,7 @@ class CRUDContestant:
                 ).first()
                 if contest:
                     contest_title = contest.name
+                    contest_category = contest.category.name if getattr(contest, "category", None) else None
                     # Préférer image_url, puis cover_image_url
                     contest_image_url = contest.image_url or contest.cover_image_url
                 else:
@@ -446,6 +448,7 @@ class CRUDContestant:
             "shares_count": shares_count,
             # Infos du contest
             "contest_title": contest_title,
+            "contest_category": contest_category,
             "contest_image_url": contest_image_url,
             "contest_id": contestant.season_id,
             "total_participants": total_participants,

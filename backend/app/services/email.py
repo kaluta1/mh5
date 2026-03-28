@@ -160,7 +160,7 @@ class EmailService:
         lang: str = "en"
     ) -> bool:
         """Send referral invitation email"""
-        referral_link = f"{self.frontend_url}/?ref={referral_code}"
+        referral_link = f"{self.frontend_url}/r/{referral_code}"
         subject, html_content, text_content = get_invitation_email(
             lang, inviter_name, referral_code, referral_link, message
         )

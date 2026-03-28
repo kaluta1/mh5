@@ -127,10 +127,21 @@ export default function AffiliatesPage() {
 
   const generateReferralLinks = (code: string) => {
     const baseUrl = getBaseUrl()
+    const shortLink = `${baseUrl}/r/${code}`
     return {
-      register: `${baseUrl}/register?ref=${code}`,
-      home: `${baseUrl}/?ref=${code}`,
-      contestants: `${baseUrl}/contests?ref=${code}`
+      register: shortLink,
+      home: shortLink,
+      contestants: shortLink
+    }
+  }
+
+  const getReferralLinkDisplay = (link: string) => {
+    if (!link) return ''
+
+    try {
+      return new URL(link).origin
+    } catch {
+      return link
     }
   }
 
@@ -506,8 +517,11 @@ export default function AffiliatesPage() {
                 <span className="font-medium text-sm sm:text-base text-gray-900 dark:text-white">{t('dashboard.affiliates.link_register') || "Lien d'inscription"}</span>
               </div>
               <div className="flex gap-2">
-                <div className="flex-1 bg-white dark:bg-gray-900 rounded-lg p-2 sm:p-2.5 font-mono text-[10px] sm:text-xs text-gray-600 dark:text-gray-400 truncate border border-gray-200 dark:border-gray-700 overflow-hidden">
-                  {referralLinks.register}
+                <div
+                  className="flex-1 bg-white dark:bg-gray-900 rounded-lg p-2 sm:p-2.5 font-mono text-[10px] sm:text-xs text-gray-600 dark:text-gray-400 truncate border border-gray-200 dark:border-gray-700 overflow-hidden"
+                  title={referralLinks.register}
+                >
+                  {getReferralLinkDisplay(referralLinks.register)}
                 </div>
                 <Button 
                   onClick={() => copyToClipboard(referralLinks.register, 'register')}
@@ -529,8 +543,11 @@ export default function AffiliatesPage() {
                 <span className="font-medium text-sm sm:text-base text-gray-900 dark:text-white">{t('dashboard.affiliates.link_home') || "Lien page d'accueil"}</span>
               </div>
               <div className="flex gap-2">
-                <div className="flex-1 bg-white dark:bg-gray-900 rounded-lg p-2 sm:p-2.5 font-mono text-[10px] sm:text-xs text-gray-600 dark:text-gray-400 truncate border border-gray-200 dark:border-gray-700 overflow-hidden">
-                  {referralLinks.home}
+                <div
+                  className="flex-1 bg-white dark:bg-gray-900 rounded-lg p-2 sm:p-2.5 font-mono text-[10px] sm:text-xs text-gray-600 dark:text-gray-400 truncate border border-gray-200 dark:border-gray-700 overflow-hidden"
+                  title={referralLinks.home}
+                >
+                  {getReferralLinkDisplay(referralLinks.home)}
                 </div>
                 <Button 
                   onClick={() => copyToClipboard(referralLinks.home, 'home')}
@@ -552,8 +569,11 @@ export default function AffiliatesPage() {
                 <span className="font-medium text-sm sm:text-base text-gray-900 dark:text-white">{t('dashboard.affiliates.link_contestants') || 'Lien page concours'}</span>
               </div>
               <div className="flex gap-2">
-                <div className="flex-1 bg-white dark:bg-gray-900 rounded-lg p-2 sm:p-2.5 font-mono text-[10px] sm:text-xs text-gray-600 dark:text-gray-400 truncate border border-gray-200 dark:border-gray-700 overflow-hidden">
-                  {referralLinks.contestants}
+                <div
+                  className="flex-1 bg-white dark:bg-gray-900 rounded-lg p-2 sm:p-2.5 font-mono text-[10px] sm:text-xs text-gray-600 dark:text-gray-400 truncate border border-gray-200 dark:border-gray-700 overflow-hidden"
+                  title={referralLinks.contestants}
+                >
+                  {getReferralLinkDisplay(referralLinks.contestants)}
                 </div>
                 <Button 
                   onClick={() => copyToClipboard(referralLinks.contestants, 'contestants')}

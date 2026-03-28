@@ -41,6 +41,16 @@ export function InviteDialog({
   const [isLoading, setIsLoading] = useState(false)
   const [copiedLink, setCopiedLink] = useState(false)
 
+  const getReferralLinkDisplay = (link: string) => {
+    if (!link) return ''
+
+    try {
+      return new URL(link).origin
+    } catch {
+      return link
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
@@ -185,8 +195,11 @@ export function InviteDialog({
             </span>
           </div>
           <div className="flex gap-2">
-            <div className="flex-1 bg-white dark:bg-gray-900 rounded-lg p-2.5 font-mono text-xs text-gray-600 dark:text-gray-400 truncate border border-gray-200 dark:border-gray-700">
-              {referralLink}
+            <div
+              className="flex-1 bg-white dark:bg-gray-900 rounded-lg p-2.5 font-mono text-xs text-gray-600 dark:text-gray-400 truncate border border-gray-200 dark:border-gray-700"
+              title={referralLink}
+            >
+              {getReferralLinkDisplay(referralLink)}
             </div>
             <Button
               type="button"

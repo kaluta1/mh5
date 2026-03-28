@@ -200,6 +200,7 @@ export interface ContestantWithAuthorAndStats {
   comments_count?: number
   shares_count?: number
   contest_title?: string
+  contest_category?: string
   contest_level?: string
   contest_image_url?: string
   contest_id?: number

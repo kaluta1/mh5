@@ -115,6 +115,7 @@ class ContestantWithAuthorAndStats(BaseModel):
     
     # Infos du contest
     contest_title: Optional[str] = None
+    contest_category: Optional[str] = None
     contest_level: Optional[str] = None
     contest_image_url: Optional[str] = None
     contest_id: Optional[int] = None

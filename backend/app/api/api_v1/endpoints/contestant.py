@@ -1,5 +1,8 @@
-from typing import List, Optional, Any
+from typing import List, Optional, Any, Set, Tuple
 from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
+import json
+import re
+from urllib.parse import parse_qs, unquote, urlparse
 
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
@@ -25,6 +28,229 @@ from app.services.content_moderation import content_moderation_service, ContentT
 from app.services.content_relevance import content_relevance_service
 
 router = APIRouter()
+
+
+def _resolve_media_url(db: Session, media_ref: Any) -> Optional[str]:
+    """Resolve a media reference that can be either a direct URL or a media ID."""
+    from app.models.media import Media
+
+    if isinstance(media_ref, str):
+        cleaned = media_ref.strip()
+        if not cleaned:
+            return None
+        if cleaned.startswith(("http://", "https://")):
+            return cleaned
+        try:
+            media_id = int(cleaned)
+        except ValueError:
+            return None
+        media = db.query(Media).filter(Media.id == media_id).first()
+        return media.url if media else None
+
+    if isinstance(media_ref, int):
+        media = db.query(Media).filter(Media.id == media_ref).first()
+        return media.url if media else None
+
+    return None
+
+
+def _clean_video_url(value: str) -> str:
+    cleaned = value.strip()
+    max_depth = 3
+
+    while max_depth > 0 and cleaned and cleaned[0] in ('[', '"'):
+        try:
+            parsed = json.loads(cleaned)
+        except json.JSONDecodeError:
+            break
+
+        if isinstance(parsed, list) and parsed:
+            cleaned = str(parsed[0]).strip()
+        elif isinstance(parsed, str):
+            cleaned = parsed.strip()
+        else:
+            break
+        max_depth -= 1
+
+    match = re.search(r'https?://[^\s"\'<>\[\]]+', cleaned)
+    return (match.group(0) if match else cleaned).rstrip("/")
+
+
+def _canonicalize_social_media_url(url: str) -> Optional[str]:
+    if not url:
+        return None
+
+    cleaned = _clean_video_url(url)
+    if not cleaned.startswith(("http://", "https://")):
+        return None
+
+    try:
+        parsed = urlparse(cleaned)
+    except ValueError:
+        return None
+
+    hostname = (parsed.netloc or "").lower()
+    hostname = hostname[4:] if hostname.startswith("www.") else hostname
+    path = unquote(parsed.path or "").rstrip("/")
+    path_parts = [part for part in path.split("/") if part]
+    query = parse_qs(parsed.query)
+
+    if not hostname:
+        return None
+
+    if any(domain in hostname for domain in ("youtube.com", "youtu.be", "youtube-nocookie.com")):
+        video_id = None
+        if hostname == "youtu.be" and path_parts:
+            video_id = path_parts[0]
+        elif "watch" in path and query.get("v"):
+            video_id = query["v"][0]
+        else:
+            for marker in ("shorts", "embed", "live", "v"):
+                if marker in path_parts:
+                    index = path_parts.index(marker)
+                    if index + 1 < len(path_parts):
+                        video_id = path_parts[index + 1]
+                        break
+        return f"youtube:{video_id}" if video_id else f"youtube:path:{path.lower()}"
+
+    if "tiktok.com" in hostname:
+        for marker in ("video", "photo", "t"):
+            if marker in path_parts:
+                index = path_parts.index(marker)
+                if index + 1 < len(path_parts):
+                    return f"tiktok:{path_parts[index + 1]}"
+        return f"tiktok:path:{path.lower()}"
+
+    if hostname in {"twitter.com", "x.com"}:
+        if "status" in path_parts:
+            index = path_parts.index("status")
+            if index + 1 < len(path_parts):
+                return f"x:{path_parts[index + 1]}"
+        return f"x:path:{path.lower()}"
+
+    if "instagram.com" in hostname or "instagr.am" in hostname:
+        if path_parts:
+            if path_parts[0] in {"p", "reel", "reels", "tv"} and len(path_parts) > 1:
+                return f"instagram:{path_parts[0]}:{path_parts[1]}"
+            return f"instagram:path:{'/'.join(path_parts).lower()}"
+        return "instagram:root"
+
+    if hostname in {"facebook.com", "m.facebook.com", "fb.com", "fb.watch"}:
+        if hostname == "fb.watch" and path_parts:
+            return f"facebook:{path_parts[0]}"
+        if query.get("v"):
+            return f"facebook:{query['v'][0]}"
+        for key in ("story_fbid", "fbid"):
+            if query.get(key):
+                return f"facebook:{query[key][0]}"
+        for marker in ("videos", "reel"):
+            if marker in path_parts:
+                index = path_parts.index(marker)
+                if index + 1 < len(path_parts):
+                    return f"facebook:{path_parts[index + 1]}"
+        return f"facebook:path:{path.lower()}"
+
+    filtered_query = []
+    for key in sorted(query.keys()):
+        if key.lower().startswith("utm_"):
+            continue
+        filtered_query.append(f"{key}={','.join(sorted(query[key]))}")
+    query_suffix = f"?{'&'.join(filtered_query)}" if filtered_query else ""
+    normalized_path = path.lower() or "/"
+    return f"{hostname}{normalized_path}{query_suffix}"
+
+
+def _extract_canonical_video_urls(db: Session, video_media_ids: Optional[str]) -> Set[str]:
+    if not video_media_ids:
+        return set()
+
+    try:
+        video_refs = json.loads(video_media_ids)
+    except json.JSONDecodeError:
+        video_refs = [video_media_ids]
+
+    if not isinstance(video_refs, list):
+        video_refs = [video_refs]
+
+    normalized_urls: Set[str] = set()
+    for ref in video_refs:
+        resolved_url = _resolve_media_url(db, ref)
+        candidate = resolved_url or str(ref).strip()
+        canonical = _canonicalize_social_media_url(candidate)
+        if canonical:
+            normalized_urls.add(canonical)
+
+    return normalized_urls
+
+
+def _get_contest_context_from_season(db: Session, season_id: Optional[int]) -> Set[Tuple[Optional[int], Optional[str]]]:
+    if not season_id:
+        return set()
+
+    contexts: Set[Tuple[Optional[int], Optional[str]]] = set()
+
+    direct_contest = db.query(Contest).filter(
+        Contest.id == season_id,
+        Contest.is_deleted == False
+    ).first()
+    if direct_contest:
+        contexts.add((direct_contest.category_id, direct_contest.contest_mode))
+
+    from app.models.contests import ContestSeasonLink
+    linked_contests = db.query(Contest).join(
+        ContestSeasonLink,
+        ContestSeasonLink.contest_id == Contest.id
+    ).filter(
+        ContestSeasonLink.season_id == season_id,
+        ContestSeasonLink.is_active == True,
+        Contest.is_deleted == False
+    ).all()
+
+    for linked_contest in linked_contests:
+        contexts.add((linked_contest.category_id, linked_contest.contest_mode))
+
+    return contexts
+
+
+def _find_duplicate_video_submission(
+    db: Session,
+    *,
+    video_media_ids: Optional[str],
+    target_round_id: Optional[int],
+    current_category_id: Optional[int],
+    current_contest_mode: Optional[str],
+    exclude_contestant_id: Optional[int] = None
+) -> Optional[Tuple[Contestant, str]]:
+    submitted_urls = _extract_canonical_video_urls(db, video_media_ids)
+    if not submitted_urls:
+        return None
+
+    duplicate_query = db.query(Contestant).filter(
+        Contestant.is_deleted == False,
+        Contestant.video_media_ids.isnot(None)
+    )
+
+    if target_round_id is not None:
+        duplicate_query = duplicate_query.filter(Contestant.round_id == target_round_id)
+
+    if exclude_contestant_id is not None:
+        duplicate_query = duplicate_query.filter(Contestant.id != exclude_contestant_id)
+
+    current_context = (current_category_id, current_contest_mode)
+    strict_context_match = current_category_id is not None or current_contest_mode is not None
+
+    for existing_contestant in duplicate_query.all():
+        existing_contexts = _get_contest_context_from_season(db, existing_contestant.season_id)
+        if strict_context_match:
+            if not existing_contexts or current_context not in existing_contexts:
+                continue
+
+        existing_urls = _extract_canonical_video_urls(db, existing_contestant.video_media_ids)
+        overlap = submitted_urls.intersection(existing_urls)
+        if overlap:
+            return existing_contestant, next(iter(overlap))
+
+    return None
 
 
 # DEBUG ENDPOINT: Test if contestants exist in database
@@ -1034,9 +1260,7 @@ def create_contestant(
     # ============================================
     # MODÉRATION DU CONTENU AVANT CRÉATION
     # ============================================
-    import json
     import logging
-    from app.models.media import Media
     
     logger = logging.getLogger(__name__)
     logger.info(f"Starting content moderation for contestant submission by user {current_user.id}")
@@ -1057,45 +1281,28 @@ def create_contestant(
     # Helper pour extraire l'URL d'un média (ID ou URL directe)
     def get_media_url(media_ref: Any) -> Optional[str]:
         """Retourne l'URL du média, que ce soit un ID ou une URL directe"""
-        if isinstance(media_ref, str):
-            # Si c'est déjà une URL
-            if media_ref.startswith(('http://', 'https://')):
-                return media_ref
-            # Si c'est un ID sous forme de string
-            try:
-                media_id = int(media_ref)
-                media = db.query(Media).filter(Media.id == media_id).first()
-                return media.url if media else None
-            except ValueError:
-                return None
-        elif isinstance(media_ref, int):
-            media = db.query(Media).filter(Media.id == media_ref).first()
-            return media.url if media else None
-        return None
+        return _resolve_media_url(db, media_ref)
     
 
     # ============================================
-    # VERIFICATION UNICITE DES LIENS VIDEO
+    # VERIFICATION UNICITE DES LIENS VIDEO (même round/concours)
     # ============================================
     if contestant_data.video_media_ids:
-        try:
-            _video_refs = json.loads(contestant_data.video_media_ids)
-            if isinstance(_video_refs, list):
-                for _vref in _video_refs:
-                    _vurl = str(_vref).strip()
-                    if not _vurl:
-                        continue
-                    _dup = db.query(Contestant).filter(
-                        Contestant.is_deleted == False,
-                        Contestant.video_media_ids.ilike(f'%{_vurl}%')
-                    ).first()
-                    if _dup:
-                        raise HTTPException(
-                            status_code=status.HTTP_409_CONFLICT,
-                            detail=f"Ce lien vid\u00e9o est d\u00e9j\u00e0 utilis\u00e9 par un autre participant : {_vurl}"
-                        )
-        except json.JSONDecodeError:
-            pass
+        duplicate_submission = _find_duplicate_video_submission(
+            db,
+            video_media_ids=contestant_data.video_media_ids,
+            target_round_id=target_round_id,
+            current_category_id=contest.category_id if contest else None,
+            current_contest_mode=contest.contest_mode if contest else None
+        )
+        if duplicate_submission:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "This content link has already been submitted by another participant "
+                    "on the same social media in this category and round."
+                )
+            )
 
     # Modérer les images si présentes
     if contestant_data.image_media_ids:
@@ -1450,9 +1657,7 @@ def update_contestant(
     # ============================================
     # MODÉRATION DU CONTENU AVANT MISE À JOUR
     # ============================================
-    import json
     import logging
-    from app.models.media import Media
     
     logger = logging.getLogger(__name__)
     logger.info(f"Starting content moderation for contestant update by user {current_user.id}")
@@ -1472,44 +1677,31 @@ def update_contestant(
     
     # Helper pour extraire l'URL d'un média (ID ou URL directe)
     def get_media_url(media_ref: Any) -> Optional[str]:
-        if isinstance(media_ref, str):
-            if media_ref.startswith(('http://', 'https://')):
-                return media_ref
-            try:
-                media_id = int(media_ref)
-                media = db.query(Media).filter(Media.id == media_id).first()
-                return media.url if media else None
-            except ValueError:
-                return None
-        elif isinstance(media_ref, int):
-            media = db.query(Media).filter(Media.id == media_ref).first()
-            return media.url if media else None
-        return None
+        return _resolve_media_url(db, media_ref)
     
 
     # ============================================
     # VERIFICATION UNICITE DES LIENS VIDEO
     # ============================================
     if contestant_data.video_media_ids:
-        try:
-            _video_refs = json.loads(contestant_data.video_media_ids)
-            if isinstance(_video_refs, list):
-                for _vref in _video_refs:
-                    _vurl = str(_vref).strip()
-                    if not _vurl:
-                        continue
-                    _dup = db.query(Contestant).filter(
-                        Contestant.is_deleted == False,
-                        Contestant.video_media_ids.ilike(f'%{_vurl}%'),
-                        Contestant.id != contestant_id
-                    ).first()
-                    if _dup:
-                        raise HTTPException(
-                            status_code=status.HTTP_409_CONFLICT,
-                            detail=f"Ce lien vid\u00e9o est d\u00e9j\u00e0 utilis\u00e9 par un autre participant : {_vurl}"
-                        )
-        except json.JSONDecodeError:
-            pass
+        current_contexts = _get_contest_context_from_season(db, contestant.season_id)
+        current_category_id, current_contest_mode = next(iter(current_contexts), (None, None))
+        duplicate_submission = _find_duplicate_video_submission(
+            db,
+            video_media_ids=contestant_data.video_media_ids,
+            target_round_id=contestant.round_id,
+            current_category_id=current_category_id,
+            current_contest_mode=current_contest_mode,
+            exclude_contestant_id=contestant_id
+        )
+        if duplicate_submission:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "This content link has already been submitted by another participant "
+                    "on the same social media in this category and round."
+                )
+            )
 
     # Modérer les images si présentes
     if contestant_data.image_media_ids:

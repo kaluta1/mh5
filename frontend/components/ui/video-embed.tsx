@@ -125,6 +125,10 @@ export function VideoEmbed({
   // ── TikTok ──
   if (videoInfo.platform === 'tiktok') {
     const openUrl = videoInfo.originalUrl
+    const resolvedTikTokId =
+      tiktokMeta.videoId && /^\d+$/.test(tiktokMeta.videoId)
+        ? tiktokMeta.videoId
+        : (videoInfo.videoId && /^\d+$/.test(videoInfo.videoId) ? videoInfo.videoId : null)
 
     if (tiktokMeta.loading) {
       return (
@@ -135,60 +139,17 @@ export function VideoEmbed({
       )
     }
 
-    // Thumbnail available → show YouTube-like preview card, click to open TikTok
-    if (tiktokMeta.thumbnailUrl) {
+    // Prefer in-page playback whenever TikTok provides a valid embed ID.
+    if (resolvedTikTokId) {
       return (
-        <a
-          href={openUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={`${className} relative block cursor-pointer group rounded-xl overflow-hidden bg-black`}
+        <div
+          className={`${className} flex items-center justify-center bg-black rounded-xl overflow-hidden`}
           style={{ width, height }}
-          title={tiktokMeta.title || 'Watch on TikTok'}
         >
-          {/* Thumbnail image */}
-          <img
-            src={tiktokMeta.thumbnailUrl}
-            alt={tiktokMeta.title || 'TikTok video'}
-            className="w-full h-full object-cover"
-          />
-
-          {/* Hover overlay */}
-          <div className="absolute inset-0 bg-black/10 group-hover:bg-black/30 transition-colors duration-200" />
-
-          {/* Play button */}
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-14 h-14 rounded-full bg-white/90 group-hover:bg-white flex items-center justify-center shadow-xl group-hover:scale-110 transition-transform duration-200">
-              <Play className="w-7 h-7 text-black ml-1" fill="black" />
-            </div>
-          </div>
-
-          {/* TikTok badge — bottom right */}
-          <div className="absolute bottom-3 right-3 flex items-center gap-1.5 bg-black/60 rounded-full px-2.5 py-1">
-            <svg viewBox="0 0 24 24" className="w-4 h-4 fill-white" xmlns="http://www.w3.org/2000/svg">
-              <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.8a8.18 8.18 0 004.78 1.52V6.87a4.85 4.85 0 01-1.01-.18z"/>
-            </svg>
-            <span className="text-white text-xs font-semibold">TikTok</span>
-          </div>
-
-          {/* Author name — bottom left */}
-          {tiktokMeta.authorName && (
-            <div className="absolute bottom-3 left-3 text-white text-xs font-medium drop-shadow-md">
-              @{tiktokMeta.authorName}
-            </div>
-          )}
-        </a>
-      )
-    }
-
-    // No thumbnail but have a numeric video ID → try iframe
-    if (tiktokMeta.videoId && /^\d+$/.test(tiktokMeta.videoId)) {
-      return (
-        <div className={`${className} flex items-center justify-center bg-black rounded-xl overflow-hidden`} style={{ width, height }}>
           <iframe
-            src={`https://www.tiktok.com/embed/v2/${tiktokMeta.videoId}`}
+            src={`https://www.tiktok.com/embed/v2/${resolvedTikTokId}`}
             className="rounded-lg"
-            style={{ width: '100%', maxWidth: '325px', height: '100%', minHeight: '500px', border: 'none' }}
+            style={{ width: '100%', height: '100%', minHeight: '500px', border: 'none' }}
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen={allowFullscreen}
             title="TikTok video"
@@ -197,7 +158,7 @@ export function VideoEmbed({
       )
     }
 
-    // Full fallback — plain "Watch on TikTok" button
+    // Fallback when TikTok does not expose an embeddable video ID.
     return (
       <div
         className={`${className} flex flex-col items-center justify-center bg-black rounded-xl overflow-hidden gap-4 p-6`}
