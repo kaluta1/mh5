@@ -19,6 +19,27 @@ function extractVideoId(url: string): string | null {
   return m ? m[1] : null
 }
 
+function extractVideoIdFromText(value: string | null | undefined): string | null {
+  if (!value) return null
+
+  const patterns = [
+    /(?:https?:\/\/)?(?:www\.)?tiktok\.com\/@[^"'?\s]+\/video\/(\d{10,25})/i,
+    /(?:https?:\/\/)?(?:m\.)?tiktok\.com\/v\/(\d{10,25})/i,
+    /"videoId":"(\d{10,25})"/i,
+    /"itemId":"(\d{10,25})"/i,
+    /"embed_product_id":"(\d{10,25})"/i,
+    /property=["']og:url["'][^>]+content=["'][^"']*\/video\/(\d{10,25})/i,
+    /rel=["']canonical["'][^>]+href=["'][^"']*\/video\/(\d{10,25})/i,
+  ]
+
+  for (const pattern of patterns) {
+    const match = value.match(pattern)
+    if (match && match[1]) return match[1]
+  }
+
+  return null
+}
+
 /** Follow redirects manually up to maxHops, returning the final URL */
 async function followRedirects(startUrl: string, maxHops = 6): Promise<string> {
   let current = startUrl
@@ -63,6 +84,40 @@ async function followRedirects(startUrl: string, maxHops = 6): Promise<string> {
   return current
 }
 
+async function resolveTikTokUrl(startUrl: string): Promise<{ resolvedUrl: string; videoId: string | null }> {
+  const redirectResolvedUrl = await followRedirects(startUrl)
+  const redirectVideoId = extractVideoId(redirectResolvedUrl) || extractVideoIdFromText(redirectResolvedUrl)
+  if (redirectVideoId) {
+    return { resolvedUrl: redirectResolvedUrl, videoId: redirectVideoId }
+  }
+
+  try {
+    const response = await fetch(startUrl, {
+      method: 'GET',
+      redirect: 'follow',
+      signal: AbortSignal.timeout(12000),
+      headers: BROWSER_HEADERS,
+    })
+
+    const finalUrl = response.url || redirectResolvedUrl || startUrl
+    const body = await response.text()
+    const resolvedVideoId =
+      extractVideoId(finalUrl) ||
+      extractVideoIdFromText(finalUrl) ||
+      extractVideoIdFromText(body)
+
+    return {
+      resolvedUrl: finalUrl,
+      videoId: resolvedVideoId,
+    }
+  } catch {
+    return {
+      resolvedUrl: redirectResolvedUrl,
+      videoId: null,
+    }
+  }
+}
+
 export async function GET(request: NextRequest) {
   const url = request.nextUrl.searchParams.get('url')
 
@@ -74,12 +129,16 @@ export async function GET(request: NextRequest) {
     // Resolve short URL to full URL first if needed
     let resolvedUrl = url
     const directId = extractVideoId(url)
+    let resolvedVideoId = directId
+
     if (!directId) {
-      resolvedUrl = await followRedirects(url)
+      const resolved = await resolveTikTokUrl(url)
+      resolvedUrl = resolved.resolvedUrl
+      resolvedVideoId = resolved.videoId
     }
 
     // Build a clean full TikTok URL for oEmbed
-    const videoId = directId || extractVideoId(resolvedUrl)
+    const videoId = resolvedVideoId || extractVideoId(resolvedUrl) || extractVideoIdFromText(resolvedUrl)
     const oembedTargetUrl = videoId
       ? `https://www.tiktok.com/video/${videoId}`
       : resolvedUrl
