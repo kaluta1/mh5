@@ -155,12 +155,20 @@ export async function GET(request: NextRequest) {
 
       if (oembedRes.ok) {
         const data = await oembedRes.json()
-        const resolvedId = data.embed_product_id || videoId || null
+        const oembedText = JSON.stringify(data)
+        const embedHtml = typeof data.html === 'string' ? data.html : null
+        const resolvedId =
+          data.embed_product_id ||
+          videoId ||
+          extractVideoIdFromText(embedHtml) ||
+          extractVideoIdFromText(oembedText) ||
+          null
         return NextResponse.json({
           videoId: resolvedId,
           thumbnailUrl: data.thumbnail_url || null,
           authorName: data.author_name || null,
           title: data.title || null,
+          embedHtml,
           source: 'oembed',
         })
       }

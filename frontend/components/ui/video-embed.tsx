@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { convertToEmbedUrl, VideoInfo, cleanVideoUrl } from '@/lib/utils/video-platforms'
 import { ExternalLink, Play, Loader2 } from 'lucide-react'
 import { useLanguage } from '@/contexts/language-context'
@@ -19,8 +19,50 @@ interface TikTokMeta {
   thumbnailUrl: string | null
   authorName: string | null
   title: string | null
+  embedHtml: string | null
   loading: boolean
   failed: boolean
+}
+
+function TikTokOEmbed({
+  embedHtml,
+  className,
+  width,
+  height,
+}: {
+  embedHtml: string
+  className: string
+  width: string | number
+  height: string | number
+}) {
+  const containerRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    const sanitizedHtml = embedHtml.replace(/<script[\s\S]*?<\/script>/gi, '').trim()
+    container.innerHTML = sanitizedHtml
+
+    const script = document.createElement('script')
+    script.src = 'https://www.tiktok.com/embed.js'
+    script.async = true
+    script.setAttribute('data-tiktok-embed', 'true')
+    container.appendChild(script)
+
+    return () => {
+      container.innerHTML = ''
+    }
+  }, [embedHtml])
+
+  return (
+    <div
+      className={`${className} bg-black rounded-xl overflow-auto`}
+      style={{ width, height, minHeight: '500px' }}
+    >
+      <div ref={containerRef} className="w-full h-full flex items-center justify-center" />
+    </div>
+  )
 }
 
 /**
@@ -32,6 +74,7 @@ function useTikTokMeta(url: string | undefined): TikTokMeta {
     thumbnailUrl: null,
     authorName: null,
     title: null,
+    embedHtml: null,
     loading: false,
     failed: false,
   })
@@ -52,8 +95,9 @@ function useTikTokMeta(url: string | undefined): TikTokMeta {
           thumbnailUrl: data.thumbnailUrl || null,
           authorName: data.authorName || null,
           title: data.title || null,
+          embedHtml: data.embedHtml || null,
           loading: false,
-          failed: !data.videoId && !data.thumbnailUrl,
+          failed: !data.videoId && !data.thumbnailUrl && !data.embedHtml,
         })
       })
       .catch(() => {
@@ -155,6 +199,17 @@ export function VideoEmbed({
             title="TikTok video"
           />
         </div>
+      )
+    }
+
+    if (tiktokMeta.embedHtml) {
+      return (
+        <TikTokOEmbed
+          embedHtml={tiktokMeta.embedHtml}
+          className={className}
+          width={width}
+          height={height}
+        />
       )
     }
 
