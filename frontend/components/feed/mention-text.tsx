@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { Fragment } from 'react'
 
 const MENTION_REGEX = /(@[A-Za-z0-9_]+)/g
@@ -16,13 +17,16 @@ export function MentionText({ text }: MentionTextProps) {
         if (!part) return null
 
         if (SINGLE_MENTION_REGEX.test(part)) {
+          const username = part.slice(1)
+
           return (
-            <span
+            <Link
               key={`${part}-${index}`}
+              href={`/dashboard/users/username/${encodeURIComponent(username)}`}
               className="font-medium text-myhigh5-primary dark:text-myhigh5-blue-400"
             >
               {part}
-            </span>
+            </Link>
           )
         }
 

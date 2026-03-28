@@ -144,6 +144,22 @@ def search_users(
     return _build_follow_users(db, users, current_user.id)
 
 
+@router.get("/by-username/{username}", response_model=User)
+def read_user_by_username(
+    username: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+) -> Any:
+    """Retrieve a user by username."""
+    user = crud_user.get_by_username(db=db, username=username)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Utilisateur non trouvé"
+        )
+    return user
+
+
 @router.get("/{user_id}/followers", response_model=List[FollowUserResponse])
 def get_followers(
     user_id: int,
