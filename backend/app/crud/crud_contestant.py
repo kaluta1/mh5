@@ -364,8 +364,19 @@ class CRUDContestant:
         contest_title = None
         contest_category = None
         contest_image_url = None
+        resolved_contest_id = contest_id
+
+        if resolved_contest_id:
+            contest = db.query(Contest).filter(
+                Contest.id == resolved_contest_id,
+                Contest.is_deleted == False
+            ).first()
+            if contest:
+                contest_title = contest.name
+                contest_category = contest.category.name if getattr(contest, "category", None) else None
+                contest_image_url = contest.image_url or contest.cover_image_url
         
-        if season:
+        if season and not contest_title:
             # Essayer d'abord de récupérer le titre du contest lié via ContestSeasonLink
             from app.models.contests import ContestSeasonLink
             contest_link = db.query(ContestSeasonLink).filter(
@@ -380,6 +391,7 @@ class CRUDContestant:
                     MyfavContest.is_deleted == False
                 ).first()
                 if contest:
+                    resolved_contest_id = contest.id
                     contest_title = contest.name
                     contest_category = contest.category.name if getattr(contest, "category", None) else None
                     # Préférer image_url, puis cover_image_url
@@ -450,7 +462,7 @@ class CRUDContestant:
             "contest_title": contest_title,
             "contest_category": contest_category,
             "contest_image_url": contest_image_url,
-            "contest_id": contestant.season_id,
+            "contest_id": resolved_contest_id or contestant.season_id,
             "total_participants": total_participants,
             # Position dans les favoris
             "position": position,
