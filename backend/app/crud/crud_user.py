@@ -485,7 +485,15 @@ class CRUDUser:
     def get_by_username(self, db: Session, username: str) -> Optional[User]:
         """Get user by username. Returns None if not found."""
         try:
-            return db.query(User).filter(User.username == username).first()
+            normalized_username = (username or "").strip()
+            if not normalized_username:
+                return None
+
+            from sqlalchemy import func
+
+            return db.query(User).filter(
+                func.lower(User.username) == normalized_username.lower()
+            ).first()
         except Exception as e:
             logger.error(f"Error querying user by username '{username}': {e}", exc_info=True)
             raise
