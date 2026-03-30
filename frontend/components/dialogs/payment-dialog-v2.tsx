@@ -403,12 +403,12 @@ export function PaymentDialog({
     <>
       <Dialog open={open} onOpenChange={() => handleClose()}>
         <DialogContent 
-          className="w-[calc(100vw-1rem)] max-w-xl max-h-[90vh] overflow-y-auto p-0"
+          className="mx-auto w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] sm:max-w-xl max-h-[90vh] overflow-x-hidden overflow-y-auto p-0"
           onPointerDownOutside={(e) => e.preventDefault()}
           onEscapeKeyDown={(e) => e.preventDefault()}
         >
           {/* Header */}
-          <div className="border-b border-gray-100 dark:border-gray-800 p-5 pb-4">
+          <div className="border-b border-gray-100 dark:border-gray-800 p-4 pb-4 sm:p-5 sm:pb-4">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-3 text-lg font-semibold text-gray-900 dark:text-white">
                 {step === 'success' ? (
@@ -453,7 +453,7 @@ export function PaymentDialog({
                       )}
                     </div>
                     {i < 2 && (
-                      <div className={`w-10 h-0.5 mx-1 ${
+                      <div className={`w-6 h-0.5 mx-1 sm:w-10 ${
                         ['recipients', 'method', 'payment'].indexOf(step) > i
                           ? 'bg-myhigh5-secondary'
                           : 'bg-gray-200 dark:bg-gray-700'
@@ -465,7 +465,7 @@ export function PaymentDialog({
             )}
           </div>
           
-          <div className="p-5">
+          <div className="min-w-0 overflow-x-hidden p-4 sm:p-5">
 
           {/* Step 1: Recipients */}
           {step === 'recipients' && (
@@ -665,10 +665,10 @@ export function PaymentDialog({
                   {recipient.error && <p className="text-xs text-red-500">{recipient.error}</p>}
 
                   {recipient.verifiedUser && (
-                    <div className="flex items-center gap-2 text-sm bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 p-2 rounded-lg">
+                    <div className="flex min-w-0 items-center gap-2 text-sm bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 p-2 rounded-lg">
                       <Check className="w-4 h-4" />
-                      <span>{recipient.verifiedUser.display_name}</span>
-                      <span className="text-xs opacity-70">(@{recipient.verifiedUser.username})</span>
+                      <span className="min-w-0 break-words">{recipient.verifiedUser.display_name}</span>
+                      <span className="min-w-0 break-all text-xs opacity-70">(@{recipient.verifiedUser.username})</span>
                     </div>
                   )}
 
@@ -912,7 +912,7 @@ export function PaymentDialog({
               </div>
 
               {/* Order ID */}
-              <div className="text-center text-xs text-gray-500 dark:text-gray-400">
+              <div className="break-all px-2 text-center text-xs text-gray-500 dark:text-gray-400">
                 {t('payment.order_id') || 'Référence'}: {payment.order_id}
               </div>
 
