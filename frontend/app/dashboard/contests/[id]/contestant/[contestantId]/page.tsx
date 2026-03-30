@@ -456,7 +456,7 @@ function ContestantDetailContent() {
     const refCode = (user as any)?.personal_referral_code || ''
     const username = (user as any)?.username?.trim()
     const sharePath = username ? `/${encodeURIComponent(username)}` : `/c/${contestantId}`
-    const link = `${baseUrl}${sharePath}${refCode ? `?ref=${encodeURIComponent(refCode)}` : ''}`
+    const link = `${baseUrl}${sharePath}`
     setShareLink(link)
     setShowShareDialog(true)
 

@@ -395,10 +395,6 @@ export function ContestantCard({
     const shareUrl = new URL(`${baseUrl}${sharePath}`)
 
     const referralCode = user?.personal_referral_code
-    if (referralCode) {
-      shareUrl.searchParams.set('ref', referralCode)
-    }
-
     const shareLinkStr = shareUrl.toString()
     setShareLink(shareLinkStr)
     setShowShareDialog(true)
