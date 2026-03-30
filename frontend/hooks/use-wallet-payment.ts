@@ -128,7 +128,11 @@ export function useWalletPayment(): UseWalletPaymentReturn {
 
       throw new Error('No wallet connected')
     } catch (err: any) {
-      const errorMessage = err.message || 'Failed to connect wallet'
+      const rawMessage = String(err?.message || '')
+      const errorMessage =
+        rawMessage.includes('Connection request reset')
+          ? 'Wallet connection expired or was cancelled. Please open the Reown wallet list and try again.'
+          : rawMessage || 'Failed to connect wallet'
       setError(errorMessage)
       setIsConnecting(false)
       throw new Error(errorMessage)
@@ -136,12 +140,8 @@ export function useWalletPayment(): UseWalletPaymentReturn {
   }, [])
 
   const connectWallet = useCallback(async (): Promise<string> => {
-    if (typeof window !== 'undefined' && window.ethereum) {
-      return connectInjectedWallet()
-    }
-
     return connectWalletConnect()
-  }, [connectInjectedWallet, connectWalletConnect])
+  }, [connectWalletConnect])
 
   const switchToBSC = useCallback(async (): Promise<void> => {
     if (typeof window === 'undefined' || !window.ethereum) {

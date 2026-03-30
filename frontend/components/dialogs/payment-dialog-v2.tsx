@@ -884,20 +884,16 @@ export function PaymentDialog({
               )}
 
               {!connectedAddress && (
-                <div className="space-y-3">
-                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/60">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">
-                      {text('payment.reown_connect_title', 'Connect your wallet')}
-                    </p>
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      {text('payment.reown_connect_desc', 'Use one button to connect your wallet. On desktop, your browser wallet extension opens directly. On mobile, Reown opens a wallet selector so you can choose your wallet app.')}
-                    </p>
-                    <div className="mt-3 space-y-2 text-xs text-gray-600 dark:text-gray-300">
-                      <p>{text('payment.reown_step_1', '1. Tap the connect wallet button below.')}</p>
-                      <p>{text('payment.reown_step_2', '2. On desktop, approve in your browser wallet. On mobile, choose your wallet in the Reown popup.')}</p>
-                      <p>{text('payment.reown_step_3', '3. Confirm the connection inside your wallet app or extension to continue.')}</p>
-                    </div>
-                  </div>
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/60">
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                    {text('payment.reown_connect_title', 'Choose a wallet with Reown')}
+                  </p>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    {text('payment.reown_connect_desc', 'Tap the button below and Reown will open its wallet list so the user can choose any supported wallet on desktop or mobile.')}
+                  </p>
+                  <p className="mt-3 text-xs text-gray-600 dark:text-gray-300">
+                    {text('payment.reown_step_1', 'After choosing a wallet, approve the connection inside that wallet to continue.')}
+                  </p>
                 </div>
               )}
 
@@ -967,7 +963,7 @@ export function PaymentDialog({
                     ) : (
                       <>
                         <Wallet className="w-4 h-4 mr-2" />
-                        {text('payment.connect_wallet', 'Connect wallet')}
+                        {text('payment.connect_wallet', 'Open Reown wallet list')}
                       </>
                     )}
                   </Button>
