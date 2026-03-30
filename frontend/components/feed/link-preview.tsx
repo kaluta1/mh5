@@ -26,7 +26,7 @@ export function LinkPreview({ url }: LinkPreviewProps) {
       setIsLoading(true)
 
       try {
-        const response = await fetch(`/api/link-preview?url=${encodeURIComponent(url)}`)
+        const response = await fetch(`/link-preview?url=${encodeURIComponent(url)}`)
         const data = await response.json()
 
         if (!isCancelled) {
