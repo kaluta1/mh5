@@ -1,10 +1,10 @@
 /**
  * Hook for wallet connection and smart contract payment execution
  */
-import { useState, useCallback } from 'react'
-import { BrowserProvider, Contract, parseUnits } from 'ethers'
+import { useState, useCallback, useEffect } from 'react'
+import { BrowserProvider, Contract } from 'ethers'
 import { initReownProvider, getReownProvider, resetReownProvider } from '@/lib/wallet'
-import { PAYMENT_CONTRACT_ABI, ERC20_ABI, CONTRACT_ADDRESSES, NETWORK_CONFIG } from '@/lib/contracts'
+import { PAYMENT_CONTRACT_ABI, ERC20_ABI, CONTRACT_ADDRESSES } from '@/lib/contracts'
 import { CONTRACTS } from '@/lib/config'
 import { paymentService, PaymentResponse } from '@/services/payment-service'
 
@@ -25,6 +25,29 @@ export function useWalletPayment(): UseWalletPaymentReturn {
   const [isProcessing, setIsProcessing] = useState(false)
   const [connectedAddress, setConnectedAddress] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const reownProvider = getReownProvider()
+    if (!reownProvider) {
+      return
+    }
+
+    const handleAccountsChanged = (accounts: string[]) => {
+      setConnectedAddress(accounts?.[0] || null)
+    }
+
+    const handleDisconnect = () => {
+      setConnectedAddress(null)
+    }
+
+    reownProvider.on('accountsChanged', handleAccountsChanged)
+    reownProvider.on('disconnect', handleDisconnect)
+
+    return () => {
+      reownProvider.removeListener?.('accountsChanged', handleAccountsChanged)
+      reownProvider.removeListener?.('disconnect', handleDisconnect)
+    }
+  }, [connectedAddress])
 
   const connectInjectedWallet = useCallback(async (): Promise<string> => {
     setIsConnecting(true)
@@ -65,30 +88,40 @@ export function useWalletPayment(): UseWalletPaymentReturn {
     setError(null)
 
     try {
-      let reownProvider = await initReownProvider()
+      await resetReownProvider()
+      const reownProvider = await initReownProvider()
+      const accounts = await reownProvider.enable()
 
-      try {
-        await reownProvider.enable()
-      } catch (initialError: any) {
-        const message = String(initialError?.message || '')
-        const shouldResetSession =
-          message.includes('Connection request reset') ||
-          message.includes('No matching key') ||
-          message.includes('session')
-
-        if (!shouldResetSession) {
-          throw initialError
-        }
-
-        await resetReownProvider()
-        reownProvider = await initReownProvider()
-        await reownProvider.enable()
-      }
-
-      const accounts = reownProvider.accounts
       if (accounts.length > 0) {
         const address = accounts[0]
         setConnectedAddress(address)
+
+        try {
+          await reownProvider.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: `0x${CONTRACTS.CHAIN_ID.toString(16)}` }],
+          })
+        } catch (switchError: any) {
+          if (switchError?.code === 4902) {
+            await reownProvider.request({
+              method: 'wallet_addEthereumChain',
+              params: [
+                {
+                  chainId: `0x${CONTRACTS.CHAIN_ID.toString(16)}`,
+                  chainName: 'BNB Smart Chain',
+                  nativeCurrency: {
+                    name: 'BNB',
+                    symbol: 'BNB',
+                    decimals: 18,
+                  },
+                  rpcUrls: [CONTRACTS.RPC_URL],
+                  blockExplorerUrls: [CONTRACTS.EXPLORER_URL],
+                },
+              ],
+            })
+          }
+        }
+
         setIsConnecting(false)
         return address
       }

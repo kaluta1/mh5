@@ -6,6 +6,25 @@ import { REOWN_PROJECT_ID } from './config'
 
 let walletConnectProvider: InstanceType<typeof EthereumProvider> | null = null
 
+const REOWN_OPTIONAL_METHODS = [
+  'eth_accounts',
+  'eth_requestAccounts',
+  'eth_chainId',
+  'eth_sendTransaction',
+  'eth_signTransaction',
+  'eth_sign',
+  'personal_sign',
+  'eth_signTypedData',
+  'wallet_switchEthereumChain',
+  'wallet_addEthereumChain',
+]
+
+const REOWN_OPTIONAL_EVENTS = [
+  'accountsChanged',
+  'chainChanged',
+  'disconnect',
+]
+
 export const initReownProvider = async (): Promise<InstanceType<typeof EthereumProvider>> => {
   if (!REOWN_PROJECT_ID) {
     throw new Error('Reown wallet connect is not configured. Set NEXT_PUBLIC_REOWN_PROJECT_ID in your frontend environment before deploying.')
@@ -17,7 +36,9 @@ export const initReownProvider = async (): Promise<InstanceType<typeof EthereumP
 
   walletConnectProvider = await EthereumProvider.init({
     projectId: REOWN_PROJECT_ID,
-    chains: [56], // BSC Mainnet
+    optionalChains: [56],
+    optionalMethods: REOWN_OPTIONAL_METHODS,
+    optionalEvents: REOWN_OPTIONAL_EVENTS,
     showQrModal: true,
     qrModalOptions: {
       enableExplorer: true,
