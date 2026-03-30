@@ -110,6 +110,11 @@ export function PaymentDialog({
 }: PaymentDialogProps) {
   const { t } = useLanguage()
   const { user } = useAuth()
+
+  const text = useCallback((key: string, fallback: string) => {
+    const translated = t(key)
+    return translated && translated !== key ? translated : fallback
+  }, [t])
   
   // Get payment methods with translations
   const paymentMethods = getPaymentMethods(t)
@@ -863,7 +868,7 @@ export function PaymentDialog({
                   <CheckCircle2 className="w-5 h-5 text-green-500" />
                   <div className="flex-1">
                     <p className="text-sm font-medium text-green-700 dark:text-green-300">
-                      {t('wallet connected') || 'Portefeuille connecté'}
+                      {text('payment.wallet_connected', 'Wallet connected')}
                     </p>
                     <p className="text-xs text-green-600 dark:text-green-400 font-mono">
                       {connectedAddress.slice(0, 6)}...{connectedAddress.slice(-4)}
@@ -873,7 +878,7 @@ export function PaymentDialog({
               ) : (
                 <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
                   <p className="text-sm text-blue-700 dark:text-blue-300 text-center">
-                    {t('connect wallet first') || 'Connectez votre portefeuille pour continuer'}
+                    {text('payment.connect_wallet_first', 'Connect your wallet to continue')}
                   </p>
                 </div>
               )}
@@ -882,31 +887,17 @@ export function PaymentDialog({
                 <div className="space-y-3">
                   <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/60">
                     <p className="text-sm font-medium text-gray-900 dark:text-white">
-                      {t('payment.reown_connect_title') || 'Connect with Reown'}
+                      {text('payment.reown_connect_title', 'Connect your wallet')}
                     </p>
                     <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      {t('payment.reown_connect_desc') || 'Open the Reown wallet modal to choose MetaMask, WalletConnect, or another supported wallet.'}
+                      {text('payment.reown_connect_desc', 'Reown will open a wallet selector so the user can choose MetaMask, Trust Wallet, OKX Wallet, WalletConnect, or another supported wallet.')}
                     </p>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={connectWallet}
-                    disabled={isConnecting}
-                    className="h-auto min-h-14 w-full justify-start rounded-xl border-gray-200 px-4 py-3 text-left dark:border-gray-700"
-                  >
-                    <div className="flex items-center gap-3">
-                      <Wallet className="h-5 w-5 text-myhigh5-primary" />
-                      <div>
-                        <div className="text-sm font-semibold">
-                          {isConnecting ? (t('payment.connecting_wallet') || 'Connecting wallet...') : (t('payment.connect_wallet') || 'Connect wallet')}
-                        </div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">
-                          {t('payment.reown_connect_button_desc') || 'Use the Reown wallet selector'}
-                        </div>
-                      </div>
+                    <div className="mt-3 space-y-2 text-xs text-gray-600 dark:text-gray-300">
+                      <p>{text('payment.reown_step_1', '1. Tap the connect wallet button below.')}</p>
+                      <p>{text('payment.reown_step_2', '2. Choose your wallet in the Reown popup.')}</p>
+                      <p>{text('payment.reown_step_3', '3. Approve the connection inside your wallet app to continue.')}</p>
                     </div>
-                  </Button>
+                  </div>
                 </div>
               )}
 
@@ -971,12 +962,12 @@ export function PaymentDialog({
                     {isConnecting ? (
                       <>
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        {t('payment.connecting') || 'Connexion...'}
+                        {text('payment.connecting_wallet', 'Connecting wallet...')}
                       </>
                     ) : (
                       <>
                         <Wallet className="w-4 h-4 mr-2" />
-                        {t('payment.auto_connect_wallet') || 'Auto connect wallet'}
+                        {text('payment.connect_wallet', 'Connect wallet')}
                       </>
                     )}
                   </Button>
