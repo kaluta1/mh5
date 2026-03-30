@@ -53,7 +53,6 @@ import {
 import { paymentService, PaymentResponse, VerifiedUser, PaymentRecipient } from '@/services/payment-service'
 import { useWalletPayment } from '@/hooks/use-wallet-payment'
 import { CONTRACTS } from '@/lib/config'
-import { ExternalLink } from 'lucide-react'
 
 interface PaymentMethod {
   id: string
@@ -133,8 +132,6 @@ export function PaymentDialog({
     connectedAddress,
     error: walletError,
     connectWallet,
-    connectInjectedWallet,
-    connectWalletConnect,
     executePayment
   } = useWalletPayment()
   const [copied, setCopied] = useState(false)
@@ -881,37 +878,30 @@ export function PaymentDialog({
               )}
 
               {!connectedAddress && (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="space-y-3">
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/60">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">
+                      {t('payment.reown_connect_title') || 'Connect with Reown'}
+                    </p>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {t('payment.reown_connect_desc') || 'Open the Reown wallet modal to choose MetaMask, WalletConnect, or another supported wallet.'}
+                    </p>
+                  </div>
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={connectInjectedWallet}
+                    onClick={connectWallet}
                     disabled={isConnecting}
-                    className="h-auto min-h-14 justify-start rounded-xl border-gray-200 px-4 py-3 text-left dark:border-gray-700"
+                    className="h-auto min-h-14 w-full justify-start rounded-xl border-gray-200 px-4 py-3 text-left dark:border-gray-700"
                   >
                     <div className="flex items-center gap-3">
                       <Wallet className="h-5 w-5 text-myhigh5-primary" />
                       <div>
-                        <div className="text-sm font-semibold">{t('payment.browser_wallet') || 'Browser wallet'}</div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">
-                          {t('payment.browser_wallet_desc') || 'MetaMask or browser wallet'}
+                        <div className="text-sm font-semibold">
+                          {isConnecting ? (t('payment.connecting_wallet') || 'Connecting wallet...') : (t('payment.connect_wallet') || 'Connect wallet')}
                         </div>
-                      </div>
-                    </div>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={connectWalletConnect}
-                    disabled={isConnecting}
-                    className="h-auto min-h-14 justify-start rounded-xl border-gray-200 px-4 py-3 text-left dark:border-gray-700"
-                  >
-                    <div className="flex items-center gap-3">
-                      <ExternalLink className="h-5 w-5 text-myhigh5-primary" />
-                      <div>
-                        <div className="text-sm font-semibold">{t('payment.walletconnect') || 'WalletConnect'}</div>
                         <div className="text-xs text-gray-500 dark:text-gray-400">
-                          {t('payment.walletconnect_desc') || 'QR code or mobile wallet'}
+                          {t('payment.reown_connect_button_desc') || 'Use the Reown wallet selector'}
                         </div>
                       </div>
                     </div>

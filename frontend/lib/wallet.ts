@@ -8,7 +8,7 @@ let walletConnectProvider: InstanceType<typeof EthereumProvider> | null = null
 
 export const initReownProvider = async (): Promise<InstanceType<typeof EthereumProvider>> => {
   if (!REOWN_PROJECT_ID) {
-    throw new Error('REOWN_PROJECT_ID is not configured. Please set NEXT_PUBLIC_REOWN_PROJECT_ID in your .env.local file.')
+    throw new Error('Reown wallet connect is not configured. Set NEXT_PUBLIC_REOWN_PROJECT_ID in your frontend environment before deploying.')
   }
 
   if (walletConnectProvider) {

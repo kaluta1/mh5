@@ -390,7 +390,9 @@ export function ContestantCard({
 
   const handleShare = async () => {
     const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
-    const shareUrl = new URL(`${baseUrl}/c/${id}`)
+    const username = user?.username?.trim()
+    const sharePath = username ? `/${encodeURIComponent(username)}` : `/c/${id}`
+    const shareUrl = new URL(`${baseUrl}${sharePath}`)
 
     const referralCode = user?.personal_referral_code
     if (referralCode) {

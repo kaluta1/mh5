@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from fastapi import Depends
 from typing import Optional
 import html
+from urllib.parse import urlencode
 
 from app.api import deps
 from app.crud import contestant as crud_contestant
@@ -12,6 +13,19 @@ from app.models.contests import Contestant
 from app.models.user import User
 
 router = APIRouter()
+
+
+def _get_latest_user_contestant(db: Session, user_id: int) -> Optional[Contestant]:
+    return (
+        db.query(Contestant)
+        .filter(
+            Contestant.user_id == user_id,
+            Contestant.is_deleted.is_(False),
+            Contestant.is_active.is_(True),
+        )
+        .order_by(Contestant.registration_date.desc(), Contestant.id.desc())
+        .first()
+    )
 
 
 # Routes courtes pour masquer l'API (utilisées dans les liens de partage)
@@ -39,6 +53,39 @@ async def share_profile_short(
     Redirige vers l'endpoint complet avec métadonnées
     """
     return await share_profile(username, ref, db)
+
+
+@router.get("/u/{username}")
+async def share_username_short(
+    username: str,
+    ref: Optional[str] = None,
+    db: Session = Depends(deps.get_db)
+):
+    """
+    Username-based short link.
+    Redirects to the latest active contestant short link for that user
+    and preserves the user's referral code automatically.
+    """
+    user = crud_user.get_by_username(db, username=username)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Utilisateur non trouvé"
+        )
+
+    contestant = _get_latest_user_contestant(db, user.id)
+    if not contestant:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Aucune participation active trouvée pour cet utilisateur"
+        )
+
+    redirect_path = f"/c/{contestant.id}"
+    referral_code = ref or user.personal_referral_code
+    if referral_code:
+        redirect_path = f"{redirect_path}?{urlencode({'ref': referral_code})}"
+
+    return RedirectResponse(url=redirect_path, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
 
 @router.get("/r/{referral_code}", response_class=HTMLResponse)

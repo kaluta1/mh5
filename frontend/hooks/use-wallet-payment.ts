@@ -86,12 +86,8 @@ export function useWalletPayment(): UseWalletPaymentReturn {
   }, [])
 
   const connectWallet = useCallback(async (): Promise<string> => {
-    if (typeof window !== 'undefined' && window.ethereum) {
-      return connectInjectedWallet()
-    }
-
     return connectWalletConnect()
-  }, [connectInjectedWallet, connectWalletConnect])
+  }, [connectWalletConnect])
 
   const switchToBSC = useCallback(async (): Promise<void> => {
     if (typeof window === 'undefined' || !window.ethereum) {
@@ -174,14 +170,13 @@ export function useWalletPayment(): UseWalletPaymentReturn {
     try {
       // Get provider and signer
       let provider: BrowserProvider
-      if (typeof window !== 'undefined' && window.ethereum) {
+      const reownProvider = getReownProvider()
+      if (reownProvider) {
+        provider = new BrowserProvider(reownProvider)
+      } else if (typeof window !== 'undefined' && window.ethereum) {
         provider = new BrowserProvider(window.ethereum)
       } else {
-        const reownProvider = getReownProvider()
-        if (!reownProvider) {
-          throw new Error('Wallet not connected')
-        }
-        provider = new BrowserProvider(reownProvider)
+        throw new Error('Wallet not connected')
       }
 
       const signer = await provider.getSigner()

@@ -454,7 +454,9 @@ function ContestantDetailContent() {
   const handleShare = async () => {
     const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
     const refCode = (user as any)?.personal_referral_code || ''
-    const link = `${baseUrl}/c/${contestantId}${refCode ? `?ref=${encodeURIComponent(refCode)}` : ''}`
+    const username = (user as any)?.username?.trim()
+    const sharePath = username ? `/${encodeURIComponent(username)}` : `/c/${contestantId}`
+    const link = `${baseUrl}${sharePath}${refCode ? `?ref=${encodeURIComponent(refCode)}` : ''}`
     setShareLink(link)
     setShowShareDialog(true)
 
