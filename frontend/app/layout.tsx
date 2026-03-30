@@ -8,6 +8,7 @@ import { LanguageProvider } from "@/contexts/language-context"
 import { ToastProvider } from "@/components/ui/toast"
 import { CookieConsent } from "@/components/ui/cookie-consent"
 import { ErrorBoundary } from "@/components/error-boundary"
+import { ReownAppKitProvider } from "@/components/reown-appkit-provider"
 import { getMetadataTranslations, detectLanguageFromHeaders, getKeywords } from "@/lib/metadata-translations"
 import { headers } from "next/headers"
 
@@ -171,12 +172,14 @@ export default function RootLayout({
         >
           <ErrorBoundary>
             <ToastProvider>
-              <LanguageProvider>
-                <AuthProvider>
-                  {children}
-                  <CookieConsent />
-                </AuthProvider>
-              </LanguageProvider>
+              <ReownAppKitProvider>
+                <LanguageProvider>
+                  <AuthProvider>
+                    {children}
+                    <CookieConsent />
+                  </AuthProvider>
+                </LanguageProvider>
+              </ReownAppKitProvider>
             </ToastProvider>
           </ErrorBoundary>
         </ThemeProvider>
