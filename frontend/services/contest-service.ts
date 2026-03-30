@@ -166,6 +166,8 @@ export interface ContestResponse {
   contestants?: Contestant[]
   current_user_contesting?: boolean
   entries_count?: number
+  participant_count?: number
+  votes_count?: number
   total_votes?: number
   total_points?: number
   level?: string
