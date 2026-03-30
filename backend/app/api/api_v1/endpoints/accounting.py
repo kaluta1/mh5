@@ -70,7 +70,7 @@ def _serialize_entry(entry: JournalEntry) -> JournalEntryRead:
 @router.get("/chart-of-accounts", response_model=List[AccountSummary])
 def get_chart_of_accounts(
     db: Session = Depends(deps.get_db),
-    current_user=Depends(deps.get_current_active_superuser),
+    current_user=Depends(deps.get_current_admin_user),
     account_type: Optional[AccountType] = Query(None),
     start_date: Optional[datetime] = Query(None),
     end_date: Optional[datetime] = Query(None),
@@ -92,7 +92,7 @@ def get_chart_of_accounts(
 @router.get("/journal-entries", response_model=JournalEntryPage)
 def get_journal_entries(
     db: Session = Depends(deps.get_db),
-    current_user=Depends(deps.get_current_active_superuser),
+    current_user=Depends(deps.get_current_admin_user),
     skip: int = 0,
     limit: int = Query(50, le=200),
     source_type: Optional[str] = None,
@@ -127,7 +127,7 @@ def get_journal_entries(
 def get_journal_entry(
     entry_id: int,
     db: Session = Depends(deps.get_db),
-    current_user=Depends(deps.get_current_active_superuser),
+    current_user=Depends(deps.get_current_admin_user),
 ):
     _sync_accounting(db)
     entry = (
@@ -144,7 +144,7 @@ def get_journal_entry(
 @router.get("/trial-balance", response_model=TrialBalanceSummary)
 def get_trial_balance(
     db: Session = Depends(deps.get_db),
-    current_user=Depends(deps.get_current_active_superuser),
+    current_user=Depends(deps.get_current_admin_user),
     as_of_date: Optional[datetime] = Query(None),
 ):
     _sync_accounting(db, as_of_date)
@@ -154,7 +154,7 @@ def get_trial_balance(
 @router.get("/general-ledger", response_model=GeneralLedgerReport)
 def get_general_ledger(
     db: Session = Depends(deps.get_db),
-    current_user=Depends(deps.get_current_active_superuser),
+    current_user=Depends(deps.get_current_admin_user),
     account_code: Optional[str] = Query(None),
     start_date: Optional[datetime] = Query(None),
     end_date: Optional[datetime] = Query(None),
@@ -171,7 +171,7 @@ def get_general_ledger(
 @router.get("/income-statement", response_model=IncomeStatementReport)
 def get_income_statement(
     db: Session = Depends(deps.get_db),
-    current_user=Depends(deps.get_current_active_superuser),
+    current_user=Depends(deps.get_current_admin_user),
     start_date: datetime = Query(...),
     end_date: datetime = Query(...),
 ):
@@ -182,7 +182,7 @@ def get_income_statement(
 @router.get("/balance-sheet", response_model=BalanceSheetReport)
 def get_balance_sheet(
     db: Session = Depends(deps.get_db),
-    current_user=Depends(deps.get_current_active_superuser),
+    current_user=Depends(deps.get_current_admin_user),
     as_of_date: datetime = Query(...),
 ):
     _sync_accounting(db, as_of_date)
@@ -192,7 +192,7 @@ def get_balance_sheet(
 @router.get("/summary", response_model=AccountingOverview)
 def get_accounting_summary(
     db: Session = Depends(deps.get_db),
-    current_user=Depends(deps.get_current_active_superuser),
+    current_user=Depends(deps.get_current_admin_user),
     start_date: Optional[datetime] = Query(None),
     end_date: Optional[datetime] = Query(None),
 ):
@@ -207,7 +207,7 @@ def get_accounting_summary(
 @router.get("/reconciliation-report", response_model=ReconciliationReport)
 def get_reconciliation_report(
     db: Session = Depends(deps.get_db),
-    current_user=Depends(deps.get_current_active_superuser),
+    current_user=Depends(deps.get_current_admin_user),
     source_type: Optional[str] = Query(None),
 ):
     _sync_accounting(db)
@@ -219,7 +219,7 @@ def get_reconciliation_links(
     source_type: str,
     source_id: str,
     db: Session = Depends(deps.get_db),
-    current_user=Depends(deps.get_current_active_superuser),
+    current_user=Depends(deps.get_current_admin_user),
 ):
     _sync_accounting(db)
     entries = accounting_posting_service.build_reconciliation_map(db, source_type, [source_id]).get(source_id, [])
