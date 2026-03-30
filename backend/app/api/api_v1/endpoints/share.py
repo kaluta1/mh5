@@ -16,12 +16,25 @@ router = APIRouter()
 
 
 def _get_latest_user_contestant(db: Session, user_id: int) -> Optional[Contestant]:
-    return (
+    latest_active_contestant = (
         db.query(Contestant)
         .filter(
             Contestant.user_id == user_id,
             Contestant.is_deleted.is_(False),
             Contestant.is_active.is_(True),
+        )
+        .order_by(Contestant.registration_date.desc(), Contestant.id.desc())
+        .first()
+    )
+
+    if latest_active_contestant:
+        return latest_active_contestant
+
+    return (
+        db.query(Contestant)
+        .filter(
+            Contestant.user_id == user_id,
+            Contestant.is_deleted.is_(False),
         )
         .order_by(Contestant.registration_date.desc(), Contestant.id.desc())
         .first()
@@ -77,7 +90,7 @@ async def share_username_short(
     if not contestant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Aucune participation active trouvée pour cet utilisateur"
+            detail="Aucune participation trouvée pour cet utilisateur"
         )
 
     redirect_path = f"/c/{contestant.id}"
