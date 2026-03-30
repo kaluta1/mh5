@@ -1,9 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import Image from 'next/image'
 import { Link as LinkIcon, ExternalLink } from 'lucide-react'
-import { cn } from '@/lib/utils'
 
 interface LinkPreviewProps {
   url: string
@@ -14,6 +12,7 @@ interface LinkMetadata {
   description?: string
   image?: string
   siteName?: string
+  url?: string
 }
 
 export function LinkPreview({ url }: LinkPreviewProps) {
@@ -21,15 +20,59 @@ export function LinkPreview({ url }: LinkPreviewProps) {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    // In a real app, you'd fetch this from your backend
-    // For now, we'll just extract basic info from the URL
-    const urlObj = new URL(url)
-    setMetadata({
-      title: urlObj.hostname,
-      description: url,
-      siteName: urlObj.hostname.replace('www.', ''),
-    })
-    setIsLoading(false)
+    let isCancelled = false
+
+    const loadPreview = async () => {
+      setIsLoading(true)
+
+      try {
+        const response = await fetch(`/api/link-preview?url=${encodeURIComponent(url)}`)
+        const data = await response.json()
+
+        if (!isCancelled) {
+          if (response.ok) {
+            setMetadata(data)
+          } else {
+            const urlObj = new URL(url)
+            setMetadata({
+              title: urlObj.hostname,
+              description: url,
+              siteName: urlObj.hostname.replace('www.', ''),
+              url,
+            })
+          }
+        }
+      } catch {
+        if (!isCancelled) {
+          try {
+            const urlObj = new URL(url)
+            setMetadata({
+              title: urlObj.hostname,
+              description: url,
+              siteName: urlObj.hostname.replace('www.', ''),
+              url,
+            })
+          } catch {
+            setMetadata({
+              title: url,
+              description: url,
+              siteName: 'Link',
+              url,
+            })
+          }
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    loadPreview()
+
+    return () => {
+      isCancelled = true
+    }
   }, [url])
 
   if (isLoading) {
@@ -50,11 +93,12 @@ export function LinkPreview({ url }: LinkPreviewProps) {
     >
       {metadata?.image && (
         <div className="relative w-full h-48 bg-gray-100 dark:bg-gray-800">
-          <Image
+          <img
             src={metadata.image}
             alt={metadata.title || ''}
-            fill
-            className="object-cover"
+            className="h-full w-full object-cover"
+            loading="lazy"
+            referrerPolicy="no-referrer"
           />
         </div>
       )}
@@ -76,7 +120,7 @@ export function LinkPreview({ url }: LinkPreviewProps) {
           </p>
         )}
         <div className="flex items-center gap-2 mt-2 text-xs text-myhigh5-primary">
-          <span>{url}</span>
+          <span className="truncate">{metadata?.url || url}</span>
           <ExternalLink className="h-3 w-3" />
         </div>
       </div>
