@@ -67,6 +67,7 @@ export function PostCard({
   const [isLiked, setIsLiked] = useState(post.is_liked)
   const [likesCount, setLikesCount] = useState(post.likes_count)
   const canManagePost = currentUserId === post.author_id
+  const previewUrl = extractUrl(post.content)
 
   const handleLike = () => {
     setIsLiked(!isLiked)
@@ -76,7 +77,7 @@ export function PostCard({
 
   const hasMedia = post.media && post.media.length > 0
   const hasPoll = post.poll !== undefined
-  const hasLink = post.content.includes('http')
+  const hasLink = Boolean(previewUrl)
 
   return (
     <article className="hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors border-b border-gray-100 dark:border-gray-700 last:border-b-0 px-4 md:px-6 py-4 md:py-5">
@@ -164,7 +165,7 @@ export function PostCard({
           {/* Link Preview */}
           {hasLink && !hasMedia && !hasPoll && (
             <div className="mb-3">
-              <LinkPreview url={extractUrl(post.content)} />
+              <LinkPreview url={previewUrl!} />
             </div>
           )}
 

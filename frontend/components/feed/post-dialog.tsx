@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils'
 import { useLanguage } from '@/contexts/language-context'
 import { useToast } from '@/components/ui/toast'
 import { MentionTextarea } from '@/components/feed/mention-textarea'
+import { LinkPreview } from '@/components/feed/link-preview'
 
 interface PostDialogProps {
   open: boolean
@@ -36,6 +37,7 @@ export function PostDialog({ open, onOpenChange, onPostCreated, postToEdit, onPo
   const isEditing = Boolean(postToEdit)
 
   const maxChars = 280
+  const detectedLink = extractUrl(content)
 
   useEffect(() => {
     if (!open) return
@@ -213,6 +215,12 @@ export function PostDialog({ open, onOpenChange, onPostCreated, postToEdit, onPo
                         <p className="text-sm text-gray-600 dark:text-gray-400">
                           {mediaIds.length} {t('dashboard.feed.files_selected') || 'file(s) selected'}
                         </p>
+                      </div>
+                    )}
+
+                    {!mediaIds.length && detectedLink && (
+                      <div className="mt-4">
+                        <LinkPreview url={detectedLink} />
                       </div>
                     )}
                   </div>
@@ -398,4 +406,11 @@ export function PostDialog({ open, onOpenChange, onPostCreated, postToEdit, onPo
       </DialogContent>
     </Dialog>
   )
+}
+
+function extractUrl(text: string): string | null {
+  if (!text) return null
+  const urlRegex = /(https?:\/\/[^\s]+)/i
+  const match = text.match(urlRegex)
+  return match ? match[0] : null
 }

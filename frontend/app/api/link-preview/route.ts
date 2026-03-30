@@ -25,6 +25,14 @@ function decodeHtmlEntities(value: string): string {
     .replace(/&gt;/g, '>')
 }
 
+function decodeEscapedString(value: string): string {
+  return decodeHtmlEntities(value)
+    .replace(/\\u0026/g, '&')
+    .replace(/\\u003d/g, '=')
+    .replace(/\\u002F/g, '/')
+    .replace(/\\\//g, '/')
+}
+
 function getYouTubeVideoId(url: string): string | undefined {
   const patterns = [
     /youtube\.com\/watch\?.*v=([a-zA-Z0-9_-]{11})/i,
@@ -53,6 +61,116 @@ function isPrivateHost(hostname: string): boolean {
   )
 }
 
+function buildJsonResponse(payload: Record<string, unknown>, maxAgeSeconds: number = 3600) {
+  return NextResponse.json(payload, {
+    headers: {
+      'Cache-Control': `public, s-maxage=${maxAgeSeconds}, stale-while-revalidate=86400`,
+    },
+  })
+}
+
+function getSiteNameFromHost(hostname: string): string {
+  return hostname.replace(/^www\./, '')
+}
+
+function isTikTokHost(hostname: string): boolean {
+  return /(^|\.)tiktok\.com$/i.test(hostname)
+}
+
+function isInstagramHost(hostname: string): boolean {
+  return /(^|\.)instagram\.com$/i.test(hostname) || /(^|\.)instagr\.am$/i.test(hostname)
+}
+
+function isFacebookHost(hostname: string): boolean {
+  return /(^|\.)facebook\.com$/i.test(hostname) || /(^|\.)fb\.com$/i.test(hostname) || /(^|\.)fb\.watch$/i.test(hostname)
+}
+
+async function fetchRemote(url: string) {
+  return fetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (compatible; MyHigh5LinkPreview/1.0)',
+      Accept: 'text/html,application/xhtml+xml,application/json',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Cache-Control': 'no-cache',
+      Pragma: 'no-cache',
+    },
+    redirect: 'follow',
+    next: { revalidate: 3600 },
+  })
+}
+
+function extractPreviewFromHtml(html: string, normalizedUrl: string, fallbackSiteName: string) {
+  const title =
+    extractMetaTag(html, [
+      /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"]+)["']/i,
+      /<meta[^>]+content=["']([^"]+)["'][^>]+property=["']og:title["']/i,
+      /<meta[^>]+name=["']twitter:title["'][^>]+content=["']([^"]+)["']/i,
+      /<meta[^>]+content=["']([^"]+)["'][^>]+name=["']twitter:title["']/i,
+      /<title[^>]*>([^<]+)<\/title>/i,
+    ]) || fallbackSiteName
+
+  const description =
+    extractMetaTag(html, [
+      /<meta[^>]+property=["']og:description["'][^>]+content=["']([^"]+)["']/i,
+      /<meta[^>]+content=["']([^"]+)["'][^>]+property=["']og:description["']/i,
+      /<meta[^>]+name=["']twitter:description["'][^>]+content=["']([^"]+)["']/i,
+      /<meta[^>]+content=["']([^"]+)["'][^>]+name=["']twitter:description["']/i,
+      /<meta[^>]+name=["']description["'][^>]+content=["']([^"]+)["']/i,
+      /<meta[^>]+content=["']([^"]+)["'][^>]+name=["']description["']/i,
+    ]) || normalizedUrl
+
+  const image =
+    extractMetaTag(html, [
+      /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"]+)["']/i,
+      /<meta[^>]+content=["']([^"]+)["'][^>]+property=["']og:image["']/i,
+      /<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"]+)["']/i,
+      /<meta[^>]+content=["']([^"]+)["'][^>]+name=["']twitter:image["']/i,
+      /"thumbnailUrl":"([^"]+)"/i,
+      /"display_url":"([^"]+)"/i,
+    ])
+
+  const siteName =
+    extractMetaTag(html, [
+      /<meta[^>]+property=["']og:site_name["'][^>]+content=["']([^"]+)["']/i,
+      /<meta[^>]+content=["']([^"]+)["'][^>]+property=["']og:site_name["']/i,
+    ]) || fallbackSiteName
+
+  return {
+    title,
+    description,
+    image: image ? decodeEscapedString(image) : undefined,
+    siteName,
+    url: normalizedUrl,
+  }
+}
+
+async function fetchHtmlPreview(normalizedUrl: string, targetUrl: URL, fallbackSiteName: string) {
+  const response = await fetchRemote(normalizedUrl)
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch target URL')
+  }
+
+  const contentType = response.headers.get('content-type') || ''
+  if (!contentType.includes('text/html')) {
+    return {
+      title: fallbackSiteName,
+      description: normalizedUrl,
+      siteName: fallbackSiteName,
+      url: normalizedUrl,
+    }
+  }
+
+  const html = await response.text()
+  const preview = extractPreviewFromHtml(html, normalizedUrl, fallbackSiteName)
+
+  return {
+    ...preview,
+    image: preview.image ? new URL(preview.image, normalizedUrl).toString() : undefined,
+    siteName: preview.siteName || getSiteNameFromHost(targetUrl.hostname),
+  }
+}
+
 export async function GET(request: NextRequest) {
   const rawUrl = request.nextUrl.searchParams.get('url')
   if (!rawUrl) {
@@ -72,6 +190,7 @@ export async function GET(request: NextRequest) {
 
   const normalizedUrl = targetUrl.toString()
   const youtubeVideoId = getYouTubeVideoId(normalizedUrl)
+  const hostnameLabel = getSiteNameFromHost(targetUrl.hostname)
 
   if (youtubeVideoId) {
     try {
@@ -87,129 +206,91 @@ export async function GET(request: NextRequest) {
 
       if (oembedResponse.ok) {
         const data = await oembedResponse.json()
-        return NextResponse.json(
-          {
-            title: data.title || 'YouTube',
-            description: data.author_name ? `By ${data.author_name}` : normalizedUrl,
-            image: data.thumbnail_url || `https://img.youtube.com/vi/${youtubeVideoId}/hqdefault.jpg`,
-            siteName: 'YouTube',
-            url: normalizedUrl,
-          },
-          {
-            headers: {
-              'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
-            },
-          }
-        )
+        return buildJsonResponse({
+          title: data.title || 'YouTube',
+          description: data.author_name ? `By ${data.author_name}` : normalizedUrl,
+          image: data.thumbnail_url || `https://img.youtube.com/vi/${youtubeVideoId}/hqdefault.jpg`,
+          siteName: 'YouTube',
+          url: normalizedUrl,
+        })
       }
     } catch {
       // Fall through to static YouTube preview fallback below.
     }
 
-    return NextResponse.json(
-      {
-        title: 'YouTube',
-        description: normalizedUrl,
-        image: `https://img.youtube.com/vi/${youtubeVideoId}/hqdefault.jpg`,
-        siteName: 'YouTube',
-        url: normalizedUrl,
-      },
-      {
-        headers: {
-          'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
-        },
+    return buildJsonResponse({
+      title: 'YouTube',
+      description: normalizedUrl,
+      image: `https://img.youtube.com/vi/${youtubeVideoId}/hqdefault.jpg`,
+      siteName: 'YouTube',
+      url: normalizedUrl,
+    })
+  }
+
+  if (isTikTokHost(targetUrl.hostname)) {
+    try {
+      const oembedResponse = await fetch(
+        `https://www.tiktok.com/oembed?url=${encodeURIComponent(normalizedUrl)}`,
+        {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (compatible; MyHigh5LinkPreview/1.0)',
+            Accept: 'application/json',
+          },
+          next: { revalidate: 3600 },
+        }
+      )
+
+      if (oembedResponse.ok) {
+        const data = await oembedResponse.json()
+        return buildJsonResponse({
+          title: data.title || 'TikTok',
+          description: data.author_name ? `By ${data.author_name}` : normalizedUrl,
+          image: data.thumbnail_url,
+          siteName: data.provider_name || 'TikTok',
+          url: normalizedUrl,
+        })
       }
-    )
+    } catch {
+      // Fallback to HTML scraping below.
+    }
+  }
+
+  if (isInstagramHost(targetUrl.hostname)) {
+    try {
+      const preview = await fetchHtmlPreview(normalizedUrl, targetUrl, 'Instagram')
+      return buildJsonResponse({
+        ...preview,
+        siteName: 'Instagram',
+      })
+    } catch {
+      // Fall through to generic handling.
+    }
+  }
+
+  if (isFacebookHost(targetUrl.hostname)) {
+    try {
+      const preview = await fetchHtmlPreview(normalizedUrl, targetUrl, 'Facebook')
+      return buildJsonResponse({
+        ...preview,
+        siteName: 'Facebook',
+      })
+    } catch {
+      // Fall through to generic handling.
+    }
   }
 
   try {
-    const response = await fetch(normalizedUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; MyHigh5LinkPreview/1.0)',
-        Accept: 'text/html,application/xhtml+xml',
-      },
-      redirect: 'follow',
-      next: { revalidate: 3600 },
-    })
-
-    if (!response.ok) {
-      return NextResponse.json({ detail: 'Failed to fetch target URL' }, { status: 502 })
-    }
-
-    const contentType = response.headers.get('content-type') || ''
-    if (!contentType.includes('text/html')) {
-      return NextResponse.json(
-        {
-          title: targetUrl.hostname.replace(/^www\./, ''),
-          description: normalizedUrl,
-          siteName: targetUrl.hostname.replace(/^www\./, ''),
-          url: normalizedUrl,
-        },
-        {
-          headers: {
-            'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
-          },
-        }
-      )
-    }
-
-    const html = await response.text()
-    const title =
-      extractMetaTag(html, [
-        /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"]+)["']/i,
-        /<meta[^>]+content=["']([^"]+)["'][^>]+property=["']og:title["']/i,
-        /<title[^>]*>([^<]+)<\/title>/i,
-      ]) || targetUrl.hostname.replace(/^www\./, '')
-    const description =
-      extractMetaTag(html, [
-        /<meta[^>]+property=["']og:description["'][^>]+content=["']([^"]+)["']/i,
-        /<meta[^>]+content=["']([^"]+)["'][^>]+property=["']og:description["']/i,
-        /<meta[^>]+name=["']description["'][^>]+content=["']([^"]+)["']/i,
-        /<meta[^>]+content=["']([^"]+)["'][^>]+name=["']description["']/i,
-      ]) || normalizedUrl
-    const image = extractMetaTag(html, [
-      /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"]+)["']/i,
-      /<meta[^>]+content=["']([^"]+)["'][^>]+property=["']og:image["']/i,
-      /<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"]+)["']/i,
-      /<meta[^>]+content=["']([^"]+)["'][^>]+name=["']twitter:image["']/i,
-    ])
-    const siteName =
-      extractMetaTag(html, [
-        /<meta[^>]+property=["']og:site_name["'][^>]+content=["']([^"]+)["']/i,
-        /<meta[^>]+content=["']([^"]+)["'][^>]+property=["']og:site_name["']/i,
-      ]) || targetUrl.hostname.replace(/^www\./, '')
-
-    const imageUrl = image
-      ? new URL(image, normalizedUrl).toString()
-      : undefined
-
-    return NextResponse.json(
-      {
-        title,
-        description,
-        image: imageUrl,
-        siteName,
-        url: normalizedUrl,
-      },
-      {
-        headers: {
-          'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
-        },
-      }
-    )
+    const preview = await fetchHtmlPreview(normalizedUrl, targetUrl, hostnameLabel)
+    return buildJsonResponse(preview)
   } catch {
-    return NextResponse.json(
+    return buildJsonResponse(
       {
-        title: targetUrl.hostname.replace(/^www\./, ''),
+        title: hostnameLabel,
         description: normalizedUrl,
-        siteName: targetUrl.hostname.replace(/^www\./, ''),
+        siteName: hostnameLabel,
         url: normalizedUrl,
       },
-      {
-        headers: {
-          'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=3600',
-        },
-      }
+      300
     )
   }
 }
