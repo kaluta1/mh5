@@ -48,7 +48,8 @@ import {
   ChevronRight,
   Crown,
   Calendar,
-  CheckCircle2
+  CheckCircle2,
+  ExternalLink
 } from 'lucide-react'
 import { paymentService, PaymentResponse, VerifiedUser, PaymentRecipient } from '@/services/payment-service'
 import { useWalletPayment } from '@/hooks/use-wallet-payment'
