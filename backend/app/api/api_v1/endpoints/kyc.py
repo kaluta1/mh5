@@ -22,6 +22,7 @@ from app.services.shufti_pro import shufti_pro_service
 from app.services.email import email_service
 
 router = APIRouter()
+KYC_PRICE_USD = 1.00
 
 
 @router.post("/initiate")
@@ -81,7 +82,7 @@ async def initiate_shufti_verification(
                 detail={
                     "message": "Vous devez payer pour effectuer la vérification KYC",
                     "available_attempts": available_count,
-                    "price": 10.00,
+                    "price": KYC_PRICE_USD,
                     "currency": "USD"
                 }
             )
@@ -295,7 +296,7 @@ async def get_kyc_status_detailed(
         "available_payments": available_payments,
         "has_valid_payment": has_valid_payment,
         "needs_payment": needs_payment,
-        "kyc_price": 10.00,
+        "kyc_price": KYC_PRICE_USD,
         "kyc_currency": "USD"
     }
 

@@ -101,7 +101,7 @@ def upgrade():
     # Insert default product types
     op.execute("""
         INSERT INTO product_types (code, name, description, price, currency, validity_days, is_active, is_consumable) VALUES
-        ('kyc', 'Vérification KYC', 'Vérification d''identité pour accéder aux fonctionnalités complètes', 10.00, 'USD', 365, true, true),
+        ('kyc', 'Vérification KYC', 'Vérification d''identité pour accéder aux fonctionnalités complètes', 1.00, 'USD', 365, true, true),
         ('subscription_club', 'Abonnement Club', 'Abonnement mensuel au club', 9.99, 'USD', 30, true, false),
         ('efm_membership', 'EFM Membership', 'Adhésion au programme EFM', 99.00, 'USD', 365, true, false)
     """)

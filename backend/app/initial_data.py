@@ -218,10 +218,10 @@ def create_product_types(db: Session) -> None:
             # KYC
             # ============================================
             {
-                "code": "kyc_verification",
+                "code": "kyc",
                 "name": "KYC Verification",
                 "description": "Vérification d'identité KYC",
-                "price": 10.00,
+                "price": 1.00,
                 "currency": "USD",
                 "validity_days": 0,
                 "is_active": True,

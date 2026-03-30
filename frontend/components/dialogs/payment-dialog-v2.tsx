@@ -73,6 +73,8 @@ interface Recipient {
   error: string | null
 }
 
+const KYC_PRICE_USD = 1
+
 const getPaymentMethods = (t: (key: string) => string | undefined): PaymentMethod[] => [
   {
     id: 'usdt',
@@ -145,7 +147,7 @@ export function PaymentDialog({
   const [includeMyself, setIncludeMyself] = useState(true)
   const [myselfProduct, setMyselfProduct] = useState<'kyc' | 'mfm_membership' | 'annual_membership'>(initialProductCode as 'kyc' | 'mfm_membership' | 'annual_membership')
   const [myselfAmount, setMyselfAmount] = useState(
-    initialProductCode === 'kyc' ? 10 : 
+    initialProductCode === 'kyc' ? KYC_PRICE_USD : 
     initialProductCode === 'annual_membership' ? 50 : 100
   )
   const [paymentConfirmed, setPaymentConfirmed] = useState(false)
@@ -160,7 +162,7 @@ export function PaymentDialog({
       usernameOrEmail: '',
       verifiedUser: null,
       productCode: 'kyc',
-      amount: 10,
+      amount: KYC_PRICE_USD,
       isVerifying: false,
       error: null
     }])
@@ -180,7 +182,7 @@ export function PaymentDialog({
       
       // Auto-set amount based on product
       if (field === 'productCode') {
-        updated.amount = value === 'kyc' ? 10 : value === 'annual_membership' ? 50 : 100
+        updated.amount = value === 'kyc' ? KYC_PRICE_USD : value === 'annual_membership' ? 50 : 100
       }
       
       // Clear verification when username changes
@@ -225,7 +227,7 @@ export function PaymentDialog({
   const othersValid = recipients.every(r => r.verifiedUser !== null && r.amount > 0)
   const hasAtLeastOne = includeMyself || recipients.length > 0
   const allRecipientsValid = hasAtLeastOne && othersValid && 
-    (!includeMyself || myselfAmount >= (myselfProduct === 'mfm_membership' ? 100 : myselfProduct === 'annual_membership' ? 50 : 10))
+    (!includeMyself || myselfAmount >= (myselfProduct === 'mfm_membership' ? 100 : myselfProduct === 'annual_membership' ? 50 : KYC_PRICE_USD))
 
   // Copy to clipboard
   const copyToClipboard = async (text: string) => {
@@ -366,7 +368,7 @@ export function PaymentDialog({
     setIncludeMyself(true)
     setMyselfProduct(initialProductCode as 'kyc' | 'mfm_membership' | 'annual_membership')
     setMyselfAmount(
-      initialProductCode === 'kyc' ? 10 : 
+      initialProductCode === 'kyc' ? KYC_PRICE_USD : 
       initialProductCode === 'annual_membership' ? 50 : 100
     )
     setPaymentConfirmed(false)
@@ -495,7 +497,7 @@ export function PaymentDialog({
                     } else {
                       setIncludeMyself(true)
                       setMyselfProduct('kyc')
-                      setMyselfAmount(10)
+                      setMyselfAmount(KYC_PRICE_USD)
                     }
                   }}
                   className={`relative w-full p-3 rounded-lg border transition-all text-left ${
@@ -523,7 +525,7 @@ export function PaymentDialog({
                         {t('payment.kyc_description') || 'Vérification d\'identité'}
                       </p>
                     </div>
-                    <span className="text-sm font-bold text-myhigh5-primary">$10</span>
+                    <span className="text-sm font-bold text-myhigh5-primary">${KYC_PRICE_USD}</span>
                   </div>
                 </button>
 
@@ -682,7 +684,7 @@ export function PaymentDialog({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="kyc">KYC Service - 10 USD</SelectItem>
+                        <SelectItem value="kyc">KYC Service - {KYC_PRICE_USD} USD</SelectItem>
                         <SelectItem value="mfm_membership">{t('payment.mfm_membership') || 'MFM'} - 100 USD</SelectItem>
                         <SelectItem value="annual_membership">Annual Membership - 50 USD</SelectItem>
                       </SelectContent>
@@ -692,7 +694,7 @@ export function PaymentDialog({
                         type="number"
                         min={
                           recipient.productCode === 'mfm_membership' ? 100 : 
-                          recipient.productCode === 'annual_membership' ? 50 : 10
+                          recipient.productCode === 'annual_membership' ? 50 : KYC_PRICE_USD
                         }
                         value={recipient.amount}
                         onChange={(e) => updateRecipient(recipient.id, 'amount', parseFloat(e.target.value) || 0)}
