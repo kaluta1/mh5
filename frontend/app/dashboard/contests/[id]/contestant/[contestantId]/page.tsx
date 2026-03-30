@@ -50,6 +50,7 @@ interface ContestantDetail {
   title?: string
   description?: string
   author_name?: string
+  author_username?: string
   author_country?: string
   author_city?: string
   author_continent?: string
@@ -454,8 +455,8 @@ function ContestantDetailContent() {
   const handleShare = async () => {
     const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
     const refCode = (user as any)?.personal_referral_code || ''
-    const username = (user as any)?.username?.trim()
-    const sharePath = username ? `/${encodeURIComponent(username)}` : `/c/${contestantId}`
+    const ownerUsername = contestant?.author_username?.trim()
+    const sharePath = ownerUsername ? `/${encodeURIComponent(ownerUsername)}` : `/c/${contestantId}`
     const link = `${baseUrl}${sharePath}`
     setShareLink(link)
     setShowShareDialog(true)
