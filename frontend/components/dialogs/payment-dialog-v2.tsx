@@ -133,6 +133,8 @@ export function PaymentDialog({
     connectedAddress,
     error: walletError,
     connectWallet,
+    connectInjectedWallet,
+    connectWalletConnect,
     executePayment
   } = useWalletPayment()
   const [copied, setCopied] = useState(false)
@@ -398,7 +400,7 @@ export function PaymentDialog({
     <>
       <Dialog open={open} onOpenChange={() => handleClose()}>
         <DialogContent 
-          className="sm:max-w-xl max-h-[90vh] overflow-y-auto p-0"
+          className="w-[calc(100vw-1rem)] max-w-xl max-h-[90vh] overflow-y-auto p-0"
           onPointerDownOutside={(e) => e.preventDefault()}
           onEscapeKeyDown={(e) => e.preventDefault()}
         >
@@ -789,7 +791,7 @@ export function PaymentDialog({
                     <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide font-medium">
                       {t('payment.cryptocurrencies') || 'Crypto-monnaies'}
                     </p>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                       {paymentMethods.filter(m => m.category === 'crypto').map((method) => (
                         <button
                           key={method.id}
@@ -810,7 +812,7 @@ export function PaymentDialog({
                     <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide font-medium">
                       {t('payment.other_methods') || 'Autres méthodes'}
                     </p>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                       {paymentMethods.filter(m => m.category !== 'crypto').map((method) => (
                         <button
                           key={method.id}
@@ -878,6 +880,45 @@ export function PaymentDialog({
                 </div>
               )}
 
+              {!connectedAddress && (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={connectInjectedWallet}
+                    disabled={isConnecting}
+                    className="h-auto min-h-14 justify-start rounded-xl border-gray-200 px-4 py-3 text-left dark:border-gray-700"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Wallet className="h-5 w-5 text-myhigh5-primary" />
+                      <div>
+                        <div className="text-sm font-semibold">{t('payment.browser_wallet') || 'Browser wallet'}</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          {t('payment.browser_wallet_desc') || 'MetaMask or browser wallet'}
+                        </div>
+                      </div>
+                    </div>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={connectWalletConnect}
+                    disabled={isConnecting}
+                    className="h-auto min-h-14 justify-start rounded-xl border-gray-200 px-4 py-3 text-left dark:border-gray-700"
+                  >
+                    <div className="flex items-center gap-3">
+                      <ExternalLink className="h-5 w-5 text-myhigh5-primary" />
+                      <div>
+                        <div className="text-sm font-semibold">{t('payment.walletconnect') || 'WalletConnect'}</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          {t('payment.walletconnect_desc') || 'QR code or mobile wallet'}
+                        </div>
+                      </div>
+                    </div>
+                  </Button>
+                </div>
+              )}
+
               {/* Network Info */}
               <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                 <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
@@ -926,7 +967,7 @@ export function PaymentDialog({
               )}
 
               {/* Actions */}
-              <div className="flex gap-3 pt-2">
+              <div className="flex flex-col gap-3 pt-2 sm:flex-row">
                 <Button variant="outline" onClick={handleBack} className="flex-1" disabled={isProcessing || isConnecting}>
                   {t('common.back') || 'Retour'}
                 </Button>
@@ -944,7 +985,7 @@ export function PaymentDialog({
                     ) : (
                       <>
                         <Wallet className="w-4 h-4 mr-2" />
-                        {t('connect wallet first') || 'Connecter le portefeuille'}
+                        {t('payment.auto_connect_wallet') || 'Auto connect wallet'}
                       </>
                     )}
                   </Button>

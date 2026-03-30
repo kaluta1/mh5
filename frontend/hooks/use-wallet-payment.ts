@@ -14,6 +14,8 @@ interface UseWalletPaymentReturn {
   connectedAddress: string | null
   error: string | null
   connectWallet: () => Promise<string>
+  connectInjectedWallet: () => Promise<string>
+  connectWalletConnect: () => Promise<string>
   executePayment: (payment: PaymentResponse, token: string) => Promise<string>
   switchToBSC: () => Promise<void>
 }
@@ -24,35 +26,48 @@ export function useWalletPayment(): UseWalletPaymentReturn {
   const [connectedAddress, setConnectedAddress] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const connectWallet = useCallback(async (): Promise<string> => {
+  const connectInjectedWallet = useCallback(async (): Promise<string> => {
     setIsConnecting(true)
     setError(null)
 
     try {
-      // Priority 1: Try injected wallet (MetaMask)
-      if (typeof window !== 'undefined' && window.ethereum) {
-        const provider = new BrowserProvider(window.ethereum)
-        const accounts = await provider.send('eth_requestAccounts', [])
-        
-        if (accounts.length > 0) {
-          const address = accounts[0]
-          setConnectedAddress(address)
-          
-          // Check if on BSC network
-          const network = await provider.getNetwork()
-          if (Number(network.chainId) !== CONTRACTS.CHAIN_ID) {
-            await switchToBSCNetwork(provider)
-          }
-          
-          setIsConnecting(false)
-          return address
-        }
+      if (typeof window === 'undefined' || !window.ethereum) {
+        throw new Error('MetaMask or another browser wallet is not installed')
       }
 
-      // Priority 2: Use Reown/WalletConnect
+      const provider = new BrowserProvider(window.ethereum)
+      const accounts = await provider.send('eth_requestAccounts', [])
+
+      if (accounts.length > 0) {
+        const address = accounts[0]
+        setConnectedAddress(address)
+
+        const network = await provider.getNetwork()
+        if (Number(network.chainId) !== CONTRACTS.CHAIN_ID) {
+          await switchToBSCNetwork(provider)
+        }
+
+        setIsConnecting(false)
+        return address
+      }
+
+      throw new Error('No wallet connected')
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to connect browser wallet'
+      setError(errorMessage)
+      setIsConnecting(false)
+      throw new Error(errorMessage)
+    }
+  }, [])
+
+  const connectWalletConnect = useCallback(async (): Promise<string> => {
+    setIsConnecting(true)
+    setError(null)
+
+    try {
       const reownProvider = await initReownProvider()
       await reownProvider.enable()
-      
+
       const accounts = reownProvider.accounts
       if (accounts.length > 0) {
         const address = accounts[0]
@@ -69,6 +84,14 @@ export function useWalletPayment(): UseWalletPaymentReturn {
       throw new Error(errorMessage)
     }
   }, [])
+
+  const connectWallet = useCallback(async (): Promise<string> => {
+    if (typeof window !== 'undefined' && window.ethereum) {
+      return connectInjectedWallet()
+    }
+
+    return connectWalletConnect()
+  }, [connectInjectedWallet, connectWalletConnect])
 
   const switchToBSC = useCallback(async (): Promise<void> => {
     if (typeof window === 'undefined' || !window.ethereum) {
@@ -243,6 +266,8 @@ export function useWalletPayment(): UseWalletPaymentReturn {
     connectedAddress,
     error,
     connectWallet,
+    connectInjectedWallet,
+    connectWalletConnect,
     executePayment,
     switchToBSC
   }
