@@ -38,9 +38,15 @@ const adminMenuSections = [
       { name: "admin.nav.contests", href: "/dashboard/admin/contests", icon: Zap },
       { name: "admin.nav.contestants", href: "/dashboard/admin/contestants", icon: Users },
       { name: "admin.nav.users", href: "/dashboard/admin/users", icon: Settings },
-      { name: "admin.nav.accounting", href: "/dashboard/admin/accounting", icon: Banknote },
       { name: "admin.nav.kyc", href: "/dashboard/admin/kyc", icon: FileCheck },
       { name: "admin.nav.reports", href: "/dashboard/admin/reports", icon: Flag },
+    ]
+  },
+  {
+    title: "Finance",
+    items: [
+      { name: "admin.nav.accounting", href: "/dashboard/admin/accounting", icon: Banknote },
+      { name: "admin.nav.transactions", href: "/dashboard/admin/transactions", icon: CreditCard },
     ]
   },
   {
@@ -49,7 +55,6 @@ const adminMenuSections = [
       { name: "admin.nav.categories", href: "/dashboard/admin/categories", icon: Tag },
       { name: "admin.nav.commission_settings", href: "/dashboard/admin/commission-settings", icon: Percent },
       { name: "admin.nav.suggested_contests", href: "/dashboard/admin/suggested-contests", icon: Lightbulb },
-      { name: "admin.nav.transactions", href: "/dashboard/admin/transactions", icon: CreditCard },
       { name: "admin.nav.microservices", href: "/dashboard/admin/microservices", icon: Server },
     ]
   },

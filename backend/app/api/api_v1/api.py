@@ -4,7 +4,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    from app.api.api_v1.endpoints import auth, users, media, contests, votes, kyc, contestant, geography, favorites, search, search_history, comments, admin, season_migration, notifications, analytics, affiliate, payments, roles, verifications, wallet, suggested_contests, social, private_messages, contact, categories, newsletter, share, follow, rounds
+    from app.api.api_v1.endpoints import auth, users, media, contests, votes, kyc, contestant, geography, favorites, search, search_history, comments, admin, accounting, season_migration, notifications, analytics, affiliate, payments, roles, verifications, wallet, suggested_contests, social, private_messages, contact, categories, newsletter, share, follow, rounds
     from app.api.api_v1.endpoints import feed_groups, feed_messages, feed_posts, feed, feed_keys, groups
     logger.info("All endpoints imported successfully")
 except ImportError as e:
@@ -20,7 +20,7 @@ api_router.include_router(rounds.router, prefix="/rounds", tags=["Rounds"])
 
 # Enregistrer le router categories avec logging
 try:
-    from app.api.api_v1.endpoints import auth, users, media, contests, votes, kyc, contestant, geography, favorites, search, search_history, comments, admin, season_migration, notifications, analytics, affiliate, payments, roles, verifications, wallet, suggested_contests, social, private_messages, contact, categories, newsletter, share, follow, rounds
+    from app.api.api_v1.endpoints import auth, users, media, contests, votes, kyc, contestant, geography, favorites, search, search_history, comments, admin, accounting, season_migration, notifications, analytics, affiliate, payments, roles, verifications, wallet, suggested_contests, social, private_messages, contact, categories, newsletter, share, follow, rounds
     api_router.include_router(categories.router, prefix="/categories", tags=["Catégories"])
     logger.info("Categories router registered successfully at /categories")
 except Exception as e:
@@ -38,6 +38,7 @@ api_router.include_router(favorites.router, prefix="/favorites", tags=["Favoris"
 api_router.include_router(search.router, tags=["Recherche"])
 api_router.include_router(search_history.router, tags=["Historique de recherche"])
 api_router.include_router(admin.router, prefix="/admin", tags=["Administration"])
+api_router.include_router(accounting.router, prefix="/accounting", tags=["Accounting"])
 api_router.include_router(season_migration.router, prefix="/seasons", tags=["Migrations de saisons"])
 api_router.include_router(notifications.router, prefix="/notifications", tags=["Notifications"])
 api_router.include_router(analytics.router, prefix="/analytics", tags=["Analytics"])
