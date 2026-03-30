@@ -23,6 +23,7 @@ interface ShareDialogProps {
 export function ShareDialog({ isOpen, onOpenChange, shareLink, title, description }: ShareDialogProps) {
   const { t } = useLanguage()
   const [linkCopied, setLinkCopied] = useState(false)
+  const canNativeShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function'
 
   const copyToClipboard = async () => {
     try {
@@ -35,7 +36,7 @@ export function ShareDialog({ isOpen, onOpenChange, shareLink, title, descriptio
   }
 
   const handleNativeShare = async () => {
-    if (navigator.share) {
+    if (canNativeShare) {
       try {
         await navigator.share({
           title: title || t('dashboard.contests.share') || 'Partager',
@@ -90,7 +91,7 @@ export function ShareDialog({ isOpen, onOpenChange, shareLink, title, descriptio
               </button>
             </div>
           </div>
-          {navigator.share && (
+          {canNativeShare && (
             <div className="flex gap-2">
               <Button
                 variant="outline"

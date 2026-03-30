@@ -25,6 +25,7 @@ import api from '@/lib/api'
 import { commentsService, Comment as ServiceComment } from '@/lib/services/comments-service'
 import { reactionsService, ReactionDetails } from '@/services/reactions-service'
 import { followService } from '@/services/follow-service'
+import { sharesService } from '@/services/shares-service'
 
 interface Media {
   id: string
@@ -450,13 +451,24 @@ function ContestantDetailContent() {
     router.push(`/dashboard/messages?user=${contestant.user_id}`)
   }
 
-  const handleShare = () => {
-    // Générer le lien de partage avec referral
+  const handleShare = async () => {
     const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
-    const refCode = (user as any)?.referral_code || ''
-    const link = `${baseUrl}/dashboard/contests/${contestId}/contestant/${contestantId}${refCode ? `?ref=${refCode}` : ''}`
+    const refCode = (user as any)?.personal_referral_code || ''
+    const link = `${baseUrl}/c/${contestantId}${refCode ? `?ref=${encodeURIComponent(refCode)}` : ''}`
     setShareLink(link)
     setShowShareDialog(true)
+
+    try {
+      await sharesService.shareContestant(
+        Number(contestantId),
+        link,
+        undefined,
+        user?.id,
+        refCode || undefined
+      )
+    } catch (error) {
+      console.error('Error recording share:', error)
+    }
   }
 
   useEffect(() => {
@@ -632,6 +644,7 @@ function ContestantDetailContent() {
                 isFollowLoading={isFollowLoading}
                 onFollowToggle={handleFollowToggle}
                 onMessage={handleMessage}
+                onShare={handleShare}
               />
             </div>
 

@@ -389,11 +389,9 @@ export function ContestantCard({
   }
 
   const handleShare = async () => {
-    // Construire le lien de partage avec l'id du contestant
     const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
-    const shareUrl = new URL(`${baseUrl}/dashboard/contests/${contestId}/contestant/${id}`)
+    const shareUrl = new URL(`${baseUrl}/c/${id}`)
 
-    // Ajouter uniquement le referral code (pas de fallback sur l'ID utilisateur)
     const referralCode = user?.personal_referral_code
     if (referralCode) {
       shareUrl.searchParams.set('ref', referralCode)

@@ -37,6 +37,50 @@ router = APIRouter()
 
 # ============ POSTS ============
 
+def _serialize_post(
+    db: Session,
+    post: Post,
+    user_id: Optional[int] = None,
+    view_count_override: Optional[int] = None
+) -> dict:
+    post_dict = {
+        "id": post.id,
+        "author_id": post.author_id,
+        "content": post.content,
+        "post_type": post.post_type,
+        "visibility": post.visibility,
+        "group_id": post.group_id,
+        "like_count": post.like_count,
+        "comment_count": post.comment_count,
+        "share_count": post.share_count,
+        "view_count": view_count_override if view_count_override is not None else post.view_count,
+        "is_pinned": post.is_pinned,
+        "is_archived": post.is_archived,
+        "created_at": post.created_at,
+        "updated_at": post.updated_at,
+        "author": {
+            "id": post.author.id,
+            "username": post.author.username,
+            "avatar_url": post.author.avatar_url
+        } if post.author else None,
+        "media": [
+            {
+                "id": pm.id,
+                "media_id": pm.media_id,
+                "order": pm.order,
+                "url": pm.media.url if pm.media else None
+            } for pm in post.media
+        ],
+        "user_reaction": None
+    }
+
+    if user_id:
+        reaction = crud_post_reaction.get(db, post.id, user_id)
+        if reaction:
+            post_dict["user_reaction"] = reaction.reaction_type
+
+    return post_dict
+
 @router.post("/posts", response_model=PostResponse, status_code=status.HTTP_201_CREATED)
 def create_post(
     *,
@@ -61,36 +105,7 @@ def create_post(
     
     background_tasks.add_task(notify_post)
 
-    return {
-        "id": post.id,
-        "author_id": post.author_id,
-        "content": post.content,
-        "post_type": post.post_type,
-        "visibility": post.visibility,
-        "group_id": post.group_id,
-        "like_count": post.like_count,
-        "comment_count": post.comment_count,
-        "share_count": post.share_count,
-        "view_count": post.view_count,
-        "is_pinned": post.is_pinned,
-        "is_archived": post.is_archived,
-        "created_at": post.created_at,
-        "updated_at": post.updated_at,
-        "author": {
-            "id": post.author.id,
-            "username": post.author.username,
-            "avatar_url": post.author.avatar_url
-        } if post.author else None,
-        "media": [
-            {
-                "id": pm.id,
-                "media_id": pm.media_id,
-                "order": pm.order,
-                "url": pm.media.url if pm.media else None
-            } for pm in post.media
-        ],
-        "user_reaction": None
-    }
+    return _serialize_post(db, post, current_user.id)
 
 
 @router.get("/posts", response_model=PostListResponse)
@@ -117,44 +132,7 @@ def get_posts(
     # Enrichir avec les données utilisateur
     result_posts = []
     for post in posts:
-        post_dict = {
-            "id": post.id,
-            "author_id": post.author_id,
-            "content": post.content,
-            "post_type": post.post_type,
-            "visibility": post.visibility,
-            "group_id": post.group_id,
-            "like_count": post.like_count,
-            "comment_count": post.comment_count,
-            "share_count": post.share_count,
-            "view_count": post.view_count,
-            "is_pinned": post.is_pinned,
-            "is_archived": post.is_archived,
-            "created_at": post.created_at,
-            "updated_at": post.updated_at,
-            "author": {
-                "id": post.author.id,
-                "username": post.author.username,
-                "avatar_url": post.author.avatar_url
-            } if post.author else None,
-            "media": [
-                {
-                    "id": pm.id,
-                    "media_id": pm.media_id,
-                    "order": pm.order,
-                    "url": pm.media.url if pm.media else None
-                } for pm in post.media
-            ],
-            "user_reaction": None
-        }
-        
-        # Ajouter la réaction de l'utilisateur si connecté
-        if user_id:
-            reaction = crud_post_reaction.get(db, post.id, user_id)
-            if reaction:
-                post_dict["user_reaction"] = reaction.reaction_type
-        
-        result_posts.append(post_dict)
+        result_posts.append(_serialize_post(db, post, user_id))
     
     return {
         "posts": result_posts,
@@ -185,43 +163,7 @@ def get_post(
     # Incrémenter le compteur de vues
     crud_post.increment_view_count(db, post_id)
     
-    post_dict = {
-        "id": post.id,
-        "author_id": post.author_id,
-        "content": post.content,
-        "post_type": post.post_type,
-        "visibility": post.visibility,
-        "group_id": post.group_id,
-        "like_count": post.like_count,
-        "comment_count": post.comment_count,
-        "share_count": post.share_count,
-        "view_count": post.view_count + 1,
-        "is_pinned": post.is_pinned,
-        "is_archived": post.is_archived,
-        "created_at": post.created_at,
-        "updated_at": post.updated_at,
-        "author": {
-            "id": post.author.id,
-            "username": post.author.username,
-            "avatar_url": post.author.avatar_url
-        } if post.author else None,
-        "media": [
-            {
-                "id": pm.id,
-                "media_id": pm.media_id,
-                "order": pm.order,
-                "url": pm.media.url if pm.media else None
-            } for pm in post.media
-        ],
-        "user_reaction": None
-    }
-    
-    if user_id:
-        reaction = crud_post_reaction.get(db, post.id, user_id)
-        if reaction:
-            post_dict["user_reaction"] = reaction.reaction_type
-    
-    return post_dict
+    return _serialize_post(db, post, user_id, view_count_override=post.view_count + 1)
 
 
 @router.put("/posts/{post_id}", response_model=PostResponse)
@@ -247,7 +189,8 @@ def update_post(
             detail="Vous n'êtes pas autorisé à modifier ce post"
         )
     
-    return crud_post.update(db, db_obj=post, obj_in=post_in)
+    updated_post = crud_post.update(db, db_obj=post, obj_in=post_in)
+    return _serialize_post(db, updated_post, current_user.id)
 
 
 @router.delete("/posts/{post_id}", status_code=status.HTTP_204_NO_CONTENT)
