@@ -46,7 +46,12 @@ export default function PublicContestantPage() {
 
     // Si l'utilisateur est connecté, rediriger vers la page dashboard
     if (isAuthenticated && user) {
-      router.push(`/dashboard/contestants/${contestantId}`)
+      const contestId = contestant?.contest_id
+      if (contestId) {
+        router.push(`/dashboard/contests/${contestId}/contestant/${contestantId}`)
+      } else {
+        router.push(`/dashboard/contestants/${contestantId}`)
+      }
       return
     }
 
@@ -58,7 +63,7 @@ export default function PublicContestantPage() {
         router.push('/register')
       }
     }
-  }, [isAuthenticated, isLoading, user, router, contestantId, refCode, loading])
+  }, [isAuthenticated, isLoading, user, router, contestantId, refCode, loading, contestant])
 
   // Afficher un loader pendant le traitement
   if (loading || isLoading) {
