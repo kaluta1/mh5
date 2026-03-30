@@ -890,12 +890,12 @@ export function PaymentDialog({
                       {text('payment.reown_connect_title', 'Connect your wallet')}
                     </p>
                     <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      {text('payment.reown_connect_desc', 'Reown will open a wallet selector so the user can choose MetaMask, Trust Wallet, OKX Wallet, WalletConnect, or another supported wallet.')}
+                      {text('payment.reown_connect_desc', 'Use one button to connect your wallet. On desktop, your browser wallet extension opens directly. On mobile, Reown opens a wallet selector so you can choose your wallet app.')}
                     </p>
                     <div className="mt-3 space-y-2 text-xs text-gray-600 dark:text-gray-300">
                       <p>{text('payment.reown_step_1', '1. Tap the connect wallet button below.')}</p>
-                      <p>{text('payment.reown_step_2', '2. Choose your wallet in the Reown popup.')}</p>
-                      <p>{text('payment.reown_step_3', '3. Approve the connection inside your wallet app to continue.')}</p>
+                      <p>{text('payment.reown_step_2', '2. On desktop, approve in your browser wallet. On mobile, choose your wallet in the Reown popup.')}</p>
+                      <p>{text('payment.reown_step_3', '3. Confirm the connection inside your wallet app or extension to continue.')}</p>
                     </div>
                   </div>
                 </div>

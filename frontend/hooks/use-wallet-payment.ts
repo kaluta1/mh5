@@ -3,7 +3,7 @@
  */
 import { useState, useCallback } from 'react'
 import { BrowserProvider, Contract, parseUnits } from 'ethers'
-import { initReownProvider, getReownProvider } from '@/lib/wallet'
+import { initReownProvider, getReownProvider, resetReownProvider } from '@/lib/wallet'
 import { PAYMENT_CONTRACT_ABI, ERC20_ABI, CONTRACT_ADDRESSES, NETWORK_CONFIG } from '@/lib/contracts'
 import { CONTRACTS } from '@/lib/config'
 import { paymentService, PaymentResponse } from '@/services/payment-service'
@@ -65,8 +65,25 @@ export function useWalletPayment(): UseWalletPaymentReturn {
     setError(null)
 
     try {
-      const reownProvider = await initReownProvider()
-      await reownProvider.enable()
+      let reownProvider = await initReownProvider()
+
+      try {
+        await reownProvider.enable()
+      } catch (initialError: any) {
+        const message = String(initialError?.message || '')
+        const shouldResetSession =
+          message.includes('Connection request reset') ||
+          message.includes('No matching key') ||
+          message.includes('session')
+
+        if (!shouldResetSession) {
+          throw initialError
+        }
+
+        await resetReownProvider()
+        reownProvider = await initReownProvider()
+        await reownProvider.enable()
+      }
 
       const accounts = reownProvider.accounts
       if (accounts.length > 0) {
@@ -86,8 +103,12 @@ export function useWalletPayment(): UseWalletPaymentReturn {
   }, [])
 
   const connectWallet = useCallback(async (): Promise<string> => {
+    if (typeof window !== 'undefined' && window.ethereum) {
+      return connectInjectedWallet()
+    }
+
     return connectWalletConnect()
-  }, [connectWalletConnect])
+  }, [connectInjectedWallet, connectWalletConnect])
 
   const switchToBSC = useCallback(async (): Promise<void> => {
     if (typeof window === 'undefined' || !window.ethereum) {
@@ -129,6 +150,39 @@ export function useWalletPayment(): UseWalletPaymentReturn {
   }, [])
 
   const switchToBSCNetwork = async (provider: BrowserProvider): Promise<void> => {
+    const reownProvider = getReownProvider()
+
+    if (reownProvider) {
+      try {
+        await reownProvider.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: `0x${CONTRACTS.CHAIN_ID.toString(16)}` }],
+        })
+        return
+      } catch (switchError: any) {
+        if (switchError?.code === 4902) {
+          await reownProvider.request({
+            method: 'wallet_addEthereumChain',
+            params: [
+              {
+                chainId: `0x${CONTRACTS.CHAIN_ID.toString(16)}`,
+                chainName: 'BNB Smart Chain',
+                nativeCurrency: {
+                  name: 'BNB',
+                  symbol: 'BNB',
+                  decimals: 18,
+                },
+                rpcUrls: [CONTRACTS.RPC_URL],
+                blockExplorerUrls: [CONTRACTS.EXPLORER_URL],
+              },
+            ],
+          })
+        } else {
+          throw switchError
+        }
+      }
+    }
+
     if (typeof window === 'undefined' || !window.ethereum) {
       return
     }

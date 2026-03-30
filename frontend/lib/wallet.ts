@@ -40,3 +40,17 @@ export const initReownProvider = async (): Promise<InstanceType<typeof EthereumP
 export const getReownProvider = (): InstanceType<typeof EthereumProvider> | null => {
   return walletConnectProvider
 }
+
+export const resetReownProvider = async (): Promise<void> => {
+  if (!walletConnectProvider) {
+    return
+  }
+
+  try {
+    await walletConnectProvider.disconnect()
+  } catch {
+    // Ignore disconnect errors from stale sessions.
+  } finally {
+    walletConnectProvider = null
+  }
+}
