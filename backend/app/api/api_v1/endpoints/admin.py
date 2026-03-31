@@ -3421,8 +3421,6 @@ class TransactionEnriched(BaseModel):
     tx_hash: Optional[str] = None
     validated_at: Optional[str] = None
     validated_by: Optional[int] = None
-    ledger_entry_count: int = 0
-    ledger_entries: List[Dict[str, Any]] = []
 
 
 @router.get("/transactions", response_model=List[TransactionEnriched])
@@ -3445,14 +3443,9 @@ async def get_all_transactions(
         from sqlalchemy import or_, func
         from app.models.payment import Deposit, DepositStatus, ProductType
         from app.models.transaction import UserTransaction, TransactionType, TransactionStatus
-        from app.services.accounting_posting import accounting_posting_service
-
-        sync_result = accounting_posting_service.sync_operational_sources(db)
-        if sync_result.seeded_accounts or sync_result.created_entries:
-            db.commit()
-
+        
         all_transactions = []
-
+        
         # Récupérer les dépôts
         deposits_query = db.query(Deposit).options(
             joinedload(Deposit.user),
@@ -3484,17 +3477,10 @@ async def get_all_transactions(
                         func.lower(UserModel.username).like(search_term)
                     )
                 )
-
-            deposits = deposits_query.order_by(Deposit.created_at.desc()).all()
-
-            deposit_reconciliation = accounting_posting_service.build_reconciliation_map(
-                db,
-                "deposit",
-                [str(deposit.id) for deposit in deposits],
-            )
-
+            
+            deposits = deposits_query.order_by(Deposit.created_at.desc()).offset(skip).limit(limit).all()
+            
             for deposit in deposits:
-                linked_entries = deposit_reconciliation.get(str(deposit.id), [])
                 all_transactions.append({
                     "id": deposit.id,
                     "type": "deposit",
@@ -3519,20 +3505,7 @@ async def get_all_transactions(
                     "external_payment_id": deposit.external_payment_id,
                     "tx_hash": deposit.tx_hash,
                     "validated_at": deposit.validated_at.isoformat() if deposit.validated_at else None,
-                    "validated_by": deposit.validated_by,
-                    "ledger_entry_count": len(linked_entries),
-                    "ledger_entries": [
-                        {
-                            "id": entry.id,
-                            "entry_number": entry.entry_number,
-                            "event_type": entry.event_type,
-                            "entry_date": entry.entry_date.isoformat() if entry.entry_date else None,
-                            "status": entry.status.value if entry.status else None,
-                            "total_debit": float(entry.total_debit or 0),
-                            "total_credit": float(entry.total_credit or 0),
-                        }
-                        for entry in linked_entries
-                    ],
+                    "validated_by": deposit.validated_by
                 })
         
         # Récupérer les transactions utilisateur (retraits, frais d'entrée, etc.)
@@ -3573,16 +3546,9 @@ async def get_all_transactions(
                 )
             )
         
-        transactions = transactions_query.order_by(UserTransaction.created_at.desc()).all()
-
-        transaction_reconciliation = accounting_posting_service.build_reconciliation_map(
-            db,
-            "transaction",
-            [str(transaction.id) for transaction in transactions],
-        )
-
+        transactions = transactions_query.order_by(UserTransaction.created_at.desc()).offset(skip).limit(limit).all()
+        
         for transaction in transactions:
-            linked_entries = transaction_reconciliation.get(str(transaction.id), [])
             all_transactions.append({
                 "id": transaction.id,
                 "type": transaction.transaction_type.value,
@@ -3610,20 +3576,7 @@ async def get_all_transactions(
                 "external_payment_id": transaction.payment_reference,
                 "tx_hash": None,
                 "validated_at": None,
-                "validated_by": None,
-                "ledger_entry_count": len(linked_entries),
-                "ledger_entries": [
-                    {
-                        "id": entry.id,
-                        "entry_number": entry.entry_number,
-                        "event_type": entry.event_type,
-                        "entry_date": entry.entry_date.isoformat() if entry.entry_date else None,
-                        "status": entry.status.value if entry.status else None,
-                        "total_debit": float(entry.total_debit or 0),
-                        "total_credit": float(entry.total_credit or 0),
-                    }
-                    for entry in linked_entries
-                ],
+                "validated_by": None
             })
         
         # Trier toutes les transactions par date de création (plus récentes en premier)

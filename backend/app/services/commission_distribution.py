@@ -15,7 +15,7 @@ import logging
 
 from app.models.user import User
 from app.models.affiliate import AffiliateCommission, CommissionType, CommissionStatus
-from app.models.payment import Deposit, DepositStatus, ProductType
+from app.models.payment import Deposit, ProductType
 from app.services.email import email_service
 from app.services.accounting_integration import record_payment_in_accounting
 
@@ -176,10 +176,6 @@ def process_payment_validation(db: Session, deposit: Deposit) -> bool:
         True si le traitement a réussi
     """
     try:
-        if deposit.status != DepositStatus.VALIDATED:
-            deposit.status = DepositStatus.VALIDATED
-            deposit.validated_at = deposit.validated_at or datetime.utcnow()
-
         # Récupérer le type de produit
         product_type = db.query(ProductType).filter(
             ProductType.id == deposit.product_type_id
@@ -213,13 +209,8 @@ def process_payment_validation(db: Session, deposit: Deposit) -> bool:
                     )
                     logger.info(f"Annual membership renewed for user {user.id}")
             
-        accounting_entry = record_payment_in_accounting(db, deposit, commissions)
-        if accounting_entry is None:
-            logger.warning("Accounting entry was not created for deposit %s", deposit.id)
-
-        db.commit()
-
-        if user:
+            db.commit()
+            
             # Envoyer l'email de confirmation de paiement
             try:
                 user_lang = getattr(user, 'preferred_language', 'fr') or 'fr'

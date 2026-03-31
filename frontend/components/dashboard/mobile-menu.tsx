@@ -23,7 +23,6 @@ import {
   Award,
   LayoutDashboard,
   Calendar,
-  Banknote,
   Zap,
   Flag,
   Tag,
@@ -97,19 +96,13 @@ const adminMenuSections = [
     ]
   },
   {
-    title: "Finance",
-    items: [
-      { name: "admin.nav.accounting", href: "/dashboard/admin/accounting", icon: Banknote },
-      { name: "admin.nav.transactions", href: "/dashboard/admin/transactions", icon: CreditCard },
-    ]
-  },
-  {
     title: "admin.nav.configuration",
   items: [
       { name: "admin.nav.categories", href: "/dashboard/admin/categories", icon: Tag },
       { name: "admin.nav.commission_settings", href: "/dashboard/admin/commission-settings", icon: Percent },
       { name: "admin.nav.microservices", href: "/dashboard/admin/microservices", icon: Server },
       { name: "admin.nav.suggested_contests", href: "/dashboard/admin/suggested-contests", icon: Lightbulb },
+      { name: "admin.nav.transactions", href: "/dashboard/admin/transactions", icon: CreditCard },
   ]
   },
 ]

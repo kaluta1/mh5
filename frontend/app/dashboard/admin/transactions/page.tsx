@@ -47,16 +47,6 @@ interface Transaction {
   tx_hash: string | null
   validated_at: string | null
   validated_by: number | null
-  ledger_entry_count: number
-  ledger_entries: Array<{
-    id: number
-    entry_number: string
-    event_type: string | null
-    entry_date: string | null
-    status: string | null
-    total_debit: number
-    total_credit: number
-  }>
 }
 
 export default function TransactionsPage() {
@@ -338,7 +328,7 @@ export default function TransactionsPage() {
       ) : (
         <div className="space-y-4">
           {filteredTransactions.map((transaction) => (
-            <Card key={`${transaction.type}-${transaction.id}`} className="hover:shadow-lg transition-shadow">
+            <Card key={transaction.id} className="hover:shadow-lg transition-shadow">
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
@@ -425,12 +415,6 @@ export default function TransactionsPage() {
                         <span>{t('admin.transactions.reference') || 'Réf.'}: {transaction.reference}</span>
                       </div>
                     )}
-                    <div className="flex items-center gap-1">
-                      <FileText className="h-3 w-3" />
-                      <span>
-                        {t('admin.transactions.ledger_links') || 'Ledger links'}: {transaction.ledger_entry_count || 0}
-                      </span>
-                    </div>
                   </div>
                 </div>
               </CardContent>
@@ -540,35 +524,6 @@ export default function TransactionsPage() {
                     <h4 className="font-semibold mb-2">{t('admin.transactions.tx_hash') || 'Hash Transaction'}</h4>
                     <p className="text-sm font-mono break-all">{selectedTransaction.tx_hash}</p>
                   </div>
-                )}
-              </div>
-
-              <div>
-                <h4 className="font-semibold mb-2">{t('admin.transactions.ledger_links') || 'Ledger links'}</h4>
-                {selectedTransaction.ledger_entries?.length ? (
-                  <div className="space-y-2">
-                    {selectedTransaction.ledger_entries.map((entry) => (
-                      <div key={entry.id} className="rounded-lg bg-gray-50 p-3 dark:bg-gray-800">
-                        <div className="flex items-center justify-between gap-4">
-                          <div>
-                            <p className="font-mono text-sm">{entry.entry_number}</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">
-                              {entry.event_type || 'posted'}
-                              {entry.entry_date ? ` · ${new Date(entry.entry_date).toLocaleString('fr-FR')}` : ''}
-                            </p>
-                          </div>
-                          <Badge variant="outline">{entry.status || 'POSTED'}</Badge>
-                        </div>
-                        <p className="mt-2 text-xs text-gray-600 dark:text-gray-300">
-                          {formatAmount(entry.total_debit, selectedTransaction.currency)} / {formatAmount(entry.total_credit, selectedTransaction.currency)}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    {t('admin.transactions.no_ledger_links') || 'No ledger entry linked yet'}
-                  </p>
                 )}
               </div>
 
