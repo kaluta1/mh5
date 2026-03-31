@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
@@ -61,7 +61,6 @@ export default function ApplyToContestPage() {
   const [hasVoiceVerification, setHasVoiceVerification] = useState(false)
   const [hasBrandVerification, setHasBrandVerification] = useState(false)
   const [hasContentVerification, setHasContentVerification] = useState(false)
-  const [verificationsCompleted, setVerificationsCompleted] = useState(false)
   const [verificationStatusLoaded, setVerificationStatusLoaded] = useState(false)
   const [hasError, setHasError] = useState(false) // Prevent infinite retry loop
   const errorShownRef = useRef(false) // Track if error was already shown
@@ -231,26 +230,6 @@ export default function ApplyToContestPage() {
         setIsEditingParticipation(true)
       }
 
-      // 4. Verification Check
-      const needsVerification =
-        c.requires_kyc ||
-        c.requires_visual_verification ||
-        c.requires_voice_verification ||
-        c.requires_brand_verification ||
-        c.requires_content_verification
-
-      if (needsVerification && !isEditMode) {
-        const kycDone = !c.requires_kyc || user?.identity_verified
-        const visualDone = !c.requires_visual_verification || hasVisualVerification
-        const voiceDone = !c.requires_voice_verification || hasVoiceVerification
-        const brandDone = !c.requires_brand_verification || hasBrandVerification
-        const contentDone = !c.requires_content_verification || hasContentVerification
-
-        if (!kycDone || !visualDone || !voiceDone || !brandDone || !contentDone) {
-          setShowVerificationDialog(true)
-        }
-      }
-
       // Fetch round data if roundId provided in URL
       if (roundIdParam) {
         try {
@@ -300,6 +279,65 @@ export default function ApplyToContestPage() {
     }
     loadVerificationStatus()
   }, [user?.id, verificationStatusLoaded])
+
+  const contestRequiresVerification = useMemo(() => {
+    if (!contest) return false
+    return !!(
+      contest.requires_kyc ||
+      contest.requires_visual_verification ||
+      contest.requires_voice_verification ||
+      contest.requires_brand_verification ||
+      contest.requires_content_verification
+    )
+  }, [contest])
+
+  const allVerificationRequirementsMet = useMemo(() => {
+    if (!contest || !contestRequiresVerification) return true
+    const kycDone =
+      !contest.requires_kyc ||
+      !!(user?.identity_verified || (user as { is_verified?: boolean })?.is_verified)
+    const visualDone = !contest.requires_visual_verification || hasVisualVerification
+    const voiceDone = !contest.requires_voice_verification || hasVoiceVerification
+    const brandDone = !contest.requires_brand_verification || hasBrandVerification
+    const contentDone = !contest.requires_content_verification || hasContentVerification
+    return kycDone && visualDone && voiceDone && brandDone && contentDone
+  }, [
+    contest,
+    contestRequiresVerification,
+    user,
+    hasVisualVerification,
+    hasVoiceVerification,
+    hasBrandVerification,
+    hasContentVerification,
+  ])
+
+  const blockedByVerification =
+    !isEditingParticipation &&
+    contestRequiresVerification &&
+    verificationStatusLoaded &&
+    !allVerificationRequirementsMet
+
+  useEffect(() => {
+    if (pageLoading || !contest || isEditingParticipation) return
+    if (!contestRequiresVerification) {
+      setShowVerificationDialog(false)
+      return
+    }
+    if (!verificationStatusLoaded) return
+    setShowVerificationDialog(!allVerificationRequirementsMet)
+  }, [
+    pageLoading,
+    contest,
+    isEditingParticipation,
+    contestRequiresVerification,
+    verificationStatusLoaded,
+    allVerificationRequirementsMet,
+  ])
+
+  const handleVerificationDialogClose = () => {
+    setShowVerificationDialog(false)
+    router.push(contestId ? `/dashboard/contests/${contestId}` : '/dashboard/contests')
+  }
 
   // Calculer le temps restant jusqu'à la date limite de soumission du round
   useEffect(() => {
@@ -402,6 +440,20 @@ export default function ApplyToContestPage() {
     nominatorCity?: string,
     nominatorCountry?: string
   ) => {
+    if (
+      !isEditingParticipation &&
+      contest &&
+      contestRequiresVerification &&
+      !allVerificationRequirementsMet
+    ) {
+      addToast(
+        t('verification.incomplete_warning') ||
+          'Complétez toutes les vérifications requises avant de participer.',
+        'error'
+      )
+      return
+    }
+
     setIsSubmitting(true)
 
     try {
@@ -597,31 +649,47 @@ export default function ApplyToContestPage() {
 
               {/* Countdown is now integrated in the ParticipationForm stepper */}
 
-              {/* Participation Form - DISPLAYED FIRST */}
-              <ParticipationForm
-                contestId={contestId}
-                onSubmit={handleParticipationSubmit}
-                onCancel={handleCancel}
-                isSubmitting={isSubmitting}
-                isEditing={isEditingParticipation}
-                initialData={{
-                  ...existingParticipationData,
-                  // Set default nominator country to user's country for nominations
-                  nominatorCountry: existingParticipationData?.nominatorCountry || (isNomination && user?.country ? user.country : undefined)
-                }}
-                isNomination={isNomination}
-                mediaRequirements={{
-                  requiresVideo: isNomination ? true : contest?.requires_video,
-                  maxVideos: contest?.max_videos,
-                  videoMaxDuration: contest?.video_max_duration,
-                  videoMaxSizeMb: contest?.video_max_size_mb,
-                  minImages: isNomination ? 0 : contest?.min_images,
-                  maxImages: contest?.max_images
-                }}
-                roundData={roundData}
-                roundId={roundIdParam ? parseInt(roundIdParam, 10) : undefined}
-                contestantId={participantId ?? undefined}
-              />
+              {contestRequiresVerification && !isEditingParticipation && !verificationStatusLoaded && (
+                <div className="p-4 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/50 text-sm text-gray-600 dark:text-gray-300">
+                  {t('common.loading') || 'Chargement du statut de vérification...'}
+                </div>
+              )}
+
+              {blockedByVerification && (
+                <div className="p-4 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 text-sm text-amber-900 dark:text-amber-100">
+                  {t('verification.incomplete_warning') ||
+                    'Complétez toutes les vérifications dans la fenêtre pour accéder au formulaire.'}
+                </div>
+              )}
+
+              {/* Participation Form — hidden until verification requirements are satisfied */}
+              {!blockedByVerification &&
+                !(contestRequiresVerification && !isEditingParticipation && !verificationStatusLoaded) && (
+                <ParticipationForm
+                  contestId={contestId}
+                  onSubmit={handleParticipationSubmit}
+                  onCancel={handleCancel}
+                  isSubmitting={isSubmitting}
+                  isEditing={isEditingParticipation}
+                  initialData={{
+                    ...existingParticipationData,
+                    // Set default nominator country to user's country for nominations
+                    nominatorCountry: existingParticipationData?.nominatorCountry || (isNomination && user?.country ? user.country : undefined)
+                  }}
+                  isNomination={isNomination}
+                  mediaRequirements={{
+                    requiresVideo: isNomination ? true : contest?.requires_video,
+                    maxVideos: contest?.max_videos,
+                    videoMaxDuration: contest?.video_max_duration,
+                    videoMaxSizeMb: contest?.video_max_size_mb,
+                    minImages: isNomination ? 0 : contest?.min_images,
+                    maxImages: contest?.max_images
+                  }}
+                  roundData={roundData}
+                  roundId={roundIdParam ? parseInt(roundIdParam, 10) : undefined}
+                  contestantId={participantId ?? undefined}
+                />
+              )}
 
               {/* Profile Setup Alert - DISPLAYED AFTER FORM */}
               {needsProfileSetup && (
@@ -704,7 +772,7 @@ export default function ApplyToContestPage() {
         <>
           <VerificationRequirementsDialog
             isOpen={showVerificationDialog}
-            onClose={() => setShowVerificationDialog(false)}
+            onClose={handleVerificationDialogClose}
             contestName={contest.name}
             requirements={{
               requiresKyc: contest.requires_kyc,
@@ -715,7 +783,7 @@ export default function ApplyToContestPage() {
               requiresVideo: contest.requires_video
             }}
             userVerifications={{
-              isKycVerified: user?.identity_verified || false,
+              isKycVerified: !!(user?.identity_verified || (user as { is_verified?: boolean })?.is_verified),
               hasVisualVerification,
               hasVoiceVerification,
               hasBrandVerification,
@@ -737,7 +805,6 @@ export default function ApplyToContestPage() {
             }}
             onProceed={() => {
               setShowVerificationDialog(false)
-              setVerificationsCompleted(true)
             }}
           />
 

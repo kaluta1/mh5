@@ -355,6 +355,33 @@ class CRUDContestant:
                         # Pour "global" ou niveau inconnu, geo_ok reste True
                     
                     can_vote = geo_ok
+
+                    # Fenêtre de vote du round (incl. grâce de soumission : pas de vote tant qu'elle n'est pas finie)
+                    if can_vote:
+                        from app.services.contest_status import contest_status_service
+                        from app.models.round import Round as RoundForVote
+
+                        if contestant.round_id:
+                            cr = (
+                                db.query(RoundForVote)
+                                .filter(RoundForVote.id == contestant.round_id)
+                                .first()
+                            )
+                            if cr:
+                                now_vote = contest_status_service._utc_now()
+                                if not contest_status_service.round_voting_open_at(cr, now_vote):
+                                    can_vote = False
+                                    vote_restriction_reason = "voting_not_open"
+                            else:
+                                can_vote = False
+                                vote_restriction_reason = "voting_not_open"
+                        elif contest_id:
+                            allowed_vote, _ = contest_status_service.check_voting_allowed(
+                                db, contest_id
+                            )
+                            if not allowed_vote:
+                                can_vote = False
+                                vote_restriction_reason = "voting_not_open"
                     
                     # S'assurer que vote_restriction_reason est défini si can_vote est False
                     if not can_vote and not vote_restriction_reason:

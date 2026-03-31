@@ -3,7 +3,7 @@ Service pour gérer l'état des contests (submission/voting open/closed)
 """
 import asyncio
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta
 from sqlalchemy.orm import Session
 from app.db.session import SessionLocal
 from app.models.contest import Contest
@@ -13,7 +13,54 @@ logger = logging.getLogger(__name__)
 
 class ContestStatusService:
     """Service pour gérer l'état des contests"""
-    
+
+    # Extra hours after the last submission calendar day (23:59:59) to accept nominations.
+    SUBMISSION_GRACE_HOURS = 5
+
+    @staticmethod
+    def _utc_now() -> datetime:
+        return datetime.utcnow()
+
+    @staticmethod
+    def extended_submission_deadline(submission_end_day: date) -> datetime:
+        """End of submission day + SUBMISSION_GRACE_HOURS (UTC)."""
+        end_of_day = datetime.combine(submission_end_day, time(23, 59, 59))
+        return end_of_day + timedelta(hours=ContestStatusService.SUBMISSION_GRACE_HOURS)
+
+    @staticmethod
+    def round_submission_open_at(round_obj, when: datetime) -> bool:
+        """True if nominations/submissions are allowed for this round at ``when`` (includes grace)."""
+        if not round_obj.submission_start_date or not round_obj.submission_end_date:
+            return False
+        start = datetime.combine(round_obj.submission_start_date, time.min)
+        end = ContestStatusService.extended_submission_deadline(round_obj.submission_end_date)
+        return start <= when <= end
+
+    @staticmethod
+    def round_in_submission_grace(round_obj, when: datetime) -> bool:
+        """True between end of submission calendar day and extended deadline (voting stays closed)."""
+        if not round_obj.submission_end_date:
+            return False
+        end_of_cal_day = datetime.combine(round_obj.submission_end_date, time(23, 59, 59))
+        ext = ContestStatusService.extended_submission_deadline(round_obj.submission_end_date)
+        return end_of_cal_day < when <= ext
+
+    @staticmethod
+    def round_voting_open_at(round_obj, when: datetime) -> bool:
+        """
+        Voting allowed only after the extended submission window has fully ended,
+        and while within the round voting date range (inclusive by calendar day).
+        """
+        if not round_obj.voting_start_date or not round_obj.voting_end_date:
+            return False
+        if round_obj.submission_end_date:
+            ext = ContestStatusService.extended_submission_deadline(round_obj.submission_end_date)
+            if when <= ext:
+                return False
+        vs = datetime.combine(round_obj.voting_start_date, time.min)
+        ve = datetime.combine(round_obj.voting_end_date, time(23, 59, 59))
+        return vs <= when <= ve
+
     @staticmethod
     def update_contest_statuses(db: Session) -> dict:
         """
@@ -28,7 +75,7 @@ class ContestStatusService:
         """
         from app.models.round import Round, RoundStatus, round_contests
         
-        today = date.today()
+        now = ContestStatusService._utc_now()
         updated_count = 0
         results = []
         
@@ -55,15 +102,13 @@ class ContestStatusService:
             is_voting_open = False
             
             for round_obj in active_rounds:
-                # Vérifier soumission
-                if round_obj.submission_start_date and round_obj.submission_end_date:
-                    if round_obj.submission_start_date <= today <= round_obj.submission_end_date:
-                        is_submission_open = True
+                # Vérifier soumission (inclut la fenêtre de grâce après la fin calendaire)
+                if ContestStatusService.round_submission_open_at(round_obj, now):
+                    is_submission_open = True
                 
-                # Vérifier vote
-                if round_obj.voting_start_date and round_obj.voting_end_date:
-                    if round_obj.voting_start_date <= today <= round_obj.voting_end_date:
-                        is_voting_open = True
+                # Vérifier vote (fermé pendant la grâce de soumission)
+                if ContestStatusService.round_voting_open_at(round_obj, now):
+                    is_voting_open = True
                 
                 # Si les deux sont ouverts, on peut arrêter de chercher (optimisation)
                 if is_submission_open and is_voting_open:
@@ -117,28 +162,30 @@ class ContestStatusService:
         if not contest.is_active:
             return False, "This contest is not active"
             
-        # Check submission deadline instead of rounds
-        today = date.today()
+        now = ContestStatusService._utc_now()
         
-        # Check if contest has a submission_end_date and if it has passed
+        # Check if contest has a submission_end_date (with grace hours after last day)
         if contest.submission_end_date:
-            if today > contest.submission_end_date:
-                return False, f"Submissions closed. Deadline was {contest.submission_end_date}"
-            # If deadline hasn't passed, allow submission
+            if contest.submission_start_date:
+                start_dt = datetime.combine(contest.submission_start_date, time.min)
+                if now < start_dt:
+                    return False, "Submissions are not open yet for this contest."
+            ext = ContestStatusService.extended_submission_deadline(contest.submission_end_date)
+            if now > ext:
+                return False, f"Submissions closed. Extended deadline was {ext.date()} (includes {ContestStatusService.SUBMISSION_GRACE_HOURS}h grace)."
             return True, ""
         
         # If no submission_end_date, check for active rounds as fallback via round_contests
-        active_submission_round = db.query(Round).join(
+        candidate_rounds = db.query(Round).join(
             round_contests, round_contests.c.round_id == Round.id
         ).filter(
             round_contests.c.contest_id == contest_id,
             Round.status != RoundStatus.CANCELLED,
-            Round.submission_start_date <= today,
-            Round.submission_end_date >= today
-        ).first()
+        ).all()
         
-        if active_submission_round:
-            return True, ""
+        for r in candidate_rounds:
+            if ContestStatusService.round_submission_open_at(r, now):
+                return True, ""
             
         # If no rounds and no deadline, allow submission (default behavior)
         return True, ""
@@ -168,21 +215,20 @@ class ContestStatusService:
         if not contest.is_active:
             return False, "This contest is not active"
         
-        # Vérifier si un round permet le vote aujourd'hui via round_contests (N:N)
+        now = ContestStatusService._utc_now()
         today = date.today()
-        
-        active_voting_round = db.query(Round).join(
+
+        rounds = db.query(Round).join(
             round_contests, round_contests.c.round_id == Round.id
         ).filter(
             round_contests.c.contest_id == contest_id,
             Round.status != RoundStatus.CANCELLED,
-            Round.voting_start_date <= today,
-            Round.voting_end_date >= today
-        ).first()
-        
-        if active_voting_round:
-            return True, ""
-            
+        ).all()
+
+        for r in rounds:
+            if ContestStatusService.round_voting_open_at(r, now):
+                return True, ""
+
         # Message utile si pas de vote — chercher le prochain round de vote
         next_voting_round = db.query(Round).join(
             round_contests, round_contests.c.round_id == Round.id
@@ -195,19 +241,24 @@ class ContestStatusService:
         if next_voting_round:
             return False, f"Voting for the next round ({next_voting_round.name}) will start on {next_voting_round.voting_start_date}"
         
-        # Vérifier si on est en phase de soumission (round actif mais pas encore en vote)
-        active_submission_round = db.query(Round).join(
-            round_contests, round_contests.c.round_id == Round.id
-        ).filter(
-            round_contests.c.contest_id == contest_id,
-            Round.status != RoundStatus.CANCELLED,
-            Round.submission_start_date <= today,
-            Round.submission_end_date >= today
-        ).first()
-        
-        if active_submission_round:
-            return False, f"Submission phase is active for {active_submission_round.name}. Voting will start on {active_submission_round.voting_start_date}"
-            
+        # Grace extension: nominations still open, voting not yet
+        for r in rounds:
+            if ContestStatusService.round_in_submission_grace(r, now):
+                ext = ContestStatusService.extended_submission_deadline(r.submission_end_date)
+                return False, (
+                    f"Nomination period extended for {r.name}. Voting opens after {ext.isoformat()} UTC."
+                )
+
+        # Calendar submission phase (no grace yet) or generic message
+        for r in rounds:
+            if r.submission_start_date and r.submission_end_date:
+                sd, ed = r.submission_start_date, r.submission_end_date
+                if sd <= today <= ed:
+                    return False, (
+                        f"Submission phase is active for {r.name}. "
+                        f"Voting starts after the nomination window and {ContestStatusService.SUBMISSION_GRACE_HOURS}h grace."
+                    )
+
         return False, "Voting is not open for any round at this time"
 
 

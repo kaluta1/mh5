@@ -86,6 +86,8 @@ export function ContestantInfoSidebar({
           return t('dashboard.contests.restriction_geographic') || 'Geographic restriction'
         case 'user_not_found':
           return t('dashboard.contests.restriction_user_not_found') || 'User not found'
+        case 'voting_not_open':
+          return t('dashboard.contests.voting_not_open') || 'Voting not open'
         default:
           return t('dashboard.contests.cannot_vote') || 'Cannot vote'
       }
@@ -117,6 +119,8 @@ export function ContestantInfoSidebar({
           return t('dashboard.contests.restriction_geographic_desc') || 'You cannot vote due to geographic restrictions'
         case 'user_not_found':
           return t('dashboard.contests.restriction_user_not_found_desc') || 'User not found'
+        case 'voting_not_open':
+          return t('dashboard.contests.voting_not_open') || 'Voting is not open for this contest yet.'
         default:
           return t('dashboard.contests.cannot_vote') || 'Cannot vote'
       }

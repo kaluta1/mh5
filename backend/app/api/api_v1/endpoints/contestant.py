@@ -1308,6 +1308,18 @@ def create_contestant(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="You already have a submission for this round of the contest"
         )
+
+    from app.services.contest_entry_eligibility import raise_if_user_missing_contest_entry_requirements
+    from app.models.contest import Contest as ContestModelForEligibility
+
+    eligibility_contest = contest
+    if eligibility_contest is None and real_contest_id:
+        eligibility_contest = db.query(ContestModelForEligibility).filter(
+            ContestModelForEligibility.id == real_contest_id,
+            ContestModelForEligibility.is_deleted == False,
+        ).first()
+    if eligibility_contest:
+        raise_if_user_missing_contest_entry_requirements(db, current_user, eligibility_contest)
     
     # ============================================
     # MODÉRATION DU CONTENU AVANT CRÉATION
@@ -1707,6 +1719,27 @@ def update_contestant(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You can only update your own submission"
         )
+
+    from app.services.contest_entry_eligibility import raise_if_user_missing_contest_entry_requirements
+    from app.models.contest import Contest as MyfavContestForEligibility
+    from app.models.contests import ContestSeasonLink as CSLForEligibility
+
+    entry_contest = db.query(MyfavContestForEligibility).filter(
+        MyfavContestForEligibility.id == contestant.season_id,
+        MyfavContestForEligibility.is_deleted == False,
+    ).first()
+    if not entry_contest:
+        _link = db.query(CSLForEligibility).filter(
+            CSLForEligibility.season_id == contestant.season_id,
+            CSLForEligibility.is_active == True,
+        ).first()
+        if _link:
+            entry_contest = db.query(MyfavContestForEligibility).filter(
+                MyfavContestForEligibility.id == _link.contest_id,
+                MyfavContestForEligibility.is_deleted == False,
+            ).first()
+    if entry_contest:
+        raise_if_user_missing_contest_entry_requirements(db, current_user, entry_contest)
     
     # ============================================
     # MODÉRATION DU CONTENU AVANT MISE À JOUR

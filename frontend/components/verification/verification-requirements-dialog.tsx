@@ -229,7 +229,7 @@ export function VerificationRequirementsDialog({
         {/* Actions */}
         <div className="flex gap-3">
           <Button variant="outline" onClick={onClose} className="flex-1">
-            {t('common.cancel') || 'Annuler'}
+            {t('verification.leave_without_participating') || t('common.cancel') || 'Retour'}
           </Button>
           <Button 
             onClick={onProceed}
