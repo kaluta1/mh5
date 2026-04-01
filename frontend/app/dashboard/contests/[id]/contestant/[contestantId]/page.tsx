@@ -20,8 +20,19 @@ import { ContestantMobileActions } from '@/components/dashboard/contestant-mobil
 import { ContestantMobileInfoDialog } from '@/components/dashboard/contestant-mobile-info-dialog'
 import { ToastNotification } from '@/components/dashboard/toast-notification'
 import { ShareDialog } from '@/components/dashboard/share-dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Info } from 'lucide-react'
 import api from '@/lib/api'
+import { contestService } from '@/services/contest-service'
 import { commentsService, Comment as ServiceComment } from '@/lib/services/comments-service'
 import { reactionsService, ReactionDetails } from '@/services/reactions-service'
 import { followService } from '@/services/follow-service'
@@ -113,6 +124,12 @@ function ContestantDetailContent() {
   const [hoverTimeout, setHoverTimeout] = useState<NodeJS.Timeout | null>(null)
   const [showShareDialog, setShowShareDialog] = useState(false)
   const [shareLink, setShareLink] = useState('')
+  const [showReplaceDialog, setShowReplaceDialog] = useState(false)
+  const [replacedContestant, setReplacedContestant] = useState<{
+    id: number
+    name: string
+    position: number
+  } | null>(null)
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -355,39 +372,55 @@ function ContestantDetailContent() {
     }
   }
 
+  const reloadContestantAfterVote = async () => {
+    const updatedResponse = await api.get(`/api/v1/contestants/${contestantId}`)
+    const data = updatedResponse.data
+    setContestant(data)
+
+    if (user?.id === data.user_id) {
+      try {
+        const votesResponse = await api.get(`/api/v1/contestants/${contestantId}/votes/details`)
+        setVoters(votesResponse.data.voters || [])
+      } catch (err) {
+        console.error('Error reloading voters:', err)
+      }
+    }
+  }
+
   const handleVote = async () => {
     if (!contestant?.can_vote || isVoting || contestant?.has_voted) return
 
     setIsVoting(true)
     try {
-      const response = await api.post(`/api/v1/contestants/${contestant?.id}/vote`)
+      const result = await contestService.voteForContestant(Number(contestant.id))
 
-      // Recharger les données du contestant pour avoir les stats à jour
-      const updatedResponse = await api.get(`/api/v1/contestants/${contestantId}`)
-      setContestant(updatedResponse.data)
-
-      // Recharger les votants si l'utilisateur est l'auteur
-      if (user?.id === contestant?.user_id) {
-        try {
-          const votesResponse = await api.get(`/api/v1/contestants/${contestantId}/votes/details`)
-          setVoters(votesResponse.data.voters || [])
-        } catch (err) {
-          console.error('Error reloading voters:', err)
-        }
+      if (result.success) {
+        await reloadContestantAfterVote()
+        setToast({
+          type: 'success',
+          message: t('contestant_detail.vote_success') || 'Vote enregistré avec succès!'
+        })
+        window.dispatchEvent(new Event('vote-changed'))
+      } else if (result.code === 'max_votes_reached') {
+        setReplacedContestant(result.replacedContestant || null)
+        setShowReplaceDialog(true)
+      } else if (result.code === 'already_voted') {
+        setToast({
+          type: 'error',
+          message: t('dashboard.contests.already_voted_error') || 'Vous avez déjà voté pour ce participant.'
+        })
       }
-
-      setToast({
-        type: 'success',
-        message: t('contestant_detail.vote_success') || 'Vote enregistré avec succès!'
-      })
     } catch (error: any) {
-      const errorDetail = error?.response?.data?.detail || ''
+      const rawDetail = error?.response?.data?.detail
+      const errorDetail =
+        typeof rawDetail === 'string'
+          ? rawDetail
+          : rawDetail?.message || (rawDetail ? JSON.stringify(rawDetail) : '')
 
-      // Détecter le type d'erreur et utiliser les traductions appropriées
       let errorMessage = t('dashboard.contests.vote_error') || t('contestant_detail.vote_error')
 
       if (errorDetail) {
-        const errorLower = errorDetail.toLowerCase()
+        const errorLower = String(errorDetail).toLowerCase()
 
         if (errorLower.includes('vote') && errorLower.includes('ouvert')) {
           errorMessage = t('dashboard.contests.voting_not_open') || 'Le vote n\'est pas encore ouvert pour ce concours.'
@@ -402,14 +435,37 @@ function ContestantDetailContent() {
         } else if (errorLower.includes('genre') && errorLower.includes('voter')) {
           errorMessage = t('dashboard.contests.vote_gender_not_set') || 'Votre profil ne contient pas d\'information de genre. Veuillez compléter votre profil pour voter dans ce concours.'
         } else {
-          // Utiliser le message d'erreur du backend s'il est disponible
-          errorMessage = errorDetail
+          errorMessage = String(errorDetail)
         }
       }
 
       setToast({
         type: 'error',
         message: errorMessage
+      })
+    } finally {
+      setIsVoting(false)
+    }
+  }
+
+  const handleReplaceVote = async () => {
+    if (!contestant?.id) return
+    setShowReplaceDialog(false)
+    setIsVoting(true)
+    try {
+      await contestService.replaceVote(Number(contestant.id))
+      await reloadContestantAfterVote()
+      setReplacedContestant(null)
+      setToast({
+        type: 'success',
+        message: t('dashboard.contests.vote_replaced') || 'Vote remplacé avec succès!'
+      })
+      window.dispatchEvent(new Event('vote-changed'))
+    } catch (error: any) {
+      console.error('Error replacing vote:', error)
+      setToast({
+        type: 'error',
+        message: t('dashboard.contests.vote_error') || 'Erreur lors du remplacement du vote.'
       })
     } finally {
       setIsVoting(false)
@@ -783,6 +839,35 @@ function ContestantDetailContent() {
         title={contestant.title || contestant.author_name}
         description={contestant.description}
       />
+
+      <AlertDialog
+        open={showReplaceDialog}
+        onOpenChange={(open) => {
+          setShowReplaceDialog(open)
+          if (!open) setReplacedContestant(null)
+        }}
+      >
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t('dashboard.contests.replace_vote_title') || 'Remplacer un vote'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('dashboard.contests.replace_vote_message') || 'Vous avez déjà 5 votes. Voulez-vous remplacer'}{' '}
+              <strong>{replacedContestant?.name}</strong>{' '}
+              {t('dashboard.contests.replace_vote_position') || '(5e position, 1 point) par ce participant ?'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setReplacedContestant(null)}>
+              {t('common.cancel') || 'Annuler'}
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleReplaceVote} className="bg-myhigh5-primary hover:bg-myhigh5-primary/90">
+              {t('dashboard.contests.replace_vote_confirm') || 'Remplacer'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

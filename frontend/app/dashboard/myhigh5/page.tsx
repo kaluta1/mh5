@@ -128,6 +128,20 @@ export default function MyHigh5Page() {
     }
   }, [isLoading, isAuthenticated, user])
 
+  // Rafraîchir la liste quand un vote / remplacement est fait ailleurs (même flux que My votes)
+  useEffect(() => {
+    const handler = async () => {
+      try {
+        const response = await contestService.getMyHigh5Votes() as MyHigh5Response
+        setSeasonsData(response.seasons || [])
+      } catch (error) {
+        console.error('Erreur lors du rafraîchissement des votes:', error)
+      }
+    }
+    window.addEventListener('vote-changed', handler)
+    return () => window.removeEventListener('vote-changed', handler)
+  }, [])
+
   // Charger l'historique quand on change d'onglet
   useEffect(() => {
     const loadHistory = async () => {
