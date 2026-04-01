@@ -295,29 +295,49 @@ export default function ApplyToContestPage() {
     void loadVerificationStatus()
   }, [user?.id])
 
+  // Participation (not nomination): if API returns no verification flags, still require KYC + visual proof
+  const verificationGateContest = useMemo(() => {
+    if (!contest) return null
+    if (isNomination) return contest
+    const anyExplicit =
+      !!contest.requires_kyc ||
+      !!contest.requires_visual_verification ||
+      !!contest.requires_voice_verification ||
+      !!contest.requires_brand_verification ||
+      !!contest.requires_content_verification
+    if (anyExplicit) return contest
+    return {
+      ...contest,
+      requires_kyc: true,
+      requires_visual_verification: true,
+    }
+  }, [contest, isNomination])
+
   const contestRequiresVerification = useMemo(() => {
-    if (!contest) return false
+    if (!verificationGateContest) return false
+    const c = verificationGateContest
     return !!(
-      contest.requires_kyc ||
-      contest.requires_visual_verification ||
-      contest.requires_voice_verification ||
-      contest.requires_brand_verification ||
-      contest.requires_content_verification
+      c.requires_kyc ||
+      c.requires_visual_verification ||
+      c.requires_voice_verification ||
+      c.requires_brand_verification ||
+      c.requires_content_verification
     )
-  }, [contest])
+  }, [verificationGateContest])
 
   const allVerificationRequirementsMet = useMemo(() => {
-    if (!contest || !contestRequiresVerification) return true
+    if (!verificationGateContest || !contestRequiresVerification) return true
+    const c = verificationGateContest
     const kycDone =
-      !contest.requires_kyc ||
+      !c.requires_kyc ||
       !!(user?.identity_verified || (user as { is_verified?: boolean })?.is_verified)
-    const visualDone = !contest.requires_visual_verification || hasVisualVerification
-    const voiceDone = !contest.requires_voice_verification || hasVoiceVerification
-    const brandDone = !contest.requires_brand_verification || hasBrandVerification
-    const contentDone = !contest.requires_content_verification || hasContentVerification
+    const visualDone = !c.requires_visual_verification || hasVisualVerification
+    const voiceDone = !c.requires_voice_verification || hasVoiceVerification
+    const brandDone = !c.requires_brand_verification || hasBrandVerification
+    const contentDone = !c.requires_content_verification || hasContentVerification
     return kycDone && visualDone && voiceDone && brandDone && contentDone
   }, [
-    contest,
+    verificationGateContest,
     contestRequiresVerification,
     user,
     hasVisualVerification,

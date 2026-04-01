@@ -79,11 +79,11 @@ class ContestStatusService:
     @staticmethod
     def round_voting_open_at(round_obj, when: datetime) -> bool:
         """
-        Voting allowed within the voting calendar window, and after nomination is fully closed.
+        Voting allowed within the voting calendar window, after the submission-period grace ends.
 
-        If the extended nomination deadline falls *after* the last moment of the voting window
-        (e.g. submission grace + vote-day grace end up past voting_end_date), we do not block
-        the entire vote window — otherwise users could never vote (March round bug).
+        We use max(voting_start midnight, extended_submission_deadline) so the Vote button does not
+        stay off for extra hours due to vote-day +5h nomination extension alone (common March→April UX bug).
+        If there is no submission_end_date, fall back to the full nomination_close rule.
         """
         if not round_obj.voting_start_date or not round_obj.voting_end_date:
             return False
@@ -91,13 +91,16 @@ class ContestStatusService:
         ve = datetime.combine(round_obj.voting_end_date, time(23, 59, 59))
         if not (vs <= when <= ve):
             return False
+        if getattr(round_obj, "submission_end_date", None):
+            handoff = ContestStatusService.extended_submission_deadline(round_obj.submission_end_date)
+            start_vote = max(vs, handoff)
+            return when >= start_vote
         nom_close = ContestStatusService.round_nomination_closes_at(round_obj)
         if nom_close is None:
             return True
-        # Impossible overlap: nomination "close" after voting ends → ignore for vote gating
         if nom_close > ve:
             return True
-        return when > nom_close
+        return when >= nom_close
 
     @staticmethod
     def update_contest_statuses(db: Session) -> dict:

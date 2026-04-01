@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useLanguage } from '@/contexts/language-context'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -10,42 +10,60 @@ import { Button } from '@/components/ui/button'
 import { format } from 'date-fns'
 import { enUS, fr } from 'date-fns/locale'
 import { Loader2, RefreshCw, FileText, BarChart3, TrendingUp, AlertCircle } from 'lucide-react'
+import { api } from '@/lib/api-service'
 
-// Mock Data for migration
-const MOCK_DATA = {
-    chartOfAccounts: [
-        { id: 1, accountCode: '101', accountName: 'Cash', accountType: 'ASSET', creditBalance: 0, totalLiabilities: 0 },
-        { id: 2, accountCode: '400', accountName: 'Sales Revenue', accountType: 'REVENUE', creditBalance: 5000, totalLiabilities: 0 }
-    ],
-    journalEntries: []
-}
+const EMPTY = { chartOfAccounts: [] as any[], journalEntries: [] as any[] }
 
 export default function AdminAccounting() {
     const { t, language } = useLanguage()
     const [activeTab, setActiveTab] = useState('journal')
-    const [loading, setLoading] = useState(false)
-    const [data, setData] = useState<any>(MOCK_DATA)
-    const [error, setError] = useState<any>(null)
+    const [loading, setLoading] = useState(true)
+    const [data, setData] = useState<any>(EMPTY)
+    const [error, setError] = useState<Error | null>(null)
     const dateLocale = language === 'fr' ? fr : enUS
     const numberLocale = language === 'fr' ? 'fr-FR' : 'en-US'
 
-    const refetch = () => {
+    const loadData = useCallback(async () => {
         setLoading(true)
-        setTimeout(() => {
+        setError(null)
+        try {
+            const [coaRes, jeRes] = await Promise.all([
+                api.get('/admin/accounting/chart-of-accounts'),
+                api.get('/admin/accounting/journal-entries', { params: { limit: 50 } }),
+            ])
+            if (coaRes.status >= 400) {
+                const d = coaRes.data as any
+                throw new Error(typeof d?.detail === 'string' ? d.detail : 'Chart of accounts request failed')
+            }
+            if (jeRes.status >= 400) {
+                const d = jeRes.data as any
+                throw new Error(typeof d?.detail === 'string' ? d.detail : 'Journal entries request failed')
+            }
+            setData({
+                chartOfAccounts: Array.isArray(coaRes.data) ? coaRes.data : [],
+                journalEntries: Array.isArray(jeRes.data) ? jeRes.data : [],
+            })
+        } catch (e: any) {
+            setError(e instanceof Error ? e : new Error(String(e)))
+            setData(EMPTY)
+        } finally {
             setLoading(false)
-        }, 1000)
+        }
+    }, [])
+
+    useEffect(() => {
+        void loadData()
+    }, [loadData])
+
+    const refetch = () => {
+        void loadData()
     }
 
-    // Calculs rapides pour le dashboard
-    const totalAssets = data?.chartOfAccounts
-        ?.filter((a: any) => a.accountType === 'ASSET')
-        .reduce((acc: number, curr: any) => acc + (curr.creditBalance * -1), 0) || 0
-
     const totalRevenue = data?.chartOfAccounts
-        ?.filter((a: any) => a.accountType === 'REVENUE')
-        .reduce((acc: number, curr: any) => acc + curr.creditBalance, 0) || 0
+        ?.filter((a: any) => String(a.accountType || '').toUpperCase() === 'REVENUE')
+        .reduce((acc: number, curr: any) => acc + (Number(curr.creditBalance) || 0), 0) || 0
 
-    if (loading && !data) {
+    if (loading && !data?.chartOfAccounts?.length && !data?.journalEntries?.length) {
         return (
             <div className="flex justify-center items-center h-96">
                 <Loader2 className="h-8 w-8 animate-spin text-myhigh5-primary" />
@@ -65,6 +83,9 @@ export default function AdminAccounting() {
             </div>
         )
     }
+
+    const journalEntries = data?.journalEntries || []
+    const chartRows = data?.chartOfAccounts || []
 
     return (
         <div className="space-y-6">
@@ -98,8 +119,6 @@ export default function AdminAccounting() {
                         <p className="text-xs text-muted-foreground">{t('admin.accounting.ytd') || 'Year to date'}</p>
                     </CardContent>
                 </Card>
-
-                {/* Autres cartes KPI à venir */}
             </div>
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
@@ -133,34 +152,46 @@ export default function AdminAccounting() {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {data?.journalEntries.map((entry: any) => (
-                                        <TableRow key={entry.id}>
-                                            <TableCell>{format(new Date(entry.entryDate), language === 'fr' ? 'dd/MM/yyyy HH:mm' : 'MM/dd/yyyy HH:mm', { locale: dateLocale })}</TableCell>
-                                            <TableCell className="font-mono text-xs">{entry.entryNumber}</TableCell>
-                                            <TableCell>
-                                                <div className="font-medium">{entry.description}</div>
-                                                <div className="text-sm text-gray-500 mt-1 space-y-1">
-                                                    {entry.lines.map((line: any) => (
-                                                        <div key={line.id} className="flex justify-between text-xs border-b border-gray-100 dark:border-gray-800 last:border-0 pb-1">
-                                                            <span>{line.account.accountCode} - {line.account.accountName}</span>
-                                                            <span className="font-mono">
-                                                                {line.debitAmount > 0
-                                                                    ? `D: ${line.debitAmount.toFixed(2)}`
-                                                                    : `C: ${line.creditAmount.toFixed(2)}`}
-                                                            </span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </TableCell>
-                                            <TableCell className="font-mono">{entry.totalDebit.toFixed(2)}</TableCell>
-                                            <TableCell className="font-mono">{entry.totalCredit.toFixed(2)}</TableCell>
-                                            <TableCell>
-                                                <Badge variant={entry.status === 'POSTED' ? 'default' : 'secondary'}>
-                                                    {entry.status}
-                                                </Badge>
+                                    {journalEntries.length === 0 ? (
+                                        <TableRow>
+                                            <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                                                {t('admin.accounting.no_journal') || 'No journal entries yet.'}
                                             </TableCell>
                                         </TableRow>
-                                    ))}
+                                    ) : (
+                                        journalEntries.map((entry: any) => (
+                                            <TableRow key={entry.id}>
+                                                <TableCell>
+                                                    {entry.entryDate
+                                                        ? format(new Date(entry.entryDate), language === 'fr' ? 'dd/MM/yyyy HH:mm' : 'MM/dd/yyyy HH:mm', { locale: dateLocale })
+                                                        : '—'}
+                                                </TableCell>
+                                                <TableCell className="font-mono text-xs">{entry.entryNumber}</TableCell>
+                                                <TableCell>
+                                                    <div className="font-medium">{entry.description}</div>
+                                                    <div className="text-sm text-gray-500 mt-1 space-y-1">
+                                                        {(entry.lines || []).map((line: any) => (
+                                                            <div key={line.id} className="flex justify-between text-xs border-b border-gray-100 dark:border-gray-800 last:border-0 pb-1">
+                                                                <span>{line.account?.accountCode} - {line.account?.accountName}</span>
+                                                                <span className="font-mono">
+                                                                    {line.debitAmount > 0
+                                                                        ? `D: ${Number(line.debitAmount).toFixed(2)}`
+                                                                        : `C: ${Number(line.creditAmount).toFixed(2)}`}
+                                                                </span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="font-mono">{Number(entry.totalDebit || 0).toFixed(2)}</TableCell>
+                                                <TableCell className="font-mono">{Number(entry.totalCredit || 0).toFixed(2)}</TableCell>
+                                                <TableCell>
+                                                    <Badge variant={String(entry.status || '').toUpperCase() === 'POSTED' ? 'default' : 'secondary'}>
+                                                        {String(entry.status || '').toUpperCase()}
+                                                    </Badge>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))
+                                    )}
                                 </TableBody>
                             </Table>
                         </CardContent>
@@ -184,19 +215,28 @@ export default function AdminAccounting() {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {data?.chartOfAccounts.map((account: any) => (
-                                        <TableRow key={account.id}>
-                                            <TableCell className="font-mono font-medium">{account.accountCode}</TableCell>
-                                            <TableCell>{account.accountName}</TableCell>
-                                            <TableCell>
-                                                <Badge variant="outline">{account.accountType}</Badge>
-                                            </TableCell>
-                                            <TableCell className="text-right font-mono">
-                                                {/* Afficher solde selon type (Débit ou Crédit nature) */}
-                                                {account.creditBalance !== 0 ? account.creditBalance.toFixed(2) : '-'}
+                                    {chartRows.length === 0 ? (
+                                        <TableRow>
+                                            <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                                                {t('admin.accounting.no_coa') || 'No accounts in database. Run init_chart_of_accounts on the server.'}
                                             </TableCell>
                                         </TableRow>
-                                    ))}
+                                    ) : (
+                                        chartRows.map((account: any) => (
+                                            <TableRow key={account.id}>
+                                                <TableCell className="font-mono font-medium">{account.accountCode}</TableCell>
+                                                <TableCell>{account.accountName}</TableCell>
+                                                <TableCell>
+                                                    <Badge variant="outline">{account.accountType}</Badge>
+                                                </TableCell>
+                                                <TableCell className="text-right font-mono">
+                                                    {Number(account.creditBalance) !== 0
+                                                        ? Number(account.creditBalance).toFixed(2)
+                                                        : '—'}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))
+                                    )}
                                 </TableBody>
                             </Table>
                         </CardContent>
