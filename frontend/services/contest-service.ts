@@ -239,6 +239,8 @@ export interface RoundWithStats {
   participants_count: number
   current_user_participated: boolean
   is_completed: boolean
+  /** Present when operator env MYHIGH5_NOMINATION_EXTENSION_UNTIL extends nominations during voting calendar. */
+  nomination_extension_until?: string | null
 }
 
 class ContestService {

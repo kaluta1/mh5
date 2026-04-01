@@ -170,7 +170,8 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
     const endMs = roundData
       ? getRoundNominationDeadlineMs({
           submission_end_date: roundData.submission_end_date,
-          voting_start_date: roundData.voting_start_date
+          voting_start_date: roundData.voting_start_date,
+          nomination_extension_until: roundData.nomination_extension_until
         })
       : null
     if (endMs == null) {
@@ -196,7 +197,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
     update()
     const interval = setInterval(update, 1000)
     return () => clearInterval(interval)
-  }, [roundData?.submission_end_date, roundData?.voting_start_date])
+  }, [roundData?.submission_end_date, roundData?.voting_start_date, roundData?.nomination_extension_until])
 
   // Load cities when country changes (for nominations)
   useEffect(() => {
@@ -376,7 +377,8 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
     roundData?.submission_end_date != null
       ? getRoundNominationDeadlineMs({
           submission_end_date: roundData.submission_end_date,
-          voting_start_date: roundData.voting_start_date
+          voting_start_date: roundData.voting_start_date,
+          nomination_extension_until: roundData.nomination_extension_until
         })
       : null
 

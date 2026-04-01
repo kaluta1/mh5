@@ -313,13 +313,14 @@ export default function ApplyToContestPage() {
   ])
 
   const blockedByVerification =
+    !isNomination &&
     !isEditingParticipation &&
     contestRequiresVerification &&
     verificationStatusLoaded &&
     !allVerificationRequirementsMet
 
   useEffect(() => {
-    if (pageLoading || !contest || isEditingParticipation) return
+    if (pageLoading || !contest || isEditingParticipation || isNomination) return
     if (!contestRequiresVerification) {
       setShowVerificationDialog(false)
       return
@@ -333,6 +334,7 @@ export default function ApplyToContestPage() {
     contestRequiresVerification,
     verificationStatusLoaded,
     allVerificationRequirementsMet,
+    isNomination,
   ])
 
   const handleVerificationDialogClose = () => {
@@ -349,7 +351,8 @@ export default function ApplyToContestPage() {
 
     const endMs = getRoundNominationDeadlineMs({
       submission_end_date: roundData.submission_end_date,
-      voting_start_date: roundData.voting_start_date
+      voting_start_date: roundData.voting_start_date,
+      nomination_extension_until: roundData.nomination_extension_until
     })
     if (endMs == null) {
       setTimeValues({ days: 0, hours: 0, minutes: 0, seconds: 0, isClosed: false, isNA: true })
@@ -375,7 +378,7 @@ export default function ApplyToContestPage() {
     updateTimeRemaining()
     const interval = setInterval(updateTimeRemaining, 1000)
     return () => clearInterval(interval)
-  }, [roundData?.submission_end_date, roundData?.voting_start_date])
+  }, [roundData?.submission_end_date, roundData?.voting_start_date, roundData?.nomination_extension_until])
 
   // Formater le temps restant avec les traductions
   useEffect(() => {
@@ -419,11 +422,12 @@ export default function ApplyToContestPage() {
 
     const endMs = getRoundNominationDeadlineMs({
       submission_end_date: roundData.submission_end_date,
-      voting_start_date: roundData.voting_start_date
+      voting_start_date: roundData.voting_start_date,
+      nomination_extension_until: roundData.nomination_extension_until
     })
     if (endMs == null) return true
     return Date.now() <= endMs
-  }, [roundData?.submission_end_date, roundData?.voting_start_date])
+  }, [roundData?.submission_end_date, roundData?.voting_start_date, roundData?.nomination_extension_until])
 
 
 
@@ -447,6 +451,7 @@ export default function ApplyToContestPage() {
     nominatorCountry?: string
   ) => {
     if (
+      !isNomination &&
       !isEditingParticipation &&
       contest &&
       contestRequiresVerification &&
@@ -655,7 +660,7 @@ export default function ApplyToContestPage() {
 
               {/* Countdown is now integrated in the ParticipationForm stepper */}
 
-              {contestRequiresVerification && !isEditingParticipation && !verificationStatusLoaded && (
+              {contestRequiresVerification && !isNomination && !isEditingParticipation && !verificationStatusLoaded && (
                 <div className="p-4 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/50 text-sm text-gray-600 dark:text-gray-300">
                   {t('common.loading') || 'Chargement du statut de vérification...'}
                 </div>
@@ -670,7 +675,7 @@ export default function ApplyToContestPage() {
 
               {/* Participation Form — hidden until verification requirements are satisfied */}
               {!blockedByVerification &&
-                !(contestRequiresVerification && !isEditingParticipation && !verificationStatusLoaded) && (
+                !(contestRequiresVerification && !isNomination && !isEditingParticipation && !verificationStatusLoaded) && (
                 <ParticipationForm
                   contestId={contestId}
                   onSubmit={handleParticipationSubmit}

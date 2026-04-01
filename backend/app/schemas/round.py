@@ -72,7 +72,9 @@ class RoundWithStats(Round):
     votes_count: int = 0  # Added votes_count
     current_user_participated: bool = False
     is_completed: bool = False  # True if global_end_date passed
-    
+    # Set when MYHIGH5_NOMINATION_EXTENSION_UNTIL is active for this round (voting calendar)
+    nomination_extension_until: Optional[datetime] = None
+
     # Nested data
     top_contestants: List["TopContestantPreview"] = []
     contests: List["Contest"] = []

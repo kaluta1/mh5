@@ -317,6 +317,18 @@ def _enrich_round_data(
             r_data["contests"] = []
             contests_count = 0
         
+        nomination_extension_until = None
+        try:
+            from app.services.contest_status import contest_status_service
+
+            ro = db.query(Round).filter(Round.id == round_id).first()
+            if ro:
+                now = datetime.utcnow()
+                if contest_status_service.env_extra_nomination_active(ro, now):
+                    nomination_extension_until = contest_status_service.nomination_extension_deadline()
+        except Exception as ext_e:
+            logger.warning("nomination_extension_until: %s", ext_e)
+
         # Build final response
         result = {
             **r_data,
@@ -325,6 +337,7 @@ def _enrich_round_data(
             "votes_count": 0,
             "current_user_participated": current_user_participated,
             "is_completed": is_completed,
+            "nomination_extension_until": nomination_extension_until,
             "top_contestants": [],  # Can be enhanced later
             "contests": r_data.get("contests", [])
         }
