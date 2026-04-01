@@ -16,6 +16,7 @@ import { isValidVideoUrl, detectVideoPlatform, cleanVideoUrl } from '@/lib/utils
 import { countries } from '@/lib/countries'
 import { getCitiesByCountry } from '@/lib/geography'
 import { contestService } from '@/services/contest-service'
+import { getRoundNominationDeadlineMs } from '@/lib/nomination-deadline'
 
 // WYSIWYG Editor - chargé dynamiquement pour éviter les erreurs SSR
 const ReactQuill = dynamic(() => import('react-quill'), { ssr: false, loading: () => <div className="w-full h-40 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center"><Loader2 className="w-6 h-6 text-gray-400 animate-spin" /></div> })
@@ -55,6 +56,7 @@ interface ParticipationFormProps {
   roundData?: {
     submission_start_date?: string
     submission_end_date?: string
+    voting_start_date?: string
     name?: string
   } | null
   roundId?: number
@@ -163,18 +165,21 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
     if (token) setAccessToken(token)
   }, [])
 
-  // Countdown timer basé sur les dates du round
+  // Countdown timer basé sur les dates du round (aligné sur la grâce backend + extension jour de vote)
   useEffect(() => {
-    if (!roundData?.submission_end_date) {
+    const endMs = roundData
+      ? getRoundNominationDeadlineMs({
+          submission_end_date: roundData.submission_end_date,
+          voting_start_date: roundData.voting_start_date
+        })
+      : null
+    if (endMs == null) {
       setCountdown(null)
       return
     }
 
-    const deadline = new Date(roundData.submission_end_date)
-    deadline.setHours(23, 59, 59, 999)
-
     const update = () => {
-      const diff = deadline.getTime() - Date.now()
+      const diff = endMs - Date.now()
       if (diff <= 0) {
         setCountdown({ days: 0, hours: 0, minutes: 0, seconds: 0, isClosed: true })
         return
@@ -191,7 +196,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
     update()
     const interval = setInterval(update, 1000)
     return () => clearInterval(interval)
-  }, [roundData?.submission_end_date])
+  }, [roundData?.submission_end_date, roundData?.voting_start_date])
 
   // Load cities when country changes (for nominations)
   useEffect(() => {
@@ -367,6 +372,14 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
 
   const plainDescriptionLength = getPlainTextLength(description)
 
+  const nominationDeadlineMs =
+    roundData?.submission_end_date != null
+      ? getRoundNominationDeadlineMs({
+          submission_end_date: roundData.submission_end_date,
+          voting_start_date: roundData.voting_start_date
+        })
+      : null
+
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault()
 
@@ -501,9 +514,10 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
               <span className="text-xs text-gray-400 mt-1">{t('dashboard.contests.time_unit_seconds') || 's'}</span>
             </div>
           </div>
-          {roundData?.submission_end_date && (
+          {nominationDeadlineMs != null && (
             <p className="text-xs text-gray-500 dark:text-gray-400 text-center mt-2">
-              {t('participation.deadline') || 'Date limite'} : {new Date(roundData.submission_end_date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
+              {t('participation.deadline') || 'Date limite'} :{' '}
+              {new Date(nominationDeadlineMs).toLocaleString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
             </p>
           )}
         </div>

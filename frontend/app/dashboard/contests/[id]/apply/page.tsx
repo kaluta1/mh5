@@ -11,6 +11,7 @@ import { ParticipationForm } from '@/components/dashboard/participation-form'
 import { contestService } from '@/services/contest-service'
 // REST API
 import ApiService from '@/lib/api-service'
+import { getRoundNominationDeadlineMs } from '@/lib/nomination-deadline'
 import { verificationService } from '@/services/verification-service'
 import {
   VerificationRequirementsDialog,
@@ -339,20 +340,24 @@ export default function ApplyToContestPage() {
     router.push(contestId ? `/dashboard/contests/${contestId}` : '/dashboard/contests')
   }
 
-  // Calculer le temps restant jusqu'à la date limite de soumission du round
+  // Temps restant jusqu'à la fin des nominations (grâce + extension alignée jour de vote — voir backend)
   useEffect(() => {
     if (!roundData?.submission_end_date) {
       setTimeValues({ days: 0, hours: 0, minutes: 0, seconds: 0, isClosed: false, isNA: true })
       return
     }
 
-    const submissionDeadline = new Date(roundData.submission_end_date)
-    submissionDeadline.setHours(23, 59, 59, 999)
+    const endMs = getRoundNominationDeadlineMs({
+      submission_end_date: roundData.submission_end_date,
+      voting_start_date: roundData.voting_start_date
+    })
+    if (endMs == null) {
+      setTimeValues({ days: 0, hours: 0, minutes: 0, seconds: 0, isClosed: false, isNA: true })
+      return
+    }
 
     const updateTimeRemaining = () => {
-      const now = new Date().getTime()
-      const endDate = submissionDeadline.getTime()
-      const difference = endDate - now
+      const difference = endMs - new Date().getTime()
 
       if (difference <= 0) {
         setTimeValues({ days: 0, hours: 0, minutes: 0, seconds: 0, isClosed: true, isNA: false })
@@ -370,7 +375,7 @@ export default function ApplyToContestPage() {
     updateTimeRemaining()
     const interval = setInterval(updateTimeRemaining, 1000)
     return () => clearInterval(interval)
-  }, [roundData?.submission_end_date])
+  }, [roundData?.submission_end_date, roundData?.voting_start_date])
 
   // Formater le temps restant avec les traductions
   useEffect(() => {
@@ -412,12 +417,13 @@ export default function ApplyToContestPage() {
   const isSubmissionActuallyOpen = useCallback((_contestData: any): boolean => {
     if (!roundData?.submission_end_date) return true
 
-    const now = new Date()
-    const submissionDeadline = new Date(roundData.submission_end_date)
-    submissionDeadline.setHours(23, 59, 59, 999)
-
-    return now <= submissionDeadline
-  }, [roundData?.submission_end_date])
+    const endMs = getRoundNominationDeadlineMs({
+      submission_end_date: roundData.submission_end_date,
+      voting_start_date: roundData.voting_start_date
+    })
+    if (endMs == null) return true
+    return Date.now() <= endMs
+  }, [roundData?.submission_end_date, roundData?.voting_start_date])
 
 
 

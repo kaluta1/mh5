@@ -4,6 +4,7 @@ Service pour gérer l'état des contests (submission/voting open/closed)
 import asyncio
 import logging
 from datetime import date, datetime, time, timedelta
+from typing import Optional
 from sqlalchemy.orm import Session
 from app.db.session import SessionLocal
 from app.models.contest import Contest
@@ -14,7 +15,7 @@ logger = logging.getLogger(__name__)
 class ContestStatusService:
     """Service pour gérer l'état des contests"""
 
-    # Extra hours after the last submission calendar day (23:59:59) to accept nominations.
+    # Extra hours after key milestones (UTC) to keep nominations open for testing / overlap rules.
     SUBMISSION_GRACE_HOURS = 5
 
     @staticmethod
@@ -23,9 +24,35 @@ class ContestStatusService:
 
     @staticmethod
     def extended_submission_deadline(submission_end_day: date) -> datetime:
-        """End of submission day + SUBMISSION_GRACE_HOURS (UTC)."""
+        """End of submission calendar day + SUBMISSION_GRACE_HOURS (UTC)."""
         end_of_day = datetime.combine(submission_end_day, time(23, 59, 59))
         return end_of_day + timedelta(hours=ContestStatusService.SUBMISSION_GRACE_HOURS)
+
+    @staticmethod
+    def round_nomination_closes_at(round_obj) -> Optional[datetime]:
+        """
+        Last moment nominations are accepted for this round.
+
+        Uses the *later* of:
+        - end of submission day + SUBMISSION_GRACE_HOURS
+        - start of voting day + SUBMISSION_GRACE_HOURS
+
+        So if the calendar voting period has started but submission+5h already passed,
+        nomination stays open until voting_day 00:00 + 5h; then voting can run.
+        """
+        deadlines: list[datetime] = []
+        if getattr(round_obj, "submission_end_date", None):
+            deadlines.append(
+                ContestStatusService.extended_submission_deadline(round_obj.submission_end_date)
+            )
+        if getattr(round_obj, "voting_start_date", None):
+            vote_day_start = datetime.combine(round_obj.voting_start_date, time.min)
+            deadlines.append(
+                vote_day_start + timedelta(hours=ContestStatusService.SUBMISSION_GRACE_HOURS)
+            )
+        if not deadlines:
+            return None
+        return max(deadlines)
 
     @staticmethod
     def round_submission_open_at(round_obj, when: datetime) -> bool:
@@ -33,30 +60,33 @@ class ContestStatusService:
         if not round_obj.submission_start_date or not round_obj.submission_end_date:
             return False
         start = datetime.combine(round_obj.submission_start_date, time.min)
-        end = ContestStatusService.extended_submission_deadline(round_obj.submission_end_date)
+        end = ContestStatusService.round_nomination_closes_at(round_obj)
+        if end is None:
+            return False
         return start <= when <= end
 
     @staticmethod
     def round_in_submission_grace(round_obj, when: datetime) -> bool:
-        """True between end of submission calendar day and extended deadline (voting stays closed)."""
+        """True after end of submission calendar day but nominations still accepted (voting not yet)."""
         if not round_obj.submission_end_date:
             return False
         end_of_cal_day = datetime.combine(round_obj.submission_end_date, time(23, 59, 59))
-        ext = ContestStatusService.extended_submission_deadline(round_obj.submission_end_date)
-        return end_of_cal_day < when <= ext
+        nom_close = ContestStatusService.round_nomination_closes_at(round_obj)
+        if not nom_close:
+            return False
+        return end_of_cal_day < when <= nom_close
 
     @staticmethod
     def round_voting_open_at(round_obj, when: datetime) -> bool:
         """
-        Voting allowed only after the extended submission window has fully ended,
+        Voting allowed only after the full nomination window (including grace) has ended,
         and while within the round voting date range (inclusive by calendar day).
         """
         if not round_obj.voting_start_date or not round_obj.voting_end_date:
             return False
-        if round_obj.submission_end_date:
-            ext = ContestStatusService.extended_submission_deadline(round_obj.submission_end_date)
-            if when <= ext:
-                return False
+        nom_close = ContestStatusService.round_nomination_closes_at(round_obj)
+        if nom_close is not None and when <= nom_close:
+            return False
         vs = datetime.combine(round_obj.voting_start_date, time.min)
         ve = datetime.combine(round_obj.voting_end_date, time(23, 59, 59))
         return vs <= when <= ve
@@ -241,12 +271,21 @@ class ContestStatusService:
         if next_voting_round:
             return False, f"Voting for the next round ({next_voting_round.name}) will start on {next_voting_round.voting_start_date}"
         
-        # Grace extension: nominations still open, voting not yet
+        # Nominations still open (grace / voting-day extension) — voting waits
         for r in rounds:
-            if ContestStatusService.round_in_submission_grace(r, now):
-                ext = ContestStatusService.extended_submission_deadline(r.submission_end_date)
+            nom_close = ContestStatusService.round_nomination_closes_at(r)
+            if not nom_close or not r.voting_start_date or not r.voting_end_date:
+                continue
+            vs = datetime.combine(r.voting_start_date, time.min)
+            ve = datetime.combine(r.voting_end_date, time(23, 59, 59))
+            if vs <= now <= ve and now <= nom_close:
                 return False, (
-                    f"Nomination period extended for {r.name}. Voting opens after {ext.isoformat()} UTC."
+                    f"Nominations for {r.name} stay open until {nom_close.isoformat()} UTC "
+                    f"({ContestStatusService.SUBMISSION_GRACE_HOURS}h grace). Voting opens after that."
+                )
+            if ContestStatusService.round_in_submission_grace(r, now):
+                return False, (
+                    f"Nomination period extended for {r.name}. Voting opens after {nom_close.isoformat()} UTC."
                 )
 
         # Calendar submission phase (no grace yet) or generic message
