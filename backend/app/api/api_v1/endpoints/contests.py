@@ -508,6 +508,10 @@ def read_contest(
     filter_country: str = Query(None, description="Filtrer par pays"),
     filter_continent: str = Query(None, description="Filtrer par continent"),
     entry_type: str = Query(None, description="Filtrer par type: nomination ou participation"),
+    round_id: Optional[int] = Query(
+        None,
+        description="Calendar round (e.g. March vs April). Only contestants for this round are listed.",
+    ),
     current_user: Optional[Any] = Depends(get_current_active_user_optional),
 ) -> Any:
     """
@@ -539,7 +543,8 @@ def read_contest(
         current_user_id=current_user_id,
         filter_country=filter_country,
         filter_continent=filter_continent,
-        entry_type=entry_type
+        entry_type=entry_type,
+        round_id=round_id,
     )
     
     if not enriched_contest:
@@ -560,9 +565,12 @@ def read_contest(
         ).first()
 
         from app import crud
-        # First, check active round as participation is now round-specific
-        active_round = crud.round.get_active_round_for_contest(db, contest_id)
-        target_round_id = active_round.id if active_round else None
+        display_rid = enriched_contest.get("display_round_id") if isinstance(enriched_contest, dict) else None
+        if display_rid:
+            target_round_id = display_rid
+        else:
+            active_round = crud.round.get_active_round_for_contest(db, contest_id)
+            target_round_id = active_round.id if active_round else None
 
         participation = None
         if target_round_id:

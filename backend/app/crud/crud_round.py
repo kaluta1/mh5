@@ -178,6 +178,51 @@ class CRUDRound:
         db.refresh(db_obj)
         return db_obj
 
+    def is_round_linked_to_contest(self, db: Session, contest_id: int, round_id: int) -> bool:
+        """True if this round is linked to the contest (N:N or legacy contest_id)."""
+        from app.models.round import round_contests
+        linked = db.query(round_contests.c.round_id).filter(
+            round_contests.c.contest_id == contest_id,
+            round_contests.c.round_id == round_id,
+        ).first()
+        if linked:
+            return True
+        legacy = db.query(Round).filter(
+            Round.id == round_id,
+            Round.contest_id == contest_id,
+            Round.status != RoundStatus.CANCELLED,
+        ).first()
+        return legacy is not None
+
+    def resolve_display_round_id_for_contest(
+        self, db: Session, contest_id: int, round_id: Optional[int]
+    ) -> Optional[int]:
+        """
+        Which calendar round to use when listing contestants for a contest.
+
+        - If ``round_id`` is set and linked to this contest, use it.
+        - Otherwise pick the best default: voting window > submission window > most recent started.
+        """
+        if round_id is not None and self.is_round_linked_to_contest(db, contest_id, round_id):
+            return round_id
+
+        rounds = self.get_rounds_for_contest(db, contest_id)
+        if not rounds:
+            return None
+        today = date.today()
+        for r in rounds:
+            if r.voting_start_date and r.voting_end_date:
+                if r.voting_start_date <= today <= r.voting_end_date:
+                    return r.id
+        for r in rounds:
+            if r.submission_start_date and r.submission_end_date:
+                if r.submission_start_date <= today <= r.submission_end_date:
+                    return r.id
+        started = [r for r in rounds if r.submission_start_date and r.submission_start_date <= today]
+        if started:
+            return max(started, key=lambda x: x.submission_start_date).id
+        return rounds[0].id
+
     def get_active_round_for_contest(self, db: Session, contest_id: int) -> Optional[Round]:
         """
         Trouve le round actif pour l'inscription (submission_start <= now <= submission_end)

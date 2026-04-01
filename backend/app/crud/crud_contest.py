@@ -1055,7 +1055,8 @@ class CRUDContest:
     def get_contest_with_enriched_contestants(
         self, db: Session, contest_id: int, current_user_id: Optional[int] = None,
         filter_country: Optional[str] = None, filter_continent: Optional[str] = None,
-        entry_type: Optional[str] = None
+        entry_type: Optional[str] = None,
+        round_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Récupère un contest avec tous ses contestants enrichis de toutes les informations :
@@ -1104,6 +1105,12 @@ class CRUDContest:
             season = db.query(ContestSeason).filter(
                 ContestSeason.id == season_link.season_id
             ).first()
+
+        # One calendar round (March vs April): list only contestants for that round
+        from app.crud import crud_round
+        target_round_id = crud_round.round.resolve_display_round_id_for_contest(
+            db, contest_id, round_id
+        )
         
         # FIXED: Query contestants by the ACTIVE SEASON ID (not contest_id)
         from app.models.round import Round, round_contests
@@ -1154,6 +1161,11 @@ class CRUDContest:
         effective_entry_type = entry_type or ('nomination' if contest_mode == 'nomination' else 'participation')
         contestants_query = contestants_query.filter(Contestant.entry_type == effective_entry_type)
         logger.info(f"[get_contest_with_enriched_contestants] Querying by season_id={filter_season_id}, entry_type={effective_entry_type}")
+        if target_round_id is not None:
+            contestants_query = contestants_query.filter(Contestant.round_id == target_round_id)
+            logger.info(
+                f"[get_contest_with_enriched_contestants] Scoping to round_id={target_round_id}"
+            )
         
         # Appliquer le filtrage géographique selon le niveau de la saison et l'utilisateur connecté
         # Récupérer l'utilisateur courant pour le filtrage géographique
@@ -1281,7 +1293,12 @@ class CRUDContest:
             applied_location_filter = effective_country is not None or effective_continent is not None
             applied_entry_type_filter = effective_entry_type is not None
 
-            if not contestants and not applied_location_filter and not applied_entry_type_filter:
+            if (
+                not contestants
+                and not applied_location_filter
+                and not applied_entry_type_filter
+                and target_round_id is None
+            ):
                 logger.warning(f"[get_contest_with_enriched_contestants] No contestants found. Trying fallbacks...")
                 
                 # Fallback 1: season_id only
@@ -1768,6 +1785,7 @@ class CRUDContest:
         
         # Ajouter les contestants enrichis au résultat
         contest_data["contestants"] = enriched_contestants
+        contest_data["display_round_id"] = target_round_id
         
         return contest_data
 

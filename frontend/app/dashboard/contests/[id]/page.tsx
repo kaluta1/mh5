@@ -146,6 +146,7 @@ export default function ContestDetailPage() {
     return searchParams.get('continent') || 'all'
   })
   const entryType = searchParams.get('entryType') || undefined
+  const roundIdFromUrl = searchParams.get('roundId')
 
   // Sync state from URL when params change (e.g. navigation from list with country=Uganda)
   React.useEffect(() => {
@@ -178,10 +179,13 @@ export default function ContestDetailPage() {
     if (entryType) {
       params.set('entryType', entryType)
     }
+    if (roundIdFromUrl) {
+      params.set('roundId', roundIdFromUrl)
+    }
     const queryString = params.toString()
     const newUrl = `/dashboard/contests/${contestId}${queryString ? `?${queryString}` : ''}`
     router.replace(newUrl, { scroll: false })
-  }, [router, contestId, entryType])
+  }, [router, contestId, entryType, roundIdFromUrl])
 
   // REST Data Fetching - Optimized for speed
   const fetchContestDetails = React.useCallback(async () => {
@@ -195,7 +199,8 @@ export default function ContestDetailPage() {
       const c = await ApiService.getContest(parseInt(contestId), {
         filterCountry: (!filterCountry || filterCountry === 'all') ? undefined : filterCountry,
         filterContinent: filterContinent === 'all' ? undefined : filterContinent,
-        entryType: entryType
+        entryType: entryType,
+        roundId: roundIdFromUrl ? parseInt(roundIdFromUrl, 10) : undefined,
       }) as any
 
       // Check if aborted
@@ -282,7 +287,7 @@ export default function ContestDetailPage() {
         setPageLoading(false)
       }
     }
-  }, [contestId, filterCountry, filterContinent, t])
+  }, [contestId, filterCountry, filterContinent, entryType, roundIdFromUrl, t])
 
   // Decide if the current user already submitted (so the CTA should show "Edit").
   // This is needed because `current_user_contesting` from the API can be inaccurate for nominations.
@@ -295,7 +300,11 @@ export default function ContestDetailPage() {
 
       const contestMode = contest?.contest?.contest_mode
       const desiredEntryType = contestMode === 'nomination' ? 'nomination' : 'participation'
-      const activeRoundId = contest?.contest?.active_round_id ?? contest?.active_round_id ?? null
+      const displayRoundId =
+        contest?.contest?.display_round_id ??
+        contest?.contest?.active_round_id ??
+        contest?.active_round_id ??
+        null
       const seasonId = parseInt(contestId)
 
       try {
@@ -314,7 +323,7 @@ export default function ContestDetailPage() {
           const seasonMatch = e?.season_id ? e.season_id === seasonId : true
           if (!seasonMatch) return false
 
-          const roundMatch = activeRoundId ? (!e?.round_id || e.round_id === activeRoundId) : true
+          const roundMatch = displayRoundId != null ? e?.round_id === displayRoundId : true
           return roundMatch
         })
 
@@ -325,7 +334,7 @@ export default function ContestDetailPage() {
     }
 
     computeUserEntry()
-  }, [user?.id, contestId, contest?.contest?.contest_mode, contest?.contest?.active_round_id])
+  }, [user?.id, contestId, contest?.contest?.contest_mode, contest?.contest?.active_round_id, contest?.contest?.display_round_id])
 
   useEffect(() => {
     fetchContestDetails()
@@ -642,6 +651,7 @@ export default function ContestDetailPage() {
                 <button
                   onClick={() => {
                     const params = new URLSearchParams()
+                    if (roundIdFromUrl) params.set('roundId', roundIdFromUrl)
                     if (filterCountry) params.set('country', filterCountry)
                     if (filterContinent && filterContinent !== 'all') params.set('continent', filterContinent)
                     const qs = params.toString()
@@ -728,11 +738,15 @@ export default function ContestDetailPage() {
                     <Button
                       onClick={() => {
                         const hasNominated = userHasEntry
-                        const activeRoundId = contest?.contest?.active_round_id || contest?.active_round_id
+                        const roundForApply =
+                          (roundIdFromUrl ? parseInt(roundIdFromUrl, 10) : null) ||
+                          contest?.contest?.display_round_id ||
+                          contest?.contest?.active_round_id ||
+                          contest?.active_round_id
 
                         const queryParams = new URLSearchParams()
                         if (hasNominated) queryParams.set('edit', 'true')
-                        if (activeRoundId) queryParams.set('roundId', activeRoundId.toString())
+                        if (roundForApply) queryParams.set('roundId', String(roundForApply))
 
                         const queryString = queryParams.toString()
                         router.push(`/dashboard/contests/${contestId}/apply${queryString ? `?${queryString}` : ''}`)
@@ -989,6 +1003,7 @@ export default function ContestDetailPage() {
                         onShowToast={showToast}
                         filterCountry={filterCountry || undefined}
                         filterContinent={filterContinent !== 'all' ? filterContinent : undefined}
+                        roundId={roundIdFromUrl || undefined}
                       />
                     )}
                   </div>

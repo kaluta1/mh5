@@ -119,12 +119,15 @@ export const ApiService = {
         filterCountry?: string;
         filterContinent?: string;
         entryType?: string;
+        /** Calendar round (March vs April); only contestants for this round */
+        roundId?: number;
     }) => {
         const response = await api.get<Contest>(`/contests/${id}`, {
             params: {
                 filter_country: params?.filterCountry,
                 filter_continent: params?.filterContinent,
-                entry_type: params?.entryType
+                entry_type: params?.entryType,
+                round_id: params?.roundId,
             }
         });
         return response.data;

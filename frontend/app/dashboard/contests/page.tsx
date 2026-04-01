@@ -705,6 +705,7 @@ function ContestsPageContent() {
                   onParticipate={() => handleParticipate(contest.id, (categoryTab === 'nomination' ? contest.currentUserParticipated : contest.currentUserContesting) || false, activeRoundId)}
                   onViewContestants={() => {
                     const params = new URLSearchParams()
+                    params.set('roundId', activeRoundId)
                     if (filterCountry && filterCountry !== 'all') params.set('country', filterCountry)
                     params.set('continent', filterContinent !== 'all' ? filterContinent : 'all')
                     params.set('entryType', categoryTab === 'nomination' ? 'nomination' : 'participation')
@@ -713,6 +714,7 @@ function ContestsPageContent() {
                   }}
                   onOpenDetails={() => {
                     const params = new URLSearchParams()
+                    params.set('roundId', activeRoundId)
                     if (filterCountry && filterCountry !== 'all') params.set('country', filterCountry)
                     params.set('continent', filterContinent !== 'all' ? filterContinent : 'all')
                     params.set('entryType', categoryTab === 'nomination' ? 'nomination' : 'participation')

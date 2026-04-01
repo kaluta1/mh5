@@ -59,12 +59,18 @@ export default function ContestantsListPage() {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
+  const roundIdParam = searchParams.get('roundId')
+
   const loadData = useCallback(async () => {
     try {
       setLoading(true)
-      const data = await ApiService.getContest(parseInt(contestId), { filterCountry: 'all', filterContinent: 'all' }) as any
+      const data = await ApiService.getContest(parseInt(contestId), {
+        filterCountry: 'all',
+        filterContinent: 'all',
+        roundId: roundIdParam ? parseInt(roundIdParam, 10) : undefined,
+      }) as any
       setContestName(data.name || '')
-      setActiveRoundId(data.active_round_id || null)
+      setActiveRoundId(data.display_round_id ?? data.active_round_id ?? null)
       const cts = data.contestants || []
       setAllContestants(cts)
       const countries = new Set<string>()
@@ -75,7 +81,7 @@ export default function ContestantsListPage() {
       setFavoriteIds(favs)
     } catch (error) { console.error('Error:', error) }
     finally { setLoading(false) }
-  }, [contestId])
+  }, [contestId, roundIdParam])
 
   useEffect(() => {
     const loadRounds = async () => {

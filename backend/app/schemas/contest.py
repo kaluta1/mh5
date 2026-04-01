@@ -312,6 +312,7 @@ class ContestantEnriched(BaseModel):
 class ContestWithEnrichedContestants(Contest):
     """Contest avec ses contestants enrichis de toutes les informations"""
     contestants: List[ContestantEnriched] = []
+    display_round_id: Optional[int] = None  # Calendar round used for this list (March vs April, etc.)
 
 
 # Schéma pour un vote de concours

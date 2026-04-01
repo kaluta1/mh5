@@ -26,6 +26,8 @@ interface ContestantsSidebarProps {
   /** When set, "View all" link includes these filters so contestants page shows same list as contest page */
   filterCountry?: string
   filterContinent?: string
+  /** Calendar round (March vs April) — must match contest detail query */
+  roundId?: string
 }
 
 export function ContestantsSidebar({
@@ -34,7 +36,8 @@ export function ContestantsSidebar({
   formatLocation,
   onShowToast,
   filterCountry,
-  filterContinent
+  filterContinent,
+  roundId
 }: ContestantsSidebarProps) {
   const { t, language } = useLanguage()
   const router = useRouter()
@@ -61,6 +64,7 @@ export function ContestantsSidebar({
                 className="text-xs border-myhigh5-primary/30 dark:border-gray-500 text-myhigh5-primary dark:text-white hover:bg-myhigh5-primary hover:text-white transition-all"
                 onClick={() => {
                   const params = new URLSearchParams()
+                  if (roundId) params.set('roundId', roundId)
                   if (filterCountry) params.set('country', filterCountry)
                   if (filterContinent && filterContinent !== 'all') params.set('continent', filterContinent)
                   const qs = params.toString()
