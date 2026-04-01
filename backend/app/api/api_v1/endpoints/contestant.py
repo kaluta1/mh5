@@ -474,9 +474,9 @@ def get_my_votes(
                 ContestantVoting.contestant_id == contestant.id
             ).count()
             
-            # Calculer les points si position est définie, sinon utiliser la position par défaut
+            # Points always follow rank (position): 1→5, 2→4, … (ignore stale stored points)
             position = vote.position if vote.position else idx
-            points = vote.points if vote.points is not None else (6 - position if 1 <= position <= 5 else None)
+            points = (6 - position) if 1 <= position <= 5 else None
             
             season_votes_list.append({
                 "position": position,
@@ -610,9 +610,9 @@ def get_my_votes_history(
                     ContestantVoting.contestant_id == contestant.id
                 ).count()
                 
-                # Calculer les points si position est définie, sinon utiliser la position par défaut
+                # Points always follow rank (position): 1→5, 2→4, … (ignore stale stored points)
                 position = vote.position if vote.position else idx
-                points = vote.points if vote.points is not None else (6 - position if 1 <= position <= 5 else None)
+                points = (6 - position) if 1 <= position <= 5 else None
                 
                 season_votes_list.append({
                     "position": position,

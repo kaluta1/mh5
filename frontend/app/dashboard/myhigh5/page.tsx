@@ -198,10 +198,11 @@ export default function MyHigh5Page() {
     newVotes.splice(draggedItem.voteIndex, 1)
     newVotes.splice(dropIndex, 0, draggedVote)
     
-    // Mettre à jour les positions
+    // Mettre à jour positions et points (1er = 5 pts … 5e = 1 pt) — même logique que le backend
     const reorderedVotes = newVotes.map((vote, index) => ({
       ...vote,
-      position: index + 1
+      position: index + 1,
+      points: POINTS_BY_POSITION[index] ?? 1
     }))
     
     season.votes = reorderedVotes
@@ -313,14 +314,12 @@ export default function MyHigh5Page() {
               </div>
             </TableCell>
 
-            {/* Points */}
+            {/* Points: same as row rank (badge = voteIndex + 1); do not use stale vote.points */}
             <TableCell className="py-3">
               <div className="flex items-center justify-center gap-1">
                 <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
                 <span className="font-bold text-lg text-gray-900 dark:text-white">
-                  {vote.points !== null && vote.points !== undefined 
-                    ? vote.points 
-                    : (POINTS_BY_POSITION[voteIndex] || 1)}
+                  {POINTS_BY_POSITION[voteIndex] ?? 1}
                 </span>
               </div>
             </TableCell>
