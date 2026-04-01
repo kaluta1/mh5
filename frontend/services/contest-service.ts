@@ -917,19 +917,38 @@ class ContestService {
     code?: string;
     replacedContestant?: { id: number; name: string; position: number };
   }> {
+    const parse409 = (data: any) => {
+      const detail = data?.detail;
+      if (typeof detail === 'object' && detail?.code) {
+        return {
+          success: false as const,
+          code: detail.code as string,
+          replacedContestant: detail.replaced_contestant as
+            | { id: number; name: string; position: number }
+            | undefined,
+        };
+      }
+      return null;
+    };
+
     try {
       const response = await api.post(`/api/v1/contestants/${contestantId}/vote`);
+      // axios uses validateStatus: status < 500 — 409 does NOT throw, so we must branch here
+      if (response.status === 409) {
+        const parsed = parse409(response.data);
+        if (parsed) return parsed;
+        return { success: false, code: 'conflict', data: response.data };
+      }
+      if (response.status >= 400) {
+        const err: any = new Error('Vote failed');
+        err.response = { status: response.status, data: response.data };
+        throw err;
+      }
       return { success: true, data: response.data };
     } catch (error: any) {
       if (error.response?.status === 409) {
-        const detail = error.response.data?.detail;
-        if (typeof detail === 'object' && detail.code) {
-          return {
-            success: false,
-            code: detail.code,
-            replacedContestant: detail.replaced_contestant,
-          };
-        }
+        const parsed = parse409(error.response.data);
+        if (parsed) return parsed;
       }
       throw error;
     }
@@ -940,6 +959,16 @@ class ContestService {
    */
   async replaceVote(contestantId: number): Promise<any> {
     const response = await api.post(`/api/v1/contestants/${contestantId}/vote/replace`);
+    if (response.status >= 400) {
+      const detail = response.data?.detail;
+      const msg =
+        typeof detail === 'string'
+          ? detail
+          : detail?.message || detail?.detail || 'Replace vote failed';
+      const err: any = new Error(msg);
+      err.response = { status: response.status, data: response.data };
+      throw err;
+    }
     return response.data;
   }
 

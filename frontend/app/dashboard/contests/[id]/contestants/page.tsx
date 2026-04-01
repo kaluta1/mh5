@@ -120,9 +120,25 @@ export default function ContestantsListPage() {
   }
 
   const handleVote = async (cid: number) => {
-    try { setVotingMap(p => new Map(p).set(cid, true)); await contestService.voteForContestant(cid); await loadData() }
-    catch (e) { console.error(e) }
-    finally { setVotingMap(p => new Map(p).set(cid, false)) }
+    try {
+      setVotingMap(p => new Map(p).set(cid, true))
+      const result = await contestService.voteForContestant(cid)
+      if (result.success) {
+        await loadData()
+        window.dispatchEvent(new Event('vote-changed'))
+      } else if (result.code === 'max_votes_reached') {
+        // This list view has no replace dialog — main contest gallery does
+        window.dispatchEvent(new Event('vote-changed'))
+        alert(
+          t('dashboard.contests.replace_vote_use_gallery') ||
+            'You already have 5 votes for this season. Open the main contest page to replace your 5th vote.'
+        )
+      }
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setVotingMap(p => new Map(p).set(cid, false))
+    }
   }
 
   const selectCountry = (country: string) => {
