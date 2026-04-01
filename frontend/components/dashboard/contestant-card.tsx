@@ -303,7 +303,6 @@ export function ContestantCard({
         setCurrentVotes(prev => prev + 1)
         addToast(t('dashboard.contests.vote_success') || 'Vote enregistré avec succès!', 'success')
         onVote()
-        window.dispatchEvent(new Event('vote-changed'))
       } else if (result.code === 'max_votes_reached') {
         // Replace 5th vote automatically (no confirmation)
         await contestService.replaceVote(Number(id))
@@ -311,7 +310,6 @@ export function ContestantCard({
         setCurrentVotes(prev => prev + 1)
         addToast(t('dashboard.contests.vote_replaced') || 'Vote enregistré (remplace le 5e choix).', 'success')
         onVote()
-        window.dispatchEvent(new Event('vote-changed'))
       } else if (result.code === 'already_voted') {
         addToast(t('dashboard.contests.already_voted_error') || 'Vous avez déjà voté pour ce participant.', 'info')
       }

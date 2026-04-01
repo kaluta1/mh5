@@ -121,6 +121,8 @@ export const ApiService = {
         entryType?: string;
         /** Calendar round (March vs April); only contestants for this round */
         roundId?: number;
+        /** Bust caches after vote / replace (client-only query param) */
+        _t?: number;
     }) => {
         const response = await api.get<Contest>(`/contests/${id}`, {
             params: {
@@ -128,6 +130,7 @@ export const ApiService = {
                 filter_continent: params?.filterContinent,
                 entry_type: params?.entryType,
                 round_id: params?.roundId,
+                ...(params?._t != null ? { _t: params._t } : {}),
             }
         });
         return response.data;

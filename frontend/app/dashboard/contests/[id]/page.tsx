@@ -188,19 +188,24 @@ export default function ContestDetailPage() {
   }, [router, contestId, entryType, roundIdFromUrl])
 
   // REST Data Fetching - Optimized for speed
-  const fetchContestDetails = React.useCallback(async () => {
+  // silent: do not show full-page skeleton (avoids remounting contestant cards and losing "Voted" UI after vote)
+  const fetchContestDetails = React.useCallback(async (options?: { silent?: boolean }) => {
     if (!contestId) return
 
     const abortController = new AbortController()
+    const silent = options?.silent === true
 
     try {
-      setPageLoading(true)
+      if (!silent) {
+        setPageLoading(true)
+      }
       // Fetch contest data
       const c = await ApiService.getContest(parseInt(contestId), {
         filterCountry: (!filterCountry || filterCountry === 'all') ? undefined : filterCountry,
         filterContinent: filterContinent === 'all' ? undefined : filterContinent,
         entryType: entryType,
         roundId: roundIdFromUrl ? parseInt(roundIdFromUrl, 10) : undefined,
+        ...(silent ? { _t: Date.now() } : {}),
       }) as any
 
       // Check if aborted
@@ -283,7 +288,7 @@ export default function ContestDetailPage() {
       // Failed to fetch contest
       setToast({ message: "Failed to load contest", type: "error" })
     } finally {
-      if (!abortController.signal.aborted) {
+      if (!abortController.signal.aborted && !silent) {
         setPageLoading(false)
       }
     }
@@ -341,14 +346,33 @@ export default function ContestDetailPage() {
     // Cleanup handled in fetchContestDetails via abortController
   }, [fetchContestDetails])
 
-  // After vote / replace, refresh all cards so "Voted" ↔ "Vote" matches server (replaced contestant shows Vote again)
+  // After vote / replace: silent refresh so we do not unmount the grid (skeleton reset "Vote" button state)
   useEffect(() => {
     const onVoteChanged = () => {
-      void fetchContestDetails()
+      void fetchContestDetails({ silent: true })
     }
     window.addEventListener('vote-changed', onVoteChanged)
     return () => window.removeEventListener('vote-changed', onVoteChanged)
   }, [fetchContestDetails])
+
+  const markContestantVotedInState = React.useCallback((contestantId: string) => {
+    setContest((prev) => {
+      if (!prev) return null
+      return {
+        ...prev,
+        contestants: prev.contestants.map((c) =>
+          c.id === contestantId
+            ? {
+                ...c,
+                hasVoted: true,
+                canVote: false,
+                voteRestrictionReason: 'already_voted',
+              }
+            : c
+        ),
+      }
+    })
+  }, [])
 
   const handleReportClick = (contestantId: string) => {
     const contestant = contest?.contestants.find(c => c.id === contestantId)
@@ -935,8 +959,8 @@ export default function ContestDetailPage() {
                   searchQuery={searchQuery}
                   onToggleFavorite={handleToggleFavorite}
                   onViewDetails={(contestantId) => router.push(`/dashboard/contests/${contestId}/contestant/${contestantId}`)}
-                  onVote={() => {
-                    // Rafraîchir le panel "Mes votes" après un vote
+                  onVote={(contestantId) => {
+                    markContestantVotedInState(contestantId)
                     window.dispatchEvent(new Event('vote-changed'))
                   }}
                   onComment={() => { }}
