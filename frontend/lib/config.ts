@@ -31,7 +31,7 @@ export const REOWN_PROJECT_ID = process.env.NEXT_PUBLIC_REOWN_PROJECT_ID || ''
 // Contract Addresses and Configuration
 // ============================================
 export const CONTRACTS = {
-  PAYMENT_CONTRACT: '0xed8cbdFEB6104A49edCe79666Aae66Eda0d3b622',
+  PAYMENT_CONTRACT: '0xC003750eDf5feEFBf94FB4B754D70f2b73392Ea9',
   USDT_ADDRESS: '0x55d398326f99059fF775485246999027B3197955',
   CHAIN_ID: 56,
   RPC_URL: 'https://bsc-dataseed.binance.org',
