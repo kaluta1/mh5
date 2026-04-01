@@ -998,16 +998,22 @@ def get_contest_contestants(
         )
         ranks = {cid: rank + 1 for rank, (cid, _) in enumerate(ranked_contestants)}
         
-        # Check user votes (with error handling)
+        # Check user votes: legacy Vote + MyHigh5 ContestantVoting (same contest scope)
         user_votes = set()
         current_user_id = current_user.id if current_user else None
         if current_user_id:
             try:
-                from app.models.voting import Vote
+                from app.models.voting import Vote, ContestantVoting
                 user_votes_list = db.query(Vote.contestant_id)\
                     .filter(Vote.voter_id == current_user_id, Vote.contestant_id.in_(contestant_ids))\
                     .all()
                 user_votes = {row[0] for row in user_votes_list}
+                cv_rows = db.query(ContestantVoting.contestant_id).filter(
+                    ContestantVoting.user_id == current_user_id,
+                    ContestantVoting.contest_id == contest_id,
+                    ContestantVoting.contestant_id.in_(contestant_ids),
+                ).all()
+                user_votes.update(row[0] for row in cv_rows)
             except Exception as e:
                 logger.warning(f"Error fetching user votes: {e}")
         

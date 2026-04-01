@@ -1335,15 +1335,17 @@ class CRUDContest:
         logger.info(f"[get_contest_with_enriched_contestants] Returning {len(contestant_ids)} contestant IDs")
         
         # Récupérer tous les votes avec utilisateurs (depuis ContestantVoting)
-        # Filtrer par season_id pour ne récupérer que les votes de cette saison
+        # Scope par contest_id (aligné sur POST /contestants/{id}/vote). Filtrer uniquement par
+        # season_id via ContestSeasonLink peut exclure les votes si la saison active du lien ≠
+        # celle enregistrée sur ContestantVoting — has_voted faux et compteurs / rangs périmés.
         votes_data = []
         try:
-            if season and contestant_ids:
+            if contestant_ids:
                 votes_data = db.query(ContestantVoting, User)\
                     .join(User, ContestantVoting.user_id == User.id)\
                     .filter(
                         ContestantVoting.contestant_id.in_(contestant_ids),
-                        ContestantVoting.season_id == season.id
+                        ContestantVoting.contest_id == contest_id,
                     )\
                     .all()
         except Exception as e:
@@ -1497,19 +1499,16 @@ class CRUDContest:
                 .all()
             author_favorites = {fav[0] for fav in author_favs}
         
-        # Récupérer tous les votes de l'utilisateur pour cette saison (pour tous les contestants)
-        # IMPORTANT: Un utilisateur peut voter pour plusieurs contestants dans la même saison
-        # Mais il ne peut pas voter deux fois pour le même contestant dans la même saison
+        # Votes de l'utilisateur pour ce concours (même clé que l'enregistrement du vote API)
         user_votes_in_season = {}
-        if current_user_id and season:
+        if current_user_id and contestant_ids:
             user_votes = db.query(ContestantVoting)\
                 .filter(
                     ContestantVoting.user_id == current_user_id,
-                    ContestantVoting.season_id == season.id,
-                    ContestantVoting.contestant_id.in_(contestant_ids)
+                    ContestantVoting.contest_id == contest_id,
+                    ContestantVoting.contestant_id.in_(contestant_ids),
                 )\
                 .all()
-            # Créer un dictionnaire {contestant_id: vote} pour vérification rapide
             user_votes_in_season = {vote.contestant_id: vote for vote in user_votes}
         
         # Déterminer le niveau de la saison (city, country, regional, continent, global, etc.)

@@ -108,12 +108,18 @@ class CRUDContestant:
             if isinstance(raw_level, str):
                 season_level = raw_level.lower()
         
-        # Compter les votes avec ContestantVoting par saison
+        # Compter les votes (aligné sur contest_id comme l'API de vote)
         votes_count = 0
-        if season:
+        if contest_id:
             vote_count_query = db.query(func.count(ContestantVoting.id)).filter(
                 ContestantVoting.contestant_id == id,
-                ContestantVoting.season_id == season.id
+                ContestantVoting.contest_id == contest_id,
+            )
+            votes_count = vote_count_query.scalar() or 0
+        elif season:
+            vote_count_query = db.query(func.count(ContestantVoting.id)).filter(
+                ContestantVoting.contestant_id == id,
+                ContestantVoting.season_id == season.id,
             )
             votes_count = vote_count_query.scalar() or 0
         
@@ -173,9 +179,9 @@ class CRUDContestant:
                 .all()
             contestant_ids = [c.id for c in contestants_same_season]
 
-        # Compter les votes pour tous les contestants de la saison (par saison)
+        # Compter les votes pour le classement (contest_id cohérent avec les lignes de vote)
         votes_counts = []
-        if season:
+        if contestant_ids and contest_id:
             votes_counts = (
                 db.query(
                     ContestantVoting.contestant_id,
@@ -183,7 +189,20 @@ class CRUDContestant:
                 )
                 .filter(
                     ContestantVoting.contestant_id.in_(contestant_ids),
-                    ContestantVoting.season_id == season.id
+                    ContestantVoting.contest_id == contest_id,
+                )
+                .group_by(ContestantVoting.contestant_id)
+                .all()
+            )
+        elif season and contestant_ids:
+            votes_counts = (
+                db.query(
+                    ContestantVoting.contestant_id,
+                    func.count(ContestantVoting.id).label("vote_count"),
+                )
+                .filter(
+                    ContestantVoting.contestant_id.in_(contestant_ids),
+                    ContestantVoting.season_id == season.id,
                 )
                 .group_by(ContestantVoting.contestant_id)
                 .all()
@@ -260,11 +279,18 @@ class CRUDContestant:
             # Si l'utilisateur a voté pour le contestant X dans la saison CITY, il peut voter pour le contestant Y dans la même saison CITY
             # Mais il ne peut pas voter deux fois pour X dans la même saison CITY
             # S'il migre vers COUNTRY, il peut voter à nouveau pour X dans la nouvelle saison COUNTRY
-            existing_vote = db.query(ContestantVoting).filter(
-                ContestantVoting.user_id == current_user_id,
-                ContestantVoting.contestant_id == contestant.id,  # Vérification par contestant
-                ContestantVoting.season_id == season.id  # Vérification par (user_id, contestant_id, season_id)
-            ).first()
+            if contest_id:
+                existing_vote = db.query(ContestantVoting).filter(
+                    ContestantVoting.user_id == current_user_id,
+                    ContestantVoting.contestant_id == contestant.id,
+                    ContestantVoting.contest_id == contest_id,
+                ).first()
+            else:
+                existing_vote = db.query(ContestantVoting).filter(
+                    ContestantVoting.user_id == current_user_id,
+                    ContestantVoting.contestant_id == contestant.id,
+                    ContestantVoting.season_id == season.id,
+                ).first()
             
             if existing_vote:
                 # L'utilisateur a déjà voté pour ce contestant dans cette saison en cours
