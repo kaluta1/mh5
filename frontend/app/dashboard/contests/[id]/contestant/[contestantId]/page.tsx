@@ -20,16 +20,6 @@ import { ContestantMobileActions } from '@/components/dashboard/contestant-mobil
 import { ContestantMobileInfoDialog } from '@/components/dashboard/contestant-mobile-info-dialog'
 import { ToastNotification } from '@/components/dashboard/toast-notification'
 import { ShareDialog } from '@/components/dashboard/share-dialog'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
 import { Info } from 'lucide-react'
 import api from '@/lib/api'
 import { contestService } from '@/services/contest-service'
@@ -124,13 +114,6 @@ function ContestantDetailContent() {
   const [hoverTimeout, setHoverTimeout] = useState<NodeJS.Timeout | null>(null)
   const [showShareDialog, setShowShareDialog] = useState(false)
   const [shareLink, setShareLink] = useState('')
-  const [showReplaceDialog, setShowReplaceDialog] = useState(false)
-  const [replacedContestant, setReplacedContestant] = useState<{
-    id: number
-    name: string
-    position: number
-  } | null>(null)
-
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       router.push('/')
@@ -396,14 +379,27 @@ function ContestantDetailContent() {
 
       if (result.success) {
         await reloadContestantAfterVote()
+        setContestant((prev) =>
+          prev ? { ...prev, has_voted: true, can_vote: false } : null
+        )
         setToast({
           type: 'success',
           message: t('contestant_detail.vote_success') || 'Vote enregistré avec succès!'
         })
         window.dispatchEvent(new Event('vote-changed'))
       } else if (result.code === 'max_votes_reached') {
-        setReplacedContestant(result.replacedContestant || null)
-        setShowReplaceDialog(true)
+        await contestService.replaceVote(Number(contestant.id))
+        await reloadContestantAfterVote()
+        setContestant((prev) =>
+          prev ? { ...prev, has_voted: true, can_vote: false } : null
+        )
+        setToast({
+          type: 'success',
+          message:
+            t('dashboard.contests.vote_replaced') ||
+            'Vote enregistré (remplace votre 5e choix).'
+        })
+        window.dispatchEvent(new Event('vote-changed'))
       } else if (result.code === 'already_voted') {
         setToast({
           type: 'error',
@@ -442,30 +438,6 @@ function ContestantDetailContent() {
       setToast({
         type: 'error',
         message: errorMessage
-      })
-    } finally {
-      setIsVoting(false)
-    }
-  }
-
-  const handleReplaceVote = async () => {
-    if (!contestant?.id) return
-    setShowReplaceDialog(false)
-    setIsVoting(true)
-    try {
-      await contestService.replaceVote(Number(contestant.id))
-      await reloadContestantAfterVote()
-      setReplacedContestant(null)
-      setToast({
-        type: 'success',
-        message: t('dashboard.contests.vote_replaced') || 'Vote remplacé avec succès!'
-      })
-      window.dispatchEvent(new Event('vote-changed'))
-    } catch (error: any) {
-      console.error('Error replacing vote:', error)
-      setToast({
-        type: 'error',
-        message: t('dashboard.contests.vote_error') || 'Erreur lors du remplacement du vote.'
       })
     } finally {
       setIsVoting(false)
@@ -839,35 +811,6 @@ function ContestantDetailContent() {
         title={contestant.title || contestant.author_name}
         description={contestant.description}
       />
-
-      <AlertDialog
-        open={showReplaceDialog}
-        onOpenChange={(open) => {
-          setShowReplaceDialog(open)
-          if (!open) setReplacedContestant(null)
-        }}
-      >
-        <AlertDialogContent className="max-w-md">
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {t('dashboard.contests.replace_vote_title') || 'Remplacer un vote'}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {t('dashboard.contests.replace_vote_message') || 'Vous avez déjà 5 votes. Voulez-vous remplacer'}{' '}
-              <strong>{replacedContestant?.name}</strong>{' '}
-              {t('dashboard.contests.replace_vote_position') || '(5e position, 1 point) par ce participant ?'}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setReplacedContestant(null)}>
-              {t('common.cancel') || 'Annuler'}
-            </AlertDialogCancel>
-            <AlertDialogAction onClick={handleReplaceVote} className="bg-myhigh5-primary hover:bg-myhigh5-primary/90">
-              {t('dashboard.contests.replace_vote_confirm') || 'Remplacer'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   )
 }

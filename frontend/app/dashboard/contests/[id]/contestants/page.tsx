@@ -127,12 +127,9 @@ export default function ContestantsListPage() {
         await loadData()
         window.dispatchEvent(new Event('vote-changed'))
       } else if (result.code === 'max_votes_reached') {
-        // This list view has no replace dialog — main contest gallery does
+        await contestService.replaceVote(cid)
+        await loadData()
         window.dispatchEvent(new Event('vote-changed'))
-        alert(
-          t('dashboard.contests.replace_vote_use_gallery') ||
-            'You already have 5 votes for this season. Open the main contest page to replace your 5th vote.'
-        )
       }
     } catch (e) {
       console.error(e)

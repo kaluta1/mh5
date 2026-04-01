@@ -11,16 +11,6 @@ import { MediaViewerModal } from '@/components/media/media-viewer-modal'
 import { VideoEmbed } from '@/components/ui/video-embed'
 import { detectVideoPlatform, convertToEmbedUrl } from '@/lib/utils/video-platforms'
 import { contestService } from '@/services/contest-service'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
 import { reactionsService } from '@/services/reactions-service'
 import { sharesService } from '@/services/shares-service'
 import { useToast } from '@/components/ui/toast'
@@ -223,8 +213,6 @@ export function ContestantCard({
   const router = useRouter()
   const [showCommentsDialog, setShowCommentsDialog] = useState(false)
   const [isVoting, setIsVoting] = useState(false)
-  const [showReplaceDialog, setShowReplaceDialog] = useState(false)
-  const [replacedContestant, setReplacedContestant] = useState<{ id: number; name: string; position: number } | null>(null)
   const [currentVotes, setCurrentVotes] = useState(votes)
 
   // Sync from server when switching cards; never clear optimistic "voted" on refetch noise (same id).
@@ -243,6 +231,8 @@ export function ContestantCard({
   // Override canVote si le round n'est pas en phase de vote
   const effectiveCanVote = isVotingOpenForRound ? canVote : false
   const effectiveVoteRestrictionReason = !isVotingOpenForRound ? 'voting_not_open' : voteRestrictionReason
+  const userHasVotedThisContestant = isLiked || !!hasVoted
+  const voteButtonCanVote = effectiveCanVote && !userHasVotedThisContestant
   const [currentComments, setCurrentComments] = useState(comments)
   const [selectedReaction, setSelectedReaction] = useState<string | null>(null)
   const [reactionsCount, setReactionsCount] = useState(reactions || 0)
@@ -302,7 +292,7 @@ export function ContestantCard({
   }
 
   const handleVote = async () => {
-    if (!effectiveCanVote || isVoting || isLiked || hasVoted) return
+    if (!voteButtonCanVote || isVoting) return
 
     try {
       setIsVoting(true)
@@ -313,10 +303,15 @@ export function ContestantCard({
         setCurrentVotes(prev => prev + 1)
         addToast(t('dashboard.contests.vote_success') || 'Vote enregistré avec succès!', 'success')
         onVote()
+        window.dispatchEvent(new Event('vote-changed'))
       } else if (result.code === 'max_votes_reached') {
-        // Ouvrir le dialogue de confirmation pour remplacer le 5e vote
-        setReplacedContestant(result.replacedContestant || null)
-        setShowReplaceDialog(true)
+        // Replace 5th vote automatically (no confirmation)
+        await contestService.replaceVote(Number(id))
+        setIsLiked(true)
+        setCurrentVotes(prev => prev + 1)
+        addToast(t('dashboard.contests.vote_replaced') || 'Vote enregistré (remplace le 5e choix).', 'success')
+        onVote()
+        window.dispatchEvent(new Event('vote-changed'))
       } else if (result.code === 'already_voted') {
         addToast(t('dashboard.contests.already_voted_error') || 'Vous avez déjà voté pour ce participant.', 'info')
       }
@@ -341,25 +336,6 @@ export function ContestantCard({
       addToast(toastMessage, 'error')
     } finally {
       setIsVoting(false)
-    }
-  }
-
-  const handleReplaceVote = async () => {
-    try {
-      setIsVoting(true)
-      setShowReplaceDialog(false)
-      await contestService.replaceVote(Number(id))
-      setIsLiked(true)
-      setCurrentVotes(prev => prev + 1)
-      addToast(t('dashboard.contests.vote_replaced') || 'Vote remplacé avec succès!', 'success')
-      onVote()
-      window.dispatchEvent(new Event('vote-changed'))
-    } catch (error: any) {
-      console.error('Error replacing vote:', error)
-      addToast(t('dashboard.contests.vote_error') || 'Erreur lors du remplacement du vote.', 'error')
-    } finally {
-      setIsVoting(false)
-      setReplacedContestant(null)
     }
   }
 
@@ -759,8 +735,8 @@ export function ContestantCard({
             >
               <VoteButton
                 contestantId={Number(id)}
-                canVote={effectiveCanVote}
-                hasVoted={isLiked}
+                canVote={voteButtonCanVote}
+                hasVoted={userHasVotedThisContestant}
                 isVoting={isVoting}
                 onVote={handleVote}
                 isAuthor={currentUserId === userId}
@@ -813,8 +789,8 @@ export function ContestantCard({
             setShowVideoDialog(false)
             setSelectedVideo(null)
           }}
-          canVote={effectiveCanVote}
-          hasVoted={isLiked}
+          canVote={voteButtonCanVote}
+          hasVoted={userHasVotedThisContestant}
           isVoting={isVoting}
           isAuthor={currentUserId === userId}
           votesCount={currentVotes}
@@ -897,30 +873,6 @@ export function ContestantCard({
         isLoading={isDeleting}
         isDangerous={true}
       />
-
-      {/* Dialogue de confirmation de remplacement du 5e vote */}
-      <AlertDialog open={showReplaceDialog} onOpenChange={setShowReplaceDialog}>
-        <AlertDialogContent className="max-w-md">
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {t('dashboard.contests.replace_vote_title') || 'Remplacer un vote'}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {t('dashboard.contests.replace_vote_message') || 'Vous avez déjà 5 votes. Voulez-vous remplacer'}{' '}
-              <strong>{replacedContestant?.name}</strong>{' '}
-              {t('dashboard.contests.replace_vote_position') || '(5e position, 1 point) par ce participant ?'}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setReplacedContestant(null)}>
-              {t('common.cancel') || 'Annuler'}
-            </AlertDialogCancel>
-            <AlertDialogAction onClick={handleReplaceVote} className="bg-myhigh5-primary hover:bg-myhigh5-primary/90">
-              {t('dashboard.contests.replace_vote_confirm') || 'Remplacer'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   )
 }
