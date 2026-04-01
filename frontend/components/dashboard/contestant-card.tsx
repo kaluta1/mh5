@@ -226,6 +226,14 @@ export function ContestantCard({
   const [showReplaceDialog, setShowReplaceDialog] = useState(false)
   const [replacedContestant, setReplacedContestant] = useState<{ id: number; name: string; position: number } | null>(null)
   const [currentVotes, setCurrentVotes] = useState(votes)
+
+  useEffect(() => {
+    setIsLiked(hasVoted)
+  }, [hasVoted])
+
+  useEffect(() => {
+    setCurrentVotes(votes)
+  }, [votes])
   
   // Override canVote si le round n'est pas en phase de vote
   const effectiveCanVote = isVotingOpenForRound ? canVote : false

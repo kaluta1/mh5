@@ -341,6 +341,15 @@ export default function ContestDetailPage() {
     // Cleanup handled in fetchContestDetails via abortController
   }, [fetchContestDetails])
 
+  // After vote / replace, refresh all cards so "Voted" ↔ "Vote" matches server (replaced contestant shows Vote again)
+  useEffect(() => {
+    const onVoteChanged = () => {
+      void fetchContestDetails()
+    }
+    window.addEventListener('vote-changed', onVoteChanged)
+    return () => window.removeEventListener('vote-changed', onVoteChanged)
+  }, [fetchContestDetails])
+
   const handleReportClick = (contestantId: string) => {
     const contestant = contest?.contestants.find(c => c.id === contestantId)
     if (contestant) {
