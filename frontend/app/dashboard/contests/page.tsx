@@ -17,6 +17,7 @@ import { LocationFilterBar } from '@/components/dashboard/location-filter-bar'
 // GraphQL
 // REST API
 import ApiService, { Round } from '@/lib/api-service'
+import { getRoundNominationDeadlineMs } from '@/lib/nomination-deadline'
 
 // Lazy load heavy components
 const ContestCard = dynamic(() => import('@/components/dashboard/contest-card').then(mod => ({ default: mod.ContestCard })), {
@@ -519,10 +520,6 @@ function ContestsPageContent() {
     return filtered
   }, [rawContests, activeTab, committedSearch, sortBy, categoryTab, filterLevel])
 
-  // Déterminer si le round actif est fermé (soumissions terminées)
-  const activeRoundData = rounds.find((r: any) => String(r.id) === activeRoundId)
-  const isRoundClosed = activeRoundData ? new Date(activeRoundData.submission_end_date + 'T23:59:59') < new Date() : false
-
   const handleParticipate = (id: string, isEditing: boolean, roundId: string | null) => {
     const params = new URLSearchParams()
     if (isEditing) params.set('edit', 'true')
@@ -701,7 +698,7 @@ function ContestsPageContent() {
                   contest_mode={contest.contest_mode}
                   currentUserContesting={(categoryTab === 'nomination' ? contest.currentUserParticipated : contest.currentUserContesting) || false}
                   onToggleFavorite={() => { }}
-                  isRoundClosed={isRoundClosed}
+                  nominationExtensionUntil={contestsData?.nomination_extension_until ?? undefined}
                   onParticipate={() => handleParticipate(contest.id, (categoryTab === 'nomination' ? contest.currentUserParticipated : contest.currentUserContesting) || false, activeRoundId)}
                   onViewContestants={() => {
                     const params = new URLSearchParams()

@@ -153,10 +153,11 @@ def _enrich_round_data(
             logger.warning(f"Error checking user participation for round {round_id}: {str(e)}")
             current_user_participated = False
         
-        # Check if completed
+        # Load round ORM once: completion check + live submission/voting flags (grace + env extension)
+        round_orm = None
         try:
-            round_obj = db.query(Round).filter(Round.id == round_id).first()
-            is_completed = crud.round.is_round_completed(round_obj) if round_obj else False
+            round_orm = db.query(Round).filter(Round.id == round_id).first()
+            is_completed = crud.round.is_round_completed(round_orm) if round_orm else False
         except Exception as e:
             logger.warning(f"Error checking if round {round_id} is completed: {str(e)}")
             is_completed = False
@@ -318,20 +319,25 @@ def _enrich_round_data(
             contests_count = 0
         
         nomination_extension_until = None
+        eff_submission_open = r_data.get("is_submission_open", True)
+        eff_voting_open = r_data.get("is_voting_open", False)
         try:
-            from app.services.contest_status import contest_status_service
+            from app.services.contest_status import ContestStatusService
 
-            ro = db.query(Round).filter(Round.id == round_id).first()
-            if ro:
+            if round_orm:
                 now = datetime.utcnow()
-                if contest_status_service.env_extra_nomination_active(ro, now):
-                    nomination_extension_until = contest_status_service.nomination_extension_deadline()
+                eff_submission_open = ContestStatusService.round_submission_open_at(round_orm, now)
+                eff_voting_open = ContestStatusService.round_voting_open_at(round_orm, now)
+                if ContestStatusService.env_extra_nomination_active(round_orm, now):
+                    nomination_extension_until = ContestStatusService.nomination_extension_deadline()
         except Exception as ext_e:
-            logger.warning("nomination_extension_until: %s", ext_e)
+            logger.warning("round live flags / nomination_extension_until: %s", ext_e)
 
         # Build final response
         result = {
             **r_data,
+            "is_submission_open": eff_submission_open,
+            "is_voting_open": eff_voting_open,
             "participants_count": participants_count,
             "contests_count": contests_count,
             "votes_count": 0,

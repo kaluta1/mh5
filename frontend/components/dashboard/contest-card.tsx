@@ -6,7 +6,8 @@ import { Heart, Users, Clock, ArrowRight, Eye, Mic, ShieldCheck, FileCheck, PawP
 import { Button } from '@/components/ui/button'
 import { useLanguage } from '@/contexts/language-context'
 import { Badge } from '@/components/ui/badge'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import { getRoundNominationDeadlineMs } from '@/lib/nomination-deadline'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 
@@ -35,9 +36,11 @@ interface ContestCardProps {
   isFavorite: boolean
   isFeatured?: boolean
   genderRestriction?: 'male' | 'female' | null
-  participationStartDate?: Date
-  participationEndDate?: Date
-  votingStartDate?: Date
+  participationStartDate?: Date | string
+  participationEndDate?: Date | string
+  votingStartDate?: Date | string
+  /** From round API when MYHIGH5_NOMINATION_EXTENSION_UNTIL is active */
+  nominationExtensionUntil?: string | null
   userGender?: 'male' | 'female' | 'other' | 'prefer_not_to_say' | null
   canParticipate?: boolean
   isRoundClosed?: boolean
@@ -81,6 +84,7 @@ export function ContestCard({
   participationStartDate,
   participationEndDate,
   votingStartDate,
+  nominationExtensionUntil,
   userGender,
   canParticipate: userCanParticipate = true,
   isRoundClosed = false,
@@ -117,6 +121,42 @@ export function ContestCard({
 
     return () => clearInterval(interval)
   }, [])
+
+  const submissionEndDateStr = useMemo(() => {
+    if (participationEndDate == null || participationEndDate === '') return null
+    if (typeof participationEndDate === 'string') {
+      return participationEndDate.includes('T') ? participationEndDate.slice(0, 10) : participationEndDate
+    }
+    try {
+      return participationEndDate.toISOString().slice(0, 10)
+    } catch {
+      return null
+    }
+  }, [participationEndDate])
+
+  const votingStartDateStr = useMemo(() => {
+    if (votingStartDate == null || votingStartDate === '') return undefined
+    if (typeof votingStartDate === 'string') {
+      return votingStartDate.includes('T') ? votingStartDate.slice(0, 10) : votingStartDate
+    }
+    try {
+      return votingStartDate.toISOString().slice(0, 10)
+    } catch {
+      return undefined
+    }
+  }, [votingStartDate])
+
+  /** Aligns with backend grace + MYHIGH5_NOMINATION_EXTENSION_UNTIL (updates every second with currentTime). */
+  const isNominationWindowClosed = useMemo(() => {
+    if (!submissionEndDateStr) return isRoundClosed
+    const endMs = getRoundNominationDeadlineMs({
+      submission_end_date: submissionEndDateStr,
+      voting_start_date: votingStartDateStr,
+      nomination_extension_until: nominationExtensionUntil ?? undefined,
+    })
+    if (endMs == null) return isRoundClosed
+    return currentTime.getTime() > endMs
+  }, [submissionEndDateStr, votingStartDateStr, nominationExtensionUntil, currentTime, isRoundClosed])
 
   // Debug: Log topContestants data (disabled to reduce console noise)
   // console.log(`Contest ${id} - topContestants:`, topContestants?.length || 0, topContestants?.map(c => ({ id: c.id, image_url: c.image_url?.substring(0, 50) })))
@@ -682,7 +722,7 @@ export function ContestCard({
 
         {/* Action Buttons */}
         <div className="mt-4 flex gap-2.5">
-          {canParticipate() && onParticipate && !isRoundClosed ? (
+          {canParticipate() && onParticipate && !isNominationWindowClosed ? (
             <>
               <Button
                 onClick={(e) => {
