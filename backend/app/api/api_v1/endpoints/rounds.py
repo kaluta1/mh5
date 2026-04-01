@@ -217,30 +217,47 @@ def _enrich_round_data(
                     # Build contest_mode map for entry_type filtering
                     mode_map = {vc.id: getattr(vc, 'contest_mode', 'participation') for vc in valid_contests}
 
-                    # Single query: count per season_id grouped
+                    # Single query: count per season_id grouped.
+                    # Include rows with round_id NULL (legacy) so nomination/participation counts match
+                    # contest enrichment (which does not require round_id). Strict round-only filter hid
+                    # valid contestants and showed 0 on cards after cleanup or for older rows.
                     batch_query = db.query(
                         ContestantModel.season_id,
                         ContestantModel.entry_type,
                         func.count(ContestantModel.id)
                     ).filter(
                         ContestantModel.season_id.in_(valid_ids),
-                        ContestantModel.round_id == round_id,
-                        ContestantModel.is_deleted == False
+                        ContestantModel.is_deleted == False,
+                        or_(
+                            ContestantModel.round_id == round_id,
+                            ContestantModel.round_id.is_(None),
+                        ),
                     )
                     if filter_country and filter_country != 'all':
-                        batch_query = batch_query.filter(
-                            or_(
-                                func.lower(ContestantModel.country) == func.lower(filter_country),
-                                ContestantModel.country == None
+                        fc = func.lower(filter_country)
+                        if contest_mode == 'nomination':
+                            # Nominee country and/or nominator country (forms may populate either)
+                            batch_query = batch_query.filter(
+                                or_(
+                                    func.lower(ContestantModel.country) == fc,
+                                    func.lower(ContestantModel.nominator_country) == fc,
+                                )
                             )
-                        )
+                        else:
+                            batch_query = batch_query.filter(
+                                or_(
+                                    func.lower(ContestantModel.country) == fc,
+                                    ContestantModel.country == None,
+                                )
+                            )
                     batch_results = batch_query.group_by(
                         ContestantModel.season_id, ContestantModel.entry_type
                     ).all()
 
                     for sid, etype, cnt in batch_results:
                         expected = 'nomination' if mode_map.get(sid) == 'nomination' else 'participation'
-                        if etype == expected:
+                        etype_norm = (etype or '').strip().lower() or 'participation'
+                        if etype_norm == expected:
                             contest_participant_counts[sid] = cnt
                 except Exception as e:
                     logger.warning(f"Batch count failed: {e}")
@@ -266,8 +283,11 @@ def _enrich_round_data(
                     
                     # Now check for this specific round, filtered by entry_type
                     if valid_contests:
-                        # Get user contestants for THIS round only
-                        user_contestants = [uc for uc in all_user_contestants if uc.round_id == round_id]
+                        # Match this round or legacy rows with no round_id (same as batch counts)
+                        user_contestants = [
+                            uc for uc in all_user_contestants
+                            if uc.round_id == round_id or uc.round_id is None
+                        ]
                         # Déterminer le entry_type attendu pour ce tab
                         expected_type = 'nomination' if contest_mode == 'nomination' else 'participation'
                         # Filtrer par entry_type ET par contest valide
@@ -302,6 +322,20 @@ def _enrich_round_data(
                         "created_at": getattr(contest, 'created_at', None),
                         "updated_at": getattr(contest, 'updated_at', None),
                         "contest_mode": getattr(contest, 'contest_mode', 'participation'),
+                        "requires_kyc": bool(getattr(contest, "requires_kyc", True)),
+                        "requires_visual_verification": bool(
+                            getattr(contest, "requires_visual_verification", False)
+                        ),
+                        "requires_voice_verification": bool(
+                            getattr(contest, "requires_voice_verification", False)
+                        ),
+                        "requires_brand_verification": bool(
+                            getattr(contest, "requires_brand_verification", False)
+                        ),
+                        "requires_content_verification": bool(
+                            getattr(contest, "requires_content_verification", False)
+                        ),
+                        "participant_type": getattr(contest, "participant_type", None),
                         "current_user_contesting": bool(is_contesting)  # Explicitly convert to bool
                     }
                     r_data.setdefault("contests", []).append(contest_data)

@@ -55,6 +55,13 @@ interface ContestCardProps {
   requiresVoiceVerification?: boolean
   requiresBrandVerification?: boolean
   requiresContentVerification?: boolean
+  /** Participation tab: approved verification from API (dashboard passes these). */
+  hasVisualVerification?: boolean
+  hasVoiceVerification?: boolean
+  hasBrandVerification?: boolean
+  hasContentVerification?: boolean
+  /** When false and participation requires checks, block Participate until loaded. Default true (no gate). */
+  verificationStatusLoaded?: boolean
   minAge?: number | null
   maxAge?: number | null
   isNomination?: boolean  // Indique si on est dans l'onglet Nomination
@@ -98,6 +105,11 @@ export function ContestCard({
   requiresVoiceVerification = false,
   requiresBrandVerification = false,
   requiresContentVerification = false,
+  hasVisualVerification = false,
+  hasVoiceVerification = false,
+  hasBrandVerification = false,
+  hasContentVerification = false,
+  verificationStatusLoaded = true,
   minAge = null,
   maxAge = null,
   isNomination = false,
@@ -231,11 +243,34 @@ export function ContestCard({
     return true
   }
 
-  // L'utilisateur peut participer seulement s'il est éligible au concours ET a complété son profil
-  // Le KYC est requis uniquement si le concours l'exige
+  // Participation: match backend / apply page — KYC if contest requires it or no other verification flags.
   const canParticipate = () => {
     if (!isEligibleForContest() || !userCanParticipate) return false
-    if (requiresKyc && !isKycVerified) return false
+    if (isNomination) return true
+
+    const participationHasOtherVerification = !!(
+      requiresVisualVerification ||
+      requiresVoiceVerification ||
+      requiresBrandVerification ||
+      requiresContentVerification
+    )
+    const hasContestVerificationInfo = !!(requiresKyc || participationHasOtherVerification)
+    const effectiveRequiresKyc =
+      hasContestVerificationInfo && (requiresKyc || !participationHasOtherVerification)
+
+    const needsAnyVerification =
+      effectiveRequiresKyc ||
+      requiresVisualVerification ||
+      requiresVoiceVerification ||
+      requiresBrandVerification ||
+      requiresContentVerification
+
+    if (needsAnyVerification && !verificationStatusLoaded) return false
+    if (effectiveRequiresKyc && !isKycVerified) return false
+    if (requiresVisualVerification && !hasVisualVerification) return false
+    if (requiresVoiceVerification && !hasVoiceVerification) return false
+    if (requiresBrandVerification && !hasBrandVerification) return false
+    if (requiresContentVerification && !hasContentVerification) return false
     return true
   }
 

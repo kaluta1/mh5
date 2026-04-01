@@ -281,21 +281,37 @@ export default function ApplyToContestPage() {
     loadVerificationStatus()
   }, [user?.id, verificationStatusLoaded])
 
-  const contestRequiresVerification = useMemo(() => {
-    if (!contest) return false
+  /** Participation only: match backend — KYC required if contest says so or no other verification flags are set. */
+  const participationHasOtherVerificationFlags = useMemo(() => {
+    if (!contest || isNomination) return false
     return !!(
-      contest.requires_kyc ||
       contest.requires_visual_verification ||
       contest.requires_voice_verification ||
       contest.requires_brand_verification ||
       contest.requires_content_verification
     )
-  }, [contest])
+  }, [contest, isNomination])
+
+  const effectiveParticipationRequiresKyc = useMemo(() => {
+    if (!contest || isNomination) return false
+    return !!(contest.requires_kyc || !participationHasOtherVerificationFlags)
+  }, [contest, isNomination, participationHasOtherVerificationFlags])
+
+  const contestRequiresVerification = useMemo(() => {
+    if (!contest || isNomination) return false
+    return !!(
+      effectiveParticipationRequiresKyc ||
+      contest.requires_visual_verification ||
+      contest.requires_voice_verification ||
+      contest.requires_brand_verification ||
+      contest.requires_content_verification
+    )
+  }, [contest, isNomination, effectiveParticipationRequiresKyc])
 
   const allVerificationRequirementsMet = useMemo(() => {
     if (!contest || !contestRequiresVerification) return true
     const kycDone =
-      !contest.requires_kyc ||
+      !effectiveParticipationRequiresKyc ||
       !!(user?.identity_verified || (user as { is_verified?: boolean })?.is_verified)
     const visualDone = !contest.requires_visual_verification || hasVisualVerification
     const voiceDone = !contest.requires_voice_verification || hasVoiceVerification
@@ -305,6 +321,7 @@ export default function ApplyToContestPage() {
   }, [
     contest,
     contestRequiresVerification,
+    effectiveParticipationRequiresKyc,
     user,
     hasVisualVerification,
     hasVoiceVerification,
@@ -786,7 +803,7 @@ export default function ApplyToContestPage() {
             onClose={handleVerificationDialogClose}
             contestName={contest.name}
             requirements={{
-              requiresKyc: contest.requires_kyc,
+              requiresKyc: effectiveParticipationRequiresKyc,
               requiresVisualVerification: contest.requires_visual_verification,
               requiresVoiceVerification: contest.requires_voice_verification,
               requiresBrandVerification: contest.requires_brand_verification,
