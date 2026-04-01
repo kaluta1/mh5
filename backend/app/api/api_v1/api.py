@@ -4,7 +4,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    from app.api.api_v1.endpoints import auth, users, media, contests, votes, kyc, contestant, geography, favorites, search, search_history, comments, admin, season_migration, notifications, analytics, affiliate, payments, roles, verifications, wallet, suggested_contests, social, private_messages, contact, categories, newsletter, share, follow, rounds
+    from app.api.api_v1.endpoints import auth, users, media, contests, votes, kyc, contestant, geography, favorites, search, search_history, comments, admin, season_migration, notifications, analytics, affiliate, payments, roles, verifications, wallet, suggested_contests, social, private_messages, contact, categories, newsletter, share, follow, rounds, voting_types
     from app.api.api_v1.endpoints import feed_groups, feed_messages, feed_posts, feed, feed_keys, groups
     logger.info("All endpoints imported successfully")
 except ImportError as e:
@@ -28,6 +28,7 @@ except Exception as e:
     raise
 api_router.include_router(suggested_contests.router, prefix="/suggested-contests", tags=["Suggestions de concours"])
 api_router.include_router(votes.router, prefix="/votes", tags=["Votes"])
+api_router.include_router(voting_types.router, prefix="/voting-types", tags=["Voting Types"])
 api_router.include_router(kyc.router, prefix="/kyc", tags=["Vérification KYC"])
 api_router.include_router(verifications.router, prefix="/verifications", tags=["Vérifications utilisateur"])
 api_router.include_router(payments.router, prefix="/payments", tags=["Paiements"])

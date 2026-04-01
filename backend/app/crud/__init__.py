@@ -12,6 +12,7 @@ from .crud_favorite import favorite
 from .crud_favorite import favorite
 from .crud_report import report
 from .crud_round import round
+from .crud_voting_type import voting_type
 # Modules affiliés
 from .crud_affiliate import (
     affiliate_tree, affiliate_commission, referral_link, 

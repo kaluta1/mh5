@@ -42,7 +42,7 @@ export default function AdminContests() {
 
       // Fetch Voting Types
       try {
-        const vtResponse = await api.get('/api/v1/voting-types')
+        const vtResponse = await api.get('/api/v1/voting-types', { params: { limit: 200 } })
         if (vtResponse.data && Array.isArray(vtResponse.data)) {
           }
       } catch (err) {

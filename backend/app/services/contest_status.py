@@ -93,6 +93,10 @@ class ContestStatusService:
             return False
         if getattr(round_obj, "submission_end_date", None):
             handoff = ContestStatusService.extended_submission_deadline(round_obj.submission_end_date)
+            # If nomination grace ends after the voting window, do not block the whole April vote
+            # period until May (common when submission_end is still open while voting_start is April).
+            if handoff > ve:
+                return when >= vs
             start_vote = max(vs, handoff)
             return when >= start_vote
         nom_close = ContestStatusService.round_nomination_closes_at(round_obj)
