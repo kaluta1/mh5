@@ -438,22 +438,30 @@ def get_my_votes(
         ContestantVoting.vote_date.asc()
     ).all()
     
-    # Grouper par season_id
-    votes_by_season = {}
+    # Grouper par (season_id, contest_id) — une ligne MyHigh5 par concours dans la période
+    votes_by_season_contest = {}
     for vote in all_votes:
-        season_key = vote.season_id
-        if season_key not in votes_by_season:
-            votes_by_season[season_key] = []
-        votes_by_season[season_key].append(vote)
+        key = (vote.season_id, vote.contest_id)
+        if key not in votes_by_season_contest:
+            votes_by_season_contest[key] = []
+        votes_by_season_contest[key].append(vote)
     
-    # Limiter à 5 votes par season et construire le résultat
+    # Limiter à 5 votes par groupe et construire le résultat
     result = {
         "seasons": []
     }
     
-    for season_id_key, votes in votes_by_season.items():
-        # Limiter à 5 votes par season
-        season_votes = votes[:5]
+    for (season_id_key, contest_id_key), votes in votes_by_season_contest.items():
+        # Ordre correct par position dans ce concours (l'ordre global par season_id peut mélanger les concours)
+        votes_sorted = sorted(
+            votes,
+            key=lambda v: (
+                v.position if v.position is not None else 1000,
+                v.vote_date.timestamp() if v.vote_date else 0.0,
+            ),
+        )
+        # Limiter à 5 votes par concours / saison
+        season_votes = votes_sorted[:5]
         
         # Récupérer les infos de la season et du contest
         first_vote = season_votes[0]
@@ -659,6 +667,7 @@ def reorder_my_votes(
     """
     votes_to_reorder = data.get("votes", [])
     season_id = data.get("season_id")
+    contest_id = data.get("contest_id")
     
     if not votes_to_reorder:
         raise HTTPException(
@@ -678,14 +687,17 @@ def reorder_my_votes(
             detail="Maximum 5 votes allowed per season"
         )
     
-    # Vérifier que tous les votes appartiennent à l'utilisateur et à la même season
+    # Vérifier que tous les votes appartiennent à l'utilisateur et à la même season (+ contest si fourni)
     contestant_ids = [v["contestant_id"] for v in votes_to_reorder]
     
-    user_votes = db.query(ContestantVoting).filter(
+    uv_q = db.query(ContestantVoting).filter(
         ContestantVoting.user_id == current_user.id,
         ContestantVoting.contestant_id.in_(contestant_ids),
         ContestantVoting.season_id == season_id
-    ).all()
+    )
+    if contest_id is not None:
+        uv_q = uv_q.filter(ContestantVoting.contest_id == contest_id)
+    user_votes = uv_q.all()
     
     user_vote_contestant_ids = {vote.contestant_id for vote in user_votes}
     
@@ -714,7 +726,12 @@ def reorder_my_votes(
     
     db.commit()
     
-    return {"message": "Votes reordered successfully", "count": len(votes_to_reorder), "season_id": season_id}
+    return {
+        "message": "Votes reordered successfully",
+        "count": len(votes_to_reorder),
+        "season_id": season_id,
+        "contest_id": contest_id,
+    }
 
 
 # IMPORTANT: Cette route DOIT venir avant /contest/{contest_id}
@@ -2229,9 +2246,11 @@ def vote_for_contestant(
     # Compter les votes existants de l'utilisateur pour cette saison
     from sqlalchemy import case, func as sa_func
 
+    # Scope to this contest + season so the cap matches the contest page and MyHigh5 (not all contests sharing the same season)
     existing_votes_for_season = db.query(ContestantVoting).filter(
         ContestantVoting.user_id == current_user.id,
-        ContestantVoting.season_id == season.id
+        ContestantVoting.season_id == season.id,
+        ContestantVoting.contest_id == contest.id,
     ).order_by(
         case(
             (ContestantVoting.position.isnot(None), ContestantVoting.position),
@@ -2446,10 +2465,11 @@ def replace_fifth_vote(
             detail={"code": "already_voted", "message": "You have already voted for this contestant."}
         )
 
-    # Récupérer tous les votes de l'utilisateur pour cette saison, triés par position
+    # Same scope as POST /vote: fifth slot is within this contest + season
     existing_votes = db.query(ContestantVoting).filter(
         ContestantVoting.user_id == current_user.id,
-        ContestantVoting.season_id == season.id
+        ContestantVoting.season_id == season.id,
+        ContestantVoting.contest_id == contest.id,
     ).order_by(
         case(
             (ContestantVoting.position.isnot(None), ContestantVoting.position),

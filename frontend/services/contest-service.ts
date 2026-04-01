@@ -790,7 +790,10 @@ class ContestService {
           votes_count: number;
           remaining_slots: number;
         }>
-      }>('/api/v1/contestants/user/my-votes');
+      }>('/api/v1/contestants/user/my-votes', {
+        params: { _t: Date.now() },
+        headers: { 'Cache-Control': 'no-cache' },
+      });
       return response.data;
     } catch (error) {
       console.error('Error fetching high 5 votes:', error);
@@ -918,11 +921,19 @@ class ContestService {
     replacedContestant?: { id: number; name: string; position: number };
   }> {
     const parse409 = (data: any) => {
-      const detail = data?.detail;
-      if (typeof detail === 'object' && detail?.code) {
+      if (!data) return null;
+      let detail = data.detail;
+      if (typeof detail === 'string') {
+        try {
+          detail = JSON.parse(detail);
+        } catch {
+          return null;
+        }
+      }
+      if (typeof detail === 'object' && detail !== null && !Array.isArray(detail) && 'code' in detail) {
         return {
           success: false as const,
-          code: detail.code as string,
+          code: String(detail.code),
           replacedContestant: detail.replaced_contestant as
             | { id: number; name: string; position: number }
             | undefined,
@@ -987,12 +998,17 @@ class ContestService {
    */
   async reorderMyHigh5Votes(
     votes: Array<{ contestant_id: number; position: number }>,
-    seasonId: number
-  ): Promise<{ message: string; count: number; season_id: number }> {
-    const response = await api.put('/api/v1/contestants/user/my-votes/reorder', {
+    seasonId: number,
+    contestId?: number
+  ): Promise<{ message: string; count: number; season_id: number; contest_id?: number }> {
+    const body: Record<string, unknown> = {
       votes,
-      season_id: seasonId
-    });
+      season_id: seasonId,
+    };
+    if (contestId != null) {
+      body.contest_id = contestId;
+    }
+    const response = await api.put('/api/v1/contestants/user/my-votes/reorder', body);
     return response.data;
   }
 

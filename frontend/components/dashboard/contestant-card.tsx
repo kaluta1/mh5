@@ -348,6 +348,7 @@ export function ContestantCard({
       setCurrentVotes(prev => prev + 1)
       addToast(t('dashboard.contests.vote_replaced') || 'Vote remplacé avec succès!', 'success')
       onVote()
+      window.dispatchEvent(new Event('vote-changed'))
     } catch (error: any) {
       console.error('Error replacing vote:', error)
       addToast(t('dashboard.contests.vote_error') || 'Erreur lors du remplacement du vote.', 'error')

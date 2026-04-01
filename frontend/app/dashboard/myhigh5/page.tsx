@@ -230,7 +230,7 @@ export default function MyHigh5Page() {
         contestant_id: vote.contestant_id,
         position: index + 1
       }))
-      await contestService.reorderMyHigh5Votes(votesToReorder, season.season_id)
+      await contestService.reorderMyHigh5Votes(votesToReorder, season.season_id, season.contest_id)
       addToast(t('dashboard.myhigh5.order_saved') || 'Ordre sauvegardé !', 'success')
     } catch (error) {
       console.error('Erreur lors de la sauvegarde de l\'ordre:', error)

@@ -113,7 +113,8 @@ export default function MyVotesPanel({ contestId, onVoteChanged }: MyVotesPanelP
             contestant_id: v.contestant_id,
             position: v.position
           })),
-          seasonId
+          seasonId,
+          contestId
         )
         onVoteChanged?.()
         // Émettre un événement global pour synchroniser
