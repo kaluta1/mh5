@@ -1,10 +1,10 @@
 /**
  * Nomination closes at the later of:
- * - end of submission_end calendar day + grace
- * - start of voting_start calendar day + grace
+ * - end of submission_end calendar day (+ NOMINATION_GRACE_HOURS)
+ * - start of voting_start calendar day (+ NOMINATION_GRACE_HOURS)
  * Matches backend `ContestStatusService.round_nomination_closes_at`.
  */
-export const NOMINATION_GRACE_HOURS = 5
+export const NOMINATION_GRACE_HOURS = 0
 
 export function getRoundNominationDeadlineMs(round: {
   submission_end_date?: string

@@ -56,7 +56,7 @@ export function VoteButton({ contestantId, canVote, hasVoted, isVoting, onVote, 
         case 'geographic_restriction':
           return t('dashboard.contests.restriction_geographic') || 'Geographic restriction'
         case 'voting_not_open':
-          return t('dashboard.contests.vote') || 'Vote'
+          return t('dashboard.contests.voting_not_open') || 'Voting not yet open'
         case 'user_not_found':
           return t('dashboard.contests.restriction_user_not_found') || 'User not found'
         default:

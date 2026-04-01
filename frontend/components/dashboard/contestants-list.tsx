@@ -32,6 +32,7 @@ interface Contestant {
   canVote: boolean
   hasVoted: boolean
   hasReported?: boolean
+  isVotingOpenForRound?: boolean
   voteRestrictionReason?: string | null
   media: Media[]
   comments: number
@@ -205,6 +206,7 @@ export function ContestantsList({
             canVote={contestant.canVote}
             hasVoted={contestant.hasVoted}
             hasReported={contestant.hasReported}
+            isVotingOpenForRound={contestant.isVotingOpenForRound}
             voteRestrictionReason={contestant.voteRestrictionReason}
             isFavorite={favorites.includes(contestant.id)}
             media={contestant.media}

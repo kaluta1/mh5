@@ -15,8 +15,8 @@ logger = logging.getLogger(__name__)
 class ContestStatusService:
     """Service pour gérer l'état des contests"""
 
-    # Extra hours after key milestones (UTC) to keep nominations open for testing / overlap rules.
-    SUBMISSION_GRACE_HOURS = 5
+    # Extra hours after key milestones (UTC) after the last submission/voting calendar day (0 = none).
+    SUBMISSION_GRACE_HOURS = 0
 
     @staticmethod
     def _utc_now() -> datetime:
@@ -37,8 +37,7 @@ class ContestStatusService:
         - end of submission day + SUBMISSION_GRACE_HOURS
         - start of voting day + SUBMISSION_GRACE_HOURS
 
-        So if the calendar voting period has started but submission+5h already passed,
-        nomination stays open until voting_day 00:00 + 5h; then voting can run.
+        When SUBMISSION_GRACE_HOURS > 0, the later deadline can extend past midnight UTC.
         """
         deadlines: list[datetime] = []
         if getattr(round_obj, "submission_end_date", None):
@@ -79,10 +78,9 @@ class ContestStatusService:
     @staticmethod
     def round_voting_open_at(round_obj, when: datetime) -> bool:
         """
-        Voting allowed within the voting calendar window, after the submission-period grace ends.
+        Voting allowed within the voting calendar window, after the submission-period grace ends (if any).
 
-        We use max(voting_start midnight, extended_submission_deadline) so the Vote button does not
-        stay off for extra hours due to vote-day +5h nomination extension alone (common March→April UX bug).
+        We use max(voting_start midnight, extended_submission_deadline) when submission_end is set.
         If there is no submission_end_date, fall back to the full nomination_close rule.
         """
         if not round_obj.voting_start_date or not round_obj.voting_end_date:
@@ -91,6 +89,13 @@ class ContestStatusService:
         ve = datetime.combine(round_obj.voting_end_date, time(23, 59, 59))
         if not (vs <= when <= ve):
             return False
+        # When the voting calendar starts on a day *after* the last submission day (e.g. March
+        # nominations → April voting), open voting at voting_start midnight instead of waiting for
+        # extended_submission_deadline on the first voting day.
+        sub_end = getattr(round_obj, "submission_end_date", None)
+        vote_start = getattr(round_obj, "voting_start_date", None)
+        if sub_end and vote_start and sub_end < vote_start:
+            return True
         if getattr(round_obj, "submission_end_date", None):
             handoff = ContestStatusService.extended_submission_deadline(round_obj.submission_end_date)
             # If nomination grace ends after the voting window, do not block the whole April vote
@@ -217,7 +222,9 @@ class ContestStatusService:
                     return False, "Submissions are not open yet for this contest."
             ext = ContestStatusService.extended_submission_deadline(contest.submission_end_date)
             if now > ext:
-                return False, f"Submissions closed. Extended deadline was {ext.date()} (includes {ContestStatusService.SUBMISSION_GRACE_HOURS}h grace)."
+                g = ContestStatusService.SUBMISSION_GRACE_HOURS
+                extra = f" (includes {g}h grace after the last day)" if g else ""
+                return False, f"Submissions closed. Deadline was {ext.date()}{extra}."
             return True, ""
         
         # If no submission_end_date, check for active rounds as fallback via round_contests
@@ -294,9 +301,11 @@ class ContestStatusService:
             vs = datetime.combine(r.voting_start_date, time.min)
             ve = datetime.combine(r.voting_end_date, time(23, 59, 59))
             if vs <= now <= ve and now <= nom_close:
+                g = ContestStatusService.SUBMISSION_GRACE_HOURS
+                grace_note = f" ({g}h grace)" if g else ""
                 return False, (
-                    f"Nominations for {r.name} stay open until {nom_close.isoformat()} UTC "
-                    f"({ContestStatusService.SUBMISSION_GRACE_HOURS}h grace). Voting opens after that."
+                    f"Nominations for {r.name} stay open until {nom_close.isoformat()} UTC{grace_note}. "
+                    "Voting opens after that."
                 )
             if ContestStatusService.round_in_submission_grace(r, now):
                 return False, (
@@ -308,9 +317,11 @@ class ContestStatusService:
             if r.submission_start_date and r.submission_end_date:
                 sd, ed = r.submission_start_date, r.submission_end_date
                 if sd <= today <= ed:
+                    g = ContestStatusService.SUBMISSION_GRACE_HOURS
+                    suffix = f" and {g}h grace" if g else ""
                     return False, (
                         f"Submission phase is active for {r.name}. "
-                        f"Voting starts after the nomination window and {ContestStatusService.SUBMISSION_GRACE_HOURS}h grace."
+                        f"Voting starts after the nomination window{suffix}."
                     )
 
         return False, "Voting is not open for any round at this time"
