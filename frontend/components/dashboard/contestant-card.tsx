@@ -227,8 +227,13 @@ export function ContestantCard({
   const [replacedContestant, setReplacedContestant] = useState<{ id: number; name: string; position: number } | null>(null)
   const [currentVotes, setCurrentVotes] = useState(votes)
 
+  // Sync from server when switching cards; never clear optimistic "voted" on refetch noise (same id).
   useEffect(() => {
     setIsLiked(hasVoted)
+  }, [id])
+
+  useEffect(() => {
+    if (hasVoted) setIsLiked(true)
   }, [hasVoted])
 
   useEffect(() => {
@@ -297,7 +302,7 @@ export function ContestantCard({
   }
 
   const handleVote = async () => {
-    if (!effectiveCanVote || isVoting) return
+    if (!effectiveCanVote || isVoting || isLiked || hasVoted) return
 
     try {
       setIsVoting(true)

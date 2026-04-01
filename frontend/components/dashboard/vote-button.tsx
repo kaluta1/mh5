@@ -147,9 +147,10 @@ export function VoteButton({ contestantId, canVote, hasVoted, isVoting, onVote, 
       <button
         onClick={(e) => {
           e.stopPropagation()
-          if (canVote && !isAuthor) onVote()
+          if (hasVoted || isAuthor) return
+          if (canVote) onVote()
         }}
-        disabled={!canVote || isVoting || isAuthor}
+        disabled={isVoting || isAuthor || hasVoted || !canVote}
         className={`flex items-center justify-center gap-1.5 py-2.5 px-1 text-xs font-medium transition-colors w-full truncate ${
           hasVoted
             ? 'text-blue-600 dark:text-blue-400'
@@ -158,7 +159,7 @@ export function VoteButton({ contestantId, canVote, hasVoted, isVoting, onVote, 
             : canVote
             ? 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
             : 'text-gray-400 dark:text-gray-500'
-        } ${!canVote || isVoting || isAuthor ? 'opacity-50 cursor-not-allowed' : ''}`}
+        } ${isVoting || isAuthor || hasVoted || !canVote ? 'opacity-50 cursor-not-allowed' : ''}`}
         title={isAuthor ? (t('dashboard.contests.owner_cannot_vote') || 'Owner, cannot vote') : getVoteButtonTitle()}
       >
         <ThumbsUp className={`w-4 h-4 flex-shrink-0 ${hasVoted ? 'fill-current' : ''}`} />
