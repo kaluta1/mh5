@@ -21,6 +21,13 @@ def init_chart_of_accounts(db: Session):
         {"code": "2002", "name": "Commissions Payable L2-10", "type": AccountType.LIABILITY, "parent": "2000"},
         {"code": "2003", "name": "Service Fees Payable (KYC)", "type": AccountType.LIABILITY, "parent": "2000"},
         {"code": "2100", "name": "User Funds Payable", "type": AccountType.LIABILITY, "parent": "2000"},
+        {"code": "2104", "name": "Founding Members Pool Payable", "type": AccountType.LIABILITY, "parent": "2000"},
+        {"code": "2110", "name": "Deferred Revenue - Annual Membership", "type": AccountType.LIABILITY, "parent": "2000"},
+        {"code": "2111", "name": "Deferred Revenue - Founding Membership", "type": AccountType.LIABILITY, "parent": "2000"},
+        {"code": "2112", "name": "Deferred Platform Fee - Club Subscriptions", "type": AccountType.LIABILITY, "parent": "2000"},
+        {"code": "2120", "name": "Club Owner Subscription Payable (Agent)", "type": AccountType.LIABILITY, "parent": "2000"},
+        {"code": "2130", "name": "Member Ad Revenue Share Payable", "type": AccountType.LIABILITY, "parent": "2000"},
+        {"code": "2200", "name": "GST Payable (Singapore)", "type": AccountType.LIABILITY, "parent": "2000"},
         
         # EQUITY (3000)
         {"code": "3000", "name": "Equity", "type": AccountType.EQUITY, "parent": None},
@@ -30,11 +37,16 @@ def init_chart_of_accounts(db: Session):
         {"code": "4000", "name": "Revenue", "type": AccountType.REVENUE, "parent": None},
         {"code": "4001", "name": "KYC Revenue", "type": AccountType.REVENUE, "parent": "4000"},
         {"code": "4002", "name": "Membership Revenue", "type": AccountType.REVENUE, "parent": "4000"},
+        {"code": "4003", "name": "Platform Revenue (Net - Membership & Fees)", "type": AccountType.REVENUE, "parent": "4000"},
+        {"code": "4004", "name": "Ad Revenue - Platform Retained", "type": AccountType.REVENUE, "parent": "4000"},
+        {"code": "4005", "name": "Cashout Fee Revenue", "type": AccountType.REVENUE, "parent": "4000"},
+        {"code": "4006", "name": "Club Platform Service Fee Revenue", "type": AccountType.REVENUE, "parent": "4000"},
         
         # EXPENSES (5000)
         {"code": "5000", "name": "Expenses", "type": AccountType.EXPENSE, "parent": None},
         {"code": "5001", "name": "Commission Expense", "type": AccountType.EXPENSE, "parent": "5000"},
         {"code": "5002", "name": "KYC Provider Expense", "type": AccountType.EXPENSE, "parent": "5000"},
+        {"code": "5003", "name": "Ad Revenue Share to Members (Expense)", "type": AccountType.EXPENSE, "parent": "5000"},
     ]
     
     # 1. Créer les comptes (Parents d'abord idéalement, mais ici on gère l'ordre manuellement)

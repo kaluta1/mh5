@@ -272,10 +272,12 @@ export default function ApplyToContestPage() {
           if (status.has_voice) setHasVoiceVerification(true)
           if (status.has_brand) setHasBrandVerification(true)
           if (status.has_content) setHasContentVerification(true)
-          setVerificationStatusLoaded(true)
         }
       } catch (err) {
         console.warn('Could not load verification status:', err)
+      } finally {
+        // Always mark loaded so verification gate runs (otherwise form opens without checks)
+        setVerificationStatusLoaded(true)
       }
     }
     loadVerificationStatus()
