@@ -1602,17 +1602,18 @@ class CRUDContest:
                 # Global ou niveau inconnu -> pas de restriction géographique
                 return True
 
-        # Helper : vérifier si le vote est ouvert pour le round du contestant
+        # Helper : vote ouvert pour le round (même logique que round_voting_open_at : grâce nomination, etc.)
         def _is_voting_open_for_round(c):
             if not c.round_id:
                 return True  # Pas de round = pas de restriction
             from app.models.round import Round as RoundModel
-            from datetime import date as date_type
+            from app.services.contest_status import contest_status_service
+
             r = db.query(RoundModel).filter(RoundModel.id == c.round_id).first()
             if not r or not r.voting_start_date or not r.voting_end_date:
                 return True
-            today = date_type.today()
-            return r.voting_start_date <= today <= r.voting_end_date
+            now_vote = contest_status_service._utc_now()
+            return contest_status_service.round_voting_open_at(r, now_vote)
 
         # Construire la liste des contestants enrichis
         enriched_contestants = []

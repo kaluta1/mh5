@@ -2044,22 +2044,32 @@ def vote_for_contestant(
     # Vérifier que le round du contestant est en phase de vote (pas en soumission)
     if contestant.round_id:
         from app.models.round import Round as RoundModel
-        from datetime import date as date_type
+        from datetime import datetime, time as time_type
+
         contestant_round = db.query(RoundModel).filter(RoundModel.id == contestant.round_id).first()
-        if contestant_round:
-            today = date_type.today()
-            # Si le round a des dates de vote définies, vérifier qu'on est dans la fenêtre de vote
-            if contestant_round.voting_start_date and contestant_round.voting_end_date:
-                if today < contestant_round.voting_start_date:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f"Voting for {contestant_round.name} has not started yet. Submission phase is active until {contestant_round.submission_end_date}. Voting starts on {contestant_round.voting_start_date}."
-                    )
-                elif today > contestant_round.voting_end_date:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f"Voting for {contestant_round.name} has ended on {contestant_round.voting_end_date}."
-                    )
+        if contestant_round and contestant_round.voting_start_date and contestant_round.voting_end_date:
+            now_vote = contest_status_service._utc_now()
+            vs = datetime.combine(contestant_round.voting_start_date, time_type.min)
+            ve = datetime.combine(contestant_round.voting_end_date, time_type(23, 59, 59))
+            if now_vote < vs:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Voting for {contestant_round.name} has not started yet. Submission phase is active until {contestant_round.submission_end_date}. Voting starts on {contestant_round.voting_start_date}."
+                )
+            if now_vote > ve:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Voting for {contestant_round.name} has ended on {contestant_round.voting_end_date}."
+                )
+            if not contest_status_service.round_voting_open_at(contestant_round, now_vote):
+                nom_close = contest_status_service.round_nomination_closes_at(contestant_round)
+                detail = (
+                    f"Voting for {contestant_round.name} opens after nominations close "
+                    f"({nom_close.isoformat()} UTC)."
+                    if nom_close
+                    else f"Voting is not open yet for {contestant_round.name}."
+                )
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
 
     # Règles de vote basées sur la localisation et le niveau de la saison
     # city      -> seuls les utilisateurs de la même ville (et même pays) peuvent voter
@@ -2391,20 +2401,31 @@ def replace_fifth_vote(
     # Vérifier que le round du contestant est en phase de vote
     if contestant.round_id:
         from app.models.round import Round as RoundModel
-        from datetime import date as date_type
+        from datetime import datetime, time as time_type
+
         contestant_round = db.query(RoundModel).filter(RoundModel.id == contestant.round_id).first()
         if contestant_round and contestant_round.voting_start_date and contestant_round.voting_end_date:
-            today = date_type.today()
-            if today < contestant_round.voting_start_date:
+            now_vote = contest_status_service._utc_now()
+            vs = datetime.combine(contestant_round.voting_start_date, time_type.min)
+            ve = datetime.combine(contestant_round.voting_end_date, time_type(23, 59, 59))
+            if now_vote < vs:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Voting for {contestant_round.name} has not started yet. Voting starts on {contestant_round.voting_start_date}."
                 )
-            elif today > contestant_round.voting_end_date:
+            if now_vote > ve:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Voting for {contestant_round.name} has ended on {contestant_round.voting_end_date}."
                 )
+            if not contest_status_service.round_voting_open_at(contestant_round, now_vote):
+                nom_close = contest_status_service.round_nomination_closes_at(contestant_round)
+                detail = (
+                    f"Voting opens after nominations close ({nom_close.isoformat()} UTC)."
+                    if nom_close
+                    else "Voting is not open yet for this round."
+                )
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
 
     # Vérifier que l'utilisateur n'a pas déjà voté pour ce contestant
     existing_vote_for_contestant = db.query(ContestantVoting).filter(
@@ -2474,151 +2495,6 @@ def replace_fifth_vote(
         logger.error(f"Error updating rankings after vote replace: {e}")
 
     # Notification au propriétaire du nouveau contestant voté
-    from app.crud.crud_notification import crud_notification
-    from app.models.notification import NotificationType
-
-    voter_name = current_user.full_name or current_user.username or "Someone"
-    crud_notification.create(
-        db,
-        user_id=contestant.user_id,
-        type=NotificationType.CONTEST,
-        title="New vote",
-        message=f"{voter_name} voted for your application",
-        related_contestant_id=contestant_id,
-        related_contest_id=contest.id
-    )
-    db.commit()
-
-    return {
-        "message": "Vote replaced successfully",
-        "voting_id": new_voting.id,
-        "replaced_contestant_id": removed_contestant_id,
-        "new_contestant_id": contestant_id,
-        "position": 5,
-        "points": 1,
-        "season_id": season.id
-    }
-
-
-
-@router.post("/{contestant_id}/vote/replace", status_code=status.HTTP_200_OK)
-def replace_fifth_vote(
-    *,
-    db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_active_user),
-    contestant_id: int
-) -> dict:
-    """
-    Remplace le 5e vote de l'utilisateur par un nouveau contestant.
-    Appelé après confirmation via le dialogue frontend.
-    """
-    from app.services.contest_status import contest_status_service
-    from app.models.contests import ContestSeasonLink, ContestSeason, ContestantSeason
-    from app.models.contest import Contest as MyfavContest
-    from sqlalchemy import case
-    import logging
-    logger = logging.getLogger(__name__)
-
-    contestant = crud_contestant.get(db, contestant_id)
-    if not contestant:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
-
-    if contestant.user_id == current_user.id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot vote for your own submission")
-
-    contestant_season_link = db.query(ContestantSeason).filter(
-        ContestantSeason.contestant_id == contestant_id,
-        ContestantSeason.is_active == True
-    ).first()
-    if not contestant_season_link:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This contestant is not active in any season")
-
-    season = db.query(ContestSeason).filter(
-        ContestSeason.id == contestant_season_link.season_id,
-        ContestSeason.is_deleted == False
-    ).first()
-    if not season:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Season not found")
-
-    contest_season_link_obj = db.query(ContestSeasonLink).filter(
-        ContestSeasonLink.season_id == season.id,
-        ContestSeasonLink.is_active == True
-    ).first()
-    if not contest_season_link_obj:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No active contest found")
-
-    contest = db.query(MyfavContest).filter(
-        MyfavContest.id == contest_season_link_obj.contest_id,
-        MyfavContest.is_deleted == False
-    ).first()
-    if not contest:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Contest not found")
-
-    is_allowed, error_message = contest_status_service.check_voting_allowed(db, contest.id)
-    if not is_allowed:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_message)
-
-    existing_vote_for_contestant = db.query(ContestantVoting).filter(
-        ContestantVoting.user_id == current_user.id,
-        ContestantVoting.contestant_id == contestant_id,
-        ContestantVoting.season_id == season.id
-    ).first()
-    if existing_vote_for_contestant:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={"code": "already_voted", "message": "You have already voted for this contestant."}
-        )
-
-    existing_votes = db.query(ContestantVoting).filter(
-        ContestantVoting.user_id == current_user.id,
-        ContestantVoting.season_id == season.id
-    ).order_by(
-        case(
-            (ContestantVoting.position.isnot(None), ContestantVoting.position),
-            else_=1000
-        ),
-        ContestantVoting.vote_date.asc()
-    ).all()
-
-    if len(existing_votes) < 5:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="You have less than 5 votes. Use the regular vote endpoint."
-        )
-
-    vote_to_remove = existing_votes[4]
-    removed_contestant_id = vote_to_remove.contestant_id
-    logger.info(
-        f"[VOTE REPLACE] Removing 5th vote: ID={vote_to_remove.id}, "
-        f"contestant_id={removed_contestant_id}, replacing with contestant_id={contestant_id}"
-    )
-    db.delete(vote_to_remove)
-    db.flush()
-
-    new_voting = ContestantVoting(
-        user_id=current_user.id,
-        contestant_id=contestant_id,
-        contest_id=contest.id,
-        season_id=season.id,
-        position=5,
-        points=1
-    )
-    db.add(new_voting)
-
-    try:
-        db.commit()
-        db.refresh(new_voting)
-    except Exception as e:
-        db.rollback()
-        logger.error(f"[VOTE REPLACE ERROR] {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error replacing vote")
-
-    from app.crud.crud_contest import contest as crud_contest
-    try:
-        crud_contest.update_contestant_rankings(db, contest.id, season.id)
-    except Exception as e:
-        logger.error(f"Error updating rankings after vote replace: {e}")
-
     from app.crud.crud_notification import crud_notification
     from app.models.notification import NotificationType
 

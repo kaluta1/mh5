@@ -165,4 +165,124 @@ class PaymentAccountingService:
                 lines=commission_lines
             )
 
+        # 3. Founding Members pool (10% of gross) — contractual payable 2104; reduce 4002 recognition
+        pool_amt = float(amount) * 0.10
+        if pool_amt > 0:
+            alloc_lines = [
+                {
+                    "account_code": "4002",
+                    "debit": pool_amt,
+                    "credit": 0.0,
+                    "description": "Allocate 10% to Founding Members pool (payable)",
+                },
+                {
+                    "account_code": "2104",
+                    "debit": 0.0,
+                    "credit": pool_amt,
+                    "description": "Founding Members pool payable accrual",
+                },
+            ]
+            accounting_service.create_journal_entry(
+                db,
+                description=description + " (Founding pool accrual)",
+                lines=alloc_lines,
+            )
+
+        # 4. Annual membership: fixed Shufti pass-through ($2) when fee is standard $10 tier
+        shufti_amt = 2.0 if float(amount) <= 12.0 else 0.0
+        if shufti_amt > 0:
+            shufti_lines = [
+                {
+                    "account_code": "4002",
+                    "debit": shufti_amt,
+                    "credit": 0.0,
+                    "description": "KYC provider fee (Shufti) from annual membership gross",
+                },
+                {
+                    "account_code": "2003",
+                    "debit": 0.0,
+                    "credit": shufti_amt,
+                    "description": "Payable to KYC verification provider",
+                },
+            ]
+            accounting_service.create_journal_entry(
+                db,
+                description=description + " (KYC provider payable)",
+                lines=shufti_lines,
+            )
+
+    def process_founding_membership_payment_accounting(
+        self,
+        db: Session,
+        deposit: Deposit,
+        commissions: List[AffiliateCommission],
+    ):
+        """
+        Founding membership (e.g. $100): gross to wallet / revenue, commissions, 10% pool accrual.
+        """
+        amount = Decimal(str(deposit.amount))
+        description = f"Founding Membership Payment - Deposit #{deposit.id} - User #{deposit.user_id}"
+
+        income_lines = [
+            {"account_code": "1001", "debit": float(amount), "credit": 0.0, "description": "Payment received"},
+            {"account_code": "4002", "debit": 0.0, "credit": float(amount), "description": "Founding membership revenue recognized"},
+        ]
+        accounting_service.create_journal_entry(
+            db,
+            description=description + " (Income)",
+            lines=income_lines,
+        )
+
+        if commissions:
+            commission_lines = []
+            total_comm = Decimal("0.0")
+            for comm in commissions:
+                c_amt = Decimal(str(comm.commission_amount))
+                total_comm += c_amt
+                payable_acc = "2001" if comm.level == 1 else "2002"
+                commission_lines.append(
+                    {
+                        "account_code": payable_acc,
+                        "debit": 0.0,
+                        "credit": float(c_amt),
+                        "description": f"Comm L{comm.level} User #{comm.user_id}",
+                    }
+                )
+            commission_lines.insert(
+                0,
+                {
+                    "account_code": "5001",
+                    "debit": float(total_comm),
+                    "credit": 0.0,
+                    "description": "Total commissions",
+                },
+            )
+            accounting_service.create_journal_entry(
+                db,
+                description=description + " (Commissions)",
+                lines=commission_lines,
+            )
+
+        pool_amt = float(amount) * 0.10
+        if pool_amt > 0:
+            accounting_service.create_journal_entry(
+                db,
+                description=description + " (Founding pool accrual)",
+                lines=[
+                    {
+                        "account_code": "4002",
+                        "debit": pool_amt,
+                        "credit": 0.0,
+                        "description": "Allocate 10% to Founding Members pool",
+                    },
+                    {
+                        "account_code": "2104",
+                        "debit": 0.0,
+                        "credit": pool_amt,
+                        "description": "Founding Members pool payable",
+                    },
+                ],
+            )
+
+
 payment_accounting = PaymentAccountingService()

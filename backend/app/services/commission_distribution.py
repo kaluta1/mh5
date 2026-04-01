@@ -17,8 +17,6 @@ from app.models.user import User
 from app.models.affiliate import AffiliateCommission, CommissionType, CommissionStatus
 from app.models.payment import Deposit, ProductType
 from app.services.email import email_service
-from app.services.accounting_integration import record_payment_in_accounting
-
 logger = logging.getLogger(__name__)
 
 
@@ -189,7 +187,7 @@ def process_payment_validation(db: Session, deposit: Deposit) -> bool:
         
         # Distribuer les commissions
         commissions = distribute_commissions(db, deposit, product_code)
-        
+
         # Activer le service pour l'utilisateur
         user = db.query(User).filter(User.id == deposit.user_id).first()
         if user:
@@ -225,9 +223,19 @@ def process_payment_validation(db: Session, deposit: Deposit) -> bool:
                 logger.info(f"Payment confirmation email sent to {user.email}")
             except Exception as e:
                 logger.error(f"Failed to send payment confirmation email: {e}")
-        
+
+        # Écritures comptables (plan comptable MyHigh5 — voir docs/MYHIGH5_CHART_OF_ACCOUNTS.md)
+        from app.services.payment_accounting import payment_accounting
+
+        if product_code == "kyc":
+            payment_accounting.process_kyc_payment_accounting(db, deposit, commissions)
+        elif product_code == "annual_membership":
+            payment_accounting.process_membership_payment_accounting(db, deposit, commissions)
+        elif product_code in ("mfm_membership", "efm_membership"):
+            payment_accounting.process_founding_membership_payment_accounting(db, deposit, commissions)
+
         return True
-        
+
     except Exception as e:
         logger.error(f"Error processing payment validation: {e}")
         db.rollback()

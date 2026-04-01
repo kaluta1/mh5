@@ -260,9 +260,22 @@ export default function ApplyToContestPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contestId]) // Only depend on contestId to prevent infinite loops
 
-  // Load real verification status from backend API
+  // Load real verification status from backend API (reset when user changes)
   useEffect(() => {
-    if (!user?.id || verificationStatusLoaded) return
+    if (!user?.id) {
+      setVerificationStatusLoaded(false)
+      setHasVisualVerification(false)
+      setHasVoiceVerification(false)
+      setHasBrandVerification(false)
+      setHasContentVerification(false)
+      return
+    }
+    setVerificationStatusLoaded(false)
+    setHasVisualVerification(false)
+    setHasVoiceVerification(false)
+    setHasBrandVerification(false)
+    setHasContentVerification(false)
+
     const loadVerificationStatus = async () => {
       try {
         const status = await verificationService.getMyVerificationsStatus()
@@ -276,12 +289,11 @@ export default function ApplyToContestPage() {
       } catch (err) {
         console.warn('Could not load verification status:', err)
       } finally {
-        // Always mark loaded so verification gate runs (otherwise form opens without checks)
         setVerificationStatusLoaded(true)
       }
     }
-    loadVerificationStatus()
-  }, [user?.id, verificationStatusLoaded])
+    void loadVerificationStatus()
+  }, [user?.id])
 
   const contestRequiresVerification = useMemo(() => {
     if (!contest) return false

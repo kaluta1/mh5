@@ -35,6 +35,16 @@ Posting logic should use these codes (or resolve by stable `account_code`) so th
 | 4006 | Club Platform Service Fee Revenue | Markup portion of club subs |
 | 5001–5003 | Commission / KYC / member share expense | P&L mirror of accruals where used |
 
+## System posting
+
+Validated payments run `process_payment_validation` → `payment_accounting` (`app/services/payment_accounting.py`):
+
+- **kyc** — income (1001/4001), commissions (5001 / 2001–2002), provider fee (5002 / 2003).
+- **annual_membership** — income (1001/4002), commissions, **10% Founding pool** (4002 / 2104), and **$2 Shufti payable** when the charged amount is ≤ 12 (standard $10 annual tier).
+- **mfm_membership / efm_membership** — founding flow: income, commissions, **10% pool** (4002 / 2104).
+
+Ad revenue, club subs, and cashout fees use the same account codes when you add posting hooks; see table above.
+
 ## Notes
 
 - **Accrual**: recognise income when earned and obligations when incurred; keep an immutable journal trail in the application ledger.
