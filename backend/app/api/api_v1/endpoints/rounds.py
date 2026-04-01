@@ -153,11 +153,10 @@ def _enrich_round_data(
             logger.warning(f"Error checking user participation for round {round_id}: {str(e)}")
             current_user_participated = False
         
-        # Load round ORM once: completion check + live submission/voting flags (grace + env extension)
-        round_orm = None
+        # Check if completed
         try:
-            round_orm = db.query(Round).filter(Round.id == round_id).first()
-            is_completed = crud.round.is_round_completed(round_orm) if round_orm else False
+            round_obj = db.query(Round).filter(Round.id == round_id).first()
+            is_completed = crud.round.is_round_completed(round_obj) if round_obj else False
         except Exception as e:
             logger.warning(f"Error checking if round {round_id} is completed: {str(e)}")
             is_completed = False
@@ -217,47 +216,30 @@ def _enrich_round_data(
                     # Build contest_mode map for entry_type filtering
                     mode_map = {vc.id: getattr(vc, 'contest_mode', 'participation') for vc in valid_contests}
 
-                    # Single query: count per season_id grouped.
-                    # Include rows with round_id NULL (legacy) so nomination/participation counts match
-                    # contest enrichment (which does not require round_id). Strict round-only filter hid
-                    # valid contestants and showed 0 on cards after cleanup or for older rows.
+                    # Single query: count per season_id grouped
                     batch_query = db.query(
                         ContestantModel.season_id,
                         ContestantModel.entry_type,
                         func.count(ContestantModel.id)
                     ).filter(
                         ContestantModel.season_id.in_(valid_ids),
-                        ContestantModel.is_deleted == False,
-                        or_(
-                            ContestantModel.round_id == round_id,
-                            ContestantModel.round_id.is_(None),
-                        ),
+                        ContestantModel.round_id == round_id,
+                        ContestantModel.is_deleted == False
                     )
                     if filter_country and filter_country != 'all':
-                        fc = func.lower(filter_country)
-                        if contest_mode == 'nomination':
-                            # Nominee country and/or nominator country (forms may populate either)
-                            batch_query = batch_query.filter(
-                                or_(
-                                    func.lower(ContestantModel.country) == fc,
-                                    func.lower(ContestantModel.nominator_country) == fc,
-                                )
+                        batch_query = batch_query.filter(
+                            or_(
+                                func.lower(ContestantModel.country) == func.lower(filter_country),
+                                ContestantModel.country == None
                             )
-                        else:
-                            batch_query = batch_query.filter(
-                                or_(
-                                    func.lower(ContestantModel.country) == fc,
-                                    ContestantModel.country == None,
-                                )
-                            )
+                        )
                     batch_results = batch_query.group_by(
                         ContestantModel.season_id, ContestantModel.entry_type
                     ).all()
 
                     for sid, etype, cnt in batch_results:
                         expected = 'nomination' if mode_map.get(sid) == 'nomination' else 'participation'
-                        etype_norm = (etype or '').strip().lower() or 'participation'
-                        if etype_norm == expected:
+                        if etype == expected:
                             contest_participant_counts[sid] = cnt
                 except Exception as e:
                     logger.warning(f"Batch count failed: {e}")
@@ -283,11 +265,8 @@ def _enrich_round_data(
                     
                     # Now check for this specific round, filtered by entry_type
                     if valid_contests:
-                        # Match this round or legacy rows with no round_id (same as batch counts)
-                        user_contestants = [
-                            uc for uc in all_user_contestants
-                            if uc.round_id == round_id or uc.round_id is None
-                        ]
+                        # Get user contestants for THIS round only
+                        user_contestants = [uc for uc in all_user_contestants if uc.round_id == round_id]
                         # Déterminer le entry_type attendu pour ce tab
                         expected_type = 'nomination' if contest_mode == 'nomination' else 'participation'
                         # Filtrer par entry_type ET par contest valide
@@ -322,20 +301,6 @@ def _enrich_round_data(
                         "created_at": getattr(contest, 'created_at', None),
                         "updated_at": getattr(contest, 'updated_at', None),
                         "contest_mode": getattr(contest, 'contest_mode', 'participation'),
-                        "requires_kyc": bool(getattr(contest, "requires_kyc", True)),
-                        "requires_visual_verification": bool(
-                            getattr(contest, "requires_visual_verification", False)
-                        ),
-                        "requires_voice_verification": bool(
-                            getattr(contest, "requires_voice_verification", False)
-                        ),
-                        "requires_brand_verification": bool(
-                            getattr(contest, "requires_brand_verification", False)
-                        ),
-                        "requires_content_verification": bool(
-                            getattr(contest, "requires_content_verification", False)
-                        ),
-                        "participant_type": getattr(contest, "participant_type", None),
                         "current_user_contesting": bool(is_contesting)  # Explicitly convert to bool
                     }
                     r_data.setdefault("contests", []).append(contest_data)
@@ -352,32 +317,14 @@ def _enrich_round_data(
             r_data["contests"] = []
             contests_count = 0
         
-        nomination_extension_until = None
-        eff_submission_open = r_data.get("is_submission_open", True)
-        eff_voting_open = r_data.get("is_voting_open", False)
-        try:
-            from app.services.contest_status import ContestStatusService
-
-            if round_orm:
-                now = datetime.utcnow()
-                eff_submission_open = ContestStatusService.round_submission_open_at(round_orm, now)
-                eff_voting_open = ContestStatusService.round_voting_open_at(round_orm, now)
-                if ContestStatusService.env_extra_nomination_active(round_orm, now):
-                    nomination_extension_until = ContestStatusService.nomination_extension_deadline()
-        except Exception as ext_e:
-            logger.warning("round live flags / nomination_extension_until: %s", ext_e)
-
         # Build final response
         result = {
             **r_data,
-            "is_submission_open": eff_submission_open,
-            "is_voting_open": eff_voting_open,
             "participants_count": participants_count,
             "contests_count": contests_count,
             "votes_count": 0,
             "current_user_participated": current_user_participated,
             "is_completed": is_completed,
-            "nomination_extension_until": nomination_extension_until,
             "top_contestants": [],  # Can be enhanced later
             "contests": r_data.get("contests", [])
         }

@@ -30,22 +30,8 @@ def raise_if_user_missing_contest_entry_requirements(
     """
     Ensures the current user meets all contest-level verification requirements
     (KYC, visual, voice, brand, content). Used for create/update contestant.
-
-    Callers must only invoke this for participation create/update (not nominations).
-
-    Participation: if the contest has no visual/voice/brand/content flags, KYC is still
-    required as a default so participation cannot bypass identity checks.
     """
-    other_verification_flags = (
-        getattr(contest, "requires_visual_verification", False)
-        or getattr(contest, "requires_voice_verification", False)
-        or getattr(contest, "requires_brand_verification", False)
-        or getattr(contest, "requires_content_verification", False)
-    )
-    # Require KYC when the contest asks for it, or when no other verification rule is configured.
-    need_kyc = bool(contest.requires_kyc) or not other_verification_flags
-
-    if need_kyc:
+    if contest.requires_kyc:
         kyc_ok = bool(getattr(user, "identity_verified", False) or getattr(user, "is_verified", False))
         if not kyc_ok:
             raise HTTPException(

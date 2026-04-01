@@ -17,24 +17,6 @@ import { LocationFilterBar } from '@/components/dashboard/location-filter-bar'
 // GraphQL
 // REST API
 import ApiService, { Round } from '@/lib/api-service'
-import { getRoundNominationDeadlineMs } from '@/lib/nomination-deadline'
-import { verificationService } from '@/services/verification-service'
-
-/** Comma-separated substrings (case-insensitive) to hide from round tabs, e.g. "April" while testing March. */
-function parseRoundNameExcludes(): string[] {
-  return (process.env.NEXT_PUBLIC_CONTESTS_HIDE_ROUNDS_SUBSTRINGS || '')
-    .split(',')
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean)
-}
-
-function filterRoundsByExcludedSubstrings(rounds: Round[], excludes: string[]): Round[] {
-  if (!excludes.length) return rounds
-  return rounds.filter((r: any) => {
-    const n = (r.name || '').toLowerCase()
-    return !excludes.some((ex) => n.includes(ex))
-  })
-}
 
 // Lazy load heavy components
 const ContestCard = dynamic(() => import('@/components/dashboard/contest-card').then(mod => ({ default: mod.ContestCard })), {
@@ -105,14 +87,6 @@ function ContestsPageContent() {
   })
   const [filterLevel, setFilterLevel] = useState<string>('all') // Level filter for participations: 'city', 'country', 'all'
 
-  const [participationVerification, setParticipationVerification] = useState({
-    loaded: false,
-    has_selfie: false,
-    has_voice: false,
-    has_brand: false,
-    has_content: false,
-  })
-
   // Data States
   const [rounds, setRounds] = useState<Round[]>([])
   const [roundsLoading, setRoundsLoading] = useState(true)
@@ -135,28 +109,19 @@ function ContestsPageContent() {
       try {
         setRoundsLoading(true)
         // Fetch rounds with minimal data for faster response
-        const raw = await ApiService.getRounds({ contestLimit: 1 }) // Minimal data for round selector
-        const data = filterRoundsByExcludedSubstrings(raw, parseRoundNameExcludes())
-
+        const data = await ApiService.getRounds({ contestLimit: 1 }) // Minimal data for round selector
+        
         // Check if aborted
         if (abortController.signal.aborted) return
-
+        
         setRounds(data)
 
-        // Default round: optional env NEXT_PUBLIC_CONTESTS_PREFER_ROUND_SUBSTRING (e.g. March), else current month
+        // Set default to current month's round
         if (data.length > 0 && !activeRoundId) {
-          const prefer = (process.env.NEXT_PUBLIC_CONTESTS_PREFER_ROUND_SUBSTRING || '').trim()
-          let chosen: any = null
-          if (prefer) {
-            const pl = prefer.toLowerCase()
-            chosen = data.find((r: any) => (r.name || '').toLowerCase().includes(pl))
-          }
-          if (!chosen) {
-            const now = new Date()
-            const currentMonthName = now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-            chosen = data.find((r: any) => r.name?.includes(currentMonthName)) || data[0]
-          }
-          setActiveRoundId(String(chosen.id))
+          const now = new Date()
+          const currentMonthName = now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+          const currentRound = data.find((r: any) => r.name?.includes(currentMonthName))
+          setActiveRoundId(String(currentRound ? currentRound.id : data[0].id))
         }
       } catch (error: any) {
         if (error.name === 'AbortError' || abortController.signal.aborted) {
@@ -229,46 +194,6 @@ function ContestsPageContent() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categoryTab, user?.country])
-
-  // Load verification status for Participations tab (Nominate tab does not need it for the CTA)
-  useEffect(() => {
-    if (categoryTab === 'nomination') {
-      setParticipationVerification((prev) => ({ ...prev, loaded: true }))
-      return
-    }
-    if (!user?.id) {
-      setParticipationVerification({
-        loaded: false,
-        has_selfie: false,
-        has_voice: false,
-        has_brand: false,
-        has_content: false,
-      })
-      return
-    }
-    let cancelled = false
-    setParticipationVerification((prev) => ({ ...prev, loaded: false }))
-    verificationService
-      .getMyVerificationsStatus()
-      .then((status) => {
-        if (cancelled || !status) return
-        setParticipationVerification({
-          loaded: true,
-          has_selfie: !!status.has_selfie,
-          has_voice: !!status.has_voice,
-          has_brand: !!status.has_brand,
-          has_content: !!status.has_content,
-        })
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setParticipationVerification((p) => ({ ...p, loaded: true }))
-        }
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [categoryTab, user?.id])
 
   // Handle Search Execution
   const handleSearch = () => {
@@ -519,12 +444,6 @@ function ContestsPageContent() {
         currentUserParticipated: Boolean(c.currentUserParticipated || c.current_user_participated || c.current_user_contesting),
         // Explicitly check for true value - default to false if undefined/null
         currentUserContesting: Boolean(c.currentUserContesting === true || c.current_user_contesting === true),
-        requiresKyc: c.requires_kyc !== false,
-        requiresVisualVerification: !!c.requires_visual_verification,
-        requiresVoiceVerification: !!c.requires_voice_verification,
-        requiresBrandVerification: !!c.requires_brand_verification,
-        requiresContentVerification: !!c.requires_content_verification,
-        contest_mode: c.contest_mode,
         topContestants: [] // Not fetching top contestants per contest in new query yet
       }
     })
@@ -599,6 +518,10 @@ function ContestsPageContent() {
 
     return filtered
   }, [rawContests, activeTab, committedSearch, sortBy, categoryTab, filterLevel])
+
+  // Déterminer si le round actif est fermé (soumissions terminées)
+  const activeRoundData = rounds.find((r: any) => String(r.id) === activeRoundId)
+  const isRoundClosed = activeRoundData ? new Date(activeRoundData.submission_end_date + 'T23:59:59') < new Date() : false
 
   const handleParticipate = (id: string, isEditing: boolean, roundId: string | null) => {
     const params = new URLSearchParams()
@@ -777,20 +700,8 @@ function ContestsPageContent() {
                   isNomination={categoryTab === 'nomination'}
                   contest_mode={contest.contest_mode}
                   currentUserContesting={(categoryTab === 'nomination' ? contest.currentUserParticipated : contest.currentUserContesting) || false}
-                  requiresKyc={contest.requiresKyc}
-                  requiresVisualVerification={contest.requiresVisualVerification}
-                  requiresVoiceVerification={contest.requiresVoiceVerification}
-                  requiresBrandVerification={contest.requiresBrandVerification}
-                  requiresContentVerification={contest.requiresContentVerification}
-                  hasVisualVerification={participationVerification.has_selfie}
-                  hasVoiceVerification={participationVerification.has_voice}
-                  hasBrandVerification={participationVerification.has_brand}
-                  hasContentVerification={participationVerification.has_content}
-                  verificationStatusLoaded={
-                    categoryTab === 'nomination' || participationVerification.loaded
-                  }
                   onToggleFavorite={() => { }}
-                  nominationExtensionUntil={contestsData?.nomination_extension_until ?? undefined}
+                  isRoundClosed={isRoundClosed}
                   onParticipate={() => handleParticipate(contest.id, (categoryTab === 'nomination' ? contest.currentUserParticipated : contest.currentUserContesting) || false, activeRoundId)}
                   onViewContestants={() => {
                     const params = new URLSearchParams()

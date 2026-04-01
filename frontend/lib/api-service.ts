@@ -65,7 +65,6 @@ export interface Round {
     submission_end_date?: string;
     voting_start_date?: string;
     voting_end_date?: string;
-    nomination_extension_until?: string | null;
 }
 
 export interface Contest {

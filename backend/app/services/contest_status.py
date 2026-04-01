@@ -1,16 +1,8 @@
 """
 Service pour gérer l'état des contests (submission/voting open/closed)
-
-Optional operator extension (UTC, naive datetime string):
-  MYHIGH5_NOMINATION_EXTENSION_UNTIL=2026-04-01T18:30:00
-
-When set and now < that instant, any round whose calendar voting window is active
-keeps nominations/submissions open and voting stays closed until the instant passes.
-Remove the env var or restart without it to resume normal voting.
 """
 import asyncio
 import logging
-import os
 from datetime import date, datetime, time, timedelta
 from typing import Optional
 from sqlalchemy.orm import Session
@@ -29,43 +21,6 @@ class ContestStatusService:
     @staticmethod
     def _utc_now() -> datetime:
         return datetime.utcnow()
-
-    @staticmethod
-    def nomination_extension_deadline() -> Optional[datetime]:
-        """
-        Parse MYHIGH5_NOMINATION_EXTENSION_UNTIL (UTC naive ISO: YYYY-MM-DDTHH:MM:SS).
-        Returns None if unset or invalid.
-        """
-        raw = os.environ.get("MYHIGH5_NOMINATION_EXTENSION_UNTIL", "").strip()
-        if not raw:
-            return None
-        s = raw.replace("Z", "").replace("z", "")
-        try:
-            if len(s) >= 19:
-                return datetime.fromisoformat(s[:19])
-            return datetime.fromisoformat(s)
-        except ValueError:
-            logger.warning("Invalid MYHIGH5_NOMINATION_EXTENSION_UNTIL=%r", raw)
-            return None
-
-    @staticmethod
-    def round_in_voting_calendar(round_obj, when: datetime) -> bool:
-        if not round_obj.voting_start_date or not round_obj.voting_end_date:
-            return False
-        vs = datetime.combine(round_obj.voting_start_date, time.min)
-        ve = datetime.combine(round_obj.voting_end_date, time(23, 59, 59))
-        return vs <= when <= ve
-
-    @staticmethod
-    def env_extra_nomination_active(round_obj, when: datetime) -> bool:
-        """
-        True when operator extension is active: still in voting calendar but nominations
-        remain open and voting must stay off until the extension instant.
-        """
-        until = ContestStatusService.nomination_extension_deadline()
-        if until is None or when >= until:
-            return False
-        return ContestStatusService.round_in_voting_calendar(round_obj, when)
 
     @staticmethod
     def extended_submission_deadline(submission_end_day: date) -> datetime:
@@ -96,22 +51,12 @@ class ContestStatusService:
                 vote_day_start + timedelta(hours=ContestStatusService.SUBMISSION_GRACE_HOURS)
             )
         if not deadlines:
-            out = None
-        else:
-            out = max(deadlines)
-        now = ContestStatusService._utc_now()
-        until = ContestStatusService.nomination_extension_deadline()
-        if until and now < until and ContestStatusService.round_in_voting_calendar(round_obj, now):
-            if out is None:
-                return until
-            return max(out, until)
-        return out
+            return None
+        return max(deadlines)
 
     @staticmethod
     def round_submission_open_at(round_obj, when: datetime) -> bool:
         """True if nominations/submissions are allowed for this round at ``when`` (includes grace)."""
-        if ContestStatusService.env_extra_nomination_active(round_obj, when):
-            return True
         if not round_obj.submission_start_date or not round_obj.submission_end_date:
             return False
         start = datetime.combine(round_obj.submission_start_date, time.min)
@@ -137,8 +82,6 @@ class ContestStatusService:
         Voting allowed only after the full nomination window (including grace) has ended,
         and while within the round voting date range (inclusive by calendar day).
         """
-        if ContestStatusService.env_extra_nomination_active(round_obj, when):
-            return False
         if not round_obj.voting_start_date or not round_obj.voting_end_date:
             return False
         nom_close = ContestStatusService.round_nomination_closes_at(round_obj)
@@ -315,15 +258,6 @@ class ContestStatusService:
         for r in rounds:
             if ContestStatusService.round_voting_open_at(r, now):
                 return True, ""
-
-        for r in rounds:
-            if ContestStatusService.env_extra_nomination_active(r, now):
-                u = ContestStatusService.nomination_extension_deadline()
-                if u:
-                    return False, (
-                        f"Nominations extended until {u.isoformat()} UTC "
-                        "(MYHIGH5_NOMINATION_EXTENSION_UNTIL). Voting opens after that."
-                    )
 
         # Message utile si pas de vote — chercher le prochain round de vote
         next_voting_round = db.query(Round).join(

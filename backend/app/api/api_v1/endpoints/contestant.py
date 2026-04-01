@@ -1318,8 +1318,7 @@ def create_contestant(
             ContestModelForEligibility.id == real_contest_id,
             ContestModelForEligibility.is_deleted == False,
         ).first()
-    # Full verification (KYC, selfie, voice, brand, content) required only for participation entries.
-    if eligibility_contest and submission_entry_type == "participation":
+    if eligibility_contest:
         raise_if_user_missing_contest_entry_requirements(db, current_user, eligibility_contest)
     
     # ============================================
@@ -1739,7 +1738,7 @@ def update_contestant(
                 MyfavContestForEligibility.id == _link.contest_id,
                 MyfavContestForEligibility.is_deleted == False,
             ).first()
-    if entry_contest and getattr(contestant, "entry_type", "participation") == "participation":
+    if entry_contest:
         raise_if_user_missing_contest_entry_requirements(db, current_user, entry_contest)
     
     # ============================================

@@ -281,37 +281,21 @@ export default function ApplyToContestPage() {
     loadVerificationStatus()
   }, [user?.id, verificationStatusLoaded])
 
-  /** Participation only: match backend — KYC required if contest says so or no other verification flags are set. */
-  const participationHasOtherVerificationFlags = useMemo(() => {
-    if (!contest || isNomination) return false
-    return !!(
-      contest.requires_visual_verification ||
-      contest.requires_voice_verification ||
-      contest.requires_brand_verification ||
-      contest.requires_content_verification
-    )
-  }, [contest, isNomination])
-
-  const effectiveParticipationRequiresKyc = useMemo(() => {
-    if (!contest || isNomination) return false
-    return !!(contest.requires_kyc || !participationHasOtherVerificationFlags)
-  }, [contest, isNomination, participationHasOtherVerificationFlags])
-
   const contestRequiresVerification = useMemo(() => {
-    if (!contest || isNomination) return false
+    if (!contest) return false
     return !!(
-      effectiveParticipationRequiresKyc ||
+      contest.requires_kyc ||
       contest.requires_visual_verification ||
       contest.requires_voice_verification ||
       contest.requires_brand_verification ||
       contest.requires_content_verification
     )
-  }, [contest, isNomination, effectiveParticipationRequiresKyc])
+  }, [contest])
 
   const allVerificationRequirementsMet = useMemo(() => {
     if (!contest || !contestRequiresVerification) return true
     const kycDone =
-      !effectiveParticipationRequiresKyc ||
+      !contest.requires_kyc ||
       !!(user?.identity_verified || (user as { is_verified?: boolean })?.is_verified)
     const visualDone = !contest.requires_visual_verification || hasVisualVerification
     const voiceDone = !contest.requires_voice_verification || hasVoiceVerification
@@ -321,7 +305,6 @@ export default function ApplyToContestPage() {
   }, [
     contest,
     contestRequiresVerification,
-    effectiveParticipationRequiresKyc,
     user,
     hasVisualVerification,
     hasVoiceVerification,
@@ -330,14 +313,13 @@ export default function ApplyToContestPage() {
   ])
 
   const blockedByVerification =
-    !isNomination &&
     !isEditingParticipation &&
     contestRequiresVerification &&
     verificationStatusLoaded &&
     !allVerificationRequirementsMet
 
   useEffect(() => {
-    if (pageLoading || !contest || isEditingParticipation || isNomination) return
+    if (pageLoading || !contest || isEditingParticipation) return
     if (!contestRequiresVerification) {
       setShowVerificationDialog(false)
       return
@@ -351,7 +333,6 @@ export default function ApplyToContestPage() {
     contestRequiresVerification,
     verificationStatusLoaded,
     allVerificationRequirementsMet,
-    isNomination,
   ])
 
   const handleVerificationDialogClose = () => {
@@ -368,8 +349,7 @@ export default function ApplyToContestPage() {
 
     const endMs = getRoundNominationDeadlineMs({
       submission_end_date: roundData.submission_end_date,
-      voting_start_date: roundData.voting_start_date,
-      nomination_extension_until: roundData.nomination_extension_until
+      voting_start_date: roundData.voting_start_date
     })
     if (endMs == null) {
       setTimeValues({ days: 0, hours: 0, minutes: 0, seconds: 0, isClosed: false, isNA: true })
@@ -395,7 +375,7 @@ export default function ApplyToContestPage() {
     updateTimeRemaining()
     const interval = setInterval(updateTimeRemaining, 1000)
     return () => clearInterval(interval)
-  }, [roundData?.submission_end_date, roundData?.voting_start_date, roundData?.nomination_extension_until])
+  }, [roundData?.submission_end_date, roundData?.voting_start_date])
 
   // Formater le temps restant avec les traductions
   useEffect(() => {
@@ -439,12 +419,11 @@ export default function ApplyToContestPage() {
 
     const endMs = getRoundNominationDeadlineMs({
       submission_end_date: roundData.submission_end_date,
-      voting_start_date: roundData.voting_start_date,
-      nomination_extension_until: roundData.nomination_extension_until
+      voting_start_date: roundData.voting_start_date
     })
     if (endMs == null) return true
     return Date.now() <= endMs
-  }, [roundData?.submission_end_date, roundData?.voting_start_date, roundData?.nomination_extension_until])
+  }, [roundData?.submission_end_date, roundData?.voting_start_date])
 
 
 
@@ -468,7 +447,6 @@ export default function ApplyToContestPage() {
     nominatorCountry?: string
   ) => {
     if (
-      !isNomination &&
       !isEditingParticipation &&
       contest &&
       contestRequiresVerification &&
@@ -677,7 +655,7 @@ export default function ApplyToContestPage() {
 
               {/* Countdown is now integrated in the ParticipationForm stepper */}
 
-              {contestRequiresVerification && !isNomination && !isEditingParticipation && !verificationStatusLoaded && (
+              {contestRequiresVerification && !isEditingParticipation && !verificationStatusLoaded && (
                 <div className="p-4 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/50 text-sm text-gray-600 dark:text-gray-300">
                   {t('common.loading') || 'Chargement du statut de vérification...'}
                 </div>
@@ -692,7 +670,7 @@ export default function ApplyToContestPage() {
 
               {/* Participation Form — hidden until verification requirements are satisfied */}
               {!blockedByVerification &&
-                !(contestRequiresVerification && !isNomination && !isEditingParticipation && !verificationStatusLoaded) && (
+                !(contestRequiresVerification && !isEditingParticipation && !verificationStatusLoaded) && (
                 <ParticipationForm
                   contestId={contestId}
                   onSubmit={handleParticipationSubmit}
@@ -803,7 +781,7 @@ export default function ApplyToContestPage() {
             onClose={handleVerificationDialogClose}
             contestName={contest.name}
             requirements={{
-              requiresKyc: effectiveParticipationRequiresKyc,
+              requiresKyc: contest.requires_kyc,
               requiresVisualVerification: contest.requires_visual_verification,
               requiresVoiceVerification: contest.requires_voice_verification,
               requiresBrandVerification: contest.requires_brand_verification,

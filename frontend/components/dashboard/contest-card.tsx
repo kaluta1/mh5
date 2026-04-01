@@ -6,8 +6,7 @@ import { Heart, Users, Clock, ArrowRight, Eye, Mic, ShieldCheck, FileCheck, PawP
 import { Button } from '@/components/ui/button'
 import { useLanguage } from '@/contexts/language-context'
 import { Badge } from '@/components/ui/badge'
-import { useState, useEffect, useMemo } from 'react'
-import { getRoundNominationDeadlineMs } from '@/lib/nomination-deadline'
+import { useState, useEffect } from 'react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 
@@ -36,11 +35,9 @@ interface ContestCardProps {
   isFavorite: boolean
   isFeatured?: boolean
   genderRestriction?: 'male' | 'female' | null
-  participationStartDate?: Date | string
-  participationEndDate?: Date | string
-  votingStartDate?: Date | string
-  /** From round API when MYHIGH5_NOMINATION_EXTENSION_UNTIL is active */
-  nominationExtensionUntil?: string | null
+  participationStartDate?: Date
+  participationEndDate?: Date
+  votingStartDate?: Date
   userGender?: 'male' | 'female' | 'other' | 'prefer_not_to_say' | null
   canParticipate?: boolean
   isRoundClosed?: boolean
@@ -55,13 +52,6 @@ interface ContestCardProps {
   requiresVoiceVerification?: boolean
   requiresBrandVerification?: boolean
   requiresContentVerification?: boolean
-  /** Participation tab: approved verification from API (dashboard passes these). */
-  hasVisualVerification?: boolean
-  hasVoiceVerification?: boolean
-  hasBrandVerification?: boolean
-  hasContentVerification?: boolean
-  /** When false and participation requires checks, block Participate until loaded. Default true (no gate). */
-  verificationStatusLoaded?: boolean
   minAge?: number | null
   maxAge?: number | null
   isNomination?: boolean  // Indique si on est dans l'onglet Nomination
@@ -91,7 +81,6 @@ export function ContestCard({
   participationStartDate,
   participationEndDate,
   votingStartDate,
-  nominationExtensionUntil,
   userGender,
   canParticipate: userCanParticipate = true,
   isRoundClosed = false,
@@ -105,11 +94,6 @@ export function ContestCard({
   requiresVoiceVerification = false,
   requiresBrandVerification = false,
   requiresContentVerification = false,
-  hasVisualVerification = false,
-  hasVoiceVerification = false,
-  hasBrandVerification = false,
-  hasContentVerification = false,
-  verificationStatusLoaded = true,
   minAge = null,
   maxAge = null,
   isNomination = false,
@@ -133,42 +117,6 @@ export function ContestCard({
 
     return () => clearInterval(interval)
   }, [])
-
-  const submissionEndDateStr = useMemo(() => {
-    if (participationEndDate == null || participationEndDate === '') return null
-    if (typeof participationEndDate === 'string') {
-      return participationEndDate.includes('T') ? participationEndDate.slice(0, 10) : participationEndDate
-    }
-    try {
-      return participationEndDate.toISOString().slice(0, 10)
-    } catch {
-      return null
-    }
-  }, [participationEndDate])
-
-  const votingStartDateStr = useMemo(() => {
-    if (votingStartDate == null || votingStartDate === '') return undefined
-    if (typeof votingStartDate === 'string') {
-      return votingStartDate.includes('T') ? votingStartDate.slice(0, 10) : votingStartDate
-    }
-    try {
-      return votingStartDate.toISOString().slice(0, 10)
-    } catch {
-      return undefined
-    }
-  }, [votingStartDate])
-
-  /** Aligns with backend grace + MYHIGH5_NOMINATION_EXTENSION_UNTIL (updates every second with currentTime). */
-  const isNominationWindowClosed = useMemo(() => {
-    if (!submissionEndDateStr) return isRoundClosed
-    const endMs = getRoundNominationDeadlineMs({
-      submission_end_date: submissionEndDateStr,
-      voting_start_date: votingStartDateStr,
-      nomination_extension_until: nominationExtensionUntil ?? undefined,
-    })
-    if (endMs == null) return isRoundClosed
-    return currentTime.getTime() > endMs
-  }, [submissionEndDateStr, votingStartDateStr, nominationExtensionUntil, currentTime, isRoundClosed])
 
   // Debug: Log topContestants data (disabled to reduce console noise)
   // console.log(`Contest ${id} - topContestants:`, topContestants?.length || 0, topContestants?.map(c => ({ id: c.id, image_url: c.image_url?.substring(0, 50) })))
@@ -243,34 +191,11 @@ export function ContestCard({
     return true
   }
 
-  // Participation: match backend / apply page — KYC if contest requires it or no other verification flags.
+  // L'utilisateur peut participer seulement s'il est éligible au concours ET a complété son profil
+  // Le KYC est requis uniquement si le concours l'exige
   const canParticipate = () => {
     if (!isEligibleForContest() || !userCanParticipate) return false
-    if (isNomination) return true
-
-    const participationHasOtherVerification = !!(
-      requiresVisualVerification ||
-      requiresVoiceVerification ||
-      requiresBrandVerification ||
-      requiresContentVerification
-    )
-    const hasContestVerificationInfo = !!(requiresKyc || participationHasOtherVerification)
-    const effectiveRequiresKyc =
-      hasContestVerificationInfo && (requiresKyc || !participationHasOtherVerification)
-
-    const needsAnyVerification =
-      effectiveRequiresKyc ||
-      requiresVisualVerification ||
-      requiresVoiceVerification ||
-      requiresBrandVerification ||
-      requiresContentVerification
-
-    if (needsAnyVerification && !verificationStatusLoaded) return false
-    if (effectiveRequiresKyc && !isKycVerified) return false
-    if (requiresVisualVerification && !hasVisualVerification) return false
-    if (requiresVoiceVerification && !hasVoiceVerification) return false
-    if (requiresBrandVerification && !hasBrandVerification) return false
-    if (requiresContentVerification && !hasContentVerification) return false
+    if (requiresKyc && !isKycVerified) return false
     return true
   }
 
@@ -757,7 +682,7 @@ export function ContestCard({
 
         {/* Action Buttons */}
         <div className="mt-4 flex gap-2.5">
-          {canParticipate() && onParticipate && !isNominationWindowClosed ? (
+          {canParticipate() && onParticipate && !isRoundClosed ? (
             <>
               <Button
                 onClick={(e) => {
