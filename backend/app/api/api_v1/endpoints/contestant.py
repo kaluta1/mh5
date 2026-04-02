@@ -253,6 +253,91 @@ def _get_contest_context_from_season(db: Session, season_id: Optional[int]) -> S
     return contexts
 
 
+def _resolve_contest_for_contestant_vote(
+    db: Session,
+    contestant: Contestant,
+    season: ContestSeason,
+) -> Optional[Contest]:
+    """
+    Pick the Contest row for this vote. ContestSeason can link to multiple contests
+    (different categories); using ContestSeasonLink(...).first() is non-deterministic
+    and mixes votes across categories. Prefer Contestant.season_id (stores contest id,
+    see get_contest_with_enriched_contestants), then disambiguate via round_contests.
+    """
+    from app.models.contests import ContestSeasonLink
+    from app.models.round import Round, round_contests
+
+    # 1) Primary: legacy column Contestant.season_id == contest.id for this contestant
+    if contestant.season_id is not None:
+        link = db.query(ContestSeasonLink).filter(
+            ContestSeasonLink.season_id == season.id,
+            ContestSeasonLink.contest_id == contestant.season_id,
+            ContestSeasonLink.is_active == True,
+        ).first()
+        if link:
+            contest = db.query(Contest).filter(
+                Contest.id == contestant.season_id,
+                Contest.is_deleted == False,
+            ).first()
+            if contest:
+                return contest
+
+    links = (
+        db.query(ContestSeasonLink)
+        .filter(
+            ContestSeasonLink.season_id == season.id,
+            ContestSeasonLink.is_active == True,
+        )
+        .all()
+    )
+    if not links:
+        return None
+
+    # 2) Contestant.round_id linked to this contest via round_contests / legacy Round.contest_id
+    if contestant.round_id is not None:
+        candidates: List[Contest] = []
+        for L in links:
+            oc = db.query(Contest).filter(
+                Contest.id == L.contest_id,
+                Contest.is_deleted == False,
+            ).first()
+            if not oc:
+                continue
+            round_ids: List[int] = []
+            try:
+                rvi = db.query(round_contests.c.round_id).filter(
+                    round_contests.c.contest_id == oc.id
+                ).all()
+                round_ids.extend(r[0] for r in rvi)
+            except Exception:
+                pass
+            try:
+                leg = db.query(Round.id).filter(Round.contest_id == oc.id).all()
+                round_ids.extend(r[0] for r in leg)
+            except Exception:
+                pass
+            round_ids = list(set(round_ids))
+            if contestant.round_id in round_ids:
+                candidates.append(oc)
+
+        if len(candidates) == 1:
+            return candidates[0]
+        if len(candidates) > 1:
+            for c in candidates:
+                if contestant.season_id == c.id:
+                    return c
+            return candidates[0]
+
+    # 3) Single contest linked to this season — previous behavior
+    if len(links) == 1:
+        return db.query(Contest).filter(
+            Contest.id == links[0].contest_id,
+            Contest.is_deleted == False,
+        ).first()
+
+    return None
+
+
 def _find_duplicate_video_submission(
     db: Session,
     *,
@@ -393,9 +478,10 @@ def get_my_votes(
     contest_id: Optional[int] = Query(None, description="Filter by contest_id")
 ) -> dict:
     """
-    Récupère les votes de l'utilisateur connecté (MyHigh5), groupés par season.
-    Retourne uniquement les votes des saisons actives (is_active=True dans ContestSeasonLink).
-    Les votes sont limités à 5 par season.
+    Récupère les votes de l'utilisateur connecté (MyHigh5), groupés par (season_id, contest_id).
+    Une entrée par concours (donc par catégorie de ce concours) — plusieurs concours peuvent
+    partager la même saison. Retourne uniquement les votes des saisons actives (ContestSeasonLink).
+    Les votes sont limités à 5 par groupe concours/saison.
     """
     from sqlalchemy.orm import joinedload
     from sqlalchemy import case, func
@@ -438,20 +524,42 @@ def get_my_votes(
         ContestantVoting.vote_date.asc()
     ).all()
     
-    # Grouper par (season_id, contest_id) — une ligne MyHigh5 par concours dans la période
+    # Grouper par (season_id, contest_id) — une ligne MyHigh5 par concours (catégorie) dans la période
     votes_by_season_contest = {}
     for vote in all_votes:
         key = (vote.season_id, vote.contest_id)
         if key not in votes_by_season_contest:
             votes_by_season_contest[key] = []
         votes_by_season_contest[key].append(vote)
+
+    # Précharger contests + catégories pour le tri et les libellés (évite N+1)
+    contest_ids_in_groups = {k[1] for k in votes_by_season_contest}
+    contests_by_id = {}
+    if contest_ids_in_groups:
+        loaded = (
+            db.query(Contest)
+            .options(joinedload(Contest.category))
+            .filter(Contest.id.in_(contest_ids_in_groups))
+            .all()
+        )
+        contests_by_id = {c.id: c for c in loaded}
+
+    def _myhigh5_group_sort_key(k: Tuple[int, int]):
+        season_id_key, contest_id_key = k
+        c = contests_by_id.get(contest_id_key)
+        cat = (c.category.name.lower() if c and c.category else "")
+        name = (c.name.lower() if c and c.name else "")
+        return (season_id_key, cat, name)
+
+    sorted_group_keys = sorted(votes_by_season_contest.keys(), key=_myhigh5_group_sort_key)
     
     # Limiter à 5 votes par groupe et construire le résultat
     result = {
         "seasons": []
     }
     
-    for (season_id_key, contest_id_key), votes in votes_by_season_contest.items():
+    for (season_id_key, contest_id_key) in sorted_group_keys:
+        votes = votes_by_season_contest[(season_id_key, contest_id_key)]
         # Ordre correct par position dans ce concours (l'ordre global par season_id peut mélanger les concours)
         votes_sorted = sorted(
             votes,
@@ -466,7 +574,11 @@ def get_my_votes(
         # Récupérer les infos de la season et du contest
         first_vote = season_votes[0]
         season = first_vote.season
-        contest = db.query(Contest).filter(Contest.id == first_vote.contest_id).first()
+        contest = contests_by_id.get(first_vote.contest_id) or db.query(Contest).filter(
+            Contest.id == first_vote.contest_id
+        ).first()
+        category_id_out = contest.category_id if contest else None
+        category_name_out = contest.category.name if contest and contest.category else None
         
         season_votes_list = []
         for idx, vote in enumerate(season_votes, 1):
@@ -509,6 +621,8 @@ def get_my_votes(
             "season_level": season.level if season else None,
             "contest_id": first_vote.contest_id,
             "contest_name": contest.name if contest else None,
+            "category_id": category_id_out,
+            "category_name": category_name_out,
             "votes": season_votes_list,
             "votes_count": len(season_votes_list),
             "remaining_slots": 5 - len(season_votes_list)
@@ -578,11 +692,18 @@ def get_my_votes_history(
     }
     
     for contest_id_key, seasons in votes_by_contest.items():
-        contest = db.query(Contest).filter(Contest.id == contest_id_key).first()
+        contest = (
+            db.query(Contest)
+            .options(joinedload(Contest.category))
+            .filter(Contest.id == contest_id_key)
+            .first()
+        )
         
         contest_data = {
             "contest_id": contest_id_key,
             "contest_name": contest.name if contest else None,
+            "category_id": contest.category_id if contest else None,
+            "category_name": contest.category.name if contest and contest.category else None,
             "seasons": []
         }
         
@@ -2005,8 +2126,7 @@ def vote_for_contestant(
         )
     
     # Récupérer la saison active du contestant via ContestantSeason
-    from app.models.contests import ContestSeasonLink, ContestSeason, ContestantSeason
-    from app.models.contest import Contest as MyfavContest
+    from app.models.contests import ContestSeason, ContestantSeason
     
     # Récupérer la saison active pour ce contestant
     contestant_season_link = db.query(ContestantSeason).filter(
@@ -2032,28 +2152,13 @@ def vote_for_contestant(
             detail="Season not found for this contestant"
         )
     
-    # Récupérer le contest associé à cette saison via ContestSeasonLink
-    contest_season_link = db.query(ContestSeasonLink).filter(
-        ContestSeasonLink.season_id == season.id,
-        ContestSeasonLink.is_active == True
-    ).first()
-    
-    if not contest_season_link:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No active contest found for this season"
-        )
-    
-    # Récupérer le contest
-    contest = db.query(MyfavContest).filter(
-        MyfavContest.id == contest_season_link.contest_id,
-        MyfavContest.is_deleted == False
-    ).first()
-    
+    # Contest associé : ne pas utiliser ContestSeasonLink(...).first() — plusieurs concours
+    # peuvent partager la même saison (catégories différentes).
+    contest = _resolve_contest_for_contestant_vote(db, contestant, season)
     if not contest:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Contest not found for this season"
+            detail="No active contest found for this season"
         )
     
     # Vérifier que le vote est ouvert pour ce contest
@@ -2369,8 +2474,7 @@ def replace_fifth_vote(
     Appelé après confirmation de l'utilisateur via le dialogue frontend.
     """
     from app.services.contest_status import contest_status_service
-    from app.models.contests import ContestSeasonLink, ContestSeason, ContestantSeason
-    from app.models.contest import Contest as MyfavContest
+    from app.models.contests import ContestSeason, ContestantSeason
     from sqlalchemy import case
     import logging
     logger = logging.getLogger(__name__)
@@ -2401,20 +2505,7 @@ def replace_fifth_vote(
     if not season:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Season not found")
 
-    # Récupérer le contest
-    contest_season_link_obj = db.query(ContestSeasonLink).filter(
-        ContestSeasonLink.season_id == season.id,
-        ContestSeasonLink.is_active == True
-    ).first()
-
-    if not contest_season_link_obj:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No active contest found")
-
-    contest = db.query(MyfavContest).filter(
-        MyfavContest.id == contest_season_link_obj.contest_id,
-        MyfavContest.is_deleted == False
-    ).first()
-
+    contest = _resolve_contest_for_contestant_vote(db, contestant, season)
     if not contest:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Contest not found")
 

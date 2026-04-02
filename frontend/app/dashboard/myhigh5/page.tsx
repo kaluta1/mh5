@@ -43,6 +43,8 @@ interface SeasonVotes {
   season_level: string | null
   contest_id: number
   contest_name: string | null
+  category_id?: number | null
+  category_name?: string | null
   votes: MyHigh5Vote[]
   votes_count: number
   remaining_slots: number
@@ -55,6 +57,8 @@ interface MyHigh5Response {
 interface HistoryContest {
   contest_id: number
   contest_name: string | null
+  category_id?: number | null
+  category_name?: string | null
   seasons: Array<{
     season_id: number
     season_level: string | null
@@ -430,7 +434,7 @@ export default function MyHigh5Page() {
             {t('dashboard.myhigh5.title') || 'MyHigh5'}
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
-            {t('dashboard.myhigh5.description') || 'Les 5 contestants pour lesquels vous avez voté par season'}
+            {t('dashboard.myhigh5.description') || 'Vos 5 votes par concours et par saison — chaque catégorie apparaît dans sa propre section.'}
           </p>
         </div>
       </div>
@@ -453,7 +457,7 @@ export default function MyHigh5Page() {
           {/* Hint explicatif */}
           <div className="px-4 py-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/50 rounded-lg">
             <p className="text-sm text-blue-700 dark:text-blue-300">
-              {t('dashboard.myhigh5.hint_dnd') || 'Glissez-déposez pour réorganiser vos votes. Le 1er reçoit 5 points, le 2ème 4 points, le 3ème 3 points, le 4ème 2 points et le 5ème 1 point. Les votes sont limités à 5 par season.'}
+              {t('dashboard.myhigh5.hint_dnd') || 'Glissez-déposez pour réorganiser vos votes dans chaque section. Le 1er reçoit 5 points, … 5ème 1 point. Maximum 5 votes par concours (chaque catégorie / concours a sa propre section).'}
             </p>
           </div>
 
@@ -478,10 +482,15 @@ export default function MyHigh5Page() {
       ) : (
         <div className="space-y-8">
           {seasonsData.map((season, seasonIndex) => (
-            <div key={season.season_id} className="space-y-4">
+            <div key={`${season.season_id}-${season.contest_id}`} className="space-y-4">
               {/* Season Header */}
               <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4">
                 <div>
+                  {season.category_name && (
+                    <p className="text-sm font-semibold text-myhigh5-primary dark:text-myhigh5-secondary mb-0.5">
+                      {season.category_name}
+                    </p>
+                  )}
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
                     {season.contest_name || `Contest #${season.contest_id}`}
                   </h2>
@@ -562,6 +571,11 @@ export default function MyHigh5Page() {
                 <div key={contest.contest_id} className="space-y-4">
                   {/* Contest Header */}
                   <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4">
+                    {contest.category_name && (
+                      <p className="text-sm font-semibold text-myhigh5-primary dark:text-myhigh5-secondary mb-0.5">
+                        {contest.category_name}
+                      </p>
+                    )}
                     <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
                       {contest.contest_name || `Contest #${contest.contest_id}`}
                     </h2>
@@ -572,7 +586,7 @@ export default function MyHigh5Page() {
                     // Créer un index unique pour cette season dans l'historique
                     const uniqueIndex = contest.contest_id * 1000 + season.season_id
                     return (
-                      <div key={season.season_id} className="space-y-3">
+                      <div key={`${contest.contest_id}-${season.season_id}`} className="space-y-3">
                         {/* Season Header */}
                         <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3">
                           <div className="flex items-center gap-3">

@@ -742,6 +742,8 @@ class ContestService {
       season_level: string | null;
       contest_id: number;
       contest_name: string | null;
+      category_id?: number | null;
+      category_name?: string | null;
       votes: Array<{
         position: number;
         points: number | null;
@@ -770,6 +772,8 @@ class ContestService {
           season_level: string | null;
           contest_id: number;
           contest_name: string | null;
+          category_id?: number | null;
+          category_name?: string | null;
           votes: Array<{
             position: number;
             points: number | null;
@@ -808,6 +812,8 @@ class ContestService {
     history: Array<{
       contest_id: number;
       contest_name: string | null;
+      category_id?: number | null;
+      category_name?: string | null;
       seasons: Array<{
         season_id: number;
         season_level: string | null;
