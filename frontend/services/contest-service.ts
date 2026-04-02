@@ -744,6 +744,7 @@ class ContestService {
       contest_name: string | null;
       category_id?: number | null;
       category_name?: string | null;
+      contest_type?: string | null;
       votes: Array<{
         position: number;
         points: number | null;
@@ -774,6 +775,7 @@ class ContestService {
           contest_name: string | null;
           category_id?: number | null;
           category_name?: string | null;
+          contest_type?: string | null;
           votes: Array<{
             position: number;
             points: number | null;

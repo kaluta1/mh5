@@ -346,9 +346,10 @@ def _myhigh5_scope_votes_query(
     contest: Contest,
 ):
     """
-    Votes that count toward the 5-slot MyHigh5 cap for this season: same category as
-    `contest` when category_id is set (any contest with that category), otherwise
-    only votes for this contest_id.
+    Votes that count toward the 5-slot MyHigh5 cap for this season:
+    - If contest.category_id is set: all votes whose contest has the same category_id.
+    - Else (many DB rows have NULL category_id): same contest_type + contest_mode
+      (matches how admin assigns "category" via type when FK is missing).
     """
     from sqlalchemy.orm import aliased
 
@@ -364,16 +365,21 @@ def _myhigh5_scope_votes_query(
     if contest.category_id is not None:
         q = q.filter(VoteContest.category_id == contest.category_id)
     else:
-        q = q.filter(ContestantVoting.contest_id == contest.id)
+        q = q.filter(
+            VoteContest.contest_type == contest.contest_type,
+            VoteContest.contest_mode == contest.contest_mode,
+        )
     return q
 
 
 def _myhigh5_group_key_for_vote(vote: ContestantVoting) -> Tuple:
-    """Group MyHigh5 rows: one bucket per (season, category) when category is set, else per contest."""
+    """One MyHigh5 bucket per season + category FK, or + (contest_type, contest_mode), else per contest."""
     c = vote.contest
-    if c is not None and c.category_id is not None:
+    if c is None:
+        return (vote.season_id, "ct", vote.contest_id)
+    if c.category_id is not None:
         return (vote.season_id, "cat", c.category_id)
-    return (vote.season_id, "ct", vote.contest_id)
+    return (vote.season_id, "ty", c.contest_type, c.contest_mode)
 
 
 def _find_duplicate_video_submission(
@@ -516,9 +522,9 @@ def get_my_votes(
     contest_id: Optional[int] = Query(None, description="Filter by contest_id")
 ) -> dict:
     """
-    Récupère les votes MyHigh5, groupés par (season_id, category_id) lorsque la catégorie est
-    définie (sinon par contest_id). Chaque catégorie a ses propres 5 places par saison.
-    Retourne uniquement les votes des saisons actives (ContestSeasonLink).
+    Récupère les votes MyHigh5, groupés par saison + (category_id si défini, sinon
+    contest_type + contest_mode). Chaque groupe a au plus 5 votes. Retourne uniquement
+    les saisons actives (ContestSeasonLink).
     """
     from sqlalchemy.orm import joinedload
     from sqlalchemy import case, func
@@ -545,21 +551,26 @@ def get_my_votes(
     if season_id:
         query = query.filter(ContestantVoting.season_id == season_id)
 
-    # Filtrer par contest_id si fourni : même scope MyHigh5 que le vote (catégorie ou concours seul)
+    # Filtrer par contest_id : même scope MyHigh5 que POST /vote (catégorie FK ou type+mode)
     if contest_id:
+        from sqlalchemy.orm import aliased
+
         scope_contest = (
             db.query(Contest)
             .options(joinedload(Contest.category))
             .filter(Contest.id == contest_id)
             .first()
         )
-        if scope_contest and scope_contest.category_id is not None:
-            from sqlalchemy.orm import aliased
-
+        if scope_contest:
             VC = aliased(Contest)
-            query = query.join(VC, ContestantVoting.contest_id == VC.id).filter(
-                VC.category_id == scope_contest.category_id
-            )
+            query = query.join(VC, ContestantVoting.contest_id == VC.id)
+            if scope_contest.category_id is not None:
+                query = query.filter(VC.category_id == scope_contest.category_id)
+            else:
+                query = query.filter(
+                    VC.contest_type == scope_contest.contest_type,
+                    VC.contest_mode == scope_contest.contest_mode,
+                )
         else:
             query = query.filter(ContestantVoting.contest_id == contest_id)
     
@@ -596,17 +607,23 @@ def get_my_votes(
         contests_by_id = {c.id: c for c in loaded}
 
     def _myhigh5_group_sort_key(k: Tuple) -> Tuple:
-        season_id_key, kind, id_val = k[0], k[1], k[2]
+        season_id_key = k[0]
+        kind = k[1]
         if kind == "cat":
+            id_val = k[2]
             cat_name = ""
             for c in contests_by_id.values():
                 if c.category_id == id_val and c.category:
                     cat_name = c.category.name.lower()
                     break
             return (season_id_key, 0, cat_name, "")
-        c = contests_by_id.get(id_val)
+        if kind == "ty":
+            typ, mode = k[2], k[3]
+            return (season_id_key, 1, (typ or "").lower(), (mode or "").lower())
+        cid = k[2]
+        c = contests_by_id.get(cid)
         name = (c.name.lower() if c and c.name else "")
-        return (season_id_key, 1, name, "")
+        return (season_id_key, 2, name, "")
 
     sorted_group_keys = sorted(votes_by_group.keys(), key=_myhigh5_group_sort_key)
     
@@ -636,7 +653,9 @@ def get_my_votes(
         ).first()
         category_id_out = contest.category_id if contest else None
         category_name_out = contest.category.name if contest and contest.category else None
-        
+        if contest and not category_name_out and len(group_key) >= 2 and group_key[1] == "ty":
+            category_name_out = contest.contest_type
+
         season_votes_list = []
         for idx, vote in enumerate(season_votes, 1):
             contestant = vote.contestant
@@ -681,6 +700,7 @@ def get_my_votes(
             "contest_name": contest.name if contest else None,
             "category_id": category_id_out,
             "category_name": category_name_out,
+            "contest_type": contest.contest_type if contest else None,
             "votes": season_votes_list,
             "votes_count": len(season_votes_list),
             "remaining_slots": 5 - len(season_votes_list)
@@ -714,21 +734,26 @@ def get_my_votes_history(
         ContestantVoting.user_id == current_user.id
     )
     
-    # Filtrer par contest_id si fourni (même scope catégorie que MyHigh5 actif)
+    # Filtrer par contest_id (même scope MyHigh5 : catégorie FK ou type+mode)
     if contest_id:
+        from sqlalchemy.orm import aliased
+
         scope_hist = (
             db.query(Contest)
             .options(joinedload(Contest.category))
             .filter(Contest.id == contest_id)
             .first()
         )
-        if scope_hist and scope_hist.category_id is not None:
-            from sqlalchemy.orm import aliased
-
+        if scope_hist:
             HVC = aliased(Contest)
-            query = query.join(HVC, ContestantVoting.contest_id == HVC.id).filter(
-                HVC.category_id == scope_hist.category_id
-            )
+            query = query.join(HVC, ContestantVoting.contest_id == HVC.id)
+            if scope_hist.category_id is not None:
+                query = query.filter(HVC.category_id == scope_hist.category_id)
+            else:
+                query = query.filter(
+                    HVC.contest_type == scope_hist.contest_type,
+                    HVC.contest_mode == scope_hist.contest_mode,
+                )
         else:
             query = query.filter(ContestantVoting.contest_id == contest_id)
     
@@ -897,14 +922,15 @@ def reorder_my_votes(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Contest not found",
             )
+        VC = aliased(Contest)
+        uv_q = uv_q.join(VC, ContestantVoting.contest_id == VC.id)
         if scope_c.category_id is not None:
-            VC = aliased(Contest)
-            uv_q = (
-                uv_q.join(VC, ContestantVoting.contest_id == VC.id)
-                .filter(VC.category_id == scope_c.category_id)
-            )
+            uv_q = uv_q.filter(VC.category_id == scope_c.category_id)
         else:
-            uv_q = uv_q.filter(ContestantVoting.contest_id == contest_id)
+            uv_q = uv_q.filter(
+                VC.contest_type == scope_c.contest_type,
+                VC.contest_mode == scope_c.contest_mode,
+            )
     user_votes = uv_q.all()
     
     user_vote_contestant_ids = {vote.contestant_id for vote in user_votes}

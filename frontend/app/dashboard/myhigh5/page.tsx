@@ -45,6 +45,8 @@ interface SeasonVotes {
   contest_name: string | null
   category_id?: number | null
   category_name?: string | null
+  /** When category FK is missing on contests, backend scopes MyHigh5 by this + contest_mode */
+  contest_type?: string | null
   votes: MyHigh5Vote[]
   votes_count: number
   remaining_slots: number
@@ -483,7 +485,7 @@ export default function MyHigh5Page() {
         <div className="space-y-8">
           {seasonsData.map((season, seasonIndex) => (
             <div
-              key={`${season.season_id}-${season.category_id ?? 'n'}-${season.contest_id}`}
+              key={`${season.season_id}-${season.category_id ?? 'n'}-${season.contest_type ?? 't'}-${season.contest_id}`}
               className="space-y-4"
             >
               {/* Season Header */}
