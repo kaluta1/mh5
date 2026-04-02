@@ -338,6 +338,44 @@ def _resolve_contest_for_contestant_vote(
     return None
 
 
+def _myhigh5_scope_votes_query(
+    db: Session,
+    *,
+    user_id: int,
+    season_id: int,
+    contest: Contest,
+):
+    """
+    Votes that count toward the 5-slot MyHigh5 cap for this season: same category as
+    `contest` when category_id is set (any contest with that category), otherwise
+    only votes for this contest_id.
+    """
+    from sqlalchemy.orm import aliased
+
+    VoteContest = aliased(Contest)
+    q = (
+        db.query(ContestantVoting)
+        .join(VoteContest, ContestantVoting.contest_id == VoteContest.id)
+        .filter(
+            ContestantVoting.user_id == user_id,
+            ContestantVoting.season_id == season_id,
+        )
+    )
+    if contest.category_id is not None:
+        q = q.filter(VoteContest.category_id == contest.category_id)
+    else:
+        q = q.filter(ContestantVoting.contest_id == contest.id)
+    return q
+
+
+def _myhigh5_group_key_for_vote(vote: ContestantVoting) -> Tuple:
+    """Group MyHigh5 rows: one bucket per (season, category) when category is set, else per contest."""
+    c = vote.contest
+    if c is not None and c.category_id is not None:
+        return (vote.season_id, "cat", c.category_id)
+    return (vote.season_id, "ct", vote.contest_id)
+
+
 def _find_duplicate_video_submission(
     db: Session,
     *,
@@ -478,10 +516,9 @@ def get_my_votes(
     contest_id: Optional[int] = Query(None, description="Filter by contest_id")
 ) -> dict:
     """
-    Récupère les votes de l'utilisateur connecté (MyHigh5), groupés par (season_id, contest_id).
-    Une entrée par concours (donc par catégorie de ce concours) — plusieurs concours peuvent
-    partager la même saison. Retourne uniquement les votes des saisons actives (ContestSeasonLink).
-    Les votes sont limités à 5 par groupe concours/saison.
+    Récupère les votes MyHigh5, groupés par (season_id, category_id) lorsque la catégorie est
+    définie (sinon par contest_id). Chaque catégorie a ses propres 5 places par saison.
+    Retourne uniquement les votes des saisons actives (ContestSeasonLink).
     """
     from sqlalchemy.orm import joinedload
     from sqlalchemy import case, func
@@ -508,9 +545,23 @@ def get_my_votes(
     if season_id:
         query = query.filter(ContestantVoting.season_id == season_id)
 
-    # Filtrer par contest_id si fourni
+    # Filtrer par contest_id si fourni : même scope MyHigh5 que le vote (catégorie ou concours seul)
     if contest_id:
-        query = query.filter(ContestantVoting.contest_id == contest_id)
+        scope_contest = (
+            db.query(Contest)
+            .options(joinedload(Contest.category))
+            .filter(Contest.id == contest_id)
+            .first()
+        )
+        if scope_contest and scope_contest.category_id is not None:
+            from sqlalchemy.orm import aliased
+
+            VC = aliased(Contest)
+            query = query.join(VC, ContestantVoting.contest_id == VC.id).filter(
+                VC.category_id == scope_contest.category_id
+            )
+        else:
+            query = query.filter(ContestantVoting.contest_id == contest_id)
     
     # Récupérer tous les votes
     all_votes = query.order_by(
@@ -524,16 +575,16 @@ def get_my_votes(
         ContestantVoting.vote_date.asc()
     ).all()
     
-    # Grouper par (season_id, contest_id) — une ligne MyHigh5 par concours (catégorie) dans la période
-    votes_by_season_contest = {}
+    # Grouper par catégorie (ou par concours si pas de catégorie)
+    votes_by_group: dict = {}
     for vote in all_votes:
-        key = (vote.season_id, vote.contest_id)
-        if key not in votes_by_season_contest:
-            votes_by_season_contest[key] = []
-        votes_by_season_contest[key].append(vote)
+        key = _myhigh5_group_key_for_vote(vote)
+        if key not in votes_by_group:
+            votes_by_group[key] = []
+        votes_by_group[key].append(vote)
 
     # Précharger contests + catégories pour le tri et les libellés (évite N+1)
-    contest_ids_in_groups = {k[1] for k in votes_by_season_contest}
+    contest_ids_in_groups = {vote.contest_id for vote in all_votes}
     contests_by_id = {}
     if contest_ids_in_groups:
         loaded = (
@@ -544,22 +595,28 @@ def get_my_votes(
         )
         contests_by_id = {c.id: c for c in loaded}
 
-    def _myhigh5_group_sort_key(k: Tuple[int, int]):
-        season_id_key, contest_id_key = k
-        c = contests_by_id.get(contest_id_key)
-        cat = (c.category.name.lower() if c and c.category else "")
+    def _myhigh5_group_sort_key(k: Tuple) -> Tuple:
+        season_id_key, kind, id_val = k[0], k[1], k[2]
+        if kind == "cat":
+            cat_name = ""
+            for c in contests_by_id.values():
+                if c.category_id == id_val and c.category:
+                    cat_name = c.category.name.lower()
+                    break
+            return (season_id_key, 0, cat_name, "")
+        c = contests_by_id.get(id_val)
         name = (c.name.lower() if c and c.name else "")
-        return (season_id_key, cat, name)
+        return (season_id_key, 1, name, "")
 
-    sorted_group_keys = sorted(votes_by_season_contest.keys(), key=_myhigh5_group_sort_key)
+    sorted_group_keys = sorted(votes_by_group.keys(), key=_myhigh5_group_sort_key)
     
     # Limiter à 5 votes par groupe et construire le résultat
     result = {
         "seasons": []
     }
     
-    for (season_id_key, contest_id_key) in sorted_group_keys:
-        votes = votes_by_season_contest[(season_id_key, contest_id_key)]
+    for group_key in sorted_group_keys:
+        votes = votes_by_group[group_key]
         # Ordre correct par position dans ce concours (l'ordre global par season_id peut mélanger les concours)
         votes_sorted = sorted(
             votes,
@@ -616,6 +673,7 @@ def get_my_votes(
                 "season_level": season.level if season else None
             })
         
+        season_id_key = group_key[0]
         result["seasons"].append({
             "season_id": season_id_key,
             "season_level": season.level if season else None,
@@ -656,9 +714,23 @@ def get_my_votes_history(
         ContestantVoting.user_id == current_user.id
     )
     
-    # Filtrer par contest_id si fourni
+    # Filtrer par contest_id si fourni (même scope catégorie que MyHigh5 actif)
     if contest_id:
-        query = query.filter(ContestantVoting.contest_id == contest_id)
+        scope_hist = (
+            db.query(Contest)
+            .options(joinedload(Contest.category))
+            .filter(Contest.id == contest_id)
+            .first()
+        )
+        if scope_hist and scope_hist.category_id is not None:
+            from sqlalchemy.orm import aliased
+
+            HVC = aliased(Contest)
+            query = query.join(HVC, ContestantVoting.contest_id == HVC.id).filter(
+                HVC.category_id == scope_hist.category_id
+            )
+        else:
+            query = query.filter(ContestantVoting.contest_id == contest_id)
     
     # Récupérer tous les votes, triés par contest_id, puis season_id, puis position/date
     all_votes = query.order_by(
@@ -811,13 +883,28 @@ def reorder_my_votes(
     # Vérifier que tous les votes appartiennent à l'utilisateur et à la même season (+ contest si fourni)
     contestant_ids = [v["contestant_id"] for v in votes_to_reorder]
     
+    from sqlalchemy.orm import aliased
+
     uv_q = db.query(ContestantVoting).filter(
         ContestantVoting.user_id == current_user.id,
         ContestantVoting.contestant_id.in_(contestant_ids),
-        ContestantVoting.season_id == season_id
+        ContestantVoting.season_id == season_id,
     )
     if contest_id is not None:
-        uv_q = uv_q.filter(ContestantVoting.contest_id == contest_id)
+        scope_c = db.query(Contest).filter(Contest.id == contest_id).first()
+        if not scope_c:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Contest not found",
+            )
+        if scope_c.category_id is not None:
+            VC = aliased(Contest)
+            uv_q = (
+                uv_q.join(VC, ContestantVoting.contest_id == VC.id)
+                .filter(VC.category_id == scope_c.category_id)
+            )
+        else:
+            uv_q = uv_q.filter(ContestantVoting.contest_id == contest_id)
     user_votes = uv_q.all()
     
     user_vote_contestant_ids = {vote.contestant_id for vote in user_votes}
@@ -2348,21 +2435,25 @@ def vote_for_contestant(
         f"(no existing vote found for this season)"
     )
     
-    # Compter les votes existants de l'utilisateur pour cette saison
-    from sqlalchemy import case, func as sa_func
+    # Compter les votes existants pour cette saison et cette catégorie MyHigh5 (5 slots par catégorie)
+    from sqlalchemy import case
 
-    # Scope to this contest + season so the cap matches the contest page and MyHigh5 (not all contests sharing the same season)
-    existing_votes_for_season = db.query(ContestantVoting).filter(
-        ContestantVoting.user_id == current_user.id,
-        ContestantVoting.season_id == season.id,
-        ContestantVoting.contest_id == contest.id,
-    ).order_by(
-        case(
-            (ContestantVoting.position.isnot(None), ContestantVoting.position),
-            else_=1000
-        ),
-        ContestantVoting.vote_date.asc()
-    ).all()
+    existing_votes_for_season = (
+        _myhigh5_scope_votes_query(
+            db,
+            user_id=current_user.id,
+            season_id=season.id,
+            contest=contest,
+        )
+        .order_by(
+            case(
+                (ContestantVoting.position.isnot(None), ContestantVoting.position),
+                else_=1000
+            ),
+            ContestantVoting.vote_date.asc(),
+        )
+        .all()
+    )
 
     votes_count = len(existing_votes_for_season)
 
@@ -2380,7 +2471,7 @@ def vote_for_contestant(
             status_code=status.HTTP_409_CONFLICT,
             detail={
                 "code": "max_votes_reached",
-                "message": f"You already have 5 votes in this season. Replace {fifth_name}?",
+                "message": f"You already have 5 votes in this category for this season. Replace {fifth_name}?",
                 "replaced_contestant": {
                     "id": fifth_vote.contestant_id,
                     "name": fifth_name,
@@ -2556,18 +2647,23 @@ def replace_fifth_vote(
             detail={"code": "already_voted", "message": "You have already voted for this contestant."}
         )
 
-    # Same scope as POST /vote: fifth slot is within this contest + season
-    existing_votes = db.query(ContestantVoting).filter(
-        ContestantVoting.user_id == current_user.id,
-        ContestantVoting.season_id == season.id,
-        ContestantVoting.contest_id == contest.id,
-    ).order_by(
-        case(
-            (ContestantVoting.position.isnot(None), ContestantVoting.position),
-            else_=1000
-        ),
-        ContestantVoting.vote_date.asc()
-    ).all()
+    # Même scope que POST /vote : 5e place dans la même catégorie / saison
+    existing_votes = (
+        _myhigh5_scope_votes_query(
+            db,
+            user_id=current_user.id,
+            season_id=season.id,
+            contest=contest,
+        )
+        .order_by(
+            case(
+                (ContestantVoting.position.isnot(None), ContestantVoting.position),
+                else_=1000
+            ),
+            ContestantVoting.vote_date.asc(),
+        )
+        .all()
+    )
 
     if len(existing_votes) < 5:
         raise HTTPException(

@@ -482,7 +482,10 @@ export default function MyHigh5Page() {
       ) : (
         <div className="space-y-8">
           {seasonsData.map((season, seasonIndex) => (
-            <div key={`${season.season_id}-${season.contest_id}`} className="space-y-4">
+            <div
+              key={`${season.season_id}-${season.category_id ?? 'n'}-${season.contest_id}`}
+              className="space-y-4"
+            >
               {/* Season Header */}
               <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4">
                 <div>
