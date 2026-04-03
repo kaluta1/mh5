@@ -760,6 +760,7 @@ class ContestService {
         vote_date: string;
         season_id: number;
         contest_id: number;
+        voted_contest_name?: string | null;
         season_level: string | null;
       }>;
       votes_count: number;
@@ -791,6 +792,7 @@ class ContestService {
             vote_date: string;
             season_id: number;
             contest_id: number;
+            voted_contest_name?: string | null;
             season_level: string | null;
           }>;
           votes_count: number;

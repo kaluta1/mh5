@@ -624,26 +624,20 @@ def get_my_votes(
 ) -> dict:
     """
     Récupère les votes MyHigh5, groupés par saison + (category_id si défini, sinon
-    contest_type + contest_mode). Chaque groupe a au plus 5 votes. Retourne uniquement
-    les saisons actives (ContestSeasonLink).
+    contest_type + contest_mode). Chaque groupe a au plus 5 votes.
+
+    Ne pas exiger un ContestSeasonLink actif : après migration de saison le lien peut
+    être inactif alors que le vote reste valide — sinon les votes disparaissent du dashboard.
     """
     from sqlalchemy.orm import joinedload
     from sqlalchemy import case, func
     from app.models.contests import Contestant, ContestSeasonLink
     from app.models.contest import Contest
-    
-    # Construire la requête de base avec filtre sur les saisons actives
+
     query = db.query(ContestantVoting).options(
         joinedload(ContestantVoting.contestant),
         joinedload(ContestantVoting.season),
         joinedload(ContestantVoting.contest)
-    ).join(
-        ContestSeasonLink,
-        and_(
-            ContestSeasonLink.contest_id == ContestantVoting.contest_id,
-            ContestSeasonLink.season_id == ContestantVoting.season_id,
-            ContestSeasonLink.is_active == True
-        )
     ).filter(
         ContestantVoting.user_id == current_user.id
     )
@@ -836,6 +830,11 @@ def get_my_votes(
             position = vote.position if vote.position else idx
             points = (6 - position) if 1 <= position <= 5 else None
             
+            c_for_row = contests_by_id.get(vote.contest_id)
+            if c_for_row is None and vote.contest_id:
+                c_for_row = db.query(Contest).filter(Contest.id == vote.contest_id).first()
+                if c_for_row:
+                    contests_by_id[vote.contest_id] = c_for_row
             season_votes_list.append({
                 "position": position,
                 "points": points,
@@ -851,6 +850,7 @@ def get_my_votes(
                 "vote_date": vote.vote_date.isoformat() if vote.vote_date else None,
                 "season_id": vote.season_id,
                 "contest_id": vote.contest_id,
+                "voted_contest_name": c_for_row.name if c_for_row else None,
                 "vote_bucket_key": vote.vote_bucket_key if getattr(vote, "vote_bucket_key", None) else bucket_key,
                 "season_level": season.level if season else None
             })

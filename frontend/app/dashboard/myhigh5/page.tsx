@@ -36,6 +36,8 @@ interface MyHigh5Vote {
   vote_date: string
   season_id: number
   contest_id: number
+  /** Contest title for this vote row (if several contests share one MyHigh5 bucket) */
+  voted_contest_name?: string | null
   season_level: string | null
 }
 
@@ -385,6 +387,11 @@ export default function MyHigh5Page() {
                   {vote.contestant_title && (
                     <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
                       {vote.contestant_title}
+                    </p>
+                  )}
+                  {vote.voted_contest_name && (
+                    <p className="text-xs text-gray-500 dark:text-gray-500 truncate" title={vote.voted_contest_name}>
+                      {vote.voted_contest_name}
                     </p>
                   )}
                 </div>
