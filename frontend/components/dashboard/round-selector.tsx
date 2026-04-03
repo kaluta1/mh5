@@ -2,6 +2,7 @@
 
 import React from 'react'
 import { RoundWithStats } from '@/services/contest-service'
+import { useLanguage } from '@/contexts/language-context'
 
 interface RoundSelectorProps {
     rounds: RoundWithStats[]
@@ -20,6 +21,7 @@ export function RoundSelector({
     onSelectRound,
     className = ''
 }: RoundSelectorProps) {
+    const { t } = useLanguage()
     if (!rounds || rounds.length === 0) {
         return null
     }
@@ -100,6 +102,11 @@ export function RoundSelector({
                             <div className="flex items-center gap-2">
                                 <span className="text-sm">{statusIcon}</span>
                                 <div className="text-left">
+                                    {round.is_voting_open && (
+                                        <div className="text-[10px] font-bold uppercase tracking-wide text-blue-500 mb-0.5">
+                                            {t('dashboard.contests.vote_label') || 'Vote'}
+                                        </div>
+                                    )}
                                     <div className="text-sm font-medium whitespace-nowrap">
                                         {round.name}
                                     </div>

@@ -13,7 +13,7 @@ import {
   Trophy, ThumbsUp, MapPin, ChevronDown, X, Globe, Play
 } from 'lucide-react'
 
-interface Round { id: number; name: string; status: string }
+interface Round { id: number; name: string; status: string; is_voting_open?: boolean }
 
 interface ContestantData {
   id: number; user_id: number; season_id: number; round_id: number | null
@@ -87,7 +87,16 @@ export default function ContestantsListPage() {
     const loadRounds = async () => {
       try {
         const rd = await ApiService.getRounds() as any
-        if (Array.isArray(rd)) setRounds(rd.map((r: any, i: number) => ({ id: r.id || i+1, name: r.name || `Round ${i+1}`, status: r.status || 'active' })))
+        if (Array.isArray(rd)) {
+          setRounds(
+            rd.map((r: any, i: number) => ({
+              id: r.id || i + 1,
+              name: r.name || `Round ${i + 1}`,
+              status: r.status || 'active',
+              is_voting_open: Boolean(r.is_voting_open),
+            }))
+          )
+        }
       } catch {}
     }
     loadRounds()
@@ -250,9 +259,22 @@ export default function ContestantsListPage() {
                   </button>
                   {rounds.map(round => (
                     <button key={round.id} onClick={() => setSelectedRound(String(round.id))}
-                      className={`px-3.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all flex items-center gap-1.5 ${selectedRound === String(round.id) ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'}`}>
-                      {round.name}
-                      {round.id === activeRoundId && <span className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" />}
+                      className={`px-3.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all flex flex-col items-center justify-center gap-0.5 min-h-[2.5rem] ${selectedRound === String(round.id) ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'}`}>
+                      {round.is_voting_open && (
+                        <span
+                          className={`text-[10px] font-bold uppercase tracking-wide leading-none ${
+                            selectedRound === String(round.id)
+                              ? 'text-blue-200'
+                              : 'text-blue-600 dark:text-blue-400'
+                          }`}
+                        >
+                          {t('dashboard.contests.vote_label') || 'Vote'}
+                        </span>
+                      )}
+                      <span className="flex items-center gap-1.5">
+                        {round.name}
+                        {round.id === activeRoundId && <span className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" />}
+                      </span>
                     </button>
                   ))}
                 </div>

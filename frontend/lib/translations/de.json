@@ -88,6 +88,7 @@
   },
   "dashboard": {
     "contests": {
+      "vote_label": "Vote",
       "edit_nomination": "Bearbeite deine Nominierung",
       "edit_participation": "Bearbeite deine Teilnahme",
       "nominate": "Nominieren",
