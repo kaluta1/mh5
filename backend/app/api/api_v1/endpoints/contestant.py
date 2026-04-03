@@ -267,6 +267,14 @@ def _contestant_belongs_to_contest(
     from app.models.contests import ContestSeasonLink
     from app.models.round import Round, round_contests
 
+    # Legacy: Contestant.season_id is often the Contest.id (see model on Contestant).
+    # GET /contest/{contest_id} lists rows with Contestant.season_id == contest_id.
+    # Do not require ContestSeasonLink for that case — the link row is sometimes missing
+    # in migrated data while the contestant row still points at the contest.
+    if contestant.season_id is not None and contestant.season_id == contest_id:
+        if db.query(Contest).filter(Contest.id == contest_id, Contest.is_deleted == False).first():
+            return True
+
     link = db.query(ContestSeasonLink).filter(
         ContestSeasonLink.contest_id == contest_id,
         ContestSeasonLink.season_id == season.id,
@@ -274,8 +282,6 @@ def _contestant_belongs_to_contest(
     ).first()
     if not link:
         return False
-    if contestant.season_id == contest_id:
-        return True
 
     links = (
         db.query(ContestSeasonLink)
