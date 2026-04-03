@@ -869,7 +869,15 @@ def get_my_votes(
             "votes_count": len(season_votes_list),
             "remaining_slots": 5 - len(season_votes_list)
         })
-    
+
+    # Highest vote count first (most active MyHigh5 slots filled), then name for ties
+    result["seasons"].sort(
+        key=lambda s: (
+            -int(s.get("votes_count") or 0),
+            (s.get("category_name") or s.get("contest_name") or "").lower(),
+        )
+    )
+
     return result
 
 
