@@ -78,25 +78,25 @@ export default function AboutMobilePage() {
 
   const team = [
     { name: "Shafi Kaluta Abedi", roleKey: "team.founder_president", emoji: "👨‍💼" },
-    { name: "Ferdinand Kouagou", roleKey: "team.director_ict", emoji: "👨‍💻" },
+    { name: "Morice wangwe", roleKey: "team.programmer", emoji: "👨‍💻" },
   ]
 
   const teamLabels: Record<string, Record<string, string>> = {
     en: { 
       "team.founder_president": "Founder and President", 
-      "team.director_ict": "Director of ICT" 
+      "team.programmer": "Programmer" 
     },
     fr: { 
       "team.founder_president": "Fondateur et Président", 
-      "team.director_ict": "Directeur des TIC" 
+      "team.programmer": "Programmeur" 
     },
     es: { 
       "team.founder_president": "Fundador y Presidente", 
-      "team.director_ict": "Director de TIC" 
+      "team.programmer": "Programador" 
     },
     de: { 
       "team.founder_president": "Gründer und Präsident", 
-      "team.director_ict": "Direktor für IKT" 
+      "team.programmer": "Programmierer" 
     },
   }
 
