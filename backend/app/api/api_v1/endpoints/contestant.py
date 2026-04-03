@@ -1,4 +1,4 @@
-from typing import List, Optional, Any, Set, Tuple
+from typing import List, Optional, Any, Set, Tuple, Dict
 from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
 import json
 import re
@@ -616,7 +616,11 @@ def get_my_votes(
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
     season_id: Optional[int] = Query(None, description="Filter by season_id"),
-    contest_id: Optional[int] = Query(None, description="Filter by contest_id")
+    contest_id: Optional[int] = Query(None, description="Filter by contest_id"),
+    include_empty_buckets: bool = Query(
+        False,
+        description="Include every active contest–season MyHigh5 bucket with no votes yet (for dashboard UI)",
+    ),
 ) -> dict:
     """
     Récupère les votes MyHigh5, groupés par saison + (category_id si défini, sinon
@@ -698,6 +702,40 @@ def get_my_votes(
             votes_by_group[key] = []
         votes_by_group[key].append(vote)
 
+    # Buckets actifs sans aucun vote (dashboard : liste toutes les catégories)
+    empty_bucket_representative: Dict[Tuple, Contest] = {}
+    inject_empty = (
+        include_empty_buckets
+        and season_id is None
+        and contest_id is None
+    )
+    if inject_empty:
+        link_rows = (
+            db.query(ContestSeasonLink)
+            .options(
+                joinedload(ContestSeasonLink.contest),
+                joinedload(ContestSeasonLink.season),
+            )
+            .join(Contest, ContestSeasonLink.contest_id == Contest.id)
+            .filter(
+                ContestSeasonLink.is_active == True,
+                Contest.is_deleted == False,
+            )
+            .all()
+        )
+        for link in link_rows:
+            s = link.season
+            if s is not None and getattr(s, "is_deleted", False):
+                continue
+            contest = link.contest
+            if contest is None:
+                continue
+            bucket = _bucket_key_for_contest(contest)
+            gkey = (link.season_id, bucket)
+            if gkey not in votes_by_group:
+                votes_by_group[gkey] = []
+                empty_bucket_representative[gkey] = contest
+
     # Précharger contests pour libellés secondaires (évite N+1)
     contest_ids_in_groups = {vote.contest_id for vote in all_votes}
     contests_by_id = {}
@@ -734,6 +772,30 @@ def get_my_votes(
     
     for group_key in sorted_group_keys:
         votes = votes_by_group[group_key]
+        if not votes:
+            contest = empty_bucket_representative.get(group_key)
+            if not contest:
+                continue
+            bucket_key = group_key[1]
+            season = db.query(ContestSeason).filter(ContestSeason.id == group_key[0]).first()
+            category_id_out, category_name_out, contest_type_out, rep_contest_name = _labels_for_myhigh5_bucket(
+                db, bucket_key, contest
+            )
+            result["seasons"].append({
+                "season_id": group_key[0],
+                "season_level": season.level if season else None,
+                "contest_id": contest.id,
+                "contest_name": category_name_out or rep_contest_name or (contest.name if contest else None),
+                "category_id": category_id_out,
+                "category_name": category_name_out,
+                "contest_type": contest_type_out or (contest.contest_type if contest else None),
+                "vote_bucket_key": bucket_key,
+                "votes": [],
+                "votes_count": 0,
+                "remaining_slots": 5,
+            })
+            continue
+
         # Ordre correct par position dans ce concours (l'ordre global par season_id peut mélanger les concours)
         votes_sorted = sorted(
             votes,

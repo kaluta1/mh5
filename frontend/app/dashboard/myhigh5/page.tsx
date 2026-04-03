@@ -7,7 +7,8 @@ import { useAuth } from '@/hooks/use-auth'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/components/ui/toast'
 import { contestService } from '@/services/contest-service'
-import { Hand, Trophy, MapPin, Calendar, GripVertical, ExternalLink, Star, History } from 'lucide-react'
+import { Hand, Trophy, MapPin, Calendar, GripVertical, ExternalLink, Star, History, ChevronDown } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
@@ -47,6 +48,8 @@ interface SeasonVotes {
   category_name?: string | null
   /** When category FK is missing on contests, backend scopes MyHigh5 by this + contest_mode */
   contest_type?: string | null
+  /** Backend bucket key; stable id for expand/collapse when multiple contests share a category */
+  vote_bucket_key?: string | null
   votes: MyHigh5Vote[]
   votes_count: number
   remaining_slots: number
@@ -106,6 +109,19 @@ export default function MyHigh5Page() {
   const [activeTab, setActiveTab] = useState('active')
   const [draggedItem, setDraggedItem] = useState<{ seasonIndex: number; voteIndex: number } | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  const [openSections, setOpenSections] = useState<Set<string>>(new Set())
+
+  const sectionKey = (season: SeasonVotes) =>
+    `${season.season_id}-${season.vote_bucket_key ?? `c${season.contest_id}`}`
+
+  const toggleSection = (key: string) => {
+    setOpenSections((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
 
   // Redirection si non authentifié
   useEffect(() => {
@@ -457,7 +473,10 @@ export default function MyHigh5Page() {
         {/* Active Votes Tab */}
         <TabsContent value="active" className="space-y-6">
           {/* Hint explicatif */}
-          <div className="px-4 py-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/50 rounded-lg">
+          <div className="px-4 py-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/50 rounded-lg space-y-1">
+            <p className="text-sm text-blue-700 dark:text-blue-300">
+              {t('dashboard.myhigh5.hint_categories') || 'Each line is a contest category. Click to expand: your votes appear in the table, or a short message if you have not voted there yet.'}
+            </p>
             <p className="text-sm text-blue-700 dark:text-blue-300">
               {t('dashboard.myhigh5.hint_dnd') || 'Glissez-déposez pour réorganiser vos votes dans chaque section. Le 1er reçoit 5 points, … 5ème 1 point. Maximum 5 votes par concours (chaque catégorie / concours a sa propre section).'}
             </p>
@@ -482,54 +501,77 @@ export default function MyHigh5Page() {
           </Button>
         </div>
       ) : (
-        <div className="space-y-8">
-          {seasonsData.map((season, seasonIndex) => (
-            <div
-              key={`${season.season_id}-${season.category_id ?? 'n'}-${season.contest_type ?? 't'}-${season.contest_id}`}
-              className="space-y-4"
-            >
-              {/* Season Header */}
-              <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4">
-                <div>
-                  {season.category_name && (
-                    <p className="text-sm font-semibold text-myhigh5-primary dark:text-myhigh5-secondary mb-0.5">
-                      {season.category_name}
-                    </p>
-                  )}
-                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                    {season.contest_name || `Contest #${season.contest_id}`}
-                  </h2>
-                  <div className="flex items-center gap-3 mt-1">
-                    {season.season_level && (
-                      <span className="inline-block px-2 py-1 text-xs font-medium bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full capitalize">
-                        {season.season_level}
-                      </span>
+        <div className="space-y-3">
+          {seasonsData.map((season, seasonIndex) => {
+            const sk = sectionKey(season)
+            const isOpen = openSections.has(sk)
+            return (
+              <div
+                key={sk}
+                className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/40 overflow-hidden"
+              >
+                <button
+                  type="button"
+                  onClick={() => toggleSection(sk)}
+                  aria-expanded={isOpen}
+                  className="w-full flex items-center justify-between gap-3 text-left p-4 bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100/80 dark:hover:bg-gray-800 transition-colors"
+                >
+                  <div className="min-w-0 flex-1">
+                    {season.category_name && (
+                      <p className="text-sm font-semibold text-myhigh5-primary dark:text-myhigh5-secondary mb-0.5">
+                        {season.category_name}
+                      </p>
                     )}
-                    <span className="text-sm text-gray-500 dark:text-gray-400">
-                      {season.votes_count} / 5 {t('dashboard.myhigh5.votes_label') || 'votes'}
-                    </span>
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white truncate">
+                      {season.contest_name || `Contest #${season.contest_id}`}
+                    </h2>
+                    <div className="flex flex-wrap items-center gap-2 mt-1">
+                      {season.season_level && (
+                        <span className="inline-block px-2 py-1 text-xs font-medium bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full capitalize">
+                          {season.season_level}
+                        </span>
+                      )}
+                      <span className="text-sm text-gray-500 dark:text-gray-400">
+                        {season.votes_count} / 5 {t('dashboard.myhigh5.votes_label') || 'votes'}
+                      </span>
+                    </div>
                   </div>
-                </div>
-                {season.remaining_slots > 0 && (
-                  <div className="text-right">
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      {(t('dashboard.myhigh5.remaining_votes') || 'Vous pouvez encore voter pour {count} contestant(s)').replace('{count}', season.remaining_slots.toString())}
-                    </p>
+                  <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+                    {season.remaining_slots > 0 && (
+                      <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 text-right max-w-[min(100%,14rem)]">
+                        {(t('dashboard.myhigh5.remaining_votes') || 'Vous pouvez encore voter pour {count} contestant(s)').replace('{count}', season.remaining_slots.toString())}
+                      </p>
+                    )}
+                    <ChevronDown
+                      className={cn(
+                        'w-5 h-5 text-gray-500 flex-shrink-0 transition-transform',
+                        isOpen && 'rotate-180'
+                      )}
+                      aria-hidden
+                    />
+                  </div>
+                </button>
+                {isOpen && (
+                  <div className="border-t border-gray-200 dark:border-gray-700 px-4 py-4">
+                    {season.votes.length === 0 ? (
+                      <p className="text-sm text-center text-gray-500 dark:text-gray-400 py-8">
+                        {t('dashboard.myhigh5.no_votes_in_category') || 'You have not voted in this category yet.'}
+                      </p>
+                    ) : (
+                      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+                        {renderVotesTable(season.votes, seasonIndex, true)}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
-
-              {/* Votes Table */}
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden border border-gray-200 dark:border-gray-700">
-                {renderVotesTable(season.votes, seasonIndex, true)}
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
 
-          {/* Points Legend */}
-          {seasonsData.length > 0 && (
+          {/* Points Legend — only when at least one category has votes */}
+          {seasonsData.some((s) => s.votes_count > 0) && (
             <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4">
               <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
                 {t('dashboard.myhigh5.points_legend') || 'Système de points'}
