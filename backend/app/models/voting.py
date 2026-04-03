@@ -180,6 +180,10 @@ class ContestantVoting(Base):
     contestant_id: Mapped[int] = mapped_column(Integer, ForeignKey("contestants.id"), nullable=False)
     contest_id: Mapped[int] = mapped_column(Integer, ForeignKey("contest.id"), nullable=False)
     season_id: Mapped[int] = mapped_column(Integer, ForeignKey("contest_seasons.id"), nullable=False)
+
+    # MyHigh5 bucket at vote time: "cat:{category_id}" or "ty:{contest_type}:{contest_mode}".
+    # Source of truth for per-category 5-slot cap; independent of ambiguous contest_id joins.
+    vote_bucket_key: Mapped[str] = mapped_column(String(128), nullable=False)
     
     vote_date: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     

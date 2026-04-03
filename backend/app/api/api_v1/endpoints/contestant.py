@@ -5,7 +5,7 @@ import re
 from urllib.parse import parse_qs, unquote, urlparse
 
 from sqlalchemy.orm import Session
-from sqlalchemy import and_
+from sqlalchemy import and_, or_
 
 from app.api import deps
 from app.crud import contestant as crud_contestant, report
@@ -338,6 +338,30 @@ def _resolve_contest_for_contestant_vote(
     return None
 
 
+def _bucket_key_for_contest(contest: Contest) -> str:
+    """
+    Stable MyHigh5 scope for a contest: one bucket per category FK, else (contest_type, contest_mode).
+    Must match persisted vote_bucket_key on ContestantVoting rows.
+    """
+    if contest.category_id is not None:
+        return f"cat:{contest.category_id}"
+    ct = (contest.contest_type or "").strip()
+    cm = (contest.contest_mode or "").strip()
+    return f"ty:{ct}:{cm}"
+
+
+def _bucket_key_for_vote_row(db: Session, vote: ContestantVoting) -> str:
+    """Bucket for grouping/display; prefers stored vote_bucket_key, else derives from contest."""
+    if getattr(vote, "vote_bucket_key", None):
+        return vote.vote_bucket_key
+    c = vote.contest
+    if c is None and vote.contest_id:
+        c = db.query(Contest).filter(Contest.id == vote.contest_id).first()
+    if c is None:
+        return f"ct:{vote.contest_id}"
+    return _bucket_key_for_contest(c)
+
+
 def _myhigh5_scope_votes_query(
     db: Session,
     *,
@@ -346,40 +370,68 @@ def _myhigh5_scope_votes_query(
     contest: Contest,
 ):
     """
-    Votes that count toward the 5-slot MyHigh5 cap for this season:
-    - If contest.category_id is set: all votes whose contest has the same category_id.
-    - Else (many DB rows have NULL category_id): same contest_type + contest_mode
-      (matches how admin assigns "category" via type when FK is missing).
+    Votes that count toward the 5-slot MyHigh5 cap for this season and category bucket.
+
+    Primary filter: ``vote_bucket_key`` (set at vote time from the contestant's resolved contest).
+    Legacy rows with NULL bucket (pre-migration) still match via joined contest fields.
     """
     from sqlalchemy.orm import aliased
 
+    bucket = _bucket_key_for_contest(contest)
     VoteContest = aliased(Contest)
-    q = (
+    if contest.category_id is not None:
+        legacy_match = VoteContest.category_id == contest.category_id
+    else:
+        legacy_match = and_(
+            VoteContest.contest_type == contest.contest_type,
+            VoteContest.contest_mode == contest.contest_mode,
+        )
+    return (
         db.query(ContestantVoting)
         .join(VoteContest, ContestantVoting.contest_id == VoteContest.id)
         .filter(
             ContestantVoting.user_id == user_id,
             ContestantVoting.season_id == season_id,
+            or_(
+                ContestantVoting.vote_bucket_key == bucket,
+                and_(ContestantVoting.vote_bucket_key.is_(None), legacy_match),
+            ),
         )
     )
-    if contest.category_id is not None:
-        q = q.filter(VoteContest.category_id == contest.category_id)
-    else:
-        q = q.filter(
-            VoteContest.contest_type == contest.contest_type,
-            VoteContest.contest_mode == contest.contest_mode,
-        )
-    return q
 
 
-def _myhigh5_group_key_for_vote(vote: ContestantVoting) -> Tuple:
-    """One MyHigh5 bucket per season + category FK, or + (contest_type, contest_mode), else per contest."""
-    c = vote.contest
-    if c is None:
-        return (vote.season_id, "ct", vote.contest_id)
-    if c.category_id is not None:
-        return (vote.season_id, "cat", c.category_id)
-    return (vote.season_id, "ty", c.contest_type, c.contest_mode)
+def _myhigh5_group_key_for_vote(db: Session, vote: ContestantVoting) -> Tuple:
+    """One MyHigh5 group per season + persisted bucket key."""
+    return (vote.season_id, _bucket_key_for_vote_row(db, vote))
+
+
+def _labels_for_myhigh5_bucket(db: Session, bucket_key: str, fallback_contest: Optional[Contest]) -> Tuple[Optional[int], Optional[str], Optional[str], Optional[str]]:
+    """
+    Returns (category_id, category_name, contest_type_label, representative_contest_name).
+    """
+    category_id_out: Optional[int] = None
+    category_name_out: Optional[str] = None
+    contest_type_out: Optional[str] = None
+    contest_name_out: Optional[str] = None
+
+    if bucket_key.startswith("cat:"):
+        rest = bucket_key[4:]
+        if rest.isdigit():
+            cid = int(rest)
+            category_id_out = cid
+            from app.models.category import Category
+
+            cat = db.query(Category).filter(Category.id == cid).first()
+            category_name_out = cat.name if cat else None
+    elif bucket_key.startswith("ty:"):
+        parts = bucket_key.split(":", 2)
+        contest_type_out = parts[1] if len(parts) > 1 else None
+        category_name_out = contest_type_out
+    if fallback_contest:
+        contest_name_out = fallback_contest.name
+        if contest_type_out is None:
+            contest_type_out = fallback_contest.contest_type
+    return category_id_out, category_name_out, contest_type_out, contest_name_out
 
 
 def _find_duplicate_video_submission(
@@ -551,7 +603,7 @@ def get_my_votes(
     if season_id:
         query = query.filter(ContestantVoting.season_id == season_id)
 
-    # Filtrer par contest_id : même scope MyHigh5 que POST /vote (catégorie FK ou type+mode)
+    # Filtrer par contest_id : même bucket MyHigh5 que POST /vote (vote_bucket_key + legacy)
     if contest_id:
         from sqlalchemy.orm import aliased
 
@@ -563,14 +615,21 @@ def get_my_votes(
         )
         if scope_contest:
             VC = aliased(Contest)
-            query = query.join(VC, ContestantVoting.contest_id == VC.id)
+            bucket = _bucket_key_for_contest(scope_contest)
             if scope_contest.category_id is not None:
-                query = query.filter(VC.category_id == scope_contest.category_id)
+                legacy = VC.category_id == scope_contest.category_id
             else:
-                query = query.filter(
+                legacy = and_(
                     VC.contest_type == scope_contest.contest_type,
                     VC.contest_mode == scope_contest.contest_mode,
                 )
+            query = query.join(VC, ContestantVoting.contest_id == VC.id)
+            query = query.filter(
+                or_(
+                    ContestantVoting.vote_bucket_key == bucket,
+                    and_(ContestantVoting.vote_bucket_key.is_(None), legacy),
+                )
+            )
         else:
             query = query.filter(ContestantVoting.contest_id == contest_id)
     
@@ -586,15 +645,15 @@ def get_my_votes(
         ContestantVoting.vote_date.asc()
     ).all()
     
-    # Grouper par catégorie (ou par concours si pas de catégorie)
+    # Grouper par saison + vote_bucket_key (une ligne MyHigh5 par catégorie réelle)
     votes_by_group: dict = {}
     for vote in all_votes:
-        key = _myhigh5_group_key_for_vote(vote)
+        key = _myhigh5_group_key_for_vote(db, vote)
         if key not in votes_by_group:
             votes_by_group[key] = []
         votes_by_group[key].append(vote)
 
-    # Précharger contests + catégories pour le tri et les libellés (évite N+1)
+    # Précharger contests pour libellés secondaires (évite N+1)
     contest_ids_in_groups = {vote.contest_id for vote in all_votes}
     contests_by_id = {}
     if contest_ids_in_groups:
@@ -607,23 +666,19 @@ def get_my_votes(
         contests_by_id = {c.id: c for c in loaded}
 
     def _myhigh5_group_sort_key(k: Tuple) -> Tuple:
-        season_id_key = k[0]
-        kind = k[1]
-        if kind == "cat":
-            id_val = k[2]
+        season_id_key, bucket_key = k[0], k[1]
+        if bucket_key.startswith("cat:"):
+            rest = bucket_key[4:]
             cat_name = ""
-            for c in contests_by_id.values():
-                if c.category_id == id_val and c.category:
-                    cat_name = c.category.name.lower()
-                    break
-            return (season_id_key, 0, cat_name, "")
-        if kind == "ty":
-            typ, mode = k[2], k[3]
-            return (season_id_key, 1, (typ or "").lower(), (mode or "").lower())
-        cid = k[2]
-        c = contests_by_id.get(cid)
-        name = (c.name.lower() if c and c.name else "")
-        return (season_id_key, 2, name, "")
+            if rest.isdigit():
+                from app.models.category import Category
+
+                cat = db.query(Category).filter(Category.id == int(rest)).first()
+                cat_name = (cat.name or "").lower() if cat else ""
+            return (season_id_key, 0, cat_name, bucket_key.lower())
+        if bucket_key.startswith("ty:"):
+            return (season_id_key, 1, bucket_key.lower(), "")
+        return (season_id_key, 2, bucket_key.lower(), "")
 
     sorted_group_keys = sorted(votes_by_group.keys(), key=_myhigh5_group_sort_key)
     
@@ -645,16 +700,16 @@ def get_my_votes(
         # Limiter à 5 votes par concours / saison
         season_votes = votes_sorted[:5]
         
-        # Récupérer les infos de la season et du contest
+        # Infos saison + libellés depuis le bucket (pas seulement le contest du 1er vote)
         first_vote = season_votes[0]
         season = first_vote.season
+        bucket_key = group_key[1]
         contest = contests_by_id.get(first_vote.contest_id) or db.query(Contest).filter(
             Contest.id == first_vote.contest_id
         ).first()
-        category_id_out = contest.category_id if contest else None
-        category_name_out = contest.category.name if contest and contest.category else None
-        if contest and not category_name_out and len(group_key) >= 2 and group_key[1] == "ty":
-            category_name_out = contest.contest_type
+        category_id_out, category_name_out, contest_type_out, rep_contest_name = _labels_for_myhigh5_bucket(
+            db, bucket_key, contest
+        )
 
         season_votes_list = []
         for idx, vote in enumerate(season_votes, 1):
@@ -689,6 +744,7 @@ def get_my_votes(
                 "vote_date": vote.vote_date.isoformat() if vote.vote_date else None,
                 "season_id": vote.season_id,
                 "contest_id": vote.contest_id,
+                "vote_bucket_key": vote.vote_bucket_key if getattr(vote, "vote_bucket_key", None) else bucket_key,
                 "season_level": season.level if season else None
             })
         
@@ -697,10 +753,11 @@ def get_my_votes(
             "season_id": season_id_key,
             "season_level": season.level if season else None,
             "contest_id": first_vote.contest_id,
-            "contest_name": contest.name if contest else None,
+            "contest_name": category_name_out or rep_contest_name or (contest.name if contest else None),
             "category_id": category_id_out,
             "category_name": category_name_out,
-            "contest_type": contest.contest_type if contest else None,
+            "contest_type": contest_type_out or (contest.contest_type if contest else None),
+            "vote_bucket_key": bucket_key,
             "votes": season_votes_list,
             "votes_count": len(season_votes_list),
             "remaining_slots": 5 - len(season_votes_list)
@@ -734,7 +791,7 @@ def get_my_votes_history(
         ContestantVoting.user_id == current_user.id
     )
     
-    # Filtrer par contest_id (même scope MyHigh5 : catégorie FK ou type+mode)
+    # Filtrer par contest_id (même bucket MyHigh5 que POST /vote)
     if contest_id:
         from sqlalchemy.orm import aliased
 
@@ -746,20 +803,27 @@ def get_my_votes_history(
         )
         if scope_hist:
             HVC = aliased(Contest)
-            query = query.join(HVC, ContestantVoting.contest_id == HVC.id)
+            bucket = _bucket_key_for_contest(scope_hist)
             if scope_hist.category_id is not None:
-                query = query.filter(HVC.category_id == scope_hist.category_id)
+                legacy = HVC.category_id == scope_hist.category_id
             else:
-                query = query.filter(
+                legacy = and_(
                     HVC.contest_type == scope_hist.contest_type,
                     HVC.contest_mode == scope_hist.contest_mode,
                 )
+            query = query.join(HVC, ContestantVoting.contest_id == HVC.id)
+            query = query.filter(
+                or_(
+                    ContestantVoting.vote_bucket_key == bucket,
+                    and_(ContestantVoting.vote_bucket_key.is_(None), legacy),
+                )
+            )
         else:
             query = query.filter(ContestantVoting.contest_id == contest_id)
     
-    # Récupérer tous les votes, triés par contest_id, puis season_id, puis position/date
+    # Récupérer tous les votes, triés par bucket, season, position/date
     all_votes = query.order_by(
-        ContestantVoting.contest_id,
+        ContestantVoting.vote_bucket_key,
         ContestantVoting.season_id,
         # Les votes avec position définie d'abord, triés par position
         # Puis les votes sans position, triés par date
@@ -770,37 +834,45 @@ def get_my_votes_history(
         ContestantVoting.vote_date.asc()
     ).all()
     
-    # Grouper par contest_id, puis par season_id
-    votes_by_contest = {}
+    # Grouper par vote_bucket_key (catégorie MyHigh5), puis par season_id
+    votes_by_bucket: dict = {}
     for vote in all_votes:
-        contest_key = vote.contest_id
-        season_key = vote.season_id
-        
-        if contest_key not in votes_by_contest:
-            votes_by_contest[contest_key] = {}
-        if season_key not in votes_by_contest[contest_key]:
-            votes_by_contest[contest_key][season_key] = []
-        
-        votes_by_contest[contest_key][season_key].append(vote)
+        bk = _bucket_key_for_vote_row(db, vote)
+        if bk not in votes_by_bucket:
+            votes_by_bucket[bk] = {}
+        if vote.season_id not in votes_by_bucket[bk]:
+            votes_by_bucket[bk][vote.season_id] = []
+        votes_by_bucket[bk][vote.season_id].append(vote)
     
-    # Construire le résultat groupé par contestant
+    # Construire le résultat groupé par bucket puis saison
     result = {
         "history": []
     }
     
-    for contest_id_key, seasons in votes_by_contest.items():
+    for bucket_key in sorted(votes_by_bucket.keys()):
+        seasons = votes_by_bucket[bucket_key]
+        first_vote_any = None
+        for _sid, vlist in seasons.items():
+            if vlist:
+                first_vote_any = vlist[0]
+                break
+        if not first_vote_any:
+            continue
         contest = (
             db.query(Contest)
             .options(joinedload(Contest.category))
-            .filter(Contest.id == contest_id_key)
+            .filter(Contest.id == first_vote_any.contest_id)
             .first()
         )
+        cid_out, cname_out, ctype_out, rep_name = _labels_for_myhigh5_bucket(db, bucket_key, contest)
         
         contest_data = {
-            "contest_id": contest_id_key,
-            "contest_name": contest.name if contest else None,
-            "category_id": contest.category_id if contest else None,
-            "category_name": contest.category.name if contest and contest.category else None,
+            "vote_bucket_key": bucket_key,
+            "contest_id": first_vote_any.contest_id,
+            "contest_name": cname_out or rep_name or (contest.name if contest else None),
+            "category_id": cid_out,
+            "category_name": cname_out,
+            "contest_type": ctype_out or (contest.contest_type if contest else None),
             "seasons": []
         }
         
@@ -817,7 +889,7 @@ def get_my_votes_history(
             # Vérifier si la saison est active
             from app.models.contests import ContestSeasonLink
             season_link = db.query(ContestSeasonLink).filter(
-                ContestSeasonLink.contest_id == contest_id_key,
+                ContestSeasonLink.contest_id == first_vote.contest_id,
                 ContestSeasonLink.season_id == season_id_key
             ).first()
             is_active = season_link.is_active if season_link else False
@@ -879,9 +951,8 @@ def reorder_my_votes(
     data: dict
 ) -> dict:
     """
-    Réordonne les votes MyHigh5 de l'utilisateur pour une season donnée.
+    Réordonne les votes MyHigh5 de l'utilisateur pour une season et un bucket catégorie.
     Le 1er reçoit 5 points, le 2ème 4 points, le 3ème 3 points, etc.
-    Les votes sont groupés par season_id.
     """
     votes_to_reorder = data.get("votes", [])
     season_id = data.get("season_id")
@@ -902,7 +973,7 @@ def reorder_my_votes(
     if len(votes_to_reorder) > 5:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Maximum 5 votes allowed per season"
+            detail="Maximum 5 votes allowed per MyHigh5 category for this season"
         )
     
     # Vérifier que tous les votes appartiennent à l'utilisateur et à la même season (+ contest si fourni)
@@ -922,16 +993,30 @@ def reorder_my_votes(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Contest not found",
             )
+        bucket = _bucket_key_for_contest(scope_c)
         VC = aliased(Contest)
-        uv_q = uv_q.join(VC, ContestantVoting.contest_id == VC.id)
         if scope_c.category_id is not None:
-            uv_q = uv_q.filter(VC.category_id == scope_c.category_id)
+            legacy = VC.category_id == scope_c.category_id
         else:
-            uv_q = uv_q.filter(
+            legacy = and_(
                 VC.contest_type == scope_c.contest_type,
                 VC.contest_mode == scope_c.contest_mode,
             )
+        uv_q = uv_q.join(VC, ContestantVoting.contest_id == VC.id)
+        uv_q = uv_q.filter(
+            or_(
+                ContestantVoting.vote_bucket_key == bucket,
+                and_(ContestantVoting.vote_bucket_key.is_(None), legacy),
+            )
+        )
     user_votes = uv_q.all()
+
+    _buckets = {_bucket_key_for_vote_row(db, v) for v in user_votes}
+    if len(_buckets) > 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Votes span multiple MyHigh5 categories; pass contest_id to identify the category bucket.",
+        )
     
     user_vote_contestant_ids = {vote.contestant_id for vote in user_votes}
     
@@ -2516,6 +2601,7 @@ def vote_for_contestant(
         contestant_id=contestant_id,
         contest_id=contest.id,
         season_id=season.id,
+        vote_bucket_key=_bucket_key_for_contest(contest),
         position=new_position,
         points=new_points
     )
@@ -2713,6 +2799,7 @@ def replace_fifth_vote(
         contestant_id=contestant_id,
         contest_id=contest.id,
         season_id=season.id,
+        vote_bucket_key=_bucket_key_for_contest(contest),
         position=5,
         points=1
     )
