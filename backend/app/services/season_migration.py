@@ -589,10 +589,18 @@ class SeasonMigrationService:
         print(f"[Migration]   Contestants sélectionnés: {len(selected_contestants)}")
         
         if len(selected_contestants) == 0:
-            error_msg = f"No contestants to promote from {from_level.value} (season_id: {from_season.id})"
-            logger.warning(error_msg)
-            print(f"[Migration] WARNING: {error_msg}")
-            return {"error": error_msg, "message": error_msg}
+            # Not a failure: calendar may say "promote" while nobody qualified in this season yet.
+            # Return a success-shaped payload so schedulers log a skip, not ERROR.
+            msg = f"No contestants to promote from {from_level.value} (season_id: {from_season.id})"
+            logger.warning(msg)
+            print(f"[Migration] WARNING: {msg}")
+            return {
+                "message": msg,
+                "skipped": True,
+                "from_season_id": from_season.id,
+                "promoted_count": 0,
+                "promoted_contestant_ids": [],
+            }
         
         # Marquer les non sélectionnés comme non qualifiés
         all_contestants = db.query(Contestant).join(

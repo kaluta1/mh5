@@ -117,6 +117,11 @@ class SeasonMigrationScheduler:
                     promoted_ids = []
                     error_msg = None
                     if isinstance(migration_result, dict):
+                        if migration_result.get("skipped"):
+                            msg = migration_result.get("message", "skipped")
+                            print(f"  - Contest {contest_id}: {action} — skip (no work): {msg}")
+                            logger.info(f"  - Contest {contest_id}: {action} — skip: {msg}")
+                            continue
                         # Vérifier s'il y a une erreur
                         if 'error' in migration_result:
                             error_msg = migration_result.get('error')
