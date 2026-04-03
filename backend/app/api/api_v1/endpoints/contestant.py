@@ -253,6 +253,43 @@ def _get_contest_context_from_season(db: Session, season_id: Optional[int]) -> S
     return contexts
 
 
+def _contestant_belongs_to_contest(
+    db: Session,
+    contestant: Contestant,
+    contest_id: int,
+    season: ContestSeason,
+) -> bool:
+    """True if this contestant entry is under ``contest_id`` for the active ``season``."""
+    from app.models.contests import ContestSeasonLink
+    from app.models.round import Round, round_contests
+
+    link = db.query(ContestSeasonLink).filter(
+        ContestSeasonLink.contest_id == contest_id,
+        ContestSeasonLink.season_id == season.id,
+        ContestSeasonLink.is_active == True,
+    ).first()
+    if not link:
+        return False
+    if contestant.season_id == contest_id:
+        return True
+    if contestant.round_id is None:
+        return False
+    rc = (
+        db.query(round_contests.c.contest_id)
+        .filter(
+            round_contests.c.round_id == contestant.round_id,
+            round_contests.c.contest_id == contest_id,
+        )
+        .first()
+    )
+    if rc:
+        return True
+    r_obj = db.query(Round).filter(Round.id == contestant.round_id).first()
+    if r_obj and r_obj.contest_id == contest_id:
+        return True
+    return False
+
+
 def _resolve_contest_for_contestant_vote(
     db: Session,
     contestant: Contestant,
@@ -260,12 +297,25 @@ def _resolve_contest_for_contestant_vote(
 ) -> Optional[Contest]:
     """
     Pick the Contest row for this vote. ContestSeason can link to multiple contests
-    (different categories); using ContestSeasonLink(...).first() is non-deterministic
-    and mixes votes across categories. Prefer Contestant.season_id (stores contest id,
-    see get_contest_with_enriched_contestants), then disambiguate via round_contests.
+    (different categories). Disambiguate via Contestant.season_id (contest id), then
+    intersection of round_contests(round_id) with this season's linked contests — not
+    the first arbitrary contest that shares the round.
     """
     from app.models.contests import ContestSeasonLink
     from app.models.round import Round, round_contests
+
+    links = (
+        db.query(ContestSeasonLink)
+        .filter(
+            ContestSeasonLink.season_id == season.id,
+            ContestSeasonLink.is_active == True,
+        )
+        .all()
+    )
+    if not links:
+        return None
+
+    season_cids = [L.contest_id for L in links]
 
     # 1) Primary: legacy column Contestant.season_id == contest.id for this contestant
     if contestant.season_id is not None:
@@ -282,51 +332,26 @@ def _resolve_contest_for_contestant_vote(
             if contest:
                 return contest
 
-    links = (
-        db.query(ContestSeasonLink)
-        .filter(
-            ContestSeasonLink.season_id == season.id,
-            ContestSeasonLink.is_active == True,
-        )
-        .all()
-    )
-    if not links:
-        return None
-
-    # 2) Contestant.round_id linked to this contest via round_contests / legacy Round.contest_id
+    # 2) Same calendar round can be linked to several contests — intersect with season
     if contestant.round_id is not None:
-        candidates: List[Contest] = []
-        for L in links:
-            oc = db.query(Contest).filter(
-                Contest.id == L.contest_id,
-                Contest.is_deleted == False,
-            ).first()
-            if not oc:
-                continue
-            round_ids: List[int] = []
-            try:
-                rvi = db.query(round_contests.c.round_id).filter(
-                    round_contests.c.contest_id == oc.id
-                ).all()
-                round_ids.extend(r[0] for r in rvi)
-            except Exception:
-                pass
-            try:
-                leg = db.query(Round.id).filter(Round.contest_id == oc.id).all()
-                round_ids.extend(r[0] for r in leg)
-            except Exception:
-                pass
-            round_ids = list(set(round_ids))
-            if contestant.round_id in round_ids:
-                candidates.append(oc)
-
-        if len(candidates) == 1:
-            return candidates[0]
-        if len(candidates) > 1:
-            for c in candidates:
-                if contestant.season_id == c.id:
-                    return c
-            return candidates[0]
+        rc_rows = db.query(round_contests.c.contest_id).filter(
+            round_contests.c.round_id == contestant.round_id
+        ).all()
+        round_cids = {r[0] for r in rc_rows}
+        r_obj = db.query(Round).filter(Round.id == contestant.round_id).first()
+        if r_obj and r_obj.contest_id:
+            round_cids.add(r_obj.contest_id)
+        inter = [cid for cid in round_cids if cid in season_cids]
+        if len(inter) == 1:
+            return db.query(Contest).filter(Contest.id == inter[0], Contest.is_deleted == False).first()
+        if len(inter) > 1:
+            if contestant.season_id in inter:
+                return db.query(Contest).filter(
+                    Contest.id == contestant.season_id,
+                    Contest.is_deleted == False,
+                ).first()
+            # Ambiguous without explicit contest_id from client — do not guess
+            return None
 
     # 3) Single contest linked to this season — previous behavior
     if len(links) == 1:
@@ -2303,7 +2328,11 @@ def vote_for_contestant(
     *,
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
-    contestant_id: int
+    contestant_id: int,
+    contest_id: Optional[int] = Query(
+        None,
+        description="Contest page the user is voting from (required when multiple contests share the same season/round).",
+    ),
 ) -> dict:
     """Vote pour un contestant"""
     from app.services.contest_status import contest_status_service
@@ -2350,13 +2379,24 @@ def vote_for_contestant(
             detail="Season not found for this contestant"
         )
     
-    # Contest associé : ne pas utiliser ContestSeasonLink(...).first() — plusieurs concours
-    # peuvent partager la même saison (catégories différentes).
-    contest = _resolve_contest_for_contestant_vote(db, contestant, season)
+    # Contest associé : préférer le contest_id de la page (évite mélange Bongo Fleva vs Tennis Club).
+    contest: Optional[Contest] = None
+    if contest_id is not None:
+        c = db.query(Contest).filter(Contest.id == contest_id, Contest.is_deleted == False).first()
+        if not c:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contest not found")
+        if not _contestant_belongs_to_contest(db, contestant, contest_id, season):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This submission is not part of the selected contest. Refresh the page and try again.",
+            )
+        contest = c
+    else:
+        contest = _resolve_contest_for_contestant_vote(db, contestant, season)
     if not contest:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No active contest found for this season"
+            detail="No active contest found for this season. Open the contest from the list and vote again, or pass contest_id.",
         )
     
     # Vérifier que le vote est ouvert pour ce contest
@@ -2670,7 +2710,11 @@ def replace_fifth_vote(
     *,
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
-    contestant_id: int
+    contestant_id: int,
+    contest_id: Optional[int] = Query(
+        None,
+        description="Contest page context (same as /vote).",
+    ),
 ) -> dict:
     """
     Remplace le 5e vote de l'utilisateur par un nouveau contestant.
@@ -2708,9 +2752,24 @@ def replace_fifth_vote(
     if not season:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Season not found")
 
-    contest = _resolve_contest_for_contestant_vote(db, contestant, season)
+    contest: Optional[Contest] = None
+    if contest_id is not None:
+        c = db.query(Contest).filter(Contest.id == contest_id, Contest.is_deleted == False).first()
+        if not c:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contest not found")
+        if not _contestant_belongs_to_contest(db, contestant, contest_id, season):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This submission is not part of the selected contest.",
+            )
+        contest = c
+    else:
+        contest = _resolve_contest_for_contestant_vote(db, contestant, season)
     if not contest:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Contest not found")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Contest not found. Pass contest_id if multiple contests share this season.",
+        )
 
     # Vérifier que le vote est ouvert
     is_allowed, error_message = contest_status_service.check_voting_allowed(db, contest.id)

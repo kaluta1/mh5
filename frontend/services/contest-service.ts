@@ -922,7 +922,10 @@ class ContestService {
   /**
    * Vote for a contestant
    */
-  async voteForContestant(contestantId: number, _points?: number): Promise<{
+  async voteForContestant(
+    contestantId: number,
+    opts?: { contestId?: number }
+  ): Promise<{
     success: boolean;
     data?: any;
     code?: string;
@@ -951,7 +954,12 @@ class ContestService {
     };
 
     try {
-      const response = await api.post(`/api/v1/contestants/${contestantId}/vote`);
+      const response = await api.post(`/api/v1/contestants/${contestantId}/vote`, {}, {
+        params:
+          opts?.contestId != null && opts.contestId > 0
+            ? { contest_id: opts.contestId }
+            : undefined,
+      });
       // axios uses validateStatus: status < 500 — 409 does NOT throw, so we must branch here
       if (response.status === 409) {
         const parsed = parse409(response.data);
@@ -976,8 +984,10 @@ class ContestService {
   /**
    * Replace the 5th vote with a new contestant (after user confirmation)
    */
-  async replaceVote(contestantId: number): Promise<any> {
-    const response = await api.post(`/api/v1/contestants/${contestantId}/vote/replace`);
+  async replaceVote(contestantId: number, contestId?: number): Promise<any> {
+    const response = await api.post(`/api/v1/contestants/${contestantId}/vote/replace`, {}, {
+      params: contestId != null && contestId > 0 ? { contest_id: contestId } : undefined,
+    });
     if (response.status >= 400) {
       const detail = response.data?.detail;
       const msg =

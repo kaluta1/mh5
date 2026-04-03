@@ -40,7 +40,9 @@ export default function MyVotesPanel({ contestId, onVoteChanged }: MyVotesPanelP
     try {
       const data = await contestService.getMyVotesForContest(contestId)
       if (data.seasons && data.seasons.length > 0) {
-        const season = data.seasons[0]
+        const season =
+          data.seasons.find((s: { contest_id?: number }) => s.contest_id === contestId) ||
+          data.seasons[0]
         setVotes(season.votes || [])
         setSeasonId(season.season_id)
       } else {

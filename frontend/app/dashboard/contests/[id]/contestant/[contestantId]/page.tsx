@@ -375,7 +375,10 @@ function ContestantDetailContent() {
 
     setIsVoting(true)
     try {
-      const result = await contestService.voteForContestant(Number(contestant.id))
+      const cIdNum = parseInt(contestId, 10)
+      const result = await contestService.voteForContestant(Number(contestant.id), {
+        contestId: Number.isNaN(cIdNum) ? undefined : cIdNum,
+      })
 
       if (result.success) {
         await reloadContestantAfterVote()
@@ -388,7 +391,10 @@ function ContestantDetailContent() {
         })
         window.dispatchEvent(new Event('vote-changed'))
       } else if (result.code === 'max_votes_reached') {
-        await contestService.replaceVote(Number(contestant.id))
+        await contestService.replaceVote(
+          Number(contestant.id),
+          Number.isNaN(cIdNum) ? undefined : cIdNum
+        )
         await reloadContestantAfterVote()
         setContestant((prev) =>
           prev ? { ...prev, has_voted: true, can_vote: false } : null

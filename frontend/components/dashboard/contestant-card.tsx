@@ -296,7 +296,13 @@ export function ContestantCard({
 
     try {
       setIsVoting(true)
-      const result = await contestService.voteForContestant(Number(id))
+      const cid =
+        contestId != null && contestId !== ''
+          ? parseInt(String(contestId), 10)
+          : undefined
+      const result = await contestService.voteForContestant(Number(id), {
+        contestId: cid && !Number.isNaN(cid) ? cid : undefined,
+      })
 
       if (result.success) {
         setIsLiked(true)
@@ -305,7 +311,7 @@ export function ContestantCard({
         onVote()
       } else if (result.code === 'max_votes_reached') {
         // Replace 5th vote automatically (no confirmation)
-        await contestService.replaceVote(Number(id))
+        await contestService.replaceVote(Number(id), cid && !Number.isNaN(cid) ? cid : undefined)
         setIsLiked(true)
         setCurrentVotes(prev => prev + 1)
         addToast(t('dashboard.contests.vote_replaced') || 'Vote enregistré (remplace le 5e choix).', 'success')
