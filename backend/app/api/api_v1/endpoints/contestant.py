@@ -259,7 +259,11 @@ def _contestant_belongs_to_contest(
     contest_id: int,
     season: ContestSeason,
 ) -> bool:
-    """True if this contestant entry is under ``contest_id`` for the active ``season``."""
+    """
+    True if this contestant entry is under ``contest_id`` for the active ``season``.
+    Aligns with ``_resolve_contest_for_contestant_vote`` (round ∩ season), and allows
+    a single-contest season when ``round_id`` is missing.
+    """
     from app.models.contests import ContestSeasonLink
     from app.models.round import Round, round_contests
 
@@ -272,21 +276,31 @@ def _contestant_belongs_to_contest(
         return False
     if contestant.season_id == contest_id:
         return True
-    if contestant.round_id is None:
-        return False
-    rc = (
-        db.query(round_contests.c.contest_id)
+
+    links = (
+        db.query(ContestSeasonLink)
         .filter(
-            round_contests.c.round_id == contestant.round_id,
-            round_contests.c.contest_id == contest_id,
+            ContestSeasonLink.season_id == season.id,
+            ContestSeasonLink.is_active == True,
         )
-        .first()
+        .all()
     )
-    if rc:
+    season_cids = [L.contest_id for L in links]
+
+    if contestant.round_id is not None:
+        rc_rows = db.query(round_contests.c.contest_id).filter(
+            round_contests.c.round_id == contestant.round_id
+        ).all()
+        round_cids = {r[0] for r in rc_rows}
+        r_obj = db.query(Round).filter(Round.id == contestant.round_id).first()
+        if r_obj and r_obj.contest_id:
+            round_cids.add(r_obj.contest_id)
+        if contest_id in round_cids and contest_id in season_cids:
+            return True
+
+    if len(season_cids) == 1 and season_cids[0] == contest_id:
         return True
-    r_obj = db.query(Round).filter(Round.id == contestant.round_id).first()
-    if r_obj and r_obj.contest_id == contest_id:
-        return True
+
     return False
 
 
@@ -2385,12 +2399,17 @@ def vote_for_contestant(
         c = db.query(Contest).filter(Contest.id == contest_id, Contest.is_deleted == False).first()
         if not c:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contest not found")
-        if not _contestant_belongs_to_contest(db, contestant, contest_id, season):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="This submission is not part of the selected contest. Refresh the page and try again.",
-            )
-        contest = c
+        if _contestant_belongs_to_contest(db, contestant, contest_id, season):
+            contest = c
+        else:
+            resolved = _resolve_contest_for_contestant_vote(db, contestant, season)
+            if resolved is not None and resolved.id == contest_id:
+                contest = c
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="This submission is not part of the selected contest. Refresh the page and try again.",
+                )
     else:
         contest = _resolve_contest_for_contestant_vote(db, contestant, season)
     if not contest:
@@ -2757,12 +2776,17 @@ def replace_fifth_vote(
         c = db.query(Contest).filter(Contest.id == contest_id, Contest.is_deleted == False).first()
         if not c:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contest not found")
-        if not _contestant_belongs_to_contest(db, contestant, contest_id, season):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="This submission is not part of the selected contest.",
-            )
-        contest = c
+        if _contestant_belongs_to_contest(db, contestant, contest_id, season):
+            contest = c
+        else:
+            resolved = _resolve_contest_for_contestant_vote(db, contestant, season)
+            if resolved is not None and resolved.id == contest_id:
+                contest = c
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="This submission is not part of the selected contest.",
+                )
     else:
         contest = _resolve_contest_for_contestant_vote(db, contestant, season)
     if not contest:

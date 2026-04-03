@@ -967,7 +967,10 @@ class ContestService {
         return { success: false, code: 'conflict', data: response.data };
       }
       if (response.status >= 400) {
-        const err: any = new Error('Vote failed');
+        const d = response.data?.detail;
+        const msg =
+          typeof d === 'string' ? d : Array.isArray(d) ? JSON.stringify(d) : 'Vote failed';
+        const err: any = new Error(msg);
         err.response = { status: response.status, data: response.data };
         throw err;
       }
