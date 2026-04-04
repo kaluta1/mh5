@@ -103,8 +103,8 @@ export function RoundSelector({
                                 <span className="text-sm">{statusIcon}</span>
                                 <div className="text-left">
                                     {round.is_voting_open && (
-                                        <div className="text-[10px] font-bold uppercase tracking-wide text-blue-500 mb-0.5">
-                                            {t('dashboard.contests.vote_label') || 'Vote'}
+                                        <div className="text-[10px] font-semibold text-blue-500 mb-0.5">
+                                            {t('dashboard.contests.vote_label') || 'Vote now'}
                                         </div>
                                     )}
                                     <div className="text-sm font-medium whitespace-nowrap">

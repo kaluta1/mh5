@@ -262,13 +262,13 @@ export default function ContestantsListPage() {
                       className={`px-3.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all flex flex-col items-center justify-center gap-0.5 min-h-[2.5rem] ${selectedRound === String(round.id) ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'}`}>
                       {round.is_voting_open && (
                         <span
-                          className={`text-[10px] font-bold uppercase tracking-wide leading-none ${
+                          className={`text-[10px] font-semibold leading-none ${
                             selectedRound === String(round.id)
                               ? 'text-blue-200'
                               : 'text-blue-600 dark:text-blue-400'
                           }`}
                         >
-                          {t('dashboard.contests.vote_label') || 'Vote'}
+                          {t('dashboard.contests.vote_label') || 'Vote now'}
                         </span>
                       )}
                       <span className="flex items-center gap-1.5">

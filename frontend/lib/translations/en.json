@@ -231,7 +231,7 @@
   },
   "dashboard": {
     "contests": {
-      "vote_label": "Vote",
+      "vote_label": "Vote now",
       "edit_nomination": "Edit your Nomination",
       "edit_participation": "Edit your Participation",
       "nominate": "Nominate",

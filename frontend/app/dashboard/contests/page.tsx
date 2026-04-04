@@ -569,13 +569,13 @@ function ContestsPageContent() {
               >
                 {round.is_voting_open && (
                   <span
-                    className={`text-[10px] font-bold uppercase tracking-wide leading-none ${
+                    className={`text-[10px] font-semibold leading-none ${
                       activeRoundId === String(round.id)
                         ? 'text-sky-200'
                         : 'text-blue-600 dark:text-blue-400'
                     }`}
                   >
-                    {t('dashboard.contests.vote_label') || 'Vote'}
+                    {t('dashboard.contests.vote_label') || 'Vote now'}
                   </span>
                 )}
                 <span className="inline-flex items-center">
