@@ -10,11 +10,52 @@ import os
 from app import crud, models
 from app.schemas import round as round_schema
 from app.api import deps
-from app.models.round import Round
+from app.models.round import Round, RoundStatus
 from app.scripts.generate_monthly_rounds import generate_monthly_round
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def _to_date_value(value: Any) -> Optional[date]:
+    """Normalize ORM/JSON dates to date for comparisons."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        return date.fromisoformat(value[:10])
+    return None
+
+
+def _effective_is_voting_open(r_data: dict, round_obj: Optional[Round]) -> bool:
+    """
+    Voting is only considered open for API/UI when the DB flag is true and the
+    round is not completed and (when dates exist) today is within the voting window.
+    Prevents stale is_voting_open from showing for past months (e.g. Jan/Feb after March opens).
+    """
+    if not r_data.get("is_voting_open"):
+        return False
+    if round_obj is not None:
+        st = round_obj.status
+        st_val = st.value if hasattr(st, "value") else str(st)
+        if st_val == RoundStatus.COMPLETED.value:
+            return False
+    else:
+        st_raw = r_data.get("status")
+        if st_raw and str(st_raw).lower() == "completed":
+            return False
+    today = date.today()
+    ve = _to_date_value(r_data.get("voting_end_date"))
+    if ve is not None and today > ve:
+        return False
+    vs = _to_date_value(r_data.get("voting_start_date"))
+    if vs is not None and today < vs:
+        return False
+    return True
+
 
 @router.get("/", response_model=List[round_schema.RoundWithStats])
 def read_rounds(
@@ -153,7 +194,8 @@ def _enrich_round_data(
             logger.warning(f"Error checking user participation for round {round_id}: {str(e)}")
             current_user_participated = False
         
-        # Check if completed
+        # Load round row for status + completion (used below for effective voting flag)
+        round_obj: Optional[Round] = None
         try:
             round_obj = db.query(Round).filter(Round.id == round_id).first()
             is_completed = crud.round.is_round_completed(round_obj) if round_obj else False
@@ -328,7 +370,8 @@ def _enrich_round_data(
             "top_contestants": [],  # Can be enhanced later
             "contests": r_data.get("contests", [])
         }
-        
+        result["is_voting_open"] = _effective_is_voting_open(r_data, round_obj)
+
         return result
         
     except Exception as e:

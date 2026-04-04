@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useLanguage } from '@/contexts/language-context'
 import { useAuth } from '@/hooks/use-auth'
 import ApiService from '@/lib/api-service'
+import { isRoundVotingLive } from '@/lib/is-round-voting-live'
 import { contestService } from '@/services/contest-service'
 import { followService } from '@/services/follow-service'
 import { Button } from '@/components/ui/button'
@@ -13,7 +14,14 @@ import {
   Trophy, ThumbsUp, MapPin, ChevronDown, X, Globe, Play
 } from 'lucide-react'
 
-interface Round { id: number; name: string; status: string; is_voting_open?: boolean }
+interface Round {
+  id: number
+  name: string
+  status: string
+  is_voting_open?: boolean
+  voting_start_date?: string | null
+  voting_end_date?: string | null
+}
 
 interface ContestantData {
   id: number; user_id: number; season_id: number; round_id: number | null
@@ -94,6 +102,8 @@ export default function ContestantsListPage() {
               name: r.name || `Round ${i + 1}`,
               status: r.status || 'active',
               is_voting_open: Boolean(r.is_voting_open),
+              voting_start_date: r.voting_start_date ?? null,
+              voting_end_date: r.voting_end_date ?? null,
             }))
           )
         }
@@ -260,7 +270,7 @@ export default function ContestantsListPage() {
                   {rounds.map(round => (
                     <button key={round.id} onClick={() => setSelectedRound(String(round.id))}
                       className={`px-3.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all flex flex-col items-center justify-center gap-0.5 min-h-[2.5rem] ${selectedRound === String(round.id) ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'}`}>
-                      {round.is_voting_open && (
+                      {isRoundVotingLive(round) && (
                         <span
                           className={`text-[10px] font-semibold leading-none ${
                             selectedRound === String(round.id)

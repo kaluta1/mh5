@@ -17,6 +17,7 @@ import { LocationFilterBar } from '@/components/dashboard/location-filter-bar'
 // GraphQL
 // REST API
 import ApiService, { Round } from '@/lib/api-service'
+import { isRoundVotingLive } from '@/lib/is-round-voting-live'
 
 // Lazy load heavy components
 const ContestCard = dynamic(() => import('@/components/dashboard/contest-card').then(mod => ({ default: mod.ContestCard })), {
@@ -567,7 +568,7 @@ function ContestsPageContent() {
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-900 dark:bg-gray-800/80 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white hover:scale-[1.02]'
                   }`}
               >
-                {round.is_voting_open && (
+                {isRoundVotingLive(round) && (
                   <span
                     className={`text-[10px] font-semibold leading-none ${
                       activeRoundId === String(round.id)

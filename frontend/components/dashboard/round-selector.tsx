@@ -2,6 +2,7 @@
 
 import React from 'react'
 import { RoundWithStats } from '@/services/contest-service'
+import { isRoundVotingLive } from '@/lib/is-round-voting-live'
 
 interface RoundSelectorProps {
     rounds: RoundWithStats[]
@@ -27,7 +28,7 @@ export function RoundSelector({
     const getStatusIcon = (round: RoundWithStats): string => {
         if (round.is_completed) return '✓'
         if (round.is_submission_open) return '🔵'
-        if (round.is_voting_open) return '🗳️'
+        if (isRoundVotingLive(round)) return '🗳️'
         if (round.status === 'upcoming') return '○'
         return ''
     }
@@ -39,7 +40,7 @@ export function RoundSelector({
         if (round.is_submission_open) {
             return 'bg-blue-500/20 text-blue-400 border-blue-500/50'
         }
-        if (round.is_voting_open) {
+        if (isRoundVotingLive(round)) {
             return 'bg-purple-500/20 text-purple-400 border-purple-500/50'
         }
         return 'bg-gray-700/50 text-gray-400 border-gray-600'
@@ -61,7 +62,7 @@ export function RoundSelector({
 
     // Calculer les stats
     const completedRounds = rounds.filter(r => r.is_completed).length
-    const activeRound = rounds.find(r => r.is_submission_open || r.is_voting_open)
+    const activeRound = rounds.find(r => r.is_submission_open || isRoundVotingLive(r))
     const totalRounds = rounds.length
 
     return (
@@ -100,7 +101,7 @@ export function RoundSelector({
                             <div className="flex items-center gap-2">
                                 <span className="text-sm">{statusIcon}</span>
                                 <div className="text-left">
-                                    {round.is_voting_open && (
+                                    {isRoundVotingLive(round) && (
                                         <div className="text-[10px] font-semibold text-blue-500 mb-0.5">
                                             VOTE NOW
                                         </div>
