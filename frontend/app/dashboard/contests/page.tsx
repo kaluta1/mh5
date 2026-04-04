@@ -562,20 +562,36 @@ function ContestsPageContent() {
               <button
                 key={round.id}
                 onClick={() => setActiveRoundId(String(round.id))}
-                className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 whitespace-nowrap ${activeRoundId === String(round.id)
+                className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 whitespace-nowrap flex flex-col items-center justify-center gap-0.5 min-h-[3rem] ${activeRoundId === String(round.id)
                   ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-500/30 scale-105'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-900 dark:bg-gray-800/80 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white hover:scale-[1.02]'
                   }`}
               >
-                {(() => {
-                  const isPast = new Date(round.submission_end_date + 'T23:59:59') < new Date()
-                  return (
-                    <>
-                      {isPast && <Lock className="w-3 h-3 mr-1 inline opacity-60" />}
-                      {round.name} <span className="ml-1 opacity-70">({round.contests_count !== undefined ? round.contests_count : (round.contests?.length || 0)})</span>
-                    </>
-                  )
-                })()}
+                {round.is_voting_open && (
+                  <span
+                    className={`text-[10px] font-bold uppercase tracking-wide leading-none ${
+                      activeRoundId === String(round.id)
+                        ? 'text-sky-200'
+                        : 'text-blue-600 dark:text-blue-400'
+                    }`}
+                  >
+                    {t('dashboard.contests.vote_label') || 'Vote'}
+                  </span>
+                )}
+                <span className="inline-flex items-center">
+                  {(() => {
+                    const isPast = new Date(round.submission_end_date + 'T23:59:59') < new Date()
+                    return (
+                      <>
+                        {isPast && <Lock className="w-3 h-3 mr-1 inline opacity-60 flex-shrink-0" />}
+                        {round.name}{' '}
+                        <span className="ml-1 opacity-70">
+                          ({round.contests_count !== undefined ? round.contests_count : (round.contests?.length || 0)})
+                        </span>
+                      </>
+                    )
+                  })()}
+                </span>
               </button>
             ))}
           </div>
