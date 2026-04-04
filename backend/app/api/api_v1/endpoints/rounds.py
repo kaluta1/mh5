@@ -57,6 +57,22 @@ def _effective_is_voting_open(r_data: dict, round_obj: Optional[Round]) -> bool:
     return True
 
 
+def _dedupe_voting_open_to_latest_round(result: List[dict]) -> None:
+    """
+    Monthly rounds can leave is_voting_open=True on older months while voting_end_date
+    spans the whole season (global). Only the latest round (max id) should stay open for API/UI.
+    """
+    if not result or len(result) < 2:
+        return
+    flagged = [r for r in result if r.get("is_voting_open")]
+    if len(flagged) <= 1:
+        return
+    max_id = max(r["id"] for r in flagged)
+    for r in result:
+        if r.get("is_voting_open") and r["id"] != max_id:
+            r["is_voting_open"] = False
+
+
 @router.get("/", response_model=List[round_schema.RoundWithStats])
 def read_rounds(
     db: Session = Depends(deps.get_db),
@@ -94,6 +110,7 @@ def read_rounds(
                                                   filter_continent, search_term, contest_limit, contest_skip)
                     if round_obj:
                         result.append(round_obj)
+                _dedupe_voting_open_to_latest_round(result)
                 return result
             else:
                 # Fetch all rounds
@@ -133,6 +150,7 @@ def read_rounds(
                         logger.error(f"Error processing round {r.id}: {str(round_error)}", exc_info=True)
                         continue
                 
+                _dedupe_voting_open_to_latest_round(result)
                 return result
                 
         except Exception as query_error:

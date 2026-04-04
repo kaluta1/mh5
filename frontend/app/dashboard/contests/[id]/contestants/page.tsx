@@ -270,7 +270,7 @@ export default function ContestantsListPage() {
                   {rounds.map(round => (
                     <button key={round.id} onClick={() => setSelectedRound(String(round.id))}
                       className={`px-3.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all flex flex-col items-center justify-center gap-0.5 min-h-[2.5rem] ${selectedRound === String(round.id) ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'}`}>
-                      {isRoundVotingLive(round) && (
+                      {isRoundVotingLive(round, rounds) && (
                         <span
                           className={`text-[10px] font-semibold leading-none ${
                             selectedRound === String(round.id)
