@@ -575,7 +575,7 @@ function ContestsPageContent() {
                         : 'text-blue-600 dark:text-blue-400'
                     }`}
                   >
-                    {t('dashboard.contests.vote_label') || 'Vote now'}
+                    VOTE NOW
                   </span>
                 )}
                 <span className="inline-flex items-center">

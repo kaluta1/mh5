@@ -268,7 +268,7 @@ export default function ContestantsListPage() {
                               : 'text-blue-600 dark:text-blue-400'
                           }`}
                         >
-                          {t('dashboard.contests.vote_label') || 'Vote now'}
+                          VOTE NOW
                         </span>
                       )}
                       <span className="flex items-center gap-1.5">
