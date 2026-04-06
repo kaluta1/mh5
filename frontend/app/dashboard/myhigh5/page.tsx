@@ -7,7 +7,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/components/ui/toast'
 import { contestService } from '@/services/contest-service'
-import { Hand, Trophy, MapPin, Calendar, GripVertical, ExternalLink, Star, History, ChevronDown } from 'lucide-react'
+import { Hand, Trophy, MapPin, Calendar, ExternalLink, Star, History, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -328,11 +328,20 @@ export default function MyHigh5Page() {
               ${isSaving ? 'pointer-events-none opacity-70' : ''}
             `}
           >
-            {/* Drag Handle */}
+            {/* Drag handle: High5 hand (not grip bars) */}
             {enableDragDrop && (
-              <TableCell className="py-3">
-                <div className="flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
-                  <GripVertical className="w-5 h-5" />
+              <TableCell className="py-3 w-14">
+                <div
+                  className={cn(
+                    'mx-auto flex h-9 w-9 cursor-grab items-center justify-center rounded-lg border border-white/25',
+                    'bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary shadow-sm',
+                    'active:cursor-grabbing hover:opacity-95 hover:ring-2 hover:ring-myhigh5-primary/30',
+                    isSaving && 'pointer-events-none opacity-60'
+                  )}
+                  title={t('dashboard.myhigh5.drag_reorder') || 'Drag to reorder your High5'}
+                  aria-label={t('dashboard.myhigh5.drag_reorder') || 'Drag to reorder your High5'}
+                >
+                  <Hand className="h-4 w-4 text-white" strokeWidth={2.25} aria-hidden />
                 </div>
               </TableCell>
             )}
