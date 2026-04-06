@@ -2546,26 +2546,27 @@ def vote_for_contestant(
 
     from app.models.user import User as MyfavUser
 
-    def locations_match() -> bool:
+    def location_vote_error() -> Optional[str]:
+        """Returns None if voting is allowed; otherwise a clear message for the client."""
         if not season_level:
-            return True
+            return None
 
         lvl = str(season_level).lower()
         voter: MyfavUser = current_user
         author: MyfavUser = contestant.user  # chargé par crud_contestant.get avec joinedload
 
         if not author:
-            return True
+            return None
 
         def eq(a: Optional[str], b: Optional[str]) -> bool:
             return bool(a and b and a.lower() == b.lower())
-        
+
         def is_valid_location(value: Optional[str]) -> bool:
             if not value:
                 return False
             val_lower = str(value).lower().strip()
             return val_lower not in ("unknown", "none", "", "null")
-        
+
         def compare_with_unknown(val1: Optional[str], val2: Optional[str]) -> bool:
             """Compare deux valeurs géographiques en ignorant 'Unknown'"""
             valid1 = is_valid_location(val1)
@@ -2575,27 +2576,99 @@ def vote_for_contestant(
             # Si au moins une est "Unknown", on accepte (pas de restriction)
             return True
 
-        if lvl == "city":
-            country_match = compare_with_unknown(voter.country, author.country)
-            return country_match and compare_with_unknown(voter.city, author.city) if country_match else False
-        elif lvl == "country":
-            continent_match = compare_with_unknown(voter.continent, author.continent)
-            return continent_match and compare_with_unknown(voter.country, author.country) if continent_match else False
-        elif lvl in ("regional", "region"):
-            v_region = getattr(voter, "region", None)
-            a_region = getattr(author, "region", None)
-            continent_match = compare_with_unknown(voter.continent, author.continent)
-            return continent_match and compare_with_unknown(v_region, a_region) if continent_match else False
-        elif lvl == "continent":
-            return compare_with_unknown(voter.continent, author.continent)
-        else:
-            # Pour "global" ou niveau inconnu, on accepte
-            return True
+        def author_location_for_vote() -> tuple:
+            """Référence géographique du participant : snapshot contestant si renseigné, sinon profil user.
+            Évite les écarts quand le profil a changé après l'inscription ou que la ligne contestant a été corrigée."""
+            def pick(c_val: Optional[str], u_val: Optional[str]) -> Optional[str]:
+                if is_valid_location(c_val):
+                    return c_val
+                return u_val
 
-    if not locations_match():
+            c = contestant
+            return (
+                pick(getattr(c, "continent", None), author.continent),
+                pick(getattr(c, "region", None), getattr(author, "region", None)),
+                pick(getattr(c, "country", None), author.country),
+                pick(getattr(c, "city", None), author.city),
+            )
+
+        ac_continent, ac_region, ac_country, ac_city = author_location_for_vote()
+
+        if lvl == "city":
+            country_match = compare_with_unknown(voter.country, ac_country)
+            if not country_match:
+                msg = (
+                    "You cannot vote for this contestant because this season is limited to the same country and city. "
+                    "Your country on your profile does not match this contestant's country."
+                )
+                if is_valid_location(voter.country) and is_valid_location(ac_country):
+                    msg += f" Your profile: {voter.country}. This contestant: {ac_country}."
+                return msg
+            if not compare_with_unknown(voter.city, ac_city):
+                msg = (
+                    "You cannot vote for this contestant because this season is limited to voters in the same city. "
+                    "You are not in the same city as this contestant. "
+                    "Update your profile city to match their city, or vote for contestants who are in your city."
+                )
+                if is_valid_location(voter.city) and is_valid_location(ac_city):
+                    msg += f" Your profile city: {voter.city}. This contestant's city: {ac_city}."
+                return msg
+            return None
+        if lvl == "country":
+            if not compare_with_unknown(voter.continent, ac_continent):
+                msg = (
+                    "You cannot vote for this contestant because this season is limited to the same continent and country. "
+                    "Your continent on your profile does not match this contestant's continent."
+                )
+                if is_valid_location(voter.continent) and is_valid_location(ac_continent):
+                    msg += f" Yours: {voter.continent}. Theirs: {ac_continent}."
+                return msg
+            if not compare_with_unknown(voter.country, ac_country):
+                msg = (
+                    "You cannot vote for this contestant because this season is limited to voters in the same country. "
+                    "Your country on your profile does not match this contestant's country."
+                )
+                if is_valid_location(voter.country) and is_valid_location(ac_country):
+                    msg += f" Your profile: {voter.country}. This contestant: {ac_country}."
+                return msg
+            return None
+        if lvl in ("regional", "region"):
+            if not compare_with_unknown(voter.continent, ac_continent):
+                msg = (
+                    "You cannot vote for this contestant because this season is limited to the same continent and region. "
+                    "Your continent does not match this contestant's continent."
+                )
+                if is_valid_location(voter.continent) and is_valid_location(ac_continent):
+                    msg += f" Yours: {voter.continent}. Theirs: {ac_continent}."
+                return msg
+            v_region = getattr(voter, "region", None)
+            if not compare_with_unknown(v_region, ac_region):
+                msg = (
+                    "You cannot vote for this contestant because this season is limited to voters in the same region. "
+                    "Your region on your profile does not match this contestant's region."
+                )
+                if is_valid_location(v_region) and is_valid_location(ac_region):
+                    msg += f" Your profile: {v_region}. This contestant: {ac_region}."
+                return msg
+            return None
+        if lvl == "continent":
+            if not compare_with_unknown(voter.continent, ac_continent):
+                msg = (
+                    "You cannot vote for this contestant because this season is limited to voters on the same continent. "
+                    "Your continent on your profile does not match this contestant's continent."
+                )
+                if is_valid_location(voter.continent) and is_valid_location(ac_continent):
+                    msg += f" Your profile: {voter.continent}. This contestant: {ac_continent}."
+                return msg
+            return None
+        # global or unknown level: no restriction
+        return None
+
+    geo_error = location_vote_error()
+    if geo_error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="You cannot vote for this contestant because you are not in the allowed location for this season"
+            detail=geo_error,
         )
     
     # Vérifier les restrictions de genre pour le vote
