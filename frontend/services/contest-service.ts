@@ -799,7 +799,7 @@ class ContestService {
           remaining_slots: number;
         }>
       }>('/api/v1/contestants/user/my-votes', {
-        params: { _t: Date.now(), include_empty_buckets: true },
+        params: { _t: Date.now() },
         headers: { 'Cache-Control': 'no-cache' },
       });
       return response.data;

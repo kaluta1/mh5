@@ -482,7 +482,7 @@ export default function MyHigh5Page() {
           {/* Hint explicatif */}
           <div className="px-4 py-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/50 rounded-lg space-y-1">
             <p className="text-sm text-blue-700 dark:text-blue-300">
-              {t('dashboard.myhigh5.hint_categories') || 'Each line is a contest category. Click to expand: your votes appear in the table, or a short message if you have not voted there yet.'}
+              {t('dashboard.myhigh5.hint_categories') || 'Only categories where you have cast at least one vote are listed. Click a section to expand your votes.'}
             </p>
             <p className="text-sm text-blue-700 dark:text-blue-300">
               {t('dashboard.myhigh5.hint_dnd') || 'Glissez-déposez pour réorganiser vos votes dans chaque section. Le 1er reçoit 5 points, … 5ème 1 point. Maximum 5 votes par concours (chaque catégorie / concours a sa propre section).'}
