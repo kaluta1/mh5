@@ -32,8 +32,10 @@ class _CRUDContestants:
 
 crud_contestants = _CRUDContestants()
 
+# Accounting (partial CRUD — payment posting uses accounting_service)
+from .crud_accounting import crud_accounting
+
 # Modules non implémentés - commentés temporairement
 # from .crud_clubs import fan_club, club_membership, club_wallet
 # from .crud_dsp import dsp_wallet, dsp_transaction, digital_product
 # from .crud_advertising import ad_campaign, ad_creative, ad_impression
-# from .crud_accounting import chart_of_accounts, journal_entry, revenue_transaction

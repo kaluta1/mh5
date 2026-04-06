@@ -3617,8 +3617,8 @@ async def admin_accounting_chart_of_accounts(
                     if hasattr(r.account_type, "value")
                     else str(r.account_type)
                 ).upper(),
-                "creditBalance": float(r.credit_balance or 0),
-                "totalLiabilities": float(r.total_liabilities or 0),
+                "creditBalance": float(getattr(r, "balance", 0) or 0),
+                "totalLiabilities": float(getattr(r, "balance", 0) or 0),
             }
             for r in rows
         ]

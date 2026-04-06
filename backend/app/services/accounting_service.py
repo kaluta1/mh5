@@ -4,6 +4,7 @@ from typing import List, Dict, Optional
 from datetime import datetime
 from decimal import Decimal
 import logging
+import uuid
 
 from app.models.accounting import (
     JournalEntry, 
@@ -52,9 +53,8 @@ class AccountingService:
         if total_debit != total_credit:
             raise AccountingError(f"Journal Entry unbalanced: Debit={total_debit}, Credit={total_credit}")
             
-        # 2. Créer l'entête du journal
-        # Générer un numéro d'entrée unique (simple timestamp pour l'exemple, à améliorer)
-        entry_number = f"JE-{int(date.timestamp())}-{hash(description) % 10000}"
+        # 2. Créer l'entête du journal — numéro unique (évite collisions sur même seconde)
+        entry_number = f"JE-{int(date.timestamp())}-{uuid.uuid4().hex[:12]}"
         
         entry = JournalEntry(
             entry_number=entry_number,

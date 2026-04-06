@@ -32,20 +32,24 @@ class ChartOfAccounts(Base):
     __tablename__ = "chart_of_accounts"
     account_code: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
     account_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    account_type: Mapped[AccountType] = mapped_column(SQLEnum(AccountType), nullable=False)
+    # native_enum=False: DB may use VARCHAR or legacy ENUM from migration 002
+    account_type: Mapped[AccountType] = mapped_column(
+        SQLEnum(AccountType, values_callable=lambda x: [e.value for e in x], native_enum=False, length=32),
+        nullable=False,
+    )
     parent_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("chart_of_accounts.id"), nullable=True)
-    
-    # Soldes
-    total_liabilities: Mapped[float] = mapped_column(Numeric(15, 2), default=0.0)
-    credit_balance: Mapped[float] = mapped_column(Numeric(15, 2), default=0.0)
-    
+
+    # Denormalized cache; prefer computing from journal_lines via AccountingService.get_balance
+    # Column name in DB (002_add_myfav_models): "balance"
+    balance: Mapped[float] = mapped_column("balance", Numeric(15, 2), default=0.0, nullable=True)
+
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    
+
     # Relations
-    parent: Mapped[Optional["ChartOfAccounts"]] = relationship("ChartOfAccounts", remote_side="ChartOfAccounts.id")
+    parent: Mapped[Optional["ChartOfAccounts"]] = relationship(
+        "ChartOfAccounts", remote_side="ChartOfAccounts.id", back_populates="children"
+    )
     children: Mapped[List["ChartOfAccounts"]] = relationship("ChartOfAccounts", back_populates="parent")
     journal_lines: Mapped[List["JournalLine"]] = relationship("JournalLine", back_populates="account")
 
@@ -62,11 +66,13 @@ class JournalEntry(Base):
     total_debit: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
     total_credit: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
     
-    status: Mapped[EntryStatus] = mapped_column(SQLEnum(EntryStatus), default=EntryStatus.DRAFT)
-    
-    # Métadonnées
+    status: Mapped[EntryStatus] = mapped_column(
+        SQLEnum(EntryStatus, values_callable=lambda x: [e.value for e in x], native_enum=False, length=20),
+        default=EntryStatus.POSTED,
+    )
+
+    # Métadonnées (created_at / updated_at from Base)
     created_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     posted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     
     # Relations
@@ -91,7 +97,10 @@ class JournalLine(Base):
 
 class FinancialReport(Base):
     __tablename__ = "financial_reports"
-    report_type: Mapped[ReportType] = mapped_column(SQLEnum(ReportType), nullable=False)
+    report_type: Mapped[ReportType] = mapped_column(
+        SQLEnum(ReportType, values_callable=lambda x: [e.value for e in x], native_enum=False, length=40),
+        nullable=False,
+    )
     
     period_start: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     period_end: Mapped[datetime] = mapped_column(DateTime, nullable=False)

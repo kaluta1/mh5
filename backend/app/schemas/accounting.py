@@ -2,7 +2,7 @@ from typing import Optional, List
 from pydantic import BaseModel, ConfigDict
 from datetime import datetime
 
-from app.models.accounting import AccountType, EntryType, TransactionStatus, TaxType
+from app.models.accounting import AccountType, EntryStatus
 
 
 # Chart of Accounts schemas
@@ -10,7 +10,7 @@ class ChartOfAccountsBase(BaseModel):
     account_code: str
     account_name: str
     account_type: AccountType
-    parent_account_id: Optional[int] = None
+    parent_id: Optional[int] = None
     description: Optional[str] = None
     is_active: bool = True
     is_system_account: bool = False
@@ -28,9 +28,9 @@ class ChartOfAccountsUpdate(BaseModel):
 
 class ChartOfAccounts(ChartOfAccountsBase):
     model_config = ConfigDict(from_attributes=True)
-    
+
     id: int
-    current_balance: float = 0.0
+    balance: float = 0.0
     created_at: Optional[datetime] = None
 
 
@@ -40,12 +40,10 @@ class ChartOfAccountsWithBalance(ChartOfAccounts):
     total_balance: float = 0.0
 
 
-# Journal Entry schemas
+# Journal Entry schemas (aligned with app.models.accounting.JournalEntry)
 class JournalEntryBase(BaseModel):
     entry_date: datetime
     description: str
-    reference_number: Optional[str] = None
-    source_document: Optional[str] = None
     total_debit: float
     total_credit: float
 
@@ -56,16 +54,15 @@ class JournalEntryCreate(JournalEntryBase):
 
 class JournalEntryUpdate(BaseModel):
     description: Optional[str] = None
-    source_document: Optional[str] = None
 
 
 class JournalEntry(JournalEntryBase):
     model_config = ConfigDict(from_attributes=True)
-    
+
     id: int
-    created_by: int
-    created_at: Optional[datetime] = None
-    is_posted: bool = False
+    entry_number: str
+    created_by: Optional[int] = None
+    status: Optional[str] = None
     posted_at: Optional[datetime] = None
 
 
@@ -74,9 +71,9 @@ class JournalEntryWithCreator(JournalEntry):
     creator_name: Optional[str] = None
 
 
-# Journal Entry Line schemas
+# Journal Entry Line schemas (aligned with JournalLine)
 class JournalEntryLineBase(BaseModel):
-    journal_entry_id: int
+    entry_id: int
     account_id: int
     description: Optional[str] = None
     debit_amount: float = 0.0
@@ -107,18 +104,16 @@ class JournalEntryLineWithAccount(JournalEntryLine):
     account_name: Optional[str] = None
 
 
-# Revenue Transaction schemas
+# Revenue Transaction schemas (aligned with app.models.accounting.RevenueTransaction)
 class RevenueTransactionBase(BaseModel):
-    user_id: int
     source_type: str
     source_id: Optional[str] = None
     gross_amount: float
     platform_fee: float
-    tax_amount: float
     net_amount: float
-    currency: str = "CAD"
-    exchange_rate: float = 1.0
-    tax_info: Optional[dict] = None
+    participant_share: float = 0.0
+    affiliate_commissions: float = 0.0
+    founding_member_share: float = 0.0
 
 
 class RevenueTransactionCreate(RevenueTransactionBase):
@@ -126,15 +121,14 @@ class RevenueTransactionCreate(RevenueTransactionBase):
 
 
 class RevenueTransactionUpdate(BaseModel):
-    status: Optional[TransactionStatus] = None
+    status: Optional[str] = None
 
 
 class RevenueTransaction(RevenueTransactionBase):
     model_config = ConfigDict(from_attributes=True)
-    
+
     id: int
     transaction_date: Optional[datetime] = None
-    status: TransactionStatus = TransactionStatus.PENDING
     journal_entry_id: Optional[int] = None
 
 
@@ -144,14 +138,13 @@ class RevenueTransactionWithUser(RevenueTransaction):
     user_email: Optional[str] = None
 
 
-# Financial Report schemas
+# Financial Report schemas (aligned with FinancialReport model)
 class FinancialReportBase(BaseModel):
-    report_name: str
-    report_type: str  # balance_sheet, income_statement, cash_flow, trial_balance
+    report_type: str
     period_start: datetime
     period_end: datetime
     report_data: dict
-    generated_by: int
+    generated_by: Optional[int] = None
 
 
 class FinancialReportCreate(FinancialReportBase):
@@ -160,9 +153,9 @@ class FinancialReportCreate(FinancialReportBase):
 
 class FinancialReport(FinancialReportBase):
     model_config = ConfigDict(from_attributes=True)
-    
+
     id: int
-    generated_at: Optional[datetime] = None
+    generated_date: Optional[datetime] = None
 
 
 class FinancialReportWithGenerator(FinancialReport):
@@ -173,10 +166,12 @@ class FinancialReportWithGenerator(FinancialReport):
 # Tax Configuration schemas
 class TaxConfigurationBase(BaseModel):
     tax_name: str
-    tax_type: TaxType
-    tax_rate: float
-    jurisdiction: str
-    account_id: int
+    tax_type: str
+    rate: float
+    tax_payable_account_id: int
+    tax_expense_account_id: Optional[int] = None
+    country_code: Optional[str] = None
+    province_code: Optional[str] = None
     is_active: bool = True
     effective_date: datetime
     expiry_date: Optional[datetime] = None
@@ -207,7 +202,7 @@ class TaxConfigurationWithAccount(TaxConfiguration):
 
 # Audit Trail schemas
 class AuditTrailBase(BaseModel):
-    user_id: int
+    user_id: Optional[int] = None
     table_name: str
     record_id: int
     action: str  # CREATE, UPDATE, DELETE

@@ -698,9 +698,14 @@ def map_chart_of_accounts_to_type(account: ChartOfAccounts) -> ChartOfAccountsTy
         parent_id=account.parent_id,
         description=account.description,
         is_active=account.is_active,
-        total_liabilities=float(account.total_liabilities or 0),
-        credit_balance=float(account.credit_balance or 0)
+        total_liabilities=_coa_cached_balance(account),
+        credit_balance=_coa_cached_balance(account),
     )
+
+
+def _coa_cached_balance(account: ChartOfAccounts) -> float:
+    """Single denormalized column `balance` in DB; legacy GraphQL fields mirror it."""
+    return float(getattr(account, "balance", 0) or 0)
 
 
 def map_journal_line_to_type(line: JournalLine) -> JournalLineType:
