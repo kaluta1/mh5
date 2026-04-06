@@ -288,7 +288,6 @@ export default function MyHigh5Page() {
     <Table>
       <TableHeader>
         <TableRow className="bg-gray-50 dark:bg-gray-800/50">
-          {enableDragDrop && <TableHead className="w-12"></TableHead>}
           <TableHead className="w-16 text-center">
             {t('dashboard.myhigh5.rank') || 'Rang'}
           </TableHead>
@@ -314,38 +313,16 @@ export default function MyHigh5Page() {
         {votes.map((vote, voteIndex) => (
           <TableRow
             key={vote.contestant_id}
-            draggable={enableDragDrop}
-            onDragStart={enableDragDrop ? (e) => handleDragStart(e, seasonIndex, voteIndex) : undefined}
             onDragOver={enableDragDrop ? handleDragOver : undefined}
             onDrop={enableDragDrop ? (e) => handleDrop(e, seasonIndex, voteIndex) : undefined}
-            onDragEnd={enableDragDrop ? handleDragEnd : undefined}
             className={`
               transition-all
-              ${enableDragDrop ? 'cursor-move' : ''}
               ${draggedItem?.seasonIndex === seasonIndex && draggedItem?.voteIndex === voteIndex 
                 ? 'opacity-50 bg-blue-50 dark:bg-blue-900/20' 
                 : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'}
               ${isSaving ? 'pointer-events-none opacity-70' : ''}
             `}
           >
-            {/* Drag handle: High5 hand (not grip bars) */}
-            {enableDragDrop && (
-              <TableCell className="py-3 w-14">
-                <div
-                  className={cn(
-                    'mx-auto flex h-9 w-9 cursor-grab items-center justify-center rounded-lg border border-white/25',
-                    'bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary shadow-sm',
-                    'active:cursor-grabbing hover:opacity-95 hover:ring-2 hover:ring-myhigh5-primary/30',
-                    isSaving && 'pointer-events-none opacity-60'
-                  )}
-                  title={t('dashboard.myhigh5.drag_reorder') || 'Drag to reorder your High5'}
-                  aria-label={t('dashboard.myhigh5.drag_reorder') || 'Drag to reorder your High5'}
-                >
-                  <Hand className="h-4 w-4 text-white" strokeWidth={2.25} aria-hidden />
-                </div>
-              </TableCell>
-            )}
-
             {/* Rank Badge */}
             <TableCell className="py-3">
               <div className="flex justify-center">
@@ -371,20 +348,53 @@ export default function MyHigh5Page() {
               </div>
             </TableCell>
 
-            {/* Contestant Info */}
+            {/* Contestant Info — drag: grab avatar only; High5 hand shows on hover */}
             <TableCell className="py-3">
               <div className="flex items-center gap-3">
-                {/* Avatar */}
-                <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary flex-shrink-0">
+                <div
+                  className={cn(
+                    'group relative h-12 w-12 flex-shrink-0 overflow-hidden rounded-full bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary',
+                    enableDragDrop && 'cursor-grab active:cursor-grabbing',
+                    enableDragDrop && isSaving && 'pointer-events-none opacity-60'
+                  )}
+                  draggable={enableDragDrop}
+                  onDragStart={
+                    enableDragDrop
+                      ? (e) => {
+                          handleDragStart(e, seasonIndex, voteIndex)
+                        }
+                      : undefined
+                  }
+                  onDragEnd={enableDragDrop ? handleDragEnd : undefined}
+                  title={
+                    enableDragDrop
+                      ? t('dashboard.myhigh5.drag_reorder') || 'Drag on the photo to reorder your High5'
+                      : undefined
+                  }
+                  aria-label={
+                    enableDragDrop
+                      ? t('dashboard.myhigh5.drag_reorder') || 'Drag profile photo to reorder your High5'
+                      : vote.author_name || 'Contestant'
+                  }
+                >
                   {vote.author_avatar_url ? (
                     <img
                       src={vote.author_avatar_url}
-                      alt={vote.author_name}
-                      className="w-full h-full object-cover"
+                      alt=""
+                      draggable={false}
+                      className="h-full w-full object-cover"
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-white font-bold text-lg">
+                    <div className="flex h-full w-full items-center justify-center text-lg font-bold text-white">
                       {vote.author_name?.charAt(0).toUpperCase() || '?'}
+                    </div>
+                  )}
+                  {enableDragDrop && (
+                    <div
+                      className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-full bg-gradient-to-br from-myhigh5-primary/90 to-myhigh5-secondary/90 opacity-0 transition-opacity duration-150 group-hover:opacity-100"
+                      aria-hidden
+                    >
+                      <Hand className="h-6 w-6 text-white drop-shadow-sm" strokeWidth={2.25} />
                     </div>
                   )}
                 </div>
@@ -494,7 +504,7 @@ export default function MyHigh5Page() {
               {t('dashboard.myhigh5.hint_categories') || 'Only categories where you have cast at least one vote are listed. Click a section to expand your votes.'}
             </p>
             <p className="text-sm text-blue-700 dark:text-blue-300">
-              {t('dashboard.myhigh5.hint_dnd') || 'Glissez-déposez pour réorganiser vos votes dans chaque section. Le 1er reçoit 5 points, … 5ème 1 point. Maximum 5 votes par concours (chaque catégorie / concours a sa propre section).'}
+              {t('dashboard.myhigh5.hint_dnd') || 'Hover a contestant’s profile photo to see the High5 hand, then drag from the photo to reorder. 1st place = 5 points … 5th = 1. Max 5 votes per category.'}
             </p>
           </div>
 
