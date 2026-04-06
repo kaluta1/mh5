@@ -2533,6 +2533,7 @@ def vote_for_contestant(
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
 
     # Règles de vote basées sur la localisation et le niveau de la saison
+    # (Les concours en mode "nomination" utilisent toujours le niveau country, jamais city — même si la saison est city.)
     # city      -> seuls les utilisateurs de la même ville (et même pays) peuvent voter
     # country   -> mêmes pays et continent
     # regional  -> mêmes région et continent
@@ -2543,6 +2544,14 @@ def vote_for_contestant(
         season_level = season.level.value if hasattr(season.level, "value") else str(season.level)
         if isinstance(season_level, str):
             season_level = season_level.lower()
+
+    # Nomination contests: voters are scoped by country, not city, even if the season level is "city".
+    if (
+        season_level == "city"
+        and contest
+        and (getattr(contest, "contest_mode", "") or "").strip().lower() == "nomination"
+    ):
+        season_level = "country"
 
     from app.models.user import User as MyfavUser
 

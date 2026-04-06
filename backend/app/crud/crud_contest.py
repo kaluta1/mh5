@@ -490,7 +490,12 @@ class CRUDContest:
         # Si pas de saison trouvée, utiliser le niveau du contest par défaut
         if not season_level:
             season_level = contest.level.lower() if contest.level else None
-        
+
+        # Nomination contests: country-level geo filter (not city), aligned with vote API
+        if season_level and str(season_level).lower() == "city":
+            if (getattr(contest, "contest_mode", "") or "").strip().lower() == "nomination":
+                season_level = "country"
+
         # FIXED: Query contestants by both round_id and season_id
         from app.models.round import Round, round_contests
         
@@ -1517,7 +1522,11 @@ class CRUDContest:
             season_level = season.level.value if hasattr(season.level, "value") else str(season.level)
             if isinstance(season_level, str):
                 season_level = season_level.lower()
-        
+
+        # Nomination contests: country-level geography (not city), aligned with POST /vote
+        if season_level == "city" and contest_obj and (getattr(contest_obj, "contest_mode", "") or "").strip().lower() == "nomination":
+            season_level = "country"
+
         # Compter les votes et sommer les points pour chaque contestant
         votes_count_by_contestant = {}
         points_by_contestant = {}

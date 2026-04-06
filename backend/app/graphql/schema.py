@@ -132,7 +132,12 @@ def map_contest_in_round_to_type(contest: Contest, round_id: int, db: Session, c
     # Fallback to contest level
     if not season_level:
         season_level = contest.level.lower() if contest.level else None
-        
+
+    # Nomination contests: geographic scope is country, not city (align with REST vote rules)
+    if season_level and str(season_level).lower() == "city":
+        if (getattr(contest, "contest_mode", "") or "").strip().lower() == "nomination":
+            season_level = "country"
+
     # FIXED: Query participants DIRECTLY from database using comprehensive OR query
     from app.models.round import Round, round_contests as rc_table
     from sqlalchemy import or_

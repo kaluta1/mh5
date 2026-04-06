@@ -107,7 +107,15 @@ class CRUDContestant:
             raw_level = season.level.value if hasattr(season.level, "value") else str(season.level)
             if isinstance(raw_level, str):
                 season_level = raw_level.lower()
-        
+
+        # Nomination contests: country-level geography (not city), same rules as POST /vote
+        if season_level == "city":
+            _cid = contest_id if contest_id is not None else contestant.season_id
+            if _cid:
+                _scope_contest = db.query(Contest).filter(Contest.id == _cid, Contest.is_deleted == False).first()
+                if _scope_contest and (getattr(_scope_contest, "contest_mode", "") or "").strip().lower() == "nomination":
+                    season_level = "country"
+
         # Compter les votes (aligné sur contest_id comme l'API de vote)
         votes_count = 0
         if contest_id:
