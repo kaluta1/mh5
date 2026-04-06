@@ -9,6 +9,17 @@ if parent_dir not in sys.path:
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
+import sqlalchemy as _sqlalchemy
+
+# App models use SQLAlchemy 2.0 API (e.g. mapped_column). System/apt Python often ships 1.x.
+_parts = _sqlalchemy.__version__.split(".")
+_ma, _mi = int(_parts[0]), int(_parts[1])
+if (_ma, _mi) < (2, 0):
+    raise RuntimeError(
+        f"This project requires SQLAlchemy >= 2.0 (found {_sqlalchemy.__version__}). "
+        "Install project deps in a venv and run Alembic with that interpreter: "
+        "pip install -r requirements.txt && python -m alembic upgrade head"
+    )
 
 from alembic import context
 
