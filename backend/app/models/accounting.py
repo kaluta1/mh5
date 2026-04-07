@@ -1,10 +1,29 @@
 from typing import Optional, List, Any
 from sqlalchemy import Column, Integer, String, ForeignKey, Float, Text, DateTime, Boolean, Enum as SQLEnum, Numeric, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.dialects.postgresql import ENUM as PG_ENUM
+from sqlalchemy.types import TypeDecorator
 from datetime import datetime
 import enum
 from app.db.base_class import Base
+
+
+class AccountTypeColumn(TypeDecorator):
+    """Maps DB account_type (PostgreSQL enum or varchar) to AccountType without PG-specific ENUM binding."""
+
+    impl = String(32)
+    cache_ok = True
+
+    def process_bind_param(self, value: Any, dialect: Any) -> Any:
+        if value is None:
+            return None
+        if isinstance(value, AccountType):
+            return value.value
+        return AccountType(str(value)).value
+
+    def process_result_value(self, value: Any, dialect: Any) -> Any:
+        if value is None:
+            return None
+        return AccountType(str(value))
 
 
 class AccountType(str, enum.Enum):
@@ -45,11 +64,8 @@ class ChartOfAccounts(Base):
     __tablename__ = "chart_of_accounts"
     account_code: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
     account_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    # PostgreSQL native enum `accounttype` (002_add_myfav_models); must not recreate type
-    account_type: Mapped[AccountType] = mapped_column(
-        PG_ENUM(AccountType, name="accounttype", create_type=False),
-        nullable=False,
-    )
+    # DB may be PostgreSQL enum `accounttype` (002) or varchar; TypeDecorator reads/writes as text
+    account_type: Mapped[AccountType] = mapped_column(AccountTypeColumn(), nullable=False)
     parent_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("chart_of_accounts.id"), nullable=True)
 
     # Denormalized cache; prefer computing from journal_lines via AccountingService.get_balance

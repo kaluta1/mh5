@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import text, inspect
 from psycopg2.errors import UniqueViolation
 from app.db.base_class import Base
 from app.api.deps import get_db, get_current_user
@@ -13,7 +14,6 @@ from app.models.payment import Deposit, ProductType, DepositStatus
 from app.models.transaction import UserTransaction, TransactionType, TransactionStatus
 from app.models.clubs import FanClub, ClubMembership, ClubAdmin
 from app.models.category import Category
-from app.models.accounting import ChartOfAccounts as CoaAccount, JournalEntry as AcctJournalEntry, JournalLine as AcctJournalLine
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any, Dict, Any
 from datetime import datetime, timedelta, date
@@ -3601,24 +3601,30 @@ async def admin_accounting_chart_of_accounts(
     """Plan comptable réel (table chart_of_accounts) pour l’admin Accounting."""
     check_admin(current_user)
     try:
-        rows = (
-            db.query(CoaAccount)
-            .filter(CoaAccount.is_active == True)
-            .order_by(CoaAccount.account_code.asc())
-            .all()
-        )
+        bind = db.get_bind()
+        if not inspect(bind).has_table("chart_of_accounts"):
+            return []
+        # Raw SQL: legacy `chart_of_accounts` (002) has no `updated_at`; ORM always selects Base columns → 500 on prod without migration
+        rows = db.execute(
+            text(
+                """
+                SELECT id, account_code, account_name,
+                       CAST(account_type AS TEXT) AS account_type,
+                       COALESCE(balance, 0) AS balance
+                FROM chart_of_accounts
+                WHERE COALESCE(is_active, true) = true
+                ORDER BY account_code ASC
+                """
+            )
+        ).mappings().all()
         return [
             {
-                "id": r.id,
-                "accountCode": r.account_code,
-                "accountName": r.account_name,
-                "accountType": (
-                    r.account_type.value
-                    if hasattr(r.account_type, "value")
-                    else str(r.account_type)
-                ).upper(),
-                "creditBalance": float(getattr(r, "balance", 0) or 0),
-                "totalLiabilities": float(getattr(r, "balance", 0) or 0),
+                "id": r["id"],
+                "accountCode": r["account_code"],
+                "accountName": r["account_name"],
+                "accountType": str(r["account_type"] or "").strip().upper(),
+                "creditBalance": float(r["balance"] or 0),
+                "totalLiabilities": float(r["balance"] or 0),
             }
             for r in rows
         ]
@@ -3638,41 +3644,60 @@ async def admin_accounting_journal_entries(
     """Dernières écritures avec lignes et comptes pour l’admin Accounting."""
     check_admin(current_user)
     try:
-        entries = (
-            db.query(AcctJournalEntry)
-            .options(
-                joinedload(AcctJournalEntry.lines).joinedload(AcctJournalLine.account),
-            )
-            .order_by(AcctJournalEntry.entry_date.desc(), AcctJournalEntry.id.desc())
-            .limit(limit)
-            .all()
-        )
+        bind = db.get_bind()
+        if not inspect(bind).has_table("journal_entries"):
+            return []
+        if not inspect(bind).has_table("journal_lines"):
+            return []
+        entries = db.execute(
+            text(
+                """
+                SELECT id, entry_date, entry_number, description,
+                       total_debit, total_credit, CAST(status AS TEXT) AS status
+                FROM journal_entries
+                ORDER BY entry_date DESC NULLS LAST, id DESC
+                LIMIT :lim
+                """
+            ),
+            {"lim": limit},
+        ).mappings().all()
         out = []
         for e in entries:
-            lines_out = []
-            for line in e.lines or []:
-                acc = line.account
-                lines_out.append(
-                    {
-                        "id": line.id,
-                        "debitAmount": float(line.debit_amount or 0),
-                        "creditAmount": float(line.credit_amount or 0),
-                        "account": {
-                            "accountCode": acc.account_code if acc else "?",
-                            "accountName": acc.account_name if acc else "?",
-                        },
-                    }
-                )
-            st = e.status
-            st_s = st.value if hasattr(st, "value") else str(st)
+            lines_rows = db.execute(
+                text(
+                    """
+                    SELECT jl.id, jl.debit_amount, jl.credit_amount,
+                           ca.account_code, ca.account_name
+                    FROM journal_lines jl
+                    JOIN chart_of_accounts ca ON ca.id = jl.account_id
+                    WHERE jl.entry_id = :eid
+                    ORDER BY jl.id ASC
+                    """
+                ),
+                {"eid": e["id"]},
+            ).mappings().all()
+            lines_out = [
+                {
+                    "id": line["id"],
+                    "debitAmount": float(line["debit_amount"] or 0),
+                    "creditAmount": float(line["credit_amount"] or 0),
+                    "account": {
+                        "accountCode": line["account_code"] or "?",
+                        "accountName": line["account_name"] or "?",
+                    },
+                }
+                for line in lines_rows
+            ]
+            ed = e["entry_date"]
+            st_s = str(e["status"] or "").strip()
             out.append(
                 {
-                    "id": e.id,
-                    "entryDate": e.entry_date.isoformat() if e.entry_date else None,
-                    "entryNumber": e.entry_number,
-                    "description": e.description,
-                    "totalDebit": float(e.total_debit or 0),
-                    "totalCredit": float(e.total_credit or 0),
+                    "id": e["id"],
+                    "entryDate": ed.isoformat() if ed is not None and hasattr(ed, "isoformat") else None,
+                    "entryNumber": e["entry_number"],
+                    "description": e["description"],
+                    "totalDebit": float(e["total_debit"] or 0),
+                    "totalCredit": float(e["total_credit"] or 0),
                     "status": st_s.upper(),
                     "lines": lines_out,
                 }
