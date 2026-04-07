@@ -17,9 +17,11 @@ _ma, _mi = int(_parts[0]), int(_parts[1])
 if (_ma, _mi) < (2, 0):
     raise RuntimeError(
         f"This project requires SQLAlchemy >= 2.0 (found {_sqlalchemy.__version__}). "
-        "Do not use system /usr/bin/alembic (it uses apt's old SQLAlchemy). "
-        "From backend: python3 -m venv .venv && . .venv/bin/activate && "
-        "pip install -r requirements.txt && python3 -m alembic upgrade head"
+        "You are using system Python/apt Alembic (old SQLAlchemy). "
+        "From the backend directory: "
+        "python3 -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt && "
+        "python3 -m alembic upgrade head  "
+        "— or: chmod +x scripts/migrate.sh && ./scripts/migrate.sh upgrade head"
     )
 
 from alembic import context
