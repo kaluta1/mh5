@@ -694,7 +694,7 @@ def map_chart_of_accounts_to_type(account: ChartOfAccounts) -> ChartOfAccountsTy
         id=account.id,
         account_code=account.account_code,
         account_name=account.account_name,
-        account_type=AccountTypeEnum(account.account_type.value),
+        account_type=AccountTypeEnum(account.account_type.value.lower()),
         parent_id=account.parent_id,
         description=account.description,
         is_active=account.is_active,

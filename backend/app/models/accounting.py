@@ -1,17 +1,30 @@
-from typing import Optional, List
+from typing import Optional, List, Any
 from sqlalchemy import Column, Integer, String, ForeignKey, Float, Text, DateTime, Boolean, Enum as SQLEnum, Numeric, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.dialects.postgresql import ENUM as PG_ENUM
 from datetime import datetime
 import enum
 from app.db.base_class import Base
 
 
 class AccountType(str, enum.Enum):
-    ASSET = "asset"
-    LIABILITY = "liability"
-    EQUITY = "equity"
-    REVENUE = "revenue"
-    EXPENSE = "expense"
+    """Labels match PostgreSQL enum `accounttype` from migration 002_add_myfav_models."""
+
+    ASSET = "ASSET"
+    LIABILITY = "LIABILITY"
+    EQUITY = "EQUITY"
+    REVENUE = "REVENUE"
+    EXPENSE = "EXPENSE"
+
+    @classmethod
+    def _missing_(cls, value: Any) -> Any:
+        """Accept API / JSON lowercase names (e.g. 'asset') as well as DB labels."""
+        if isinstance(value, str):
+            u = value.strip().upper()
+            for m in cls:
+                if m.value == u or m.name == u:
+                    return m
+        raise ValueError(f"{value!r} is not a valid {cls.__qualname__}")
 
 
 class EntryStatus(str, enum.Enum):
@@ -32,9 +45,9 @@ class ChartOfAccounts(Base):
     __tablename__ = "chart_of_accounts"
     account_code: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
     account_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    # native_enum=False: DB may use VARCHAR or legacy ENUM from migration 002
+    # PostgreSQL native enum `accounttype` (002_add_myfav_models); must not recreate type
     account_type: Mapped[AccountType] = mapped_column(
-        SQLEnum(AccountType, values_callable=lambda x: [e.value for e in x], native_enum=False, length=32),
+        PG_ENUM(AccountType, name="accounttype", create_type=False),
         nullable=False,
     )
     parent_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("chart_of_accounts.id"), nullable=True)
