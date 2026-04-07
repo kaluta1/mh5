@@ -1,9 +1,10 @@
 /**
- * Smart Contract ABIs and Addresses
+ * Smart Contract ABIs and Addresses (single source: lib/config.ts CONTRACTS)
  */
 import paymentHubAbi from './payment-hub-abi.json'
+import { CONTRACTS } from './config'
 
-/** MyHigh5PaymentHub — matches deployed contract + backend on-chain verifier */
+/** MyHigh5PaymentHub — matches contracts/MyHigh5PaymentHub.sol + backend verifier */
 export const PAYMENT_CONTRACT_ABI = paymentHubAbi
 
 // ERC20 Token ABI (Ethers.js format)
@@ -14,16 +15,14 @@ export const ERC20_ABI = [
   'function transfer(address to, uint256 amount) returns (bool)'
 ] as const
 
-// Contract Addresses
 export const CONTRACT_ADDRESSES = {
-  PAYMENT_CONTRACT: '0xC003750eDf5feEFBf94FB4B754D70f2b73392Ea9',
-  USDT: '0x55d398326f99059fF775485246999027B3197955'
+  PAYMENT_CONTRACT: CONTRACTS.PAYMENT_CONTRACT,
+  USDT: CONTRACTS.USDT_ADDRESS
 } as const
 
-// Network Configuration
 export const NETWORK_CONFIG = {
-  CHAIN_ID: 56,
-  RPC_URL: 'https://bsc-dataseed.binance.org',
-  EXPLORER_URL: 'https://bscscan.com',
-  USDT_DECIMALS: 18
+  CHAIN_ID: CONTRACTS.CHAIN_ID,
+  RPC_URL: CONTRACTS.RPC_URL,
+  EXPLORER_URL: CONTRACTS.EXPLORER_URL,
+  USDT_DECIMALS: CONTRACTS.USDT_DECIMALS
 } as const

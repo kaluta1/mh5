@@ -28,16 +28,25 @@ export const API_URL = normalizeApiUrl(rawApiUrl || fallbackUrl)
 export const REOWN_PROJECT_ID = process.env.NEXT_PUBLIC_REOWN_PROJECT_ID || ''
 
 // ============================================
-// Contract Addresses and Configuration
+// BSC — MyHigh5PaymentHub + USDT (must match backend BSC_* and deployed contract)
 // ============================================
-export const CONTRACTS = {
-  PAYMENT_CONTRACT: '0xC003750eDf5feEFBf94FB4B754D70f2b73392Ea9',
+const BSC_DEFAULTS = {
+  PAYMENT_CONTRACT: '0xd548c9cc73a9Dde77B77BFca2D0b8a120E0001e5',
   USDT_ADDRESS: '0x55d398326f99059fF775485246999027B3197955',
   CHAIN_ID: 56,
   RPC_URL: 'https://bsc-dataseed.binance.org',
   EXPLORER_URL: 'https://bscscan.com',
   USDT_DECIMALS: 18
 } as const
+
+export const CONTRACTS = {
+  PAYMENT_CONTRACT: process.env.NEXT_PUBLIC_BSC_PAYMENT_CONTRACT || BSC_DEFAULTS.PAYMENT_CONTRACT,
+  USDT_ADDRESS: process.env.NEXT_PUBLIC_BSC_USDT_ADDRESS || BSC_DEFAULTS.USDT_ADDRESS,
+  CHAIN_ID: Number(process.env.NEXT_PUBLIC_BSC_CHAIN_ID ?? BSC_DEFAULTS.CHAIN_ID),
+  RPC_URL: process.env.NEXT_PUBLIC_BSC_RPC_URL || BSC_DEFAULTS.RPC_URL,
+  EXPLORER_URL: process.env.NEXT_PUBLIC_BSC_EXPLORER_URL || BSC_DEFAULTS.EXPLORER_URL,
+  USDT_DECIMALS: Number(process.env.NEXT_PUBLIC_BSC_USDT_DECIMALS ?? BSC_DEFAULTS.USDT_DECIMALS)
+}
 
 export const assertApiUrl = (): void => {
   if (!API_URL && typeof window !== 'undefined') {
