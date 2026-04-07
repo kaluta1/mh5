@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError
@@ -21,6 +22,7 @@ from app.crud.crud_round import round as crud_round
 from app.schemas.round import RoundCreate
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 # Pydantic models
 class ContestCreateRequest(BaseModel):
@@ -139,12 +141,19 @@ class ContestResponse(BaseModel):
 def check_admin(current_user: User) -> User:
     """Allow access if user has is_admin=True OR has the admin role."""
     is_admin_flag = getattr(current_user, 'is_admin', False)
-    has_admin_role = (
-        current_user.role_id is not None
-        and current_user.role is not None
-        and getattr(current_user.role, 'name', None) == 'admin'
-    )
-    if not is_admin_flag and not has_admin_role:
+    if is_admin_flag:
+        return current_user
+    has_admin_role = False
+    try:
+        has_admin_role = (
+            current_user.role_id is not None
+            and current_user.role is not None
+            and getattr(current_user.role, 'name', None) == 'admin'
+        )
+    except Exception:
+        # Avoid 500 if role relationship cannot be lazy-loaded
+        has_admin_role = False
+    if not has_admin_role:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Vous n'avez pas les permissions pour accéder à cette ressource"
@@ -3593,6 +3602,63 @@ async def get_all_transactions(
         )
 
 
+def _fetch_admin_chart_of_accounts_rows(db: Session) -> list:
+    """
+    Raw SQL only (no ORM): legacy rows may lack Base columns like `updated_at`.
+    Uses reflection so missing `balance` / `is_active` columns do not break the query.
+    """
+    bind = db.get_bind()
+    insp = inspect(bind)
+    if not insp.has_table("chart_of_accounts"):
+        return []
+    try:
+        colset = {c["name"] for c in insp.get_columns("chart_of_accounts")}
+    except Exception as e:
+        logger.warning("Could not reflect chart_of_accounts columns: %s", e)
+        colset = set()
+
+    at_expr = "CAST(account_type AS TEXT)" if "account_type" in colset else "'UNKNOWN'"
+    bal_expr = "COALESCE(balance, 0)" if "balance" in colset else "0"
+    where_clause = "WHERE COALESCE(is_active, true) = true" if "is_active" in colset else ""
+    sql = f"""
+    SELECT id, account_code, account_name,
+           {at_expr} AS account_type,
+           {bal_expr} AS balance
+    FROM chart_of_accounts
+    {where_clause}
+    ORDER BY account_code ASC
+    """
+    try:
+        return db.execute(text(sql)).mappings().all()
+    except Exception:
+        logger.exception("chart_of_accounts primary admin SQL failed; trying minimal SELECT")
+        try:
+            return db.execute(
+                text(
+                    """
+                    SELECT id, account_code, account_name,
+                           CAST(account_type AS TEXT) AS account_type,
+                           0 AS balance
+                    FROM chart_of_accounts
+                    ORDER BY account_code ASC
+                    """
+                )
+            ).mappings().all()
+        except Exception:
+            logger.exception("chart_of_accounts fallback SQL failed; returning id/code/name only")
+            return db.execute(
+                text(
+                    """
+                    SELECT id, account_code, account_name,
+                           'UNKNOWN' AS account_type,
+                           0 AS balance
+                    FROM chart_of_accounts
+                    ORDER BY account_code ASC
+                    """
+                )
+            ).mappings().all()
+
+
 @router.get("/accounting/chart-of-accounts")
 async def admin_accounting_chart_of_accounts(
     db: Session = Depends(get_db),
@@ -3601,22 +3667,7 @@ async def admin_accounting_chart_of_accounts(
     """Plan comptable réel (table chart_of_accounts) pour l’admin Accounting."""
     check_admin(current_user)
     try:
-        bind = db.get_bind()
-        if not inspect(bind).has_table("chart_of_accounts"):
-            return []
-        # Raw SQL: legacy `chart_of_accounts` (002) has no `updated_at`; ORM always selects Base columns → 500 on prod without migration
-        rows = db.execute(
-            text(
-                """
-                SELECT id, account_code, account_name,
-                       CAST(account_type AS TEXT) AS account_type,
-                       COALESCE(balance, 0) AS balance
-                FROM chart_of_accounts
-                WHERE COALESCE(is_active, true) = true
-                ORDER BY account_code ASC
-                """
-            )
-        ).mappings().all()
+        rows = _fetch_admin_chart_of_accounts_rows(db)
         return [
             {
                 "id": r["id"],
@@ -3629,6 +3680,7 @@ async def admin_accounting_chart_of_accounts(
             for r in rows
         ]
     except Exception as e:
+        logger.exception("admin chart_of_accounts endpoint failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur chart of accounts: {str(e)}",
