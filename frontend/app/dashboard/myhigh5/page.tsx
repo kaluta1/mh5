@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from "react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useSyncExternalStore } from "react"
 import { useLanguage } from '@/contexts/language-context'
 import { useAuth } from '@/hooks/use-auth'
 import { useRouter } from 'next/navigation'
@@ -82,6 +82,25 @@ interface HistoryResponse {
 // Points attribués selon la position (1er = 5 points, 2ème = 4 points, etc.)
 const POINTS_BY_POSITION = [5, 4, 3, 2, 1]
 
+function subscribeCoarsePointer(cb: () => void) {
+  if (typeof window === "undefined") return () => {}
+  const mq = window.matchMedia("(pointer: coarse)")
+  mq.addEventListener("change", cb)
+  return () => mq.removeEventListener("change", cb)
+}
+
+function getCoarsePointerSnapshot() {
+  return typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches
+}
+
+function getServerCoarsePointerSnapshot() {
+  return false
+}
+
+function useCoarsePointer() {
+  return useSyncExternalStore(subscribeCoarsePointer, getCoarsePointerSnapshot, getServerCoarsePointerSnapshot)
+}
+
 function MyHigh5Skeleton() {
   return (
     <div className="space-y-6">
@@ -110,6 +129,12 @@ export default function MyHigh5Page() {
   const [historyLoading, setHistoryLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('active')
   const [draggedItem, setDraggedItem] = useState<{ seasonIndex: number; voteIndex: number } | null>(null)
+  /** Touch / coarse pointer: first tap selects row, second tap on another row moves there (same as drag-drop). */
+  const [touchReorderSource, setTouchReorderSource] = useState<{
+    seasonIndex: number
+    voteIndex: number
+  } | null>(null)
+  const isCoarsePointer = useCoarsePointer()
   const [isSaving, setIsSaving] = useState(false)
   const [openSections, setOpenSections] = useState<Set<string>>(new Set())
 
@@ -206,6 +231,43 @@ export default function MyHigh5Page() {
   }
 
   // Drag and drop handlers
+  const applyReorder = async (seasonIndex: number, fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex) return
+
+    const newSeasonsData = [...seasonsData]
+    const season = newSeasonsData[seasonIndex]
+    const newVotes = [...season.votes]
+    const moved = newVotes[fromIndex]
+    newVotes.splice(fromIndex, 1)
+    newVotes.splice(toIndex, 0, moved)
+
+    const reorderedVotes = newVotes.map((vote, index) => ({
+      ...vote,
+      position: index + 1,
+      points: POINTS_BY_POSITION[index] ?? 1,
+    }))
+
+    season.votes = reorderedVotes
+    setSeasonsData(newSeasonsData)
+
+    try {
+      setIsSaving(true)
+      const votesToReorder = reorderedVotes.map((vote, index) => ({
+        contestant_id: vote.contestant_id,
+        position: index + 1,
+      }))
+      await contestService.reorderMyHigh5Votes(votesToReorder, season.season_id, season.contest_id)
+      addToast(t('dashboard.myhigh5.order_saved') || 'Ordre sauvegardé !', 'success')
+    } catch (error) {
+      console.error('Erreur lors de la sauvegarde de l\'ordre:', error)
+      addToast(t('dashboard.myhigh5.order_error') || 'Erreur lors de la sauvegarde', 'error')
+      const response = await contestService.getMyHigh5Votes() as MyHigh5Response
+      setSeasonsData(response.seasons || [])
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   const handleDragStart = (e: React.DragEvent, seasonIndex: number, voteIndex: number) => {
     setDraggedItem({ seasonIndex, voteIndex })
     e.dataTransfer.effectAllowed = 'move'
@@ -228,47 +290,40 @@ export default function MyHigh5Page() {
       return
     }
 
-    // Réorganiser les votes dans cette season
-    const newSeasonsData = [...seasonsData]
-    const season = newSeasonsData[seasonIndex]
-    const newVotes = [...season.votes]
-    const draggedVote = newVotes[draggedItem.voteIndex]
-    newVotes.splice(draggedItem.voteIndex, 1)
-    newVotes.splice(dropIndex, 0, draggedVote)
-    
-    // Mettre à jour positions et points (1er = 5 pts … 5e = 1 pt) — même logique que le backend
-    const reorderedVotes = newVotes.map((vote, index) => ({
-      ...vote,
-      position: index + 1,
-      points: POINTS_BY_POSITION[index] ?? 1
-    }))
-    
-    season.votes = reorderedVotes
-    setSeasonsData(newSeasonsData)
+    const from = draggedItem.voteIndex
     setDraggedItem(null)
-
-    // Sauvegarder l'ordre au backend
-    try {
-      setIsSaving(true)
-      const votesToReorder = reorderedVotes.map((vote, index) => ({
-        contestant_id: vote.contestant_id,
-        position: index + 1
-      }))
-      await contestService.reorderMyHigh5Votes(votesToReorder, season.season_id, season.contest_id)
-      addToast(t('dashboard.myhigh5.order_saved') || 'Ordre sauvegardé !', 'success')
-    } catch (error) {
-      console.error('Erreur lors de la sauvegarde de l\'ordre:', error)
-      addToast(t('dashboard.myhigh5.order_error') || 'Erreur lors de la sauvegarde', 'error')
-      // Recharger les votes en cas d'erreur
-      const response = await contestService.getMyHigh5Votes() as MyHigh5Response
-      setSeasonsData(response.seasons || [])
-    } finally {
-      setIsSaving(false)
-    }
+    await applyReorder(seasonIndex, from, dropIndex)
   }
 
   const handleDragEnd = () => {
     setDraggedItem(null)
+  }
+
+  const handleAvatarTapReorder = (
+    e: React.MouseEvent,
+    seasonIndex: number,
+    voteIndex: number
+  ) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (isSaving) return
+
+    if (!touchReorderSource) {
+      setTouchReorderSource({ seasonIndex, voteIndex })
+      return
+    }
+    if (touchReorderSource.seasonIndex !== seasonIndex) {
+      setTouchReorderSource({ seasonIndex, voteIndex })
+      return
+    }
+    if (touchReorderSource.voteIndex === voteIndex) {
+      setTouchReorderSource(null)
+      return
+    }
+
+    const from = touchReorderSource.voteIndex
+    setTouchReorderSource(null)
+    void applyReorder(seasonIndex, from, voteIndex)
   }
 
   if (isLoading || pageLoading) {
@@ -281,10 +336,14 @@ export default function MyHigh5Page() {
 
   // Fonction helper pour rendre un tableau de votes
   const renderVotesTable = (
-    votes: MyHigh5Vote[], 
-    seasonIndex: number, 
+    votes: MyHigh5Vote[],
+    seasonIndex: number,
     enableDragDrop: boolean = true
-  ) => (
+  ) => {
+    const dragEnabled = enableDragDrop && !isCoarsePointer
+    const touchReorderEnabled = enableDragDrop && isCoarsePointer
+
+    return (
     <Table>
       <TableHeader>
         <TableRow className="bg-gray-50 dark:bg-gray-800/50">
@@ -313,15 +372,18 @@ export default function MyHigh5Page() {
         {votes.map((vote, voteIndex) => (
           <TableRow
             key={vote.contestant_id}
-            onDragOver={enableDragDrop ? handleDragOver : undefined}
-            onDrop={enableDragDrop ? (e) => handleDrop(e, seasonIndex, voteIndex) : undefined}
-            className={`
-              transition-all
-              ${draggedItem?.seasonIndex === seasonIndex && draggedItem?.voteIndex === voteIndex 
-                ? 'opacity-50 bg-blue-50 dark:bg-blue-900/20' 
-                : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'}
-              ${isSaving ? 'pointer-events-none opacity-70' : ''}
-            `}
+            onDragOver={dragEnabled ? handleDragOver : undefined}
+            onDrop={dragEnabled ? (e) => handleDrop(e, seasonIndex, voteIndex) : undefined}
+            className={cn(
+              'transition-all',
+              draggedItem?.seasonIndex === seasonIndex && draggedItem?.voteIndex === voteIndex
+                ? 'opacity-50 bg-blue-50 dark:bg-blue-900/20'
+                : 'hover:bg-gray-50 dark:hover:bg-gray-700/50',
+              touchReorderSource?.seasonIndex === seasonIndex &&
+                touchReorderSource?.voteIndex === voteIndex &&
+                'bg-myhigh5-primary/10 ring-2 ring-inset ring-myhigh5-primary/50 dark:bg-myhigh5-primary/20',
+              isSaving && 'pointer-events-none opacity-70'
+            )}
           >
             {/* Rank Badge */}
             <TableCell className="py-3">
@@ -352,28 +414,51 @@ export default function MyHigh5Page() {
             <TableCell className="py-3">
               <div className="flex items-center gap-3">
                 <div
+                  role={touchReorderEnabled ? 'button' : undefined}
+                  tabIndex={touchReorderEnabled ? 0 : undefined}
+                  onKeyDown={
+                    touchReorderEnabled
+                      ? (e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            handleAvatarTapReorder(e as unknown as React.MouseEvent, seasonIndex, voteIndex)
+                          }
+                        }
+                      : undefined
+                  }
                   className={cn(
                     'group relative h-12 w-12 flex-shrink-0 overflow-hidden rounded-full bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary',
-                    enableDragDrop && 'cursor-grab active:cursor-grabbing',
+                    dragEnabled && 'cursor-grab active:cursor-grabbing',
+                    touchReorderEnabled && 'cursor-pointer touch-manipulation',
                     enableDragDrop && isSaving && 'pointer-events-none opacity-60'
                   )}
-                  draggable={enableDragDrop}
+                  draggable={dragEnabled}
                   onDragStart={
-                    enableDragDrop
+                    dragEnabled
                       ? (e) => {
                           handleDragStart(e, seasonIndex, voteIndex)
                         }
                       : undefined
                   }
-                  onDragEnd={enableDragDrop ? handleDragEnd : undefined}
+                  onDragEnd={dragEnabled ? handleDragEnd : undefined}
+                  onClick={
+                    touchReorderEnabled
+                      ? (e) => handleAvatarTapReorder(e, seasonIndex, voteIndex)
+                      : undefined
+                  }
                   title={
                     enableDragDrop
-                      ? t('dashboard.myhigh5.drag_reorder') || 'Drag on the photo to reorder your High5'
+                      ? touchReorderEnabled
+                        ? t('dashboard.myhigh5.tap_reorder') ||
+                          'Tap to select, then tap another photo to reorder'
+                        : t('dashboard.myhigh5.drag_reorder') || 'Drag on the photo to reorder your High5'
                       : undefined
                   }
                   aria-label={
                     enableDragDrop
-                      ? t('dashboard.myhigh5.drag_reorder') || 'Drag profile photo to reorder your High5'
+                      ? touchReorderEnabled
+                        ? `${t('dashboard.myhigh5.tap_reorder') || 'Tap to select, then tap another photo to reorder'} — ${vote.author_name || 'Contestant'}`
+                        : t('dashboard.myhigh5.drag_reorder') || 'Drag profile photo to reorder your High5'
                       : vote.author_name || 'Contestant'
                   }
                 >
@@ -391,7 +476,12 @@ export default function MyHigh5Page() {
                   )}
                   {enableDragDrop && (
                     <div
-                      className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-full bg-gradient-to-br from-myhigh5-primary/90 to-myhigh5-secondary/90 opacity-0 transition-opacity duration-150 group-hover:opacity-100"
+                      className={cn(
+                        'pointer-events-none absolute inset-0 flex items-center justify-center rounded-full bg-gradient-to-br from-myhigh5-primary/90 to-myhigh5-secondary/90 transition-opacity duration-150',
+                        isCoarsePointer
+                          ? 'opacity-50'
+                          : 'opacity-0 group-hover:opacity-100'
+                      )}
                       aria-hidden
                     >
                       <Hand className="h-6 w-6 text-white drop-shadow-sm" strokeWidth={2.25} />
@@ -464,7 +554,8 @@ export default function MyHigh5Page() {
         ))}
       </TableBody>
     </Table>
-  )
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -504,8 +595,22 @@ export default function MyHigh5Page() {
               {t('dashboard.myhigh5.hint_categories') || 'Only categories where you have cast at least one vote are listed. Click a section to expand your votes.'}
             </p>
             <p className="text-sm text-blue-700 dark:text-blue-300">
-              {t('dashboard.myhigh5.hint_dnd') || 'Hover a contestant’s profile photo to see the High5 hand, then drag from the photo to reorder. 1st place = 5 points … 5th = 1. Max 5 votes per category.'}
+              {isCoarsePointer
+                ? t('dashboard.myhigh5.hint_tap') ||
+                  'Tap a contestant’s profile photo to select them, then tap another photo to move them to that rank. Tap the same photo again to cancel.'
+                : t('dashboard.myhigh5.hint_dnd') ||
+                  'Hover a contestant’s profile photo to see the High5 hand, then drag from the photo to reorder. 1st place = 5 points … 5th = 1. Max 5 votes per category.'}
             </p>
+            {isCoarsePointer && touchReorderSource && (
+              <p className="text-sm font-medium text-amber-800 dark:text-amber-200 pt-1">
+                {(t('dashboard.myhigh5.tap_reorder_second') ||
+                  'Tap another contestant’s photo to move {name} to that position.').replace(
+                  '{name}',
+                  seasonsData[touchReorderSource.seasonIndex]?.votes[touchReorderSource.voteIndex]?.author_name ||
+                    '…'
+                )}
+              </p>
+            )}
           </div>
 
           {/* Votes by Season */}

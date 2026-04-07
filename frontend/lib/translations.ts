@@ -3453,6 +3453,11 @@ export const translations: Record<Language, TranslationKeys> = {
         remaining_votes: "Vous pouvez encore voter pour {count} contestant(s)",
         votes_label: "votes",
         hint_dnd: "Glissez-déposez pour réorganiser vos votes. Le 1er reçoit 5 points, le 2ème 4 points, le 3ème 3 points, le 4ème 2 points et le 5ème 1 point. Les votes sont limités à 5 par season.",
+        hint_tap:
+          "Touchez la photo d’un candidat pour le sélectionner, puis touchez une autre photo pour le placer à ce rang. Touchez la même photo pour annuler.",
+        tap_reorder_second: "Touchez une autre photo pour déplacer {name} à cette position.",
+        tap_reorder: "Touchez pour sélectionner, puis une autre photo pour réorganiser",
+        drag_reorder: "Glissez la photo de profil pour réorganiser votre High5",
         rank: "Rang",
         points: "Points",
         contestant: "Contestant",
@@ -7713,6 +7718,11 @@ export const translations: Record<Language, TranslationKeys> = {
         remaining_votes: "You can still vote for {count} more contestant(s)",
         votes_label: "votes",
         hint_dnd: "Drag and drop to reorder your votes. 1st place gets 5 points, 2nd gets 4 points, 3rd gets 3 points, 4th gets 2 points, and 5th gets 1 point. You may vote for as many contestants as you wish, but only the top 5 are counted for voting credit. Any additional vote after the fifth will replace the contestant currently in 5th place.",
+        hint_tap:
+          "Tap a contestant’s profile photo to select them, then tap another photo to move them to that rank. Tap the same photo again to cancel.",
+        tap_reorder_second: "Tap another contestant’s photo to move {name} to that position.",
+        tap_reorder: "Tap to select, then tap another photo to reorder",
+        drag_reorder: "Drag profile photo to reorder your High5",
         rank: "Rank",
         points: "Points",
         contestant: "Contestant",
