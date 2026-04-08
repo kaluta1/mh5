@@ -22,7 +22,7 @@ from app.services.shufti_pro import shufti_pro_service
 from app.services.email import email_service
 
 router = APIRouter()
-KYC_PRICE_USD = 10.00
+KYC_PRICE_USD = 1.00  # testing; keep in sync with product_types.price for code "kyc"
 
 
 @router.post("/initiate")
