@@ -27,22 +27,12 @@
   },
   {
     "inputs": [],
-    "name": "NotOperator",
-    "type": "error"
-  },
-  {
-    "inputs": [],
     "name": "NotOwner",
     "type": "error"
   },
   {
     "inputs": [],
     "name": "OrderAlreadyPaid",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "PaymentNotFound",
     "type": "error"
   },
   {
@@ -94,34 +84,6 @@
   {
     "inputs": [
       {
-        "internalType": "bytes32",
-        "name": "orderId",
-        "type": "bytes32"
-      },
-      {
-        "internalType": "address",
-        "name": "recipient",
-        "type": "address"
-      },
-      {
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      }
-    ],
-    "name": "refund",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "RefundExceedsPaidAmount",
-    "type": "error"
-  },
-  {
-    "inputs": [
-      {
         "internalType": "address",
         "name": "token",
         "type": "address"
@@ -133,24 +95,6 @@
       }
     ],
     "name": "setAcceptedToken",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "operator",
-        "type": "address"
-      },
-      {
-        "internalType": "bool",
-        "name": "allowed",
-        "type": "bool"
-      }
-    ],
-    "name": "setOperator",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -208,25 +152,6 @@
       {
         "indexed": true,
         "internalType": "address",
-        "name": "operator",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "bool",
-        "name": "allowed",
-        "type": "bool"
-      }
-    ],
-    "name": "OperatorUpdated",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "address",
         "name": "previousOwner",
         "type": "address"
       },
@@ -272,37 +197,6 @@
     "type": "event"
   },
   {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "bytes32",
-        "name": "orderId",
-        "type": "bytes32"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "recipient",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "token",
-        "type": "address"
-      }
-    ],
-    "name": "PaymentRefunded",
-    "type": "event"
-  },
-  {
     "inputs": [
       {
         "internalType": "address",
@@ -335,64 +229,8 @@
     "type": "event"
   },
   {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "token",
-        "type": "address"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "treasury",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      }
-    ],
-    "name": "TreasuryWithdrawal",
-    "type": "event"
-  },
-  {
     "stateMutability": "payable",
     "type": "fallback"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      }
-    ],
-    "name": "withdrawNative",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "token",
-        "type": "address"
-      },
-      {
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      }
-    ],
-    "name": "withdrawToken",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
   },
   {
     "stateMutability": "payable",
@@ -407,25 +245,6 @@
       }
     ],
     "name": "acceptedTokens",
-    "outputs": [
-      {
-        "internalType": "bool",
-        "name": "",
-        "type": "bool"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "name": "operators",
     "outputs": [
       {
         "internalType": "bool",
@@ -494,33 +313,9 @@
         "type": "uint256"
       },
       {
-        "internalType": "uint256",
-        "name": "refundedAmount",
-        "type": "uint256"
-      },
-      {
         "internalType": "uint64",
         "name": "paidAt",
         "type": "uint64"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "bytes32",
-        "name": "orderId",
-        "type": "bytes32"
-      }
-    ],
-    "name": "refundableAmount",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
       }
     ],
     "stateMutability": "view",

@@ -102,7 +102,7 @@ class Settings(BaseModel):
     # ============================================
     BSC_RPC_URL: str = os.getenv("BSC_RPC_URL", "https://bsc-dataseed.binance.org")
     BSC_CHAIN_ID: int = int(os.getenv("BSC_CHAIN_ID", "56"))
-    BSC_PAYMENT_CONTRACT: str = os.getenv("BSC_PAYMENT_CONTRACT", "0xd548c9cc73a9Dde77B77BFca2D0b8a120E0001e5")
+    BSC_PAYMENT_CONTRACT: str = os.getenv("BSC_PAYMENT_CONTRACT", "0x12Ccb74E7A8B8f0fDc14e55A82C8693145e36EdA")
     BSC_CONFIRMATIONS: int = int(os.getenv("BSC_CONFIRMATIONS", "1"))
     BSC_EXPLORER_URL: str = os.getenv("BSC_EXPLORER_URL", "https://bscscan.com")
     BSC_USDT_ADDRESS: str = os.getenv("BSC_USDT_ADDRESS", "0x55d398326f99059fF775485246999027B3197955")

@@ -73,7 +73,7 @@ interface Recipient {
   error: string | null
 }
 
-const KYC_PRICE_USD = 1
+const KYC_PRICE_USD = 10
 
 const getPaymentMethods = (t: (key: string) => string | undefined): PaymentMethod[] => [
   {
@@ -101,7 +101,8 @@ interface PaymentDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   initialProductCode?: string
-  onPaymentInitiated?: () => void
+  /** Fires once after on-chain payment + backend verify succeed (may be async). */
+  onPaymentInitiated?: () => void | Promise<void>
 }
 
 export function PaymentDialog({
@@ -327,7 +328,11 @@ export function PaymentDialog({
       setTxHash(hash)
       setPaymentConfirmed(true)
       setStep('success')
-      onPaymentInitiated?.()
+      try {
+        await Promise.resolve(onPaymentInitiated?.())
+      } catch (callbackErr) {
+        logger.error('onPaymentInitiated error', callbackErr)
+      }
     } catch (error) {
       logger.error('Wallet payment error', error)
       setPaymentError(error instanceof Error ? error.message : 'Erreur lors du paiement')
@@ -338,7 +343,6 @@ export function PaymentDialog({
   const handleClose = () => {
     // Allow direct close from success step (also trigger callback)
     if (step === 'success') {
-      onPaymentInitiated?.()
       resetAndClose()
       return
     }
@@ -1030,7 +1034,6 @@ export function PaymentDialog({
               {/* Close Button */}
               <Button
                 onClick={() => {
-                  onPaymentInitiated?.()
                   resetAndClose()
                 }}
                 className="w-full bg-myhigh5-primary hover:bg-myhigh5-primary/90"

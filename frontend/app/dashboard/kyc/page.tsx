@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, Suspense, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useLanguage } from '@/contexts/language-context'
 import { useAuth } from '@/hooks/use-auth'
@@ -167,6 +167,44 @@ function KYCPageContent() {
       setIsLoadingStatus(false)
     }
   }
+
+  /** Après paiement crypto vérifié : met à jour le statut sans masquer toute la page, puis lance Shufti. */
+  const handleKycPaymentSuccess = useCallback(async () => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
+    if (!token) return
+
+    let status = await kycService.getKYCStatus(token)
+    for (let attempt = 0; attempt < 5; attempt++) {
+      if (!status.needs_payment || status.has_valid_payment) break
+      await new Promise((r) => setTimeout(r, 500))
+      status = await kycService.getKYCStatus(token)
+    }
+
+    setKycData(status)
+    if (status.status === 'approved') {
+      refreshUser?.()
+    }
+    setShowPaymentDialog(false)
+
+    setIsInitiating(true)
+    setError(null)
+    try {
+      const lang = document.documentElement.lang?.toUpperCase() || 'FR'
+      const result = await kycService.initiateVerification(token, lang)
+      if (result.verification_url) {
+        setVerificationUrl(result.verification_url)
+      }
+    } catch (err) {
+      if (err instanceof KYCPaymentRequiredError) {
+        setShowPaymentDialog(true)
+      } else {
+        logger.error('KYC initiate after payment:', err)
+        setError(err instanceof Error ? err.message : t('common.error') || 'Une erreur est survenue')
+      }
+    } finally {
+      setIsInitiating(false)
+    }
+  }, [refreshUser, t])
 
   if (isLoading || isLoadingStatus) {
     return <KYCSkeleton />
@@ -351,7 +389,7 @@ function KYCPageContent() {
                 </p>
               </div>
               <p className="text-sm text-blue-700 dark:text-blue-300 mb-3">
-                {t('kyc.price_per_attempt') || 'Prix par tentative'}: <span className="font-bold">{kycData.kyc_price || 1} {kycData.kyc_currency || 'USD'}</span>
+                {t('kyc.price_per_attempt') || 'Prix par tentative'}: <span className="font-bold">{kycData.kyc_price || 10} {kycData.kyc_currency || 'USD'}</span>
               </p>
               <Button
                 onClick={() => setShowPaymentDialog(true)}
@@ -376,9 +414,7 @@ function KYCPageContent() {
           open={showPaymentDialog}
           onOpenChange={setShowPaymentDialog}
           initialProductCode="kyc"
-          onPaymentInitiated={() => {
-            handleRefreshStatus()
-          }}
+          onPaymentInitiated={handleKycPaymentSuccess}
         />
       </div>
     )
@@ -412,7 +448,7 @@ function KYCPageContent() {
                 {t('kyc.verification_fee') || 'Frais de vérification'}
               </p>
               <p className="text-2xl font-bold text-myhigh5-primary">
-                {kycData?.kyc_price || 1} {kycData?.kyc_currency || 'USD'}
+                {kycData?.kyc_price || 10} {kycData?.kyc_currency || 'USD'}
               </p>
             </div>
 
@@ -439,9 +475,7 @@ function KYCPageContent() {
           open={showPaymentDialog}
           onOpenChange={setShowPaymentDialog}
           initialProductCode="kyc"
-          onPaymentInitiated={() => {
-            handleRefreshStatus()
-          }}
+          onPaymentInitiated={handleKycPaymentSuccess}
         />
       </div>
     )
@@ -482,7 +516,7 @@ function KYCPageContent() {
                   </p>
                 </div>
                 <p className="text-sm text-blue-700 dark:text-blue-300 mb-3">
-                  Prix: <span className="font-bold">{kycData.kyc_price || 1} {kycData.kyc_currency || 'USD'}</span>
+                  Prix: <span className="font-bold">{kycData.kyc_price || 10} {kycData.kyc_currency || 'USD'}</span>
                 </p>
                 <Button
                   onClick={() => setShowPaymentDialog(true)}
@@ -539,9 +573,7 @@ function KYCPageContent() {
           open={showPaymentDialog}
           onOpenChange={setShowPaymentDialog}
           initialProductCode="kyc"
-          onPaymentInitiated={() => {
-            handleRefreshStatus()
-          }}
+          onPaymentInitiated={handleKycPaymentSuccess}
         />
       </div>
     )
@@ -667,10 +699,7 @@ function KYCPageContent() {
         open={showPaymentDialog}
         onOpenChange={setShowPaymentDialog}
         initialProductCode="kyc"
-        onPaymentInitiated={() => {
-          // Rafraîchir le statut après que l'utilisateur dit avoir payé
-          handleRefreshStatus()
-        }}
+        onPaymentInitiated={handleKycPaymentSuccess}
       />
     </div>
   )

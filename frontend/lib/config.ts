@@ -31,7 +31,7 @@ export const REOWN_PROJECT_ID = process.env.NEXT_PUBLIC_REOWN_PROJECT_ID || ''
 // BSC — MyHigh5PaymentHub + USDT (must match backend BSC_* and deployed contract)
 // ============================================
 const BSC_DEFAULTS = {
-  PAYMENT_CONTRACT: '0xd548c9cc73a9Dde77B77BFca2D0b8a120E0001e5',
+  PAYMENT_CONTRACT: '0x12Ccb74E7A8B8f0fDc14e55A82C8693145e36EdA',
   USDT_ADDRESS: '0x55d398326f99059fF775485246999027B3197955',
   CHAIN_ID: 56,
   RPC_URL: 'https://bsc-dataseed.binance.org',
