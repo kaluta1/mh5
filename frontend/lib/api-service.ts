@@ -1,7 +1,8 @@
 
 import axios from 'axios';
 
-// Get API URL from env or default
+// Get API URL from env or default.
+// For `next dev`, prefer `frontend/.env.development` (localhost) unless `.env.local` sets NEXT_PUBLIC_API_URL.
 // Ensure we handle the case where NEXT_PUBLIC_API_URL might be just the domain
 const getApiUrl = () => {
     let url = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';

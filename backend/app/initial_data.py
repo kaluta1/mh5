@@ -13,24 +13,28 @@ logger = logging.getLogger(__name__)
 def init_db() -> None:
     db = SessionLocal()
     try:
+        # Plan comptable first: payment_accounting / admin COA must not be skipped if a later
+        # step (roles, admin, products) fails or partially commits.
+        try:
+            ensure_chart_of_accounts(db)
+        except Exception as e:
+            logger.warning("ensure_chart_of_accounts (init): %s", e)
+
         # Création des rôles par défaut
         create_default_roles(db)
-        
+
         # Création de l'administrateur par défaut
         create_admin_user(db)
-        
+
         # Création des templates de concours par défaut
         create_default_contest_templates(db)
-        
+
         # Création des localisations de base
         create_base_locations(db)
-        
+
         # Création des types de produits avec commissions
         create_product_types(db)
 
-        # Plan comptable (requis pour les écritures KYC / membership — payment_accounting.py)
-        ensure_chart_of_accounts(db)
-        
     except Exception as e:
         logger.error(f"Erreur lors de l'initialisation de la base de données: {e}")
         raise
