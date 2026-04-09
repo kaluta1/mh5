@@ -3622,7 +3622,8 @@ def _fetch_admin_chart_of_accounts_rows(db: Session) -> list:
 
     at_expr = "CAST(ca.account_type AS TEXT)" if "account_type" in colset else "'UNKNOWN'"
     stored_bal = "COALESCE(ca.balance, 0)" if "balance" in colset else "0"
-    where_clause = "WHERE COALESCE(ca.is_active, true) = true" if "is_active" in colset else ""
+    # Admin list: do not filter by is_active — legacy rows may be false/NULL and would hide the whole CoA.
+    where_clause = ""
 
     # Prefer ledger balances from posted lines so admin UI matches journal activity
     if insp.has_table("journal_lines"):
@@ -3650,13 +3651,11 @@ def _fetch_admin_chart_of_accounts_rows(db: Session) -> list:
     else:
         bal_expr = "COALESCE(balance, 0)" if "balance" in colset else "0"
         at_simple = "CAST(account_type AS TEXT)" if "account_type" in colset else "'UNKNOWN'"
-        where_simple = "WHERE COALESCE(is_active, true) = true" if "is_active" in colset else ""
         sql = f"""
         SELECT id, account_code, account_name,
                {at_simple} AS account_type,
                {bal_expr} AS balance
         FROM chart_of_accounts
-        {where_simple}
         ORDER BY account_code ASC
         """
     try:
@@ -3699,6 +3698,14 @@ async def admin_accounting_chart_of_accounts(
     check_admin(current_user)
     try:
         rows = _fetch_admin_chart_of_accounts_rows(db)
+        if not rows:
+            try:
+                from app.initial_data import ensure_chart_of_accounts
+
+                ensure_chart_of_accounts(db)
+                rows = _fetch_admin_chart_of_accounts_rows(db)
+            except Exception as e:
+                logger.warning("admin chart_of_accounts auto-seed failed: %s", e)
         return [
             {
                 "id": r["id"],
