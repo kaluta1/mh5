@@ -3606,6 +3606,9 @@ def _fetch_admin_chart_of_accounts_rows(db: Session) -> list:
     """
     Raw SQL only (no ORM): legacy rows may lack Base columns like `updated_at`.
     Uses reflection so missing `balance` / `is_active` columns do not break the query.
+
+    Balances are computed from journal_lines when that table exists (create_journal_entry
+    does not update chart_of_accounts.balance), matching AccountingService.get_balance.
     """
     bind = db.get_bind()
     insp = inspect(bind)
@@ -3617,17 +3620,45 @@ def _fetch_admin_chart_of_accounts_rows(db: Session) -> list:
         logger.warning("Could not reflect chart_of_accounts columns: %s", e)
         colset = set()
 
-    at_expr = "CAST(account_type AS TEXT)" if "account_type" in colset else "'UNKNOWN'"
-    bal_expr = "COALESCE(balance, 0)" if "balance" in colset else "0"
-    where_clause = "WHERE COALESCE(is_active, true) = true" if "is_active" in colset else ""
-    sql = f"""
-    SELECT id, account_code, account_name,
-           {at_expr} AS account_type,
-           {bal_expr} AS balance
-    FROM chart_of_accounts
-    {where_clause}
-    ORDER BY account_code ASC
-    """
+    at_expr = "CAST(ca.account_type AS TEXT)" if "account_type" in colset else "'UNKNOWN'"
+    stored_bal = "COALESCE(ca.balance, 0)" if "balance" in colset else "0"
+    where_clause = "WHERE COALESCE(ca.is_active, true) = true" if "is_active" in colset else ""
+
+    # Prefer ledger balances from posted lines so admin UI matches journal activity
+    if insp.has_table("journal_lines"):
+        sql = f"""
+        SELECT ca.id, ca.account_code, ca.account_name,
+               {at_expr} AS account_type,
+               COALESCE(leg.net, {stored_bal}) AS balance
+        FROM chart_of_accounts ca
+        LEFT JOIN (
+            SELECT jl.account_id,
+                   SUM(
+                     CASE
+                       WHEN UPPER(TRIM(CAST(co.account_type AS TEXT))) IN ('ASSET', 'EXPENSE')
+                         THEN COALESCE(jl.debit_amount, 0) - COALESCE(jl.credit_amount, 0)
+                       ELSE COALESCE(jl.credit_amount, 0) - COALESCE(jl.debit_amount, 0)
+                     END
+                   ) AS net
+            FROM journal_lines jl
+            INNER JOIN chart_of_accounts co ON co.id = jl.account_id
+            GROUP BY jl.account_id
+        ) AS leg ON leg.account_id = ca.id
+        {where_clause}
+        ORDER BY ca.account_code ASC
+        """
+    else:
+        bal_expr = "COALESCE(balance, 0)" if "balance" in colset else "0"
+        at_simple = "CAST(account_type AS TEXT)" if "account_type" in colset else "'UNKNOWN'"
+        where_simple = "WHERE COALESCE(is_active, true) = true" if "is_active" in colset else ""
+        sql = f"""
+        SELECT id, account_code, account_name,
+               {at_simple} AS account_type,
+               {bal_expr} AS balance
+        FROM chart_of_accounts
+        {where_simple}
+        ORDER BY account_code ASC
+        """
     try:
         return db.execute(text(sql)).mappings().all()
     except Exception:

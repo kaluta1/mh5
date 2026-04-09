@@ -27,6 +27,9 @@ def init_db() -> None:
         
         # Création des types de produits avec commissions
         create_product_types(db)
+
+        # Plan comptable (requis pour les écritures KYC / membership — payment_accounting.py)
+        ensure_chart_of_accounts(db)
         
     except Exception as e:
         logger.error(f"Erreur lors de l'initialisation de la base de données: {e}")
@@ -316,6 +319,24 @@ def create_product_types(db: Session) -> None:
     except Exception as e:
         db.rollback()
         logger.error(f"Erreur lors de la création des types de produits: {e}")
+
+
+def ensure_chart_of_accounts(db: Session) -> None:
+    """Crée les comptes 1001, 4001, etc. si absents. Sans cela, les journaux de paiement échouent."""
+    try:
+        from sqlalchemy import inspect
+
+        bind = db.get_bind()
+        insp = inspect(bind)
+        if not insp.has_table("chart_of_accounts"):
+            logger.warning("Table chart_of_accounts absente — saut de l'init plan comptable")
+            return
+
+        from app.scripts.init_coa import init_chart_of_accounts
+
+        init_chart_of_accounts(db)
+    except Exception as e:
+        logger.warning("Chart of accounts non initialisé: %s", e)
 
 
 if __name__ == "__main__":
