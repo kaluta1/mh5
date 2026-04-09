@@ -75,6 +75,9 @@ def backfill_missing_payment_journals(
     errors: List[Dict[str, Any]] = []
 
     for deposit in deposits:
+        # Clear failed transaction from previous iteration (e.g. INSERT error on enum column)
+        db.rollback()
+
         if _journal_exists_for_deposit(db, deposit.id):
             skipped_has_journal.append(deposit.id)
             continue
