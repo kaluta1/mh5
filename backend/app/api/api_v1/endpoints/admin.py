@@ -3791,3 +3791,27 @@ async def admin_accounting_journal_entries(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur journal entries: {str(e)}",
         )
+
+
+@router.post("/accounting/backfill-journals")
+async def admin_accounting_backfill_journals(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    dry_run: bool = Query(False, description="If true, only list deposits that would get journals"),
+):
+    """
+    Post missing journal entries for validated KYC/membership deposits (e.g. when CoA was not ready earlier).
+
+    Does not duplicate affiliate commissions; only creates ledger entries.
+    """
+    check_admin(current_user)
+    from app.services.payment_accounting_backfill import backfill_missing_payment_journals
+
+    try:
+        return backfill_missing_payment_journals(db, dry_run=dry_run)
+    except Exception as e:
+        logger.exception("backfill journals failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )

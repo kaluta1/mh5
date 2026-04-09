@@ -194,7 +194,7 @@ def process_payment_validation(db: Session, deposit: Deposit) -> bool:
             if product_code == "kyc":
                 # KYC sera traité séparément après vérification
                 logger.info(f"KYC payment validated for user {user.id}")
-            elif product_code in ["mfm_membership", "efm_membership"]:
+            elif product_code in ["mfm_membership", "efm_membership", "founding_membership"]:
                 # Activer le statut Founding Member
                 user.is_founding_member = True
                 user.founding_member_since = datetime.utcnow()
@@ -231,7 +231,7 @@ def process_payment_validation(db: Session, deposit: Deposit) -> bool:
             payment_accounting.process_kyc_payment_accounting(db, deposit, commissions)
         elif product_code == "annual_membership":
             payment_accounting.process_membership_payment_accounting(db, deposit, commissions)
-        elif product_code in ("mfm_membership", "efm_membership"):
+        elif product_code in ("mfm_membership", "efm_membership", "founding_membership"):
             payment_accounting.process_founding_membership_payment_accounting(db, deposit, commissions)
 
         return True

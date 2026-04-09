@@ -2,12 +2,19 @@ from sqlalchemy.orm import Session
 from decimal import Decimal
 import logging
 from typing import Optional, List, Dict
+from datetime import datetime
 
 from app.models.payment import Deposit
 from app.models.affiliate import AffiliateCommission, CommissionType
 from app.services.accounting_service import accounting_service
 
 logger = logging.getLogger(__name__)
+
+
+def _journal_entry_date(deposit: Deposit, entry_date: Optional[datetime]) -> datetime:
+    if entry_date is not None:
+        return entry_date
+    return deposit.validated_at or deposit.created_at or datetime.utcnow()
 
 class PaymentAccountingService:
     """
@@ -19,7 +26,8 @@ class PaymentAccountingService:
         self, 
         db: Session, 
         deposit: Deposit, 
-        commissions: List[AffiliateCommission]
+        commissions: List[AffiliateCommission],
+        entry_date: Optional[datetime] = None,
     ):
         """
         Cas d'usage 1: Paiement KYC (10$)
@@ -30,6 +38,7 @@ class PaymentAccountingService:
         """
         amount = Decimal(str(deposit.amount))
         description = f"KYC Payment - Deposit #{deposit.id} - User #{deposit.user_id}"
+        jdate = _journal_entry_date(deposit, entry_date)
         
         # 1. Enregistrement du revenu (Encaissement)
         # Debit: Platform Wallet (1001), Credit: KYC Revenue (4001)
@@ -42,7 +51,8 @@ class PaymentAccountingService:
             accounting_service.create_journal_entry(
                 db, 
                 description=description + " (Income)", 
-                lines=income_lines
+                lines=income_lines,
+                date=jdate,
             )
             logger.info(f"Accounting: Income recorded for KYC deposit {deposit.id}")
         except Exception as e:
@@ -82,7 +92,8 @@ class PaymentAccountingService:
                 accounting_service.create_journal_entry(
                     db,
                     description=description + " (Commissions)",
-                    lines=commission_lines
+                    lines=commission_lines,
+                    date=jdate,
                 )
                 logger.info(f"Accounting: Commissions recorded for KYC deposit {deposit.id}")
             except Exception as e:
@@ -102,7 +113,8 @@ class PaymentAccountingService:
             accounting_service.create_journal_entry(
                 db,
                 description=description + " (Provider Fees)",
-                lines=fee_lines
+                lines=fee_lines,
+                date=jdate,
             )
             logger.info(f"Accounting: Provider fees recorded for KYC deposit {deposit.id}")
         except Exception as e:
@@ -112,7 +124,8 @@ class PaymentAccountingService:
         self,
         db: Session,
         deposit: Deposit,
-        commissions: List[AffiliateCommission]
+        commissions: List[AffiliateCommission],
+        entry_date: Optional[datetime] = None,
     ):
         """
         Cas d'usage 2: Abonnement Annuel (50$)
@@ -122,6 +135,7 @@ class PaymentAccountingService:
         """
         amount = Decimal(str(deposit.amount))
         description = f"Membership Payment - Deposit #{deposit.id} - User #{deposit.user_id}"
+        jdate = _journal_entry_date(deposit, entry_date)
         
         # 1. Income (Revenue)
         income_lines = [
@@ -132,7 +146,8 @@ class PaymentAccountingService:
         accounting_service.create_journal_entry(
             db,
             description=description + " (Income)",
-            lines=income_lines
+            lines=income_lines,
+            date=jdate,
         )
         
         # 2. Commissions
@@ -162,7 +177,8 @@ class PaymentAccountingService:
             accounting_service.create_journal_entry(
                 db,
                 description=description + " (Commissions)",
-                lines=commission_lines
+                lines=commission_lines,
+                date=jdate,
             )
 
         # 3. Founding Members pool (10% of gross) — contractual payable 2104; reduce 4002 recognition
@@ -186,6 +202,7 @@ class PaymentAccountingService:
                 db,
                 description=description + " (Founding pool accrual)",
                 lines=alloc_lines,
+                date=jdate,
             )
 
         # 4. Annual membership: fixed Shufti pass-through ($2) when fee is standard $10 tier
@@ -209,6 +226,7 @@ class PaymentAccountingService:
                 db,
                 description=description + " (KYC provider payable)",
                 lines=shufti_lines,
+                date=jdate,
             )
 
     def process_founding_membership_payment_accounting(
@@ -216,12 +234,14 @@ class PaymentAccountingService:
         db: Session,
         deposit: Deposit,
         commissions: List[AffiliateCommission],
+        entry_date: Optional[datetime] = None,
     ):
         """
         Founding membership (e.g. $100): gross to wallet / revenue, commissions, 10% pool accrual.
         """
         amount = Decimal(str(deposit.amount))
         description = f"Founding Membership Payment - Deposit #{deposit.id} - User #{deposit.user_id}"
+        jdate = _journal_entry_date(deposit, entry_date)
 
         income_lines = [
             {"account_code": "1001", "debit": float(amount), "credit": 0.0, "description": "Payment received"},
@@ -231,6 +251,7 @@ class PaymentAccountingService:
             db,
             description=description + " (Income)",
             lines=income_lines,
+            date=jdate,
         )
 
         if commissions:
@@ -261,6 +282,7 @@ class PaymentAccountingService:
                 db,
                 description=description + " (Commissions)",
                 lines=commission_lines,
+                date=jdate,
             )
 
         pool_amt = float(amount) * 0.10
@@ -282,6 +304,7 @@ class PaymentAccountingService:
                         "description": "Founding Members pool payable",
                     },
                 ],
+                date=jdate,
             )
 
 
