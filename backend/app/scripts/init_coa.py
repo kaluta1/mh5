@@ -1,13 +1,80 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import inspect, text
 from app.models.accounting import ChartOfAccounts, AccountType
 import logging
 
 logger = logging.getLogger(__name__)
 
+
+def _ensure_chart_of_accounts_columns(db: Session) -> None:
+    """
+    Legacy databases may lack columns expected by ChartOfAccounts (ORM SELECT fails).
+    Adds missing columns so init_chart_of_accounts can run without Alembic first.
+    """
+    bind = db.get_bind()
+    insp = inspect(bind)
+    if not insp.has_table("chart_of_accounts"):
+        return
+    try:
+        colset = {c["name"] for c in insp.get_columns("chart_of_accounts")}
+    except Exception as e:
+        logger.warning("Could not reflect chart_of_accounts: %s", e)
+        return
+
+    altered = False
+    if "balance" not in colset:
+        db.execute(
+            text(
+                "ALTER TABLE chart_of_accounts ADD COLUMN IF NOT EXISTS balance NUMERIC(15, 2)"
+            )
+        )
+        altered = True
+        logger.info("Added chart_of_accounts.balance (legacy DB)")
+    if "updated_at" not in colset:
+        db.execute(
+            text(
+                "ALTER TABLE chart_of_accounts ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP"
+            )
+        )
+        db.execute(
+            text(
+                "UPDATE chart_of_accounts SET updated_at = COALESCE(created_at, NOW()) "
+                "WHERE updated_at IS NULL"
+            )
+        )
+        altered = True
+        logger.info("Added chart_of_accounts.updated_at (legacy DB)")
+
+    # Legacy schemas (e.g. create_coa.sql / GraphQL) had NOT NULL columns omitted from ORM model.
+    # Inserts must receive defaults when those columns are not in the INSERT.
+    _legacy_defaults = [
+        ("total_liabilities", "0"),
+        ("credit_balance", "0"),
+        ("debit_balance", "0"),
+        ("normal_balance", "'debit'"),
+    ]
+    for col, default_sql in _legacy_defaults:
+        if col in colset:
+            try:
+                db.execute(
+                    text(
+                        f"ALTER TABLE chart_of_accounts ALTER COLUMN {col} SET DEFAULT {default_sql}"
+                    )
+                )
+                altered = True
+            except Exception as ex:
+                logger.debug("Skip legacy default for %s: %s", col, ex)
+
+    if altered:
+        db.commit()
+
+
 def init_chart_of_accounts(db: Session):
     """
     Initialise le Plan Comptable (Chart of Accounts) par défaut.
     """
+    _ensure_chart_of_accounts_columns(db)
+
     # Liste initiale des comptes
     accounts = [
         # ASSETS (1000)
@@ -73,6 +140,8 @@ def init_chart_of_accounts(db: Session):
                 is_active=True
             )
             db.add(new_account)
+            # One row at a time: batched INSERT sends VARCHAR to PG enum and fails (DatatypeMismatch).
+            db.flush()
             created_count += 1
             
     try:
