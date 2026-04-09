@@ -737,7 +737,7 @@ def map_journal_entry_to_type(entry: JournalEntry, db: Session) -> JournalEntryT
         threshold=float(entry.threshold) if entry.threshold else None,
         total_debit=float(entry.total_debit or 0),
         total_credit=float(entry.total_credit or 0),
-        status=EntryStatusEnum(entry.status.value),
+        status=EntryStatusEnum(str(entry.status).lower()),
         created_at=entry.created_at,
         posted_at=entry.posted_at,
         lines=lines,

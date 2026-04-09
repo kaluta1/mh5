@@ -141,7 +141,7 @@ def record_payment_in_accounting(
             description=f"Payment received - {product_code} - Deposit #{deposit.id}",
             total_debit=total_debit,
             total_credit=total_credit,
-            status=EntryStatus.POSTED,  # Auto-post payment entries
+            status=EntryStatus.POSTED.value,
             created_by=created_by
         )
         db.add(journal_entry)
@@ -280,7 +280,7 @@ def record_commission_payment_in_accounting(
             description=f"Commission paid - Commission #{commission.id} - User {commission.user_id}",
             total_debit=amount,
             total_credit=amount,
-            status=EntryStatus.POSTED,
+            status=EntryStatus.POSTED.value,
             created_by=created_by
         )
         db.add(journal_entry)

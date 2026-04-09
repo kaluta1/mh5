@@ -62,7 +62,7 @@ class AccountingService:
             description=description,
             total_debit=float(total_debit),
             total_credit=float(total_credit),
-            status=EntryStatus.POSTED  # Directement POSTED pour simplifier, ou DRAFT si validation requise
+            status=EntryStatus.POSTED.value  # varchar column; PG enum caused invalid "posted" on some DBs
         )
         db.add(entry)
         db.flush()  # Pour avoir l'ID

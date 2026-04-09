@@ -95,10 +95,9 @@ class JournalEntry(Base):
     total_debit: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
     total_credit: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
     
-    status: Mapped[EntryStatus] = mapped_column(
-        SQLEnum(EntryStatus, values_callable=lambda x: [e.value for e in x], native_enum=False, length=20),
-        default=EntryStatus.POSTED,
-    )
+    # Store lowercase strings (draft/posted/reversed) as VARCHAR — avoids PG native enum
+    # mismatches (e.g. enum labels POSTED vs value "posted").
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="posted", server_default="posted")
 
     # Métadonnées (created_at / updated_at from Base)
     created_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)

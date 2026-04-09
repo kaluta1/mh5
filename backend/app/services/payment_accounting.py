@@ -36,8 +36,9 @@ class PaymentAccountingService:
         - Commissions -> Commission Expense / Payable
         - Frais Provider (20%) -> Expense / Payable
         """
+        dep_id = deposit.id
         amount = Decimal(str(deposit.amount))
-        description = f"KYC Payment - Deposit #{deposit.id} - User #{deposit.user_id}"
+        description = f"KYC Payment - Deposit #{dep_id} - User #{deposit.user_id}"
         jdate = _journal_entry_date(deposit, entry_date)
         
         # 1. Enregistrement du revenu (Encaissement)
@@ -54,9 +55,9 @@ class PaymentAccountingService:
                 lines=income_lines,
                 date=jdate,
             )
-            logger.info(f"Accounting: Income recorded for KYC deposit {deposit.id}")
+            logger.info(f"Accounting: Income recorded for KYC deposit {dep_id}")
         except Exception as e:
-            logger.error(f"Failed to record income for deposit {deposit.id}: {e}")
+            logger.error(f"Failed to record income for deposit {dep_id}: {e}")
             # On continue pour essayer d'enregistrer les dépenses ? Ou on stop ?
             # Idéalement transaction atomique globale.
         
@@ -95,9 +96,9 @@ class PaymentAccountingService:
                     lines=commission_lines,
                     date=jdate,
                 )
-                logger.info(f"Accounting: Commissions recorded for KYC deposit {deposit.id}")
+                logger.info(f"Accounting: Commissions recorded for KYC deposit {dep_id}")
             except Exception as e:
-                logger.error(f"Failed to record commissions for deposit {deposit.id}: {e}")
+                logger.error(f"Failed to record commissions for deposit {dep_id}: {e}")
 
         # 3. Enregistrement des frais de service (Provider Fee 20% = 2$)
         # Debit: Expense (5002), Credit: Payable (2003)
@@ -116,9 +117,9 @@ class PaymentAccountingService:
                 lines=fee_lines,
                 date=jdate,
             )
-            logger.info(f"Accounting: Provider fees recorded for KYC deposit {deposit.id}")
+            logger.info(f"Accounting: Provider fees recorded for KYC deposit {dep_id}")
         except Exception as e:
-            logger.error(f"Failed to record fees for deposit {deposit.id}: {e}")
+            logger.error(f"Failed to record fees for deposit {dep_id}: {e}")
 
     def process_membership_payment_accounting(
         self,

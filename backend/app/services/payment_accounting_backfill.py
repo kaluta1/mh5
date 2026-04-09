@@ -90,6 +90,7 @@ def backfill_missing_payment_journals(
             processed.append(deposit.id)
             continue
 
+        did = deposit.id
         entry_date: Optional[datetime] = None  # use validated_at inside payment_accounting
 
         try:
@@ -106,14 +107,15 @@ def backfill_missing_payment_journals(
                     db, deposit, commissions, entry_date=entry_date
                 )
             else:
-                errors.append({"deposit_id": deposit.id, "detail": f"unsupported product {product_code}"})
+                errors.append({"deposit_id": did, "detail": f"unsupported product {product_code}"})
                 continue
 
-            processed.append(deposit.id)
-            logger.info("Backfilled accounting journals for deposit %s (%s)", deposit.id, product_code)
+            processed.append(did)
+            logger.info("Backfilled accounting journals for deposit %s (%s)", did, product_code)
         except Exception as e:
-            logger.exception("Backfill failed for deposit %s", deposit.id)
-            errors.append({"deposit_id": deposit.id, "detail": str(e)})
+            db.rollback()
+            logger.exception("Backfill failed for deposit %s", did)
+            errors.append({"deposit_id": did, "detail": str(e)})
 
     return {
         "dry_run": dry_run,
