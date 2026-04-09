@@ -1070,6 +1070,8 @@ export interface TranslationKeys {
       }
       error_loading: string
       retry: string
+      no_journal: string
+      no_coa: string
     }
     commission_settings: {
       subtitle: string
@@ -2731,7 +2733,9 @@ export const translations: Record<Language, TranslationKeys> = {
           balance: "Solde"
         },
         error_loading: "Erreur lors du chargement des données comptables",
-        retry: "Réessayer"
+        retry: "Réessayer",
+        no_journal: "Aucune écriture au journal pour le moment.",
+        no_coa: "Aucun compte dans la base. Exécutez init_chart_of_accounts sur le serveur."
       },
       commission_settings: {
         subtitle: "Configurez les règles et taux de commission",
@@ -5947,7 +5951,9 @@ export const translations: Record<Language, TranslationKeys> = {
           balance: "Balance"
         },
         error_loading: "Error loading accounting data",
-        retry: "Retry"
+        retry: "Retry",
+        no_journal: "No journal entries yet.",
+        no_coa: "No accounts in database. Run init_chart_of_accounts on the server."
       },
       commission_settings: {
         subtitle: "Configure commission rules and rates",
