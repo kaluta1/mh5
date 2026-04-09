@@ -65,6 +65,7 @@ def upgrade() -> None:
     if _journal_status_is_varchar(bind):
         return
 
+    op.execute(text("SAVEPOINT sp_f1_status"))
     try:
         op.execute(text("ALTER TABLE journal_entries ALTER COLUMN status DROP DEFAULT"))
         op.execute(
@@ -77,7 +78,9 @@ def upgrade() -> None:
             )
         )
         op.execute(text("ALTER TABLE journal_entries ALTER COLUMN status SET DEFAULT 'posted'"))
+        op.execute(text("RELEASE SAVEPOINT sp_f1_status"))
     except (ProgrammingError, OperationalError) as e:
+        op.execute(text("ROLLBACK TO SAVEPOINT sp_f1_status"))
         if _is_privilege_error(e):
             warnings.warn(
                 "journal_entries.status was not converted to VARCHAR (DB user is not table owner). "

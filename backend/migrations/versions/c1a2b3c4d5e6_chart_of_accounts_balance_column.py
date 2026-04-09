@@ -9,7 +9,7 @@ import warnings
 
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy import inspect
+from sqlalchemy import inspect, text
 from sqlalchemy.exc import ProgrammingError, OperationalError
 
 
@@ -42,12 +42,23 @@ def upgrade() -> None:
     bind = op.get_bind()
     if _column_exists(bind, "chart_of_accounts", "balance"):
         return
+    # PG: a failed ALTER aborts the whole migration transaction unless we use a savepoint.
+    if bind.dialect.name != "postgresql":
+        op.add_column(
+            "chart_of_accounts",
+            sa.Column("balance", sa.Numeric(precision=15, scale=2), nullable=True),
+        )
+        return
+
+    op.execute(text("SAVEPOINT sp_c1_balance"))
     try:
         op.add_column(
             "chart_of_accounts",
             sa.Column("balance", sa.Numeric(precision=15, scale=2), nullable=True),
         )
+        op.execute(text("RELEASE SAVEPOINT sp_c1_balance"))
     except (ProgrammingError, OperationalError) as e:
+        op.execute(text("ROLLBACK TO SAVEPOINT sp_c1_balance"))
         if _is_privilege_error(e):
             warnings.warn(
                 "chart_of_accounts.balance was not added (DB user is not table owner). "
@@ -62,9 +73,21 @@ def downgrade() -> None:
     bind = op.get_bind()
     if not _column_exists(bind, "chart_of_accounts", "balance"):
         return
+    if bind.dialect.name != "postgresql":
+        try:
+            op.drop_column("chart_of_accounts", "balance")
+        except (ProgrammingError, OperationalError) as e:
+            if _is_privilege_error(e):
+                return
+            raise
+        return
+
+    op.execute(text("SAVEPOINT sp_c1_balance_dn"))
     try:
         op.drop_column("chart_of_accounts", "balance")
+        op.execute(text("RELEASE SAVEPOINT sp_c1_balance_dn"))
     except (ProgrammingError, OperationalError) as e:
+        op.execute(text("ROLLBACK TO SAVEPOINT sp_c1_balance_dn"))
         if _is_privilege_error(e):
             return
         raise
