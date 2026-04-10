@@ -11,6 +11,7 @@ Use your real path, e.g. cd ~/mh5/backend (not /path/to/mh5-1/backend).
   python scripts/backfill_payment_accounting.py --founding-pool --dry-run
   python scripts/backfill_payment_accounting.py --all --dry-run
   python scripts/backfill_payment_accounting.py --all
+  python scripts/backfill_payment_accounting.py --all --skip-kyc-approval-guard --dry-run
 """
 
 from __future__ import annotations
@@ -21,7 +22,7 @@ import os
 import sys
 
 # Bump when CLI flags change; `python scripts/backfill_payment_accounting.py --version` must show this on the server.
-BACKFILL_CLI_VERSION = "5"
+BACKFILL_CLI_VERSION = "6"
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -49,6 +50,11 @@ def main() -> None:
         version=f"%(prog)s {BACKFILL_CLI_VERSION}",
     )
     p.add_argument("--dry-run", action="store_true", help="No DB writes (where supported)")
+    p.add_argument(
+        "--skip-kyc-approval-guard",
+        action="store_true",
+        help="Allow KYC Step 2 backfill when kyc_verifications is not APPROVED (use only if DB status is wrong).",
+    )
     mode = p.add_mutually_exclusive_group()
     mode.add_argument(
         "--founding-pool",
@@ -71,7 +77,11 @@ def main() -> None:
     try:
         if args.all:
             result = {
-                "kyc_recognition": backfill_missing_kyc_recognition(db, dry_run=args.dry_run),
+                "kyc_recognition": backfill_missing_kyc_recognition(
+                    db,
+                    dry_run=args.dry_run,
+                    skip_kyc_approval_guard=args.skip_kyc_approval_guard,
+                ),
                 "payment_journals": backfill_missing_payment_journals(db, dry_run=args.dry_run),
                 "founding_pool": backfill_missing_founding_pool_accruals(db, dry_run=args.dry_run),
             }
@@ -88,7 +98,11 @@ def main() -> None:
             if result.get("errors"):
                 sys.exit(1)
         elif args.kyc_recognition:
-            result = backfill_missing_kyc_recognition(db, dry_run=args.dry_run)
+            result = backfill_missing_kyc_recognition(
+                db,
+                dry_run=args.dry_run,
+                skip_kyc_approval_guard=args.skip_kyc_approval_guard,
+            )
             print(json.dumps(result, indent=2, default=str))
             if result.get("errors"):
                 sys.exit(1)

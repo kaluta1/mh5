@@ -4059,16 +4059,22 @@ async def admin_accounting_backfill_kyc_recognition(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     dry_run: bool = Query(False, description="If true, only list deposits that would get Step 2 journals"),
+    skip_approval_guard: bool = Query(
+        False,
+        description="If true, post Step 2 even when kyc_verifications is not APPROVED (ops only).",
+    ),
 ):
     """
     Post KYC Step 2 (revenue + 2104 + Shufti payable) when deferred receipt exists, recognition is missing,
-    and kyc_verifications.status is APPROVED. Run before founding-pool-only backfill for KYC deposits.
+    and kyc_verifications.status is APPROVED (unless skip_approval_guard). Run before founding-pool-only backfill for KYC deposits.
     """
     check_admin(current_user)
     from app.services.payment_accounting_backfill import backfill_missing_kyc_recognition
 
     try:
-        return backfill_missing_kyc_recognition(db, dry_run=dry_run)
+        return backfill_missing_kyc_recognition(
+            db, dry_run=dry_run, skip_kyc_approval_guard=skip_approval_guard
+        )
     except Exception as e:
         logger.exception("backfill kyc recognition failed")
         raise HTTPException(

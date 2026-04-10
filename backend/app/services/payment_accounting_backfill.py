@@ -184,13 +184,14 @@ def backfill_missing_kyc_recognition(
     *,
     dry_run: bool = False,
     deposit_ids: Optional[List[int]] = None,
+    skip_kyc_approval_guard: bool = False,
 ) -> Dict[str, Any]:
     """
     Post KYC Step 2 (Dr 2113 / Cr 4001, 2104, 2003 + optional commissions) when:
     - Deposit is validated KYC,
-    - Deferred cash receipt (Step 1) exists,
+    - Deferred cash receipt (Step 1) exists (or legacy instant revenue + correction),
     - Recognition is not already posted,
-    - kyc_verifications row for the user is APPROVED.
+    - Unless skip_kyc_approval_guard=True: kyc_verifications.status is APPROVED for the payer.
 
     Run this before --founding-pool for KYC deposits; Step 2 already includes 2104 when it runs.
     """
@@ -204,6 +205,7 @@ def backfill_missing_kyc_recognition(
             "skipped_no_deferred_receipt": [],
             "skipped_recognition_already_posted": [],
             "skipped_kyc_verification_not_approved": [],
+            "skip_kyc_approval_guard": skip_kyc_approval_guard,
             "errors": [{"detail": "No product_types row for code kyc"}],
         }
 
@@ -233,9 +235,17 @@ def backfill_missing_kyc_recognition(
             .filter(KYCVerification.user_id == deposit.user_id)
             .first()
         )
-        if kv is None or kv.status != KYCStatus.APPROVED:
-            skipped_not_approved.append(did)
-            continue
+        if not skip_kyc_approval_guard:
+            if kv is None or kv.status != KYCStatus.APPROVED:
+                skipped_not_approved.append(did)
+                continue
+        elif kv is None or kv.status != KYCStatus.APPROVED:
+            logger.warning(
+                "KYC Step 2 backfill: approval guard OFF — deposit %s user %s kyc_status=%s",
+                did,
+                deposit.user_id,
+                getattr(kv, "status", None),
+            )
 
         has_deferred = kyc_deferred_receipt_posted(db, did) or kyc_reclass_correction_posted(db, did)
         if not has_deferred:
@@ -272,6 +282,7 @@ def backfill_missing_kyc_recognition(
         "skipped_no_deferred_receipt": skipped_no_deferred,
         "skipped_recognition_already_posted": skipped_has_recognition,
         "skipped_kyc_verification_not_approved": skipped_not_approved,
+        "skip_kyc_approval_guard": skip_kyc_approval_guard,
         "errors": errors,
     }
 
