@@ -5,7 +5,7 @@
 INSERT INTO chart_of_accounts (account_code, account_name, account_type, is_active, total_liabilities, credit_balance, created_at, updated_at)
 VALUES 
     ('1000', 'Assets', 'ASSET', true, 0.0, 0.0, NOW(), NOW()),
-    ('1001', 'Platform Wallet', 'ASSET', true, 0.0, 0.0, NOW(), NOW()),
+    ('1001', 'USDT Treasury (BSC)', 'ASSET', true, 0.0, 0.0, NOW(), NOW()),
     ('1200', 'Accounts Receivable', 'ASSET', true, 0.0, 0.0, NOW(), NOW())
 ON CONFLICT (account_code) DO NOTHING;
 

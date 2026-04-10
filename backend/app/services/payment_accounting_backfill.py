@@ -189,7 +189,7 @@ def backfill_missing_kyc_recognition(
     """
     Post KYC Step 2 (Dr 2113 / Cr 4001, 2104, 2003 + optional commissions) when:
     - Deposit is validated KYC,
-    - Deferred cash receipt (Step 1) exists (or legacy instant revenue + correction),
+    - Deferred USDT (BSC) receipt (Step 1) exists (or legacy instant revenue + correction),
     - Recognition is not already posted,
     - Unless skip_kyc_approval_guard=True: kyc_verifications.status is APPROVED for the payer.
 

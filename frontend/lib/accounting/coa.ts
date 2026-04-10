@@ -8,6 +8,7 @@ const round2 = (n: number) => Math.round(n * 100) / 100
 export const COA = {
   ASSETS: {
     ROOT: '1000',
+    /** 1001 — on-chain USDT (BEP-20, BSC) treasury (CoA name: USDT Treasury (BSC)) */
     PLATFORM_WALLET: '1001',
     ACCOUNTS_RECEIVABLE: '1200',
   },
