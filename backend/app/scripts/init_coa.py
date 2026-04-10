@@ -6,6 +6,23 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def _pg_column_exists_public(db: Session, table: str, column: str) -> bool:
+    """True if column exists on public.table (Neon/SQLAlchemy reflection can disagree with ORM)."""
+    row = db.execute(
+        text(
+            """
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = :t
+              AND column_name = :c
+            LIMIT 1
+            """
+        ),
+        {"t": table, "c": column},
+    ).first()
+    return row is not None
+
+
 def _chart_of_accounts_colset(db: Session) -> set:
     bind = db.get_bind()
     insp = inspect(bind)
@@ -28,13 +45,23 @@ def _ensure_chart_of_accounts_columns(db: Session) -> None:
     insp = inspect(bind)
     if not insp.has_table("chart_of_accounts"):
         return
+    try:
+        ident = db.execute(text("SELECT current_user::text, current_database()::text")).first()
+        if ident:
+            logger.info("init_coa: DB role=%r database=%r (must match table owner to run ALTER)", ident[0], ident[1])
+    except Exception:
+        pass
+
     colset = _chart_of_accounts_colset(db)
     if not colset:
         return
 
     altered = False
 
-    if "balance" not in colset:
+    # Any ALTER TABLE requires table ownership in PostgreSQL, even ADD IF NOT EXISTS when the
+    # column is already there — so skip DDL when information_schema says the column exists.
+    need_balance = ("balance" not in colset) and (not _pg_column_exists_public(db, "chart_of_accounts", "balance"))
+    if need_balance:
         try:
             with db.begin_nested():
                 db.execute(
@@ -51,7 +78,10 @@ def _ensure_chart_of_accounts_columns(db: Session) -> None:
                 e,
             )
 
-    if "updated_at" not in colset:
+    need_updated_at = ("updated_at" not in colset) and (
+        not _pg_column_exists_public(db, "chart_of_accounts", "updated_at")
+    )
+    if need_updated_at:
         try:
             with db.begin_nested():
                 db.execute(
@@ -106,13 +136,15 @@ def init_chart_of_accounts(db: Session):
     """
     _ensure_chart_of_accounts_columns(db)
 
-    colset_after = _chart_of_accounts_colset(db)
-    if "balance" not in colset_after:
+    has_balance = _pg_column_exists_public(db, "chart_of_accounts", "balance") or (
+        "balance" in _chart_of_accounts_colset(db)
+    )
+    if not has_balance:
         raise RuntimeError(
             "chart_of_accounts.balance is missing and the app DB user could not ALTER the table. "
-            "Connect as PostgreSQL owner (Neon: SQL Editor) and run "
-            "backend/scripts/sql/fix_chart_of_accounts_columns.sql — optionally "
-            "ALTER TABLE chart_of_accounts OWNER TO <role_from_DATABASE_URL>; then retry."
+            "Check the DB role in logs (must match pg_tables.tableowner). Use the same DATABASE_URL "
+            "user as neondb_owner, or run backend/scripts/sql/fix_chart_of_accounts_columns.sql in "
+            "Neon SQL Editor on this exact database branch. Avoid read-replica URLs for DDL."
         )
 
     # Liste initiale des comptes
