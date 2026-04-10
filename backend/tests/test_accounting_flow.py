@@ -16,6 +16,7 @@ import app.models
 
 from decimal import Decimal
 from datetime import datetime
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 # from app.db.session import SessionLocal
@@ -124,11 +125,15 @@ def test_kyc_payment_accounting_flow(db: Session):
     assert sponsor_comm is not None, "Sponsor commission missing"
     assert float(sponsor_comm.commission_amount) == 1.0, f"Commission should be 1.0, got {sponsor_comm.commission_amount}"
     
-    # 5. Step 1 — deferred revenue (cash receipt: Dr 1001 / Cr 2113)
+    # 5. Step 1 — deferred revenue (USDT BSC receipt: Dr 1001 / Cr 2113)
     deferred_entry = db.query(JournalEntry).filter(
-        JournalEntry.description.like(f"%KYC Payment - Deposit #{deposit.id}%(Deferred cash receipt)%")
+        JournalEntry.description.like(f"%KYC Payment - Deposit #{deposit.id}%"),
+        or_(
+            JournalEntry.description.like("%(Deferred cash receipt)%"),
+            JournalEntry.description.like("%(Deferred receipt - USDT BSC)%"),
+        ),
     ).first()
-    assert deferred_entry is not None, "Deferred cash receipt journal missing"
+    assert deferred_entry is not None, "Deferred USDT (BSC) receipt journal missing"
     assert deferred_entry.total_debit == 10.0
     assert deferred_entry.total_credit == 10.0
 
@@ -212,7 +217,7 @@ def test_membership_payment_accounting_flow(db: Session):
         JournalEntry.description.like(f"%Membership Payment - Deposit #{deposit.id}%(Founding pool accrual)%")
     ).first()
     assert pool_entry is not None
-    assert abs(pool_entry.total_debit - 5.0) < 0.001
+    assert abs(float(pool_entry.total_debit) - 5.0) < 0.001
 
     logger.info("--- TEST PASSED: Membership accounting verified ---")
 

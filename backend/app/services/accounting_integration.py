@@ -139,7 +139,10 @@ def record_payment_in_accounting(
         journal_entry = JournalEntry(
             entry_number=entry_number,
             entry_date=entry_date,
-            description=f"Payment received - {product_code} - Deposit #{deposit.id}",
+            description=(
+                f"USDT (BSC) on-chain inflow — {product_code}; "
+                f"Deposit #{deposit.id} User #{deposit.user_id}"
+            ),
             total_debit=total_debit,
             total_credit=total_credit,
             status=posted_status_literal_for_db(db),
@@ -157,7 +160,10 @@ def record_payment_in_accounting(
             account_id=crypto_account.id,
             debit_amount=total_amount,
             credit_amount=0.0,
-            description=f"Payment received from user {deposit.user_id} - Deposit #{deposit.id}"
+            description=(
+                f"USDT (BSC) received from on-chain deposit — User #{deposit.user_id}; "
+                f"Deposit #{deposit.id}"
+            )
         ))
         
         # 2. Credit: Revenue (gross amount - full payment amount)

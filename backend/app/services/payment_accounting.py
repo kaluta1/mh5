@@ -1,3 +1,4 @@
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from decimal import Decimal
 import logging
@@ -48,14 +49,17 @@ def _journal_entry_line_totals(
 
 def kyc_deferred_receipt_posted(db: Session, deposit_id: int) -> bool:
     """
-    Step 1: cash to deferred 2113. Matches standard description or legacy rows (Dr 1001 / Cr 2113, no 2113 Dr / no 4001 Cr).
+    Step 1: USDT (BSC) inflow to deferred 2113. Matches standard description or legacy rows (Dr 1001 / Cr 2113, no 2113 Dr / no 4001 Cr).
     """
+    dep_prefix = f"%KYC Payment - Deposit #{deposit_id}%"
     if (
         db.query(JournalEntry.id)
         .filter(
-            JournalEntry.description.like(
-                f"%KYC Payment - Deposit #{deposit_id}%(Deferred cash receipt)%"
-            )
+            JournalEntry.description.like(dep_prefix),
+            or_(
+                JournalEntry.description.like("%(Deferred cash receipt)%"),
+                JournalEntry.description.like("%(Deferred receipt - USDT BSC)%"),
+            ),
         )
         .first()
         is not None
@@ -122,7 +126,7 @@ def kyc_recognition_posted(db: Session, deposit_id: int) -> bool:
 def _legacy_instant_kyc_amount_and_revenue(
     db: Session, deposit: Deposit) -> Tuple[Optional[float], Optional[str]]:
     """
-    Detect legacy 'instant' KYC posting: cash Dr 1001 / Cr revenue (4001 or 4002) with no 2113 movement,
+    Detect legacy 'instant' KYC posting: Dr 1001 / Cr revenue (4001 or 4002) with no 2113 movement,
     for a journal that references this deposit. Returns (cash_amount, revenue_account_code) or (None, None).
     """
     needle = f"Deposit #{deposit.id}"
@@ -191,7 +195,7 @@ def post_kyc_legacy_instant_to_deferred(db: Session, deposit: Deposit) -> None:
     amt, rev_code = _legacy_instant_kyc_amount_and_revenue(db, deposit)
     if amt is None or rev_code is None:
         raise ValueError(
-            f"No legacy instant KYC cash-to-revenue pattern found for deposit {dep_id}"
+            f"No legacy instant KYC revenue-without-deferred pattern found for deposit {dep_id}"
         )
     uid = deposit.user_id
     description = (
@@ -231,7 +235,7 @@ class PaymentAccountingService:
     Payment-specific journals using generic accounting_service (CoA codes in init_coa.py).
 
     KYC verification fee (Singapore-style accrual):
-    - Cash receipt: Dr 1001 / Cr 2113 (deferred until service performed).
+    - USDT (BSC) receipt: Dr 1001 / Cr 2113 (deferred until service performed).
     - When Shufti/KYC completes: Dr 2113 / Cr 4001 (net), Cr 2104 (10% founding pool), Cr 2003 (Shufti);
  plus Dr 5001 / Cr 2001–2002 for sponsor commissions.
     """
@@ -255,7 +259,10 @@ class PaymentAccountingService:
                 "account_code": "1001",
                 "debit": float(amount),
                 "credit": 0.0,
-                "description": "Cash / wallet — verification fee received",
+                "description": (
+                    f"USDT (BSC) on-chain inflow — KYC verification fee from member; "
+                    f"Deposit #{dep_id} User #{deposit.user_id}"
+                ),
             },
             {
                 "account_code": "2113",
@@ -266,11 +273,11 @@ class PaymentAccountingService:
         ]
         accounting_service.create_journal_entry(
             db,
-            description=description + " (Deferred cash receipt)",
+            description=description + " (Deferred receipt - USDT BSC)",
             lines=lines,
             date=jdate,
         )
-        logger.info("KYC deferred cash receipt posted for deposit %s", dep_id)
+        logger.info("KYC deferred USDT (BSC) receipt posted for deposit %s", dep_id)
 
     def process_kyc_verification_performed_accounting(
         self,
@@ -288,6 +295,8 @@ class PaymentAccountingService:
         amount = Decimal(str(deposit.amount))
         total_comm = sum(Decimal(str(c.commission_amount)) for c in commissions)
         split = kyc_verification_recognition_split(amount, total_comm)
+        # 4001 = gross − founding pool − Shufti; sponsor commissions hit 5001 / payables in a separate JE.
+        verification_fee_revenue = amount - split.founding_pool_accrual - split.shufti_payable
 
         description = f"KYC Payment - Deposit #{dep_id} - User #{deposit.user_id}"
         jdate = _journal_entry_date(deposit, entry_date)
@@ -302,8 +311,11 @@ class PaymentAccountingService:
             {
                 "account_code": "4001",
                 "debit": 0.0,
-                "credit": float(split.net_verification_revenue),
-                "description": "Verification fee revenue (net after pool, Shufti, sponsor commissions)",
+                "credit": float(verification_fee_revenue),
+                "description": (
+                    "Verification fee revenue after founding pool and Shufti "
+                    "(sponsor commissions — separate commission expense entry)"
+                ),
             },
             {
                 "account_code": "2104",
@@ -387,7 +399,7 @@ class PaymentAccountingService:
         entry_date: Optional[datetime] = None,
     ):
         """
-        Backward-compatible name: Step 1 only (cash receipt / deferred).
+        Backward-compatible name: Step 1 only (USDT BSC receipt / deferred).
         Step 2 runs via post_kyc_verification_recognition_for_user when KYC is approved.
         """
         self.process_kyc_cash_receipt_accounting(db, deposit, entry_date=entry_date)
@@ -402,7 +414,7 @@ class PaymentAccountingService:
         """
         Cas d'usage 2: Abonnement Annuel (50$)
         Répartition:
-        - 100% -> Platform Wallet / Membership Revenue
+        - 100% -> USDT (BSC) treasury / Membership Revenue
         - Commissions -> Expense / Payable
         """
         amount = Decimal(str(deposit.amount))
@@ -411,7 +423,15 @@ class PaymentAccountingService:
 
         # 1. Income (Revenue)
         income_lines = [
-            {"account_code": "1001", "debit": float(amount), "credit": 0.0, "description": "Payment received"},
+            {
+                "account_code": "1001",
+                "debit": float(amount),
+                "credit": 0.0,
+                "description": (
+                    f"USDT (BSC) on-chain inflow — annual membership from member; "
+                    f"Deposit #{deposit.id} User #{deposit.user_id}"
+                ),
+            },
             {"account_code": "4002", "debit": 0.0, "credit": float(amount), "description": "Membership Revenue recognized"},
         ]
 
@@ -514,14 +534,22 @@ class PaymentAccountingService:
         entry_date: Optional[datetime] = None,
     ):
         """
-        Founding membership (e.g. $100): gross to wallet / revenue, commissions, 10% pool accrual.
+        Founding membership (e.g. $100): gross USDT (BSC) inflow / revenue, commissions, 10% pool accrual.
         """
         amount = Decimal(str(deposit.amount))
         description = f"Founding Membership Payment - Deposit #{deposit.id} - User #{deposit.user_id}"
         jdate = _journal_entry_date(deposit, entry_date)
 
         income_lines = [
-            {"account_code": "1001", "debit": float(amount), "credit": 0.0, "description": "Payment received"},
+            {
+                "account_code": "1001",
+                "debit": float(amount),
+                "credit": 0.0,
+                "description": (
+                    f"USDT (BSC) on-chain inflow — founding membership from member; "
+                    f"Deposit #{deposit.id} User #{deposit.user_id}"
+                ),
+            },
             {"account_code": "4002", "debit": 0.0, "credit": float(amount), "description": "Founding membership revenue recognized"},
         ]
         accounting_service.create_journal_entry(
@@ -616,13 +644,16 @@ class PaymentAccountingService:
 
         accounting_service.create_journal_entry(
             db,
-            description=description + " (Cash and payables)",
+            description=description + " (USDT BSC receipt and payables)",
             lines=[
                 {
                     "account_code": "1001",
                     "debit": float(charge),
                     "credit": 0.0,
-                    "description": "Club membership — payment received",
+                    "description": (
+                        f"USDT (BSC) on-chain inflow — club membership from member; "
+                        f"Deposit #{dep_id} User #{deposit.user_id}"
+                    ),
                 },
                 {
                     "account_code": "2120",
@@ -700,12 +731,12 @@ class PaymentAccountingService:
         reference: str = "",
     ) -> JournalEntry:
         """
-        Operational payment to Shufti: Dr 2003 (reduce AP), Cr 1001 (cash / wallet).
+        Operational payment to Shufti: Dr 2003 (reduce AP), Cr 1001 (USDT BSC outflow).
         """
         if amount <= 0:
             raise ValueError("amount must be positive")
         jdate = entry_date or datetime.utcnow()
-        desc = "KYC provider (Shufti) settlement"
+        desc = "KYC provider (Shufti) settlement — USDT (BSC) paid out"
         if reference:
             desc += f" ref={reference}"
         lines = [
@@ -713,13 +744,13 @@ class PaymentAccountingService:
                 "account_code": "2003",
                 "debit": float(amount),
                 "credit": 0.0,
-                "description": "Pay Shufti - clear accounts payable",
+                "description": "Pay Shufti — clear accounts payable (KYC verification provider)",
             },
             {
                 "account_code": "1001",
                 "debit": 0.0,
                 "credit": float(amount),
-                "description": "Cash / wallet paid to KYC provider",
+                "description": "USDT (BSC) on-chain outflow — settlement to Shufti (KYC provider)",
             },
         ]
         return accounting_service.create_journal_entry(db, description=desc, lines=lines, date=jdate)
