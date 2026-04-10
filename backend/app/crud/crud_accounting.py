@@ -22,7 +22,9 @@ from app.models.accounting import (
     TaxConfiguration,
     AuditTrail,
     AccountType,
+    ReportType,
 )
+from sqlalchemy import inspect as sa_inspect
 
 
 class CRUDChartOfAccounts:
@@ -95,11 +97,78 @@ class _NotImplemented:
         return _raise
 
 
+class CRUDFinancialReport:
+    """Balance sheet, income statement, etc. from posted journals (see financial_report_service)."""
+
+    def get_reports_by_type(
+        self,
+        db: Session,
+        report_type: Optional[str] = None,
+        period_year: Optional[int] = None,
+    ) -> List[FinancialReport]:
+        bind = db.get_bind()
+        if not sa_inspect(bind).has_table("financial_reports"):
+            return []
+        q = db.query(FinancialReport)
+        if report_type:
+            try:
+                rt = ReportType(report_type)
+                q = q.filter(FinancialReport.report_type == rt)
+            except ValueError:
+                return []
+        if period_year is not None:
+            from sqlalchemy import extract
+
+            q = q.filter(extract("year", FinancialReport.period_start) == period_year)
+        return q.order_by(FinancialReport.generated_date.desc()).limit(200).all()
+
+    def generate_report(self, db: Session, obj_in: Any, generated_by: int) -> FinancialReport:
+        raise NotImplementedError(
+            "Persisted report snapshots are not implemented; use GET balance-sheet / income-statement endpoints."
+        )
+
+    def generate_balance_sheet(self, db: Session, as_of_date: date) -> Any:
+        from app.services.financial_report_service import generate_balance_sheet_payload
+
+        return generate_balance_sheet_payload(db, as_of_date)
+
+    def generate_income_statement(self, db: Session, start_date: date, end_date: date) -> Any:
+        from app.services.financial_report_service import generate_income_statement_payload
+
+        return generate_income_statement_payload(db, start_date, end_date)
+
+    def generate_cash_flow_statement(self, db: Session, start_date: date, end_date: date) -> Any:
+        from app.services.financial_report_service import generate_cash_flow_payload
+
+        return generate_cash_flow_payload(db, start_date, end_date)
+
+    def generate_trial_balance(self, db: Session, as_of_date: date) -> Any:
+        from app.services.financial_report_service import generate_trial_balance_payload
+
+        return generate_trial_balance_payload(db, as_of_date)
+
+    def generate_general_ledger(
+        self, db: Session, account_code: str, start_date: date, end_date: date
+    ) -> Any:
+        from app.services.financial_report_service import generate_general_ledger_payload
+
+        return generate_general_ledger_payload(db, account_code, start_date, end_date)
+
+    def generate_full_financial_report(
+        self, db: Session, as_of: date, period_start: date, period_end: date
+    ) -> Any:
+        from app.services.financial_report_service import generate_full_financial_report_payload
+
+        return generate_full_financial_report_payload(
+            db, as_of=as_of, period_start=period_start, period_end=period_end
+        )
+
+
 class CRUDAccountingBundle:
     chart_of_accounts = CRUDChartOfAccounts()
     journal_entry = CRUDJournalEntry()
     revenue_transaction = _NotImplemented()
-    financial_report = _NotImplemented()
+    financial_report = CRUDFinancialReport()
     tax_configuration = _NotImplemented()
     audit_trail = _NotImplemented()
 

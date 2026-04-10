@@ -19,6 +19,7 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Any, Dict, Any
 from datetime import datetime, timedelta, date
 from app.crud.crud_round import round as crud_round
+from app.crud import crud_accounting
 from app.schemas.round import RoundCreate
 
 router = APIRouter()
@@ -3797,6 +3798,146 @@ async def admin_accounting_journal_entries(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur journal entries: {str(e)}",
+        )
+
+
+@router.get("/accounting/balance-sheet")
+async def admin_accounting_balance_sheet(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    as_of: Optional[date] = Query(
+        None, description="As-of date for balances (posted journals through end of this day, UTC)"
+    ),
+):
+    """Balance sheet from posted journal lines (assets, liabilities, equity)."""
+    check_admin(current_user)
+    try:
+        d = as_of or date.today()
+        return crud_accounting.financial_report.generate_balance_sheet(db, d)
+    except Exception as e:
+        logger.exception("admin balance_sheet failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
+
+
+@router.get("/accounting/income-statement")
+async def admin_accounting_income_statement(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+):
+    """Income statement (revenue & expense activity) for the period."""
+    check_admin(current_user)
+    try:
+        end_d = end_date or date.today()
+        start_d = start_date or date(end_d.year, 1, 1)
+        return crud_accounting.financial_report.generate_income_statement(db, start_d, end_d)
+    except Exception as e:
+        logger.exception("admin income_statement failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
+
+
+@router.get("/accounting/trial-balance")
+async def admin_accounting_trial_balance(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    as_of: Optional[date] = Query(
+        None, description="Trial balance as of this date (posted journals through end of day)"
+    ),
+):
+    """Trial balance: debit/credit columns by account."""
+    check_admin(current_user)
+    try:
+        d = as_of or date.today()
+        return crud_accounting.financial_report.generate_trial_balance(db, d)
+    except Exception as e:
+        logger.exception("admin trial_balance failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
+
+
+@router.get("/accounting/cash-flow-statement")
+async def admin_accounting_cash_flow(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+):
+    """Simplified cash summary (net income + Platform Wallet 1001 change when present)."""
+    check_admin(current_user)
+    try:
+        end_d = end_date or date.today()
+        start_d = start_date or date(end_d.year, 1, 1)
+        return crud_accounting.financial_report.generate_cash_flow_statement(db, start_d, end_d)
+    except Exception as e:
+        logger.exception("admin cash_flow failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
+
+
+@router.get("/accounting/full-financial-report")
+async def admin_accounting_full_financial_report(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    as_of: Optional[date] = Query(
+        None,
+        description="As-of date for balance sheet, trial balance, and CoA register (posted through end of day)",
+    ),
+    period_start: Optional[date] = Query(None, description="P&L and cash flow period start"),
+    period_end: Optional[date] = Query(None, description="P&L and cash flow period end"),
+):
+    """
+    Complete financial reporting package derived from the chart of accounts and posted journals:
+    balance sheet, income statement, trial balance, cash flow summary, full CoA register,
+    period activity by account, validation summary.
+    """
+    check_admin(current_user)
+    try:
+        as_of_d = as_of or date.today()
+        end_d = period_end or date.today()
+        start_d = period_start or date(end_d.year, 1, 1)
+        return crud_accounting.financial_report.generate_full_financial_report(
+            db, as_of_d, start_d, end_d
+        )
+    except Exception as e:
+        logger.exception("admin full_financial_report failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
+
+
+@router.get("/accounting/general-ledger")
+async def admin_accounting_general_ledger(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    account_code: str = Query(..., min_length=1, description="Chart of accounts code, e.g. 1001"),
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+):
+    """Account activity with running balance (general ledger detail)."""
+    check_admin(current_user)
+    try:
+        end_d = end_date or date.today()
+        start_d = start_date or date(end_d.year, 1, 1)
+        return crud_accounting.financial_report.generate_general_ledger(
+            db, account_code.strip(), start_d, end_d
+        )
+    except Exception as e:
+        logger.exception("admin general_ledger failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
         )
 
 
