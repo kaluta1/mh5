@@ -7,12 +7,12 @@ import logging
 import uuid
 
 from app.models.accounting import (
-    JournalEntry, 
-    JournalLine, 
-    ChartOfAccounts, 
-    EntryStatus, 
-    AccountType
+    JournalEntry,
+    JournalLine,
+    ChartOfAccounts,
+    AccountType,
 )
+from app.services.journal_entry_status import posted_status_literal_for_db
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ class AccountingService:
         Vérifie que Débit = Crédit.
         
         lines format: [
-            {"account_code": "1001", "debit": 10.0, "credit": 0.0, "description": "optional"},
+            {"account_code": "1001", "debit": 1.0, "credit": 0.0, "description": "optional"},
             ...
         ]
         """
@@ -62,10 +62,14 @@ class AccountingService:
             description=description,
             total_debit=float(total_debit),
             total_credit=float(total_credit),
-            status=EntryStatus.POSTED.value  # varchar column; PG enum caused invalid "posted" on some DBs
+            status=posted_status_literal_for_db(db),
         )
         db.add(entry)
-        db.flush()  # Pour avoir l'ID
+        try:
+            db.flush()  # Pour avoir l'ID
+        except Exception:
+            db.rollback()
+            raise
         
         # 3. Créer les lignes
         for line_data in lines:

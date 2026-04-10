@@ -389,7 +389,7 @@ function KYCPageContent() {
                 </p>
               </div>
               <p className="text-sm text-blue-700 dark:text-blue-300 mb-3">
-                {t('kyc.price_per_attempt') || 'Prix par tentative'}: <span className="font-bold">{kycData.kyc_price || 10} {kycData.kyc_currency || 'USD'}</span>
+                {t('kyc.price_per_attempt') || 'Prix par tentative'}: <span className="font-bold">{kycData.kyc_price || 1} {kycData.kyc_currency || 'USD'}</span>
               </p>
               <Button
                 onClick={() => setShowPaymentDialog(true)}
@@ -448,7 +448,7 @@ function KYCPageContent() {
                 {t('kyc.verification_fee') || 'Frais de vérification'}
               </p>
               <p className="text-2xl font-bold text-myhigh5-primary">
-                {kycData?.kyc_price || 10} {kycData?.kyc_currency || 'USD'}
+                {kycData?.kyc_price || 1} {kycData?.kyc_currency || 'USD'}
               </p>
             </div>
 
@@ -516,7 +516,7 @@ function KYCPageContent() {
                   </p>
                 </div>
                 <p className="text-sm text-blue-700 dark:text-blue-300 mb-3">
-                  Prix: <span className="font-bold">{kycData.kyc_price || 10} {kycData.kyc_currency || 'USD'}</span>
+                  Prix: <span className="font-bold">{kycData.kyc_price || 1} {kycData.kyc_currency || 'USD'}</span>
                 </p>
                 <Button
                   onClick={() => setShowPaymentDialog(true)}

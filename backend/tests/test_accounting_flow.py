@@ -60,7 +60,7 @@ def test_kyc_payment_accounting_flow(db: Session):
     """
     Test complet du flux comptable pour un paiement KYC.
     1. Création utilisateurs (User + Sponsor)
-    2. Création dépôt (10$)
+    2. Création dépôt (1$ — prix KYC courant)
     3. Validation paiement
     4. Vérification commissions
     5. Vérification écritures comptables
@@ -87,17 +87,17 @@ def test_kyc_payment_accounting_flow(db: Session):
     # S'assurer que le produit KYC existe
     kyc_product = db.query(ProductType).filter(ProductType.code == "kyc").first()
     if not kyc_product:
-        kyc_product = ProductType(code="kyc", name="KYC Verification", price=10.0, is_active=True)
+        kyc_product = ProductType(code="kyc", name="KYC Verification", price=1.0, is_active=True)
         db.add(kyc_product)
     else:
-        kyc_product.price = 10.0
+        kyc_product.price = 1.0
     db.commit()
     db.refresh(kyc_product)
         
     deposit = Deposit(
         user_id=user.id,
         product_type_id=kyc_product.id,
-        amount=10.0,
+        amount=1.0,
         status=DepositStatus.PENDING,
         external_payment_id=f"PAY-{timestamp}"
     )
@@ -111,13 +111,15 @@ def test_kyc_payment_accounting_flow(db: Session):
     assert success is True, "Payment validation failed"
     
     # 4. Verify Commissions
-    # Règle KYC: 10% direct ($1.00 sur dépôt $10)
+    # Règle KYC: 10% direct ($0.10 sur dépôt $1)
     commissions = db.query(AffiliateCommission).filter(AffiliateCommission.deposit_id == deposit.id).all()
     assert len(commissions) >= 1, "Should create at least one commission for sponsor"
     
     sponsor_comm = next((c for c in commissions if c.user_id == sponsor.id), None)
     assert sponsor_comm is not None, "Sponsor commission missing"
-    assert float(sponsor_comm.commission_amount) == 1.0, f"Commission should be 1.0, got {sponsor_comm.commission_amount}"
+    assert abs(float(sponsor_comm.commission_amount) - 0.1) < 1e-6, (
+        f"Commission should be 0.1, got {sponsor_comm.commission_amount}"
+    )
     
     # 5. Verify Accounting (Journal Entries)
     # On cherche l'entrée liée à ce dépôt (description contient Deposit ID)
@@ -128,8 +130,8 @@ def test_kyc_payment_accounting_flow(db: Session):
     
     assert income_entry is not None, "Income Journal Entry missing"
     assert len(income_entry.lines) == 2, "Income entry should have 2 lines"
-    assert income_entry.total_debit == 10.0
-    assert income_entry.total_credit == 10.0
+    assert income_entry.total_debit == 1.0
+    assert income_entry.total_credit == 1.0
     
     # Commission Entry
     comm_entry = db.query(JournalEntry).filter(
@@ -141,13 +143,13 @@ def test_kyc_payment_accounting_flow(db: Session):
     total_commissions = sum(float(c.commission_amount) for c in commissions)
     assert comm_entry.total_debit == total_commissions
     
-    # Provider Fee Entry (20% -> $2.00 sur dépôt $10)
+    # Provider Fee Entry (20% -> $0.20 sur dépôt $1)
     fee_entry = db.query(JournalEntry).filter(
         JournalEntry.description.like(f"%KYC Payment - Deposit #{deposit.id}%(Provider Fees)%")
     ).first()
     
     assert fee_entry is not None, "Provider Fee Journal Entry missing"
-    assert fee_entry.total_debit == 2.0
+    assert abs(float(fee_entry.total_debit) - 0.2) < 1e-6
     
     logger.info("--- TEST PASSED: All accounting entries verified ---")
 

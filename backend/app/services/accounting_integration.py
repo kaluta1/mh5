@@ -12,8 +12,9 @@ import uuid
 
 from app.models.accounting import (
     ChartOfAccounts, JournalEntry, JournalLine, RevenueTransaction,
-    AccountType, EntryStatus
+    AccountType,
 )
+from app.services.journal_entry_status import posted_status_literal_for_db
 from app.models.payment import Deposit
 from app.models.affiliate import AffiliateCommission
 
@@ -141,7 +142,7 @@ def record_payment_in_accounting(
             description=f"Payment received - {product_code} - Deposit #{deposit.id}",
             total_debit=total_debit,
             total_credit=total_credit,
-            status=EntryStatus.POSTED.value,
+            status=posted_status_literal_for_db(db),
             created_by=created_by
         )
         db.add(journal_entry)
@@ -280,7 +281,7 @@ def record_commission_payment_in_accounting(
             description=f"Commission paid - Commission #{commission.id} - User {commission.user_id}",
             total_debit=amount,
             total_credit=amount,
-            status=EntryStatus.POSTED.value,
+            status=posted_status_literal_for_db(db),
             created_by=created_by
         )
         db.add(journal_entry)

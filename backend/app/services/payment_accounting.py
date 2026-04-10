@@ -30,7 +30,7 @@ class PaymentAccountingService:
         entry_date: Optional[datetime] = None,
     ):
         """
-        Cas d'usage 1: Paiement KYC (10$)
+        Cas d'usage 1: Paiement KYC (montant = deposit.amount, ex. 1$)
         Répartition:
         - 100% du montant -> Platform Wallet (Asset) / KYC Revenue (Income)
         - Commissions -> Commission Expense / Payable
