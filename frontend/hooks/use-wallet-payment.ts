@@ -7,6 +7,7 @@ import { useAppKit, useAppKitAccount, useAppKitProvider } from '@reown/appkit/re
 import type { ProviderType } from '@reown/appkit-adapter-ethers'
 import { PAYMENT_CONTRACT_ABI, ERC20_ABI, CONTRACT_ADDRESSES } from '@/lib/contracts'
 import { CONTRACTS } from '@/lib/config'
+import { getWalletPaymentUserMessage } from '@/lib/wallet-payment-errors'
 import { paymentService, PaymentResponse } from '@/services/payment-service'
 
 interface UseWalletPaymentReturn {
@@ -66,7 +67,7 @@ export function useWalletPayment(): UseWalletPaymentReturn {
   const switchToBSC = useCallback(async (): Promise<void> => {
     const provider = walletProviderRef.current as unknown as Eip1193RequestProvider | undefined
     if (!provider) {
-      throw new Error('Wallet not connected')
+      throw new Error('Connect your wallet first, then try again.')
     }
 
     try {
@@ -95,7 +96,9 @@ export function useWalletPayment(): UseWalletPaymentReturn {
             ],
           })
         } catch (addError) {
-          throw new Error('Failed to add BSC network to MetaMask')
+          throw new Error(
+            'Could not add BNB Smart Chain to your wallet. Add the BSC network in your wallet settings, then try again.'
+          )
         }
       } else {
         throw switchError
@@ -120,10 +123,9 @@ export function useWalletPayment(): UseWalletPaymentReturn {
       return connected
     } catch (err: any) {
       const rawMessage = String(err?.message || '')
-      const errorMessage =
-        rawMessage.includes('Connection request reset')
-          ? 'Wallet connection expired or was cancelled. Please open the Reown wallet list and try again.'
-          : rawMessage || 'Failed to connect wallet'
+      const errorMessage = rawMessage.includes('Connection request reset')
+        ? 'Wallet connection expired or was cancelled. Open the wallet list and try again.'
+        : getWalletPaymentUserMessage(err)
       setError(errorMessage)
       setIsConnecting(false)
       throw new Error(errorMessage)
@@ -153,7 +155,7 @@ export function useWalletPayment(): UseWalletPaymentReturn {
       // Get provider and signer
       const walletProvider = walletProviderRef.current
       if (!walletProvider) {
-        throw new Error('Wallet not connected')
+        throw new Error('Connect your wallet first, then try the payment again.')
       }
 
       const provider = new BrowserProvider(walletProvider as unknown as Eip1193RequestProvider)
@@ -162,11 +164,16 @@ export function useWalletPayment(): UseWalletPaymentReturn {
       const payerAddress = await signer.getAddress()
 
       // Ensure we're on BSC
-      const network = await provider.getNetwork()
+      let network = await provider.getNetwork()
       if (Number(network.chainId) !== CONTRACTS.CHAIN_ID) {
         await switchToBSCNetwork()
-        // Wait a bit for network switch
-        await new Promise(resolve => setTimeout(resolve, 1000))
+        await new Promise(resolve => setTimeout(resolve, 1500))
+        network = await provider.getNetwork()
+      }
+      if (Number(network.chainId) !== CONTRACTS.CHAIN_ID) {
+        throw new Error(
+          'Your wallet is not on BNB Smart Chain (BSC). Switch to BSC in your wallet, then try again.'
+        )
       }
 
       // Get token contract
@@ -181,7 +188,9 @@ export function useWalletPayment(): UseWalletPaymentReturn {
       const requiredAmount = BigInt(payment.amount_wei)
       
       if (balance < requiredAmount) {
-        throw new Error('Insufficient USDT balance')
+        throw new Error(
+          'Your USDT balance on BNB Smart Chain is too low for this payment. Add BEP-20 USDT, then try again.'
+        )
       }
 
       // Check and approve if needed
@@ -215,7 +224,7 @@ export function useWalletPayment(): UseWalletPaymentReturn {
       const receipt = await tx.wait()
 
       if (!receipt || !receipt.hash) {
-        throw new Error('Transaction failed')
+        throw new Error('The transaction did not complete. Check the transaction in your wallet or BscScan, then try again.')
       }
 
       // Verify payment with backend
@@ -227,7 +236,7 @@ export function useWalletPayment(): UseWalletPaymentReturn {
       setIsProcessing(false)
       return receipt.hash
     } catch (err: any) {
-      const errorMessage = err.message || 'Payment failed'
+      const errorMessage = getWalletPaymentUserMessage(err)
       setError(errorMessage)
       setIsProcessing(false)
       throw new Error(errorMessage)

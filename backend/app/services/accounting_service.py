@@ -39,7 +39,7 @@ class AccountingService:
         Vérifie que Débit = Crédit.
         
         lines format: [
-            {"account_code": "1001", "debit": 1.0, "credit": 0.0, "description": "optional"},
+            {"account_code": "1001", "debit": 10.0, "credit": 0.0, "description": "optional"},
             ...
         ]
         """

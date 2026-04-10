@@ -73,7 +73,7 @@ interface Recipient {
   error: string | null
 }
 
-const KYC_PRICE_USD = 1
+const KYC_PRICE_USD = 10
 
 const getPaymentMethods = (t: (key: string) => string | undefined): PaymentMethod[] => [
   {

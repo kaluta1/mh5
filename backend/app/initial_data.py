@@ -228,7 +228,7 @@ def create_product_types(db: Session) -> None:
                 "code": "kyc",
                 "name": "KYC Verification",
                 "description": "Vérification d'identité KYC",
-                "price": 1.00,
+                "price": 10.00,
                 "currency": "USD",
                 "validity_days": 0,
                 "is_active": True,
@@ -317,7 +317,7 @@ def create_product_types(db: Session) -> None:
                 for key, value in product_data.items():
                     if key.startswith("affiliate_") or key == "has_affiliate_commission":
                         setattr(product, key, value)
-                # Garder le prix catalogue aligné (ex. KYC promo $1)
+                # Garder le prix KYC catalogue aligné avec initial_data
                 if product_data["code"] == "kyc":
                     product.price = product_data["price"]
                 logger.info(f"Commissions mises à jour pour '{product_data['code']}'")
