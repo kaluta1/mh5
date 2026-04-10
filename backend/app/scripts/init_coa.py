@@ -6,44 +6,72 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def _chart_of_accounts_colset(db: Session) -> set:
+    bind = db.get_bind()
+    insp = inspect(bind)
+    if not insp.has_table("chart_of_accounts"):
+        return set()
+    try:
+        return {c["name"] for c in insp.get_columns("chart_of_accounts")}
+    except Exception as e:
+        logger.warning("Could not reflect chart_of_accounts: %s", e)
+        return set()
+
+
 def _ensure_chart_of_accounts_columns(db: Session) -> None:
     """
     Legacy databases may lack columns expected by ChartOfAccounts (ORM SELECT fails).
     Adds missing columns so init_chart_of_accounts can run without Alembic first.
+    Uses a savepoint per DDL so a permission error on one ALTER does not abort the whole session.
     """
     bind = db.get_bind()
     insp = inspect(bind)
     if not insp.has_table("chart_of_accounts"):
         return
-    try:
-        colset = {c["name"] for c in insp.get_columns("chart_of_accounts")}
-    except Exception as e:
-        logger.warning("Could not reflect chart_of_accounts: %s", e)
+    colset = _chart_of_accounts_colset(db)
+    if not colset:
         return
 
     altered = False
+
     if "balance" not in colset:
-        db.execute(
-            text(
-                "ALTER TABLE chart_of_accounts ADD COLUMN IF NOT EXISTS balance NUMERIC(15, 2)"
+        try:
+            with db.begin_nested():
+                db.execute(
+                    text(
+                        "ALTER TABLE chart_of_accounts ADD COLUMN IF NOT EXISTS balance NUMERIC(15, 2)"
+                    )
+                )
+            altered = True
+            logger.info("Added chart_of_accounts.balance (legacy DB)")
+        except Exception as e:
+            logger.warning(
+                "Could not ADD chart_of_accounts.balance (need table owner?): %s — "
+                "run backend/scripts/sql/fix_chart_of_accounts_columns.sql as owner",
+                e,
             )
-        )
-        altered = True
-        logger.info("Added chart_of_accounts.balance (legacy DB)")
+
     if "updated_at" not in colset:
-        db.execute(
-            text(
-                "ALTER TABLE chart_of_accounts ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP"
+        try:
+            with db.begin_nested():
+                db.execute(
+                    text(
+                        "ALTER TABLE chart_of_accounts ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP"
+                    )
+                )
+                db.execute(
+                    text(
+                        "UPDATE chart_of_accounts SET updated_at = COALESCE(created_at, NOW()) "
+                        "WHERE updated_at IS NULL"
+                    )
+                )
+            altered = True
+            logger.info("Added chart_of_accounts.updated_at (legacy DB)")
+        except Exception as e:
+            logger.warning(
+                "Could not ADD chart_of_accounts.updated_at (need table owner?): %s",
+                e,
             )
-        )
-        db.execute(
-            text(
-                "UPDATE chart_of_accounts SET updated_at = COALESCE(created_at, NOW()) "
-                "WHERE updated_at IS NULL"
-            )
-        )
-        altered = True
-        logger.info("Added chart_of_accounts.updated_at (legacy DB)")
 
     # Legacy schemas (e.g. create_coa.sql / GraphQL) had NOT NULL columns omitted from ORM model.
     # Inserts must receive defaults when those columns are not in the INSERT.
@@ -56,17 +84,20 @@ def _ensure_chart_of_accounts_columns(db: Session) -> None:
     for col, default_sql in _legacy_defaults:
         if col in colset:
             try:
-                db.execute(
-                    text(
-                        f"ALTER TABLE chart_of_accounts ALTER COLUMN {col} SET DEFAULT {default_sql}"
+                with db.begin_nested():
+                    db.execute(
+                        text(
+                            f"ALTER TABLE chart_of_accounts ALTER COLUMN {col} SET DEFAULT {default_sql}"
+                        )
                     )
-                )
                 altered = True
             except Exception as ex:
                 logger.debug("Skip legacy default for %s: %s", col, ex)
 
     if altered:
         db.commit()
+    else:
+        db.rollback()
 
 
 def init_chart_of_accounts(db: Session):
@@ -74,6 +105,15 @@ def init_chart_of_accounts(db: Session):
     Initialise le Plan Comptable (Chart of Accounts) par défaut.
     """
     _ensure_chart_of_accounts_columns(db)
+
+    colset_after = _chart_of_accounts_colset(db)
+    if "balance" not in colset_after:
+        raise RuntimeError(
+            "chart_of_accounts.balance is missing and the app DB user could not ALTER the table. "
+            "Connect as PostgreSQL owner (Neon: SQL Editor) and run "
+            "backend/scripts/sql/fix_chart_of_accounts_columns.sql — optionally "
+            "ALTER TABLE chart_of_accounts OWNER TO <role_from_DATABASE_URL>; then retry."
+        )
 
     # Liste initiale des comptes
     accounts = [
