@@ -1,10 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Link as LinkIcon, ExternalLink } from 'lucide-react'
 
 interface LinkPreviewProps {
   url: string
+  /** compact: title + site badge + cover image only (feed cards) */
+  variant?: 'full' | 'compact'
 }
 
 interface LinkMetadata {
@@ -15,9 +17,34 @@ interface LinkMetadata {
   url?: string
 }
 
-export function LinkPreview({ url }: LinkPreviewProps) {
+function getYouTubeVideoId(url: string): string | undefined {
+  const patterns = [
+    /youtube\.com\/watch\?.*v=([a-zA-Z0-9_-]{11})/i,
+    /youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/i,
+    /youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/i,
+    /youtu\.be\/([a-zA-Z0-9_-]{11})/i,
+  ]
+  for (const pattern of patterns) {
+    const match = url.match(pattern)
+    if (match?.[1]) return match[1]
+  }
+  return undefined
+}
+
+function shouldHideDescription(desc: string | undefined, metaUrl: string | undefined, originalUrl: string): boolean {
+  const d = desc?.trim()
+  if (!d) return true
+  if (d === metaUrl || d === originalUrl) return true
+  if (/^by\s+/i.test(d)) return true
+  if (/^https?:\/\//i.test(d)) return true
+  return false
+}
+
+export function LinkPreview({ url, variant = 'full' }: LinkPreviewProps) {
   const [metadata, setMetadata] = useState<LinkMetadata | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [imgSrc, setImgSrc] = useState<string | undefined>(undefined)
+  const ytId = getYouTubeVideoId(url)
 
   useEffect(() => {
     let isCancelled = false
@@ -32,6 +59,7 @@ export function LinkPreview({ url }: LinkPreviewProps) {
         if (!isCancelled) {
           if (response.ok) {
             setMetadata(data)
+            setImgSrc(typeof data.image === 'string' ? data.image : undefined)
           } else {
             const urlObj = new URL(url)
             setMetadata({
@@ -40,6 +68,7 @@ export function LinkPreview({ url }: LinkPreviewProps) {
               siteName: urlObj.hostname.replace('www.', ''),
               url,
             })
+            setImgSrc(undefined)
           }
         }
       } catch {
@@ -60,6 +89,7 @@ export function LinkPreview({ url }: LinkPreviewProps) {
               url,
             })
           }
+          setImgSrc(undefined)
         }
       } finally {
         if (!isCancelled) {
@@ -75,6 +105,21 @@ export function LinkPreview({ url }: LinkPreviewProps) {
     }
   }, [url])
 
+  useEffect(() => {
+    if (metadata?.image) {
+      setImgSrc(metadata.image)
+    }
+  }, [metadata?.image])
+
+  const onImgError = useCallback(() => {
+    if (!ytId || !imgSrc) return
+    if (imgSrc.includes('maxresdefault')) {
+      setImgSrc(`https://img.youtube.com/vi/${ytId}/hqdefault.jpg`)
+    } else if (imgSrc.includes('hqdefault')) {
+      setImgSrc(`https://img.youtube.com/vi/${ytId}/mqdefault.jpg`)
+    }
+  }, [imgSrc, ytId])
+
   if (isLoading) {
     return (
       <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 animate-pulse">
@@ -84,6 +129,17 @@ export function LinkPreview({ url }: LinkPreviewProps) {
     )
   }
 
+  const showDescription =
+    variant === 'full' &&
+    !shouldHideDescription(metadata?.description, metadata?.url, url)
+
+  const showFooterUrl = variant === 'full'
+
+  const imageShellClass =
+    variant === 'compact'
+      ? 'relative w-full aspect-video overflow-hidden bg-black'
+      : 'relative w-full aspect-video sm:aspect-[2/1] overflow-hidden bg-gray-100 dark:bg-gray-800'
+
   return (
     <a
       href={url}
@@ -91,14 +147,15 @@ export function LinkPreview({ url }: LinkPreviewProps) {
       rel="noopener noreferrer"
       className="block border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden hover:shadow-md transition-shadow"
     >
-      {metadata?.image && (
-        <div className="relative w-full h-48 bg-gray-100 dark:bg-gray-800">
+      {imgSrc && (
+        <div className={imageShellClass}>
           <img
-            src={metadata.image}
-            alt={metadata.title || ''}
-            className="h-full w-full object-cover"
+            src={imgSrc}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover object-center"
             loading="lazy"
             referrerPolicy="no-referrer"
+            onError={onImgError}
           />
         </div>
       )}
@@ -114,17 +171,18 @@ export function LinkPreview({ url }: LinkPreviewProps) {
             {metadata.title}
           </h4>
         )}
-        {metadata?.description && (
+        {showDescription && metadata?.description && (
           <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
             {metadata.description}
           </p>
         )}
-        <div className="flex items-center gap-2 mt-2 text-xs text-myhigh5-primary">
-          <span className="truncate">{metadata?.url || url}</span>
-          <ExternalLink className="h-3 w-3" />
-        </div>
+        {showFooterUrl && (
+          <div className="flex items-center gap-2 mt-2 text-xs text-myhigh5-primary">
+            <span className="truncate">{metadata?.url || url}</span>
+            <ExternalLink className="h-3 w-3 flex-shrink-0" />
+          </div>
+        )}
       </div>
     </a>
   )
 }
-

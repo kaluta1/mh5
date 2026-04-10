@@ -206,10 +206,15 @@ export async function GET(request: NextRequest) {
 
       if (oembedResponse.ok) {
         const data = await oembedResponse.json()
+        const thumb: string | undefined = data.thumbnail_url
+        const hiRes =
+          typeof thumb === 'string' && thumb.includes('hqdefault')
+            ? thumb.replace('hqdefault', 'maxresdefault')
+            : `https://img.youtube.com/vi/${youtubeVideoId}/maxresdefault.jpg`
         return buildJsonResponse({
           title: data.title || 'YouTube',
-          description: data.author_name ? `By ${data.author_name}` : normalizedUrl,
-          image: data.thumbnail_url || `https://img.youtube.com/vi/${youtubeVideoId}/hqdefault.jpg`,
+          description: '',
+          image: hiRes,
           siteName: 'YouTube',
           url: normalizedUrl,
         })
@@ -220,8 +225,8 @@ export async function GET(request: NextRequest) {
 
     return buildJsonResponse({
       title: 'YouTube',
-      description: normalizedUrl,
-      image: `https://img.youtube.com/vi/${youtubeVideoId}/hqdefault.jpg`,
+      description: '',
+      image: `https://img.youtube.com/vi/${youtubeVideoId}/maxresdefault.jpg`,
       siteName: 'YouTube',
       url: normalizedUrl,
     })

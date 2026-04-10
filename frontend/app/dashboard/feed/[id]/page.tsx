@@ -9,11 +9,15 @@ import { CommentDialog } from '@/components/feed/comment-dialog'
 import { PostDialog } from '@/components/feed/post-dialog'
 import { socialService, Post } from '@/services/social-service'
 import { useAuth } from '@/hooks/use-auth'
+import { useLanguage } from '@/contexts/language-context'
+import { useToast } from '@/components/ui/toast'
 
 export default function PostDetailPage() {
   const params = useParams()
   const router = useRouter()
   const { isAuthenticated, user } = useAuth()
+  const { t } = useLanguage()
+  const { addToast } = useToast()
   const postId = parseInt(params.id as string)
   
   const [post, setPost] = useState<Post | null>(null)
@@ -67,13 +71,35 @@ export default function PostDetailPage() {
     }
   }
 
-  const handleShare = async () => {
-    if (!post) return
+  const handleRepost = async (pid: number) => {
+    if (!post || post.id !== pid) return
     try {
       await socialService.sharePost(post.id)
       await loadPost()
     } catch (error) {
-      console.error('Error sharing post:', error)
+      console.error('Error reposting:', error)
+      addToast(t('dashboard.feed.repost_failed'), 'error', 6000)
+    }
+  }
+
+  const handleShareOut = async (p: Post) => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : ''
+    const shareUrl = `${origin}/dashboard/feed/${p.id}`
+    const title = p.author?.full_name || p.author?.username || 'MyHigh5'
+    const text = (p.content || '').slice(0, 280)
+    try {
+      if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+        await navigator.share({ title, text, url: shareUrl })
+        return
+      }
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') return
+    }
+    try {
+      await navigator.clipboard.writeText(shareUrl)
+      addToast(t('dashboard.feed.link_copied'), 'success', 4000)
+    } catch {
+      addToast(t('dashboard.feed.share_failed'), 'error', 6000)
     }
   }
 
@@ -106,7 +132,7 @@ export default function PostDetailPage() {
           className="mb-6"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
-          Retour
+          {t('common.back')}
         </Button>
 
         {/* Post */}
@@ -120,7 +146,8 @@ export default function PostDetailPage() {
             currentUserId={user?.id}
             onLike={handleLike}
             onComment={handleComment}
-            onShare={handleShare}
+            onRepost={handleRepost}
+            onShareOut={handleShareOut}
             onReact={handleReact}
             onEdit={() => setIsPostDialogOpen(true)}
             onDelete={handleDelete}

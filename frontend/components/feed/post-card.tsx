@@ -44,23 +44,27 @@ interface PostCardProps {
   currentUserId?: number
   onLike?: (postId: number) => void
   onComment?: (postId: number) => void
-  onShare?: (postId: number) => void
+  /** Repost / boost — increments share count via API */
+  onRepost?: (postId: number) => void
+  /** Native share or copy link (Share icon) */
+  onShareOut?: (post: Post) => void
   onReact?: (postId: number, reactionType: string) => void
   onEdit?: (post: Post) => void
   onDelete?: (postId: number) => void
   showFullContent?: boolean
 }
 
-export function PostCard({ 
-  post, 
+export function PostCard({
+  post,
   currentUserId,
-  onLike, 
-  onComment, 
-  onShare, 
+  onLike,
+  onComment,
+  onRepost,
+  onShareOut,
   onReact,
   onEdit,
   onDelete,
-  showFullContent = false 
+  showFullContent = false,
 }: PostCardProps) {
   const { t, language } = useLanguage()
   const dateLocale = localeMap[language] || enUS
@@ -165,7 +169,7 @@ export function PostCard({
           {/* Link Preview */}
           {hasLink && !hasMedia && !hasPoll && (
             <div className="mb-3">
-              <LinkPreview url={previewUrl!} />
+              <LinkPreview url={previewUrl!} variant="compact" />
             </div>
           )}
 
@@ -186,8 +190,10 @@ export function PostCard({
 
             {/* Share/Retweet */}
             <button
-              onClick={() => onShare?.(post.id)}
+              type="button"
+              onClick={() => onRepost?.(post.id)}
               className="group flex items-center gap-2 text-gray-500 dark:text-gray-400 hover:text-green-500 dark:hover:text-green-400 transition-colors"
+              aria-label={t('dashboard.feed.repost') || 'Repost'}
             >
               <div className="p-2 rounded-full group-hover:bg-green-100 dark:group-hover:bg-green-900/20 transition-colors">
                 <Repeat2 className="h-5 w-5" />
@@ -209,8 +215,10 @@ export function PostCard({
 
             {/* Share */}
             <button
-              onClick={() => onShare?.(post.id)}
+              type="button"
+              onClick={() => onShareOut?.(post)}
               className="group flex items-center gap-2 text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors"
+              aria-label={t('dashboard.feed.share') || 'Share'}
             >
               <div className="p-2 rounded-full group-hover:bg-blue-100 dark:group-hover:bg-blue-900/20 transition-colors">
                 <Share2 className="h-5 w-5" />

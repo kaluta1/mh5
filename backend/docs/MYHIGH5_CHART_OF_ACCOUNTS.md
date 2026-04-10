@@ -120,14 +120,16 @@ All **percentage** shares below are **of gross** (membership fee or ad revenue) 
 
 ### 3.5 Club membership subscription (20% markup)
 
-Let **base** = club owner’s list price. Customer pays **base × 1.2**.
+Club owners set **paid membership clubs** with a **base subscription price** and billing cadence (**monthly**, **quarterly**, **semi-annual**, or **annual**). The member’s charge is **base × 1.2** (20% platform markup on top of the owner’s price).
+
+Let **base** = club owner’s list price for one billing period. Customer pays **base × 1.2**.
 
 | Bucket | Accounting |
 |--------|--------------|
 | **Base** | Liability **2120** (payable to club owner — agent), not platform revenue |
-| **Markup (20%)** | Platform margin: split **only from markup**: L1 10%; L2–10 1% each; pool 10%; remainder **4003 / 4006** per revenue policy and deferred release |
+| **Markup (20%)** | Platform margin: split **only from markup**: L1 sponsor of the payer **10%** of markup; levels **2–10** **1% each** of markup (filled levels only; missing slots accrue to platform per §1); **10%** of markup to **Founding Members pool (2104)**; **remainder** of markup to platform revenue **4003** / **4006** per recognition policy and **2112** deferral over the subscription term |
 
-Automated **daily** (or periodic) **release** of deferred amounts (base vs markup) should follow subscription terms (monthly / quarterly / semi-annual / annual) and settlement buffer (e.g. T+7) — implement as scheduled journals, not manual edits.
+Automated **daily** (or periodic) **release** of deferred amounts (base vs markup) should follow the club’s subscription term and settlement buffer (e.g. T+7) — implement as scheduled journals, not manual edits.
 
 ### 3.6 Cashout fee (on withdrawal)
 

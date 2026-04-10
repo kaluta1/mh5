@@ -580,6 +580,12 @@ export interface TranslationKeys {
     contestant_label: string
     nominator_label: string
     nominated_for: string
+    contest_rank_label: string
+    description_section: string
+    candidacy_id: string
+    season_label: string
+    entry_fallback_title: string
+    full_description: string
   }
   admin: {
     title: string
@@ -2971,7 +2977,12 @@ export const translations: Record<Language, TranslationKeys> = {
         comment_success: "Commentaire publié avec succès !",
         comment_error: "Échec de la publication du commentaire. Veuillez réessayer.",
         post_success: "Publication créée avec succès !",
-        post_error: "Échec de la création de la publication. Veuillez réessayer."
+        post_error: "Échec de la création de la publication. Veuillez réessayer.",
+        link_copied: "Lien copié dans le presse-papiers",
+        share_failed: "Impossible de partager. Essayez de copier le lien.",
+        repost_failed: "Impossible d'enregistrer le repost. Réessayez.",
+        repost: "Republier",
+        share: "Partager"
       },
       messages: {
         title: "Messages",
@@ -4215,7 +4226,13 @@ export const translations: Record<Language, TranslationKeys> = {
       of: "de",
       contestant_label: "Participant",
       nominator_label: "Nominateur",
-      nominated_for: "Nominé pour :"
+      nominated_for: "Nominé pour :",
+      contest_rank_label: "Classement",
+      description_section: "Description",
+      candidacy_id: "ID de candidature",
+      season_label: "Saison",
+      entry_fallback_title: "Candidature",
+      full_description: "Description complète"
     },
     dashboard: {
       welcome: "Bienvenue",
@@ -6601,7 +6618,13 @@ export const translations: Record<Language, TranslationKeys> = {
       of: "of",
       contestant_label: "Contestant",
       nominator_label: "Nominator",
-      nominated_for: "Nominated for:"
+      nominated_for: "Nominated for:",
+      contest_rank_label: "Ranking",
+      description_section: "Description",
+      candidacy_id: "Candidacy ID",
+      season_label: "Season",
+      entry_fallback_title: "Application",
+      full_description: "Full description"
     },
     testimonials: {
       title: "What our users say",
@@ -6914,7 +6937,12 @@ export const translations: Record<Language, TranslationKeys> = {
         comment_success: "Comment posted successfully!",
         comment_error: "Failed to post comment. Please try again.",
         post_success: "Post created successfully!",
-        post_error: "Failed to create post. Please try again."
+        post_error: "Failed to create post. Please try again.",
+        link_copied: "Link copied to clipboard",
+        share_failed: "Could not open share. Try copying the link.",
+        repost_failed: "Could not record repost. Please try again.",
+        repost: "Repost",
+        share: "Share"
       },
       messages: {
         title: "Messages",
@@ -10157,7 +10185,13 @@ export const translations: Record<Language, TranslationKeys> = {
       of: "de",
       contestant_label: "Participante",
       nominator_label: "Nominador",
-      nominated_for: "Nominado para:"
+      nominated_for: "Nominado para:",
+      contest_rank_label: "Clasificación",
+      description_section: "Descripción",
+      candidacy_id: "ID de participación",
+      season_label: "Temporada",
+      entry_fallback_title: "Participación",
+      full_description: "Descripción completa"
     },
     kyc: {
       verification_required: "Verificación de Identidad Requerida",
@@ -12554,7 +12588,13 @@ export const translations: Record<Language, TranslationKeys> = {
       of: "von",
       contestant_label: "Teilnehmer",
       nominator_label: "Nominierender",
-      nominated_for: "Nominiert für:"
+      nominated_for: "Nominiert für:",
+      contest_rank_label: "Rangliste",
+      description_section: "Beschreibung",
+      candidacy_id: "Bewerbungs-ID",
+      season_label: "Saison",
+      entry_fallback_title: "Bewerbung",
+      full_description: "Vollständige Beschreibung"
     },
     kyc: {
       verification_required: "Identitätsverifizierung erforderlich",

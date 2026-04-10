@@ -4,6 +4,7 @@ import * as React from 'react'
 import { useLanguage } from '@/contexts/language-context'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { htmlToPlainText } from '@/lib/utils'
 
 interface ContestantDescriptionProps {
   description: string
@@ -28,22 +29,14 @@ export function ContestantDescription({ description, maxLength = 200 }: Contesta
     )
   }
 
-  // Extraire le texte brut du HTML pour la troncature
-  const plainText = description.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim()
+  const plainText = htmlToPlainText(description)
   const shouldTruncate = plainText.length > maxLength
 
-  const dialogTitle =
-    language === 'fr'
-      ? 'Description'
-      : language === 'es'
-        ? 'Descripción'
-        : language === 'de'
-          ? 'Beschreibung'
-          : 'Description'
+  const dialogTitle = t('contestant_detail.description_section') || 'Description'
 
   return (
     <>
-      <div className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
+      <div className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed whitespace-pre-wrap break-words">
         {shouldTruncate ? (
           <>
             <span>{plainText.substring(0, maxLength)}...</span>
@@ -56,7 +49,7 @@ export function ContestantDescription({ description, maxLength = 200 }: Contesta
             </Button>
           </>
         ) : (
-          <div className="prose prose-sm dark:prose-invert max-w-none [&>*]:m-0 [&>p]:mb-1" dangerouslySetInnerHTML={{ __html: description }} />
+          <span>{plainText}</span>
         )}
       </div>
 
@@ -65,8 +58,8 @@ export function ContestantDescription({ description, maxLength = 200 }: Contesta
           <DialogHeader>
             <DialogTitle>{dialogTitle}</DialogTitle>
           </DialogHeader>
-          <div className="mt-3">
-            <div className="prose prose-sm dark:prose-invert max-w-none text-sm text-gray-700 dark:text-gray-300 leading-relaxed" dangerouslySetInnerHTML={{ __html: description }} />
+          <div className="mt-3 text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap break-words">
+            {plainText}
           </div>
         </DialogContent>
       </Dialog>

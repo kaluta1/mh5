@@ -1,4 +1,4 @@
-import { apiService } from '@/lib/api'
+import api, { apiService } from '@/lib/api'
 
 export interface Post {
   id: number
@@ -271,7 +271,18 @@ export const socialService = {
   },
 
   async sharePost(postId: number): Promise<void> {
-    return apiService.post(`/api/v1/social/posts/${postId}/shares`, {})
+    const response = await api.post(`/api/v1/social/posts/${postId}/shares`, {})
+    if (response.status < 200 || response.status >= 300) {
+      const data = response.data as { detail?: string | unknown }
+      const detail = data?.detail
+      const msg =
+        typeof detail === 'string'
+          ? detail
+          : Array.isArray(detail)
+            ? (detail[0] as { msg?: string })?.msg || 'Share failed'
+            : 'Could not record repost'
+      throw new Error(msg)
+    }
   },
 
   // Comments

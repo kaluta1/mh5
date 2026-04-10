@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ArrowLeft, MapPin, Heart } from 'lucide-react'
 import api from '@/lib/api'
+import { htmlToPlainText } from '@/lib/utils'
 
 interface ContestantDetail {
   id: number
@@ -141,7 +142,7 @@ export default function ContestantDetailPage() {
           {contestant.rank && (
             <div className="text-center">
               <div className="text-4xl font-bold mb-1">#{contestant.rank}</div>
-              <p className="text-sm text-white/80">Classement</p>
+              <p className="text-sm text-white/80">{t('contestant_detail.contest_rank_label')}</p>
             </div>
           )}
         </div>
@@ -153,11 +154,11 @@ export default function ContestantDetailPage() {
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-2">
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-              {contestant.title || 'Candidature'}
+              {contestant.title || t('contestant_detail.entry_fallback_title')}
             </h2>
             {formattedDate && (
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                Inscrit le: {formattedDate}
+                {t('contestant_detail.registered_on')}: {formattedDate}
               </p>
             )}
           </div>
@@ -170,7 +171,7 @@ export default function ContestantDetailPage() {
                   : 'bg-gray-100 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300'
               }`}
             >
-              {contestant.is_qualified ? 'Qualifié' : 'En attente'}
+              {contestant.is_qualified ? t('contestant_detail.qualified') : t('contestant_detail.pending')}
             </Badge>
           )}
         </div>
@@ -178,9 +179,11 @@ export default function ContestantDetailPage() {
         {/* Description */}
         {contestant.description && (
           <div>
-            <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Description</h3>
-            <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-              {contestant.description}
+            <h3 className="font-semibold text-gray-900 dark:text-white mb-2">
+              {t('contestant_detail.description_section')}
+            </h3>
+            <p className="text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap break-words">
+              {htmlToPlainText(contestant.description)}
             </p>
           </div>
         )}
@@ -203,13 +206,13 @@ export default function ContestantDetailPage() {
             <div className="text-2xl font-bold text-myfav-primary mb-1">
               {contestant.videos_count || 0}
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400">Vidéos</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">{t('contestant_detail.videos')}</p>
           </div>
           <div className="bg-myfav-blue-50 dark:bg-myfav-blue-900/20 rounded-lg p-4">
             <div className="text-2xl font-bold text-myfav-primary mb-1">
               {contestant.rank || '-'}
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400">Rang</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">{t('contestant_detail.rank')}</p>
           </div>
         </div>
 
@@ -217,11 +220,11 @@ export default function ContestantDetailPage() {
         <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
             <div>
-              <p className="font-semibold text-gray-900 dark:text-white mb-1">ID Candidature</p>
+              <p className="font-semibold text-gray-900 dark:text-white mb-1">{t('contestant_detail.candidacy_id')}</p>
               <p className="text-gray-600 dark:text-gray-400">{contestant.id}</p>
             </div>
             <div>
-              <p className="font-semibold text-gray-900 dark:text-white mb-1">Saison</p>
+              <p className="font-semibold text-gray-900 dark:text-white mb-1">{t('contestant_detail.season_label')}</p>
               <p className="text-gray-600 dark:text-gray-400">{contestant.season_id}</p>
             </div>
           </div>

@@ -8,6 +8,7 @@ import { socialService, Post } from '@/services/social-service'
 import { useAuth } from '@/hooks/use-auth'
 import { useRouter } from 'next/navigation'
 import { useLanguage } from '@/contexts/language-context'
+import { useToast } from '@/components/ui/toast'
 
 // Lazy load heavy feed components
 const PostCard = dynamic(() => import('@/components/feed/post-card').then(mod => ({ default: mod.PostCard })), {
@@ -34,6 +35,7 @@ export default function FeedPage() {
   const { isAuthenticated, user } = useAuth()
   const router = useRouter()
   const { t } = useLanguage()
+  const { addToast } = useToast()
   const [posts, setPosts] = useState<Post[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isPostDialogOpen, setIsPostDialogOpen] = useState(false)
@@ -116,13 +118,36 @@ export default function FeedPage() {
     }
   }
 
-  const handleShare = async (postId: number) => {
+  const handleRepost = async (postId: number) => {
     try {
       await socialService.sharePost(postId)
       const updatedPost = await socialService.getPost(postId)
       setPosts(prev => prev.map(p => p.id === postId ? updatedPost : p))
     } catch (error) {
-      console.error('Error sharing post:', error)
+      console.error('Error reposting:', error)
+      addToast(t('dashboard.feed.repost_failed'), 'error', 6000)
+    }
+  }
+
+  const handleShareOut = async (post: Post) => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : ''
+    const shareUrl = `${origin}/dashboard/feed/${post.id}`
+    const title = post.author?.full_name || post.author?.username || 'MyHigh5'
+    const text = (post.content || '').slice(0, 280)
+
+    try {
+      if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+        await navigator.share({ title, text, url: shareUrl })
+        return
+      }
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') return }
+
+    try {
+      await navigator.clipboard.writeText(shareUrl)
+      addToast(t('dashboard.feed.link_copied'), 'success', 4000)
+    } catch {
+      addToast(t('dashboard.feed.share_failed'), 'error', 6000)
     }
   }
 
@@ -188,7 +213,8 @@ export default function FeedPage() {
                     currentUserId={user?.id}
                     onLike={handleLike}
                     onComment={handleComment}
-                    onShare={handleShare}
+                    onRepost={handleRepost}
+                    onShareOut={handleShareOut}
                     onReact={handleReact}
                     onEdit={(selectedPost) => {
                       setEditingPost(selectedPost)

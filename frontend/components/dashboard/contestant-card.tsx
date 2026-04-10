@@ -10,6 +10,7 @@ import { VideoPreviewDialog } from '@/components/ui/video-preview-dialog'
 import { MediaViewerModal } from '@/components/media/media-viewer-modal'
 import { VideoEmbed } from '@/components/ui/video-embed'
 import { detectVideoPlatform, convertToEmbedUrl } from '@/lib/utils/video-platforms'
+import { htmlToPlainText } from '@/lib/utils'
 import { contestService } from '@/services/contest-service'
 import { reactionsService } from '@/services/reactions-service'
 import { sharesService } from '@/services/shares-service'
@@ -28,11 +29,12 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 
 // Composant pour afficher une description tronquée avec popover au hover
 function DescriptionWithPopover({ description, maxLength = 150 }: { description: string; maxLength?: number }) {
+  const { t } = useLanguage()
   const [isOpen, setIsOpen] = useState(false)
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  const plainText = description ? description.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim() : ''
+  const plainText = description ? htmlToPlainText(description) : ''
   const shouldTruncate = plainText.length > maxLength
   const truncatedDescription = shouldTruncate ? plainText.substring(0, maxLength) + '...' : plainText
 
@@ -63,7 +65,7 @@ function DescriptionWithPopover({ description, maxLength = 150 }: { description:
 
   if (!shouldTruncate) {
     return (
-      <div className="text-sm text-gray-700 dark:text-gray-300 prose prose-sm dark:prose-invert max-w-none [&>*]:m-0 [&>p]:mb-1" dangerouslySetInnerHTML={{ __html: description }} />
+      <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words">{plainText}</p>
     )
   }
 
@@ -86,8 +88,10 @@ function DescriptionWithPopover({ description, maxLength = 150 }: { description:
           onMouseLeave={handleMouseLeave}
         >
           <div className="space-y-2">
-            <h4 className="font-semibold text-sm text-gray-900 dark:text-white">Description complète</h4>
-            <div className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed prose prose-sm dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: description }} />
+            <h4 className="font-semibold text-sm text-gray-900 dark:text-white">
+              {t('contestant_detail.full_description') || 'Full description'}
+            </h4>
+            <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap break-words">{plainText}</p>
           </div>
         </div>
       )}
