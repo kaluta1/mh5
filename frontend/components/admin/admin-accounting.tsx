@@ -10,9 +10,18 @@ import { Button } from '@/components/ui/button'
 import { format } from 'date-fns'
 import { enUS, fr } from 'date-fns/locale'
 import { Loader2, RefreshCw, FileText, BarChart3, TrendingUp, AlertCircle } from 'lucide-react'
-import { api } from '@/lib/api-service'
+import api from '@/lib/api'
 
 const EMPTY = { chartOfAccounts: [] as any[], journalEntries: [] as any[] }
+
+/** Same pattern as other admin pages: full /api/v1 paths on base URL without /api/v1 (see admin-users.tsx). */
+function asJsonArray<T>(raw: unknown): T[] {
+    if (Array.isArray(raw)) return raw as T[]
+    if (raw && typeof raw === 'object' && Array.isArray((raw as { data?: unknown }).data)) {
+        return (raw as { data: T[] }).data
+    }
+    return []
+}
 
 export default function AdminAccounting() {
     const { t, language } = useLanguage()
@@ -28,8 +37,8 @@ export default function AdminAccounting() {
         setError(null)
         try {
             const [coaRes, jeRes] = await Promise.all([
-                api.get('/admin/accounting/chart-of-accounts'),
-                api.get('/admin/accounting/journal-entries', { params: { limit: 50 } }),
+                api.get('/api/v1/admin/accounting/chart-of-accounts'),
+                api.get('/api/v1/admin/accounting/journal-entries', { params: { limit: 50 } }),
             ])
             if (coaRes.status >= 400) {
                 const d = coaRes.data as any
@@ -40,8 +49,8 @@ export default function AdminAccounting() {
                 throw new Error(typeof d?.detail === 'string' ? d.detail : 'Journal entries request failed')
             }
             setData({
-                chartOfAccounts: Array.isArray(coaRes.data) ? coaRes.data : [],
-                journalEntries: Array.isArray(jeRes.data) ? jeRes.data : [],
+                chartOfAccounts: asJsonArray(coaRes.data),
+                journalEntries: asJsonArray(jeRes.data),
             })
         } catch (e: any) {
             setError(e instanceof Error ? e : new Error(String(e)))

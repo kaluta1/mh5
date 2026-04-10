@@ -1,10 +1,11 @@
 /**
- * Frontend Configuration
- * Single source for backend URL: set NEXT_PUBLIC_API_URL in Vercel to your Render backend URL.
+ * Frontend configuration.
+ * On your VPS (or any host), set NEXT_PUBLIC_API_URL to the public API origin
+ * (e.g. https://myhigh5.com or https://api.myhigh5.com — match nginx / reverse proxy).
  */
 
-/** Default backend URL when NEXT_PUBLIC_API_URL is not set (e.g. production Render service name) */
-export const DEFAULT_PUBLIC_API_URL = 'https://mh5-backend.onrender.com'
+/** Default API origin when NEXT_PUBLIC_* is unset at build time (production self-hosted). */
+export const DEFAULT_PUBLIC_API_URL = 'https://myhigh5.com'
 
 const normalizeApiUrl = (url: string): string => {
   if (!url) return ''
@@ -20,6 +21,15 @@ const isProduction = process.env.NODE_ENV === 'production'
 const fallbackUrl = isProduction ? DEFAULT_PUBLIC_API_URL : 'http://localhost:8000'
 
 export const API_URL = normalizeApiUrl(rawApiUrl || fallbackUrl)
+
+/** Origin only (for preconnect / dns-prefetch); works when API_URL includes /api/v1. */
+export const API_ORIGIN = (() => {
+  try {
+    return new URL(API_URL).origin
+  } catch {
+    return 'https://myhigh5.com'
+  }
+})()
 
 // ============================================
 // Reown/WalletConnect Project ID

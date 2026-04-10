@@ -1,19 +1,18 @@
 
 import axios from 'axios';
+import { API_URL as CONFIG_API_ORIGIN } from './config';
 
-// Get API URL from env or default.
-// For `next dev`, prefer `frontend/.env.development` (localhost) unless `.env.local` sets NEXT_PUBLIC_API_URL.
-// Ensure we handle the case where NEXT_PUBLIC_API_URL might be just the domain
+// Same origin resolution as lib/api.ts (production default Render URL when env is missing).
+// Must not default to localhost in production — that breaks deployed sites and yields empty admin data.
 const getApiUrl = () => {
-    let url = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
-    // If url ends with /, remove it
+    let url =
+        process.env.NEXT_PUBLIC_API_URL ||
+        process.env.NEXT_PUBLIC_BACKEND_URL ||
+        CONFIG_API_ORIGIN ||
+        'http://localhost:8000';
     if (url.endsWith('/')) {
         url = url.slice(0, -1);
     }
-    // If url doesn't end with /api/v1 and it's not the root domain (assuming we want to enforce v1)
-    // Actually simplest is: if not includes /api/v1, append it.
-    // But sticking to the default being correct is safer.
-    // Let's assume the user might have set NEXT_PUBLIC_API_URL=http://localhost:8000
     if (!url.includes('/api/v1')) {
         url = `${url}/api/v1`;
     }
