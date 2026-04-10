@@ -4,11 +4,11 @@ import logging
 from typing import Optional, List
 from datetime import datetime
 
+from app.accounting.distribution_formulas import club_markup_split, kyc_verification_recognition_split
 from app.models.payment import Deposit, DepositStatus, ProductType
 from app.models.affiliate import AffiliateCommission
 from app.models.accounting import JournalEntry
 from app.services.accounting_service import accounting_service
-from app.accounting.distribution_formulas import kyc_verification_recognition_split
 
 logger = logging.getLogger(__name__)
 
@@ -410,6 +410,114 @@ class PaymentAccountingService:
                 ],
                 date=jdate,
             )
+
+    def process_club_membership_payment_accounting(
+        self,
+        db: Session,
+        deposit: Deposit,
+        commissions: List[AffiliateCommission],
+        entry_date: Optional[datetime] = None,
+    ) -> None:
+        """
+        Club membership: member pays base + 20% platform markup. Base is owed to the club owner (2120);
+        markup clears via 2112 to 2104 (10% of markup — Founding pool), sponsor payables, and net platform revenue (4003).
+        """
+        charge = Decimal(str(deposit.amount))
+        base = (charge / Decimal("1.2")).quantize(Decimal("0.01"))
+        split = club_markup_split(base)
+        dep_id = deposit.id
+        description = f"Club Membership Payment - Deposit #{dep_id} - User #{deposit.user_id}"
+        jdate = _journal_entry_date(deposit, entry_date)
+
+        markup_amt = split.markup
+        pool_amt = split.founding_pool
+        c_total = sum(Decimal(str(c.commission_amount)) for c in commissions)
+        plat = markup_amt - pool_amt - c_total
+        if plat < Decimal("0"):
+            logger.warning(
+                "Club membership deposit %s: commissions (%s) exceed markup net of pool; zeroing platform revenue",
+                dep_id,
+                c_total,
+            )
+            plat = Decimal("0")
+
+        accounting_service.create_journal_entry(
+            db,
+            description=description + " (Cash and payables)",
+            lines=[
+                {
+                    "account_code": "1001",
+                    "debit": float(charge),
+                    "credit": 0.0,
+                    "description": "Club membership — payment received",
+                },
+                {
+                    "account_code": "2120",
+                    "debit": 0.0,
+                    "credit": float(split.base_to_owner),
+                    "description": "Payable to club owner — member base subscription (pass-through)",
+                },
+                {
+                    "account_code": "2112",
+                    "debit": 0.0,
+                    "credit": float(markup_amt),
+                    "description": "Club platform markup (20%) — clearing",
+                },
+            ],
+            date=jdate,
+        )
+
+        alloc_lines: List[dict] = [
+            {
+                "account_code": "2112",
+                "debit": float(markup_amt),
+                "credit": 0.0,
+                "description": "Release markup for allocation",
+            },
+        ]
+        if commissions:
+            alloc_lines.append(
+                {
+                    "account_code": "5001",
+                    "debit": float(c_total),
+                    "credit": 0.0,
+                    "description": "Commission expense — club membership markup",
+                }
+            )
+        alloc_lines.extend(
+            [
+                {
+                    "account_code": "2104",
+                    "debit": 0.0,
+                    "credit": float(pool_amt),
+                    "description": "Accrued liability — Founding Members pool (10% of club markup)",
+                },
+                {
+                    "account_code": "4003",
+                    "debit": 0.0,
+                    "credit": float(plat),
+                    "description": "Club subscription — net platform revenue (markup after pool and sponsors)",
+                },
+            ]
+        )
+        for comm in commissions:
+            ca = Decimal(str(comm.commission_amount))
+            payable_acc = "2001" if comm.level == 1 else "2002"
+            alloc_lines.append(
+                {
+                    "account_code": payable_acc,
+                    "debit": 0.0,
+                    "credit": float(ca),
+                    "description": f"Affiliate commission L{comm.level} User #{comm.user_id}",
+                }
+            )
+
+        accounting_service.create_journal_entry(
+            db,
+            description=description + " (Markup allocation — Founding pool and platform)",
+            lines=alloc_lines,
+            date=jdate,
+        )
 
     def record_kyc_provider_settlement(
         self,

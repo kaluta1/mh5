@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { format } from 'date-fns'
 import { enUS, fr } from 'date-fns/locale'
-import { Loader2, RefreshCw, FileText, BarChart3, TrendingUp, AlertCircle, PieChart, Settings2 } from 'lucide-react'
+import { Loader2, RefreshCw, FileText, BarChart3, TrendingUp, AlertCircle, PieChart } from 'lucide-react'
 import api from '@/lib/api'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -20,8 +20,6 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select'
-import { Checkbox } from '@/components/ui/checkbox'
-
 const EMPTY = { chartOfAccounts: [] as any[], journalEntries: [] as any[] }
 
 const JOURNAL_PAGE_SIZE = 300
@@ -94,19 +92,6 @@ export default function AdminAccounting() {
     const [reportLoading, setReportLoading] = useState(false)
     const [reportError, setReportError] = useState<string | null>(null)
 
-    const [ledgerHealth, setLedgerHealth] = useState<Record<string, unknown> | null>(null)
-    const [healthLoading, setHealthLoading] = useState(false)
-    const [fpSnapshots, setFpSnapshots] = useState<any[]>([])
-    const [fpYear, setFpYear] = useState(new Date().getFullYear())
-    const [fpMonth, setFpMonth] = useState(new Date().getMonth() + 1)
-    const [fpNotes, setFpNotes] = useState('')
-    const [opBusy, setOpBusy] = useState(false)
-    const [opMessage, setOpMessage] = useState<string | null>(null)
-    const [backfillDryRun, setBackfillDryRun] = useState(true)
-    const [shuftiAmount, setShuftiAmount] = useState('0')
-    const [shuftiRef, setShuftiRef] = useState('')
-    const [shuftiDate, setShuftiDate] = useState(todayStr)
-
     useEffect(() => {
         setReportData(null)
         setReportError(null)
@@ -160,12 +145,6 @@ export default function AdminAccounting() {
     useEffect(() => {
         void loadData()
     }, [loadData])
-
-    useEffect(() => {
-        if (activeTab === 'operations') {
-            void fetchFoundingSnapshots()
-        }
-    }, [activeTab])
 
     const journalEntries = data?.journalEntries || []
     const chartRows = data?.chartOfAccounts || []
@@ -249,180 +228,6 @@ export default function AdminAccounting() {
         }
     }
 
-    const fetchLedgerHealth = async () => {
-        setHealthLoading(true)
-        setOpMessage(null)
-        try {
-            const res = await api.get('/api/v1/admin/accounting/ledger-health')
-            if (res.status >= 400) {
-                const d = res.data as { detail?: string }
-                throw new Error(typeof d?.detail === 'string' ? d.detail : 'ledger-health failed')
-            }
-            setLedgerHealth(res.data as Record<string, unknown>)
-        } catch (e) {
-            setOpMessage(e instanceof Error ? e.message : String(e))
-            setLedgerHealth(null)
-        } finally {
-            setHealthLoading(false)
-        }
-    }
-
-    const fetchFoundingSnapshots = async () => {
-        try {
-            const res = await api.get('/api/v1/admin/accounting/founding-pool/snapshots')
-            if (res.status >= 400) {
-                setFpSnapshots([])
-                return
-            }
-            setFpSnapshots(extractApiArray(res.data))
-        } catch {
-            setFpSnapshots([])
-        }
-    }
-
-    const runEnsureCoa = async () => {
-        setOpBusy(true)
-        setOpMessage(null)
-        try {
-            const res = await api.post('/api/v1/admin/accounting/ensure-coa')
-            if (res.status >= 400) {
-                const d = res.data as { detail?: string }
-                throw new Error(typeof d?.detail === 'string' ? d.detail : 'ensure-coa failed')
-            }
-            setOpMessage((res.data as any)?.detail || 'Chart of accounts synced.')
-            await loadData()
-        } catch (e) {
-            setOpMessage(e instanceof Error ? e.message : String(e))
-        } finally {
-            setOpBusy(false)
-        }
-    }
-
-    const runBackfill = async () => {
-        setOpBusy(true)
-        setOpMessage(null)
-        try {
-            const res = await api.post('/api/v1/admin/accounting/backfill-journals', {}, {
-                params: { dry_run: backfillDryRun },
-            })
-            if (res.status >= 400) {
-                const d = res.data as { detail?: string }
-                throw new Error(typeof d?.detail === 'string' ? d.detail : 'backfill failed')
-            }
-            setOpMessage(JSON.stringify(res.data, null, 2))
-            if (!backfillDryRun) await loadData()
-        } catch (e) {
-            setOpMessage(e instanceof Error ? e.message : String(e))
-        } finally {
-            setOpBusy(false)
-        }
-    }
-
-    const runFoundingPoolAccrualBackfill = async () => {
-        setOpBusy(true)
-        setOpMessage(null)
-        try {
-            const res = await api.post(
-                '/api/v1/admin/accounting/backfill-founding-pool-accruals',
-                {},
-                { params: { dry_run: backfillDryRun } },
-            )
-            if (res.status >= 400) {
-                const d = res.data as { detail?: string }
-                throw new Error(typeof d?.detail === 'string' ? d.detail : 'founding pool backfill failed')
-            }
-            setOpMessage(JSON.stringify(res.data, null, 2))
-            if (!backfillDryRun) await loadData()
-        } catch (e) {
-            setOpMessage(e instanceof Error ? e.message : String(e))
-        } finally {
-            setOpBusy(false)
-        }
-    }
-
-    const runFpPrepare = async () => {
-        setOpBusy(true)
-        setOpMessage(null)
-        try {
-            const res = await api.post('/api/v1/admin/accounting/founding-pool/prepare-month', {
-                year: fpYear,
-                month: fpMonth,
-                notes: fpNotes || undefined,
-            })
-            if (res.status >= 400) {
-                const d = res.data as { detail?: string }
-                throw new Error(typeof d?.detail === 'string' ? d.detail : 'prepare failed')
-            }
-            setOpMessage(`Prepared snapshot id ${(res.data as any)?.id}`)
-            await fetchFoundingSnapshots()
-        } catch (e) {
-            setOpMessage(e instanceof Error ? e.message : String(e))
-        } finally {
-            setOpBusy(false)
-        }
-    }
-
-    const runFpApprove = async (snapshotId: number) => {
-        setOpBusy(true)
-        setOpMessage(null)
-        try {
-            const res = await api.post(`/api/v1/admin/accounting/founding-pool/${snapshotId}/approve`)
-            if (res.status >= 400) {
-                const d = res.data as { detail?: string }
-                throw new Error(typeof d?.detail === 'string' ? d.detail : 'approve failed')
-            }
-            setOpMessage(`Approved snapshot ${snapshotId}`)
-            await fetchFoundingSnapshots()
-        } catch (e) {
-            setOpMessage(e instanceof Error ? e.message : String(e))
-        } finally {
-            setOpBusy(false)
-        }
-    }
-
-    const runFpPost = async (snapshotId: number) => {
-        setOpBusy(true)
-        setOpMessage(null)
-        try {
-            const res = await api.post(`/api/v1/admin/accounting/founding-pool/${snapshotId}/post`)
-            if (res.status >= 400) {
-                const d = res.data as { detail?: string }
-                throw new Error(typeof d?.detail === 'string' ? d.detail : 'post failed')
-            }
-            setOpMessage(`Posted snapshot ${snapshotId} — journal ${(res.data as any)?.journalEntryId ?? '?'}`)
-            await fetchFoundingSnapshots()
-            await loadData()
-        } catch (e) {
-            setOpMessage(e instanceof Error ? e.message : String(e))
-        } finally {
-            setOpBusy(false)
-        }
-    }
-
-    const runShuftiSettlement = async () => {
-        setOpBusy(true)
-        setOpMessage(null)
-        try {
-            const amt = Number(shuftiAmount)
-            if (!Number.isFinite(amt) || amt <= 0) throw new Error('Enter a positive amount')
-            const res = await api.post('/api/v1/admin/accounting/kyc-provider/settlement', {
-                amount: amt,
-                entry_date: shuftiDate || undefined,
-                reference: shuftiRef || undefined,
-            })
-            if (res.status >= 400) {
-                const d = res.data as { detail?: string }
-                throw new Error(typeof d?.detail === 'string' ? d.detail : 'settlement failed')
-            }
-            setOpMessage(`Posted ${(res.data as any)?.entryNumber ?? ''}`)
-            await loadData()
-        } catch (e) {
-            setOpMessage(e instanceof Error ? e.message : String(e))
-        } finally {
-            setOpBusy(false)
-        }
-    }
-
     const totalRevenue = data?.chartOfAccounts
         ?.filter((a: any) => String(a.accountType || '').toUpperCase() === 'REVENUE')
         .reduce((acc: number, curr: any) => acc + (Number(curr.creditBalance) || 0), 0) || 0
@@ -495,10 +300,6 @@ export default function AdminAccounting() {
                     <TabsTrigger value="reports" className="gap-2">
                         <PieChart className="h-4 w-4" />
                         {t('admin.accounting.reports_tab') || 'Financial reports'}
-                    </TabsTrigger>
-                    <TabsTrigger value="operations" className="gap-2">
-                        <Settings2 className="h-4 w-4" />
-                        {t('admin.accounting.operations_tab') || 'CoA sync & controls'}
                     </TabsTrigger>
                 </TabsList>
 
@@ -1252,225 +1053,6 @@ export default function AdminAccounting() {
                                     </Table>
                                 </div>
                             )}
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-
-                <TabsContent value="operations" className="space-y-4">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>{t('admin.accounting.operations_title') || 'Ledger health & CoA alignment'}</CardTitle>
-                            <CardDescription>
-                                {t('admin.accounting.operations_desc') ||
-                                    'Verify new accounts exist, find KYC journal gaps, sync CoA from server seed, and run payment backfill. Prior journals keep the same account IDs when you rename codes.'}
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-6">
-                            {opMessage && (
-                                <pre className="text-xs bg-muted p-3 rounded-md overflow-x-auto whitespace-pre-wrap max-h-48">
-                                    {opMessage}
-                                </pre>
-                            )}
-                            <div className="flex flex-wrap gap-2">
-                                <Button type="button" size="sm" onClick={() => void fetchLedgerHealth()} disabled={healthLoading}>
-                                    {healthLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}{' '}
-                                    {t('admin.accounting.run_ledger_health') || 'Run ledger health check'}
-                                </Button>
-                                <Button type="button" size="sm" variant="secondary" onClick={() => void runEnsureCoa()} disabled={opBusy}>
-                                    {t('admin.accounting.ensure_coa') || 'Sync chart of accounts (ensure-coa)'}
-                                </Button>
-                                <Button type="button" size="sm" variant="outline" onClick={() => void runBackfill()} disabled={opBusy}>
-                                    {t('admin.accounting.run_backfill') || 'Payment journal backfill'}
-                                </Button>
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => void runFoundingPoolAccrualBackfill()}
-                                    disabled={opBusy}
-                                    title={t('admin.accounting.founding_pool_backfill_hint')}
-                                >
-                                    {t('admin.accounting.run_founding_pool_backfill') ||
-                                        'Founding Members 10% accrual backfill'}
-                                </Button>
-                                <label className="flex items-center gap-2 text-sm">
-                                    <Checkbox checked={backfillDryRun} onCheckedChange={(c) => setBackfillDryRun(!!c)} id="dry-run" />
-                                    <span>{t('admin.accounting.backfill_dry_run') || 'Dry run only'}</span>
-                                </label>
-                            </div>
-                            <p className="text-xs text-muted-foreground max-w-3xl">
-                                {t('admin.accounting.founding_pool_backfill_hint')}
-                            </p>
-                            {ledgerHealth && (
-                                <div className="grid gap-3 md:grid-cols-2 text-sm border rounded-lg p-4">
-                                    <div>
-                                        <p className="font-medium">CoA rows</p>
-                                        <p className="text-muted-foreground">{String(ledgerHealth.chart_of_accounts_row_count ?? '—')}</p>
-                                    </div>
-                                    <div>
-                                        <p className="font-medium">Accounts used in journals</p>
-                                        <p className="text-muted-foreground">
-                                            {String(ledgerHealth.distinct_accounts_used_in_journals ?? '—')}
-                                        </p>
-                                    </div>
-                                    <div>
-                                        <p className="font-medium">Orphan journal lines</p>
-                                        <p className={Number(ledgerHealth.orphan_journal_lines) > 0 ? 'text-red-600' : 'text-muted-foreground'}>
-                                            {String(ledgerHealth.orphan_journal_lines ?? 0)}
-                                        </p>
-                                    </div>
-                                    <div>
-                                        <p className="font-medium">Missing critical codes</p>
-                                        <p className="text-muted-foreground font-mono text-xs">
-                                            {Array.isArray(ledgerHealth.missing_critical_codes) &&
-                                            (ledgerHealth.missing_critical_codes as string[]).length
-                                                ? (ledgerHealth.missing_critical_codes as string[]).join(', ')
-                                                : 'None'}
-                                        </p>
-                                    </div>
-                                    {(ledgerHealth.kyc_gaps as any) && (
-                                        <div className="md:col-span-2 space-y-2">
-                                            <p className="font-medium">KYC validated deposits (sample scan)</p>
-                                            <p className="text-muted-foreground">
-                                                Missing deferred: {(ledgerHealth.kyc_gaps as any).missing_deferred_journal ?? '—'} — Missing
-                                                recognition: {(ledgerHealth.kyc_gaps as any).missing_verification_recognition ?? '—'}
-                                            </p>
-                                            {Array.isArray((ledgerHealth.kyc_gaps as any).samples) &&
-                                            (ledgerHealth.kyc_gaps as any).samples.length > 0 ? (
-                                                <ul className="text-xs text-muted-foreground list-disc pl-4 max-h-32 overflow-y-auto">
-                                                    {(ledgerHealth.kyc_gaps as any).samples.slice(0, 15).map((s: any, i: number) => (
-                                                        <li key={i}>
-                                                            Deposit {s.deposit_id} (user {s.user_id}): {s.issue}
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            ) : null}
-                                        </div>
-                                    )}
-                                    {Array.isArray(ledgerHealth.hints) && (ledgerHealth.hints as string[]).length > 0 && (
-                                        <div className="md:col-span-2 text-xs text-muted-foreground border-t pt-3 mt-1">
-                                            <p className="font-medium text-foreground mb-1">Hints</p>
-                                            <ul className="list-disc pl-4 space-y-1">
-                                                {(ledgerHealth.hints as string[]).map((h, i) => (
-                                                    <li key={i}>{h}</li>
-                                                ))}
-                                            </ul>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>{t('admin.accounting.founding_pool_title') || 'Founding pool month-end'}</CardTitle>
-                            <CardDescription>2104 → 2105 reclass (prepare → approve → post)</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="flex flex-wrap gap-3 items-end">
-                                <div className="space-y-1">
-                                    <Label>Year</Label>
-                                    <Input
-                                        type="number"
-                                        className="w-[100px]"
-                                        value={fpYear}
-                                        onChange={(e) => setFpYear(Number(e.target.value))}
-                                    />
-                                </div>
-                                <div className="space-y-1">
-                                    <Label>Month</Label>
-                                    <Input
-                                        type="number"
-                                        min={1}
-                                        max={12}
-                                        className="w-[80px]"
-                                        value={fpMonth}
-                                        onChange={(e) => setFpMonth(Number(e.target.value))}
-                                    />
-                                </div>
-                                <div className="space-y-1 flex-1 min-w-[200px]">
-                                    <Label>Notes</Label>
-                                    <Input value={fpNotes} onChange={(e) => setFpNotes(e.target.value)} placeholder="Optional" />
-                                </div>
-                                <Button type="button" size="sm" onClick={() => void runFpPrepare()} disabled={opBusy}>
-                                    Prepare month
-                                </Button>
-                                <Button type="button" size="sm" variant="outline" onClick={() => void fetchFoundingSnapshots()}>
-                                    Refresh list
-                                </Button>
-                            </div>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Period</TableHead>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead className="text-right">Pool amount</TableHead>
-                                        <TableHead>Members</TableHead>
-                                        <TableHead>JE</TableHead>
-                                        <TableHead />
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {fpSnapshots.length === 0 ? (
-                                        <TableRow>
-                                            <TableCell colSpan={6} className="text-muted-foreground text-center py-6">
-                                                No snapshots (run migration if table missing).
-                                            </TableCell>
-                                        </TableRow>
-                                    ) : (
-                                        fpSnapshots.map((s: any) => (
-                                            <TableRow key={s.id}>
-                                                <TableCell className="font-mono">
-                                                    {s.periodYear}-{String(s.periodMonth).padStart(2, '0')}
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Badge variant="outline">{s.status}</Badge>
-                                                </TableCell>
-                                                <TableCell className="text-right font-mono">{Number(s.accruedPoolAmount ?? 0).toFixed(2)}</TableCell>
-                                                <TableCell>{s.memberCount}</TableCell>
-                                                <TableCell className="font-mono text-xs">{s.journalEntryId ?? '—'}</TableCell>
-                                                <TableCell className="space-x-2">
-                                                    {s.status === 'draft' && (
-                                                        <Button type="button" size="sm" variant="secondary" onClick={() => void runFpApprove(s.id)}>
-                                                            Approve
-                                                        </Button>
-                                                    )}
-                                                    {s.status === 'approved' && (
-                                                        <Button type="button" size="sm" onClick={() => void runFpPost(s.id)}>
-                                                            Post
-                                                        </Button>
-                                                    )}
-                                                </TableCell>
-                                            </TableRow>
-                                        ))
-                                    )}
-                                </TableBody>
-                            </Table>
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>{t('admin.accounting.shufti_settlement_title') || 'Shufti / KYC provider payment'}</CardTitle>
-                            <CardDescription>Dr 2003, Cr 1001 — record when you pay the provider</CardDescription>
-                        </CardHeader>
-                        <CardContent className="flex flex-wrap gap-3 items-end">
-                            <div className="space-y-1">
-                                <Label>Amount (USD)</Label>
-                                <Input value={shuftiAmount} onChange={(e) => setShuftiAmount(e.target.value)} className="w-[120px]" />
-                            </div>
-                            <div className="space-y-1">
-                                <Label>Entry date</Label>
-                                <Input type="date" value={shuftiDate} onChange={(e) => setShuftiDate(e.target.value)} className="w-[160px]" />
-                            </div>
-                            <div className="space-y-1 flex-1 min-w-[200px]">
-                                <Label>Reference</Label>
-                                <Input value={shuftiRef} onChange={(e) => setShuftiRef(e.target.value)} placeholder="Invoice #" />
-                            </div>
-                            <Button type="button" onClick={() => void runShuftiSettlement()} disabled={opBusy}>
-                                Post settlement
-                            </Button>
                         </CardContent>
                     </Card>
                 </TabsContent>

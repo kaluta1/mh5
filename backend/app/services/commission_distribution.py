@@ -234,6 +234,8 @@ def process_payment_validation(db: Session, deposit: Deposit) -> bool:
             payment_accounting.process_membership_payment_accounting(db, deposit, commissions)
         elif product_code in ("mfm_membership", "efm_membership", "founding_membership"):
             payment_accounting.process_founding_membership_payment_accounting(db, deposit, commissions)
+        elif product_code == "club_membership":
+            payment_accounting.process_club_membership_payment_accounting(db, deposit, commissions)
 
         return True
 

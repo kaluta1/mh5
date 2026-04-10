@@ -50,7 +50,7 @@ def orphan_journal_line_count(db: Session) -> int:
 
 def account_codes_used_in_journals(db: Session) -> Set[str]:
     bind = db.get_bind()
-    insp = __import__("sqlalchemy.inspect", fromlist=["inspect"]).inspect(bind)
+    insp = inspect(bind)
     if not insp.has_table("journal_lines"):
         return set()
     rows = db.execute(

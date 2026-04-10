@@ -18,7 +18,7 @@ from app.models.accounting import ChartOfAccounts, JournalEntry, JournalLine
 from app.models.affiliate import AffiliateCommission
 from app.models.payment import Deposit, DepositStatus, ProductType
 from app.models.kyc import KYCVerification, KYCStatus
-from app.accounting.distribution_formulas import kyc_verification_recognition_split
+from app.accounting.distribution_formulas import club_markup_split, kyc_verification_recognition_split
 from app.services.accounting_service import accounting_service
 from app.services.payment_accounting import (
     payment_accounting,
@@ -36,6 +36,7 @@ _ACCOUNTED_PRODUCT_CODES = frozenset(
         "mfm_membership",
         "efm_membership",
         "founding_membership",  # legacy product code in initial_data; same ledger as MFM
+        "club_membership",
     }
 )
 
@@ -150,6 +151,10 @@ def backfill_missing_payment_journals(
                 payment_accounting.process_founding_membership_payment_accounting(
                     db, deposit, commissions, entry_date=entry_date
                 )
+            elif product_code == "club_membership":
+                payment_accounting.process_club_membership_payment_accounting(
+                    db, deposit, commissions, entry_date=entry_date
+                )
             else:
                 errors.append({"deposit_id": did, "detail": f"unsupported product {product_code}"})
                 continue
@@ -243,6 +248,12 @@ def backfill_missing_founding_pool_accruals(
             pool_amt = float(amount) * 0.10
             revenue_code = "4002"
             base_desc = f"Founding Membership Payment - Deposit #{dep_id} - User #{deposit.user_id}"
+        elif product_code == "club_membership":
+            base = (amount / Decimal("1.2")).quantize(Decimal("0.01"))
+            split = club_markup_split(base)
+            pool_amt = float(split.founding_pool)
+            revenue_code = "4003"
+            base_desc = f"Club Membership Payment - Deposit #{dep_id} - User #{deposit.user_id}"
         else:
             errors.append({"deposit_id": dep_id, "detail": f"unsupported product {product_code}"})
             continue
