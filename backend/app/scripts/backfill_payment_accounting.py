@@ -17,6 +17,8 @@ import argparse
 import json
 import sys
 
+BACKFILL_CLI_VERSION = "3"
+
 from app.db.session import SessionLocal
 from app.services.payment_accounting_backfill import (
     backfill_missing_founding_pool_accruals,
@@ -27,7 +29,17 @@ from app.services.payment_accounting_backfill import (
 
 def main() -> None:
     p = argparse.ArgumentParser(
-        description="Accounting backfills (run from backend/ with .env pointing at production DB)."
+        description="Accounting backfills (run from backend/ with .env pointing at production DB).",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            f"CLI revision {BACKFILL_CLI_VERSION}. "
+            "If --kyc-recognition and --all are missing on the server, git pull and redeploy this repo."
+        ),
+    )
+    p.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {BACKFILL_CLI_VERSION}",
     )
     p.add_argument("--dry-run", action="store_true", help="No DB writes (where supported)")
     mode = p.add_mutually_exclusive_group()

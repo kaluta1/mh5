@@ -20,6 +20,9 @@ import json
 import os
 import sys
 
+# Bump when CLI flags change; `python scripts/backfill_payment_accounting.py --version` must show this on the server.
+BACKFILL_CLI_VERSION = "3"
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.db.session import SessionLocal
@@ -32,7 +35,18 @@ from app.services.payment_accounting_backfill import (
 
 def main() -> None:
     p = argparse.ArgumentParser(
-        description="Accounting backfills (run from backend/ with .env pointing at production DB)."
+        description="Accounting backfills (run from backend/ with .env pointing at production DB).",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            f"CLI revision {BACKFILL_CLI_VERSION}. "
+            "If you only see --founding-pool (no --kyc-recognition or --all), this file on the server is outdated: "
+            "cd ~/mh5 && git pull && use the updated scripts/backfill_payment_accounting.py."
+        ),
+    )
+    p.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {BACKFILL_CLI_VERSION}",
     )
     p.add_argument("--dry-run", action="store_true", help="No DB writes (where supported)")
     mode = p.add_mutually_exclusive_group()
