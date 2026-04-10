@@ -17,7 +17,7 @@ import argparse
 import json
 import sys
 
-BACKFILL_CLI_VERSION = "3"
+BACKFILL_CLI_VERSION = "4"
 
 from app.db.session import SessionLocal
 from app.services.payment_accounting_backfill import (

@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from decimal import Decimal
 import logging
-from typing import Optional, List
+from typing import Optional, List, Tuple, Any
 from datetime import datetime
 
 from app.accounting.distribution_formulas import club_markup_split, kyc_verification_recognition_split
@@ -35,13 +35,61 @@ def get_latest_validated_kyc_deposit(db: Session, user_id: int) -> Optional[Depo
     )
 
 
-def kyc_deferred_receipt_posted(db: Session, deposit_id: int) -> bool:
+def _journal_entry_line_totals(
+    db: Session, je_id: int
+) -> List[Tuple[Any, float, float]]:
     return (
+        db.query(ChartOfAccounts.account_code, JournalLine.debit_amount, JournalLine.credit_amount)
+        .join(JournalLine, JournalLine.account_id == ChartOfAccounts.id)
+        .filter(JournalLine.entry_id == je_id)
+        .all()
+    )
+
+
+def kyc_deferred_receipt_posted(db: Session, deposit_id: int) -> bool:
+    """
+    Step 1: cash to deferred 2113. Matches standard description or legacy rows (Dr 1001 / Cr 2113, no 2113 Dr / no 4001 Cr).
+    """
+    if (
         db.query(JournalEntry.id)
-        .filter(JournalEntry.description.like(f"%KYC Payment - Deposit #{deposit_id}%(Deferred cash receipt)%"))
+        .filter(
+            JournalEntry.description.like(
+                f"%KYC Payment - Deposit #{deposit_id}%(Deferred cash receipt)%"
+            )
+        )
         .first()
         is not None
-    )
+    ):
+        return True
+
+    if (
+        db.query(JournalEntry.id)
+        .filter(
+            JournalEntry.description.like(f"%KYC Payment - Deposit #{deposit_id}%"),
+            JournalEntry.description.ilike("%deferred%"),
+            ~JournalEntry.description.ilike("%verification performed%"),
+        )
+        .first()
+        is not None
+    ):
+        return True
+
+    needle = f"Deposit #{deposit_id}"
+    je_ids = [
+        r[0]
+        for r in db.query(JournalEntry.id)
+        .filter(JournalEntry.description.like(f"%{needle}%"))
+        .all()
+    ]
+    for je_id in je_ids:
+        rows = _journal_entry_line_totals(db, je_id)
+        has_1001_dr = any(str(c) == "1001" and float(dr or 0) > 0 for c, dr, _cr in rows)
+        has_2113_cr = any(str(c) == "2113" and float(cr or 0) > 0 for c, _dr, cr in rows)
+        has_2113_dr = any(str(c) == "2113" and float(dr or 0) > 0 for c, dr, _cr in rows)
+        has_4001_cr = any(str(c) == "4001" and float(cr or 0) > 0 for c, _dr, cr in rows)
+        if has_1001_dr and has_2113_cr and not has_2113_dr and not has_4001_cr:
+            return True
+    return False
 
 
 def kyc_recognition_posted(db: Session, deposit_id: int) -> bool:
@@ -55,21 +103,17 @@ def kyc_recognition_posted(db: Session, deposit_id: int) -> bool:
         is not None
     ):
         return True
-    needle = f"KYC Payment - Deposit #{deposit_id}"
-    je_ids = [r[0] for r in db.query(JournalEntry.id).filter(JournalEntry.description.like(f"%{needle}%")).all()]
+    needle_dep = f"Deposit #{deposit_id}"
+    je_ids = [
+        r[0]
+        for r in db.query(JournalEntry.id)
+        .filter(JournalEntry.description.like(f"%{needle_dep}%"))
+        .all()
+    ]
     for je_id in je_ids:
-        rows = (
-            db.query(ChartOfAccounts.account_code, JournalLine.debit_amount, JournalLine.credit_amount)
-            .join(JournalLine, JournalLine.account_id == ChartOfAccounts.id)
-            .filter(JournalLine.entry_id == je_id)
-            .all()
-        )
-        has_2113_dr = any(
-            str(c) == "2113" and float(dr or 0) > 0 for c, dr, _cr in rows
-        )
-        has_4001_cr = any(
-            str(c) == "4001" and float(cr or 0) > 0 for c, _dr, cr in rows
-        )
+        rows = _journal_entry_line_totals(db, je_id)
+        has_2113_dr = any(str(c) == "2113" and float(dr or 0) > 0 for c, dr, _cr in rows)
+        has_4001_cr = any(str(c) == "4001" and float(cr or 0) > 0 for c, _dr, cr in rows)
         if has_2113_dr and has_4001_cr:
             return True
     return False
