@@ -20,6 +20,7 @@ from app.schemas.kyc import (
 )
 from app.services.shufti_pro import shufti_pro_service
 from app.services.email import email_service
+from app.services.payment_accounting import payment_accounting
 
 router = APIRouter()
 KYC_PRICE_USD = 10.00  # keep in sync with product_types.price for code "kyc"
@@ -108,6 +109,7 @@ async def initiate_shufti_verification(
                     # Mettre à jour le user aussi
                     current_user.identity_verified = True
                     db.commit()
+                    payment_accounting.post_kyc_verification_recognition_for_user(db, verification.user_id)
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail="Votre identité est déjà vérifiée"
@@ -258,6 +260,7 @@ async def get_kyc_status_detailed(
             if new_status == KYCStatus.APPROVED:
                 current_user.identity_verified = True
                 db.commit()
+                payment_accounting.post_kyc_verification_recognition_for_user(db, verification.user_id)
     
     # Déterminer si l'utilisateur peut démarrer/reprendre une vérification
     max_attempts_reached = verification.attempts_count >= verification.max_attempts
@@ -580,6 +583,7 @@ def approve_kyc_verification(
     result = crud_kyc.kyc_verification.approve_verification(
         db, verification_id=verification_id, admin_user_id=current_user.id
     )
+    payment_accounting.post_kyc_verification_recognition_for_user(db, result.user_id)
     
     # Envoyer l'email de confirmation KYC approuvé
     verified_user = db.query(User).filter(User.id == verification.user_id).first()
@@ -708,6 +712,7 @@ def shufti_pro_webhook(
             face_verified=True
         )
         crud_kyc.kyc_verification.update(db=db, db_obj=verification, obj_in=update_data)
+        payment_accounting.post_kyc_verification_recognition_for_user(db, verification.user_id)
         
     elif webhook_data.event == "verification.declined":
         # Rejeter automatiquement

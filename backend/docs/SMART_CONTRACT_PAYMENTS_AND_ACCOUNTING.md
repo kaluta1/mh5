@@ -17,7 +17,7 @@ This stack already wires **on-chain USDT (BSC)** to **deposits**, **affiliate co
    `app/services/onchain_payment.py` reads the receipt, finds **`PaymentReceived`** for that `order_id`, checks amount/token.
 
 4. **Business logic**  
-   `process_payment_validation` → commissions (`commission_distribution.py`) and, for validated flows, **accounting** via `payment_accounting.py` + `accounting_service.create_journal_entry` using **account codes** (e.g. `1001` Platform wallet, `4001` KYC revenue, `5001` commission expense, `2001`/`2002` payables) aligned with `init_coa.py` / CoA docs.
+   `process_payment_validation` → commissions (`commission_distribution.py`) and **accounting** via `payment_accounting.py`. **KYC:** Step 1 on payment validation — `1001` / deferred `2113`. Step 2 when Shufti approves (webhook, status sync, admin approve) — release `2113` to net `4001`, `2104` (10% founding pool accrual), `2003` (Shufti), plus `5001`/`2001`–`2002` for sponsor commissions. Other products use their handlers in `payment_accounting.py` (aligned with `init_coa.py`).
 
 5. **Admin**  
    Chart of accounts + journal views read the **database** (`/api/v1/admin/accounting/...`), not the chain directly. The chain is the **source of truth for settlement**; the DB is the **source of truth for recognition** after verification.

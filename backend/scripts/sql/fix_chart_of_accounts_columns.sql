@@ -10,4 +10,5 @@
 
 ALTER TABLE chart_of_accounts ADD COLUMN IF NOT EXISTS balance NUMERIC(15, 2);
 ALTER TABLE chart_of_accounts ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP;
+ALTER TABLE chart_of_accounts ADD COLUMN IF NOT EXISTS description TEXT;
 UPDATE chart_of_accounts SET updated_at = COALESCE(created_at, NOW()) WHERE updated_at IS NULL;

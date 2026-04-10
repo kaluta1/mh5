@@ -76,6 +76,7 @@ from app.models.accounting import (
     ChartOfAccounts, JournalEntry, JournalLine, FinancialReport,
     RevenueTransaction, TaxConfiguration, AuditTrail
 )
+from app.models.founding_pool import FoundingPoolSnapshot, FoundingPoolSnapshotLine
 from app.models.contact_message import ContactMessage
 from app.models.social_group import (
     SocialGroup, GroupMember, GroupJoinRequest, GroupMessage, 

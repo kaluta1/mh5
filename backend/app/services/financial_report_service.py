@@ -35,6 +35,7 @@ def _enrich_account_fields(acc: ChartOfAccounts, id_map: dict[int, ChartOfAccoun
         "account_id": acc.id,
         "account_code": acc.account_code,
         "account_name": acc.account_name,
+        "description": acc.description,
         "account_type": at,
         "parent_id": acc.parent_id,
         "parent_account_code": parent.account_code if parent else None,

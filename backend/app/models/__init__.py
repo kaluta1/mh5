@@ -10,6 +10,7 @@ from .clubs import FanClub, ClubAdmin, ClubMembership, ClubWallet, ClubTransacti
 from .affiliate import AffiliateTree, CommissionRate, AffiliateCommission, ReferralLink, ReferralClick, FoundingMember, RevenueShare
 from .advertising import AdCampaign, AdCreative, AdPlacement, AdImpression, AdClick, AdRevenueShare, AdBudgetTransaction, AdPerformanceMetrics
 from .accounting import ChartOfAccounts, JournalEntry, JournalLine, FinancialReport, RevenueTransaction, TaxConfiguration, AuditTrail
+from .founding_pool import FoundingPoolSnapshot, FoundingPoolSnapshotLine
 from .media import Media
 from .contest import Contest, ContestTemplate, Location, ContestEntry, ContestVote
 from .category import Category
@@ -42,6 +43,7 @@ __all__ = [
     "AffiliateTree", "CommissionRate", "AffiliateCommission", "ReferralLink", "ReferralClick", "FoundingMember", "RevenueShare",
     "AdCampaign", "AdCreative", "AdPlacement", "AdImpression", "AdClick", "AdRevenueShare", "AdBudgetTransaction", "AdPerformanceMetrics",
     "ChartOfAccounts", "JournalEntry", "JournalLine", "FinancialReport", "RevenueTransaction", "TaxConfiguration", "AuditTrail",
+    "FoundingPoolSnapshot", "FoundingPoolSnapshotLine",
     "Media", "Contest", "ContestTemplate", "Location", "ContestEntry", "ContestVote",
     "Category",
     "Prize", "PrizeWinner", "Commission",

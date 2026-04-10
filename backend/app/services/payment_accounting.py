@@ -1,12 +1,14 @@
 from sqlalchemy.orm import Session
 from decimal import Decimal
 import logging
-from typing import Optional, List, Dict
+from typing import Optional, List
 from datetime import datetime
 
-from app.models.payment import Deposit
-from app.models.affiliate import AffiliateCommission, CommissionType
+from app.models.payment import Deposit, DepositStatus, ProductType
+from app.models.affiliate import AffiliateCommission
+from app.models.accounting import JournalEntry
 from app.services.accounting_service import accounting_service
+from app.accounting.distribution_formulas import kyc_verification_recognition_split
 
 logger = logging.getLogger(__name__)
 
@@ -16,110 +18,206 @@ def _journal_entry_date(deposit: Deposit, entry_date: Optional[datetime]) -> dat
         return entry_date
     return deposit.validated_at or deposit.created_at or datetime.utcnow()
 
+
+def get_latest_validated_kyc_deposit(db: Session, user_id: int) -> Optional[Deposit]:
+    kyc_pt = db.query(ProductType).filter(ProductType.code == "kyc").first()
+    if not kyc_pt:
+        return None
+    return (
+        db.query(Deposit)
+        .filter(
+            Deposit.user_id == user_id,
+            Deposit.product_type_id == kyc_pt.id,
+            Deposit.status == DepositStatus.VALIDATED,
+        )
+        .order_by(Deposit.id.desc())
+        .first()
+    )
+
+
+def kyc_deferred_receipt_posted(db: Session, deposit_id: int) -> bool:
+    return (
+        db.query(JournalEntry.id)
+        .filter(JournalEntry.description.like(f"%KYC Payment - Deposit #{deposit_id}%(Deferred cash receipt)%"))
+        .first()
+        is not None
+    )
+
+
+def kyc_recognition_posted(db: Session, deposit_id: int) -> bool:
+    return (
+        db.query(JournalEntry.id)
+        .filter(JournalEntry.description.like(f"%KYC Payment - Deposit #{deposit_id}%(Verification performed)%"))
+        .first()
+        is not None
+    )
+
+
 class PaymentAccountingService:
     """
-    Service de haut niveau pour gérer la comptabilité des paiements spécifiques
-    (KYC, Membership, etc.) en utilisant le service comptable générique.
+    Payment-specific journals using generic accounting_service (CoA codes in init_coa.py).
+
+    KYC verification fee (Singapore-style accrual):
+    - Cash receipt: Dr 1001 / Cr 2113 (deferred until service performed).
+    - When Shufti/KYC completes: Dr 2113 / Cr 4001 (net), Cr 2104 (10% founding pool), Cr 2003 (Shufti);
+ plus Dr 5001 / Cr 2001–2002 for sponsor commissions.
     """
-    
+
+    def process_kyc_cash_receipt_accounting(
+        self,
+        db: Session,
+        deposit: Deposit,
+        entry_date: Optional[datetime] = None,
+    ) -> None:
+        """Step 1: validated payment in — unearned until verification completes."""
+        dep_id = deposit.id
+        if kyc_deferred_receipt_posted(db, dep_id):
+            logger.info("KYC deferred receipt already posted for deposit %s", dep_id)
+            return
+        amount = Decimal(str(deposit.amount))
+        description = f"KYC Payment - Deposit #{dep_id} - User #{deposit.user_id}"
+        jdate = _journal_entry_date(deposit, entry_date)
+        lines = [
+            {
+                "account_code": "1001",
+                "debit": float(amount),
+                "credit": 0.0,
+                "description": "Cash / wallet — verification fee received",
+            },
+            {
+                "account_code": "2113",
+                "debit": 0.0,
+                "credit": float(amount),
+                "description": "Deferred revenue — verification (unearned until KYC performed)",
+            },
+        ]
+        accounting_service.create_journal_entry(
+            db,
+            description=description + " (Deferred cash receipt)",
+            lines=lines,
+            date=jdate,
+        )
+        logger.info("KYC deferred cash receipt posted for deposit %s", dep_id)
+
+    def process_kyc_verification_performed_accounting(
+        self,
+        db: Session,
+        deposit: Deposit,
+        commissions: List[AffiliateCommission],
+        entry_date: Optional[datetime] = None,
+    ) -> None:
+        """Step 2: release deferred revenue when verification service is performed (e.g. Shufti accepted)."""
+        dep_id = deposit.id
+        if kyc_recognition_posted(db, dep_id):
+            logger.info("KYC verification recognition already posted for deposit %s", dep_id)
+            return
+
+        amount = Decimal(str(deposit.amount))
+        total_comm = sum(Decimal(str(c.commission_amount)) for c in commissions)
+        split = kyc_verification_recognition_split(amount, total_comm)
+
+        description = f"KYC Payment - Deposit #{dep_id} - User #{deposit.user_id}"
+        jdate = _journal_entry_date(deposit, entry_date)
+
+        recognition_lines = [
+            {
+                "account_code": "2113",
+                "debit": float(split.gross),
+                "credit": 0.0,
+                "description": "Release deferred revenue — verification service performed",
+            },
+            {
+                "account_code": "4001",
+                "debit": 0.0,
+                "credit": float(split.net_verification_revenue),
+                "description": "Verification fee revenue (net after pool, Shufti, sponsor commissions)",
+            },
+            {
+                "account_code": "2104",
+                "debit": 0.0,
+                "credit": float(split.founding_pool_accrual),
+                "description": "Accrued liability — Founding Members pool (10% of gross)",
+            },
+            {
+                "account_code": "2003",
+                "debit": 0.0,
+                "credit": float(split.shufti_payable),
+                "description": "Accounts payable — Shufti (KYC provider fee)",
+            },
+        ]
+        accounting_service.create_journal_entry(
+            db,
+            description=description + " (Verification performed)",
+            lines=recognition_lines,
+            date=jdate,
+        )
+
+        if commissions:
+            commission_lines: List[dict] = []
+            total_comm_expense = Decimal("0.0")
+            for comm in commissions:
+                comm_amount = Decimal(str(comm.commission_amount))
+                total_comm_expense += comm_amount
+                payable_account = "2001" if comm.level == 1 else "2002"
+                commission_lines.append(
+                    {
+                        "account_code": payable_account,
+                        "debit": 0.0,
+                        "credit": float(comm_amount),
+                        "description": f"Commission Level {comm.level} to User #{comm.user_id}",
+                    }
+                )
+            commission_lines.insert(
+                0,
+                {
+                    "account_code": "5001",
+                    "debit": float(total_comm_expense),
+                    "credit": 0.0,
+                    "description": "Referral commission expense — verification fee",
+                },
+            )
+            accounting_service.create_journal_entry(
+                db,
+                description=description + " (Commissions)",
+                lines=commission_lines,
+                date=jdate,
+            )
+
+        logger.info("KYC verification performed accounting posted for deposit %s", dep_id)
+
+    def post_kyc_verification_recognition_for_user(
+        self,
+        db: Session,
+        user_id: int,
+        entry_date: Optional[datetime] = None,
+    ) -> bool:
+        """
+        Idempotent: post Step 2 when KYC is approved. Returns True if recognition was posted.
+        """
+        deposit = get_latest_validated_kyc_deposit(db, user_id)
+        if not deposit:
+            logger.warning("post_kyc_verification_recognition: no validated KYC deposit for user %s", user_id)
+            return False
+        if kyc_recognition_posted(db, deposit.id):
+            return False
+        commissions = (
+            db.query(AffiliateCommission).filter(AffiliateCommission.deposit_id == deposit.id).all()
+        )
+        self.process_kyc_verification_performed_accounting(db, deposit, commissions, entry_date=entry_date)
+        return True
+
     def process_kyc_payment_accounting(
-        self, 
-        db: Session, 
-        deposit: Deposit, 
+        self,
+        db: Session,
+        deposit: Deposit,
         commissions: List[AffiliateCommission],
         entry_date: Optional[datetime] = None,
     ):
         """
-        Cas d'usage 1: Paiement KYC (montant = deposit.amount, ex. 10$)
-        Répartition:
-        - 100% du montant -> Platform Wallet (Asset) / KYC Revenue (Income)
-        - Commissions -> Commission Expense / Payable
-        - Frais Provider (20%) -> Expense / Payable
+        Backward-compatible name: Step 1 only (cash receipt / deferred).
+        Step 2 runs via post_kyc_verification_recognition_for_user when KYC is approved.
         """
-        dep_id = deposit.id
-        amount = Decimal(str(deposit.amount))
-        description = f"KYC Payment - Deposit #{dep_id} - User #{deposit.user_id}"
-        jdate = _journal_entry_date(deposit, entry_date)
-        
-        # 1. Enregistrement du revenu (Encaissement)
-        # Debit: Platform Wallet (1001), Credit: KYC Revenue (4001)
-        income_lines = [
-            {"account_code": "1001", "debit": float(amount), "credit": 0.0, "description": "Payment received"},
-            {"account_code": "4001", "debit": 0.0, "credit": float(amount), "description": "KYC Revenue recognized"}
-        ]
-        
-        try:
-            accounting_service.create_journal_entry(
-                db, 
-                description=description + " (Income)", 
-                lines=income_lines,
-                date=jdate,
-            )
-            logger.info(f"Accounting: Income recorded for KYC deposit {dep_id}")
-        except Exception as e:
-            logger.error(f"Failed to record income for deposit {dep_id}: {e}")
-            # On continue pour essayer d'enregistrer les dépenses ? Ou on stop ?
-            # Idéalement transaction atomique globale.
-        
-        # 2. Enregistrement des commissions (Dépenses)
-        if commissions:
-            commission_lines = []
-            total_comm_expense = Decimal("0.0")
-            
-            for comm in commissions:
-                comm_amount = Decimal(str(comm.commission_amount))
-                total_comm_expense += comm_amount
-                
-                # Debit: Commission Expense (5001) est fait globalement ou par ligne
-                # Credit: Commission Payable L1 (2001) ou L2-10 (2002)
-                payable_account = "2001" if comm.level == 1 else "2002"
-                
-                commission_lines.append({
-                    "account_code": payable_account,
-                    "debit": 0.0,
-                    "credit": float(comm_amount),
-                    "description": f"Commission Level {comm.level} to User #{comm.user_id}"
-                })
-            
-            # Ajout de la ligne Debit globale pour les commissions
-            commission_lines.insert(0, {
-                "account_code": "5001",
-                "debit": float(total_comm_expense),
-                "credit": 0.0,
-                "description": "Total Referral Commissions"
-            })
-            
-            try:
-                accounting_service.create_journal_entry(
-                    db,
-                    description=description + " (Commissions)",
-                    lines=commission_lines,
-                    date=jdate,
-                )
-                logger.info(f"Accounting: Commissions recorded for KYC deposit {dep_id}")
-            except Exception as e:
-                logger.error(f"Failed to record commissions for deposit {dep_id}: {e}")
-
-        # 3. Enregistrement des frais de service (Provider Fee 20% = 2$)
-        # Debit: Expense (5002), Credit: Payable (2003)
-        # Note: Ce montant de 2$ est hardcodé ici pour l'exemple, mais pourrait venir d'une config
-        provider_fee = amount * Decimal("0.20") # 20%
-        
-        fee_lines = [
-            {"account_code": "5002", "debit": float(provider_fee), "credit": 0.0, "description": "KYC Provider Verification Cost"},
-            {"account_code": "2003", "debit": 0.0, "credit": float(provider_fee), "description": "Liability to KYC Provider"}
-        ]
-        
-        try:
-            accounting_service.create_journal_entry(
-                db,
-                description=description + " (Provider Fees)",
-                lines=fee_lines,
-                date=jdate,
-            )
-            logger.info(f"Accounting: Provider fees recorded for KYC deposit {dep_id}")
-        except Exception as e:
-            logger.error(f"Failed to record fees for deposit {dep_id}: {e}")
+        self.process_kyc_cash_receipt_accounting(db, deposit, entry_date=entry_date)
 
     def process_membership_payment_accounting(
         self,
@@ -137,44 +235,49 @@ class PaymentAccountingService:
         amount = Decimal(str(deposit.amount))
         description = f"Membership Payment - Deposit #{deposit.id} - User #{deposit.user_id}"
         jdate = _journal_entry_date(deposit, entry_date)
-        
+
         # 1. Income (Revenue)
         income_lines = [
             {"account_code": "1001", "debit": float(amount), "credit": 0.0, "description": "Payment received"},
-            {"account_code": "4002", "debit": 0.0, "credit": float(amount), "description": "Membership Revenue recognized"}
+            {"account_code": "4002", "debit": 0.0, "credit": float(amount), "description": "Membership Revenue recognized"},
         ]
-        
+
         accounting_service.create_journal_entry(
             db,
             description=description + " (Income)",
             lines=income_lines,
             date=jdate,
         )
-        
+
         # 2. Commissions
         if commissions:
             commission_lines = []
             total_comm = Decimal("0.0")
-            
+
             for comm in commissions:
                 c_amt = Decimal(str(comm.commission_amount))
                 total_comm += c_amt
                 payable_acc = "2001" if comm.level == 1 else "2002"
-                
-                commission_lines.append({
-                    "account_code": payable_acc,
-                    "debit": 0.0,
-                    "credit": float(c_amt),
-                    "description": f"Comm L{comm.level} User #{comm.user_id}"
-                })
-                
-            commission_lines.insert(0, {
-                "account_code": "5001",
-                "debit": float(total_comm),
-                "credit": 0.0,
-                "description": "Total Commissions"
-            })
-            
+
+                commission_lines.append(
+                    {
+                        "account_code": payable_acc,
+                        "debit": 0.0,
+                        "credit": float(c_amt),
+                        "description": f"Comm L{comm.level} User #{comm.user_id}",
+                    }
+                )
+
+            commission_lines.insert(
+                0,
+                {
+                    "account_code": "5001",
+                    "debit": float(total_comm),
+                    "credit": 0.0,
+                    "description": "Total Commissions",
+                },
+            )
+
             accounting_service.create_journal_entry(
                 db,
                 description=description + " (Commissions)",
@@ -182,7 +285,7 @@ class PaymentAccountingService:
                 date=jdate,
             )
 
-        # 3. Founding Members pool (10% of gross) — contractual payable 2104; reduce 4002 recognition
+        # 3. Founding Members pool (10% of gross) — contractual accrual 2104; reduce 4002 recognition
         pool_amt = float(amount) * 0.10
         if pool_amt > 0:
             alloc_lines = [
@@ -190,13 +293,13 @@ class PaymentAccountingService:
                     "account_code": "4002",
                     "debit": pool_amt,
                     "credit": 0.0,
-                    "description": "Allocate 10% to Founding Members pool (payable)",
+                    "description": "Allocate 10% to Founding Members pool (accrued)",
                 },
                 {
                     "account_code": "2104",
                     "debit": 0.0,
                     "credit": pool_amt,
-                    "description": "Founding Members pool payable accrual",
+                    "description": "Accrued liability — Founding Members pool",
                 },
             ]
             accounting_service.create_journal_entry(
@@ -302,11 +405,43 @@ class PaymentAccountingService:
                         "account_code": "2104",
                         "debit": 0.0,
                         "credit": pool_amt,
-                        "description": "Founding Members pool payable",
+                        "description": "Accrued liability — Founding Members pool",
                     },
                 ],
                 date=jdate,
             )
+
+    def record_kyc_provider_settlement(
+        self,
+        db: Session,
+        amount: float,
+        entry_date: Optional[datetime] = None,
+        reference: str = "",
+    ) -> JournalEntry:
+        """
+        Operational payment to Shufti: Dr 2003 (reduce AP), Cr 1001 (cash / wallet).
+        """
+        if amount <= 0:
+            raise ValueError("amount must be positive")
+        jdate = entry_date or datetime.utcnow()
+        desc = "KYC provider (Shufti) settlement"
+        if reference:
+            desc += f" ref={reference}"
+        lines = [
+            {
+                "account_code": "2003",
+                "debit": float(amount),
+                "credit": 0.0,
+                "description": "Pay Shufti - clear accounts payable",
+            },
+            {
+                "account_code": "1001",
+                "debit": 0.0,
+                "credit": float(amount),
+                "description": "Cash / wallet paid to KYC provider",
+            },
+        ]
+        return accounting_service.create_journal_entry(db, description=desc, lines=lines, date=jdate)
 
 
 payment_accounting = PaymentAccountingService()

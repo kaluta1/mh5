@@ -228,7 +228,8 @@ def process_payment_validation(db: Session, deposit: Deposit) -> bool:
         from app.services.payment_accounting import payment_accounting
 
         if product_code == "kyc":
-            payment_accounting.process_kyc_payment_accounting(db, deposit, commissions)
+            # Step 1: cash to deferred2113. Step 2 posts when KYC is approved (Shufti webhook / status sync).
+            payment_accounting.process_kyc_cash_receipt_accounting(db, deposit)
         elif product_code == "annual_membership":
             payment_accounting.process_membership_payment_accounting(db, deposit, commissions)
         elif product_code in ("mfm_membership", "efm_membership", "founding_membership"):

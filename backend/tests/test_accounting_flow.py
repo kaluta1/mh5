@@ -25,6 +25,7 @@ from app.models.payment import Deposit, ProductType, DepositStatus
 from app.models.affiliate import CommissionRule, CommissionType, AffiliateCommission
 from app.models.accounting import JournalEntry, JournalLine, AccountType
 from app.services.commission_distribution import process_payment_validation
+from app.services.payment_accounting import payment_accounting
 from app.scripts.init_coa import init_chart_of_accounts
 from app.scripts.init_commission_rules import init_commission_rules
 
@@ -109,8 +110,12 @@ def test_kyc_payment_accounting_flow(db: Session):
     logger.info(f"Processing validation for deposit {deposit.id}")
     success = process_payment_validation(db, deposit)
     assert success is True, "Payment validation failed"
+
+    deposit.status = DepositStatus.VALIDATED
+    deposit.validated_at = datetime.utcnow()
+    db.commit()
     
-    # 4. Verify Commissions
+    # 4. Verify Commissions (DB rows at payment; commission journals post with KYC recognition)
     # Règle KYC: 10% direct ($1.00 sur dépôt $10)
     commissions = db.query(AffiliateCommission).filter(AffiliateCommission.deposit_id == deposit.id).all()
     assert len(commissions) >= 1, "Should create at least one commission for sponsor"
@@ -119,35 +124,30 @@ def test_kyc_payment_accounting_flow(db: Session):
     assert sponsor_comm is not None, "Sponsor commission missing"
     assert float(sponsor_comm.commission_amount) == 1.0, f"Commission should be 1.0, got {sponsor_comm.commission_amount}"
     
-    # 5. Verify Accounting (Journal Entries)
-    # On cherche l'entrée liée à ce dépôt (description contient Deposit ID)
-    # Income Entry
-    income_entry = db.query(JournalEntry).filter(
-        JournalEntry.description.like(f"%KYC Payment - Deposit #{deposit.id}%(Income)%")
+    # 5. Step 1 — deferred revenue (cash receipt: Dr 1001 / Cr 2113)
+    deferred_entry = db.query(JournalEntry).filter(
+        JournalEntry.description.like(f"%KYC Payment - Deposit #{deposit.id}%(Deferred cash receipt)%")
     ).first()
-    
-    assert income_entry is not None, "Income Journal Entry missing"
-    assert len(income_entry.lines) == 2, "Income entry should have 2 lines"
-    assert income_entry.total_debit == 10.0
-    assert income_entry.total_credit == 10.0
-    
-    # Commission Entry
+    assert deferred_entry is not None, "Deferred cash receipt journal missing"
+    assert deferred_entry.total_debit == 10.0
+    assert deferred_entry.total_credit == 10.0
+
+    # 6. Step 2 — verification performed (release2113; Cr 4001 net, 2104 pool, 2003 Shufti)
+    assert payment_accounting.post_kyc_verification_recognition_for_user(db, user.id) is True
+
+    rec_entry = db.query(JournalEntry).filter(
+        JournalEntry.description.like(f"%KYC Payment - Deposit #{deposit.id}%(Verification performed)%")
+    ).first()
+    assert rec_entry is not None, "Verification performed journal missing"
+    assert rec_entry.total_debit == 10.0
+    assert rec_entry.total_credit == 10.0
+
     comm_entry = db.query(JournalEntry).filter(
         JournalEntry.description.like(f"%KYC Payment - Deposit #{deposit.id}%(Commissions)%")
     ).first()
-    
     assert comm_entry is not None, "Commission Journal Entry missing"
-    # Vérifier que le total débit correspond à la somme des commissions
     total_commissions = sum(float(c.commission_amount) for c in commissions)
     assert comm_entry.total_debit == total_commissions
-    
-    # Provider Fee Entry (20% -> $2.00 sur dépôt $10)
-    fee_entry = db.query(JournalEntry).filter(
-        JournalEntry.description.like(f"%KYC Payment - Deposit #{deposit.id}%(Provider Fees)%")
-    ).first()
-    
-    assert fee_entry is not None, "Provider Fee Journal Entry missing"
-    assert fee_entry.total_debit == 2.0
     
     logger.info("--- TEST PASSED: All accounting entries verified ---")
 
@@ -185,7 +185,6 @@ def test_membership_payment_accounting_flow(db: Session):
         product_type_id=product.id,
         amount=50.0,
         status=DepositStatus.PENDING,
-        payment_method="crypto",
         external_payment_id=f"PAY-MEM-{timestamp}"
     )
     db.add(deposit)

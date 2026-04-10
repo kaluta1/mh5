@@ -1,6 +1,6 @@
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import text, inspect
 from psycopg2.errors import UniqueViolation
@@ -3623,6 +3623,7 @@ def _fetch_admin_chart_of_accounts_rows(db: Session) -> list:
 
     at_expr = "CAST(ca.account_type AS TEXT)" if "account_type" in colset else "'UNKNOWN'"
     stored_bal = "COALESCE(ca.balance, 0)" if "balance" in colset else "0"
+    desc_ca = "ca.description" if "description" in colset else "NULL::text"
     # Admin list: do not filter by is_active — legacy rows may be false/NULL and would hide the whole CoA.
     where_clause = ""
 
@@ -3630,6 +3631,7 @@ def _fetch_admin_chart_of_accounts_rows(db: Session) -> list:
     if insp.has_table("journal_lines"):
         sql = f"""
         SELECT ca.id, ca.account_code, ca.account_name,
+               {desc_ca} AS description,
                {at_expr} AS account_type,
                COALESCE(leg.net, {stored_bal}) AS balance
         FROM chart_of_accounts ca
@@ -3652,8 +3654,10 @@ def _fetch_admin_chart_of_accounts_rows(db: Session) -> list:
     else:
         bal_expr = "COALESCE(balance, 0)" if "balance" in colset else "0"
         at_simple = "CAST(account_type AS TEXT)" if "account_type" in colset else "'UNKNOWN'"
+        desc_simple = "description" if "description" in colset else "NULL::text"
         sql = f"""
         SELECT id, account_code, account_name,
+               {desc_simple} AS description,
                {at_simple} AS account_type,
                {bal_expr} AS balance
         FROM chart_of_accounts
@@ -3664,10 +3668,12 @@ def _fetch_admin_chart_of_accounts_rows(db: Session) -> list:
     except Exception:
         logger.exception("chart_of_accounts primary admin SQL failed; trying minimal SELECT")
         try:
+            desc_fb = "description" if "description" in colset else "NULL::text"
             return db.execute(
                 text(
-                    """
+                    f"""
                     SELECT id, account_code, account_name,
+                           {desc_fb} AS description,
                            CAST(account_type AS TEXT) AS account_type,
                            0 AS balance
                     FROM chart_of_accounts
@@ -3677,10 +3683,12 @@ def _fetch_admin_chart_of_accounts_rows(db: Session) -> list:
             ).mappings().all()
         except Exception:
             logger.exception("chart_of_accounts fallback SQL failed; returning id/code/name only")
+            desc_fb2 = "description" if "description" in colset else "NULL::text"
             return db.execute(
                 text(
-                    """
+                    f"""
                     SELECT id, account_code, account_name,
+                           {desc_fb2} AS description,
                            'UNKNOWN' AS account_type,
                            0 AS balance
                     FROM chart_of_accounts
@@ -3712,6 +3720,7 @@ async def admin_accounting_chart_of_accounts(
                 "id": r["id"],
                 "accountCode": r["account_code"],
                 "accountName": r["account_name"],
+                "description": (r.get("description") or "") or None,
                 "accountType": str(r["account_type"] or "").strip().upper(),
                 "creditBalance": float(r["balance"] or 0),
                 "totalLiabilities": float(r["balance"] or 0),
@@ -3730,9 +3739,10 @@ async def admin_accounting_chart_of_accounts(
 async def admin_accounting_journal_entries(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    limit: int = Query(50, ge=1, le=200),
+    limit: int = Query(100, ge=1, le=2000),
+    offset: int = Query(0, ge=0, le=100000),
 ):
-    """Dernières écritures avec lignes et comptes pour l’admin Accounting."""
+    """Journal entries with lines and CoA codes (paginated: offset + limit)."""
     check_admin(current_user)
     try:
         bind = db.get_bind()
@@ -3747,10 +3757,10 @@ async def admin_accounting_journal_entries(
                        total_debit, total_credit, CAST(status AS TEXT) AS status
                 FROM journal_entries
                 ORDER BY entry_date DESC NULLS LAST, id DESC
-                LIMIT :lim
+                OFFSET :off LIMIT :lim
                 """
             ),
-            {"lim": limit},
+            {"off": offset, "lim": limit},
         ).mappings().all()
         out = []
         for e in entries:
@@ -3799,6 +3809,85 @@ async def admin_accounting_journal_entries(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur journal entries: {str(e)}",
         )
+
+
+@router.get("/accounting/ledger-health")
+async def admin_accounting_ledger_health(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    kyc_scan_limit: int = Query(500, ge=1, le=5000),
+):
+    """CoA coverage, orphan lines, KYC journal gaps — use before/after CoA upgrades."""
+    check_admin(current_user)
+    from app.services.admin_ledger_health import build_ledger_health_payload
+
+    try:
+        return build_ledger_health_payload(db, kyc_scan_limit=kyc_scan_limit)
+    except Exception as e:
+        logger.exception("ledger-health failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
+
+
+@router.post("/accounting/ensure-coa")
+async def admin_accounting_ensure_coa(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Insert/update chart_of_accounts from init_coa.py (names, descriptions, new codes)."""
+    check_admin(current_user)
+    try:
+        from app.initial_data import ensure_chart_of_accounts
+
+        ensure_chart_of_accounts(db)
+        return {"ok": True, "detail": "Chart of accounts synced from server seed (init_coa)."}
+    except Exception as e:
+        logger.exception("ensure-coa failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
+
+
+@router.get("/accounting/founding-pool/snapshots")
+async def admin_founding_pool_list_snapshots(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+):
+    check_admin(current_user)
+    bind = db.get_bind()
+    if not inspect(bind).has_table("founding_pool_snapshots"):
+        return []
+    from app.models.founding_pool import FoundingPoolSnapshot
+
+    rows = (
+        db.query(FoundingPoolSnapshot)
+        .options(selectinload(FoundingPoolSnapshot.lines))
+        .order_by(FoundingPoolSnapshot.period_year.desc(), FoundingPoolSnapshot.period_month.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+    return [
+        {
+            "id": r.id,
+            "periodYear": r.period_year,
+            "periodMonth": r.period_month,
+            "status": r.status,
+            "accruedPoolAmount": float(r.accrued_pool_amount or 0),
+            "memberCount": r.member_count,
+            "preparedByUserId": r.prepared_by_user_id,
+            "approvedByUserId": r.approved_by_user_id,
+            "journalEntryId": r.journal_entry_id,
+            "lineCount": len(r.lines) if r.lines else 0,
+            "createdAt": r.created_at.isoformat() if r.created_at else None,
+        }
+        for r in rows
+    ]
 
 
 @router.get("/accounting/balance-sheet")
@@ -3963,3 +4052,122 @@ async def admin_accounting_backfill_journals(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e),
         )
+
+
+class FoundingPoolPrepareRequest(BaseModel):
+    year: int
+    month: int
+    notes: Optional[str] = None
+
+
+class KycProviderSettlementRequest(BaseModel):
+    amount: float
+    entry_date: Optional[date] = None
+    reference: Optional[str] = None
+
+
+@router.post("/accounting/founding-pool/prepare-month")
+async def admin_founding_pool_prepare_month(
+    body: FoundingPoolPrepareRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Draft snapshot: net accrual to 2104 in the calendar month, split across active founding members.
+    Next: POST .../approve then POST .../post (maker-checker).
+    """
+    check_admin(current_user)
+    from app.services.founding_pool_service import prepare_founding_pool_month
+
+    try:
+        snap = prepare_founding_pool_month(
+            db,
+            year=body.year,
+            month=body.month,
+            user_id=current_user.id,
+            notes=body.notes,
+        )
+        return {
+            "id": snap.id,
+            "period_year": snap.period_year,
+            "period_month": snap.period_month,
+            "status": snap.status,
+            "accrued_pool_amount": float(snap.accrued_pool_amount),
+            "member_count": snap.member_count,
+            "lines": [
+                {
+                    "user_id": ln.user_id,
+                    "share_amount": float(ln.share_amount),
+                    "weight_ratio": float(ln.weight_ratio or 0),
+                }
+                for ln in snap.lines
+            ],
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/accounting/founding-pool/{snapshot_id}/approve")
+async def admin_founding_pool_approve(
+    snapshot_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    check_admin(current_user)
+    from app.services.founding_pool_service import approve_founding_pool_snapshot
+
+    try:
+        snap = approve_founding_pool_snapshot(db, snapshot_id, current_user.id)
+        return {
+            "id": snap.id,
+            "status": snap.status,
+            "approved_by_user_id": snap.approved_by_user_id,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/accounting/founding-pool/{snapshot_id}/post")
+async def admin_founding_pool_post(
+    snapshot_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Post Dr 2104 / Cr 2105 for the approved snapshot total."""
+    check_admin(current_user)
+    from app.services.founding_pool_service import post_founding_pool_snapshot
+
+    try:
+        snap = post_founding_pool_snapshot(db, snapshot_id)
+        return {
+            "id": snap.id,
+            "status": snap.status,
+            "journal_entry_id": snap.journal_entry_id,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/accounting/kyc-provider/settlement")
+async def admin_kyc_provider_settlement(
+    body: KycProviderSettlementRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Record cash payment to Shufti: Dr 2003, Cr 1001."""
+    check_admin(current_user)
+    from app.services.payment_accounting import payment_accounting
+
+    try:
+        entry_dt = None
+        if body.entry_date is not None:
+            entry_dt = datetime.combine(body.entry_date, datetime.min.time())
+        je = payment_accounting.record_kyc_provider_settlement(
+            db,
+            amount=body.amount,
+            entry_date=entry_dt,
+            reference=body.reference or "",
+        )
+        return {"journal_entry_id": je.id, "entry_number": je.entry_number}
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

@@ -45,6 +45,44 @@ class CashoutFeeResult:
     net_to_member: Decimal
 
 
+@dataclass(frozen=True)
+class KycVerificationRecognitionSplit:
+    """When verification service is performed: release deferred fee (ex. $10 gross)."""
+
+    gross: Decimal
+    founding_pool_accrual: Decimal  # 10% of gross →2104 (monthly pool)
+    shufti_payable: Decimal  # provider fee (e.g. 20% of gross) → 2003
+    sponsor_commissions_total: Decimal  # sum of L1–L10 accruals (separate JE:5001 / 2001–2002)
+    net_verification_revenue: Decimal  # remainder → 4001
+
+
+def kyc_verification_recognition_split(
+    gross: Decimal,
+    sponsor_commissions_total: Decimal,
+    *,
+    founding_rate: Decimal = Decimal("0.10"),
+    shufti_rate: Decimal = Decimal("0.20"),
+) -> KycVerificationRecognitionSplit:
+    """
+    Net verification revenue = gross − founding accrual − Shufti − sponsor commissions.
+    Sponsor lines are posted in a separate journal (commission expense / payables).
+    """
+    g = _d(gross)
+    founding = _d(g * founding_rate)
+    shufti = _d(g * shufti_rate)
+    s = _d(max(Decimal("0"), sponsor_commissions_total))
+    net = _d(g - founding - shufti - s)
+    if net < 0:
+        net = Decimal("0.00")
+    return KycVerificationRecognitionSplit(
+        gross=g,
+        founding_pool_accrual=founding,
+        shufti_payable=shufti,
+        sponsor_commissions_total=s,
+        net_verification_revenue=net,
+    )
+
+
 def annual_membership_split(
     gross: Decimal,
     *,

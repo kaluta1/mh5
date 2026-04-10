@@ -16,7 +16,12 @@ from sqlalchemy.orm import Session
 from app.models.accounting import JournalEntry
 from app.models.affiliate import AffiliateCommission
 from app.models.payment import Deposit, DepositStatus, ProductType
-from app.services.payment_accounting import payment_accounting
+from app.models.kyc import KYCVerification, KYCStatus
+from app.services.payment_accounting import (
+    payment_accounting,
+    kyc_deferred_receipt_posted,
+    kyc_recognition_posted,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -98,9 +103,23 @@ def backfill_missing_payment_journals(
 
         try:
             if product_code == "kyc":
-                payment_accounting.process_kyc_payment_accounting(
-                    db, deposit, commissions, entry_date=entry_date
+                if not kyc_deferred_receipt_posted(db, did):
+                    payment_accounting.process_kyc_cash_receipt_accounting(
+                        db, deposit, entry_date=entry_date
+                    )
+                kyc_ok = (
+                    db.query(KYCVerification.id)
+                    .filter(
+                        KYCVerification.user_id == deposit.user_id,
+                        KYCVerification.status == KYCStatus.APPROVED,
+                    )
+                    .first()
+                    is not None
                 )
+                if kyc_ok and not kyc_recognition_posted(db, did):
+                    payment_accounting.process_kyc_verification_performed_accounting(
+                        db, deposit, commissions, entry_date=entry_date
+                    )
             elif product_code == "annual_membership":
                 payment_accounting.process_membership_payment_accounting(
                     db, deposit, commissions, entry_date=entry_date

@@ -2,16 +2,33 @@ from typing import Optional, List, Any
 from sqlalchemy import Column, Integer, String, ForeignKey, Float, Text, DateTime, Boolean, Enum as SQLEnum, Numeric, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import TypeDecorator
+from sqlalchemy.dialects.postgresql import ENUM as PG_ENUM
 from datetime import datetime
 import enum
 from app.db.base_class import Base
 
+# Existing DBs (002_add_myfav_models) use native PostgreSQL enum `accounttype`.
+_PG_ACCOUNTTYPE = PG_ENUM(
+    "ASSET",
+    "LIABILITY",
+    "EQUITY",
+    "REVENUE",
+    "EXPENSE",
+    name="accounttype",
+    create_type=False,
+)
+
 
 class AccountTypeColumn(TypeDecorator):
-    """Maps DB account_type (PostgreSQL enum or varchar) to AccountType without PG-specific ENUM binding."""
+    """Maps DB account_type: PostgreSQL uses native enum `accounttype`; others use VARCHAR."""
 
     impl = String(32)
     cache_ok = True
+
+    def load_dialect_impl(self, dialect: Any) -> Any:
+        if dialect.name == "postgresql":
+            return dialect.type_descriptor(_PG_ACCOUNTTYPE)
+        return dialect.type_descriptor(String(32))
 
     def process_bind_param(self, value: Any, dialect: Any) -> Any:
         if value is None:
