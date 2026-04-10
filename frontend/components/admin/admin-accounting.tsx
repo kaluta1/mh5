@@ -318,6 +318,28 @@ export default function AdminAccounting() {
         }
     }
 
+    const runFoundingPoolAccrualBackfill = async () => {
+        setOpBusy(true)
+        setOpMessage(null)
+        try {
+            const res = await api.post(
+                '/api/v1/admin/accounting/backfill-founding-pool-accruals',
+                {},
+                { params: { dry_run: backfillDryRun } },
+            )
+            if (res.status >= 400) {
+                const d = res.data as { detail?: string }
+                throw new Error(typeof d?.detail === 'string' ? d.detail : 'founding pool backfill failed')
+            }
+            setOpMessage(JSON.stringify(res.data, null, 2))
+            if (!backfillDryRun) await loadData()
+        } catch (e) {
+            setOpMessage(e instanceof Error ? e.message : String(e))
+        } finally {
+            setOpBusy(false)
+        }
+    }
+
     const runFpPrepare = async () => {
         setOpBusy(true)
         setOpMessage(null)
@@ -1260,11 +1282,25 @@ export default function AdminAccounting() {
                                 <Button type="button" size="sm" variant="outline" onClick={() => void runBackfill()} disabled={opBusy}>
                                     {t('admin.accounting.run_backfill') || 'Payment journal backfill'}
                                 </Button>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => void runFoundingPoolAccrualBackfill()}
+                                    disabled={opBusy}
+                                    title={t('admin.accounting.founding_pool_backfill_hint')}
+                                >
+                                    {t('admin.accounting.run_founding_pool_backfill') ||
+                                        'Founding Members 10% accrual backfill'}
+                                </Button>
                                 <label className="flex items-center gap-2 text-sm">
                                     <Checkbox checked={backfillDryRun} onCheckedChange={(c) => setBackfillDryRun(!!c)} id="dry-run" />
                                     <span>{t('admin.accounting.backfill_dry_run') || 'Dry run only'}</span>
                                 </label>
                             </div>
+                            <p className="text-xs text-muted-foreground max-w-3xl">
+                                {t('admin.accounting.founding_pool_backfill_hint')}
+                            </p>
                             {ledgerHealth && (
                                 <div className="grid gap-3 md:grid-cols-2 text-sm border rounded-lg p-4">
                                     <div>

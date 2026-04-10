@@ -153,6 +153,7 @@ def build_ledger_health_payload(db: Session, *, kyc_scan_limit: int = 500) -> Di
         "hints": [
             "Run POST /api/v1/admin/accounting/ensure-coa to insert/update CoA rows from init_coa.py.",
             "Run POST /api/v1/admin/accounting/backfill-journals?dry_run=false to post missing payment journals (uses current rules).",
+            "If journals exist but Founding Members 10% (2104) is missing, run POST /api/v1/admin/accounting/backfill-founding-pool-accruals?dry_run=false after reviewing a dry run.",
             "Old journals keep the same account_id FKs; renaming accounts in CoA does not break prior entries.",
         ],
     }

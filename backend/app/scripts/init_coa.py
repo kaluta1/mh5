@@ -202,7 +202,7 @@ def init_chart_of_accounts(db: Session):
         {"code": "2100", "name": "User Funds Payable", "type": AccountType.LIABILITY, "parent": "2000"},
         {
             "code": "2104",
-            "name": "Accrued Liability - Founding Members Pool",
+            "name": "Accrued Liability — Founding Members 10% Commission Pool",
             "type": AccountType.LIABILITY,
             "parent": "2000",
             "description": "10% of gross on applicable flows (e.g. KYC verification fee, membership) accrued when revenue is "

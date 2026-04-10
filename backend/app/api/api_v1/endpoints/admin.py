@@ -4054,6 +4054,29 @@ async def admin_accounting_backfill_journals(
         )
 
 
+@router.post("/accounting/backfill-founding-pool-accruals")
+async def admin_accounting_backfill_founding_pool_accruals(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    dry_run: bool = Query(False, description="If true, only list deposits that would receive a 2104 accrual line"),
+):
+    """
+    For deposits that already have payment journals but no 2104 (Founding Members 10%) line, post an
+    adjusting entry (Dr revenue / Cr 2104). Run after backfill-journals for legacy data.
+    """
+    check_admin(current_user)
+    from app.services.payment_accounting_backfill import backfill_missing_founding_pool_accruals
+
+    try:
+        return backfill_missing_founding_pool_accruals(db, dry_run=dry_run)
+    except Exception as e:
+        logger.exception("backfill founding pool accruals failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
+
+
 class FoundingPoolPrepareRequest(BaseModel):
     year: int
     month: int
