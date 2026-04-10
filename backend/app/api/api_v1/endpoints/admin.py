@@ -4054,6 +4054,29 @@ async def admin_accounting_backfill_journals(
         )
 
 
+@router.post("/accounting/backfill-kyc-recognition")
+async def admin_accounting_backfill_kyc_recognition(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    dry_run: bool = Query(False, description="If true, only list deposits that would get Step 2 journals"),
+):
+    """
+    Post KYC Step 2 (revenue + 2104 + Shufti payable) when deferred receipt exists, recognition is missing,
+    and kyc_verifications.status is APPROVED. Run before founding-pool-only backfill for KYC deposits.
+    """
+    check_admin(current_user)
+    from app.services.payment_accounting_backfill import backfill_missing_kyc_recognition
+
+    try:
+        return backfill_missing_kyc_recognition(db, dry_run=dry_run)
+    except Exception as e:
+        logger.exception("backfill kyc recognition failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
+
+
 @router.post("/accounting/backfill-founding-pool-accruals")
 async def admin_accounting_backfill_founding_pool_accruals(
     db: Session = Depends(get_db),

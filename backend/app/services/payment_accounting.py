@@ -7,7 +7,7 @@ from datetime import datetime
 from app.accounting.distribution_formulas import club_markup_split, kyc_verification_recognition_split
 from app.models.payment import Deposit, DepositStatus, ProductType
 from app.models.affiliate import AffiliateCommission
-from app.models.accounting import JournalEntry
+from app.models.accounting import ChartOfAccounts, JournalEntry, JournalLine
 from app.services.accounting_service import accounting_service
 
 logger = logging.getLogger(__name__)
@@ -45,12 +45,34 @@ def kyc_deferred_receipt_posted(db: Session, deposit_id: int) -> bool:
 
 
 def kyc_recognition_posted(db: Session, deposit_id: int) -> bool:
-    return (
+    """True if Step 2 posted: standard description or legacy entry with Dr 2113 + Cr 4001 for this deposit."""
+    if (
         db.query(JournalEntry.id)
-        .filter(JournalEntry.description.like(f"%KYC Payment - Deposit #{deposit_id}%(Verification performed)%"))
+        .filter(
+            JournalEntry.description.like(f"%KYC Payment - Deposit #{deposit_id}%(Verification performed)%")
+        )
         .first()
         is not None
-    )
+    ):
+        return True
+    needle = f"KYC Payment - Deposit #{deposit_id}"
+    je_ids = [r[0] for r in db.query(JournalEntry.id).filter(JournalEntry.description.like(f"%{needle}%")).all()]
+    for je_id in je_ids:
+        rows = (
+            db.query(ChartOfAccounts.account_code, JournalLine.debit_amount, JournalLine.credit_amount)
+            .join(JournalLine, JournalLine.account_id == ChartOfAccounts.id)
+            .filter(JournalLine.entry_id == je_id)
+            .all()
+        )
+        has_2113_dr = any(
+            str(c) == "2113" and float(dr or 0) > 0 for c, dr, _cr in rows
+        )
+        has_4001_cr = any(
+            str(c) == "4001" and float(cr or 0) > 0 for c, _dr, cr in rows
+        )
+        if has_2113_dr and has_4001_cr:
+            return True
+    return False
 
 
 class PaymentAccountingService:

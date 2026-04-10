@@ -176,6 +176,97 @@ def backfill_missing_payment_journals(
     }
 
 
+def backfill_missing_kyc_recognition(
+    db: Session,
+    *,
+    dry_run: bool = False,
+    deposit_ids: Optional[List[int]] = None,
+) -> Dict[str, Any]:
+    """
+    Post KYC Step 2 (Dr 2113 / Cr 4001, 2104, 2003 + optional commissions) when:
+    - Deposit is validated KYC,
+    - Deferred cash receipt (Step 1) exists,
+    - Recognition is not already posted,
+    - kyc_verifications row for the user is APPROVED.
+
+    Run this before --founding-pool for KYC deposits; Step 2 already includes 2104 when it runs.
+    """
+    kyc_pt = db.query(ProductType).filter(ProductType.code == "kyc").first()
+    if not kyc_pt:
+        return {
+            "dry_run": dry_run,
+            "candidates": 0,
+            "posted": 0,
+            "processed_deposit_ids": [],
+            "skipped_no_deferred_receipt": [],
+            "skipped_recognition_already_posted": [],
+            "skipped_kyc_verification_not_approved": [],
+            "errors": [{"detail": "No product_types row for code kyc"}],
+        }
+
+    q = (
+        db.query(Deposit)
+        .filter(Deposit.product_type_id == kyc_pt.id, Deposit.status == DepositStatus.VALIDATED)
+        .order_by(Deposit.id.asc())
+    )
+    if deposit_ids is not None:
+        q = q.filter(Deposit.id.in_(deposit_ids))
+
+    deposits = q.all()
+    processed: List[int] = []
+    skipped_no_deferred: List[int] = []
+    skipped_has_recognition: List[int] = []
+    skipped_not_approved: List[int] = []
+    errors: List[Dict[str, Any]] = []
+
+    for deposit in deposits:
+        db.rollback()
+        did = deposit.id
+        if not kyc_deferred_receipt_posted(db, did):
+            skipped_no_deferred.append(did)
+            continue
+        if kyc_recognition_posted(db, did):
+            skipped_has_recognition.append(did)
+            continue
+        kv = (
+            db.query(KYCVerification)
+            .filter(KYCVerification.user_id == deposit.user_id)
+            .first()
+        )
+        if kv is None or kv.status != KYCStatus.APPROVED:
+            skipped_not_approved.append(did)
+            continue
+
+        if dry_run:
+            processed.append(did)
+            continue
+
+        try:
+            commissions = (
+                db.query(AffiliateCommission).filter(AffiliateCommission.deposit_id == did).all()
+            )
+            payment_accounting.process_kyc_verification_performed_accounting(
+                db, deposit, commissions, entry_date=None
+            )
+            processed.append(did)
+            logger.info("Backfilled KYC verification recognition for deposit %s", did)
+        except Exception as e:
+            db.rollback()
+            logger.exception("KYC recognition backfill failed for deposit %s", did)
+            errors.append({"deposit_id": did, "detail": str(e)})
+
+    return {
+        "dry_run": dry_run,
+        "candidates": len(deposits),
+        "posted": len(processed),
+        "processed_deposit_ids": processed,
+        "skipped_no_deferred_receipt": skipped_no_deferred,
+        "skipped_recognition_already_posted": skipped_has_recognition,
+        "skipped_kyc_verification_not_approved": skipped_not_approved,
+        "errors": errors,
+    }
+
+
 def backfill_missing_founding_pool_accruals(
     db: Session,
     *,
