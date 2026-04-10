@@ -14,13 +14,49 @@ import api from '@/lib/api'
 
 const EMPTY = { chartOfAccounts: [] as any[], journalEntries: [] as any[] }
 
-/** Same pattern as other admin pages: full /api/v1 paths on base URL without /api/v1 (see admin-users.tsx). */
-function asJsonArray<T>(raw: unknown): T[] {
+/**
+ * Match admin-users.tsx: accept a bare array or common envelope shapes (gateways, BFFs, older clients).
+ */
+function extractApiArray<T>(raw: unknown): T[] {
     if (Array.isArray(raw)) return raw as T[]
-    if (raw && typeof raw === 'object' && Array.isArray((raw as { data?: unknown }).data)) {
-        return (raw as { data: T[] }).data
+    if (raw && typeof raw === 'object') {
+        const o = raw as Record<string, unknown>
+        const nested =
+            o.data ??
+            o.items ??
+            o.results ??
+            o.accounts ??
+            o.chartOfAccounts ??
+            o.chart_of_accounts ??
+            o.journalEntries ??
+            o.journal_entries
+        if (Array.isArray(nested)) return nested as T[]
+    }
+    if (typeof raw === 'string') {
+        try {
+            return extractApiArray(JSON.parse(raw) as unknown)
+        } catch {
+            return []
+        }
     }
     return []
+}
+
+/** Admin CoA endpoint uses camelCase; tolerate snake_case if a proxy or alternate handler returns ORM-shaped JSON. */
+function normalizeCoaRow(r: Record<string, unknown>): any {
+    const id = r.id
+    const accountCode = r.accountCode ?? r.account_code
+    const accountName = r.accountName ?? r.account_name
+    const accountType = r.accountType ?? r.account_type
+    const bal = r.creditBalance ?? r.credit_balance ?? r.balance ?? r.totalLiabilities ?? r.total_liabilities
+    return {
+        id,
+        accountCode,
+        accountName,
+        accountType: accountType != null ? String(accountType).toUpperCase() : accountType,
+        creditBalance: typeof bal === 'number' ? bal : Number(bal ?? 0),
+        totalLiabilities: typeof bal === 'number' ? bal : Number(bal ?? 0),
+    }
 }
 
 export default function AdminAccounting() {
@@ -48,9 +84,11 @@ export default function AdminAccounting() {
                 const d = jeRes.data as any
                 throw new Error(typeof d?.detail === 'string' ? d.detail : 'Journal entries request failed')
             }
+            const coaRaw = extractApiArray<Record<string, unknown>>(coaRes.data)
+            const jeRaw = extractApiArray(jeRes.data)
             setData({
-                chartOfAccounts: asJsonArray(coaRes.data),
-                journalEntries: asJsonArray(jeRes.data),
+                chartOfAccounts: coaRaw.map((row) => normalizeCoaRow(row)),
+                journalEntries: jeRaw,
             })
         } catch (e: any) {
             setError(e instanceof Error ? e : new Error(String(e)))
