@@ -277,9 +277,7 @@ export default function AdminAccounting() {
                                                     <Badge variant="outline">{account.accountType}</Badge>
                                                 </TableCell>
                                                 <TableCell className="text-right font-mono">
-                                                    {Number(account.creditBalance) !== 0
-                                                        ? Number(account.creditBalance).toFixed(2)
-                                                        : '—'}
+                                                    {Number(account.creditBalance ?? 0).toFixed(2)}
                                                 </TableCell>
                                             </TableRow>
                                         ))
