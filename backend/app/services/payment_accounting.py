@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from decimal import Decimal
 import logging
-from typing import Optional, List, Tuple, Any
+from typing import Optional, List, Tuple, Any, Dict
 from datetime import datetime
 
 from app.accounting.distribution_formulas import club_markup_split, kyc_verification_recognition_split
@@ -117,6 +117,113 @@ def kyc_recognition_posted(db: Session, deposit_id: int) -> bool:
         if has_2113_dr and has_4001_cr:
             return True
     return False
+
+
+def _legacy_instant_kyc_amount_and_revenue(
+    db: Session, deposit: Deposit) -> Tuple[Optional[float], Optional[str]]:
+    """
+    Detect legacy 'instant' KYC posting: cash Dr 1001 / Cr revenue (4001 or 4002) with no 2113 movement,
+    for a journal that references this deposit. Returns (cash_amount, revenue_account_code) or (None, None).
+    """
+    needle = f"Deposit #{deposit.id}"
+    target = float(deposit.amount)
+    je_ids = [
+        r[0]
+        for r in db.query(JournalEntry.id)
+        .filter(JournalEntry.description.like(f"%{needle}%"))
+        .all()
+    ]
+    for je_id in je_ids:
+        rows = _journal_entry_line_totals(db, je_id)
+        sums: Dict[str, Dict[str, float]] = {}
+        for c, d, cr in rows:
+            code = str(c)
+            sums.setdefault(code, {"d": 0.0, "c": 0.0})
+            sums[code]["d"] += float(d or 0)
+            sums[code]["c"] += float(cr or 0)
+        d1 = float(sums.get("1001", {}).get("d", 0.0))
+        c2113 = float(sums.get("2113", {}).get("c", 0.0))
+        d2113 = float(sums.get("2113", {}).get("d", 0.0))
+        c4001 = float(sums.get("4001", {}).get("c", 0.0))
+        c4002 = float(sums.get("4002", {}).get("c", 0.0))
+        if c2113 > 0.01 or d2113 > 0.01:
+            continue
+        if d1 < 0.01:
+            continue
+        rev_cr = c4001 + c4002
+        if rev_cr < 0.01:
+            continue
+        if abs(d1 - rev_cr) > 0.03:
+            continue
+        if abs(d1 - target) > 0.08 and abs(rev_cr - target) > 0.08:
+            continue
+        rev_code = "4001" if c4001 >= c4002 else "4002"
+        return (d1, rev_code)
+    return (None, None)
+
+
+def kyc_legacy_instant_cash_to_revenue_detected(db: Session, deposit: Deposit) -> bool:
+    amt, _ = _legacy_instant_kyc_amount_and_revenue(db, deposit)
+    return amt is not None
+
+
+def kyc_reclass_correction_posted(db: Session, deposit_id: int) -> bool:
+    return (
+        db.query(JournalEntry.id)
+        .filter(
+            JournalEntry.description.like(f"%Deposit #{deposit_id}%"),
+            JournalEntry.description.ilike("%legacy instant revenue correction%"),
+        )
+        .first()
+        is not None
+    )
+
+
+def post_kyc_legacy_instant_to_deferred(db: Session, deposit: Deposit) -> None:
+    """
+    Dr revenue / Cr 2113 for the legacy instant-recognition amount so Step 2 can run (Dr 2113 / Cr 4001 / …).
+    Idempotent if correction journal already exists.
+    """
+    dep_id = deposit.id
+    if kyc_reclass_correction_posted(db, dep_id):
+        logger.info("KYC legacy reclass already posted for deposit %s", dep_id)
+        return
+    amt, rev_code = _legacy_instant_kyc_amount_and_revenue(db, deposit)
+    if amt is None or rev_code is None:
+        raise ValueError(
+            f"No legacy instant KYC cash-to-revenue pattern found for deposit {dep_id}"
+        )
+    uid = deposit.user_id
+    description = (
+        f"KYC Payment - Deposit #{dep_id} - User #{uid} "
+        f"(Deferred setup — legacy instant revenue correction)"
+    )
+    jdate = _journal_entry_date(deposit, None)
+    accounting_service.create_journal_entry(
+        db,
+        description=description,
+        lines=[
+            {
+                "account_code": rev_code,
+                "debit": float(amt),
+                "credit": 0.0,
+                "description": "Reclass verification revenue to deferred 2113",
+            },
+            {
+                "account_code": "2113",
+                "debit": 0.0,
+                "credit": float(amt),
+                "description": "Deferred revenue — verification (unearned until performed)",
+            },
+        ],
+        date=jdate,
+    )
+    logger.info(
+        "Posted KYC legacy instant-to-deferred correction for deposit %s amount=%s via %s",
+        dep_id,
+        amt,
+        rev_code,
+    )
 
 
 class PaymentAccountingService:

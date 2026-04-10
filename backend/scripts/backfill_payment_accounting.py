@@ -21,7 +21,7 @@ import os
 import sys
 
 # Bump when CLI flags change; `python scripts/backfill_payment_accounting.py --version` must show this on the server.
-BACKFILL_CLI_VERSION = "4"
+BACKFILL_CLI_VERSION = "5"
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 

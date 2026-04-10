@@ -23,7 +23,10 @@ from app.services.accounting_service import accounting_service
 from app.services.payment_accounting import (
     payment_accounting,
     kyc_deferred_receipt_posted,
+    kyc_legacy_instant_cash_to_revenue_detected,
+    kyc_reclass_correction_posted,
     kyc_recognition_posted,
+    post_kyc_legacy_instant_to_deferred,
 )
 
 logger = logging.getLogger(__name__)
@@ -222,9 +225,6 @@ def backfill_missing_kyc_recognition(
     for deposit in deposits:
         db.rollback()
         did = deposit.id
-        if not kyc_deferred_receipt_posted(db, did):
-            skipped_no_deferred.append(did)
-            continue
         if kyc_recognition_posted(db, did):
             skipped_has_recognition.append(did)
             continue
@@ -236,6 +236,15 @@ def backfill_missing_kyc_recognition(
         if kv is None or kv.status != KYCStatus.APPROVED:
             skipped_not_approved.append(did)
             continue
+
+        has_deferred = kyc_deferred_receipt_posted(db, did) or kyc_reclass_correction_posted(db, did)
+        if not has_deferred:
+            if kyc_legacy_instant_cash_to_revenue_detected(db, deposit):
+                if not dry_run:
+                    post_kyc_legacy_instant_to_deferred(db, deposit)
+            else:
+                skipped_no_deferred.append(did)
+                continue
 
         if dry_run:
             processed.append(did)
