@@ -340,6 +340,14 @@ def ensure_chart_of_accounts(db: Session) -> None:
 
         init_chart_of_accounts(db)
     except Exception as e:
+        msg = str(e)
+        if "must be owner" in msg or "InsufficientPrivilege" in msg:
+            logger.error(
+                "Chart of accounts: le rôle PostgreSQL n'est pas propriétaire de chart_of_accounts — "
+                "les ALTER TABLE échouent. Exécutez une fois en superuser / propriétaire (Neon: SQL Editor avec un rôle admin) "
+                "le fichier backend/scripts/sql/fix_accounting_schema_privileged.sql, ou: "
+                "ALTER TABLE chart_of_accounts OWNER TO <votre_role_app>; puis relancez ensure_chart_of_accounts."
+            )
         logger.warning("Chart of accounts non initialisé: %s", e)
 
 
