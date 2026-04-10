@@ -239,15 +239,15 @@ def generate_cash_flow_payload(db: Session, start: date, end: date) -> dict[str,
     net_income = inc["net_income"]
     begin_cash = 0.0
     end_cash = 0.0
-    wallet = db.query(ChartOfAccounts).filter(ChartOfAccounts.account_code == "1001").first()
-    if wallet and _has_journal_tables(db):
+    treasury_usdt_bsc = db.query(ChartOfAccounts).filter(ChartOfAccounts.account_code == "1001").first()
+    if treasury_usdt_bsc and _has_journal_tables(db):
         pre_end = _end_of_day(start - timedelta(days=1))
         for acc, d, c in account_totals_through_date(db, pre_end):
-            if acc.id == wallet.id:
+            if acc.id == treasury_usdt_bsc.id:
                 begin_cash = _signed_balance(acc.account_type, d, c)
                 break
         for acc, d, c in account_totals_through_date(db, _end_of_day(end)):
-            if acc.id == wallet.id:
+            if acc.id == treasury_usdt_bsc.id:
                 end_cash = _signed_balance(acc.account_type, d, c)
                 break
     begin_cash, end_cash = round(begin_cash, 2), round(end_cash, 2)
@@ -256,15 +256,19 @@ def generate_cash_flow_payload(db: Session, start: date, end: date) -> dict[str,
     return {
         "period_start": start.isoformat(),
         "period_end": end.isoformat(),
-        "note": "Summary: net income from the income statement and change in Platform Wallet (1001) when present. "
-        "Line-by-line operating/investing/financing classification is not implemented yet.",
+        "note": "Summary: net income from the income statement and the change in on-chain USDT (BEP-20, BSC) "
+        "held in treasury account 1001 when present. Amounts are in USDT. "
+        "Line-by-line operating / investing / financing classification is not implemented yet.",
         "net_income": net_income,
         "beginning_cash_balance": begin_cash,
         "ending_cash_balance": end_cash,
         "net_change_in_cash": change,
         "operating_activities": [
             {"label": "Net income", "amount": net_income},
-            {"label": "Other (reconciliation to cash)", "amount": other},
+            {
+                "label": "Other (reconciliation to USDT BSC treasury — 1001)",
+                "amount": other,
+            },
         ],
         "investing_activities": [],
         "financing_activities": [],
@@ -433,7 +437,7 @@ def generate_full_financial_report_payload(
     period_end: date,
 ) -> dict[str, Any]:
     """
-    Single package: balance sheet (as_of), P&L and cash flow (period), trial balance (as_of),
+    Single package: balance sheet (as_of), P&L and USDT (BSC) treasury summary (period), trial balance (as_of),
     full CoA register (as_of), period activity, validation summary.
     """
     bs = generate_balance_sheet_payload(db, as_of)

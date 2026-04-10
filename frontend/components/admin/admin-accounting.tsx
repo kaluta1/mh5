@@ -742,8 +742,8 @@ export default function AdminAccounting() {
                                                         </p>
                                                     ) : null}
                                                     <p className="text-sm">
-                                                        Δ cash: {fmtMoney(cf?.net_change_in_cash)} — {t('admin.accounting.net_income')}:{' '}
-                                                        {fmtMoney(cf?.net_income)}
+                                                        {t('admin.accounting.treasury_change_1001')}: {fmtMoney(cf?.net_change_in_cash)} —{' '}
+                                                        {t('admin.accounting.net_income')}: {fmtMoney(cf?.net_income)}
                                                     </p>
                                                 </div>
                                                 <div>
@@ -978,8 +978,8 @@ export default function AdminAccounting() {
                                         </p>
                                     )}
                                     <p className="text-sm">
-                                        {t('admin.accounting.opening_balance')}: {fmtMoney((reportData as any).beginning_cash_balance)} —{' '}
-                                        {t('admin.accounting.closing_balance')}: {fmtMoney((reportData as any).ending_cash_balance)}
+                                        {t('admin.accounting.cf_1001_opening')}: {fmtMoney((reportData as any).beginning_cash_balance)} —{' '}
+                                        {t('admin.accounting.cf_1001_closing')}: {fmtMoney((reportData as any).ending_cash_balance)}
                                     </p>
                                     <h4 className="font-semibold">{t('admin.accounting.operating')}</h4>
                                     <Table>
@@ -993,7 +993,8 @@ export default function AdminAccounting() {
                                         </TableBody>
                                     </Table>
                                     <p className="font-medium">
-                                        {t('admin.accounting.net_income')}: {fmtMoney((reportData as any).net_income)} — Δ cash:{' '}
+                                        {t('admin.accounting.net_income')}: {fmtMoney((reportData as any).net_income)} —{' '}
+                                        {t('admin.accounting.treasury_change_1001')}:{' '}
                                         {fmtMoney((reportData as any).net_change_in_cash)}
                                     </p>
                                 </div>

@@ -223,7 +223,7 @@ def get_cash_flow_statement(
     end_date: Optional[date] = None
 ):
     """
-    Générer l'état des flux de trésorerie (admin seulement).
+    Résumé de trésorerie USDT (BSC) vs résultat net (compte 1001) — admin seulement.
     """
     if not end_date:
         end_date = date.today()

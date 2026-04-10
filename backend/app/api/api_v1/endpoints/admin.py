@@ -3960,7 +3960,7 @@ async def admin_accounting_cash_flow(
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
 ):
-    """Simplified cash summary (net income + Platform Wallet 1001 change when present)."""
+    """Simplified liquidity summary: net income plus change in USDT (BSC) treasury (1001) when present."""
     check_admin(current_user)
     try:
         end_d = end_date or date.today()
@@ -3982,12 +3982,12 @@ async def admin_accounting_full_financial_report(
         None,
         description="As-of date for balance sheet, trial balance, and CoA register (posted through end of day)",
     ),
-    period_start: Optional[date] = Query(None, description="P&L and cash flow period start"),
-    period_end: Optional[date] = Query(None, description="P&L and cash flow period end"),
+    period_start: Optional[date] = Query(None, description="P&L and USDT (BSC) treasury summary period start"),
+    period_end: Optional[date] = Query(None, description="P&L and USDT (BSC) treasury summary period end"),
 ):
     """
     Complete financial reporting package derived from the chart of accounts and posted journals:
-    balance sheet, income statement, trial balance, cash flow summary, full CoA register,
+    balance sheet, income statement, trial balance, USDT (BSC) treasury summary, full CoA register,
     period activity by account, validation summary.
     """
     check_admin(current_user)
@@ -4206,7 +4206,7 @@ async def admin_kyc_provider_settlement(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Record cash payment to Shufti: Dr 2003, Cr 1001."""
+    """Record USDT (BSC) payment to Shufti: Dr 2003, Cr 1001."""
     check_admin(current_user)
     from app.services.payment_accounting import payment_accounting
 

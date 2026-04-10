@@ -252,7 +252,7 @@ def record_commission_payment_in_accounting(
     
     Creates journal entry:
     - Debit: Commission Payable
-    - Credit: Cash/Crypto Asset (or payment method used)
+    - Credit: USDT (BSC) / crypto asset (or payment method used)
     
     Args:
         db: Database session

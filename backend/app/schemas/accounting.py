@@ -309,7 +309,7 @@ class BalanceSheet(BaseModel):
 
 
 class CashFlowStatement(BaseModel):
-    """État des flux de trésorerie"""
+    """Liquidity summary: net income vs change in USDT (BSC) treasury (account 1001), not generic cash."""
     period_start: datetime
     period_end: datetime
     operating_activities: List[dict] = []

@@ -2743,7 +2743,8 @@ export const translations: Record<Language, TranslationKeys> = {
         no_journal: "Aucune écriture au journal pour le moment.",
         no_coa: "Aucun compte dans la base. Exécutez init_chart_of_accounts sur le serveur.",
         reports_tab: "Rapports financiers",
-        reports_hint: "Grand livre, balance de vérification, bilan, compte de résultat et flux de trésorerie (aperçu).",
+        reports_hint:
+          "Grand livre, balance de vérification, bilan, compte de résultat et synthèse trésorerie USDT (BSC) (aperçu).",
         load_report: "Charger le rapport",
         as_of_date: "À la date du",
         period_from: "Du",
@@ -2751,7 +2752,7 @@ export const translations: Record<Language, TranslationKeys> = {
         balance_sheet_title: "Bilan",
         income_statement_title: "Compte de résultat",
         trial_balance_title: "Balance de vérification",
-        cash_flow_title: "Flux de trésorerie (résumé)",
+        cash_flow_title: "Trésorerie USDT (BSC) (résumé)",
         general_ledger_title: "Grand livre (compte)",
         select_account: "Compte",
         section_assets: "Actifs",
@@ -2779,14 +2780,18 @@ export const translations: Record<Language, TranslationKeys> = {
         no_report_data: "Aucune donnée pour cette période.",
         report_failed: "Échec du rapport",
         full_pack_tab: "Dossier complet",
-        full_pack_hint: "Bilan, compte de résultat, balance, flux de trésorerie, registre du plan comptable et mouvements de période — basé sur les écritures validées.",
+        full_pack_hint:
+          "Bilan, compte de résultat, balance, synthèse trésorerie USDT (BSC), registre du plan comptable et mouvements de période — basé sur les écritures validées.",
         download_json: "Télécharger JSON",
         download_coa_csv: "CSV plan comptable",
         summary_checks: "Contrôles",
         coa_register_title: "Registre du plan comptable (tous les comptes)",
         period_activity_title: "Mouvements de la période par compte",
         equity_highlights: "Capitaux propres (aperçu)",
-        parent_code: "Compte parent"
+        parent_code: "Compte parent",
+        treasury_change_1001: "Variation trésorerie USDT (BSC) (1001)",
+        cf_1001_opening: "Solde d'ouverture — USDT (BSC) compte 1001",
+        cf_1001_closing: "Solde de clôture — USDT (BSC) compte 1001"
       },
       commission_settings: {
         subtitle: "Configurez les règles et taux de commission",
@@ -6017,7 +6022,8 @@ export const translations: Record<Language, TranslationKeys> = {
         no_journal: "No journal entries yet.",
         no_coa: "No accounts in database. Run init_chart_of_accounts on the server.",
         reports_tab: "Financial reports",
-        reports_hint: "General ledger, trial balance, balance sheet, income statement, and cash flow (summary).",
+        reports_hint:
+          "General ledger, trial balance, balance sheet, income statement, and USDT (BSC) treasury summary.",
         load_report: "Load report",
         as_of_date: "As of",
         period_from: "From",
@@ -6025,7 +6031,7 @@ export const translations: Record<Language, TranslationKeys> = {
         balance_sheet_title: "Balance sheet",
         income_statement_title: "Income statement",
         trial_balance_title: "Trial balance",
-        cash_flow_title: "Cash flow (summary)",
+        cash_flow_title: "USDT (BSC) treasury summary",
         general_ledger_title: "General ledger (by account)",
         select_account: "Account",
         section_assets: "Assets",
@@ -6053,14 +6059,18 @@ export const translations: Record<Language, TranslationKeys> = {
         no_report_data: "No data for this period.",
         report_failed: "Report failed",
         full_pack_tab: "Complete package",
-        full_pack_hint: "Balance sheet, income statement, trial balance, cash flow summary, full chart-of-accounts register, and period activity — all tied to your CoA and posted journals.",
+        full_pack_hint:
+          "Balance sheet, income statement, trial balance, USDT (BSC) treasury summary, full chart-of-accounts register, and period activity — all tied to your CoA and posted journals.",
         download_json: "Download JSON",
         download_coa_csv: "Download CoA CSV",
         summary_checks: "Checks",
         coa_register_title: "Chart of accounts register (all accounts)",
         period_activity_title: "Period activity by account",
         equity_highlights: "Equity (highlights)",
-        parent_code: "Parent code"
+        parent_code: "Parent code",
+        treasury_change_1001: "Change in USDT (BSC) treasury (1001)",
+        cf_1001_opening: "Opening — USDT (BSC) treasury (1001)",
+        cf_1001_closing: "Closing — USDT (BSC) treasury (1001)"
       },
       commission_settings: {
         subtitle: "Configure commission rules and rates",

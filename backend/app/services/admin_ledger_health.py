@@ -106,8 +106,8 @@ def kyc_journal_gaps(db: Session, *, scan_limit: int = 500) -> Dict[str, Any]:
                     {
                         "deposit_id": did,
                         "user_id": uid,
-                        "issue": "missing_deferred_cash_receipt",
-                        "fix": "Run payment backfill or re-validate deposit accounting (Dr 1001 / Cr 2113)",
+                        "issue": "missing_deferred_receipt",
+                        "fix": "Run payment backfill or re-validate deposit accounting (USDT BSC Dr 1001 / Cr 2113)",
                     }
                 )
             continue

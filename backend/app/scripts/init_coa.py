@@ -170,7 +170,14 @@ def init_chart_of_accounts(db: Session):
     accounts = [
         # ASSETS (1000)
         {"code": "1000", "name": "Assets", "type": AccountType.ASSET, "parent": None},
-        {"code": "1001", "name": "Platform Wallet", "type": AccountType.ASSET, "parent": "1000"},
+        {
+            "code": "1001",
+            "name": "USDT Treasury (BSC)",
+            "type": AccountType.ASSET,
+            "parent": "1000",
+            "description": "On-chain USDT (BEP-20) on BNB Smart Chain (BSC). Member and platform receipts post here (Dr 1001); "
+            "settlements (e.g. Shufti) clear with Cr 1001. Not fiat cash or custodial wallet balance.",
+        },
         {"code": "1200", "name": "Accounts Receivable", "type": AccountType.ASSET, "parent": "1000"},
         # LIABILITIES (2000)
         {"code": "2000", "name": "Liabilities", "type": AccountType.LIABILITY, "parent": None},
@@ -215,7 +222,7 @@ def init_chart_of_accounts(db: Session):
             "type": AccountType.LIABILITY,
             "parent": "2000",
             "description": "Member-level founding commission balances after month-end pool allocation (Dr 2104, Cr 2105). "
-            "Cashouts clear against user payables; cashout fee revenue uses 4005.",
+            "USDT withdrawals clear against user payables; cashout fee revenue uses 4005.",
         },
         {"code": "2110", "name": "Deferred Revenue - Annual Membership", "type": AccountType.LIABILITY, "parent": "2000"},
         {"code": "2111", "name": "Deferred Revenue - Founding Membership", "type": AccountType.LIABILITY, "parent": "2000"},
@@ -233,7 +240,7 @@ def init_chart_of_accounts(db: Session):
             "name": "Deferred Revenue - Verification (KYC)",
             "type": AccountType.LIABILITY,
             "parent": "2000",
-            "description": "Unearned verification fees until KYC completes. Step 1 (cash in): Dr 1001, Cr 2113. "
+            "description": "Unearned verification fees until KYC completes. Step 1 (USDT BSC in): Dr 1001, Cr 2113. "
             "Step 2 (Shufti/service performed): Dr 2113, Cr 4001 (net), Cr 2104 (10% founding pool accrual), Cr 2003 (Shufti). "
             "Sponsor commissions: separate Dr 5001 / Cr 2001–2002 entry when recognition posts.",
         },
