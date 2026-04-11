@@ -250,8 +250,10 @@ class ShuftiProService:
                 # Utiliser le même domaine que le callback (digitalshoppingmall.net)
                 redirect_url = "https://digitalshoppingmall.net/shufti_redirect.php"
         
-        # Payload pour la vérification (basé sur le code PHP fonctionnel)
-        payload = {
+        # Payload pour la vérification (basé sur le code PHP fonctionnel).
+        # Ne pas envoyer de chaînes vides pour name/dob/etc. : Shufti renvoie souvent
+        # event "request.invalid" (écran INVALID dans l'iframe) si le format est incohérent.
+        payload: Dict[str, Any] = {
             "reference": reference,
             "callback_url": self.callback_url,
             "redirect_url": redirect_url,
@@ -264,21 +266,12 @@ class ShuftiProService:
             "show_results": "1",
             "show_consent": "1",
             "show_feedback_form": "0",
-            "allow_retry": "1",
             "ttl": SHUFTI_TTL_MINUTES,  # 6 jours en minutes
-            
-            # Vérification faciale
             "face": {
                 "proof": ""
             },
-            
-            # Pièce d'identité
             "document": {
                 "supported_types": ["id_card", "passport", "driving_license"],
-                "name": "",
-                "dob": "",
-                "document_number": "",
-                "issue_date": "",
                 "fetch_enhanced_data": "0",
                 "allow_offline": "1",
                 "allow_online": "1",
@@ -290,10 +283,8 @@ class ShuftiProService:
                     "allow_e_document": "1"
                 }
             },
-            # Justificatif de domicile (vérification automatique côté Shufti Pro)
             "address": {
                 "proof": "",
-                "name": "",
                 "supported_types": [
                     "utility_bill",
                     "bank_statement",
@@ -304,14 +295,12 @@ class ShuftiProService:
                 "verification_mode": "any",
                 "allow_offline": "1",
                 "allow_online": "1",
-                "address_fuzzy_match": "1",
-                **(
-                    {"full_address": residential_address.strip()[:500]}
-                    if residential_address and residential_address.strip()
-                    else {}
-                ),
             },
         }
+        if country:
+            payload["country"] = country
+        if residential_address and residential_address.strip():
+            payload["address"]["full_address"] = residential_address.strip()[:500]
         
         try:
             async with aiohttp.ClientSession() as session:
@@ -327,12 +316,33 @@ class ShuftiProService:
                     result = await response.json()
                     
                     if response.status == 200:
+                        event = result.get("event", "")
+                        if event == "request.invalid":
+                            err = result.get("error") or {}
+                            msg = err.get("message", "Invalid request payload") if isinstance(err, dict) else str(err)
+                            svc = err.get("service", "") if isinstance(err, dict) else ""
+                            key = err.get("key", "") if isinstance(err, dict) else ""
+                            hint = f" ({svc}/{key})" if svc or key else ""
+                            logger.error("Shufti Pro request.invalid for %s: %s", reference, result)
+                            return {
+                                "success": False,
+                                "error": f"{msg}{hint}",
+                                "data": result,
+                            }
+                        url = result.get("verification_url")
+                        if not url:
+                            logger.error("Shufti Pro 200 but no verification_url: %s", result)
+                            return {
+                                "success": False,
+                                "error": "Shufti did not return a verification URL",
+                                "data": result,
+                            }
                         logger.info(f"Shufti Pro verification initiated: {reference}")
                         return {
                             "success": True,
-                            "verification_url": result.get("verification_url"),
+                            "verification_url": url,
                             "reference": reference,
-                            "event": result.get("event"),
+                            "event": event,
                             "data": result
                         }
                     else:
