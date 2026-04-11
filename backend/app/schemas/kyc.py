@@ -168,6 +168,18 @@ class KYCVerificationComplete(KYCVerification):
         from_attributes = True
 
 
+class KYCInitiateRequest(BaseModel):
+    """Optional body for POST /kyc/initiate — declared address for Shufti proof-of-address matching."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    residential_address: Optional[str] = Field(
+        None,
+        max_length=500,
+        description="Full residential address as declared by the user; must match proof-of-address document.",
+    )
+
+
 # Schémas pour les requêtes
 class KYCSubmissionRequest(BaseModel):
     first_name: str = Field(..., min_length=1, max_length=100, alias='firstName')

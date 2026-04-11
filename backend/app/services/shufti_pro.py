@@ -20,6 +20,105 @@ logger = logging.getLogger(__name__)
 # URLs Shufti Pro
 SHUFTI_BASE_URL = "https://api.shuftipro.com"
 
+
+def _shufti_leaf_pass(val: Any) -> Optional[bool]:
+    """
+    Interpret a Shufti verification_result leaf value.
+    Returns True/False when known, None when absent or inconclusive (caller may fall back to overall event).
+    """
+    if val is None:
+        return None
+    if isinstance(val, bool):
+        return val
+    if isinstance(val, (int, float)):
+        if val == 1:
+            return True
+        if val == 0:
+            return False
+        return None
+    if isinstance(val, str):
+        s = val.strip().lower()
+        if s in ("1", "true", "yes", "clear", "verified", "accepted", "pass", "passed"):
+            return True
+        if s in ("0", "false", "no", "declined", "rejected", "fail", "failed"):
+            return False
+        return None
+    if isinstance(val, dict):
+        if not val:
+            return None
+        any_fail = False
+        any_pass = False
+        for sub in val.values():
+            st = _shufti_leaf_pass(sub)
+            if st is None:
+                continue
+            if st is False:
+                any_fail = True
+            else:
+                any_pass = True
+        if any_fail:
+            return False
+        if any_pass:
+            return True
+        return None
+    if isinstance(val, list):
+        if not val:
+            return None
+        any_fail = False
+        any_pass = False
+        for item in val:
+            st = _shufti_leaf_pass(item)
+            if st is None:
+                continue
+            if st is False:
+                any_fail = True
+            else:
+                any_pass = True
+        if any_fail:
+            return False
+        if any_pass:
+            return True
+        return None
+    return None
+
+
+def _shufti_service_pass(service_val: Any, overall_fallback: bool) -> bool:
+    agg = _shufti_leaf_pass(service_val)
+    if agg is None:
+        return overall_fallback
+    return agg
+
+
+def kyc_flags_from_shufti_payload(payload: Dict[str, Any], *, overall_accepted: bool) -> Dict[str, bool]:
+    """
+    Map Shufti status/webhook JSON to our four booleans.
+    identity_verified follows document (ID was verified).
+    Missing service keys in verification_result fall back to overall_accepted.
+    """
+    vr = payload.get("verification_result")
+    if not isinstance(vr, dict):
+        v = overall_accepted
+        return {
+            "identity_verified": v,
+            "document_verified": v,
+            "face_verified": v,
+            "address_verified": v,
+        }
+    doc = _shufti_service_pass(vr.get("document"), overall_accepted)
+    face = _shufti_service_pass(vr.get("face"), overall_accepted)
+    addr_raw = vr.get("address")
+    if addr_raw is None:
+        addr_raw = vr.get("proof_of_address")
+    if addr_raw is None:
+        addr_raw = vr.get("address_proof")
+    addr = _shufti_service_pass(addr_raw, overall_accepted)
+    return {
+        "identity_verified": doc,
+        "document_verified": doc,
+        "face_verified": face,
+        "address_verified": addr,
+    }
+
 # Configuration
 SHUFTI_RETENTION_DAYS = 5  # Nombre de jours de rétention d'une vérification
 SHUFTI_TTL_MINUTES = (SHUFTI_RETENTION_DAYS + 1) * 24 * 60  # TTL en minutes
@@ -125,7 +224,8 @@ class ShuftiProService:
         email: str,
         country: Optional[str] = None,
         language: str = "FR",
-        redirect_url: Optional[str] = None
+        redirect_url: Optional[str] = None,
+        residential_address: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Initier une vérification KYC avec Shufti Pro
@@ -136,6 +236,7 @@ class ShuftiProService:
             country: Code pays ISO (optionnel, pour pré-remplir)
             language: Langue de l'interface (FR, EN, ES, etc.)
             redirect_url: URL de redirection après vérification
+            residential_address: Adresse déclarée (correspondance avec le justificatif de domicile)
         
         Returns:
             Dict contenant verification_url et autres données
@@ -163,6 +264,7 @@ class ShuftiProService:
             "show_results": "1",
             "show_consent": "1",
             "show_feedback_form": "0",
+            "allow_retry": "1",
             "ttl": SHUFTI_TTL_MINUTES,  # 6 jours en minutes
             
             # Vérification faciale
@@ -170,7 +272,7 @@ class ShuftiProService:
                 "proof": ""
             },
             
-            # Vérification de document uniquement (address non inclus dans le plan)
+            # Pièce d'identité
             "document": {
                 "supported_types": ["id_card", "passport", "driving_license"],
                 "name": "",
@@ -187,7 +289,28 @@ class ShuftiProService:
                     "allow_scanned": "1",
                     "allow_e_document": "1"
                 }
-            }
+            },
+            # Justificatif de domicile (vérification automatique côté Shufti Pro)
+            "address": {
+                "proof": "",
+                "name": "",
+                "supported_types": [
+                    "utility_bill",
+                    "bank_statement",
+                    "rent_agreement",
+                    "tax_bill",
+                    "insurance_agreement",
+                ],
+                "verification_mode": "any",
+                "allow_offline": "1",
+                "allow_online": "1",
+                "address_fuzzy_match": "1",
+                **(
+                    {"full_address": residential_address.strip()[:500]}
+                    if residential_address and residential_address.strip()
+                    else {}
+                ),
+            },
         }
         
         try:

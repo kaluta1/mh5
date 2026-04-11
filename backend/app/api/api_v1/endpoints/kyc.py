@@ -1,5 +1,5 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Request, Header, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Request, Header, BackgroundTasks, Body
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from datetime import datetime
@@ -16,9 +16,9 @@ from app.schemas.kyc import (
     KYCDocument, KYCDocumentCreate, KYCDocumentUpdate,
     KYCAuditLog, KYCSubmissionRequest, KYCStatusResponse,
     KYCStatistics, KYCVerificationWithDocuments, KYCVerificationComplete,
-    ShuftiProWebhookData, KYCWebhookResponse
+    ShuftiProWebhookData, KYCWebhookResponse, KYCInitiateRequest,
 )
-from app.services.shufti_pro import shufti_pro_service
+from app.services.shufti_pro import shufti_pro_service, kyc_flags_from_shufti_payload
 from app.services.email import email_service
 from app.services.payment_accounting import payment_accounting
 
@@ -31,7 +31,8 @@ async def initiate_shufti_verification(
     *,
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
-    language: str = "FR"
+    language: str = "FR",
+    payload: KYCInitiateRequest = Body(default_factory=KYCInitiateRequest),
 ):
     """
     Initier ou reprendre une vérification KYC avec Shufti Pro.
@@ -99,9 +100,16 @@ async def initiate_shufti_verification(
             # Si la vérification est terminée côté Shufti Pro, mettre à jour notre statut
             if validity_check.get("is_completed"):
                 new_status = KYCStatus.APPROVED if validity_check.get("is_accepted") else KYCStatus.REJECTED
+                is_ok = bool(validity_check.get("is_accepted"))
+                raw = validity_check.get("data") or {}
+                flags = kyc_flags_from_shufti_payload(raw if isinstance(raw, dict) else {}, overall_accepted=is_ok)
                 update_data = KYCVerificationUpdate(
                     status=new_status,
-                    processed_at=datetime.utcnow()
+                    processed_at=datetime.utcnow(),
+                    identity_verified=flags["identity_verified"],
+                    document_verified=flags["document_verified"],
+                    face_verified=flags["face_verified"],
+                    address_verified=flags["address_verified"],
                 )
                 crud_kyc.kyc_verification.update(db=db, db_obj=verification, obj_in=update_data)
                 
@@ -170,12 +178,25 @@ async def initiate_shufti_verification(
         db.commit()
         db.refresh(verification)
     
+    addr = (payload.residential_address or "").strip()
+    if len(addr) < 10:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Residential address is required (min. 10 characters) for automated proof-of-address verification.",
+        )
+    verification = crud_kyc.kyc_verification.update(
+        db,
+        db_obj=verification,
+        obj_in=KYCVerificationUpdate(verified_address=addr),
+    )
+
     # Appeler Shufti Pro pour obtenir l'URL de vérification
     result = await shufti_pro_service.initiate_verification(
         reference=reference,
         email=current_user.email,
         country=current_user.country,
-        language=language
+        language=language,
+        residential_address=addr,
     )
     
     if not result.get("success"):
@@ -249,9 +270,16 @@ async def get_kyc_status_detailed(
         # Mettre à jour le statut si terminé
         if validity_check.get("is_completed"):
             new_status = KYCStatus.APPROVED if validity_check.get("is_accepted") else KYCStatus.REJECTED
+            is_ok = bool(validity_check.get("is_accepted"))
+            raw = validity_check.get("data") or {}
+            flags = kyc_flags_from_shufti_payload(raw if isinstance(raw, dict) else {}, overall_accepted=is_ok)
             update_data = KYCVerificationUpdate(
                 status=new_status,
-                processed_at=datetime.utcnow()
+                processed_at=datetime.utcnow(),
+                identity_verified=flags["identity_verified"],
+                document_verified=flags["document_verified"],
+                face_verified=flags["face_verified"],
+                address_verified=flags["address_verified"],
             )
             crud_kyc.kyc_verification.update(db=db, db_obj=verification, obj_in=update_data)
             verification.status = new_status
@@ -288,6 +316,8 @@ async def get_kyc_status_detailed(
         "identity_verified": verification.identity_verified,
         "document_verified": verification.document_verified,
         "face_verified": verification.face_verified,
+        "address_verified": verification.address_verified,
+        "declared_residential_address": verification.verified_address,
         "can_restart": can_restart and has_valid_payment,  # Ne peut reprendre que si payé
         "can_continue": can_continue,
         "verification_url": verification.verification_url if can_continue else None,
@@ -701,15 +731,18 @@ def shufti_pro_webhook(
     if webhook_data.event == "verification.accepted":
         # Approuver automatiquement
         crud_kyc.kyc_verification.approve_verification(db, verification_id=verification.id)
-        
+
+        wh_raw = webhook_data.model_dump()
+        flags = kyc_flags_from_shufti_payload(wh_raw, overall_accepted=True)
         # Mettre à jour avec les données du webhook
         update_data = KYCVerificationUpdate(
             external_verification_id=webhook_data.reference,
             provider_response=str(webhook_data.verification_result),
-            webhook_data=str(webhook_data.dict()),
-            identity_verified=True,
-            document_verified=True,
-            face_verified=True
+            webhook_data=str(webhook_data.model_dump()),
+            identity_verified=flags["identity_verified"],
+            document_verified=flags["document_verified"],
+            face_verified=flags["face_verified"],
+            address_verified=flags["address_verified"],
         )
         crud_kyc.kyc_verification.update(db=db, db_obj=verification, obj_in=update_data)
         payment_accounting.post_kyc_verification_recognition_for_user(db, verification.user_id)
@@ -720,15 +753,26 @@ def shufti_pro_webhook(
         crud_kyc.kyc_verification.reject_verification(
             db, verification_id=verification.id, reason=reason
         )
-        
+
+        wh_raw = webhook_data.model_dump()
+        flags = kyc_flags_from_shufti_payload(wh_raw, overall_accepted=False)
         # Mettre à jour avec les données du webhook
         update_data = KYCVerificationUpdate(
             external_verification_id=webhook_data.reference,
             provider_response=str(webhook_data.verification_result),
-            webhook_data=str(webhook_data.dict()),
-            rejection_reason=reason
+            webhook_data=str(webhook_data.model_dump()),
+            rejection_reason=reason,
+            identity_verified=flags["identity_verified"],
+            document_verified=flags["document_verified"],
+            face_verified=flags["face_verified"],
+            address_verified=flags["address_verified"],
         )
         crud_kyc.kyc_verification.update(db=db, db_obj=verification, obj_in=update_data)
+        u = db.query(User).filter(User.id == verification.user_id).first()
+        if u:
+            u.identity_verified = False
+            db.add(u)
+            db.commit()
     
     return KYCWebhookResponse(
         success=True,

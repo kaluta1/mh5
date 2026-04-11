@@ -63,37 +63,57 @@ class KYCService {
    * Initier une vérification KYC avec Shufti Pro
    * Retourne l'URL de vérification où rediriger l'utilisateur
    */
-  async initiateVerification(token: string, language: string = 'FR'): Promise<KYCInitiateResponse> {
+  async initiateVerification(
+    token: string,
+    language: string = 'FR',
+    residentialAddress?: string
+  ): Promise<KYCInitiateResponse> {
     try {
       if (!token) {
         throw new Error('Authentication token is required')
       }
 
-      const response = await fetch(`${this.baseUrl}/api/v1/kyc/initiate?language=${language}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+      const response = await fetch(
+        `${this.baseUrl}/api/v1/kyc/initiate?language=${encodeURIComponent(language)}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            residential_address: (residentialAddress ?? '').trim(),
+          }),
         }
-      })
+      )
 
       if (!response.ok) {
         const error = await response.json()
         logger.error('KYC initiation error:', error)
-        
+
+        const detailRaw = error.detail
+        const detailStr =
+          typeof detailRaw === 'string'
+            ? detailRaw
+            : detailRaw && typeof detailRaw === 'object' && 'message' in detailRaw
+              ? String((detailRaw as { message: string }).message)
+              : Array.isArray(detailRaw)
+                ? detailRaw.map((e: { msg?: string }) => e.msg).filter(Boolean).join(', ')
+                : null
+
         // Gérer l'erreur 402 Payment Required
         if (response.status === 402) {
-          const detail = typeof error.detail === 'object' ? error.detail : { message: error.detail }
+          const detail = typeof error.detail === 'object' && error.detail !== null ? error.detail : { message: error.detail }
           throw new KYCPaymentRequiredError({
             type: 'payment_required',
-            message: detail.message || 'Paiement requis pour la vérification KYC',
-            available_attempts: detail.available_attempts || 0,
-            price: detail.price || 10,
-            currency: detail.currency || 'USD'
+            message: (detail as { message?: string }).message || 'Paiement requis pour la vérification KYC',
+            available_attempts: (detail as { available_attempts?: number }).available_attempts || 0,
+            price: (detail as { price?: number }).price || 10,
+            currency: (detail as { currency?: string }).currency || 'USD',
           })
         }
-        
-        throw new Error(error.detail?.message || error.detail || error.message || 'Failed to initiate KYC verification')
+
+        throw new Error(detailStr || error.message || 'Failed to initiate KYC verification')
       }
 
       const result = await response.json()
@@ -179,6 +199,7 @@ class KYCService {
         processed_at: result.processed_at,
         rejection_reason: result.rejection_reason,
         expires_at: result.expires_at,
+        declared_residential_address: result.declared_residential_address ?? null,
         can_start: result.can_restart || result.can_continue || false,
         needs_payment: result.needs_payment || false,
         has_valid_payment: result.has_valid_payment || false

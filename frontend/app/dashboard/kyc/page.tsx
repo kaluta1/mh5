@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useLanguage } from '@/contexts/language-context'
 import { useAuth } from '@/hooks/use-auth'
 import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
 import { KYCSkeleton } from '@/components/ui/skeleton'
 import { kycService, KYCPaymentRequiredError } from '@/services/kyc-service'
 import { PaymentDialog } from '@/components/dialogs/payment-dialog-v2'
@@ -36,6 +37,7 @@ interface KYCStatusData {
   max_attempts?: number
   attempts_remaining?: number
   max_attempts_reached?: boolean
+  declared_residential_address?: string | null
   // Payment info
   needs_payment?: boolean
   has_valid_payment?: boolean
@@ -58,6 +60,33 @@ function KYCPageContent() {
   
   // Payment dialog state
   const [showPaymentDialog, setShowPaymentDialog] = useState(false)
+  const [residentialAddress, setResidentialAddress] = useState('')
+
+  const residentialAddressField = (
+    <div className="w-full text-left mb-6">
+      <label
+        htmlFor="kyc-residential-address"
+        className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+      >
+        {t('kyc.residential_address_label') || 'Residential address'}
+      </label>
+      <Textarea
+        id="kyc-residential-address"
+        value={residentialAddress}
+        onChange={(e) => setResidentialAddress(e.target.value)}
+        placeholder={
+          t('kyc.residential_address_placeholder') ||
+          'Street, city, postal code, country — must match your proof-of-address document'
+        }
+        className="min-h-[100px] bg-white dark:bg-gray-900"
+        autoComplete="street-address"
+      />
+      <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+        {t('kyc.residential_address_hint') ||
+          'Used for automatic proof-of-address verification with your partner flow (e.g. utility bill, bank statement).'}
+      </p>
+    </div>
+  )
 
   // Vérifier si on revient de Shufti Pro
   const statusParam = searchParams.get('status')
@@ -101,8 +130,15 @@ function KYCPageContent() {
     }
   }, [isAuthenticated, statusParam, refreshUser])
 
+  useEffect(() => {
+    const saved = kycData?.declared_residential_address
+    if (typeof saved === 'string' && saved.trim().length > 0 && residentialAddress.trim() === '') {
+      setResidentialAddress(saved)
+    }
+  }, [kycData?.declared_residential_address])
+
   // Démarrer ou reprendre la vérification Shufti Pro
-  const handleStartVerification = async () => {
+  const handleStartVerification = async (allowMissingAddress = false) => {
     setIsInitiating(true)
     setError(null)
 
@@ -118,7 +154,25 @@ function KYCPageContent() {
       // Déterminer la langue
       const lang = document.documentElement.lang?.toUpperCase() || 'FR'
 
-      const result = await kycService.initiateVerification(token, lang)
+      const addrToSend = (
+        residentialAddress.trim() ||
+        (typeof kycData?.declared_residential_address === 'string'
+          ? kycData.declared_residential_address.trim()
+          : '')
+      ).trim()
+
+      if (!allowMissingAddress && addrToSend.length < 10) {
+        setError(
+          t('kyc.residential_address_required') ||
+            'Enter your full residential address (min. 10 characters). It must match your proof-of-address document.'
+        )
+        setIsInitiating(false)
+        return
+      }
+
+      const payloadAddr =
+        allowMissingAddress && addrToSend.length < 10 ? undefined : addrToSend
+      const result = await kycService.initiateVerification(token, lang, payloadAddr)
 
       if (result.verification_url) {
         setVerificationUrl(result.verification_url)
@@ -142,9 +196,8 @@ function KYCPageContent() {
 
   // Continuer une vérification existante
   const handleContinueVerification = async () => {
-    // Toujours appeler le backend qui gère la réutilisation de l'URL existante
-    // ou en génère une nouvelle si nécessaire
-    await handleStartVerification()
+    // Réutilisation d'une session en cours : le backend peut renvoyer l'URL sans nouvel appel Shufti
+    await handleStartVerification(true)
   }
 
   // Rafraîchir le statut
@@ -190,7 +243,21 @@ function KYCPageContent() {
     setError(null)
     try {
       const lang = document.documentElement.lang?.toUpperCase() || 'FR'
-      const result = await kycService.initiateVerification(token, lang)
+      const refreshed = status as KYCStatusData
+      const declared =
+        typeof refreshed.declared_residential_address === 'string'
+          ? refreshed.declared_residential_address.trim()
+          : ''
+      const addrToSend = (residentialAddress.trim() || declared).trim()
+      if (addrToSend.length < 10) {
+        setError(
+          t('kyc.residential_address_required') ||
+            'Enter your full residential address (min. 10 characters). It must match your proof-of-address document.'
+        )
+        setIsInitiating(false)
+        return
+      }
+      const result = await kycService.initiateVerification(token, lang, addrToSend)
       if (result.verification_url) {
         setVerificationUrl(result.verification_url)
       }
@@ -204,7 +271,7 @@ function KYCPageContent() {
     } finally {
       setIsInitiating(false)
     }
-  }, [refreshUser, t])
+  }, [refreshUser, t, residentialAddress])
 
   if (isLoading || isLoadingStatus) {
     return <KYCSkeleton />
@@ -312,6 +379,14 @@ function KYCPageContent() {
             <p className="text-gray-600 dark:text-gray-400 mb-6">
               {t('kyc.verification_continue_description') || 'Vous avez une vérification en cours. Vous pouvez la continuer ou actualiser le statut.'}
             </p>
+
+            {error && (
+              <div className="mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 flex items-start gap-2 text-left">
+                <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+              </div>
+            )}
+            {residentialAddressField}
             
             {kycData?.submitted_at && (
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
@@ -379,6 +454,14 @@ function KYCPageContent() {
                 {t('kyc.attempts_used') || 'Tentatives utilisées'}: <span className="font-semibold">{kycData.attempts_count}/{kycData.max_attempts}</span>
               </p>
             </div>
+
+            {error && (
+              <div className="mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 flex items-start gap-2 text-left">
+                <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+              </div>
+            )}
+            {residentialAddressField}
 
             {/* Option de paiement */}
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
@@ -451,6 +534,14 @@ function KYCPageContent() {
                 {kycData?.kyc_price || 10} {kycData?.kyc_currency || 'USD'}
               </p>
             </div>
+
+            {error && (
+              <div className="mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 flex items-start gap-2 text-left">
+                <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+              </div>
+            )}
+            {residentialAddressField}
 
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Button
@@ -539,6 +630,14 @@ function KYCPageContent() {
                 </p>
               </div>
             )}
+
+            {error && (
+              <div className="mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 flex items-start gap-2 text-left">
+                <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+              </div>
+            )}
+            {residentialAddressField}
 
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Button
@@ -666,6 +765,8 @@ function KYCPageContent() {
             </span>
           </div>
         </div>
+
+        <div className="max-w-xl mx-auto mb-8">{residentialAddressField}</div>
 
         {/* CTA Button */}
         <div className="text-center">
