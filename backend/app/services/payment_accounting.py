@@ -354,6 +354,8 @@ class PaymentAccountingService:
         db: Session,
         deposit: Deposit,
         entry_date: Optional[datetime] = None,
+        *,
+        journal_commit: bool = True,
     ) -> None:
         """Step 1: validated payment in — unearned until verification completes."""
         dep_id = deposit.id
@@ -385,6 +387,7 @@ class PaymentAccountingService:
             description=description + " (Deferred receipt - USDT BSC)",
             lines=lines,
             date=jdate,
+            commit=journal_commit,
         )
         logger.info("KYC deferred USDT (BSC) receipt posted for deposit %s", dep_id)
 
@@ -394,6 +397,8 @@ class PaymentAccountingService:
         deposit: Deposit,
         commissions: List[AffiliateCommission],
         entry_date: Optional[datetime] = None,
+        *,
+        journal_commit: bool = True,
     ) -> None:
         """Step 2: release deferred revenue when verification service is performed (e.g. Shufti accepted)."""
         dep_id = deposit.id
@@ -444,6 +449,7 @@ class PaymentAccountingService:
             description=description + " (Verification performed)",
             lines=recognition_lines,
             date=jdate,
+            commit=journal_commit,
         )
 
         if commissions:
@@ -475,6 +481,7 @@ class PaymentAccountingService:
                 description=description + " (Commissions)",
                 lines=commission_lines,
                 date=jdate,
+                commit=journal_commit,
             )
 
         logger.info("KYC verification performed accounting posted for deposit %s", dep_id)
@@ -497,7 +504,9 @@ class PaymentAccountingService:
         commissions = (
             db.query(AffiliateCommission).filter(AffiliateCommission.deposit_id == deposit.id).all()
         )
-        self.process_kyc_verification_performed_accounting(db, deposit, commissions, entry_date=entry_date)
+        self.process_kyc_verification_performed_accounting(
+            db, deposit, commissions, entry_date=entry_date, journal_commit=True
+        )
         return True
 
     def process_kyc_payment_accounting(
@@ -506,12 +515,16 @@ class PaymentAccountingService:
         deposit: Deposit,
         commissions: List[AffiliateCommission],
         entry_date: Optional[datetime] = None,
+        *,
+        journal_commit: bool = True,
     ):
         """
         Backward-compatible name: Step 1 only (USDT BSC receipt / deferred).
         Step 2 runs via post_kyc_verification_recognition_for_user when KYC is approved.
         """
-        self.process_kyc_cash_receipt_accounting(db, deposit, entry_date=entry_date)
+        self.process_kyc_cash_receipt_accounting(
+            db, deposit, entry_date=entry_date, journal_commit=journal_commit
+        )
 
     def process_membership_payment_accounting(
         self,
@@ -519,6 +532,8 @@ class PaymentAccountingService:
         deposit: Deposit,
         commissions: List[AffiliateCommission],
         entry_date: Optional[datetime] = None,
+        *,
+        journal_commit: bool = True,
     ):
         """
         Annual membership: Dr 1001 / Cr 2110 (deferred), then recognition with 10% gross to2104,
@@ -577,6 +592,7 @@ class PaymentAccountingService:
                 description=description + " (Commissions)",
                 lines=commission_lines,
                 date=jdate,
+                commit=journal_commit,
             )
 
         if not _annual_membership_deferred_posted(db, dep_id):
@@ -601,6 +617,7 @@ class PaymentAccountingService:
                     },
                 ],
                 date=jdate,
+                commit=journal_commit,
             )
 
         if not _annual_membership_recognition_posted(db, dep_id):
@@ -641,6 +658,7 @@ class PaymentAccountingService:
                 description=description + " (Recognition - annual membership)",
                 lines=rec_lines,
                 date=jdate,
+                commit=journal_commit,
             )
 
     def process_founding_membership_payment_accounting(
@@ -649,6 +667,8 @@ class PaymentAccountingService:
         deposit: Deposit,
         commissions: List[AffiliateCommission],
         entry_date: Optional[datetime] = None,
+        *,
+        journal_commit: bool = True,
     ):
         """
         Founding / MFM membership (e.g. $100): Dr 1001 / Cr 2111 (deferred), then recognition:
@@ -700,6 +720,7 @@ class PaymentAccountingService:
                 description=description + " (Commissions)",
                 lines=commission_lines,
                 date=jdate,
+                commit=journal_commit,
             )
 
         if not _founding_membership_deferred_posted(db, dep_id):
@@ -724,6 +745,7 @@ class PaymentAccountingService:
                     },
                 ],
                 date=jdate,
+                commit=journal_commit,
             )
 
         if not _founding_membership_recognition_posted(db, dep_id):
@@ -753,6 +775,7 @@ class PaymentAccountingService:
                     },
                 ],
                 date=jdate,
+                commit=journal_commit,
             )
 
     def process_club_membership_payment_accounting(
@@ -761,6 +784,8 @@ class PaymentAccountingService:
         deposit: Deposit,
         commissions: List[AffiliateCommission],
         entry_date: Optional[datetime] = None,
+        *,
+        journal_commit: bool = True,
     ) -> None:
         """
         Club membership: member pays base + 20% platform markup. Base is owed to the club owner (2120);
@@ -812,6 +837,7 @@ class PaymentAccountingService:
                 },
             ],
             date=jdate,
+            commit=journal_commit,
         )
 
         alloc_lines: List[dict] = [
@@ -864,6 +890,7 @@ class PaymentAccountingService:
             description=description + " (Markup allocation — Founding pool and platform)",
             lines=alloc_lines,
             date=jdate,
+            commit=journal_commit,
         )
 
     def record_kyc_provider_settlement(

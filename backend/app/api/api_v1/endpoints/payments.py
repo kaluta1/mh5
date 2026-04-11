@@ -183,17 +183,25 @@ async def verify_payment(
             token_address=settings.BSC_USDT_ADDRESS
         )
         
-        # Update deposit status
+        # Update deposit status (single commit after commissions + accounting succeed)
         deposit.status = DepositStatus.VALIDATED
         deposit.validated_at = datetime.utcnow()
         deposit.external_payment_id = request.tx_hash
         deposit.payment_address = payment_details.payer
-        db.commit()
-        
-        # Process commission distribution
+
         logger.info(f"Processing commission distribution for deposit {deposit.id}")
-        process_payment_validation(db, deposit)
-        
+        ok = process_payment_validation(db, deposit, defer_commit=True)
+        if not ok:
+            db.rollback()
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    "Payment verification failed while recording commissions or accounting "
+                    "(e.g. chart of accounts). The deposit was not finalized; retry after fixing configuration."
+                ),
+            )
+        db.commit()
+
         return {
             "valid": True,
             "deposit_id": deposit.id,

@@ -36,7 +36,9 @@ DEFAULT_COMMISSION_CONFIG = {
 def distribute_commissions(
     db: Session,
     deposit: Deposit,
-    product_code: str
+    product_code: str,
+    *,
+    commit: bool = True,
 ) -> List[AffiliateCommission]:
     """
     Distribue les commissions d'affiliation pour un dépôt validé.
@@ -152,24 +154,34 @@ def distribute_commissions(
     
     if commissions_created:
         try:
-            db.commit()
+            if commit:
+                db.commit()
+            else:
+                db.flush()
             for c in commissions_created:
                 db.refresh(c)
             logger.info(f"Created {len(commissions_created)} commissions for deposit {deposit.id}")
         except Exception as e:
             logger.error(f"Error saving commissions: {e}")
             db.rollback()
-    
+            if not commit:
+                raise
+
     return commissions_created
 
 
-def process_payment_validation(db: Session, deposit: Deposit) -> bool:
+def process_payment_validation(
+    db: Session, deposit: Deposit, *, defer_commit: bool = False
+) -> bool:
     """
     Traite la validation d'un paiement.
-    - Met à jour le statut du dépôt
     - Distribue les commissions
     - Active les services associés (KYC, Membership, etc.)
-    
+    - Écrit les journaux comptables (payment_accounting)
+
+    Si defer_commit=True, aucun commit n'est fait ici : l'appelant valide dépôt + commissions +
+    écritures en une seule transaction (ex. POST /payments/verify après preuve on-chain).
+
     Returns:
         True si le traitement a réussi
     """
@@ -186,7 +198,9 @@ def process_payment_validation(db: Session, deposit: Deposit) -> bool:
         product_code = product_type.code
         
         # Distribuer les commissions
-        commissions = distribute_commissions(db, deposit, product_code)
+        commissions = distribute_commissions(
+            db, deposit, product_code, commit=not defer_commit
+        )
 
         # Activer le service pour l'utilisateur
         user = db.query(User).filter(User.id == deposit.user_id).first()
@@ -206,8 +220,11 @@ def process_payment_validation(db: Session, deposit: Deposit) -> bool:
                         year=datetime.utcnow().year + 1
                     )
                     logger.info(f"Annual membership renewed for user {user.id}")
-            
-            db.commit()
+
+            if defer_commit:
+                db.flush()
+            else:
+                db.commit()
             
             # Envoyer l'email de confirmation de paiement
             try:
@@ -227,15 +244,24 @@ def process_payment_validation(db: Session, deposit: Deposit) -> bool:
         # Écritures comptables (plan comptable MyHigh5 — voir docs/MYHIGH5_CHART_OF_ACCOUNTS.md)
         from app.services.payment_accounting import payment_accounting
 
+        journal_commit = not defer_commit
         if product_code == "kyc":
             # Step 1: cash to deferred2113. Step 2 posts when KYC is approved (Shufti webhook / status sync).
-            payment_accounting.process_kyc_cash_receipt_accounting(db, deposit)
+            payment_accounting.process_kyc_cash_receipt_accounting(
+                db, deposit, journal_commit=journal_commit
+            )
         elif product_code == "annual_membership":
-            payment_accounting.process_membership_payment_accounting(db, deposit, commissions)
+            payment_accounting.process_membership_payment_accounting(
+                db, deposit, commissions, journal_commit=journal_commit
+            )
         elif product_code in ("mfm_membership", "efm_membership", "founding_membership"):
-            payment_accounting.process_founding_membership_payment_accounting(db, deposit, commissions)
+            payment_accounting.process_founding_membership_payment_accounting(
+                db, deposit, commissions, journal_commit=journal_commit
+            )
         elif product_code == "club_membership":
-            payment_accounting.process_club_membership_payment_accounting(db, deposit, commissions)
+            payment_accounting.process_club_membership_payment_accounting(
+                db, deposit, commissions, journal_commit=journal_commit
+            )
 
         return True
 
