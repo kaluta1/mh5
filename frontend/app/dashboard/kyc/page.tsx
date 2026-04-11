@@ -68,21 +68,21 @@ function KYCPageContent() {
         htmlFor="kyc-residential-address"
         className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
       >
-        {t('kyc.residential_address_label') || 'Residential address'}
+        {t('residential address') || 'Residential address'}
       </label>
       <Textarea
         id="kyc-residential-address"
         value={residentialAddress}
         onChange={(e) => setResidentialAddress(e.target.value)}
         placeholder={
-          t('kyc.residential_address_placeholder') ||
+          t('Enter your address') ||
           'Street, city, postal code, country — must match your proof-of-address document'
         }
         className="min-h-[100px] bg-white dark:bg-gray-900"
         autoComplete="street-address"
       />
       <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-        {t('kyc.residential_address_hint') ||
+        {t('residential address') ||
           'Used for automatic proof-of-address verification with your partner flow (e.g. utility bill, bank statement).'}
       </p>
     </div>
