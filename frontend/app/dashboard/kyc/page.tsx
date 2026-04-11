@@ -262,11 +262,12 @@ function KYCPageContent() {
         setIsInitiating(false)
         return
       }
+      // Fresh Shufti session — reusing an old URL after payment often showed INVALID in the iframe.
       const result = await kycService.initiateVerification(
         token,
         lang,
         addrToSend.length >= 10 ? addrToSend : undefined,
-        false
+        true
       )
       if (result.verification_url) {
         setVerificationUrl(result.verification_url)
