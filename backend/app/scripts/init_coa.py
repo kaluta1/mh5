@@ -224,8 +224,22 @@ def init_chart_of_accounts(db: Session):
             "description": "Member-level founding commission balances after month-end pool allocation (Dr 2104, Cr 2105). "
             "USDT withdrawals clear against user payables; cashout fee revenue uses 4005.",
         },
-        {"code": "2110", "name": "Deferred Revenue - Annual Membership", "type": AccountType.LIABILITY, "parent": "2000"},
-        {"code": "2111", "name": "Deferred Revenue - Founding Membership", "type": AccountType.LIABILITY, "parent": "2000"},
+        {
+            "code": "2110",
+            "name": "Deferred Revenue - Annual Membership",
+            "type": AccountType.LIABILITY,
+            "parent": "2000",
+            "description": "Unearned annual membership. Step 1: Dr 1001, Cr 2110. Step 2 (on activation): Dr 2110, "
+            "Cr 4002 (net after 10% Founding pool 2104 and Shufti pass-through when applicable), Cr 2104, Cr 2003.",
+        },
+        {
+            "code": "2111",
+            "name": "Deferred Revenue - Founding Membership",
+            "type": AccountType.LIABILITY,
+            "parent": "2000",
+            "description": "Unearned founding / MFM membership fee. Step 1: Dr 1001, Cr 2111. Step 2: Dr 2111, "
+            "Cr 4002 (net after 10% Founding pool 2104), Cr 2104.",
+        },
         {
             "code": "2112",
             "name": "Club subs — deferred / clearing (20% markup)",

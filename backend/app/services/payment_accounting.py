@@ -1,6 +1,6 @@
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 import logging
 from typing import Optional, List, Tuple, Any, Dict
 from datetime import datetime
@@ -12,6 +12,12 @@ from app.models.accounting import ChartOfAccounts, JournalEntry, JournalLine
 from app.services.accounting_service import accounting_service
 
 logger = logging.getLogger(__name__)
+
+_CENT = Decimal("0.01")
+
+
+def _money_dec(x: Decimal) -> Decimal:
+    return x.quantize(_CENT, rounding=ROUND_HALF_UP)
 
 
 def _journal_entry_date(deposit: Deposit, entry_date: Optional[datetime]) -> datetime:
@@ -230,14 +236,117 @@ def post_kyc_legacy_instant_to_deferred(db: Session, deposit: Deposit) -> None:
     )
 
 
+def _annual_membership_legacy_income_posted(db: Session, deposit_id: int) -> bool:
+    return (
+        db.query(JournalEntry.id)
+        .filter(
+            JournalEntry.description.like(f"%Membership Payment - Deposit #{deposit_id}%(Income)%")
+        )
+        .first()
+        is not None
+    )
+
+
+def _annual_membership_deferred_posted(db: Session, deposit_id: int) -> bool:
+    return (
+        db.query(JournalEntry.id)
+        .filter(
+            JournalEntry.description.like(f"%Membership Payment - Deposit #{deposit_id}%"),
+            JournalEntry.description.like("%(Deferred receipt - annual membership)%"),
+        )
+        .first()
+        is not None
+    )
+
+
+def _annual_membership_recognition_posted(db: Session, deposit_id: int) -> bool:
+    return (
+        db.query(JournalEntry.id)
+        .filter(
+            JournalEntry.description.like(f"%Membership Payment - Deposit #{deposit_id}%"),
+            JournalEntry.description.like("%(Recognition - annual membership)%"),
+        )
+        .first()
+        is not None
+    )
+
+
+def _annual_membership_commissions_posted(db: Session, deposit_id: int) -> bool:
+    return (
+        db.query(JournalEntry.id)
+        .filter(
+            JournalEntry.description.like(f"%Membership Payment - Deposit #{deposit_id}%(Commissions)%")
+        )
+        .first()
+        is not None
+    )
+
+
+def _founding_membership_legacy_income_posted(db: Session, deposit_id: int) -> bool:
+    return (
+        db.query(JournalEntry.id)
+        .filter(
+            JournalEntry.description.like(
+                f"%Founding Membership Payment - Deposit #{deposit_id}%(Income)%"
+            )
+        )
+        .first()
+        is not None
+    )
+
+
+def _founding_membership_deferred_posted(db: Session, deposit_id: int) -> bool:
+    return (
+        db.query(JournalEntry.id)
+        .filter(
+            JournalEntry.description.like(f"%Founding Membership Payment - Deposit #{deposit_id}%"),
+            JournalEntry.description.like("%(Deferred receipt - founding membership)%"),
+        )
+        .first()
+        is not None
+    )
+
+
+def _founding_membership_recognition_posted(db: Session, deposit_id: int) -> bool:
+    return (
+        db.query(JournalEntry.id)
+        .filter(
+            JournalEntry.description.like(f"%Founding Membership Payment - Deposit #{deposit_id}%"),
+            JournalEntry.description.like("%(Recognition - founding membership)%"),
+        )
+        .first()
+        is not None
+    )
+
+
+def _founding_membership_commissions_posted(db: Session, deposit_id: int) -> bool:
+    return (
+        db.query(JournalEntry.id)
+        .filter(
+            JournalEntry.description.like(
+                f"%Founding Membership Payment - Deposit #{deposit_id}%(Commissions)%"
+            )
+        )
+        .first()
+        is not None
+    )
+
+
 class PaymentAccountingService:
     """
     Payment-specific journals using generic accounting_service (CoA codes in init_coa.py).
 
-    KYC verification fee (Singapore-style accrual):
+    **Founding Members 10% pool (2104)** accrues on gross for every product we account for here:
+    KYC (on verification recognition), annual membership, founding/MFM membership, and club markup.
+
+    KYC verification fee:
     - USDT (BSC) receipt: Dr 1001 / Cr 2113 (deferred until service performed).
     - When Shufti/KYC completes: Dr 2113 / Cr 4001 (net), Cr 2104 (10% founding pool), Cr 2003 (Shufti);
  plus Dr 5001 / Cr 2001–2002 for sponsor commissions.
+
+    Annual / founding membership (aligned with deferred revenue policy):
+    - Dr 1001 / Cr 2110 or 2111 (receipt), then Dr deferred / Cr 4002 (net), Cr 2104 (10%), optional Cr 2003 (Shufti);
+      commissions in a separate Dr 5001 / Cr 2001–2002 entry.
     """
 
     def process_kyc_cash_receipt_accounting(
@@ -412,38 +521,30 @@ class PaymentAccountingService:
         entry_date: Optional[datetime] = None,
     ):
         """
-        Cas d'usage 2: Abonnement Annuel (50$)
-        Répartition:
-        - 100% -> USDT (BSC) treasury / Membership Revenue
-        - Commissions -> Expense / Payable
+        Annual membership: Dr 1001 / Cr 2110 (deferred), then recognition with 10% gross to2104,
+        optional $2 Shufti pass-through on small tiers, net to 4002. Commissions: Dr 5001 / Cr2001–2002.
+
+        Legacy rows that already have ``(Income)`` journals keep the old pattern; new deposits use deferred 2110.
         """
-        amount = Decimal(str(deposit.amount))
-        description = f"Membership Payment - Deposit #{deposit.id} - User #{deposit.user_id}"
+        dep_id = deposit.id
+        if _annual_membership_legacy_income_posted(db, dep_id):
+            logger.info(
+                "Annual membership legacy (Income) already posted for deposit %s; skipping new flow",
+                dep_id,
+            )
+            return
+
+        gross = _money_dec(Decimal(str(deposit.amount)))
+        description = f"Membership Payment - Deposit #{dep_id} - User #{deposit.user_id}"
         jdate = _journal_entry_date(deposit, entry_date)
 
-        # 1. Income (Revenue)
-        income_lines = [
-            {
-                "account_code": "1001",
-                "debit": float(amount),
-                "credit": 0.0,
-                "description": (
-                    f"USDT (BSC) on-chain inflow — annual membership from member; "
-                    f"Deposit #{deposit.id} User #{deposit.user_id}"
-                ),
-            },
-            {"account_code": "4002", "debit": 0.0, "credit": float(amount), "description": "Membership Revenue recognized"},
-        ]
-
-        accounting_service.create_journal_entry(
-            db,
-            description=description + " (Income)",
-            lines=income_lines,
-            date=jdate,
+        pool_amt = _money_dec(gross * Decimal("0.10"))
+        shufti_amt = (
+            _money_dec(Decimal("2.00")) if gross <= Decimal("12.00") else _money_dec(Decimal("0"))
         )
+        net_revenue = _money_dec(gross - pool_amt - shufti_amt)
 
-        # 2. Commissions
-        if commissions:
+        if commissions and not _annual_membership_commissions_posted(db, dep_id):
             commission_lines = []
             total_comm = Decimal("0.0")
 
@@ -478,51 +579,67 @@ class PaymentAccountingService:
                 date=jdate,
             )
 
-        # 3. Founding Members pool (10% of gross) — contractual accrual 2104; reduce 4002 recognition
-        pool_amt = float(amount) * 0.10
-        if pool_amt > 0:
-            alloc_lines = [
+        if not _annual_membership_deferred_posted(db, dep_id):
+            accounting_service.create_journal_entry(
+                db,
+                description=description + " (Deferred receipt - annual membership)",
+                lines=[
+                    {
+                        "account_code": "1001",
+                        "debit": float(gross),
+                        "credit": 0.0,
+                        "description": (
+                            f"USDT (BSC) on-chain inflow — annual membership from member; "
+                            f"Deposit #{dep_id} User #{deposit.user_id}"
+                        ),
+                    },
+                    {
+                        "account_code": "2110",
+                        "debit": 0.0,
+                        "credit": float(gross),
+                        "description": "Deferred revenue — annual membership (unearned until recognized)",
+                    },
+                ],
+                date=jdate,
+            )
+
+        if not _annual_membership_recognition_posted(db, dep_id):
+            rec_lines: List[dict] = [
+                {
+                    "account_code": "2110",
+                    "debit": float(gross),
+                    "credit": 0.0,
+                    "description": "Release deferred revenue — annual membership activated",
+                },
                 {
                     "account_code": "4002",
-                    "debit": pool_amt,
-                    "credit": 0.0,
-                    "description": "Allocate 10% to Founding Members pool (accrued)",
+                    "debit": 0.0,
+                    "credit": float(net_revenue),
+                    "description": (
+                        "Membership revenue after Founding Members pool (10% of gross) "
+                        "and Shufti pass-through (if applicable)"
+                    ),
                 },
                 {
                     "account_code": "2104",
                     "debit": 0.0,
-                    "credit": pool_amt,
-                    "description": "Accrued liability — Founding Members pool",
+                    "credit": float(pool_amt),
+                    "description": "Accrued liability — Founding Members pool (10% of gross)",
                 },
             ]
+            if shufti_amt > 0:
+                rec_lines.append(
+                    {
+                        "account_code": "2003",
+                        "debit": 0.0,
+                        "credit": float(shufti_amt),
+                        "description": "Payable to KYC verification provider (annual tier pass-through)",
+                    }
+                )
             accounting_service.create_journal_entry(
                 db,
-                description=description + " (Founding pool accrual)",
-                lines=alloc_lines,
-                date=jdate,
-            )
-
-        # 4. Annual membership: fixed Shufti pass-through ($2) when fee is standard $10 tier
-        shufti_amt = 2.0 if float(amount) <= 12.0 else 0.0
-        if shufti_amt > 0:
-            shufti_lines = [
-                {
-                    "account_code": "4002",
-                    "debit": shufti_amt,
-                    "credit": 0.0,
-                    "description": "KYC provider fee (Shufti) from annual membership gross",
-                },
-                {
-                    "account_code": "2003",
-                    "debit": 0.0,
-                    "credit": shufti_amt,
-                    "description": "Payable to KYC verification provider",
-                },
-            ]
-            accounting_service.create_journal_entry(
-                db,
-                description=description + " (KYC provider payable)",
-                lines=shufti_lines,
+                description=description + " (Recognition - annual membership)",
+                lines=rec_lines,
                 date=jdate,
             )
 
@@ -534,32 +651,27 @@ class PaymentAccountingService:
         entry_date: Optional[datetime] = None,
     ):
         """
-        Founding membership (e.g. $100): gross USDT (BSC) inflow / revenue, commissions, 10% pool accrual.
+        Founding / MFM membership (e.g. $100): Dr 1001 / Cr 2111 (deferred), then recognition:
+        Dr 2111 / Cr 4002 (net after 10% pool), Cr 2104 (10% of gross). Commissions: Dr 5001 / Cr 2001–2002.
+
+        Legacy ``(Income)`` journals are left unchanged; new deposits use deferred 2111.
         """
-        amount = Decimal(str(deposit.amount))
-        description = f"Founding Membership Payment - Deposit #{deposit.id} - User #{deposit.user_id}"
+        dep_id = deposit.id
+        if _founding_membership_legacy_income_posted(db, dep_id):
+            logger.info(
+                "Founding membership legacy (Income) already posted for deposit %s; skipping new flow",
+                dep_id,
+            )
+            return
+
+        gross = _money_dec(Decimal(str(deposit.amount)))
+        description = f"Founding Membership Payment - Deposit #{dep_id} - User #{deposit.user_id}"
         jdate = _journal_entry_date(deposit, entry_date)
 
-        income_lines = [
-            {
-                "account_code": "1001",
-                "debit": float(amount),
-                "credit": 0.0,
-                "description": (
-                    f"USDT (BSC) on-chain inflow — founding membership from member; "
-                    f"Deposit #{deposit.id} User #{deposit.user_id}"
-                ),
-            },
-            {"account_code": "4002", "debit": 0.0, "credit": float(amount), "description": "Founding membership revenue recognized"},
-        ]
-        accounting_service.create_journal_entry(
-            db,
-            description=description + " (Income)",
-            lines=income_lines,
-            date=jdate,
-        )
+        pool_amt = _money_dec(gross * Decimal("0.10"))
+        net_revenue = _money_dec(gross - pool_amt)
 
-        if commissions:
+        if commissions and not _founding_membership_commissions_posted(db, dep_id):
             commission_lines = []
             total_comm = Decimal("0.0")
             for comm in commissions:
@@ -590,23 +702,54 @@ class PaymentAccountingService:
                 date=jdate,
             )
 
-        pool_amt = float(amount) * 0.10
-        if pool_amt > 0:
+        if not _founding_membership_deferred_posted(db, dep_id):
             accounting_service.create_journal_entry(
                 db,
-                description=description + " (Founding pool accrual)",
+                description=description + " (Deferred receipt - founding membership)",
                 lines=[
                     {
-                        "account_code": "4002",
-                        "debit": pool_amt,
+                        "account_code": "1001",
+                        "debit": float(gross),
                         "credit": 0.0,
-                        "description": "Allocate 10% to Founding Members pool",
+                        "description": (
+                            f"USDT (BSC) on-chain inflow — founding membership from member; "
+                            f"Deposit #{dep_id} User #{deposit.user_id}"
+                        ),
+                    },
+                    {
+                        "account_code": "2111",
+                        "debit": 0.0,
+                        "credit": float(gross),
+                        "description": "Deferred revenue — founding membership (unearned until recognized)",
+                    },
+                ],
+                date=jdate,
+            )
+
+        if not _founding_membership_recognition_posted(db, dep_id):
+            accounting_service.create_journal_entry(
+                db,
+                description=description + " (Recognition - founding membership)",
+                lines=[
+                    {
+                        "account_code": "2111",
+                        "debit": float(gross),
+                        "credit": 0.0,
+                        "description": "Release deferred revenue — founding membership activated",
+                    },
+                    {
+                        "account_code": "4002",
+                        "debit": 0.0,
+                        "credit": float(net_revenue),
+                        "description": (
+                            "Founding membership revenue after Founding Members pool (10% of gross)"
+                        ),
                     },
                     {
                         "account_code": "2104",
                         "debit": 0.0,
-                        "credit": pool_amt,
-                        "description": "Accrued liability — Founding Members pool",
+                        "credit": float(pool_amt),
+                        "description": "Accrued liability — Founding Members pool (10% of gross)",
                     },
                 ],
                 date=jdate,

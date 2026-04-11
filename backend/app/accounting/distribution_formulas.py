@@ -1,6 +1,9 @@
 """
 Pure distribution math for MyHigh5 payment flows (Singapore-oriented CoA).
 
+**Founding Members 10% pool (ledger 2104)** accrues on gross for every flow we model here (KYC fee, annual/founding membership gross, ad shares, and 10% of club *markup*), before month-end
+allocation (2104 → 2105). Payment journals implement the same policy in `payment_accounting`.
+
 Percentages apply to gross (membership / ad revenue) unless noted.
 Missing affiliate levels are treated as platform revenue (no separate line here).
 """

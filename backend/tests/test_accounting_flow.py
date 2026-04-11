@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 from app.models.user import User
 from app.models.payment import Deposit, ProductType, DepositStatus
 from app.models.affiliate import CommissionRule, CommissionType, AffiliateCommission
-from app.models.accounting import JournalEntry, JournalLine, AccountType
+from app.models.accounting import JournalEntry, JournalLine, AccountType, ChartOfAccounts
 from app.services.commission_distribution import process_payment_validation
 from app.services.payment_accounting import payment_accounting
 from app.scripts.init_coa import init_chart_of_accounts
@@ -201,23 +201,31 @@ def test_membership_payment_accounting_flow(db: Session):
 
     assert process_payment_validation(db, deposit) is True
 
-    income_entry = db.query(JournalEntry).filter(
-        JournalEntry.description.like(f"%Membership Payment - Deposit #{deposit.id}%(Income)%")
+    deferred_entry = db.query(JournalEntry).filter(
+        JournalEntry.description.like(f"%Membership Payment - Deposit #{deposit.id}%(Deferred receipt - annual membership)%")
     ).first()
-    assert income_entry is not None
-    assert income_entry.total_debit == 50.0
+    assert deferred_entry is not None
+    assert float(deferred_entry.total_debit) == 50.0
+
+    rec_entry = db.query(JournalEntry).filter(
+        JournalEntry.description.like(f"%Membership Payment - Deposit #{deposit.id}%(Recognition - annual membership)%")
+    ).first()
+    assert rec_entry is not None
+    assert abs(float(rec_entry.total_debit) - 50.0) < 0.001
+    pool_line = (
+        db.query(JournalLine)
+        .join(ChartOfAccounts, JournalLine.account_id == ChartOfAccounts.id)
+        .filter(JournalLine.entry_id == rec_entry.id, ChartOfAccounts.account_code == "2104")
+        .first()
+    )
+    assert pool_line is not None
+    assert abs(float(pool_line.credit_amount) - 5.0) < 0.001
 
     comm_entry = db.query(JournalEntry).filter(
         JournalEntry.description.like(f"%Membership Payment - Deposit #{deposit.id}%(Commissions)%")
     ).first()
     assert comm_entry is not None
     assert comm_entry.total_debit >= 5.0
-
-    pool_entry = db.query(JournalEntry).filter(
-        JournalEntry.description.like(f"%Membership Payment - Deposit #{deposit.id}%(Founding pool accrual)%")
-    ).first()
-    assert pool_entry is not None
-    assert abs(float(pool_entry.total_debit) - 5.0) < 0.001
 
     logger.info("--- TEST PASSED: Membership accounting verified ---")
 

@@ -299,7 +299,7 @@ def backfill_missing_founding_pool_accruals(
     for that deposit id in the journal description.
 
     - KYC: only when verification recognition is already posted; pool = split from policy (10% gross).
-    - Annual / founding membership:10% of gross, revenue from 4002.
+    - Annual / founding membership: 10% of gross to 2104 (from recognition or legacy ``(Founding pool accrual)``).
 
     Deposits with no journal lines yet should use backfill_missing_payment_journals first.
     """
