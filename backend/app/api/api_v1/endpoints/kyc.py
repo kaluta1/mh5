@@ -10,6 +10,7 @@ from app.core.config import settings
 from app.crud import crud_kyc
 from app.crud import crud_deposit
 from app.models.user import User
+from app.models.geography import Country
 from app.models.kyc import KYCStatus, DocumentType
 from app.schemas.kyc import (
     KYCVerification, KYCVerificationCreate, KYCVerificationUpdate,
@@ -18,12 +19,29 @@ from app.schemas.kyc import (
     KYCStatistics, KYCVerificationWithDocuments, KYCVerificationComplete,
     ShuftiProWebhookData, KYCWebhookResponse, KYCInitiateRequest,
 )
-from app.services.shufti_pro import shufti_pro_service, kyc_flags_from_shufti_payload
+from app.services.shufti_pro import (
+    shufti_pro_service,
+    kyc_flags_from_shufti_payload,
+    normalize_country_iso2_for_shufti,
+)
 from app.services.email import email_service
 from app.services.payment_accounting import payment_accounting
 
 router = APIRouter()
 KYC_PRICE_USD = 10.00  # keep in sync with product_types.price for code "kyc"
+
+
+def _shufti_country_iso2_for_user(db: Session, user: User) -> Optional[str]:
+    """
+    Shufti requires ISO 3166-1 alpha-2. User.country is often a full name; prefer countries.code via country_id.
+    """
+    if user.country_id:
+        row = db.query(Country).filter(Country.id == user.country_id).first()
+        if row and row.code:
+            iso = normalize_country_iso2_for_shufti(row.code)
+            if iso:
+                return iso
+    return normalize_country_iso2_for_shufti(user.country)
 
 
 @router.post("/initiate")
@@ -109,7 +127,6 @@ async def initiate_shufti_verification(
                     identity_verified=flags["identity_verified"],
                     document_verified=flags["document_verified"],
                     face_verified=flags["face_verified"],
-                    address_verified=flags["address_verified"],
                 )
                 crud_kyc.kyc_verification.update(db=db, db_obj=verification, obj_in=update_data)
                 
@@ -178,32 +195,44 @@ async def initiate_shufti_verification(
         db.commit()
         db.refresh(verification)
     
+    # Adresse déclarée : stockée pour le flux interne (justificatif hors Shufti). Optionnelle.
     addr = (payload.residential_address or "").strip()
-    if len(addr) < 10:
+    if addr and len(addr) < 10:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Residential address is required (min. 10 characters) for automated proof-of-address verification.",
+            detail="If provided, residential address must be at least 10 characters.",
         )
-    verification = crud_kyc.kyc_verification.update(
-        db,
-        db_obj=verification,
-        obj_in=KYCVerificationUpdate(verified_address=addr),
-    )
+    if addr:
+        verification = crud_kyc.kyc_verification.update(
+            db,
+            db_obj=verification,
+            obj_in=KYCVerificationUpdate(verified_address=addr),
+        )
 
-    # Appeler Shufti Pro pour obtenir l'URL de vérification
+    # Appeler Shufti Pro (document + face uniquement)
     result = await shufti_pro_service.initiate_verification(
         reference=reference,
         email=current_user.email,
-        country=current_user.country,
+        country=_shufti_country_iso2_for_user(db, current_user),
         language=language,
-        residential_address=addr,
     )
     
     if not result.get("success"):
-        # En cas d'erreur, remettre le statut à PENDING pour permettre une nouvelle tentative
+        err = result.get("error", "Erreur lors de l'initialisation de la vérification")
+        err_l = (err or "").lower()
+        # Shufti misconfiguration / bad credentials — clearer than generic 500
+        if (
+            "shufti pro is not configured" in err_l
+            or "authorization keys" in err_l
+            or "shufti_client_id" in err_l
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=err,
+            )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=result.get("error", "Erreur lors de l'initialisation de la vérification")
+            detail=err,
         )
     
     verification_url = result.get("verification_url")
@@ -279,7 +308,6 @@ async def get_kyc_status_detailed(
                 identity_verified=flags["identity_verified"],
                 document_verified=flags["document_verified"],
                 face_verified=flags["face_verified"],
-                address_verified=flags["address_verified"],
             )
             crud_kyc.kyc_verification.update(db=db, db_obj=verification, obj_in=update_data)
             verification.status = new_status
@@ -742,7 +770,6 @@ def shufti_pro_webhook(
             identity_verified=flags["identity_verified"],
             document_verified=flags["document_verified"],
             face_verified=flags["face_verified"],
-            address_verified=flags["address_verified"],
         )
         crud_kyc.kyc_verification.update(db=db, db_obj=verification, obj_in=update_data)
         payment_accounting.post_kyc_verification_recognition_for_user(db, verification.user_id)
@@ -765,7 +792,6 @@ def shufti_pro_webhook(
             identity_verified=flags["identity_verified"],
             document_verified=flags["document_verified"],
             face_verified=flags["face_verified"],
-            address_verified=flags["address_verified"],
         )
         crud_kyc.kyc_verification.update(db=db, db_obj=verification, obj_in=update_data)
         u = db.query(User).filter(User.id == verification.user_id).first()

@@ -76,14 +76,14 @@ function KYCPageContent() {
         onChange={(e) => setResidentialAddress(e.target.value)}
         placeholder={
           t('Enter your address') ||
-          'Street, city, postal code, country — must match your proof-of-address document'
+          'Street, city, postal code, country (optional — for our records / internal address check)'
         }
         className="min-h-[100px] bg-white dark:bg-gray-900"
         autoComplete="street-address"
       />
       <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-        {t('residential address') ||
-          'Used for automatic proof-of-address verification with your partner flow (e.g. utility bill, bank statement).'}
+        {t('kyc.residential_address_hint') ||
+          'Shufti verifies ID + face only. Address is optional and kept for internal proof-of-address if we add it later.'}
       </p>
     </div>
   )
@@ -138,7 +138,7 @@ function KYCPageContent() {
   }, [kycData?.declared_residential_address])
 
   // Démarrer ou reprendre la vérification Shufti Pro
-  const handleStartVerification = async (allowMissingAddress = false) => {
+  const handleStartVerification = async () => {
     setIsInitiating(true)
     setError(null)
 
@@ -161,17 +161,16 @@ function KYCPageContent() {
           : '')
       ).trim()
 
-      if (!allowMissingAddress && addrToSend.length < 10) {
+      if (addrToSend.length > 0 && addrToSend.length < 10) {
         setError(
-          t('kyc.residential_address_required') ||
-            'Enter your full residential address (min. 10 characters). It must match your proof-of-address document.'
+          t('kyc.residential_address_too_short') ||
+            'If you enter a residential address, use at least 10 characters (for your profile / internal verification).'
         )
         setIsInitiating(false)
         return
       }
 
-      const payloadAddr =
-        allowMissingAddress && addrToSend.length < 10 ? undefined : addrToSend
+      const payloadAddr = addrToSend.length >= 10 ? addrToSend : undefined
       const result = await kycService.initiateVerification(token, lang, payloadAddr)
 
       if (result.verification_url) {
@@ -197,7 +196,7 @@ function KYCPageContent() {
   // Continuer une vérification existante
   const handleContinueVerification = async () => {
     // Réutilisation d'une session en cours : le backend peut renvoyer l'URL sans nouvel appel Shufti
-    await handleStartVerification(true)
+    await handleStartVerification()
   }
 
   // Rafraîchir le statut
@@ -249,15 +248,19 @@ function KYCPageContent() {
           ? refreshed.declared_residential_address.trim()
           : ''
       const addrToSend = (residentialAddress.trim() || declared).trim()
-      if (addrToSend.length < 10) {
+      if (addrToSend.length > 0 && addrToSend.length < 10) {
         setError(
-          t('kyc.residential_address_required') ||
-            'Enter your full residential address (min. 10 characters). It must match your proof-of-address document.'
+          t('kyc.residential_address_too_short') ||
+            'If you enter a residential address, use at least 10 characters.'
         )
         setIsInitiating(false)
         return
       }
-      const result = await kycService.initiateVerification(token, lang, addrToSend)
+      const result = await kycService.initiateVerification(
+        token,
+        lang,
+        addrToSend.length >= 10 ? addrToSend : undefined
+      )
       if (result.verification_url) {
         setVerificationUrl(result.verification_url)
       }

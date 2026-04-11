@@ -124,6 +124,19 @@ SHUFTI_RETENTION_DAYS = 5  # Nombre de jours de rétention d'une vérification
 SHUFTI_TTL_MINUTES = (SHUFTI_RETENTION_DAYS + 1) * 24 * 60  # TTL en minutes
 
 
+def normalize_country_iso2_for_shufti(country: Optional[str]) -> Optional[str]:
+    """
+    Shufti expects ISO 3166-1 alpha-2 (exactly 2 letters). Profile often stores full names.
+    Only pass through values that are already valid 2-letter codes; otherwise omit.
+    """
+    if not country or not str(country).strip():
+        return None
+    c = str(country).strip().upper()
+    if len(c) == 2 and c.isalpha():
+        return c
+    return None
+
+
 class ShuftiProService:
     """Service pour interagir avec l'API Shufti Pro"""
     
@@ -225,19 +238,19 @@ class ShuftiProService:
         country: Optional[str] = None,
         language: str = "FR",
         redirect_url: Optional[str] = None,
-        residential_address: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Initier une vérification KYC avec Shufti Pro
-        
+        Initier une vérification KYC avec Shufti Pro (document + face uniquement).
+
+        Le justificatif de domicile est géré hors Shufti (plan / flux interne).
+
         Args:
             reference: Identifiant unique pour cette vérification
             email: Email de l'utilisateur
             country: Code pays ISO (optionnel, pour pré-remplir)
             language: Langue de l'interface (FR, EN, ES, etc.)
             redirect_url: URL de redirection après vérification
-            residential_address: Adresse déclarée (correspondance avec le justificatif de domicile)
-        
+
         Returns:
             Dict contenant verification_url et autres données
         """
@@ -283,25 +296,23 @@ class ShuftiProService:
                     "allow_e_document": "1"
                 }
             },
-            "address": {
-                "proof": "",
-                "supported_types": [
-                    "utility_bill",
-                    "bank_statement",
-                    "rent_agreement",
-                    "tax_bill",
-                    "insurance_agreement",
-                ],
-                "verification_mode": "any",
-                "allow_offline": "1",
-                "allow_online": "1",
-            },
         }
-        if country:
-            payload["country"] = country
-        if residential_address and residential_address.strip():
-            payload["address"]["full_address"] = residential_address.strip()[:500]
-        
+        iso2 = normalize_country_iso2_for_shufti(country)
+        if iso2:
+            payload["country"] = iso2
+
+        if not (self.client_id or "").strip() or not (self.secret_key or "").strip():
+            logger.error("Shufti Pro: SHUFTI_CLIENT_ID or SHUFTI_SECRET_KEY is empty — check backend .env")
+            return {
+                "success": False,
+                "error": (
+                    "Shufti Pro is not configured on the server. "
+                    "Set SHUFTI_CLIENT_ID and SHUFTI_SECRET_KEY in backend/.env (not the frontend). "
+                    "Get keys from the Shufti Pro dashboard."
+                ),
+                "data": {},
+            }
+
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(
@@ -347,9 +358,22 @@ class ShuftiProService:
                         }
                     else:
                         logger.error(f"Shufti Pro error: {result}")
+                        err_raw = result.get("error")
+                        if isinstance(err_raw, dict):
+                            msg = err_raw.get("message", "Unknown error")
+                        elif isinstance(err_raw, str):
+                            msg = err_raw
+                        else:
+                            msg = "Unknown error"
+                        if msg and "authorization keys" in msg.lower():
+                            msg = (
+                                f"{msg} "
+                                "Verify SHUFTI_CLIENT_ID and SHUFTI_SECRET_KEY in backend .env match your Shufti "
+                                "dashboard (sandbox vs production). Frontend env vars are not used for API calls."
+                            )
                         return {
                             "success": False,
-                            "error": result.get("error", {}).get("message", "Unknown error"),
+                            "error": msg,
                             "data": result
                         }
                     

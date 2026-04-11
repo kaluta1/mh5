@@ -53,7 +53,7 @@ const products: Product[] = [
   {
     code: 'kyc',
     nameKey: 'payment.kyc_verification',
-    price: 10,
+    price: 1,
     maxQuantity: 10,
     isQuantityBased: true,
     description: 'payment.kyc_description'

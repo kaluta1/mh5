@@ -4,7 +4,7 @@ Service de distribution des commissions d'affiliation.
 Règles de commission (MyHigh5 Founding Members):
 - Founding Membership Fee (100$): 20$ direct, 2$ indirect (N2-10)
 - Annual Membership Fee (50$): 10$ direct, 1$ indirect (N2-10)
-- KYC (10$): 2$ direct, 0.2$ indirect (N2-10)
+- KYC (10$): 1$ direct (10%), 0.10$ indirect per level (1%, N2-10)
 """
 
 from sqlalchemy.orm import Session

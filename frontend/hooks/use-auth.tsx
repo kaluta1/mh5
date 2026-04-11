@@ -3,6 +3,7 @@
 import * as React from 'react'
 import { AxiosError } from 'axios'
 import { authService } from '@/lib/api'
+import { API_URL } from '@/lib/config'
 import { cacheService } from '@/lib/cache-service'
 import { logger } from '@/lib/logger'
 import type { User, UserRole } from '@/types/user'
@@ -63,7 +64,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      const baseUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').replace(/\/+$/, '')
+      const baseUrl = API_URL.replace(/\/+$/, '')
 
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 5000)
@@ -100,7 +101,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Vérifier l'authentification au chargement (optimized for speed)
   React.useEffect(() => {
-    const checkAuth = async (retryCount = 0) => {
+    let cancelled = false
+    const safetyId =
+      typeof window !== 'undefined'
+        ? window.setTimeout(() => {
+            if (!cancelled) {
+              logger.warn('Auth bootstrap exceeded 25s; stop blocking UI — is the backend running? Check API_URL in lib/config.')
+              setIsLoading(false)
+            }
+          }, 25000)
+        : undefined
+
+    const checkAuth = async (retryCount = 0): Promise<void> => {
       try {
         // Check cache first for instant display
         const cachedUser = cacheService.get('user')
@@ -109,62 +121,87 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setIsLoading(false) // Show page immediately with cached user
           // Load fresh data in background
           if (authService.isAuthenticated()) {
-            authService.getCurrentUser()
-              .then(userData => {
+            authService
+              .getCurrentUser()
+              .then((userData) => {
+                if (cancelled) return
                 setUser({
                   ...userData,
                   is_admin: (userData as any).is_admin || false,
                   is_active: userData.is_active ?? true,
-                  is_verified: userData.is_verified ?? false
+                  is_verified: userData.is_verified ?? false,
                 } as User)
                 cacheService.set('user', userData, 300000) // Cache for 5 minutes
-                loadPermissions().catch(() => { })
+                loadPermissions().catch(() => {})
               })
-              .catch(() => { }) // Silent fail - use cached data
+              .catch(() => {
+                /* keep cached user */
+              })
           }
           return
         }
 
         if (authService.isAuthenticated()) {
           const userData = await authService.getCurrentUser()
+          if (cancelled) return
           setUser({
             ...userData,
             is_admin: (userData as any).is_admin || false,
             is_active: userData.is_active ?? true,
-            is_verified: userData.is_verified ?? false
+            is_verified: userData.is_verified ?? false,
           } as User)
           cacheService.set('user', userData, 300000) // Cache for 5 minutes
-          loadPermissions().catch(() => { })
+          loadPermissions().catch(() => {})
         } else {
           setIsLoading(false)
         }
       } catch (error) {
         const axiosErr = error as AxiosError
         const status = axiosErr.response?.status
-        const isNetworkOrServerError = !axiosErr.response || (status && status >= 500)
-        const isRetryable = isNetworkOrServerError || axiosErr.code === 'ECONNABORTED' || axiosErr.message === 'Network Error'
+        const isNetworkOrServerError = !axiosErr.response || (status !== undefined && status >= 500)
+        const isRetryable =
+          isNetworkOrServerError ||
+          axiosErr.code === 'ECONNABORTED' ||
+          axiosErr.message === 'Network Error'
 
-        if (status === 401) {
+        if (status === 401 || status === 403) {
           localStorage.removeItem('access_token')
           localStorage.removeItem('refresh_token')
+          cacheService.clear()
+          setUser(null)
           logger.debug('Session expirée ou token invalide')
         } else if (isRetryable && retryCount < 1) {
           logger.warn('Backend indisponible, nouvel essai dans 3s...')
           await new Promise((r) => setTimeout(r, 3000))
-          return checkAuth(retryCount + 1)
+          await checkAuth(retryCount + 1)
+          return
         } else if (isRetryable) {
           logger.warn('Backend temporairement indisponible')
         } else {
-          logger.error('Erreur lors de la vérification de l\'authentification', error)
+          logger.error("Erreur lors de la vérification de l'authentification", error)
           localStorage.removeItem('access_token')
           localStorage.removeItem('refresh_token')
+          cacheService.clear()
+          setUser(null)
         }
       } finally {
         setIsLoading(false)
       }
     }
 
-    checkAuth()
+    void (async () => {
+      try {
+        await checkAuth(0)
+      } finally {
+        cancelled = true
+        if (safetyId) window.clearTimeout(safetyId)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+      if (safetyId) window.clearTimeout(safetyId)
+    }
   }, [])
 
   const login = async (credentials: { email_or_username: string; password: string }) => {

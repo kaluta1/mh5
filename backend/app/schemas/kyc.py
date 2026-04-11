@@ -169,14 +169,14 @@ class KYCVerificationComplete(KYCVerification):
 
 
 class KYCInitiateRequest(BaseModel):
-    """Optional body for POST /kyc/initiate — declared address for Shufti proof-of-address matching."""
+    """Optional body for POST /kyc/initiate — declared address stored for internal use (PoA is not sent to Shufti)."""
 
     model_config = ConfigDict(extra="ignore")
 
     residential_address: Optional[str] = Field(
         None,
         max_length=500,
-        description="Full residential address as declared by the user; must match proof-of-address document.",
+        description="Optional declared address stored on the verification row for internal proof-of-address flow.",
     )
 
 

@@ -1,9 +1,26 @@
 from typing import List, Union, Optional
+from pathlib import Path
 from pydantic import BaseModel, field_validator, ConfigDict
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+# Always load backend/.env (this file lives in backend/app/core/). Using load_dotenv()
+# without a path only reads from the process cwd, so starting uvicorn from the repo
+# root would skip DATABASE_URL and other vars — wrong DB / login appears "broken".
+_BACKEND_DIR = Path(__file__).resolve().parents[2]
+# utf-8-sig strips BOM from Windows Notepad–saved .env files
+load_dotenv(_BACKEND_DIR / ".env", encoding="utf-8-sig")
+load_dotenv(_BACKEND_DIR / ".env.local", override=True, encoding="utf-8-sig")
+
+
+def _first_nonempty_env(*keys: str) -> str:
+    """First set env var among keys (common aliases); strip whitespace from value."""
+    for k in keys:
+        v = os.getenv(k)
+        if v is not None and str(v).strip() != "":
+            return str(v).strip()
+    return ""
+
 
 class Settings(BaseModel):
     model_config = ConfigDict(
@@ -86,11 +103,11 @@ class Settings(BaseModel):
     # FRONTEND
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
     
-    # SHUFTI PRO KYC
-    SHUFTI_CLIENT_ID: str = os.getenv("SHUFTI_CLIENT_ID", "")
-    SHUFTI_SECRET_KEY: str = os.getenv("SHUFTI_SECRET_KEY", "")
-    SHUFTI_CALLBACK_URL: str = os.getenv("SHUFTI_CALLBACK_URL", "")  # Webhook URL
-    SHUFTI_REDIRECT_URL: str = os.getenv("SHUFTI_REDIRECT_URL", "")  # Redirect URL après vérification
+    # SHUFTI PRO KYC (accept UPPER_SNAKE and lowercase aliases from .env)
+    SHUFTI_CLIENT_ID: str = _first_nonempty_env("SHUFTI_CLIENT_ID", "shufti_client_id")
+    SHUFTI_SECRET_KEY: str = _first_nonempty_env("SHUFTI_SECRET_KEY", "shufti_secret_key")
+    SHUFTI_CALLBACK_URL: str = _first_nonempty_env("SHUFTI_CALLBACK_URL", "shufti_callback_url")
+    SHUFTI_REDIRECT_URL: str = _first_nonempty_env("SHUFTI_REDIRECT_URL", "shufti_redirect_url")
     
     # ============================================
     # Reown/WalletConnect Configuration

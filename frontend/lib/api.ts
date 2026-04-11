@@ -188,8 +188,27 @@ export const authService = {
 
     _currentUserCacheTime = now;
     _currentUserPromise = (async () => {
-      const response = await api.get('/api/v1/auth/me')
-      return response.data
+      try {
+        // Shorter timeout so a dead local backend does not block the UI for 30s
+        const response = await api.get('/api/v1/auth/me', { timeout: 15000 })
+        // validateStatus accepts4xx; treat auth failures as errors so we do not setUser(error JSON)
+        if (response.status === 401 || response.status === 403) {
+          const err = new Error('Unauthorized') as AxiosError
+          ;(err as any).response = response
+          throw err
+        }
+        const data = response.data
+        if (!data || typeof data !== 'object' || typeof (data as any).id !== 'number') {
+          const err = new Error('Invalid user response') as AxiosError
+          ;(err as any).response = response
+          throw err
+        }
+        return data as LoginResponse['user']
+      } catch (e) {
+        _currentUserPromise = null
+        _currentUserCacheTime = 0
+        throw e
+      }
     })();
 
     return _currentUserPromise;
