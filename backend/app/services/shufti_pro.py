@@ -8,6 +8,7 @@ import json
 import hashlib
 import hmac
 import logging
+import os
 import random
 import string
 from typing import Optional, Dict, Any, Tuple
@@ -124,13 +125,36 @@ SHUFTI_RETENTION_DAYS = 5  # Nombre de jours de rétention d'une vérification
 SHUFTI_TTL_MINUTES = (SHUFTI_RETENTION_DAYS + 1) * 24 * 60  # TTL en minutes
 
 
+def _public_api_base_for_shufti() -> str:
+    """
+    Public origin where this FastAPI app is reachable (no trailing slash).
+    Order: BACKEND_PUBLIC_URL (always, if set) → FRONTEND_URL (skip localhost :3000 style)
+    → RENDER_EXTERNAL_URL → PUBLIC_URL.
+    """
+    be = (settings.BACKEND_PUBLIC_URL or "").strip().rstrip("/")
+    if be:
+        return be
+
+    fe = (settings.FRONTEND_URL or "").strip().rstrip("/")
+    if fe:
+        low = fe.lower()
+        if "localhost" not in low and not low.startswith("http://127."):
+            return fe
+
+    for raw in (os.getenv("RENDER_EXTERNAL_URL", ""), os.getenv("PUBLIC_URL", "")):
+        b = (raw or "").strip().rstrip("/")
+        if b:
+            return b
+    return ""
+
+
 def resolve_shufti_callback_and_redirect_urls() -> Tuple[str, str]:
     """
     Shufti requires allowlisted domains for callback_url and redirect_url.
-    Explicit SHUFTI_* env wins; otherwise derive from BACKEND_PUBLIC_URL (same host as API).
+    Explicit SHUFTI_* env wins; otherwise derive from public API base.
     """
     api_v1 = settings.API_V1_STR.rstrip("/")
-    base = (settings.BACKEND_PUBLIC_URL or "").strip().rstrip("/")
+    base = _public_api_base_for_shufti()
 
     callback = (settings.SHUFTI_CALLBACK_URL or "").strip()
     if not callback and base:

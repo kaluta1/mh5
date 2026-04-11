@@ -14,7 +14,13 @@ services:
       - key: BACKEND_CORS_ORIGINS
         value: https://frontend-rho-eight-72.vercel.app
       - key: FRONTEND_URL
-        value: https://frontend-rho-eight-72.vercel.app
+        sync: false # e.g. https://myhigh5.com — must match the public site; used for Shufti URL fallback + redirects
+      - key: BACKEND_PUBLIC_URL
+        sync: false # e.g. https://myhigh5.com if API is same host; else your Render URL — Shufti callback/redirect base
+      - key: SHUFTI_CALLBACK_URL
+        sync: false # optional override: https://YOUR_DOMAIN/api/v1/kyc/webhook/shufti-pro
+      - key: SHUFTI_REDIRECT_URL
+        sync: false # optional override: https://YOUR_DOMAIN/api/v1/kyc/redirect
       - key: ALGORITHM
         value: HS256
       - key: ACCESS_TOKEN_EXPIRE_MINUTES

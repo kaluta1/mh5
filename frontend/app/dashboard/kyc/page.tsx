@@ -138,7 +138,7 @@ function KYCPageContent() {
   }, [kycData?.declared_residential_address])
 
   // Démarrer ou reprendre la vérification Shufti Pro
-  const handleStartVerification = async () => {
+  const handleStartVerification = async (forceNew = false) => {
     setIsInitiating(true)
     setError(null)
 
@@ -171,7 +171,7 @@ function KYCPageContent() {
       }
 
       const payloadAddr = addrToSend.length >= 10 ? addrToSend : undefined
-      const result = await kycService.initiateVerification(token, lang, payloadAddr)
+      const result = await kycService.initiateVerification(token, lang, payloadAddr, forceNew)
 
       if (result.verification_url) {
         setVerificationUrl(result.verification_url)
@@ -196,7 +196,13 @@ function KYCPageContent() {
   // Continuer une vérification existante
   const handleContinueVerification = async () => {
     // Réutilisation d'une session en cours : le backend peut renvoyer l'URL sans nouvel appel Shufti
-    await handleStartVerification()
+    await handleStartVerification(false)
+  }
+
+  /** Nouvelle URL Shufti (évite une iframe INVALID liée à une session ou config obsolète). */
+  const handleRequestNewShuftiLink = async () => {
+    setVerificationUrl(null)
+    await handleStartVerification(true)
   }
 
   // Rafraîchir le statut
@@ -259,7 +265,8 @@ function KYCPageContent() {
       const result = await kycService.initiateVerification(
         token,
         lang,
-        addrToSend.length >= 10 ? addrToSend : undefined
+        addrToSend.length >= 10 ? addrToSend : undefined,
+        false
       )
       if (result.verification_url) {
         setVerificationUrl(result.verification_url)
@@ -329,11 +336,28 @@ function KYCPageContent() {
           </div>
           
           {/* Footer info */}
-          <div className="mt-4 text-center">
+          <div className="mt-4 text-center space-y-2">
             <p className="text-xs text-gray-400 dark:text-gray-500 flex items-center justify-center gap-1">
               <Shield className="w-3 h-3" />
               {t('kyc.secure_verification') || 'Vérification sécurisée et chiffrée'}
             </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isInitiating}
+              onClick={() => void handleRequestNewShuftiLink()}
+              className="text-xs"
+            >
+              {isInitiating ? (
+                <>
+                  <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                  {t('common.loading') || 'Loading...'}
+                </>
+              ) : (
+                t('kyc.new_verification_link') || 'Get a new verification link'
+              )}
+            </Button>
           </div>
         </div>
       </div>
@@ -430,6 +454,20 @@ function KYCPageContent() {
                 {t('common.refresh') || 'Actualiser'}
               </Button>
             </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">
+              {t('kyc.invalid_iframe_hint') ||
+                'If the verification window shows INVALID, request a fresh link (same payment):'}
+            </p>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="mt-1 text-myhigh5-primary"
+              disabled={isInitiating}
+              onClick={() => void handleStartVerification(true)}
+            >
+              {t('kyc.new_verification_link') || 'Get a new verification link'}
+            </Button>
           </div>
         </div>
       </div>
@@ -644,7 +682,7 @@ function KYCPageContent() {
 
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Button
-                onClick={handleStartVerification}
+                onClick={() => void handleStartVerification()}
                 disabled={isInitiating}
                 className="bg-myhigh5-primary hover:bg-myhigh5-primary/90"
               >
@@ -774,7 +812,7 @@ function KYCPageContent() {
         {/* CTA Button */}
         <div className="text-center">
           <Button
-            onClick={handleStartVerification}
+            onClick={() => void handleStartVerification()}
             disabled={isInitiating}
             size="lg"
             className="bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white px-8 py-6 text-lg rounded-xl shadow-lg shadow-myhigh5-primary/25"

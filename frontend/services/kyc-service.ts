@@ -66,40 +66,53 @@ class KYCService {
   async initiateVerification(
     token: string,
     language: string = 'FR',
-    residentialAddress?: string
+    residentialAddress?: string,
+    forceNew: boolean = false
   ): Promise<KYCInitiateResponse> {
     try {
       if (!token) {
         throw new Error('Authentication token is required')
       }
 
-      const response = await fetch(
-        `${this.baseUrl}/api/v1/kyc/initiate?language=${encodeURIComponent(language)}`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            residential_address: (residentialAddress ?? '').trim(),
-          }),
-        }
-      )
+      const q = new URLSearchParams()
+      q.set('language', language)
+      if (forceNew) q.set('force_new', 'true')
+
+      const response = await fetch(`${this.baseUrl}/api/v1/kyc/initiate?${q.toString()}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          residential_address: (residentialAddress ?? '').trim(),
+        }),
+      })
 
       if (!response.ok) {
         const error = await response.json()
         logger.error('KYC initiation error:', error)
 
         const detailRaw = error.detail
-        const detailStr =
-          typeof detailRaw === 'string'
-            ? detailRaw
-            : detailRaw && typeof detailRaw === 'object' && 'message' in detailRaw
-              ? String((detailRaw as { message: string }).message)
-              : Array.isArray(detailRaw)
-                ? detailRaw.map((e: { msg?: string }) => e.msg).filter(Boolean).join(', ')
-                : null
+        const formatObjectDetail = (d: Record<string, unknown>): string => {
+          const msg = d.message != null ? String(d.message) : ''
+          const hint = d.hint != null ? String(d.hint) : ''
+          const cb = d.callback_url != null ? `callback_url=${String(d.callback_url)}` : ''
+          const rd = d.redirect_url != null ? `redirect_url=${String(d.redirect_url)}` : ''
+          const dom = d.domains_to_register_in_shufti
+          const domStr =
+            Array.isArray(dom) && dom.length ? `Register in Shufti: ${dom.join(', ')}` : ''
+          return [msg, hint, cb, rd, domStr].filter(Boolean).join(' — ')
+        }
+        let detailStr: string | null = null
+        if (typeof detailRaw === 'string') {
+          detailStr = detailRaw
+        } else if (Array.isArray(detailRaw)) {
+          detailStr = detailRaw.map((e: { msg?: string }) => e.msg).filter(Boolean).join(', ')
+        } else if (detailRaw && typeof detailRaw === 'object') {
+          const formatted = formatObjectDetail(detailRaw as Record<string, unknown>)
+          detailStr = formatted || JSON.stringify(detailRaw)
+        }
 
         // Gérer l'erreur 402 Payment Required
         if (response.status === 402) {

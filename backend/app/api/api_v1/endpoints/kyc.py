@@ -1,5 +1,7 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Request, Header, BackgroundTasks, Body
+from urllib.parse import urlparse
+
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Request, Header, BackgroundTasks, Body, Query
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from datetime import datetime
@@ -31,6 +33,32 @@ router = APIRouter()
 KYC_PRICE_USD = 10.00  # keep in sync with product_types.price for code "kyc"
 
 
+def _shufti_urls_for_client_error() -> dict:
+    """Help operators align Shufti Backoffice allowlists with URLs this server sends."""
+    cb = (shufti_pro_service.callback_url or "").strip()
+    rd = (shufti_pro_service.redirect_url or "").strip()
+    hosts: List[str] = []
+    for u in (cb, rd):
+        if not u:
+            continue
+        try:
+            h = urlparse(u).hostname
+            if h:
+                hosts.append(h)
+        except Exception:
+            pass
+    return {
+        "callback_url": cb or None,
+        "redirect_url": rd or None,
+        "domains_to_register_in_shufti": sorted(set(hosts)),
+        "hint": (
+            "In Shufti Backoffice: Settings → Callback and Redirect URLs — add each listed domain "
+            "(host only, e.g. myhigh5.com) for both Callback and Redirect, save, wait a minute, then retry. "
+            "Sandbox vs live keys must match the environment where you registered domains."
+        ),
+    }
+
+
 def _shufti_country_iso2_for_user(db: Session, user: User) -> Optional[str]:
     """
     Shufti requires ISO 3166-1 alpha-2. User.country is often a full name; prefer countries.code via country_id.
@@ -50,6 +78,10 @@ async def initiate_shufti_verification(
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
     language: str = "FR",
+    force_new: bool = Query(
+        False,
+        description="Skip reusing an in-flight Shufti session and request a fresh verification URL (fixes stale INVALID iframe).",
+    ),
     payload: KYCInitiateRequest = Body(default_factory=KYCInitiateRequest),
 ):
     """
@@ -108,7 +140,11 @@ async def initiate_shufti_verification(
             )
     
     # Cas 2: Vérification en cours (PENDING/IN_PROGRESS) → Essayer de réutiliser
-    if verification and verification.status in [KYCStatus.PENDING, KYCStatus.IN_PROGRESS]:
+    if (
+        not force_new
+        and verification
+        and verification.status in [KYCStatus.PENDING, KYCStatus.IN_PROGRESS]
+    ):
         reference = verification.reference_id
         
         if reference:
@@ -210,11 +246,15 @@ async def initiate_shufti_verification(
         )
 
     # Appeler Shufti Pro (document + face uniquement)
+    lang = (language or "en").strip().lower()
+    if len(lang) > 2:
+        lang = lang[:2]
+
     result = await shufti_pro_service.initiate_verification(
         reference=reference,
         email=current_user.email,
         country=_shufti_country_iso2_for_user(db, current_user),
-        language=language,
+        language=lang,
     )
     
     if not result.get("success"):
@@ -229,6 +269,17 @@ async def initiate_shufti_verification(
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=err,
+            )
+        if (
+            "callback domain" in err_l
+            or "redirect domain" in err_l
+            or "not registered" in err_l
+            or "callback url is not configured" in err_l
+            or "redirect url is not configured" in err_l
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail={"message": err, **_shufti_urls_for_client_error()},
             )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
