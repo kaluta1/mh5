@@ -25,6 +25,7 @@ from app.services.shufti_pro import (
     shufti_pro_service,
     kyc_flags_from_shufti_payload,
     normalize_country_iso2_for_shufti,
+    resolve_shufti_callback_and_redirect_urls,
 )
 from app.services.email import email_service
 from app.services.payment_accounting import payment_accounting
@@ -53,9 +54,49 @@ def _shufti_urls_for_client_error() -> dict:
         "domains_to_register_in_shufti": sorted(set(hosts)),
         "hint": (
             "In Shufti Backoffice: Settings → Callback and Redirect URLs — add each listed domain "
-            "(host only, e.g. myhigh5.com) for both Callback and Redirect, save, wait a minute, then retry. "
-            "Sandbox vs live keys must match the environment where you registered domains."
+            "(host only) for BOTH Callback and Redirect types. If you use www and apex separately, register BOTH. "
+            "Also check Shufti settings for iframe / hosted verification domain allowlist (parent page must be allowed). "
+            "Sandbox vs live keys must match where domains were registered. After changes, restart the API on your VPS."
         ),
+    }
+
+
+@router.get("/deployment/shufti-urls")
+def get_shufti_deployment_urls(
+    *,
+    current_user: User = Depends(deps.get_current_active_user),
+):
+    """
+    Debug: URLs and hosts this server will send to Shufti (no secrets).
+    Call while logged in; compare with Shufti Backoffice allowlists.
+    """
+    cb, rd = resolve_shufti_callback_and_redirect_urls()
+    hosts: List[str] = []
+    for u in (cb, rd):
+        if not u:
+            continue
+        try:
+            h = urlparse(u).hostname
+            if h:
+                hosts.append(h)
+        except Exception:
+            pass
+    cid = (settings.SHUFTI_CLIENT_ID or "").strip()
+    return {
+        "callback_url": cb or None,
+        "redirect_url": rd or None,
+        "domains_to_register_in_shufti": sorted(set(hosts)),
+        "env_FRONTEND_URL": (settings.FRONTEND_URL or "").strip() or None,
+        "env_BACKEND_PUBLIC_URL": (settings.BACKEND_PUBLIC_URL or "").strip() or None,
+        "env_SHUFTI_CALLBACK_URL_set": bool((settings.SHUFTI_CALLBACK_URL or "").strip()),
+        "env_SHUFTI_REDIRECT_URL_set": bool((settings.SHUFTI_REDIRECT_URL or "").strip()),
+        "shufti_client_id_prefix": (cid[:10] + "…") if len(cid) > 10 else (cid or None),
+        "checklist": [
+            "VPS: same values must exist in the process environment (systemd EnvironmentFile / docker env), not only local .env.",
+            "Nginx: POST /api/v1/kyc/webhook/shufti-pro must reach FastAPI (test with curl from outside).",
+            "Shufti Backoffice: register every hostname listed under domains_to_register_in_shufti for Callback AND Redirect.",
+            "If INVALID persists inside iframe, try 'Open in new tab' on KYC page or add iframe/parent-site allowlist in Shufti.",
+        ],
     }
 
 

@@ -13,6 +13,7 @@ import random
 import string
 from typing import Optional, Dict, Any, Tuple
 from datetime import datetime, timedelta
+from urllib.parse import urlparse
 
 from app.core.config import settings
 
@@ -151,7 +152,10 @@ def _public_api_base_for_shufti() -> str:
 def resolve_shufti_callback_and_redirect_urls() -> Tuple[str, str]:
     """
     Shufti requires allowlisted domains for callback_url and redirect_url.
-    Explicit SHUFTI_* env wins; otherwise derive from public API base.
+    Explicit SHUFTI_* env wins.
+    Default redirect: FRONTEND_URL/dashboard/kyc (user-facing) when FRONTEND is public;
+    else API /kyc/redirect. Iframe INVALID often means a domain is missing in Backoffice
+    (callback, redirect, and sometimes the site that embeds the iframe).
     """
     api_v1 = settings.API_V1_STR.rstrip("/")
     base = _public_api_base_for_shufti()
@@ -161,8 +165,14 @@ def resolve_shufti_callback_and_redirect_urls() -> Tuple[str, str]:
         callback = f"{base}{api_v1}/kyc/webhook/shufti-pro"
 
     redirect = (settings.SHUFTI_REDIRECT_URL or "").strip()
-    if not redirect and base:
-        redirect = f"{base}{api_v1}/kyc/redirect"
+    if not redirect:
+        fe = (settings.FRONTEND_URL or "").strip().rstrip("/")
+        if fe:
+            low = fe.lower()
+            if "localhost" not in low and not low.startswith("http://127."):
+                redirect = f"{fe}/dashboard/kyc"
+        if not redirect and base:
+            redirect = f"{base}{api_v1}/kyc/redirect"
 
     return callback, redirect
 
@@ -186,8 +196,16 @@ class ShuftiProService:
     def __init__(self):
         self.client_id = settings.SHUFTI_CLIENT_ID
         self.secret_key = settings.SHUFTI_SECRET_KEY
-        self.callback_url, self.redirect_url = resolve_shufti_callback_and_redirect_urls()
         self.frontend_url = settings.FRONTEND_URL
+
+    @property
+    def callback_url(self) -> str:
+        """Re-read from settings on each use (single source of truth with resolve_shufti_callback_and_redirect_urls)."""
+        return resolve_shufti_callback_and_redirect_urls()[0]
+
+    @property
+    def redirect_url(self) -> str:
+        return resolve_shufti_callback_and_redirect_urls()[1]
     
     def _get_auth_header(self) -> str:
         """Générer le header d'authentification Basic"""
@@ -376,6 +394,18 @@ class ShuftiProService:
             }
 
         try:
+            cb_u, rd_u = self.callback_url, redirect_url
+            try:
+                cb_host = urlparse(cb_u).hostname or ""
+                rd_host = urlparse(rd_u).hostname or ""
+            except Exception:
+                cb_host, rd_host = "", ""
+            logger.info(
+                "Shufti Pro POST / reference=%s callback_host=%s redirect_host=%s",
+                reference,
+                cb_host,
+                rd_host,
+            )
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     f"{SHUFTI_BASE_URL}/",
