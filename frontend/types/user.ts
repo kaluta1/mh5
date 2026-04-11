@@ -30,6 +30,7 @@ export interface User {
   is_verified: boolean
   is_admin: boolean
   identity_verified?: boolean
+  address_verified?: boolean
   verification_date?: string
   status?: 'active' | 'suspended' | 'banned' | 'pending_verification'
   last_login?: string

@@ -80,6 +80,7 @@ class User(Base):
     # Vérification d'identité (Shufti)
     shufti_verification_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     identity_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    address_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     verification_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     
     # Statut et métadonnées

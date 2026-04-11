@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_, desc, func
 from datetime import datetime, timedelta
 
+from app.models.user import User, UserStatus
 from app.models.kyc import KYCVerification, KYCDocument, KYCAuditLog, KYCStatus, DocumentType
 from app.schemas.kyc import (
     KYCVerificationCreate, KYCVerificationUpdate,
@@ -71,7 +72,14 @@ class CRUDKYCVerification:
     def get_pending_verifications(self, db: Session, *, skip: int = 0, limit: int = 10) -> List[KYCVerification]:
         """Récupérer les vérifications en attente"""
         return db.query(KYCVerification).filter(
-            KYCVerification.status.in_([KYCStatus.PENDING, KYCStatus.IN_PROGRESS])
+            KYCVerification.status.in_(
+                [
+                    KYCStatus.PENDING,
+                    KYCStatus.IN_PROGRESS,
+                    KYCStatus.PENDING_PROOF_OF_ADDRESS,
+                    KYCStatus.REQUIRES_REVIEW,
+                ]
+            )
         ).order_by(KYCVerification.submitted_at).offset(skip).limit(limit).all()
 
     def get_expired_verifications(self, db: Session) -> List[KYCVerification]:
@@ -94,19 +102,96 @@ class CRUDKYCVerification:
             db.refresh(verification)
         return verification
 
+    def apply_shufti_identity_accepted(
+        self,
+        db: Session,
+        *,
+        verification: KYCVerification,
+        flags: Dict[str, bool],
+        external_verification_id: Optional[str] = None,
+        provider_response: Optional[str] = None,
+        webhook_data: Optional[str] = None,
+    ) -> KYCVerification:
+        """Shufti ID+face passed — move to proof-of-address step; no revenue recognition yet."""
+        verification.status = KYCStatus.PENDING_PROOF_OF_ADDRESS
+        verification.identity_verified = bool(flags.get("identity_verified"))
+        verification.document_verified = bool(flags.get("document_verified"))
+        verification.face_verified = bool(flags.get("face_verified"))
+        verification.address_verified = False
+        if external_verification_id:
+            verification.external_verification_id = external_verification_id
+        if provider_response is not None:
+            verification.provider_response = provider_response
+        if webhook_data is not None:
+            verification.webhook_data = webhook_data
+        verification.processed_at = None
+
+        u = db.query(User).filter(User.id == verification.user_id).first()
+        if u:
+            u.identity_verified = True
+            u.address_verified = False
+
+        db.add(verification)
+        db.commit()
+        db.refresh(verification)
+        self._create_audit_log(
+            db,
+            verification.id,
+            "shufti_identity_accepted",
+            "Shufti ID+face accepted; proof of address required",
+            None,
+            False,
+        )
+        return verification
+
+    def finalize_proof_of_address_auto(
+        self, db: Session, *, verification_id: int, admin_user_id: Optional[int] = None
+    ) -> KYCVerification:
+        """Heuristic PoA passed — full KYC approved."""
+        verification = self.get(db, verification_id)
+        if not verification:
+            return verification
+        verification.status = KYCStatus.APPROVED
+        verification.address_verified = True
+        verification.processed_at = datetime.utcnow()
+
+        u = db.query(User).filter(User.id == verification.user_id).first()
+        if u:
+            u.identity_verified = True
+            u.address_verified = True
+            u.verification_date = datetime.utcnow()
+            if u.status == UserStatus.PENDING_VERIFICATION:
+                u.status = UserStatus.ACTIVE
+
+        db.add(verification)
+        db.commit()
+        db.refresh(verification)
+        self._create_audit_log(
+            db,
+            verification_id,
+            "proof_of_address_approved",
+            "Proof of address validated (automatic)",
+            admin_user_id,
+            bool(admin_user_id),
+        )
+        return verification
+
     def approve_verification(self, db: Session, *, verification_id: int, admin_user_id: Optional[int] = None) -> KYCVerification:
         """Approuver une vérification KYC"""
         verification = self.get(db, verification_id)
         if verification:
             verification.status = KYCStatus.APPROVED
             verification.processed_at = datetime.utcnow()
-            
+            verification.address_verified = True
+            verification.identity_verified = True
+
             # Mettre à jour le statut utilisateur
             if verification.user:
                 verification.user.identity_verified = True
+                verification.user.address_verified = True
                 verification.user.verification_date = datetime.utcnow()
-                if verification.user.status == "pending_verification":
-                    verification.user.status = "active"
+                if verification.user.status == UserStatus.PENDING_VERIFICATION:
+                    verification.user.status = UserStatus.ACTIVE
             
             db.commit()
             db.refresh(verification)
@@ -128,7 +213,16 @@ class CRUDKYCVerification:
             verification.rejection_reason = reason
             verification.rejection_details = details
             verification.processed_at = datetime.utcnow()
-            
+            verification.identity_verified = False
+            verification.document_verified = False
+            verification.face_verified = False
+            verification.address_verified = False
+
+            u = db.query(User).filter(User.id == verification.user_id).first()
+            if u:
+                u.identity_verified = False
+                u.address_verified = False
+
             db.commit()
             db.refresh(verification)
             
@@ -153,7 +247,14 @@ class CRUDKYCVerification:
         pending = db.query(KYCVerification).filter(
             and_(
                 KYCVerification.submitted_at >= since_date,
-                KYCVerification.status.in_([KYCStatus.PENDING, KYCStatus.IN_PROGRESS])
+                KYCVerification.status.in_(
+                    [
+                        KYCStatus.PENDING,
+                        KYCStatus.IN_PROGRESS,
+                        KYCStatus.PENDING_PROOF_OF_ADDRESS,
+                        KYCStatus.REQUIRES_REVIEW,
+                    ]
+                ),
             )
         ).count()
         

@@ -13,6 +13,8 @@ if TYPE_CHECKING:
 class KYCStatus(str, enum.Enum):
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
+    # Shufti (ID+face) accepted; user must upload proof of address.
+    PENDING_PROOF_OF_ADDRESS = "pending_proof_of_address"
     APPROVED = "approved"
     REJECTED = "rejected"
     EXPIRED = "expired"
@@ -61,6 +63,7 @@ class KYCVerification(Base):
     verified_date_of_birth: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     verified_nationality: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     verified_address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    residential_address_locked_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     
     # Résultats de vérification
     identity_verified: Mapped[bool] = mapped_column(Boolean, default=False)

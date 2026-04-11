@@ -71,6 +71,7 @@ class User(UserBase):
     role_id: Optional[int] = None
     role: Optional[RoleBase] = None
     identity_verified: Optional[bool] = False
+    address_verified: Optional[bool] = False
     affiliate_agreement_accepted: Optional[bool] = False
     affiliate_agreement_accepted_at: Optional[datetime] = None
     # Anciens champs (dépréciés)

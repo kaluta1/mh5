@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect, Suspense, useCallback } from 'react'
+import { useState, useEffect, Suspense, useCallback, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useLanguage } from '@/contexts/language-context'
 import { useAuth } from '@/hooks/use-auth'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { Input } from '@/components/ui/input'
 import { KYCSkeleton } from '@/components/ui/skeleton'
 import { kycService, KYCPaymentRequiredError } from '@/services/kyc-service'
 import { PaymentDialog } from '@/components/dialogs/payment-dialog-v2'
@@ -38,6 +39,11 @@ interface KYCStatusData {
   attempts_remaining?: number
   max_attempts_reached?: boolean
   declared_residential_address?: string | null
+  residential_address_locked?: boolean
+  needs_proof_of_address?: boolean
+  kyc_step?: number
+  identity_verified?: boolean
+  address_verified?: boolean
   // Payment info
   needs_payment?: boolean
   has_valid_payment?: boolean
@@ -62,6 +68,17 @@ function KYCPageContent() {
   const [showPaymentDialog, setShowPaymentDialog] = useState(false)
   const [residentialAddress, setResidentialAddress] = useState('')
 
+  const [poaName, setPoaName] = useState('')
+  const [poaAddressOnDoc, setPoaAddressOnDoc] = useState('')
+  const [poaDocType, setPoaDocType] = useState<'utility_bill' | 'address_proof' | 'bank_statement'>(
+    'utility_bill'
+  )
+  const poaFrontInputRef = useRef<HTMLInputElement>(null)
+  const poaBackInputRef = useRef<HTMLInputElement>(null)
+  const [isSubmittingPoa, setIsSubmittingPoa] = useState(false)
+
+  const addrLocked = !!kycData?.residential_address_locked
+
   const residentialAddressField = (
     <div className="w-full text-left mb-6">
       <label
@@ -69,21 +86,28 @@ function KYCPageContent() {
         className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
       >
         {t('residential address') || 'Residential address'}
+        {addrLocked ? (
+          <span className="ml-2 text-xs font-normal text-amber-600 dark:text-amber-400">
+            ({t('kyc.address_locked') || 'locked for this verification'})
+          </span>
+        ) : null}
       </label>
       <Textarea
         id="kyc-residential-address"
         value={residentialAddress}
         onChange={(e) => setResidentialAddress(e.target.value)}
+        disabled={addrLocked}
+        readOnly={addrLocked}
         placeholder={
           t('Enter your address') ||
-          'Street, city, postal code, country (optional — for our records / internal address check)'
+          'Street, city, postal code, country (min. 10 characters before starting verification)'
         }
-        className="min-h-[100px] bg-white dark:bg-gray-900"
+        className="min-h-[100px] bg-white dark:bg-gray-900 disabled:opacity-70"
         autoComplete="street-address"
       />
       <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
         {t('kyc.residential_address_hint') ||
-          'Shufti verifies ID + face only. Address is optional and kept for internal proof-of-address if we add it later.'}
+          'Enter the address that must match your proof-of-address document. It is locked once Shufti verification starts; changing it requires a new paid verification.'}
       </p>
     </div>
   )
@@ -106,8 +130,7 @@ function KYCPageContent() {
         const status = await kycService.getKYCStatus(token)
         setKycData(status)
         
-        // Si le statut est approved, rafraîchir les données utilisateur
-        if (status.status === 'approved') {
+        if (status.status === 'approved' || status.needs_proof_of_address) {
           refreshUser?.()
         }
       } catch (err) {
@@ -170,8 +193,26 @@ function KYCPageContent() {
         return
       }
 
+      const reuseSession = !!kycData?.can_continue
+      if (!reuseSession && addrToSend.length < 10) {
+        setError(
+          t('kyc.residential_address_required') ||
+            'Residential address is required (at least 10 characters) before starting verification.'
+        )
+        setIsInitiating(false)
+        return
+      }
+
       const payloadAddr = addrToSend.length >= 10 ? addrToSend : undefined
       const result = await kycService.initiateVerification(token, lang, payloadAddr, forceNew)
+
+      if (result.status === 'pending_proof_of_address' || result.needs_proof_of_address) {
+        setVerificationUrl(null)
+        const st = await kycService.getKYCStatus(token)
+        setKycData(st)
+        refreshUser?.()
+        return
+      }
 
       if (result.verification_url) {
         setVerificationUrl(result.verification_url)
@@ -205,6 +246,41 @@ function KYCPageContent() {
     await handleStartVerification(true)
   }
 
+  const handleSubmitProofOfAddress = async () => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
+    if (!token) {
+      setError(t('kyc.login_required') || 'Please sign in')
+      return
+    }
+    const frontFile = poaFrontInputRef.current?.files?.[0]
+    if (!frontFile) {
+      setError(
+        t('kyc.poa_file_required') || 'Please choose a proof-of-address file (photo or PDF).'
+      )
+      return
+    }
+
+    setIsSubmittingPoa(true)
+    setError(null)
+    try {
+      const backFile = poaBackInputRef.current?.files?.[0]
+      await kycService.submitProofOfAddress(token, {
+        document_type: poaDocType,
+        document_front: frontFile,
+        document_back: backFile ?? null,
+        name_on_document: poaName.trim(),
+        address_as_shown_on_document: poaAddressOnDoc.trim(),
+      })
+      const st = await kycService.getKYCStatus(token)
+      setKycData(st)
+      await refreshUser?.()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t('common.error') || 'Error')
+    } finally {
+      setIsSubmittingPoa(false)
+    }
+  }
+
   // Rafraîchir le statut
   const handleRefreshStatus = async () => {
     setIsLoadingStatus(true)
@@ -214,8 +290,7 @@ function KYCPageContent() {
         const status = await kycService.getKYCStatus(token)
         setKycData(status)
         
-        // Si approuvé, rafraîchir l'utilisateur
-        if (status.status === 'approved') {
+        if (status.status === 'approved' || status.needs_proof_of_address) {
           refreshUser?.()
         }
       }
@@ -239,7 +314,7 @@ function KYCPageContent() {
     }
 
     setKycData(status)
-    if (status.status === 'approved') {
+    if (status.status === 'approved' || status.needs_proof_of_address) {
       refreshUser?.()
     }
     setShowPaymentDialog(false)
@@ -254,23 +329,27 @@ function KYCPageContent() {
           ? refreshed.declared_residential_address.trim()
           : ''
       const addrToSend = (residentialAddress.trim() || declared).trim()
-      if (addrToSend.length > 0 && addrToSend.length < 10) {
+      if (addrToSend.length < 10) {
         setError(
-          t('kyc.residential_address_too_short') ||
-            'If you enter a residential address, use at least 10 characters.'
+          t('kyc.residential_address_required') ||
+            'Residential address is required (at least 10 characters) before starting verification.'
         )
         setIsInitiating(false)
         return
       }
       // Fresh Shufti session — reusing an old URL after payment often showed INVALID in the iframe.
-      const result = await kycService.initiateVerification(
-        token,
-        lang,
-        addrToSend.length >= 10 ? addrToSend : undefined,
-        true
-      )
+      const result = await kycService.initiateVerification(token, lang, addrToSend, true)
+      if (result.status === 'pending_proof_of_address' || result.needs_proof_of_address) {
+        setVerificationUrl(null)
+        const st = await kycService.getKYCStatus(token)
+        setKycData(st)
+        refreshUser?.()
+        return
+      }
       if (result.verification_url) {
         setVerificationUrl(result.verification_url)
+      } else {
+        setError(t('kyc.init_error') || 'Impossible de démarrer la vérification')
       }
     } catch (err) {
       if (err instanceof KYCPaymentRequiredError) {
@@ -379,8 +458,12 @@ function KYCPageContent() {
     )
   }
 
-  // Utilisateur déjà vérifié OU statut approuvé
-  if (user.identity_verified || kycData?.status === 'approved') {
+  const fullyVerified =
+    kycData?.status === 'approved' ||
+    (!!user?.identity_verified && !!user?.address_verified)
+
+  // KYC entièrement terminé (identité + domicile)
+  if (fullyVerified) {
     return (
       <div className="min-h-[calc(100vh-10rem)] flex items-center justify-center p-4">
         <div className="w-full max-w-lg">
@@ -400,6 +483,132 @@ function KYCPageContent() {
             >
               {t('common.back_to_dashboard') || 'Retour au tableau de bord'}
             </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Étape 2 — justificatif de domicile
+  if (kycData?.needs_proof_of_address || kycData?.status === 'pending_proof_of_address') {
+    const declared =
+      typeof kycData.declared_residential_address === 'string'
+        ? kycData.declared_residential_address
+        : ''
+    return (
+      <div className="min-h-[calc(100vh-10rem)] flex items-center justify-center p-4">
+        <div className="w-full max-w-lg">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-8">
+            <div className="w-20 h-20 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
+              <FileCheck className="w-10 h-10 text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2 text-center">
+              {t('kyc.step2_title') || 'Step 2: Proof of address'}
+            </h1>
+            <p className="text-gray-600 dark:text-gray-400 mb-6 text-center text-sm">
+              {t('kyc.step2_intro') ||
+                'Identity verification is complete. Submit a utility bill, bank statement, or official letter and copy the name and address exactly as shown on the document.'}
+            </p>
+            {declared ? (
+              <div className="mb-4 p-3 rounded-lg bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-600 text-sm">
+                <p className="font-medium text-gray-800 dark:text-gray-200 mb-1">
+                  {t('kyc.locked_residential_address') || 'Declared address (locked)'}
+                </p>
+                <p className="text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{declared}</p>
+              </div>
+            ) : null}
+            {error && (
+              <div className="mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+              </div>
+            )}
+            <div className="space-y-4 text-left">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  {t('kyc.poa_document_type') || 'Document type'}
+                </label>
+                <select
+                  value={poaDocType}
+                  onChange={(e) =>
+                    setPoaDocType(e.target.value as 'utility_bill' | 'address_proof' | 'bank_statement')
+                  }
+                  className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
+                >
+                  <option value="utility_bill">{t('kyc.doc_utility') || 'Utility bill'}</option>
+                  <option value="bank_statement">{t('kyc.doc_bank') || 'Bank statement'}</option>
+                  <option value="address_proof">{t('kyc.doc_address_letter') || 'Official address letter'}</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  {t('kyc.poa_front_file') || 'Document file (photo or PDF)'}
+                </label>
+                <input
+                  ref={poaFrontInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
+                  className="block w-full text-sm text-gray-600 dark:text-gray-300 file:mr-3 file:rounded-md file:border-0 file:bg-myhigh5-primary file:px-3 file:py-2 file:text-sm file:text-white"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  {t('kyc.poa_file_hint') || 'JPEG, PNG, WebP, or PDF — max 10 MB.'}
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  {t('kyc.poa_back_file') || 'Second page / back (optional)'}
+                </label>
+                <input
+                  ref={poaBackInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
+                  className="block w-full text-sm text-gray-600 dark:text-gray-300 file:mr-3 file:rounded-md file:border-0 file:bg-gray-200 dark:file:bg-gray-700 file:px-3 file:py-2 file:text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  {t('kyc.poa_name_on_doc') || 'Full name as on document'}
+                </label>
+                <Input
+                  value={poaName}
+                  onChange={(e) => setPoaName(e.target.value)}
+                  className="bg-white dark:bg-gray-900"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  {t('kyc.poa_address_on_doc') || 'Address as shown on document'}
+                </label>
+                <Textarea
+                  value={poaAddressOnDoc}
+                  onChange={(e) => setPoaAddressOnDoc(e.target.value)}
+                  className="min-h-[80px] bg-white dark:bg-gray-900"
+                />
+              </div>
+            </div>
+            <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
+              <Button
+                onClick={() => void handleSubmitProofOfAddress()}
+                disabled={isSubmittingPoa}
+                className="bg-myhigh5-primary hover:bg-myhigh5-primary/90"
+              >
+                {isSubmittingPoa ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    {t('common.loading') || 'Loading...'}
+                  </>
+                ) : (
+                  <>
+                    <FileCheck className="w-4 h-4 mr-2" />
+                    {t('kyc.submit_poa') || 'Submit proof of address'}
+                  </>
+                )}
+              </Button>
+              <Button type="button" variant="outline" onClick={() => void handleRefreshStatus()}>
+                <RefreshCw className="w-4 h-4 mr-2" />
+                {t('common.refresh') || 'Refresh'}
+              </Button>
+            </div>
           </div>
         </div>
       </div>

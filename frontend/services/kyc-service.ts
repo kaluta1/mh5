@@ -33,9 +33,23 @@ export interface KYCSubmissionResponse {
 }
 
 export interface KYCInitiateResponse {
-  verification_url: string
+  verification_url: string | null
   reference: string
   verification_id: number
+  reused?: boolean
+  status?: string
+  kyc_step?: number
+  needs_proof_of_address?: boolean
+  message?: string
+}
+
+export interface ProofOfAddressPayload {
+  document_type: 'utility_bill' | 'address_proof' | 'bank_statement'
+  /** Main proof file (image or PDF) */
+  document_front: File
+  document_back?: File | null
+  name_on_document: string
+  address_as_shown_on_document: string
 }
 
 export interface PaymentRequiredError {
@@ -138,6 +152,45 @@ class KYCService {
   }
 
   /**
+   * Étape 2 — justificatif de domicile (texte + URLs des fichiers déjà hébergés).
+   */
+  async submitProofOfAddress(
+    token: string,
+    payload: ProofOfAddressPayload
+  ): Promise<{ success: boolean; status: string; verification_id: number; message?: string }> {
+    if (!token) {
+      throw new Error('Authentication token is required')
+    }
+    const fd = new FormData()
+    fd.append('document_type', payload.document_type)
+    fd.append('name_on_document', payload.name_on_document)
+    fd.append('address_as_shown_on_document', payload.address_as_shown_on_document)
+    fd.append('document_front', payload.document_front)
+    if (payload.document_back) {
+      fd.append('document_back', payload.document_back)
+    }
+    const response = await fetch(`${this.baseUrl}/api/v1/kyc/proof-of-address`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: fd,
+    })
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}))
+      const d = error.detail
+      const msg =
+        typeof d === 'string'
+          ? d
+          : d && typeof d === 'object' && 'message' in d
+            ? String((d as { message?: string }).message)
+            : error.message || 'Proof of address submission failed'
+      throw new Error(msg)
+    }
+    return response.json()
+  }
+
+  /**
    * Soumettre les données KYC
    */
   async submitKYC(data: KYCSubmissionData, token: string): Promise<KYCSubmissionResponse> {
@@ -213,9 +266,15 @@ class KYCService {
         rejection_reason: result.rejection_reason,
         expires_at: result.expires_at,
         declared_residential_address: result.declared_residential_address ?? null,
+        residential_address_locked: result.residential_address_locked || false,
+        needs_proof_of_address: result.needs_proof_of_address || false,
+        kyc_step: result.kyc_step,
         can_start: result.can_restart || result.can_continue || false,
         needs_payment: result.needs_payment || false,
-        has_valid_payment: result.has_valid_payment || false
+        has_valid_payment: result.has_valid_payment || false,
+        can_continue: result.can_continue,
+        can_restart: result.can_restart,
+        verification_url: result.verification_url,
       } as any
     } catch (error) {
       // Handle network errors gracefully

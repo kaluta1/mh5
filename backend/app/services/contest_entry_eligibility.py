@@ -32,7 +32,13 @@ def raise_if_user_missing_contest_entry_requirements(
     (KYC, visual, voice, brand, content). Used for create/update contestant.
     """
     if contest.requires_kyc:
-        kyc_ok = bool(getattr(user, "identity_verified", False) or getattr(user, "is_verified", False))
+        kyc_ok = bool(
+            getattr(user, "is_verified", False)
+            or (
+                getattr(user, "identity_verified", False)
+                and getattr(user, "address_verified", False)
+            )
+        )
         if not kyc_ok:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

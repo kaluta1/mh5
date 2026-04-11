@@ -168,10 +168,12 @@ def create_digital_product(
     """
     Créer un nouveau produit digital (vendeurs vérifiés seulement).
     """
-    if not current_user.identity_verified:
+    if not (
+        current_user.identity_verified and getattr(current_user, "address_verified", False)
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Vérification d'identité requise pour vendre"
+            detail="Vérification d'identité et de domicile requise pour vendre"
         )
     
     product = crud_dsp.digital_product.create_with_seller(

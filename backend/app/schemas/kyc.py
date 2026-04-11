@@ -29,6 +29,7 @@ class KYCVerificationUpdate(BaseModel):
     status: Optional[KYCStatus] = None
     external_verification_id: Optional[str] = None
     verification_url: Optional[str] = None
+    residential_address_locked_at: Optional[datetime] = None
     verified_first_name: Optional[str] = None
     verified_last_name: Optional[str] = None
     verified_date_of_birth: Optional[datetime] = None
@@ -56,6 +57,7 @@ class KYCVerification(KYCVerificationBase):
     id: int
     user_id: int
     external_verification_id: Optional[str] = None
+    residential_address_locked_at: Optional[datetime] = None
     identity_verified: bool = False
     address_verified: bool = False
     document_verified: bool = False
@@ -116,6 +118,27 @@ class KYCDocument(KYCDocumentBase):
         from_attributes = True
 
 
+class KYCDocumentWithPublicUrls(KYCDocument):
+    """Same as KYCDocument plus absolute URLs for admin viewers (local /media/ → BACKEND_PUBLIC_URL)."""
+
+    front_public_url: Optional[str] = None
+    back_public_url: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class KYCVerificationAdminDetail(KYCVerification):
+    """Verification row + all documents with resolvable file URLs + user hints for admin UI."""
+
+    documents: List[KYCDocumentWithPublicUrls] = Field(default_factory=list)
+    user_email: Optional[str] = None
+    user_full_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
 # Schémas pour l'audit
 class KYCAuditLogBase(BaseModel):
     action: str
@@ -169,14 +192,14 @@ class KYCVerificationComplete(KYCVerification):
 
 
 class KYCInitiateRequest(BaseModel):
-    """Optional body for POST /kyc/initiate — declared address stored for internal use (PoA is not sent to Shufti)."""
+    """Body for POST /kyc/initiate — residential address required for new sessions; omit to reuse locked address while in progress."""
 
     model_config = ConfigDict(extra="ignore")
 
     residential_address: Optional[str] = Field(
         None,
         max_length=500,
-        description="Optional declared address stored on the verification row for internal proof-of-address flow.",
+        description="Declared residential address; locked when Shufti verification starts.",
     )
 
 

@@ -8,6 +8,75 @@ from PIL import Image
 
 from app.core.config import settings
 
+# Proof-of-address: scans / photos / PDF bills
+KYC_POA_MAX_BYTES = 10 * 1024 * 1024
+KYC_POA_ALLOWED_CT_PREFIXES = ("image/", "application/pdf")
+
+
+async def store_kyc_proof_file(file: UploadFile, user_id: int) -> Dict[str, Any]:
+    """
+    Store a proof-of-address upload (image or PDF). Same storage backend as media (local or S3).
+    """
+    content_type = (file.content_type or "").lower()
+    if not any(content_type.startswith(p) for p in KYC_POA_ALLOWED_CT_PREFIXES):
+        raise ValueError(
+            "Proof of address must be an image (JPEG, PNG, WebP, etc.) or a PDF."
+        )
+
+    content = await file.read()
+    if len(content) > KYC_POA_MAX_BYTES:
+        raise ValueError(f"File too large (max {KYC_POA_MAX_BYTES // (1024 * 1024)} MB).")
+
+    extension = os.path.splitext(file.filename or "")[1].lower()
+    if not extension:
+        if "pdf" in content_type:
+            extension = ".pdf"
+        elif "png" in content_type:
+            extension = ".png"
+        elif "jpeg" in content_type or "jpg" in content_type:
+            extension = ".jpg"
+        else:
+            extension = ".bin"
+
+    file_uuid = str(uuid.uuid4())
+    filename = f"kyc_poa_{file_uuid}{extension}"
+
+    if settings.STORAGE_TYPE == "s3":
+        s3_client = boto3.client(
+            "s3",
+            aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
+            aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
+            region_name=settings.S3_REGION,
+        )
+        s3_path = f"uploads/{user_id}/{filename}"
+        s3_client.put_object(
+            Bucket=settings.S3_BUCKET_NAME,
+            Key=s3_path,
+            Body=content,
+            ContentType=file.content_type or "application/octet-stream",
+        )
+        url = f"https://{settings.S3_BUCKET_NAME}.s3.amazonaws.com/{s3_path}"
+        return {"path": s3_path, "url": url, "metadata": {}}
+
+    user_dir = os.path.join(settings.LOCAL_STORAGE_PATH, str(user_id))
+    os.makedirs(user_dir, exist_ok=True)
+    file_path = os.path.join(user_dir, filename)
+    async with aiofiles.open(file_path, "wb") as out_file:
+        await out_file.write(content)
+
+    url = f"/media/{user_id}/{filename}"
+    metadata: Dict[str, Any] = {}
+    if content_type.startswith("image/"):
+        try:
+            with Image.open(file_path) as img:
+                metadata["width"] = img.width
+                metadata["height"] = img.height
+                metadata["file_size"] = os.path.getsize(file_path)
+        except Exception:
+            pass
+
+    return {"path": file_path, "url": url, "metadata": metadata}
+
 
 async def store_media(file: UploadFile, user_id: int) -> Dict[str, Any]:
     """

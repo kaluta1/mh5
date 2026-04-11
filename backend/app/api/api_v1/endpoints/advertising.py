@@ -25,10 +25,12 @@ def create_ad_campaign(
     """
     Créer une nouvelle campagne publicitaire.
     """
-    if not current_user.identity_verified:
+    if not (
+        current_user.identity_verified and getattr(current_user, "address_verified", False)
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Vérification d'identité requise pour créer des campagnes"
+            detail="Vérification d'identité et de domicile requise pour créer des campagnes"
         )
     
     campaign = crud_advertising.ad_campaign.create_with_advertiser(
