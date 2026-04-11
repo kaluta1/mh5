@@ -102,6 +102,9 @@ class Settings(BaseModel):
     
     # FRONTEND
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    # Public base URL of this API (no trailing slash), e.g. https://myhigh5.com or https://api.example.com.
+    # Used to default Shufti callback/redirect when SHUFTI_CALLBACK_URL / SHUFTI_REDIRECT_URL are unset.
+    BACKEND_PUBLIC_URL: str = _first_nonempty_env("BACKEND_PUBLIC_URL", "PUBLIC_BACKEND_URL")
     
     # SHUFTI PRO KYC (accept UPPER_SNAKE and lowercase aliases from .env)
     SHUFTI_CLIENT_ID: str = _first_nonempty_env("SHUFTI_CLIENT_ID", "shufti_client_id")

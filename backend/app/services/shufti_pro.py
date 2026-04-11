@@ -10,7 +10,7 @@ import hmac
 import logging
 import random
 import string
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 from datetime import datetime, timedelta
 
 from app.core.config import settings
@@ -124,6 +124,25 @@ SHUFTI_RETENTION_DAYS = 5  # Nombre de jours de rétention d'une vérification
 SHUFTI_TTL_MINUTES = (SHUFTI_RETENTION_DAYS + 1) * 24 * 60  # TTL en minutes
 
 
+def resolve_shufti_callback_and_redirect_urls() -> Tuple[str, str]:
+    """
+    Shufti requires allowlisted domains for callback_url and redirect_url.
+    Explicit SHUFTI_* env wins; otherwise derive from BACKEND_PUBLIC_URL (same host as API).
+    """
+    api_v1 = settings.API_V1_STR.rstrip("/")
+    base = (settings.BACKEND_PUBLIC_URL or "").strip().rstrip("/")
+
+    callback = (settings.SHUFTI_CALLBACK_URL or "").strip()
+    if not callback and base:
+        callback = f"{base}{api_v1}/kyc/webhook/shufti-pro"
+
+    redirect = (settings.SHUFTI_REDIRECT_URL or "").strip()
+    if not redirect and base:
+        redirect = f"{base}{api_v1}/kyc/redirect"
+
+    return callback, redirect
+
+
 def normalize_country_iso2_for_shufti(country: Optional[str]) -> Optional[str]:
     """
     Shufti expects ISO 3166-1 alpha-2 (exactly 2 letters). Profile often stores full names.
@@ -143,8 +162,7 @@ class ShuftiProService:
     def __init__(self):
         self.client_id = settings.SHUFTI_CLIENT_ID
         self.secret_key = settings.SHUFTI_SECRET_KEY
-        self.callback_url = settings.SHUFTI_CALLBACK_URL
-        self.redirect_url = settings.SHUFTI_REDIRECT_URL
+        self.callback_url, self.redirect_url = resolve_shufti_callback_and_redirect_urls()
         self.frontend_url = settings.FRONTEND_URL
     
     def _get_auth_header(self) -> str:
@@ -254,14 +272,10 @@ class ShuftiProService:
         Returns:
             Dict contenant verification_url et autres données
         """
-        # Utiliser l'URL de redirect configurée
-        # IMPORTANT: Le domaine doit être enregistré dans Shufti Pro Dashboard
+        # Redirect after verification: explicit arg > env-derived (see resolve_shufti_callback_and_redirect_urls)
+        # Domains must be allowlisted in the Shufti Pro dashboard (callback + redirect).
         if not redirect_url:
-            if self.redirect_url:
-                redirect_url = self.redirect_url
-            else:
-                # Utiliser le même domaine que le callback (digitalshoppingmall.net)
-                redirect_url = "https://digitalshoppingmall.net/shufti_redirect.php"
+            redirect_url = self.redirect_url or ""
         
         # Payload pour la vérification (basé sur le code PHP fonctionnel).
         # Ne pas envoyer de chaînes vides pour name/dob/etc. : Shufti renvoie souvent
@@ -309,6 +323,30 @@ class ShuftiProService:
                     "Shufti Pro is not configured on the server. "
                     "Set SHUFTI_CLIENT_ID and SHUFTI_SECRET_KEY in backend/.env (not the frontend). "
                     "Get keys from the Shufti Pro dashboard."
+                ),
+                "data": {},
+            }
+
+        if not (self.callback_url or "").strip():
+            logger.error("Shufti Pro: callback URL empty — set SHUFTI_CALLBACK_URL or BACKEND_PUBLIC_URL in backend .env")
+            return {
+                "success": False,
+                "error": (
+                    "Shufti callback URL is not configured. Set SHUFTI_CALLBACK_URL to your public API webhook "
+                    f"(e.g. https://your-domain{settings.API_V1_STR}/kyc/webhook/shufti-pro) or set BACKEND_PUBLIC_URL "
+                    "to your API base URL so it can be derived automatically. Register that domain in Shufti Backoffice."
+                ),
+                "data": {},
+            }
+
+        if not (redirect_url or "").strip():
+            logger.error("Shufti Pro: redirect URL empty — set SHUFTI_REDIRECT_URL or BACKEND_PUBLIC_URL")
+            return {
+                "success": False,
+                "error": (
+                    "Shufti redirect URL is not configured. Set SHUFTI_REDIRECT_URL or BACKEND_PUBLIC_URL "
+                    f"(redirect is derived as BACKEND_PUBLIC_URL + {settings.API_V1_STR}/kyc/redirect). "
+                    "Register that domain in Shufti Backoffice."
                 ),
                 "data": {},
             }
