@@ -220,30 +220,30 @@ async def initiate_shufti_verification(
     raw_in = (payload.residential_address or "").strip()
     addr = raw_in
     if verification and verification.status in (KYCStatus.PENDING, KYCStatus.IN_PROGRESS):
-        if len(addr) < 10 and verification.verified_address:
+        if len(addr) < 2 and verification.verified_address:
             addr = (verification.verified_address or "").strip()
 
-    if raw_in and len(raw_in) < 10:
+    if raw_in and len(raw_in) < 2:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="If provided, residential address must be at least 10 characters.",
+            detail="If provided, residential address must be at least 2 characters.",
         )
 
     needs_fresh_address = (
         not verification
         or verification.status in (KYCStatus.REJECTED, KYCStatus.REQUIRES_REVIEW, KYCStatus.EXPIRED)
     )
-    if needs_fresh_address and len(addr) < 10:
+    if needs_fresh_address and len(addr) < 2:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Residential address is required (at least 10 characters) before starting verification.",
+            detail="Residential address is required (at least 2 characters) before starting verification.",
         )
 
     if (
         verification
         and verification.residential_address_locked_at
         and verification.verified_address
-        and len(addr) >= 10
+        and len(addr) >= 2
         and normalized_address_key(addr) != normalized_address_key(verification.verified_address)
     ):
         raise HTTPException(
@@ -366,7 +366,7 @@ async def initiate_shufti_verification(
         db.commit()
         db.refresh(verification)
 
-    if len(addr) >= 10:
+    if len(addr) >= 2:
         verification = crud_kyc.kyc_verification.update(
             db,
             db_obj=verification,

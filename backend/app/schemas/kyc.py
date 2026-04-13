@@ -209,7 +209,7 @@ class KYCSubmissionRequest(BaseModel):
     last_name: str = Field(..., min_length=1, max_length=100, alias='lastName')
     date_of_birth: datetime = Field(..., alias='dateOfBirth')
     nationality: str = Field(..., min_length=2, max_length=100)
-    address: str = Field(..., min_length=10, max_length=500)
+    address: str = Field(..., min_length=2, max_length=500)
     document_type: DocumentType = Field(..., alias='documentType')
     document_number: Optional[str] = Field(None, max_length=100, alias='documentNumber')
     issuing_country: str = Field(..., min_length=2, max_length=100, alias='issuingCountry')

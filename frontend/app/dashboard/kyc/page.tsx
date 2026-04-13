@@ -100,7 +100,7 @@ function KYCPageContent() {
         readOnly={addrLocked}
         placeholder={
           t('Enter your address') ||
-          'Street, city, postal code, country (min. 10 characters before starting verification)'
+          'Street, city, postal code, country (min. 2 characters before starting verification)'
         }
         className="min-h-[100px] bg-white dark:bg-gray-900 disabled:opacity-70"
         autoComplete="street-address"
@@ -184,26 +184,26 @@ function KYCPageContent() {
           : '')
       ).trim()
 
-      if (addrToSend.length > 0 && addrToSend.length < 10) {
+      if (addrToSend.length > 0 && addrToSend.length < 2) {
         setError(
           t('kyc.residential_address_too_short') ||
-            'If you enter a residential address, use at least 10 characters (for your profile / internal verification).'
+            'If you enter a residential address, use at least 2 characters (for your profile / internal verification).'
         )
         setIsInitiating(false)
         return
       }
 
       const reuseSession = !!kycData?.can_continue
-      if (!reuseSession && addrToSend.length < 10) {
+      if (!reuseSession && addrToSend.length < 2) {
         setError(
           t('kyc.residential_address_required') ||
-            'Residential address is required (at least 10 characters) before starting verification.'
+            'Residential address is required (at least 2 characters) before starting verification.'
         )
         setIsInitiating(false)
         return
       }
 
-      const payloadAddr = addrToSend.length >= 10 ? addrToSend : undefined
+      const payloadAddr = addrToSend.length >= 2 ? addrToSend : undefined
       const result = await kycService.initiateVerification(token, lang, payloadAddr, forceNew)
 
       if (result.status === 'pending_proof_of_address' || result.needs_proof_of_address) {
@@ -329,10 +329,10 @@ function KYCPageContent() {
           ? refreshed.declared_residential_address.trim()
           : ''
       const addrToSend = (residentialAddress.trim() || declared).trim()
-      if (addrToSend.length < 10) {
+      if (addrToSend.length < 2) {
         setError(
           t('kyc.residential_address_required') ||
-            'Residential address is required (at least 10 characters) before starting verification.'
+            'Residential address is required (at least 2 characters) before starting verification.'
         )
         setIsInitiating(false)
         return
