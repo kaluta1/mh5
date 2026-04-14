@@ -22,11 +22,73 @@ from app.models.contests import (
 )
 from app.models.user import User
 from app.models.voting import ContestantVoting
+from app.models.voting import ContestantShare, ContestLike, ContestComment, PageView
 from app.models.round import Round, RoundStatus
 
 
 class SeasonMigrationService:
     """Service pour gérer les migrations de saisons"""
+
+    @staticmethod
+    def _engagement_by_contestant(db: Session, contestant_ids: List[int]) -> Dict[int, Dict[str, int]]:
+        """
+        Build engagement metrics used for deterministic winner tie-breaks.
+        Order required by business rules:
+        stars(points) -> shares -> likes -> comments -> views -> first contestant.
+        """
+        if not contestant_ids:
+            return {}
+
+        shares_rows = db.query(
+            ContestantShare.contestant_id,
+            func.count(ContestantShare.id).label("shares_count"),
+        ).filter(
+            ContestantShare.contestant_id.in_(contestant_ids)
+        ).group_by(
+            ContestantShare.contestant_id
+        ).all()
+
+        likes_rows = db.query(
+            ContestLike.contestant_id,
+            func.count(ContestLike.id).label("likes_count"),
+        ).filter(
+            ContestLike.contestant_id.in_(contestant_ids)
+        ).group_by(
+            ContestLike.contestant_id
+        ).all()
+
+        comments_rows = db.query(
+            ContestComment.contestant_id,
+            func.count(ContestComment.id).label("comments_count"),
+        ).filter(
+            ContestComment.contestant_id.in_(contestant_ids)
+        ).group_by(
+            ContestComment.contestant_id
+        ).all()
+
+        views_rows = db.query(
+            PageView.contestant_id,
+            func.count(PageView.id).label("views_count"),
+        ).filter(
+            PageView.contestant_id.in_(contestant_ids)
+        ).group_by(
+            PageView.contestant_id
+        ).all()
+
+        shares_by_id = {r.contestant_id: int(r.shares_count or 0) for r in shares_rows}
+        likes_by_id = {r.contestant_id: int(r.likes_count or 0) for r in likes_rows}
+        comments_by_id = {r.contestant_id: int(r.comments_count or 0) for r in comments_rows}
+        views_by_id = {r.contestant_id: int(r.views_count or 0) for r in views_rows}
+
+        out: Dict[int, Dict[str, int]] = {}
+        for cid in contestant_ids:
+            out[cid] = {
+                "shares": shares_by_id.get(cid, 0),
+                "likes": likes_by_id.get(cid, 0),
+                "comments": comments_by_id.get(cid, 0),
+                "views": views_by_id.get(cid, 0),
+            }
+        return out
     
     @staticmethod
     def get_or_create_season(
@@ -198,14 +260,25 @@ class SeasonMigrationService:
             
             grouped[location_value].append(contestant)
         
+        contestant_ids = [c.id for c in contestants]
+        engagement_by_id = SeasonMigrationService._engagement_by_contestant(db, contestant_ids)
+
         # Trier et limiter pour chaque localisation
         result = {}
         logger.info(f"  - Groupes par localisation: {len(grouped)}")
         for location_value, location_contestants in grouped.items():
-            # Trier par points décroissants, puis votes décroissants
+            # Business winner order:
+            # 1) total stars(points), 2) shares, 3) likes, 4) comments, 5) views, 6) first contestant
             sorted_contestants = sorted(
                 location_contestants,
-                key=lambda c: (points_by_contestant.get(c.id, 0), votes_by_contestant.get(c.id, 0)),
+                key=lambda c: (
+                    points_by_contestant.get(c.id, 0),
+                    engagement_by_id.get(c.id, {}).get("shares", 0),
+                    engagement_by_id.get(c.id, {}).get("likes", 0),
+                    engagement_by_id.get(c.id, {}).get("comments", 0),
+                    engagement_by_id.get(c.id, {}).get("views", 0),
+                    -(c.id or 0),
+                ),
                 reverse=True
             )
             
@@ -548,12 +621,21 @@ class SeasonMigrationService:
                 )
             ).all()
             
-            # Trier par points puis votes
+            engagement_by_id = SeasonMigrationService._engagement_by_contestant(db, contestant_ids)
+
+            # Business winner order:
+            # 1) total stars(points), 2) shares, 3) likes, 4) comments, 5) views, 6) first contestant
             points_dict = {vc.contestant_id: vc.total_points for vc in vote_counts}
-            vote_dict = {vc.contestant_id: vc.vote_count for vc in vote_counts}
             selected_contestants = sorted(
                 selected_contestants,
-                key=lambda c: (points_dict.get(c.id, 0), vote_dict.get(c.id, 0)),
+                key=lambda c: (
+                    points_dict.get(c.id, 0),
+                    engagement_by_id.get(c.id, {}).get("shares", 0),
+                    engagement_by_id.get(c.id, {}).get("likes", 0),
+                    engagement_by_id.get(c.id, {}).get("comments", 0),
+                    engagement_by_id.get(c.id, {}).get("views", 0),
+                    -(c.id or 0),
+                ),
                 reverse=True
             )
             
