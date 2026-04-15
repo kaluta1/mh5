@@ -380,6 +380,7 @@ def run_real_data_test(
     try:
         ctx = contextmanager(lambda: (yield))() if persist else non_persistent_commits(db)
         with ctx:
+            final_summary = []
             round_obj = db.query(Round).filter(Round.id == round_id).first()
             if not round_obj:
                 raise RuntimeError(f"Round {round_id} not found.")
@@ -423,6 +424,7 @@ def run_real_data_test(
                     _auto_initialize_if_empty(db=db, round_id=round_id, contest=contest, season=season)
 
                 print("\n[1] Winner selection preview")
+                expected_ids: List[int] = []
                 if to_level == SeasonLevel.GLOBAL:
                     ranked, points_by_id, engagement_by_id = _preview_global_winners(
                         db=db,
@@ -432,6 +434,7 @@ def run_real_data_test(
                     if not ranked:
                         print("No qualified contestants found for GLOBAL ranking.")
                     else:
+                        expected_ids = [c.id for c in ranked]
                         print("GLOBAL candidate ranking (top 3):")
                         for i, c in enumerate(ranked, start=1):
                             print(_format_metrics_line(i, c, points_by_id, engagement_by_id))
@@ -446,6 +449,7 @@ def run_real_data_test(
                         print("No grouped winners found for this season/level.")
                     else:
                         for group_name, winners in grouped.items():
+                            expected_ids.extend([c.id for c in winners])
                             print(f"Group: {group_name} (top {min(limit, len(winners))})")
                             for i, c in enumerate(winners, start=1):
                                 print(_format_metrics_line(i, c, points_by_id, engagement_by_id))
@@ -460,6 +464,17 @@ def run_real_data_test(
                 )
                 if "error" in result:
                     print(f"ERROR: {result['error']}")
+                    final_summary.append(
+                        {
+                            "contest_id": contest.id,
+                            "contest_name": contest.name,
+                            "from_level": from_level.value,
+                            "to_level": to_level.value,
+                            "expected_ids": expected_ids,
+                            "promoted_ids": [],
+                            "status": "ERROR",
+                        }
+                    )
                     continue
 
                 promoted_ids = result.get("promoted_contestant_ids", [])
@@ -475,6 +490,53 @@ def run_real_data_test(
                         contestant = promoted_by_id.get(cid)
                         name = _display_name(contestant) if contestant else f"Contestant#{cid}"
                         print(f"  {i}. {name} (id={cid})")
+
+                expected_names = []
+                if expected_ids:
+                    expected_objs = db.query(Contestant).filter(Contestant.id.in_(expected_ids)).all()
+                    expected_by_id = {c.id: c for c in expected_objs}
+                    expected_names = [
+                        _display_name(expected_by_id[cid]) if cid in expected_by_id else f"Contestant#{cid}"
+                        for cid in expected_ids
+                    ]
+
+                promoted_names = []
+                if promoted_ids:
+                    promoted_objs = db.query(Contestant).filter(Contestant.id.in_(promoted_ids)).all()
+                    promoted_by_id = {c.id: c for c in promoted_objs}
+                    promoted_names = [
+                        _display_name(promoted_by_id[cid]) if cid in promoted_by_id else f"Contestant#{cid}"
+                        for cid in promoted_ids
+                    ]
+
+                match_status = "MATCH" if expected_ids == promoted_ids else "MISMATCH"
+                final_summary.append(
+                    {
+                        "contest_id": contest.id,
+                        "contest_name": contest.name,
+                        "from_level": from_level.value,
+                        "to_level": to_level.value,
+                        "expected_ids": expected_ids,
+                        "expected_names": expected_names,
+                        "promoted_ids": promoted_ids,
+                        "promoted_names": promoted_names,
+                        "status": match_status,
+                    }
+                )
+
+            print("\n================ FINAL CHECKOUT ================")
+            for idx, row in enumerate(final_summary, start=1):
+                print(
+                    f"{idx}. Contest {row['contest_id']} ({row['contest_name']}) | "
+                    f"{row['from_level']} -> {row['to_level']} | {row['status']}"
+                )
+                print(f"   Expected IDs: {row.get('expected_ids', [])}")
+                if row.get("expected_names") is not None:
+                    print(f"   Expected Names: {row.get('expected_names', [])}")
+                print(f"   Promoted IDs: {row.get('promoted_ids', [])}")
+                if row.get("promoted_names") is not None:
+                    print(f"   Promoted Names: {row.get('promoted_names', [])}")
+            print("================================================\n")
 
         if not persist:
             db.rollback()
