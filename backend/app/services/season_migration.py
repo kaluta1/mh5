@@ -89,6 +89,77 @@ class SeasonMigrationService:
                 "views": views_by_id.get(cid, 0),
             }
         return out
+
+    @staticmethod
+    def _ensure_source_season_links(db: Session, contest_id: int, season_id: int) -> int:
+        """
+        Repair missing contestant-season links for a source season.
+        This handles data states where votes/contestants exist but ContestantSeason links are missing.
+        Returns number of links created/reactivated.
+        """
+        current_count = db.query(ContestantSeason).filter(
+            and_(
+                ContestantSeason.season_id == season_id,
+                ContestantSeason.is_active == True,
+            )
+        ).count()
+        if current_count > 0:
+            return 0
+
+        # Prefer contestants that already have votes in this contest/season.
+        voted_ids_rows = db.query(ContestantVoting.contestant_id).filter(
+            and_(
+                ContestantVoting.contest_id == contest_id,
+                ContestantVoting.season_id == season_id,
+            )
+        ).distinct().all()
+        candidate_ids = [row[0] for row in voted_ids_rows]
+
+        # Fallback to active contest contestants from legacy linkage.
+        if not candidate_ids:
+            candidate_ids = [
+                c.id
+                for c in db.query(Contestant).filter(
+                    and_(
+                        Contestant.season_id == contest_id,
+                        Contestant.is_active == True,
+                        Contestant.is_deleted == False,
+                    )
+                ).all()
+            ]
+
+        if not candidate_ids:
+            return 0
+
+        repaired = 0
+        for cid in candidate_ids:
+            contestant = db.query(Contestant).filter(Contestant.id == cid).first()
+            if not contestant:
+                continue
+            contestant.is_qualified = True
+            existing = db.query(ContestantSeason).filter(
+                and_(
+                    ContestantSeason.contestant_id == cid,
+                    ContestantSeason.season_id == season_id,
+                )
+            ).first()
+            if existing:
+                if not existing.is_active:
+                    existing.is_active = True
+                    existing.joined_at = datetime.utcnow()
+                    repaired += 1
+            else:
+                db.add(
+                    ContestantSeason(
+                        contestant_id=cid,
+                        season_id=season_id,
+                        joined_at=datetime.utcnow(),
+                        is_active=True,
+                    )
+                )
+                repaired += 1
+        db.flush()
+        return repaired
     
     @staticmethod
     def get_or_create_season(
@@ -159,9 +230,9 @@ class SeasonMigrationService:
         
         # Récupérer tous les contestants actifs et qualifiés de la saison via ContestantSeason
         contestants_query = db.query(Contestant).join(
-            ContestantSeason
+            ContestantSeason, ContestantSeason.contestant_id == Contestant.id
         ).join(
-            User
+            User, User.id == Contestant.user_id
         ).filter(
             and_(
                 ContestantSeason.season_id == season_id,
@@ -587,6 +658,21 @@ class SeasonMigrationService:
         logger.info(f"  - Source season: {from_season.id} (level {from_level.value})")
         print(f"[Migration] Promotion contest {contest_id} from {from_level.value} to {to_level.value}")
         print(f"[Migration]   Source season: {from_season.id}")
+
+        repaired_links = SeasonMigrationService._ensure_source_season_links(
+            db=db,
+            contest_id=contest_id,
+            season_id=from_season.id,
+        )
+        if repaired_links > 0:
+            logger.warning(
+                f"  - Auto-repaired missing source season links: {repaired_links} "
+                f"(contest {contest_id}, season {from_season.id})"
+            )
+            print(
+                f"[Migration]   Auto-repaired source season links: {repaired_links} "
+                f"(contest {contest_id}, season {from_season.id})"
+            )
         
         # Sélectionner les contestants selon le niveau (sans dépendre des stages)
         selected_contestants = []
