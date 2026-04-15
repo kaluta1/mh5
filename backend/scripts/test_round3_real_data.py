@@ -423,6 +423,7 @@ def run_real_data_test(
     source_level_filter: str | None = None,
     respect_contest_current_level: bool = True,
     contest_id_filter: int | None = None,
+    only_with_winners: bool = True,
 ):
     db = SessionLocal()
     try:
@@ -463,6 +464,7 @@ def run_real_data_test(
             print(f"Respect contest current level: {respect_contest_current_level}")
             if contest_id_filter is not None:
                 print(f"Contest filter: {contest_id_filter}")
+            print(f"Only categories with winners: {only_with_winners}")
 
             processed_contests = set()
 
@@ -575,6 +577,11 @@ def run_real_data_test(
                                 print(_format_metrics_line(i, c, points_by_id, engagement_by_id))
 
                 print("\n[2] Migration dry-run using service")
+                if not expected_ids and only_with_winners:
+                    print("Skipped contest: no winner candidates for current filters.")
+                    if contest_tx is not None:
+                        contest_tx.rollback()
+                    continue
                 if country and not expected_ids:
                     print(
                         "Skipped migration dry-run for this contest because country filter "
@@ -674,6 +681,8 @@ def run_real_data_test(
                     contest_tx.rollback()
 
             print("\n================ FINAL CHECKOUT ================")
+            if not final_summary:
+                print("No qualifying categories found with current filters.")
             for idx, row in enumerate(final_summary, start=1):
                 print(
                     f"{idx}. Contest {row['contest_id']} ({row['contest_name']}) | "
@@ -744,6 +753,11 @@ if __name__ == "__main__":
         default=None,
         help="Only evaluate one specific contest ID.",
     )
+    parser.add_argument(
+        "--include-empty",
+        action="store_true",
+        help="Include categories with no winner candidates in final output.",
+    )
     args = parser.parse_args()
     run_real_data_test(
         round_id=args.round_id,
@@ -755,5 +769,6 @@ if __name__ == "__main__":
         source_level_filter=args.from_level,
         respect_contest_current_level=not args.ignore_contest_current_level,
         contest_id_filter=args.contest_id,
+        only_with_winners=not args.include_empty,
     )
 
