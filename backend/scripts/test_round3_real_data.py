@@ -314,6 +314,7 @@ def _preview_non_global_winners(
     season: ContestSeason,
     to_level: SeasonLevel,
     limit: int,
+    country_filter: str | None = None,
 ) -> Tuple[Dict[str, List[Contestant]], Dict[int, int], Dict[int, Dict[str, int]]]:
     location_field = _location_field_for_to_level(to_level)
     if not location_field:
@@ -326,6 +327,19 @@ def _preview_non_global_winners(
         limit=limit,
         stage_id=None,
     )
+    if country_filter:
+        wanted = country_filter.strip().lower()
+        filtered_grouped: Dict[str, List[Contestant]] = {}
+        for group_name, contestants in grouped.items():
+            kept = []
+            for c in contestants:
+                c_country = (c.user.country or "").strip().lower() if c.user else ""
+                if c_country == wanted:
+                    kept.append(c)
+            if kept:
+                filtered_grouped[group_name] = kept
+        grouped = filtered_grouped
+
     all_contestants = [c for arr in grouped.values() for c in arr]
     all_ids = [c.id for c in all_contestants]
     points_by_id = _points_map(db, season.id, all_ids)
@@ -337,6 +351,7 @@ def _preview_global_winners(
     db,
     season: ContestSeason,
     limit: int,
+    country_filter: str | None = None,
 ) -> Tuple[List[Contestant], Dict[int, int], Dict[int, Dict[str, int]]]:
     contestants = (
         db.query(Contestant)
@@ -352,6 +367,13 @@ def _preview_global_winners(
         )
         .all()
     )
+    if country_filter:
+        wanted = country_filter.strip().lower()
+        contestants = [
+            c for c in contestants
+            if c.user and (c.user.country or "").strip().lower() == wanted
+        ]
+
     contestant_ids = [c.id for c in contestants]
     points_by_id = _points_map(db, season.id, contestant_ids)
     engagement_by_id = SeasonMigrationService._engagement_by_contestant(db, contestant_ids)
@@ -375,6 +397,7 @@ def run_real_data_test(
     limit: int = 5,
     persist: bool = False,
     auto_init_empty: bool = False,
+    country: str | None = None,
 ):
     db = SessionLocal()
     try:
@@ -405,6 +428,8 @@ def run_real_data_test(
             print(f"Round: {round_obj.id} - {round_obj.name}")
             print(f"Active contest-season links: {len(links)}")
             print(f"Mode: {'PERSISTENT' if persist else 'NON-PERSISTENT (rollback)'}")
+            if country:
+                print(f"Country filter: {country}")
 
             for link, season, contest in links:
                 from_level = season.level
@@ -430,6 +455,7 @@ def run_real_data_test(
                         db=db,
                         season=season,
                         limit=3,
+                        country_filter=country,
                     )
                     if not ranked:
                         print("No qualified contestants found for GLOBAL ranking.")
@@ -444,6 +470,7 @@ def run_real_data_test(
                         season=season,
                         to_level=to_level,
                         limit=limit,
+                        country_filter=country,
                     )
                     if not grouped:
                         print("No grouped winners found for this season/level.")
@@ -455,6 +482,26 @@ def run_real_data_test(
                                 print(_format_metrics_line(i, c, points_by_id, engagement_by_id))
 
                 print("\n[2] Migration dry-run using service")
+                if country and not expected_ids:
+                    print(
+                        "Skipped migration dry-run for this contest because country filter "
+                        "returned no winner candidates."
+                    )
+                    final_summary.append(
+                        {
+                            "contest_id": contest.id,
+                            "contest_name": contest.name,
+                            "from_level": from_level.value,
+                            "to_level": to_level.value,
+                            "expected_ids": expected_ids,
+                            "expected_names": [],
+                            "promoted_ids": [],
+                            "promoted_names": [],
+                            "status": "SKIPPED_BY_COUNTRY_FILTER",
+                        }
+                    )
+                    continue
+
                 result = SeasonMigrationService.promote_to_next_level(
                     db=db,
                     from_level=from_level,
@@ -566,11 +613,18 @@ if __name__ == "__main__":
         action="store_true",
         help="Auto-initialize/backfill empty source seasons before preview/migration.",
     )
+    parser.add_argument(
+        "--country",
+        type=str,
+        default=None,
+        help="Filter winner preview/final checkout to one country (e.g. Tanzania).",
+    )
     args = parser.parse_args()
     run_real_data_test(
         round_id=args.round_id,
         limit=args.limit,
         persist=args.persist,
         auto_init_empty=args.auto_init_empty,
+        country=args.country,
     )
 
