@@ -422,6 +422,7 @@ def run_real_data_test(
     source_season_id: int | None = None,
     source_level_filter: str | None = None,
     respect_contest_current_level: bool = True,
+    contest_id_filter: int | None = None,
 ):
     db = SessionLocal()
     try:
@@ -460,6 +461,8 @@ def run_real_data_test(
             if source_level_filter:
                 print(f"From-level filter: {source_level_filter}")
             print(f"Respect contest current level: {respect_contest_current_level}")
+            if contest_id_filter is not None:
+                print(f"Contest filter: {contest_id_filter}")
 
             processed_contests = set()
 
@@ -469,10 +472,15 @@ def run_real_data_test(
                 to_level = _next_level(from_level)
                 print("\n------------------------------------------------------------")
                 print(
-                    f"Contest: {contest.name} | Type: {contest.contest_type} | "
+                    f"Contest: {contest.name} (id={contest.id}) | Type: {contest.contest_type} | "
                     f"From: {from_level.value} -> To: {to_level.value if to_level else 'N/A'}"
                 )
                 print(f"Source season: {season.id} ({season.title})")
+
+                if contest_id_filter is not None and contest.id != contest_id_filter:
+                    if contest_tx is not None:
+                        contest_tx.rollback()
+                    continue
 
                 # Keep one record per contest in this run.
                 if contest.id in processed_contests:
@@ -730,6 +738,12 @@ if __name__ == "__main__":
         action="store_true",
         help="Do not force source season to match contest.current level.",
     )
+    parser.add_argument(
+        "--contest-id",
+        type=int,
+        default=None,
+        help="Only evaluate one specific contest ID.",
+    )
     args = parser.parse_args()
     run_real_data_test(
         round_id=args.round_id,
@@ -740,5 +754,6 @@ if __name__ == "__main__":
         source_season_id=args.source_season_id,
         source_level_filter=args.from_level,
         respect_contest_current_level=not args.ignore_contest_current_level,
+        contest_id_filter=args.contest_id,
     )
 
