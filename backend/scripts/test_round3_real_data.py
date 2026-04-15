@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from typing import Dict, List, Tuple
 
 import app.models  # noqa: F401
@@ -207,6 +208,107 @@ def _print_empty_promotion_diagnostics(db, season: ContestSeason, from_level: Se
     print(f"  - Contestants with at least one vote in season: {voted_count}")
 
 
+def _active_linked_count(db, season_id: int) -> int:
+    return (
+        db.query(ContestantSeason)
+        .join(Contestant, Contestant.id == ContestantSeason.contestant_id)
+        .filter(
+            and_(
+                ContestantSeason.season_id == season_id,
+                ContestantSeason.is_active == True,
+                Contestant.is_active == True,
+                Contestant.is_deleted == False,
+            )
+        )
+        .count()
+    )
+
+
+def _backfill_contestants_into_season(db, contest_id: int, season_id: int) -> int:
+    """
+    Ensure active contest contestants are linked to the target season.
+    This repairs cases where season link exists but contestant links are empty.
+    """
+    contestants = (
+        db.query(Contestant)
+        .filter(
+            and_(
+                Contestant.season_id == contest_id,
+                Contestant.is_active == True,
+                Contestant.is_deleted == False,
+            )
+        )
+        .all()
+    )
+    added = 0
+    for contestant in contestants:
+        contestant.is_qualified = True
+        link = (
+            db.query(ContestantSeason)
+            .filter(
+                and_(
+                    ContestantSeason.contestant_id == contestant.id,
+                    ContestantSeason.season_id == season_id,
+                )
+            )
+            .first()
+        )
+        if not link:
+            db.add(
+                ContestantSeason(
+                    contestant_id=contestant.id,
+                    season_id=season_id,
+                    joined_at=datetime.now(timezone.utc),
+                    is_active=True,
+                )
+            )
+            added += 1
+        else:
+            link.is_active = True
+            link.joined_at = datetime.now(timezone.utc)
+    db.flush()
+    return added
+
+
+def _auto_initialize_if_empty(db, round_id: int, contest: Contest, season: ContestSeason) -> None:
+    """
+    Auto-fix empty source season by running init and/or backfilling links.
+    """
+    before = _active_linked_count(db, season.id)
+    if before > 0:
+        return
+
+    mode = (contest.contest_mode or "").lower()
+    print(
+        f"[Auto-fix] Empty season detected for contest {contest.id} "
+        f"(level={season.level.value}, mode={mode or 'unknown'})."
+    )
+
+    if season.level == SeasonLevel.CITY and mode == "participation":
+        init_result = SeasonMigrationService.migrate_to_city_season(
+            db=db, contest_id=contest.id, round_id=round_id
+        )
+        print(f"[Auto-fix] migrate_to_city_season result: {init_result}")
+    elif season.level == SeasonLevel.COUNTRY and mode == "nomination":
+        init_result = SeasonMigrationService.migrate_to_country_start(
+            db=db, contest_id=contest.id, round_id=round_id
+        )
+        print(f"[Auto-fix] migrate_to_country_start result: {init_result}")
+    else:
+        print(
+            "[Auto-fix] No direct initializer mapped for this level/mode; "
+            "trying link backfill only."
+        )
+
+    after_init = _active_linked_count(db, season.id)
+    if after_init == 0:
+        repaired = _backfill_contestants_into_season(db, contest.id, season.id)
+        print(f"[Auto-fix] Backfilled contestant-season links: {repaired}")
+
+    after = _active_linked_count(db, season.id)
+    print(f"[Auto-fix] Active linked contestants: before={before}, after={after}")
+
+
 def _preview_non_global_winners(
     db,
     season: ContestSeason,
@@ -268,7 +370,12 @@ def _preview_global_winners(
     return ranked[:limit], points_by_id, engagement_by_id
 
 
-def run_real_data_test(round_id: int = 3, limit: int = 5, persist: bool = False):
+def run_real_data_test(
+    round_id: int = 3,
+    limit: int = 5,
+    persist: bool = False,
+    auto_init_empty: bool = False,
+):
     db = SessionLocal()
     try:
         ctx = contextmanager(lambda: (yield))() if persist else non_persistent_commits(db)
@@ -311,6 +418,9 @@ def run_real_data_test(round_id: int = 3, limit: int = 5, persist: bool = False)
                 if not to_level:
                     print("No next migration level (already global or unsupported).")
                     continue
+
+                if auto_init_empty:
+                    _auto_initialize_if_empty(db=db, round_id=round_id, contest=contest, season=season)
 
                 print("\n[1] Winner selection preview")
                 if to_level == SeasonLevel.GLOBAL:
@@ -389,6 +499,16 @@ if __name__ == "__main__":
         action="store_true",
         help="Persist migration changes (default is rollback-safe dry-run).",
     )
+    parser.add_argument(
+        "--auto-init-empty",
+        action="store_true",
+        help="Auto-initialize/backfill empty source seasons before preview/migration.",
+    )
     args = parser.parse_args()
-    run_real_data_test(round_id=args.round_id, limit=args.limit, persist=args.persist)
+    run_real_data_test(
+        round_id=args.round_id,
+        limit=args.limit,
+        persist=args.persist,
+        auto_init_empty=args.auto_init_empty,
+    )
 
