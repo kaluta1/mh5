@@ -392,6 +392,8 @@ def run_real_data_test(
     auto_init_empty: bool = False,
     country: str | None = None,
     source_season_id: int | None = None,
+    source_level_filter: str | None = None,
+    respect_contest_current_level: bool = True,
 ):
     db = SessionLocal()
     try:
@@ -413,6 +415,7 @@ def run_real_data_test(
                         ContestSeason.is_deleted == False,
                     )
                 )
+                .order_by(ContestSeasonLink.linked_at.desc(), ContestSeasonLink.id.desc())
                 .all()
             )
             if not links:
@@ -426,6 +429,11 @@ def run_real_data_test(
                 print(f"Country filter: {country}")
             if source_season_id is not None:
                 print(f"Source season filter: {source_season_id}")
+            if source_level_filter:
+                print(f"From-level filter: {source_level_filter}")
+            print(f"Respect contest current level: {respect_contest_current_level}")
+
+            processed_contests = set()
 
             for link, season, contest in links:
                 contest_tx = db.begin_nested() if not persist else None
@@ -437,6 +445,32 @@ def run_real_data_test(
                     f"From: {from_level.value} -> To: {to_level.value if to_level else 'N/A'}"
                 )
                 print(f"Source season: {season.id} ({season.title})")
+
+                # Keep one record per contest in this run.
+                if contest.id in processed_contests:
+                    print("Skipped contest: already processed with a newer season link.")
+                    if contest_tx is not None:
+                        contest_tx.rollback()
+                    continue
+
+                # Optional strict filter to test only a specific source level.
+                if source_level_filter and season.level.value != source_level_filter.strip().lower():
+                    print(f"Skipped contest: source level is not '{source_level_filter}'.")
+                    if contest_tx is not None:
+                        contest_tx.rollback()
+                    continue
+
+                # Align with dashboard: only test the link that matches current contest level.
+                if respect_contest_current_level and contest.level and contest.level != season.level.value:
+                    print(
+                        f"Skipped contest: contest current level is '{contest.level}', "
+                        f"but this link is '{season.level.value}'."
+                    )
+                    if contest_tx is not None:
+                        contest_tx.rollback()
+                    continue
+
+                processed_contests.add(contest.id)
 
                 if source_season_id is not None and season.id != source_season_id:
                     print(
@@ -657,6 +691,17 @@ if __name__ == "__main__":
         default=None,
         help="Only evaluate contests whose source season matches this season ID.",
     )
+    parser.add_argument(
+        "--from-level",
+        type=str,
+        default=None,
+        help="Only evaluate source seasons of this level (city, country, regional, continent).",
+    )
+    parser.add_argument(
+        "--ignore-contest-current-level",
+        action="store_true",
+        help="Do not force source season to match contest.current level.",
+    )
     args = parser.parse_args()
     run_real_data_test(
         round_id=args.round_id,
@@ -665,5 +710,7 @@ if __name__ == "__main__":
         auto_init_empty=args.auto_init_empty,
         country=args.country,
         source_season_id=args.source_season_id,
+        source_level_filter=args.from_level,
+        respect_contest_current_level=not args.ignore_contest_current_level,
     )
 
