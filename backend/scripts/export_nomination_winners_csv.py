@@ -6,11 +6,15 @@ Read-only. Uses the same ordering as SeasonMigrationService (stars -> shares -> 
 comments -> views -> lower contestant id).
 
 VPS usage (example):
-  cd /path/to/mh5-1/backend
-  source venv/bin/activate
-  export PYTHONPATH=/path/to/mh5-1/backend
-  # Ensure .env (or environment) points at the production DATABASE_URL
-  python scripts/export_nomination_winners_csv.py --round-id 3 --output /tmp/nomination_round3.csv
+  cd ~/mh5/backend
+  python3 -m venv .venv && source .venv/bin/activate
+  pip install -r requirements.txt
+  export PYTHONPATH="$PWD"
+  set -a && [ -f .env ] && source .env && set +a
+  python3 scripts/export_nomination_winners_csv.py --round-id 3 -o /tmp/nomination_round3.csv
+
+  Do NOT use system python3 without a venv: Debian's /usr/lib SQLAlchemy 1.x lacks
+  mapped_column (SQLAlchemy 2.0+ is required; see requirements.txt).
 
   # Everyone in each country (e.g. 10) with metrics; migrates_next_stage=Y for top 5:
   python scripts/export_nomination_winners_csv.py --round-id 3 --output out.csv --full-group-ranks
