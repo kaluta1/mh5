@@ -252,12 +252,9 @@ def run_chain_test(persist: bool = False):
                 contestants[5].id: {"shares": 3, "likes": 0, "comments": 0, "views": 0},     # c6
             }
             support_ids = [u.id for u in support]
-            cursor = 0
             for ct in contestants:
                 p = plan[ct.id]
-                need = p["shares"] + p["likes"] + p["comments"] + p["views"]
-                add_engagement(db, ct, support_ids[cursor:cursor + need], **p)
-                cursor += need
+                add_engagement(db, ct, support_ids, **p)
 
             # CITY -> COUNTRY
             r1 = SeasonMigrationService.promote_to_next_level(

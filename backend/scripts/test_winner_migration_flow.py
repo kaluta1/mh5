@@ -276,16 +276,12 @@ def run_test(persist: bool = False):
             }
 
             support_ids = [u.id for u in support_users]
-            cursor = 0
             for ct in contestants:
                 plan = engagement_plan[ct.id]
-                needed = plan["shares"] + plan["likes"] + plan["comments"] + plan["views"]
-                batch = support_ids[cursor: cursor + needed]
-                cursor += needed
                 _add_engagement(
                     db,
                     contestant=ct,
-                    support_user_ids=batch,
+                    support_user_ids=support_ids,
                     shares=plan["shares"],
                     likes=plan["likes"],
                     comments=plan["comments"],
