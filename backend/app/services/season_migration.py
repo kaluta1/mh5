@@ -625,24 +625,31 @@ class SeasonMigrationService:
         from_level: SeasonLevel,
         to_level: SeasonLevel,
         contest_id: int,
-        limit: int = 5  # 5 pour tous sauf GLOBAL (3)
+        limit: int = 5,  # 5 pour tous sauf GLOBAL (3)
+        from_season_id: Optional[int] = None,
     ) -> dict:
         """
         Promouvoit les meilleurs contestants d'un niveau vers le niveau supérieur.
         Pour CITY/COUNTRY/REGIONAL/CONTINENTAL : 5 premiers par localisation
         Pour GLOBAL : 3 premiers au total
         """
-        # Récupérer la saison source via le lien contest-season
-        contest_season_link = db.query(ContestSeasonLink).join(
-            ContestSeason
-        ).filter(
+        # Récupérer la saison source via le lien contest-season.
+        # If from_season_id is provided, force that season to avoid ambiguity when
+        # multiple active links exist for the same contest/level.
+        query = db.query(ContestSeasonLink).join(ContestSeason).filter(
             and_(
                 ContestSeasonLink.contest_id == contest_id,
                 ContestSeason.level == from_level,
                 ContestSeason.is_deleted == False,
                 ContestSeasonLink.is_active == True
             )
-        ).first()
+        )
+        if from_season_id is not None:
+            query = query.filter(ContestSeasonLink.season_id == from_season_id)
+        else:
+            # deterministic fallback for legacy calls
+            query = query.order_by(ContestSeasonLink.linked_at.desc(), ContestSeasonLink.id.desc())
+        contest_season_link = query.first()
         
         import logging
         logger = logging.getLogger(__name__)

@@ -398,6 +398,7 @@ def run_real_data_test(
     persist: bool = False,
     auto_init_empty: bool = False,
     country: str | None = None,
+    source_season_id: int | None = None,
 ):
     db = SessionLocal()
     try:
@@ -430,6 +431,8 @@ def run_real_data_test(
             print(f"Mode: {'PERSISTENT' if persist else 'NON-PERSISTENT (rollback)'}")
             if country:
                 print(f"Country filter: {country}")
+            if source_season_id is not None:
+                print(f"Source season filter: {source_season_id}")
 
             for link, season, contest in links:
                 contest_tx = db.begin_nested() if not persist else None
@@ -441,6 +444,28 @@ def run_real_data_test(
                     f"From: {from_level.value} -> To: {to_level.value if to_level else 'N/A'}"
                 )
                 print(f"Source season: {season.id} ({season.title})")
+
+                if source_season_id is not None and season.id != source_season_id:
+                    print(
+                        "Skipped contest: source season does not match --source-season-id "
+                        f"({source_season_id})."
+                    )
+                    final_summary.append(
+                        {
+                            "contest_id": contest.id,
+                            "contest_name": contest.name,
+                            "from_level": from_level.value,
+                            "to_level": to_level.value if to_level else "N/A",
+                            "expected_ids": [],
+                            "expected_names": [],
+                            "promoted_ids": [],
+                            "promoted_names": [],
+                            "status": "SKIPPED_BY_SOURCE_SEASON_FILTER",
+                        }
+                    )
+                    if contest_tx is not None:
+                        contest_tx.rollback()
+                    continue
 
                 if not to_level:
                     print("No next migration level (already global or unsupported).")
@@ -513,6 +538,7 @@ def run_real_data_test(
                     to_level=to_level,
                     contest_id=contest.id,
                     limit=3 if to_level == SeasonLevel.GLOBAL else limit,
+                    from_season_id=season.id,
                 )
                 if "error" in result:
                     print(f"ERROR: {result['error']}")
@@ -630,6 +656,12 @@ if __name__ == "__main__":
         default=None,
         help="Filter winner preview/final checkout to one country (e.g. Tanzania).",
     )
+    parser.add_argument(
+        "--source-season-id",
+        type=int,
+        default=None,
+        help="Only evaluate contests whose source season matches this season ID.",
+    )
     args = parser.parse_args()
     run_real_data_test(
         round_id=args.round_id,
@@ -637,5 +669,6 @@ if __name__ == "__main__":
         persist=args.persist,
         auto_init_empty=args.auto_init_empty,
         country=args.country,
+        source_season_id=args.source_season_id,
     )
 
