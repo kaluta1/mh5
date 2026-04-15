@@ -206,6 +206,7 @@ class SeasonMigrationService:
         season_id: int,  # ID de la saison, pas du contest
         location_field: str,  # 'city', 'country', 'region', 'continent'
         contest_id: Optional[int] = None,
+        country_filter: Optional[str] = None,
         limit: int = 5,
         stage_id: Optional[int] = None  # Non utilisé maintenant, gardé pour compatibilité
     ) -> Dict[str, List[Contestant]]:
@@ -249,6 +250,10 @@ class SeasonMigrationService:
         if contest_id is not None:
             # Keep winner selection scoped to the current contest only.
             contestants_query = contestants_query.filter(Contestant.season_id == contest_id)
+        if country_filter:
+            contestants_query = contestants_query.filter(
+                func.lower(func.trim(User.country)) == country_filter.strip().lower()
+            )
         
         # Filtrer par localisation non nulle
         if location_field == 'city':

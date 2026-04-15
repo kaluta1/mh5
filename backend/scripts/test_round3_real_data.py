@@ -326,21 +326,10 @@ def _preview_non_global_winners(
         season_id=season.id,
         location_field=location_field,
         contest_id=contest.id,
+        country_filter=country_filter,
         limit=limit,
         stage_id=None,
     )
-    if country_filter:
-        wanted = country_filter.strip().lower()
-        filtered_grouped: Dict[str, List[Contestant]] = {}
-        for group_name, contestants in grouped.items():
-            kept = []
-            for c in contestants:
-                c_country = (c.user.country or "").strip().lower() if c.user else ""
-                if c_country == wanted:
-                    kept.append(c)
-            if kept:
-                filtered_grouped[group_name] = kept
-        grouped = filtered_grouped
 
     all_contestants = [c for arr in grouped.values() for c in arr]
     all_ids = [c.id for c in all_contestants]
