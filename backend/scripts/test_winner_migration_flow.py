@@ -168,9 +168,16 @@ def _add_engagement(
     comments: int,
     views: int,
 ):
+    if not support_user_ids:
+        raise ValueError("support_user_ids cannot be empty")
+
+    # Reuse helper users cyclically if we need more events than available IDs.
+    def next_uid(pos: int) -> int:
+        return support_user_ids[pos % len(support_user_ids)]
+
     idx = 0
     for i in range(shares):
-        uid = support_user_ids[idx]
+        uid = next_uid(idx)
         idx += 1
         db.add(
             ContestantShare(
@@ -184,11 +191,11 @@ def _add_engagement(
             )
         )
     for i in range(likes):
-        uid = support_user_ids[idx]
+        uid = next_uid(idx)
         idx += 1
         db.add(ContestLike(user_id=uid, contestant_id=contestant.id))
     for i in range(comments):
-        uid = support_user_ids[idx]
+        uid = next_uid(idx)
         idx += 1
         db.add(
             ContestComment(
@@ -199,7 +206,7 @@ def _add_engagement(
             )
         )
     for i in range(views):
-        uid = support_user_ids[idx]
+        uid = next_uid(idx)
         idx += 1
         db.add(
             PageView(

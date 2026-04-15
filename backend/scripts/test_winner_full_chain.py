@@ -137,12 +137,19 @@ def add_votes(db, contestant_id: int, contest_id: int, season_id: int, voter_ids
 
 
 def add_engagement(db, contestant: Contestant, user_ids: List[int], shares=0, likes=0, comments=0, views=0):
+    if not user_ids:
+        raise ValueError("user_ids cannot be empty")
+
+    # Reuse helper users cyclically if engagement volume exceeds helper pool.
+    def uid_at(pos: int) -> int:
+        return user_ids[pos % len(user_ids)]
+
     i = 0
     for n in range(shares):
         db.add(
             ContestantShare(
                 author_id=contestant.user_id,
-                shared_by_user_id=user_ids[i],
+                shared_by_user_id=uid_at(i),
                 contestant_id=contestant.id,
                 referral_code="chain",
                 share_link=f"https://myhigh5.com/c/{contestant.id}?sh={n}",
@@ -152,12 +159,12 @@ def add_engagement(db, contestant: Contestant, user_ids: List[int], shares=0, li
         )
         i += 1
     for _ in range(likes):
-        db.add(ContestLike(user_id=user_ids[i], contestant_id=contestant.id))
+        db.add(ContestLike(user_id=uid_at(i), contestant_id=contestant.id))
         i += 1
     for n in range(comments):
         db.add(
             ContestComment(
-                user_id=user_ids[i],
+                user_id=uid_at(i),
                 contestant_id=contestant.id,
                 content=f"c{contestant.id}-{n}",
                 is_approved=True,
@@ -167,7 +174,7 @@ def add_engagement(db, contestant: Contestant, user_ids: List[int], shares=0, li
     for n in range(views):
         db.add(
             PageView(
-                user_id=user_ids[i],
+                user_id=uid_at(i),
                 contestant_id=contestant.id,
                 ip_address=f"10.9.{contestant.id % 255}.{(n + 1) % 255}",
                 user_agent="chain-test",
