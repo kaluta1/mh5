@@ -154,8 +154,8 @@ class SeasonMigrationService:
         ).count()
         
         logger.info(f"get_top_contestants_by_location: season_id={season_id}, location_field={location_field}, limit={limit}")
-        logger.info(f"  - Total contestants liés à la saison: {total_contestants_in_season}")
-        print(f"[Migration]   Total contestants liés à la saison {season_id}: {total_contestants_in_season}")
+        logger.info(f"  - Total contestants linked to season: {total_contestants_in_season}")
+        print(f"[Migration]   Total contestants linked to season {season_id}: {total_contestants_in_season}")
         
         # Récupérer tous les contestants actifs et qualifiés de la saison via ContestantSeason
         contestants_query = db.query(Contestant).join(
@@ -184,8 +184,8 @@ class SeasonMigrationService:
         
         contestants = contestants_query.all()
         
-        logger.info(f"  - Contestants qualifiés avec localisation {location_field}: {len(contestants)}")
-        print(f"[Migration]   Contestants qualifiés avec localisation {location_field}: {len(contestants)}")
+        logger.info(f"  - Qualified contestants with {location_field} location: {len(contestants)}")
+        print(f"[Migration]   Qualified contestants with {location_field} location: {len(contestants)}")
         
         if not contestants:
             # Vérifier pourquoi aucun contestant n'est trouvé
@@ -215,12 +215,12 @@ class SeasonMigrationService:
                 )
             ).count()
             
-            logger.warning(f"  - Aucun contestant trouvé pour la saison {season_id}")
-            logger.warning(f"    - Contestants qualifiés sans localisation: {contestants_without_location}")
-            logger.warning(f"    - Contestants non qualifiés: {contestants_not_qualified}")
-            print(f"[Migration]   Aucun contestant trouvé pour la saison {season_id}")
-            print(f"[Migration]     - Contestants qualifiés sans localisation: {contestants_without_location}")
-            print(f"[Migration]     - Contestants non qualifiés: {contestants_not_qualified}")
+            logger.warning(f"  - No contestant found for season {season_id}")
+            logger.warning(f"    - Qualified contestants without location: {contestants_without_location}")
+            logger.warning(f"    - Non-qualified contestants: {contestants_not_qualified}")
+            print(f"[Migration]   No contestant found for season {season_id}")
+            print(f"[Migration]     - Qualified contestants without location: {contestants_without_location}")
+            print(f"[Migration]     - Non-qualified contestants: {contestants_not_qualified}")
             return {}
         
         # Récupérer les points par contestant depuis ContestantVoting (par season_id)
@@ -265,7 +265,7 @@ class SeasonMigrationService:
 
         # Trier et limiter pour chaque localisation
         result = {}
-        logger.info(f"  - Groupes par localisation: {len(grouped)}")
+        logger.info(f"  - Groups by location: {len(grouped)}")
         for location_value, location_contestants in grouped.items():
             # Business winner order:
             # 1) total stars(points), 2) shares, 3) likes, 4) comments, 5) views, 6) first contestant
@@ -285,12 +285,12 @@ class SeasonMigrationService:
             # Prendre les N premiers (ou tous si moins de N)
             selected = sorted_contestants[:limit]
             result[location_value] = selected
-            logger.info(f"    - {location_value}: {len(selected)}/{len(location_contestants)} contestants sélectionnés")
+            logger.info(f"    - {location_value}: {len(selected)}/{len(location_contestants)} contestants selected")
             print(f"[Migration]     {location_value}: {len(selected)}/{len(location_contestants)} contestants")
         
         total_selected = sum(len(contestants) for contestants in result.values())
-        logger.info(f"  - Total sélectionné: {total_selected} contestants")
-        print(f"[Migration]   Total sélectionné: {total_selected} contestants")
+        logger.info(f"  - Total selected: {total_selected} contestants")
+        print(f"[Migration]   Total selected: {total_selected} contestants")
         
         return result
     
@@ -583,10 +583,10 @@ class SeasonMigrationService:
             return {"error": error_msg}
         
         from_season = contest_season_link.season
-        logger.info(f"Promotion de {from_level.value} vers {to_level.value} pour contest {contest_id}")
-        logger.info(f"  - Saison source: {from_season.id} (niveau {from_level.value})")
-        print(f"[Migration] Promotion contest {contest_id} de {from_level.value} vers {to_level.value}")
-        print(f"[Migration]   Saison source: {from_season.id}")
+        logger.info(f"Promotion from {from_level.value} to {to_level.value} for contest {contest_id}")
+        logger.info(f"  - Source season: {from_season.id} (level {from_level.value})")
+        print(f"[Migration] Promotion contest {contest_id} from {from_level.value} to {to_level.value}")
+        print(f"[Migration]   Source season: {from_season.id}")
         
         # Sélectionner les contestants selon le niveau (sans dépendre des stages)
         selected_contestants = []
@@ -639,7 +639,7 @@ class SeasonMigrationService:
                 reverse=True
             )
             
-            logger.info(f"  - {len(selected_contestants)} contestants sélectionnés pour GLOBAL")
+            logger.info(f"  - {len(selected_contestants)} contestants selected for GLOBAL")
         else:
             # Pour les autres niveaux : prendre les 5 premiers par localisation
             location_field_map = {
@@ -654,12 +654,12 @@ class SeasonMigrationService:
                 return {"error": f"Invalid target level: {to_level.value}"}
             
             # Récupérer les meilleurs par localisation (sans stage_id)
-            logger.info(f"  - Récupération des meilleurs contestants par {location_field} (limit: {limit})")
+            logger.info(f"  - Selecting top contestants by {location_field} (limit: {limit})")
             grouped_contestants = SeasonMigrationService.get_top_contestants_by_location(
                 db, from_season.id, location_field, limit=limit, stage_id=None
             )
             
-            logger.info(f"  - Groupes trouvés: {len(grouped_contestants)} localisations")
+            logger.info(f"  - Groups found: {len(grouped_contestants)} locations")
             for location, contestants in grouped_contestants.items():
                 logger.info(f"    - {location}: {len(contestants)} contestants")
             
@@ -667,8 +667,8 @@ class SeasonMigrationService:
             for location_contestants in grouped_contestants.values():
                 selected_contestants.extend(location_contestants)
         
-        logger.info(f"  - Total contestants sélectionnés: {len(selected_contestants)}")
-        print(f"[Migration]   Contestants sélectionnés: {len(selected_contestants)}")
+        logger.info(f"  - Total contestants selected: {len(selected_contestants)}")
+        print(f"[Migration]   Contestants selected: {len(selected_contestants)}")
         
         if len(selected_contestants) == 0:
             # Not a failure: calendar may say "promote" while nobody qualified in this season yet.
@@ -715,8 +715,8 @@ class SeasonMigrationService:
             title=f"Saison {to_level.value.capitalize()} - {contest.name} - {round_name}",
             round_id=round_id
         )
-        logger.info(f"  - Saison destination: {to_season.id} (niveau {to_level.value})")
-        print(f"[Migration]   Saison destination: {to_season.id}")
+        logger.info(f"  - Destination season: {to_season.id} (level {to_level.value})")
+        print(f"[Migration]   Destination season: {to_season.id}")
         
         # Désactiver les liens dans l'ancienne saison pour les promus et créer les nouveaux liens
         promoted_contestant_ids = []
@@ -761,8 +761,8 @@ class SeasonMigrationService:
                 logger.info(f"  - Réactivation du lien ContestantSeason existant pour contestant {contestant.id} dans saison {to_season.id} (date mise à jour)")
                 promoted_contestant_ids.append(contestant.id)
         
-        logger.info(f"Contestants promus ({len(promoted_contestant_ids)}): {promoted_contestant_ids}")
-        print(f"[Migration] Contestants promus ({len(promoted_contestant_ids)}): {promoted_contestant_ids}")
+        logger.info(f"Promoted contestants ({len(promoted_contestant_ids)}): {promoted_contestant_ids}")
+        print(f"[Migration] Promoted contestants ({len(promoted_contestant_ids)}): {promoted_contestant_ids}")
         
         # Désactiver l'ancien lien contest-season
         old_contest_link = db.query(ContestSeasonLink).filter(
@@ -813,11 +813,11 @@ class SeasonMigrationService:
             db.rollback()
             raise
         
-        logger.info(f"Migration réussie: {len(selected_contestants)} contestants promus de {from_level.value} vers {to_level.value}")
+        logger.info(f"Migration successful: {len(selected_contestants)} contestants promoted from {from_level.value} to {to_level.value}")
         logger.info(f"  - Contest {contest_id} lié à la saison {to_season.id} (niveau {to_level.value})")
-        logger.info(f"  - Contestants promus: {promoted_contestant_ids}")
-        print(f"[Migration] ✓ Migration réussie: Contest {contest_id} promu de {from_level.value} vers {to_level.value}")
-        print(f"[Migration]   Contestants promus ({len(promoted_contestant_ids)}): {promoted_contestant_ids}")
+        logger.info(f"  - Promoted contestants: {promoted_contestant_ids}")
+        print(f"[Migration] ✓ Migration successful: Contest {contest_id} promoted from {from_level.value} to {to_level.value}")
+        print(f"[Migration]   Promoted contestants ({len(promoted_contestant_ids)}): {promoted_contestant_ids}")
         
         return {
             "message": f"Promoted {len(selected_contestants)} contestants from {from_level.value} to {to_level.value}",

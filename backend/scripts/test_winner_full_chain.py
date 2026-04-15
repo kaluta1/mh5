@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import argparse
 from contextlib import contextmanager
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import List, Dict, Tuple
 
 import app.models  # noqa: F401
@@ -111,7 +111,7 @@ def mk_round_contest_country_season(db, suffix: str) -> Tuple[Contest, ContestSe
         ContestSeasonLink(
             contest_id=c.id,
             season_id=s.id,
-            linked_at=datetime.utcnow(),
+            linked_at=datetime.now(timezone.utc),
             is_active=True,
         )
     )
@@ -128,7 +128,7 @@ def add_votes(db, contestant_id: int, contest_id: int, season_id: int, voter_ids
                 contest_id=contest_id,
                 season_id=season_id,
                 vote_bucket_key="cat:chain",
-                vote_date=datetime.utcnow(),
+                vote_date=datetime.now(timezone.utc),
                 position=1,
                 points=points,
             )
@@ -178,7 +178,7 @@ def add_engagement(db, contestant: Contestant, user_ids: List[int], shares=0, li
                 contestant_id=contestant.id,
                 ip_address=f"10.9.{contestant.id % 255}.{(n + 1) % 255}",
                 user_agent="chain-test",
-                viewed_at=datetime.utcnow(),
+                viewed_at=datetime.now(timezone.utc),
             )
         )
         i += 1
@@ -186,7 +186,7 @@ def add_engagement(db, contestant: Contestant, user_ids: List[int], shares=0, li
 
 
 def run_chain_test(persist: bool = False):
-    suffix = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+    suffix = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
     db = SessionLocal()
     try:
         ctx = contextmanager(lambda: (yield))() if persist else non_persistent_commits(db)
@@ -229,7 +229,7 @@ def run_chain_test(persist: bool = False):
                     ContestantSeason(
                         contestant_id=ct.id,
                         season_id=city_season.id,
-                        joined_at=datetime.utcnow(),
+                        joined_at=datetime.now(timezone.utc),
                         is_active=True,
                     )
                 )
@@ -263,8 +263,16 @@ def run_chain_test(persist: bool = False):
             if "error" in r1:
                 raise RuntimeError(f"CITY->COUNTRY failed: {r1['error']}")
             promoted_country = r1.get("promoted_contestant_ids", [])
-            assert promoted_country[:2] == [contestants[0].id, contestants[4].id], (
-                f"Unexpected top promoted from CITY: {promoted_country}"
+            # CITY -> COUNTRY is grouped per city. With limit=5 and 3 contestants per city,
+            # all six are promoted; validate order INSIDE each city group.
+            idx = {cid: i for i, cid in enumerate(promoted_country)}
+            # CityA order expected: c1 > c2 > c3
+            assert idx[contestants[0].id] < idx[contestants[1].id] < idx[contestants[2].id], (
+                f"Unexpected CityA order in CITY->COUNTRY: {promoted_country}"
+            )
+            # CityB order expected: c5 > c4 > c6 (views tie-break between c5/c4)
+            assert idx[contestants[4].id] < idx[contestants[3].id] < idx[contestants[5].id], (
+                f"Unexpected CityB order in CITY->COUNTRY: {promoted_country}"
             )
 
             # COUNTRY -> REGIONAL

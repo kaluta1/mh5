@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import argparse
 from contextlib import contextmanager
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Dict, List
 
 # Ensure mappers are loaded
@@ -133,7 +133,7 @@ def _create_contest_bundle(db, suffix: str):
         ContestSeasonLink(
             contest_id=c.id,
             season_id=src.id,
-            linked_at=datetime.utcnow(),
+            linked_at=datetime.now(timezone.utc),
             is_active=True,
         )
     )
@@ -151,7 +151,7 @@ def _add_votes(db, contestant_id: int, contest_id: int, season_id: int, voter_id
                 contest_id=contest_id,
                 season_id=season_id,
                 vote_bucket_key="cat:test",
-                vote_date=datetime.utcnow(),
+                vote_date=datetime.now(timezone.utc),
                 position=1,
                 points=points_each,
             )
@@ -214,14 +214,14 @@ def _add_engagement(
                 contestant_id=contestant.id,
                 ip_address=f"10.10.{contestant.id % 255}.{(i + 1) % 255}",
                 user_agent="winner-test-script",
-                viewed_at=datetime.utcnow(),
+                viewed_at=datetime.now(timezone.utc),
             )
         )
     db.flush()
 
 
 def run_test(persist: bool = False):
-    suffix = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+    suffix = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
     db = SessionLocal()
     try:
         ctx = contextmanager(lambda: (yield))() if persist else non_persistent_commits(db)
@@ -251,7 +251,7 @@ def run_test(persist: bool = False):
                     ContestantSeason(
                         contestant_id=ct.id,
                         season_id=from_season.id,
-                        joined_at=datetime.utcnow(),
+                        joined_at=datetime.now(timezone.utc),
                         is_active=True,
                     )
                 )
