@@ -308,12 +308,24 @@ def run_test(persist: bool = False):
                 contestants[2].id,  # c3 (tie with c6 -> lower id wins)
                 contestants[5].id,  # c6
             ]
+            id_to_name = {
+                contestants[0].id: "Aisha",
+                contestants[1].id: "Brian",
+                contestants[2].id: "Clara",
+                contestants[3].id: "David",
+                contestants[4].id: "Eva",
+                contestants[5].id: "Faisal",
+            }
+            expected_names = [id_to_name[cid] for cid in expected]
+            actual_names = [id_to_name.get(cid, f"Unknown({cid})") for cid in promoted_ids]
 
             print("\n=== Winner/Migration Test ===")
             print(f"Contest ID: {contest.id}")
             print(f"From season ID: {from_season.id} (country)")
             print(f"Promoted IDs: {promoted_ids}")
             print(f"Expected IDs: {expected}")
+            print(f"Expected winner order (names): {expected_names}")
+            print(f"Actual winner order (names):   {actual_names}")
 
             assert promoted_ids == expected, (
                 "Promotion order mismatch.\n"

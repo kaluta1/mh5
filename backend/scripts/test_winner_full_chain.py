@@ -298,13 +298,27 @@ def run_chain_test(persist: bool = False):
 
             promoted_global = r4.get("promoted_contestant_ids", [])
             expected_top_global = [contestants[0].id, contestants[4].id, contestants[3].id]
+            id_to_name = {
+                contestants[0].id: "Aisha",
+                contestants[1].id: "Brian",
+                contestants[2].id: "Clara",
+                contestants[3].id: "David",
+                contestants[4].id: "Eva",
+                contestants[5].id: "Faisal",
+            }
+            city_country_names = [id_to_name.get(cid, f"Unknown({cid})") for cid in promoted_country]
+            expected_global_names = [id_to_name[cid] for cid in expected_top_global]
+            actual_global_names = [id_to_name.get(cid, f"Unknown({cid})") for cid in promoted_global]
             assert promoted_global == expected_top_global, (
                 f"Unexpected GLOBAL winners.\nExpected: {expected_top_global}\nGot: {promoted_global}"
             )
 
             print("\n=== Full Chain Migration Test ===")
             print(f"CITY->COUNTRY promoted: {promoted_country}")
+            print(f"CITY->COUNTRY promoted (names): {city_country_names}")
             print(f"CONTINENT->GLOBAL winners: {promoted_global}")
+            print(f"Expected GLOBAL winners (names): {expected_global_names}")
+            print(f"Actual GLOBAL winners (names):   {actual_global_names}")
             print("PASS: full chain + tie-break rules validated.")
 
         if not persist:
