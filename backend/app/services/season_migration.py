@@ -236,8 +236,6 @@ class SeasonMigrationService:
         # Récupérer tous les contestants actifs et qualifiés de la saison via ContestantSeason
         contestants_query = db.query(Contestant).join(
             ContestantSeason, ContestantSeason.contestant_id == Contestant.id
-        ).join(
-            User, User.id == Contestant.user_id
         ).filter(
             and_(
                 ContestantSeason.season_id == season_id,
@@ -252,18 +250,18 @@ class SeasonMigrationService:
             contestants_query = contestants_query.filter(Contestant.season_id == contest_id)
         if country_filter:
             contestants_query = contestants_query.filter(
-                func.lower(func.trim(User.country)) == country_filter.strip().lower()
+                func.lower(func.trim(Contestant.country)) == country_filter.strip().lower()
             )
         
         # Filtrer par localisation non nulle
         if location_field == 'city':
-            contestants_query = contestants_query.filter(User.city.isnot(None))
+            contestants_query = contestants_query.filter(Contestant.city.isnot(None))
         elif location_field == 'country':
-            contestants_query = contestants_query.filter(User.country.isnot(None))
+            contestants_query = contestants_query.filter(Contestant.country.isnot(None))
         elif location_field == 'region':
-            contestants_query = contestants_query.filter(User.region.isnot(None))
+            contestants_query = contestants_query.filter(Contestant.region.isnot(None))
         elif location_field == 'continent':
-            contestants_query = contestants_query.filter(User.continent.isnot(None))
+            contestants_query = contestants_query.filter(Contestant.continent.isnot(None))
         
         contestants = contestants_query.all()
         
@@ -274,8 +272,6 @@ class SeasonMigrationService:
             # Vérifier pourquoi aucun contestant n'est trouvé
             contestants_without_location = db.query(Contestant).join(
                 ContestantSeason
-            ).join(
-                User
             ).filter(
                 and_(
                     ContestantSeason.season_id == season_id,
@@ -350,13 +346,13 @@ class SeasonMigrationService:
         for contestant in contestants:
             location_value = None
             if location_field == 'city':
-                location_value = contestant.user.city
+                location_value = contestant.city
             elif location_field == 'country':
-                location_value = contestant.user.country
+                location_value = contestant.country
             elif location_field == 'region':
-                location_value = contestant.user.region
+                location_value = contestant.region
             elif location_field == 'continent':
-                location_value = contestant.user.continent
+                location_value = contestant.continent
             
             if not location_value:
                 continue
