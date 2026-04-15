@@ -318,6 +318,15 @@ def run_test(persist: bool = False):
             }
             expected_names = [id_to_name[cid] for cid in expected]
             actual_names = [id_to_name.get(cid, f"Unknown({cid})") for cid in promoted_ids]
+            points_by_id = {ct.id: len(voter_ids) * 5 for ct in contestants}
+
+            def metrics_line(cid: int) -> str:
+                p = engagement_plan[cid]
+                return (
+                    f"{id_to_name.get(cid, cid)}"
+                    f" (stars={points_by_id.get(cid, 0)}, shares={p['shares']}, likes={p['likes']}, "
+                    f"comments={p['comments']}, views={p['views']})"
+                )
 
             print("\n=== Winner/Migration Test ===")
             print(f"Contest ID: {contest.id}")
@@ -326,6 +335,12 @@ def run_test(persist: bool = False):
             print(f"Expected IDs: {expected}")
             print(f"Expected winner order (names): {expected_names}")
             print(f"Actual winner order (names):   {actual_names}")
+            print("Expected winner metrics order:")
+            for i, cid in enumerate(expected, start=1):
+                print(f"  {i}. {metrics_line(cid)}")
+            print("Actual winner metrics order:")
+            for i, cid in enumerate(promoted_ids, start=1):
+                print(f"  {i}. {metrics_line(cid)}")
 
             assert promoted_ids == expected, (
                 "Promotion order mismatch.\n"

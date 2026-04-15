@@ -309,6 +309,15 @@ def run_chain_test(persist: bool = False):
             city_country_names = [id_to_name.get(cid, f"Unknown({cid})") for cid in promoted_country]
             expected_global_names = [id_to_name[cid] for cid in expected_top_global]
             actual_global_names = [id_to_name.get(cid, f"Unknown({cid})") for cid in promoted_global]
+            points_by_id = {ct.id: len(voter_ids) * 5 for ct in contestants}
+
+            def metrics_line(cid: int) -> str:
+                p = plan[cid]
+                return (
+                    f"{id_to_name.get(cid, cid)}"
+                    f" (stars={points_by_id.get(cid, 0)}, shares={p['shares']}, likes={p['likes']}, "
+                    f"comments={p['comments']}, views={p['views']})"
+                )
             assert promoted_global == expected_top_global, (
                 f"Unexpected GLOBAL winners.\nExpected: {expected_top_global}\nGot: {promoted_global}"
             )
@@ -319,6 +328,12 @@ def run_chain_test(persist: bool = False):
             print(f"CONTINENT->GLOBAL winners: {promoted_global}")
             print(f"Expected GLOBAL winners (names): {expected_global_names}")
             print(f"Actual GLOBAL winners (names):   {actual_global_names}")
+            print("Expected GLOBAL winner metrics order:")
+            for i, cid in enumerate(expected_top_global, start=1):
+                print(f"  {i}. {metrics_line(cid)}")
+            print("Actual GLOBAL winner metrics order:")
+            for i, cid in enumerate(promoted_global, start=1):
+                print(f"  {i}. {metrics_line(cid)}")
             print("PASS: full chain + tie-break rules validated.")
 
         if not persist:
