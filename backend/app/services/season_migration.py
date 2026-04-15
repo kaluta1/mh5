@@ -205,6 +205,7 @@ class SeasonMigrationService:
         db: Session,
         season_id: int,  # ID de la saison, pas du contest
         location_field: str,  # 'city', 'country', 'region', 'continent'
+        contest_id: Optional[int] = None,
         limit: int = 5,
         stage_id: Optional[int] = None  # Non utilisé maintenant, gardé pour compatibilité
     ) -> Dict[str, List[Contestant]]:
@@ -224,7 +225,10 @@ class SeasonMigrationService:
             )
         ).count()
         
-        logger.info(f"get_top_contestants_by_location: season_id={season_id}, location_field={location_field}, limit={limit}")
+        logger.info(
+            f"get_top_contestants_by_location: season_id={season_id}, "
+            f"contest_id={contest_id}, location_field={location_field}, limit={limit}"
+        )
         logger.info(f"  - Total contestants linked to season: {total_contestants_in_season}")
         print(f"[Migration]   Total contestants linked to season {season_id}: {total_contestants_in_season}")
         
@@ -242,6 +246,9 @@ class SeasonMigrationService:
                 Contestant.is_qualified == True
             )
         )
+        if contest_id is not None:
+            # Keep winner selection scoped to the current contest only.
+            contestants_query = contestants_query.filter(Contestant.season_id == contest_id)
         
         # Filtrer par localisation non nulle
         if location_field == 'city':
@@ -300,7 +307,10 @@ class SeasonMigrationService:
             func.coalesce(func.sum(ContestantVoting.points), 0).label('total_points'),
             func.count(ContestantVoting.id).label('vote_count')
         ).filter(
-            ContestantVoting.season_id == season_id
+            and_(
+                ContestantVoting.season_id == season_id,
+                ContestantVoting.contest_id == contest_id if contest_id is not None else True,
+            )
         ).group_by(
             ContestantVoting.contestant_id
         ).all()
@@ -749,7 +759,7 @@ class SeasonMigrationService:
             # Récupérer les meilleurs par localisation (sans stage_id)
             logger.info(f"  - Selecting top contestants by {location_field} (limit: {limit})")
             grouped_contestants = SeasonMigrationService.get_top_contestants_by_location(
-                db, from_season.id, location_field, limit=limit, stage_id=None
+                db, from_season.id, location_field, contest_id=contest_id, limit=limit, stage_id=None
             )
             
             logger.info(f"  - Groups found: {len(grouped_contestants)} locations")

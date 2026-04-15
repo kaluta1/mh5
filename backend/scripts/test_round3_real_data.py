@@ -311,6 +311,7 @@ def _auto_initialize_if_empty(db, round_id: int, contest: Contest, season: Conte
 
 def _preview_non_global_winners(
     db,
+    contest: Contest,
     season: ContestSeason,
     to_level: SeasonLevel,
     limit: int,
@@ -324,6 +325,7 @@ def _preview_non_global_winners(
         db=db,
         season_id=season.id,
         location_field=location_field,
+        contest_id=contest.id,
         limit=limit,
         stage_id=None,
     )
@@ -349,6 +351,7 @@ def _preview_non_global_winners(
 
 def _preview_global_winners(
     db,
+    contest: Contest,
     season: ContestSeason,
     limit: int,
     country_filter: str | None = None,
@@ -359,6 +362,7 @@ def _preview_global_winners(
         .filter(
             and_(
                 ContestantSeason.season_id == season.id,
+                Contestant.season_id == contest.id,
                 ContestantSeason.is_active == True,
                 Contestant.is_active == True,
                 Contestant.is_deleted == False,
@@ -481,6 +485,7 @@ def run_real_data_test(
                 if to_level == SeasonLevel.GLOBAL:
                     ranked, points_by_id, engagement_by_id = _preview_global_winners(
                         db=db,
+                        contest=contest,
                         season=season,
                         limit=3,
                         country_filter=country,
@@ -495,6 +500,7 @@ def run_real_data_test(
                 else:
                     grouped, points_by_id, engagement_by_id = _preview_non_global_winners(
                         db=db,
+                        contest=contest,
                         season=season,
                         to_level=to_level,
                         limit=limit,
