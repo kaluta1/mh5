@@ -270,7 +270,7 @@ class SeasonMigrationService:
         
         if not contestants:
             # Vérifier pourquoi aucun contestant n'est trouvé
-            contestants_without_location = db.query(Contestant).join(
+            base_q = db.query(Contestant).join(
                 ContestantSeason
             ).filter(
                 and_(
@@ -280,9 +280,13 @@ class SeasonMigrationService:
                     Contestant.is_deleted == False,
                     Contestant.is_qualified == True
                 )
-            ).count()
+            )
+            if contest_id is not None:
+                base_q = base_q.filter(Contestant.season_id == contest_id)
+
+            contestants_without_location = base_q.count()
             
-            contestants_not_qualified = db.query(Contestant).join(
+            not_qualified_q = db.query(Contestant).join(
                 ContestantSeason
             ).filter(
                 and_(
@@ -292,7 +296,10 @@ class SeasonMigrationService:
                     Contestant.is_deleted == False,
                     Contestant.is_qualified == False
                 )
-            ).count()
+            )
+            if contest_id is not None:
+                not_qualified_q = not_qualified_q.filter(Contestant.season_id == contest_id)
+            contestants_not_qualified = not_qualified_q.count()
             
             logger.warning(f"  - No contestant found for season {season_id}")
             logger.warning(f"    - Qualified contestants without location: {contestants_without_location}")
