@@ -114,6 +114,99 @@ def _format_metrics_line(
     )
 
 
+def _print_empty_promotion_diagnostics(db, season: ContestSeason, from_level: SeasonLevel) -> None:
+    """Print root-cause counters when no contestants are promoted."""
+    all_active_rows = (
+        db.query(Contestant.id, Contestant.user_id)
+        .join(ContestantSeason)
+        .filter(
+            and_(
+                ContestantSeason.season_id == season.id,
+                ContestantSeason.is_active == True,
+                Contestant.is_active == True,
+                Contestant.is_deleted == False,
+            )
+        )
+        .all()
+    )
+    active_ids = [r.id for r in all_active_rows]
+    qualified_count = (
+        db.query(Contestant)
+        .join(ContestantSeason)
+        .filter(
+            and_(
+                ContestantSeason.season_id == season.id,
+                ContestantSeason.is_active == True,
+                Contestant.is_active == True,
+                Contestant.is_deleted == False,
+                Contestant.is_qualified == True,
+            )
+        )
+        .count()
+    )
+    non_qualified_count = (
+        db.query(Contestant)
+        .join(ContestantSeason)
+        .filter(
+            and_(
+                ContestantSeason.season_id == season.id,
+                ContestantSeason.is_active == True,
+                Contestant.is_active == True,
+                Contestant.is_deleted == False,
+                Contestant.is_qualified == False,
+            )
+        )
+        .count()
+    )
+
+    # Required location by from_level (used for next promotion step selection).
+    # city -> needs user.city ; country -> user.country ; regional -> user.region ; continent -> user.continent
+    location_attr = {
+        SeasonLevel.CITY: "city",
+        SeasonLevel.COUNTRY: "country",
+        SeasonLevel.REGIONAL: "region",
+        SeasonLevel.CONTINENT: "continent",
+    }.get(from_level)
+
+    with_location = 0
+    without_location = 0
+    if active_ids and location_attr:
+        active_contestants = (
+            db.query(Contestant)
+            .filter(Contestant.id.in_(active_ids))
+            .all()
+        )
+        for c in active_contestants:
+            val = getattr(c.user, location_attr, None) if c.user else None
+            if val:
+                with_location += 1
+            else:
+                without_location += 1
+
+    voted_count = 0
+    if active_ids:
+        voted_count = (
+            db.query(func.count(func.distinct(ContestantVoting.contestant_id)))
+            .filter(
+                and_(
+                    ContestantVoting.season_id == season.id,
+                    ContestantVoting.contestant_id.in_(active_ids),
+                )
+            )
+            .scalar()
+            or 0
+        )
+
+    print("Diagnostics:")
+    print(f"  - Active contestants in season: {len(active_ids)}")
+    print(f"  - Qualified contestants: {qualified_count}")
+    print(f"  - Non-qualified contestants: {non_qualified_count}")
+    if location_attr:
+        print(f"  - With {location_attr}: {with_location}")
+        print(f"  - Missing {location_attr}: {without_location}")
+    print(f"  - Contestants with at least one vote in season: {voted_count}")
+
+
 def _preview_non_global_winners(
     db,
     season: ContestSeason,
@@ -262,6 +355,7 @@ def run_real_data_test(round_id: int = 3, limit: int = 5, persist: bool = False)
                 promoted_ids = result.get("promoted_contestant_ids", [])
                 if not promoted_ids:
                     print("No contestants promoted in dry-run.")
+                    _print_empty_promotion_diagnostics(db, season, from_level)
                 else:
                     promoted = db.query(Contestant).filter(Contestant.id.in_(promoted_ids)).all()
                     promoted_by_id = {c.id: c for c in promoted}
