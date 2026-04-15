@@ -72,23 +72,51 @@ def _location_field_for_to_level(to_level: SeasonLevel) -> str | None:
     return mapping.get(to_level)
 
 
-def _points_map(db, season_id: int, contestant_ids: List[int]) -> Dict[int, int]:
+def _points_map(
+    db,
+    season_id: int,
+    contestant_ids: List[int],
+    contest_id: int | None = None,
+) -> Dict[int, int]:
     if not contestant_ids:
         return {}
-    rows = (
+    query = (
         db.query(
             ContestantVoting.contestant_id,
             func.coalesce(func.sum(ContestantVoting.points), 0).label("total_points"),
         )
-        .filter(
+    )
+    if contest_id is not None:
+        query = query.filter(
+            and_(
+                ContestantVoting.season_id == season_id,
+                ContestantVoting.contest_id == contest_id,
+                ContestantVoting.contestant_id.in_(contestant_ids),
+            )
+        )
+    else:
+        query = query.filter(
             and_(
                 ContestantVoting.season_id == season_id,
                 ContestantVoting.contestant_id.in_(contestant_ids),
             )
         )
-        .group_by(ContestantVoting.contestant_id)
-        .all()
-    )
+    rows = query.group_by(ContestantVoting.contestant_id).all()
+    if not rows and contest_id is not None:
+        rows = (
+            db.query(
+                ContestantVoting.contestant_id,
+                func.coalesce(func.sum(ContestantVoting.points), 0).label("total_points"),
+            )
+            .filter(
+                and_(
+                    ContestantVoting.contest_id == contest_id,
+                    ContestantVoting.contestant_id.in_(contestant_ids),
+                )
+            )
+            .group_by(ContestantVoting.contestant_id)
+            .all()
+        )
     return {r.contestant_id: int(r.total_points or 0) for r in rows}
 
 
@@ -333,7 +361,7 @@ def _preview_non_global_winners(
 
     all_contestants = [c for arr in grouped.values() for c in arr]
     all_ids = [c.id for c in all_contestants]
-    points_by_id = _points_map(db, season.id, all_ids)
+    points_by_id = _points_map(db, season.id, all_ids, contest_id=contest.id)
     engagement_by_id = SeasonMigrationService._engagement_by_contestant(db, all_ids)
     return grouped, points_by_id, engagement_by_id
 
@@ -368,7 +396,7 @@ def _preview_global_winners(
         ]
 
     contestant_ids = [c.id for c in contestants]
-    points_by_id = _points_map(db, season.id, contestant_ids)
+    points_by_id = _points_map(db, season.id, contestant_ids, contest_id=contest.id)
     engagement_by_id = SeasonMigrationService._engagement_by_contestant(db, contestant_ids)
     ranked = sorted(
         contestants,

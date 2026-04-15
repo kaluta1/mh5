@@ -306,19 +306,39 @@ class SeasonMigrationService:
             print(f"[Migration]     - Non-qualified contestants: {contestants_not_qualified}")
             return {}
         
-        # Récupérer les points par contestant depuis ContestantVoting (par season_id)
-        points_data = db.query(
+        # Récupérer les points par contestant depuis ContestantVoting.
+        # Primary: contest+season (strict migration scope)
+        # Fallback: contest only (legacy data where season_id on votes may drift)
+        points_query = db.query(
             ContestantVoting.contestant_id,
             func.coalesce(func.sum(ContestantVoting.points), 0).label('total_points'),
             func.count(ContestantVoting.id).label('vote_count')
-        ).filter(
-            and_(
-                ContestantVoting.season_id == season_id,
-                ContestantVoting.contest_id == contest_id if contest_id is not None else True,
+        )
+        if contest_id is not None:
+            points_query = points_query.filter(
+                and_(
+                    ContestantVoting.season_id == season_id,
+                    ContestantVoting.contest_id == contest_id,
+                )
             )
-        ).group_by(
-            ContestantVoting.contestant_id
-        ).all()
+        else:
+            points_query = points_query.filter(ContestantVoting.season_id == season_id)
+        points_data = points_query.group_by(ContestantVoting.contestant_id).all()
+
+        if not points_data and contest_id is not None:
+            logger.warning(
+                f"  - No vote points found with season+contest scope "
+                f"(season_id={season_id}, contest_id={contest_id}); fallback to contest-only scope"
+            )
+            points_data = db.query(
+                ContestantVoting.contestant_id,
+                func.coalesce(func.sum(ContestantVoting.points), 0).label('total_points'),
+                func.count(ContestantVoting.id).label('vote_count')
+            ).filter(
+                ContestantVoting.contest_id == contest_id
+            ).group_by(
+                ContestantVoting.contestant_id
+            ).all()
         
         points_by_contestant = {p.contestant_id: p.total_points for p in points_data}
         votes_by_contestant = {p.contestant_id: p.vote_count for p in points_data}
