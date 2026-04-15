@@ -249,8 +249,20 @@ class SeasonMigrationService:
             # Keep winner selection scoped to the current contest only.
             contestants_query = contestants_query.filter(Contestant.season_id == contest_id)
         if country_filter:
+            raw = country_filter.strip().lower()
+            alias_map = {
+                "tanzania": "tz",
+                "tz": "tanzania",
+                "uganda": "ug",
+                "ug": "uganda",
+                "kenya": "ke",
+                "ke": "kenya",
+            }
+            variants = {raw}
+            if raw in alias_map:
+                variants.add(alias_map[raw])
             contestants_query = contestants_query.filter(
-                func.lower(func.trim(Contestant.country)) == country_filter.strip().lower()
+                func.lower(func.trim(Contestant.country)).in_(list(variants))
             )
         
         # Filtrer par localisation non nulle

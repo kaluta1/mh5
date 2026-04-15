@@ -62,6 +62,24 @@ def _next_level(from_level: SeasonLevel) -> SeasonLevel | None:
     return mapping.get(from_level)
 
 
+def _country_variants(country_filter: str | None) -> set[str]:
+    if not country_filter:
+        return set()
+    raw = country_filter.strip().lower()
+    alias_map = {
+        "tanzania": "tz",
+        "tz": "tanzania",
+        "uganda": "ug",
+        "ug": "uganda",
+        "kenya": "ke",
+        "ke": "kenya",
+    }
+    out = {raw}
+    if raw in alias_map:
+        out.add(alias_map[raw])
+    return out
+
+
 def _location_field_for_to_level(to_level: SeasonLevel) -> str | None:
     mapping = {
         SeasonLevel.COUNTRY: "city",
@@ -389,10 +407,10 @@ def _preview_global_winners(
         .all()
     )
     if country_filter:
-        wanted = country_filter.strip().lower()
+        wanted_variants = _country_variants(country_filter)
         contestants = [
             c for c in contestants
-            if c.user and (c.user.country or "").strip().lower() == wanted
+            if c.user and (c.user.country or "").strip().lower() in wanted_variants
         ]
 
     contestant_ids = [c.id for c in contestants]
