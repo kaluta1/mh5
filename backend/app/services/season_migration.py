@@ -207,8 +207,9 @@ class SeasonMigrationService:
         location_field: str,  # 'city', 'country', 'region', 'continent'
         contest_id: Optional[int] = None,
         country_filter: Optional[str] = None,
-        limit: int = 5,
-        stage_id: Optional[int] = None  # Non utilisé maintenant, gardé pour compatibilité
+        limit: Optional[int] = 5,
+        stage_id: Optional[int] = None,  # Non utilisé maintenant, gardé pour compatibilité
+        diagnostics: bool = True,
     ) -> Dict[str, List[Contestant]]:
         """
         Récupère les N meilleurs contestants groupés par localisation.
@@ -226,12 +227,13 @@ class SeasonMigrationService:
             )
         ).count()
         
-        logger.info(
-            f"get_top_contestants_by_location: season_id={season_id}, "
-            f"contest_id={contest_id}, location_field={location_field}, limit={limit}"
-        )
-        logger.info(f"  - Total contestants linked to season: {total_contestants_in_season}")
-        print(f"[Migration]   Total contestants linked to season {season_id}: {total_contestants_in_season}")
+        if diagnostics:
+            logger.info(
+                f"get_top_contestants_by_location: season_id={season_id}, "
+                f"contest_id={contest_id}, location_field={location_field}, limit={limit}"
+            )
+            logger.info(f"  - Total contestants linked to season: {total_contestants_in_season}")
+            print(f"[Migration]   Total contestants linked to season {season_id}: {total_contestants_in_season}")
         
         # Récupérer tous les contestants actifs et qualifiés de la saison via ContestantSeason
         contestants_query = db.query(Contestant).join(
@@ -277,8 +279,9 @@ class SeasonMigrationService:
         
         contestants = contestants_query.all()
         
-        logger.info(f"  - Qualified contestants with {location_field} location: {len(contestants)}")
-        print(f"[Migration]   Qualified contestants with {location_field} location: {len(contestants)}")
+        if diagnostics:
+            logger.info(f"  - Qualified contestants with {location_field} location: {len(contestants)}")
+            print(f"[Migration]   Qualified contestants with {location_field} location: {len(contestants)}")
         
         if not contestants:
             # Vérifier pourquoi aucun contestant n'est trouvé
@@ -313,12 +316,13 @@ class SeasonMigrationService:
                 not_qualified_q = not_qualified_q.filter(Contestant.season_id == contest_id)
             contestants_not_qualified = not_qualified_q.count()
             
-            logger.warning(f"  - No contestant found for season {season_id}")
-            logger.warning(f"    - Qualified contestants without location: {contestants_without_location}")
-            logger.warning(f"    - Non-qualified contestants: {contestants_not_qualified}")
-            print(f"[Migration]   No contestant found for season {season_id}")
-            print(f"[Migration]     - Qualified contestants without location: {contestants_without_location}")
-            print(f"[Migration]     - Non-qualified contestants: {contestants_not_qualified}")
+            if diagnostics:
+                logger.warning(f"  - No contestant found for season {season_id}")
+                logger.warning(f"    - Qualified contestants without location: {contestants_without_location}")
+                logger.warning(f"    - Non-qualified contestants: {contestants_not_qualified}")
+                print(f"[Migration]   No contestant found for season {season_id}")
+                print(f"[Migration]     - Qualified contestants without location: {contestants_without_location}")
+                print(f"[Migration]     - Non-qualified contestants: {contestants_not_qualified}")
             return {}
         
         # Récupérer les points par contestant depuis ContestantVoting.
@@ -341,10 +345,11 @@ class SeasonMigrationService:
         points_data = points_query.group_by(ContestantVoting.contestant_id).all()
 
         if not points_data and contest_id is not None:
-            logger.warning(
-                f"  - No vote points found with season+contest scope "
-                f"(season_id={season_id}, contest_id={contest_id}); fallback to contest-only scope"
-            )
+            if diagnostics:
+                logger.warning(
+                    f"  - No vote points found with season+contest scope "
+                    f"(season_id={season_id}, contest_id={contest_id}); fallback to contest-only scope"
+                )
             points_data = db.query(
                 ContestantVoting.contestant_id,
                 func.coalesce(func.sum(ContestantVoting.points), 0).label('total_points'),
@@ -357,8 +362,9 @@ class SeasonMigrationService:
         
         points_by_contestant = {p.contestant_id: p.total_points for p in points_data}
         votes_by_contestant = {p.contestant_id: p.vote_count for p in points_data}
-        logger.info(f"  - Points/Votes found for {len(points_by_contestant)} contestants")
-        print(f"[Migration]   Points/Votes found for {len(points_by_contestant)} contestants")
+        if diagnostics:
+            logger.info(f"  - Points/Votes found for {len(points_by_contestant)} contestants")
+            print(f"[Migration]   Points/Votes found for {len(points_by_contestant)} contestants")
         
         # Grouper par localisation
         grouped = {}
@@ -386,7 +392,8 @@ class SeasonMigrationService:
 
         # Trier et limiter pour chaque localisation
         result = {}
-        logger.info(f"  - Groups by location: {len(grouped)}")
+        if diagnostics:
+            logger.info(f"  - Groups by location: {len(grouped)}")
         for location_value, location_contestants in grouped.items():
             # Business winner order:
             # 1) total stars(points), 2) shares, 3) likes, 4) comments, 5) views, 6) first contestant
@@ -403,15 +410,17 @@ class SeasonMigrationService:
                 reverse=True
             )
             
-            # Prendre les N premiers (ou tous si moins de N)
-            selected = sorted_contestants[:limit]
+            # Prendre les N premiers (ou tous si limit is None)
+            selected = sorted_contestants if limit is None else sorted_contestants[:limit]
             result[location_value] = selected
-            logger.info(f"    - {location_value}: {len(selected)}/{len(location_contestants)} contestants selected")
-            print(f"[Migration]     {location_value}: {len(selected)}/{len(location_contestants)} contestants")
+            if diagnostics:
+                logger.info(f"    - {location_value}: {len(selected)}/{len(location_contestants)} contestants selected")
+                print(f"[Migration]     {location_value}: {len(selected)}/{len(location_contestants)} contestants")
         
         total_selected = sum(len(contestants) for contestants in result.values())
-        logger.info(f"  - Total selected: {total_selected} contestants")
-        print(f"[Migration]   Total selected: {total_selected} contestants")
+        if diagnostics:
+            logger.info(f"  - Total selected: {total_selected} contestants")
+            print(f"[Migration]   Total selected: {total_selected} contestants")
         
         return result
     
