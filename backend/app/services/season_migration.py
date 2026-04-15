@@ -236,8 +236,8 @@ class SeasonMigrationService:
         
         points_by_contestant = {p.contestant_id: p.total_points for p in points_data}
         votes_by_contestant = {p.contestant_id: p.vote_count for p in points_data}
-        logger.info(f"  - Points/Votes trouvés pour {len(points_by_contestant)} contestants")
-        print(f"[Migration]   Points/Votes trouvés pour {len(points_by_contestant)} contestants")
+        logger.info(f"  - Points/Votes found for {len(points_by_contestant)} contestants")
+        print(f"[Migration]   Points/Votes found for {len(points_by_contestant)} contestants")
         
         # Grouper par localisation
         grouped = {}
@@ -592,27 +592,13 @@ class SeasonMigrationService:
         selected_contestants = []
         
         if to_level == SeasonLevel.GLOBAL:
-            # Pour GLOBAL : prendre les 3 premiers au total basés sur les votes de la saison
-            # Compter les votes par contestant dans cette saison
-            vote_counts = db.query(
-                ContestantVoting.contestant_id,
-                func.coalesce(func.sum(ContestantVoting.points), 0).label('total_points'),
-                func.count(ContestantVoting.id).label('vote_count')
-            ).filter(
-                ContestantVoting.season_id == from_season.id
-            ).group_by(
-                ContestantVoting.contestant_id
-            ).order_by(
-                func.coalesce(func.sum(ContestantVoting.points), 0).desc(),
-                func.count(ContestantVoting.id).desc()
-            ).limit(limit).all()
-            
-            contestant_ids = [vc.contestant_id for vc in vote_counts]
-            selected_contestants = db.query(Contestant).join(
+            # For GLOBAL: rank all active contestants in the source season.
+            # Votes in the current season may be zero; in that case, tie-break
+            # still relies on shares/likes/comments/views and then lowest id.
+            season_contestants = db.query(Contestant).join(
                 ContestantSeason
             ).filter(
                 and_(
-                    Contestant.id.in_(contestant_ids),
                     ContestantSeason.season_id == from_season.id,
                     ContestantSeason.is_active == True,
                     Contestant.is_active == True,
@@ -620,25 +606,39 @@ class SeasonMigrationService:
                     Contestant.is_qualified == True
                 )
             ).all()
-            
-            engagement_by_id = SeasonMigrationService._engagement_by_contestant(db, contestant_ids)
 
-            # Business winner order:
-            # 1) total stars(points), 2) shares, 3) likes, 4) comments, 5) views, 6) first contestant
-            points_dict = {vc.contestant_id: vc.total_points for vc in vote_counts}
-            selected_contestants = sorted(
-                selected_contestants,
-                key=lambda c: (
-                    points_dict.get(c.id, 0),
-                    engagement_by_id.get(c.id, {}).get("shares", 0),
-                    engagement_by_id.get(c.id, {}).get("likes", 0),
-                    engagement_by_id.get(c.id, {}).get("comments", 0),
-                    engagement_by_id.get(c.id, {}).get("views", 0),
-                    -(c.id or 0),
-                ),
-                reverse=True
-            )
-            
+            contestant_ids = [c.id for c in season_contestants]
+            if contestant_ids:
+                vote_counts = db.query(
+                    ContestantVoting.contestant_id,
+                    func.coalesce(func.sum(ContestantVoting.points), 0).label('total_points')
+                ).filter(
+                    and_(
+                        ContestantVoting.season_id == from_season.id,
+                        ContestantVoting.contestant_id.in_(contestant_ids)
+                    )
+                ).group_by(
+                    ContestantVoting.contestant_id
+                ).all()
+                points_dict = {vc.contestant_id: vc.total_points for vc in vote_counts}
+                engagement_by_id = SeasonMigrationService._engagement_by_contestant(db, contestant_ids)
+
+                ranked = sorted(
+                    season_contestants,
+                    key=lambda c: (
+                        points_dict.get(c.id, 0),
+                        engagement_by_id.get(c.id, {}).get("shares", 0),
+                        engagement_by_id.get(c.id, {}).get("likes", 0),
+                        engagement_by_id.get(c.id, {}).get("comments", 0),
+                        engagement_by_id.get(c.id, {}).get("views", 0),
+                        -(c.id or 0),
+                    ),
+                    reverse=True
+                )
+                selected_contestants = ranked[:limit]
+            else:
+                selected_contestants = []
+
             logger.info(f"  - {len(selected_contestants)} contestants selected for GLOBAL")
         else:
             # Pour les autres niveaux : prendre les 5 premiers par localisation
@@ -805,8 +805,8 @@ class SeasonMigrationService:
         
         try:
             db.commit()
-            logger.info(f"  - Commit réussi")
-            print(f"[Migration]   Commit réussi")
+            logger.info(f"  - Commit successful")
+            print(f"[Migration]   Commit successful")
         except Exception as e:
             logger.error(f"  - Erreur lors du commit: {e}", exc_info=True)
             print(f"[Migration] ERROR lors du commit: {e}")
