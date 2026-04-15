@@ -432,6 +432,7 @@ def run_real_data_test(
                 print(f"Country filter: {country}")
 
             for link, season, contest in links:
+                contest_tx = db.begin_nested() if not persist else None
                 from_level = season.level
                 to_level = _next_level(from_level)
                 print("\n------------------------------------------------------------")
@@ -443,6 +444,8 @@ def run_real_data_test(
 
                 if not to_level:
                     print("No next migration level (already global or unsupported).")
+                    if contest_tx is not None:
+                        contest_tx.rollback()
                     continue
 
                 if auto_init_empty:
@@ -500,6 +503,8 @@ def run_real_data_test(
                             "status": "SKIPPED_BY_COUNTRY_FILTER",
                         }
                     )
+                    if contest_tx is not None:
+                        contest_tx.rollback()
                     continue
 
                 result = SeasonMigrationService.promote_to_next_level(
@@ -522,6 +527,8 @@ def run_real_data_test(
                             "status": "ERROR",
                         }
                     )
+                    if contest_tx is not None:
+                        contest_tx.rollback()
                     continue
 
                 promoted_ids = result.get("promoted_contestant_ids", [])
@@ -570,6 +577,10 @@ def run_real_data_test(
                         "status": match_status,
                     }
                 )
+                if contest_tx is not None:
+                    # Critical for dry-run accuracy across many contests sharing same seasons:
+                    # undo this contest's promotion side-effects before evaluating next one.
+                    contest_tx.rollback()
 
             print("\n================ FINAL CHECKOUT ================")
             for idx, row in enumerate(final_summary, start=1):
