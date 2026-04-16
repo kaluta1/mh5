@@ -75,105 +75,76 @@ def get_top_high5_by_country(
                 detail="Country is required (query ?country=... or authenticated user country).",
             )
 
-        if round_id is not None:
-            rnd = db.query(Round).filter(Round.id == round_id).first()
-            if not rnd:
-                raise HTTPException(status_code=404, detail=f"Round id={round_id} not found")
-        else:
-            rnd = (
-                db.query(Round)
-                .filter(Round.status != RoundStatus.CANCELLED)
-                .order_by(Round.id.desc())
-                .first()
-            )
-            if not rnd:
-                raise HTTPException(status_code=404, detail="No available rounds")
-
-        contest_ids = [
-            r[0]
-            for r in db.execute(
-                select(round_contests.c.contest_id).where(round_contests.c.round_id == rnd.id)
-            ).fetchall()
-        ]
-        if not contest_ids:
-            return {"round_id": rnd.id, "round_name": rnd.name, "country": selected_country, "contests": []}
-
-        nomination_contests = (
-            db.query(Contest)
-            .filter(Contest.id.in_(contest_ids))
-            .filter(Contest.contest_mode == "nomination")
-            .order_by(Contest.id.asc())
-            .all()
-        )
-
         variants = _country_variants(selected_country)
-        contests_out = []
 
-        for contest in nomination_contests:
-            link = (
-                db.query(ContestSeasonLink, ContestSeason)
-                .join(ContestSeason, ContestSeason.id == ContestSeasonLink.season_id)
-                .filter(
-                    ContestSeasonLink.contest_id == contest.id,
-                    ContestSeasonLink.is_active == True,
-                    ContestSeason.round_id == rnd.id,
-                )
-                .first()
-            )
-            if not link:
-                continue
-            _, season = link
-            nxt = _next_level(season.level)
-            if season.level != SeasonLevel.COUNTRY:
-                continue
+        def _build_for_round(rnd: Round):
+            contest_ids = [
+                r[0]
+                for r in db.execute(
+                    select(round_contests.c.contest_id).where(round_contests.c.round_id == rnd.id)
+                ).fetchall()
+            ]
+            if not contest_ids:
+                return []
 
-            grouped = season_migration_service.get_top_contestants_by_location(
-                db,
-                season.id,
-                "country",
-                contest_id=contest.id,
-                limit=None,
-                stage_id=None,
-                diagnostics=False,
+            nomination_contests = (
+                db.query(Contest)
+                .filter(Contest.id.in_(contest_ids))
+                .filter(Contest.contest_mode == "nomination")
+                .order_by(Contest.id.asc())
+                .all()
             )
 
-            matched_key = None
-            for key in grouped.keys():
-                if (key or "").strip().lower() in variants:
-                    matched_key = key
-                    break
-            if matched_key is None:
-                continue
-
-            ranked = grouped.get(matched_key, [])
-            contestant_ids = [c.id for c in ranked]
-            points_by_id = {}
-            engagement_by_id = {}
-            if contestant_ids:
-                points_rows = (
-                    db.query(
-                        ContestantVoting.contestant_id,
-                        func.coalesce(func.sum(ContestantVoting.points), 0).label("total_points"),
-                    )
+            contests_out = []
+            for contest in nomination_contests:
+                link = (
+                    db.query(ContestSeasonLink, ContestSeason)
+                    .join(ContestSeason, ContestSeason.id == ContestSeasonLink.season_id)
                     .filter(
-                        and_(
-                            ContestantVoting.season_id == season.id,
-                            ContestantVoting.contest_id == contest.id,
-                            ContestantVoting.contestant_id.in_(contestant_ids),
-                        )
+                        ContestSeasonLink.contest_id == contest.id,
+                        ContestSeasonLink.is_active == True,
+                        ContestSeason.round_id == rnd.id,
                     )
-                    .group_by(ContestantVoting.contestant_id)
-                    .all()
+                    .first()
                 )
-                points_by_id = {r.contestant_id: int(r.total_points or 0) for r in points_rows}
-                if not points_by_id:
-                    legacy_rows = (
+                if not link:
+                    continue
+                _, season = link
+                nxt = _next_level(season.level)
+                if season.level != SeasonLevel.COUNTRY:
+                    continue
+
+                grouped = season_migration_service.get_top_contestants_by_location(
+                    db,
+                    season.id,
+                    "country",
+                    contest_id=contest.id,
+                    limit=None,
+                    stage_id=None,
+                    diagnostics=False,
+                )
+
+                matched_key = None
+                for key in grouped.keys():
+                    if (key or "").strip().lower() in variants:
+                        matched_key = key
+                        break
+                if matched_key is None:
+                    continue
+
+                ranked = grouped.get(matched_key, [])
+                contestant_ids = [c.id for c in ranked]
+                points_by_id = {}
+                engagement_by_id = {}
+                if contestant_ids:
+                    points_rows = (
                         db.query(
                             ContestantVoting.contestant_id,
                             func.coalesce(func.sum(ContestantVoting.points), 0).label("total_points"),
                         )
                         .filter(
                             and_(
+                                ContestantVoting.season_id == season.id,
                                 ContestantVoting.contest_id == contest.id,
                                 ContestantVoting.contestant_id.in_(contestant_ids),
                             )
@@ -181,54 +152,109 @@ def get_top_high5_by_country(
                         .group_by(ContestantVoting.contestant_id)
                         .all()
                     )
-                    points_by_id = {r.contestant_id: int(r.total_points or 0) for r in legacy_rows}
-                engagement_by_id = season_migration_service._engagement_by_contestant(db, contestant_ids)
+                    points_by_id = {r.contestant_id: int(r.total_points or 0) for r in points_rows}
+                    if not points_by_id:
+                        legacy_rows = (
+                            db.query(
+                                ContestantVoting.contestant_id,
+                                func.coalesce(func.sum(ContestantVoting.points), 0).label("total_points"),
+                            )
+                            .filter(
+                                and_(
+                                    ContestantVoting.contest_id == contest.id,
+                                    ContestantVoting.contestant_id.in_(contestant_ids),
+                                )
+                            )
+                            .group_by(ContestantVoting.contestant_id)
+                            .all()
+                        )
+                        points_by_id = {r.contestant_id: int(r.total_points or 0) for r in legacy_rows}
+                    engagement_by_id = season_migration_service._engagement_by_contestant(db, contestant_ids)
 
-            rows = []
-            for idx, c in enumerate(ranked, start=1):
-                author_name = None
-                author_email = None
-                if c.user:
-                    author_name = c.user.full_name or c.user.username or c.user.email
-                    author_email = c.user.email
-                e = engagement_by_id.get(c.id, {})
-                rows.append(
+                rows = []
+                for idx, c in enumerate(ranked, start=1):
+                    author_name = None
+                    author_email = None
+                    if c.user:
+                        author_name = c.user.full_name or c.user.username or c.user.email
+                        author_email = c.user.email
+                    e = engagement_by_id.get(c.id, {})
+                    rows.append(
+                        {
+                            "rank": idx,
+                            "migrates_next_stage": idx <= 5,
+                            "contestant_id": c.id,
+                            "contestant_title": c.title,
+                            "author_name": author_name,
+                            "author_email": author_email,
+                            "city": c.city,
+                            "country": c.country,
+                            "region": c.region,
+                            "continent": c.continent,
+                            "stars_points": points_by_id.get(c.id, 0),
+                            "shares": e.get("shares", 0),
+                            "likes": e.get("likes", 0),
+                            "comments": e.get("comments", 0),
+                            "views": e.get("views", 0),
+                        }
+                    )
+
+                contests_out.append(
                     {
-                        "rank": idx,
-                        "migrates_next_stage": idx <= 5,
-                        "contestant_id": c.id,
-                        "contestant_title": c.title,
-                        "author_name": author_name,
-                        "author_email": author_email,
-                        "city": c.city,
-                        "country": c.country,
-                        "region": c.region,
-                        "continent": c.continent,
-                        "stars_points": points_by_id.get(c.id, 0),
-                        "shares": e.get("shares", 0),
-                        "likes": e.get("likes", 0),
-                        "comments": e.get("comments", 0),
-                        "views": e.get("views", 0),
+                        "contest_id": contest.id,
+                        "contest_name": contest.name,
+                        "from_level": season.level.value,
+                        "to_level": nxt.value if nxt else None,
+                        "country_group": matched_key,
+                        "promotion_limit": 5,
+                        "rows": rows,
                     }
                 )
+            return contests_out
 
-            contests_out.append(
-                {
-                    "contest_id": contest.id,
-                    "contest_name": contest.name,
-                    "from_level": season.level.value,
-                    "to_level": nxt.value if nxt else None,
-                    "country_group": matched_key,
-                    "promotion_limit": 5,
-                    "rows": rows,
-                }
-            )
+        if round_id is not None:
+            rnd = db.query(Round).filter(Round.id == round_id).first()
+            if not rnd:
+                raise HTTPException(status_code=404, detail=f"Round id={round_id} not found")
+            contests_out = _build_for_round(rnd)
+            return {
+                "round_id": rnd.id,
+                "round_name": rnd.name,
+                "country": selected_country,
+                "contests": contests_out,
+                "fallback_applied": False,
+            }
+
+        candidate_rounds = (
+            db.query(Round)
+            .filter(Round.status != RoundStatus.CANCELLED)
+            .order_by(Round.id.desc())
+            .all()
+        )
+        if not candidate_rounds:
+            raise HTTPException(status_code=404, detail="No available rounds")
+
+        # Prioritize rounds currently open for voting (business expectation: show current voting round first).
+        voting_open_rounds = [r for r in candidate_rounds if bool(r.is_voting_open)]
+        search_rounds = voting_open_rounds + [r for r in candidate_rounds if not bool(r.is_voting_open)]
+
+        chosen_round = candidate_rounds[0]
+        chosen_contests = []
+        fallback_applied = False
+        for idx, rnd in enumerate(search_rounds):
+            contests_out = _build_for_round(rnd)
+            if contests_out:
+                chosen_round = rnd
+                chosen_contests = contests_out
+                fallback_applied = idx != 0
+                break
 
         return {
-            "round_id": rnd.id,
-            "round_name": rnd.name,
+            "round_id": chosen_round.id,
+            "round_name": chosen_round.name,
             "country": selected_country,
-            "contests": contests_out,
+            "contests": chosen_contests,
+            "fallback_applied": fallback_applied,
         }
     finally:
         db.close()

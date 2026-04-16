@@ -166,6 +166,14 @@ export default function TopHigh5Page() {
                 <span>Last update: {lastUpdatedAt.toLocaleTimeString()}</span>
               </>
             )}
+            {data.fallback_applied && (
+              <>
+                <span>|</span>
+                <span className="text-amber-700 dark:text-amber-400">
+                  Auto-selected latest round with winners
+                </span>
+              </>
+            )}
           </div>
         )}
       </div>

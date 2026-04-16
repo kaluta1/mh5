@@ -274,6 +274,7 @@ export interface TopHigh5Response {
   round_name: string
   country: string
   contests: TopHigh5Contest[]
+  fallback_applied?: boolean
 }
 
 class ContestService {
