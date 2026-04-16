@@ -277,7 +277,6 @@ export default function TopHigh5Page() {
                           <tr>
                             <th className="px-3 py-2 text-left">Rank</th>
                             <th className="px-3 py-2 text-left">Contestant</th>
-                            <th className="px-3 py-2 text-left">City</th>
                             <th className="px-3 py-2 text-left">Email</th>
                             <th className="px-3 py-2 text-left">Stars</th>
                             <th className="px-3 py-2 text-left">Shares</th>
@@ -302,7 +301,6 @@ export default function TopHigh5Page() {
                                   <div className="text-xs text-gray-500">{row.contestant_title}</div>
                                 )}
                               </td>
-                              <td className="px-3 py-2">{row.city || "-"}</td>
                               <td className="px-3 py-2 break-all">{row.author_email || "-"}</td>
                               <td className="px-3 py-2">{row.stars_points}</td>
                               <td className="px-3 py-2">{row.shares}</td>
