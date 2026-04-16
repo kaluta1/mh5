@@ -17,9 +17,16 @@ Requires DATABASE_URL / SQL config in environment (same as the API).
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from collections import defaultdict
 from typing import Dict, List, Optional, Tuple
+
+# Make `app` importable when running as `python scripts/report_round_voting_winners.py`
+# from the backend directory (no need to set PYTHONPATH).
+_BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _BACKEND_DIR not in sys.path:
+    sys.path.insert(0, _BACKEND_DIR)
 
 from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
