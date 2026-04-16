@@ -275,6 +275,14 @@ export interface TopHigh5Response {
   country: string
   contests: TopHigh5Contest[]
   fallback_applied?: boolean
+  diagnostics?: {
+    round_id: number
+    round_name: string
+    country: string
+    country_variants: string[]
+    active_links_by_level: Record<string, number>
+    nomination_contests_in_round: number
+  }
 }
 
 class ContestService {

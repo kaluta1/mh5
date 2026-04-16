@@ -92,6 +92,43 @@ def get_top_high5_by_country(
 
         variants = _country_variants(selected_country)
 
+        def _diagnostics_for_round(rnd: Round):
+            # Active contest-season links per level
+            counts = (
+                db.query(ContestSeason.level, func.count())
+                .join(ContestSeasonLink, ContestSeasonLink.season_id == ContestSeason.id)
+                .filter(ContestSeason.round_id == rnd.id)
+                .filter(ContestSeasonLink.is_active == True)
+                .group_by(ContestSeason.level)
+                .all()
+            )
+            active_links_by_level = {str(level.value if hasattr(level, "value") else level): int(cnt) for level, cnt in counts}
+
+            # Active nomination contests in this round
+            contest_ids = [
+                r[0]
+                for r in db.execute(
+                    select(round_contests.c.contest_id).where(round_contests.c.round_id == rnd.id)
+                ).fetchall()
+            ]
+            nomination_contests = (
+                db.query(Contest)
+                .filter(Contest.id.in_(contest_ids))
+                .filter(Contest.contest_mode == "nomination")
+                .count()
+                if contest_ids
+                else 0
+            )
+
+            return {
+                "round_id": rnd.id,
+                "round_name": rnd.name,
+                "country": selected_country,
+                "country_variants": sorted(list(variants)),
+                "active_links_by_level": active_links_by_level,
+                "nomination_contests_in_round": int(nomination_contests),
+            }
+
         def _build_for_round(rnd: Round):
             contest_ids = [
                 r[0]
@@ -296,6 +333,7 @@ def get_top_high5_by_country(
                 "country": selected_country,
                 "contests": contests_out,
                 "fallback_applied": False,
+                "diagnostics": _diagnostics_for_round(rnd),
             }
 
         candidate_rounds = (
@@ -328,6 +366,7 @@ def get_top_high5_by_country(
             "country": selected_country,
             "contests": chosen_contests,
             "fallback_applied": fallback_applied,
+            "diagnostics": _diagnostics_for_round(chosen_round),
         }
     finally:
         db.close()

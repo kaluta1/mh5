@@ -33,6 +33,7 @@ export default function TopHigh5Page() {
   const [error, setError] = useState<string | null>(null)
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null)
   const [isAutoRefreshing, setIsAutoRefreshing] = useState(false)
+  const [showDiagnostics, setShowDiagnostics] = useState(false)
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -185,8 +186,31 @@ export default function TopHigh5Page() {
       )}
 
       {!filteredContests.length ? (
-        <div className="text-center py-10 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 text-gray-500">
-          No country winners found for this selection.
+        <div className="rounded-xl border border-dashed border-gray-300 dark:border-gray-700 p-5">
+          <div className="text-center text-gray-500 py-6">
+            No country winners found for this selection.
+          </div>
+          {data?.diagnostics && (
+            <div className="mt-2">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-xs text-gray-600 dark:text-gray-400">
+                  Diagnostics (helps explain empty results)
+                </div>
+                <button
+                  type="button"
+                  className="text-xs text-myhigh5-primary hover:underline"
+                  onClick={() => setShowDiagnostics((v) => !v)}
+                >
+                  {showDiagnostics ? "Hide" : "Show"}
+                </button>
+              </div>
+              {showDiagnostics && (
+                <pre className="mt-2 text-xs bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700 rounded-lg p-3 overflow-x-auto">
+                  {JSON.stringify(data.diagnostics, null, 2)}
+                </pre>
+              )}
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-6">
