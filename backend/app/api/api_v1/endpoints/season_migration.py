@@ -187,6 +187,11 @@ def get_top_high5_by_country(
 
                 # Fallback mode: when active season is no longer COUNTRY (or no grouped row),
                 # still provide country-specific ranking snapshot from the current active season.
+                # NOTE: do NOT filter by Contestant.is_qualified here. A previous migration
+                # step may have set is_qualified=False on non-promoted contestants; the
+                # snapshot view should still show them so voting leaderboards never go
+                # silently empty after a migration cycle. The "would migrate" highlight
+                # is computed below via top-N rank, not via is_qualified.
                 if not ranked:
                     season_contestants = (
                         db.query(Contestant)
@@ -197,7 +202,6 @@ def get_top_high5_by_country(
                                 ContestantSeason.is_active == True,
                                 Contestant.is_active == True,
                                 Contestant.is_deleted == False,
-                                Contestant.is_qualified == True,
                                 Contestant.season_id == contest.id,
                             )
                         )

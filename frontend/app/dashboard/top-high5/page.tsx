@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useEffect, useMemo, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@/hooks/use-auth"
 import { useLanguage } from "@/contexts/language-context"
 import { contestService, TopHigh5Contest, TopHigh5Response } from "@/services/contest-service"
@@ -26,10 +26,13 @@ export default function TopHigh5Page() {
   const { user, isAuthenticated, isLoading } = useAuth()
   const { t } = useLanguage()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [countryInput, setCountryInput] = useState("")
+  const [roundIdInput, setRoundIdInput] = useState("")
   const [data, setData] = useState<TopHigh5Response | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeCountry, setActiveCountry] = useState("")
+  const [activeRoundId, setActiveRoundId] = useState<number | undefined>(undefined)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null)
   const [isAutoRefreshing, setIsAutoRefreshing] = useState(false)
@@ -45,13 +48,19 @@ export default function TopHigh5Page() {
     if (!isLoading && isAuthenticated) {
       const fallbackCountry =
         (user as any)?.country || (user as any)?.author_country || "Tanzania"
+      const urlRoundIdRaw = searchParams?.get("round_id") || ""
+      const parsedRoundId = urlRoundIdRaw && !Number.isNaN(Number(urlRoundIdRaw)) ? Number(urlRoundIdRaw) : undefined
       setCountryInput(fallbackCountry)
-      fetchData(fallbackCountry)
+      setRoundIdInput(urlRoundIdRaw)
+      fetchData(fallbackCountry, { roundId: parsedRoundId })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoading, isAuthenticated, user?.id])
 
-  const fetchData = async (country: string, options?: { silent?: boolean }) => {
+  const fetchData = async (
+    country: string,
+    options?: { silent?: boolean; roundId?: number }
+  ) => {
     try {
       if (!options?.silent) {
         setLoading(true)
@@ -61,9 +70,11 @@ export default function TopHigh5Page() {
       setError(null)
       const response = await contestService.getTopHigh5ByCountry({
         country: country.trim(),
+        roundId: options?.roundId,
       })
       setData(response)
       setActiveCountry(country.trim())
+      setActiveRoundId(options?.roundId)
       setLastUpdatedAt(new Date())
     } catch (e: any) {
       setError(e?.message || "Failed to load Top High5")
@@ -100,24 +111,24 @@ export default function TopHigh5Page() {
 
     const tick = () => {
       if (document.visibilityState !== "visible") return
-      void fetchData(activeCountry, { silent: true })
+      void fetchData(activeCountry, { silent: true, roundId: activeRoundId })
     }
 
     intervalId = setInterval(tick, 5000)
 
     const onVisibility = () => {
       if (document.visibilityState === "visible") {
-        void fetchData(activeCountry, { silent: true })
+        void fetchData(activeCountry, { silent: true, roundId: activeRoundId })
       }
     }
 
     const onWindowFocus = () => {
-      void fetchData(activeCountry, { silent: true })
+      void fetchData(activeCountry, { silent: true, roundId: activeRoundId })
     }
 
     // Same-tab refresh signal from MyHigh5 reorder flow
     const onVoteChanged = () => {
-      void fetchData(activeCountry, { silent: true })
+      void fetchData(activeCountry, { silent: true, roundId: activeRoundId })
     }
 
     document.addEventListener("visibilitychange", onVisibility)
@@ -131,7 +142,7 @@ export default function TopHigh5Page() {
       window.removeEventListener("vote-changed", onVoteChanged)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, activeCountry])
+  }, [isAuthenticated, activeCountry, activeRoundId])
 
   if (isLoading || loading) {
     return <TopHigh5Skeleton />
@@ -164,7 +175,19 @@ export default function TopHigh5Page() {
               className="pl-9"
             />
           </div>
-          <Button onClick={() => fetchData(countryInput)}>
+          <Input
+            value={roundIdInput}
+            onChange={(e) => setRoundIdInput(e.target.value.replace(/[^0-9]/g, ""))}
+            placeholder="Round id (optional, e.g. 3 = March 2026)"
+            className="md:w-72"
+            inputMode="numeric"
+          />
+          <Button
+            onClick={() => {
+              const parsed = roundIdInput && !Number.isNaN(Number(roundIdInput)) ? Number(roundIdInput) : undefined
+              fetchData(countryInput, { roundId: parsed })
+            }}
+          >
             Show Top High5
           </Button>
         </div>
