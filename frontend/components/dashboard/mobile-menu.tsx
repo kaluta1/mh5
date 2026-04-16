@@ -47,6 +47,7 @@ const baseMenuSections = [
       { name: "dashboard.nav.overview", href: "/dashboard", icon: LayoutDashboard },
       { name: "dashboard.nav.contests", href: "/dashboard/contests", icon: Trophy },
       { name: "dashboard.nav.myhigh5", href: "/dashboard/myhigh5", icon: Hand },
+      { name: "Top High5", href: "/dashboard/top-high5", icon: Trophy },
       { name: "dashboard.nav.favorites", href: "/dashboard/favorites", icon: Star },
       { name: "dashboard.nav.my_applications", href: "/dashboard/my-applications", icon: FileText },
     ]

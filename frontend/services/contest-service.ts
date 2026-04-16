@@ -241,6 +241,41 @@ export interface RoundWithStats {
   is_completed: boolean
 }
 
+export interface TopHigh5Row {
+  rank: number
+  migrates_next_stage: boolean
+  contestant_id: number
+  contestant_title?: string | null
+  author_name?: string | null
+  author_email?: string | null
+  city?: string | null
+  country?: string | null
+  region?: string | null
+  continent?: string | null
+  stars_points: number
+  shares: number
+  likes: number
+  comments: number
+  views: number
+}
+
+export interface TopHigh5Contest {
+  contest_id: number
+  contest_name: string
+  from_level: string
+  to_level?: string | null
+  country_group: string
+  promotion_limit: number
+  rows: TopHigh5Row[]
+}
+
+export interface TopHigh5Response {
+  round_id: number
+  round_name: string
+  country: string
+  contests: TopHigh5Contest[]
+}
+
 class ContestService {
   async addToFavorites(id: string | number, type: 'contest' | 'contestant' = 'contest'): Promise<void> {
     try {
@@ -1093,6 +1128,29 @@ class ContestService {
     } catch (error) {
       console.error('Error reordering favorites:', error)
       throw error
+    }
+  }
+
+  async getTopHigh5ByCountry(params?: {
+    roundId?: number
+    country?: string
+  }): Promise<TopHigh5Response> {
+    try {
+      const response = await api.get<TopHigh5Response>('/api/v1/seasons/top-high5', {
+        params: {
+          round_id: params?.roundId,
+          country: params?.country,
+        },
+      })
+      return response.data
+    } catch (error) {
+      console.error('Error fetching top high5 by country:', error)
+      return {
+        round_id: 0,
+        round_name: '',
+        country: params?.country || '',
+        contests: [],
+      }
     }
   }
 

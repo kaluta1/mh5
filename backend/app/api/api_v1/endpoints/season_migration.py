@@ -1,8 +1,9 @@
 """
 Endpoints pour gérer les migrations de saisons
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import and_, func, select
 
 from app.api import deps
 from app.services.season_migration import season_migration_service
@@ -12,8 +13,225 @@ from app.tasks.season_migration import (
     promote_contest_level
 )
 from app.models.user import User
+from app.models.round import Round, RoundStatus, round_contests
+from app.models.contest import Contest
+from app.models.contests import ContestSeason, ContestSeasonLink, SeasonLevel
+from app.models.voting import ContestantVoting
 
 router = APIRouter()
+
+
+def _next_level(level: SeasonLevel):
+    order = [
+        SeasonLevel.CITY,
+        SeasonLevel.COUNTRY,
+        SeasonLevel.REGIONAL,
+        SeasonLevel.CONTINENT,
+        SeasonLevel.GLOBAL,
+    ]
+    try:
+        idx = order.index(level)
+    except ValueError:
+        return None
+    return order[idx + 1] if idx < len(order) - 1 else None
+
+
+def _country_variants(raw_country: str):
+    raw = (raw_country or "").strip().lower()
+    variants = {raw}
+    alias_map = {
+        "tanzania": "tz",
+        "tz": "tanzania",
+        "uganda": "ug",
+        "ug": "uganda",
+        "kenya": "ke",
+        "ke": "kenya",
+    }
+    if raw in alias_map:
+        variants.add(alias_map[raw])
+    return variants
+
+
+@router.get("/top-high5")
+def get_top_high5_by_country(
+    round_id: int | None = Query(default=None),
+    country: str | None = Query(default=None),
+    current_user: User | None = Depends(deps.get_current_active_user_optional),
+):
+    """
+    Read-only preview for Top High5 by country (nomination contests).
+    Returns full ranked rows for that country and marks top-5 as migrates_next_stage=True.
+    """
+    from app.db.session import SessionLocal
+
+    db = SessionLocal()
+    try:
+        selected_country = (country or "").strip()
+        if not selected_country and current_user:
+            selected_country = (current_user.country or "").strip()
+        if not selected_country:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Country is required (query ?country=... or authenticated user country).",
+            )
+
+        if round_id is not None:
+            rnd = db.query(Round).filter(Round.id == round_id).first()
+            if not rnd:
+                raise HTTPException(status_code=404, detail=f"Round id={round_id} not found")
+        else:
+            rnd = (
+                db.query(Round)
+                .filter(Round.status != RoundStatus.CANCELLED)
+                .order_by(Round.id.desc())
+                .first()
+            )
+            if not rnd:
+                raise HTTPException(status_code=404, detail="No available rounds")
+
+        contest_ids = [
+            r[0]
+            for r in db.execute(
+                select(round_contests.c.contest_id).where(round_contests.c.round_id == rnd.id)
+            ).fetchall()
+        ]
+        if not contest_ids:
+            return {"round_id": rnd.id, "round_name": rnd.name, "country": selected_country, "contests": []}
+
+        nomination_contests = (
+            db.query(Contest)
+            .filter(Contest.id.in_(contest_ids))
+            .filter(Contest.contest_mode == "nomination")
+            .order_by(Contest.id.asc())
+            .all()
+        )
+
+        variants = _country_variants(selected_country)
+        contests_out = []
+
+        for contest in nomination_contests:
+            link = (
+                db.query(ContestSeasonLink, ContestSeason)
+                .join(ContestSeason, ContestSeason.id == ContestSeasonLink.season_id)
+                .filter(
+                    ContestSeasonLink.contest_id == contest.id,
+                    ContestSeasonLink.is_active == True,
+                    ContestSeason.round_id == rnd.id,
+                )
+                .first()
+            )
+            if not link:
+                continue
+            _, season = link
+            nxt = _next_level(season.level)
+            if season.level != SeasonLevel.COUNTRY:
+                continue
+
+            grouped = season_migration_service.get_top_contestants_by_location(
+                db,
+                season.id,
+                "country",
+                contest_id=contest.id,
+                limit=None,
+                stage_id=None,
+                diagnostics=False,
+            )
+
+            matched_key = None
+            for key in grouped.keys():
+                if (key or "").strip().lower() in variants:
+                    matched_key = key
+                    break
+            if matched_key is None:
+                continue
+
+            ranked = grouped.get(matched_key, [])
+            contestant_ids = [c.id for c in ranked]
+            points_by_id = {}
+            engagement_by_id = {}
+            if contestant_ids:
+                points_rows = (
+                    db.query(
+                        ContestantVoting.contestant_id,
+                        func.coalesce(func.sum(ContestantVoting.points), 0).label("total_points"),
+                    )
+                    .filter(
+                        and_(
+                            ContestantVoting.season_id == season.id,
+                            ContestantVoting.contest_id == contest.id,
+                            ContestantVoting.contestant_id.in_(contestant_ids),
+                        )
+                    )
+                    .group_by(ContestantVoting.contestant_id)
+                    .all()
+                )
+                points_by_id = {r.contestant_id: int(r.total_points or 0) for r in points_rows}
+                if not points_by_id:
+                    legacy_rows = (
+                        db.query(
+                            ContestantVoting.contestant_id,
+                            func.coalesce(func.sum(ContestantVoting.points), 0).label("total_points"),
+                        )
+                        .filter(
+                            and_(
+                                ContestantVoting.contest_id == contest.id,
+                                ContestantVoting.contestant_id.in_(contestant_ids),
+                            )
+                        )
+                        .group_by(ContestantVoting.contestant_id)
+                        .all()
+                    )
+                    points_by_id = {r.contestant_id: int(r.total_points or 0) for r in legacy_rows}
+                engagement_by_id = season_migration_service._engagement_by_contestant(db, contestant_ids)
+
+            rows = []
+            for idx, c in enumerate(ranked, start=1):
+                author_name = None
+                author_email = None
+                if c.user:
+                    author_name = c.user.full_name or c.user.username or c.user.email
+                    author_email = c.user.email
+                e = engagement_by_id.get(c.id, {})
+                rows.append(
+                    {
+                        "rank": idx,
+                        "migrates_next_stage": idx <= 5,
+                        "contestant_id": c.id,
+                        "contestant_title": c.title,
+                        "author_name": author_name,
+                        "author_email": author_email,
+                        "city": c.city,
+                        "country": c.country,
+                        "region": c.region,
+                        "continent": c.continent,
+                        "stars_points": points_by_id.get(c.id, 0),
+                        "shares": e.get("shares", 0),
+                        "likes": e.get("likes", 0),
+                        "comments": e.get("comments", 0),
+                        "views": e.get("views", 0),
+                    }
+                )
+
+            contests_out.append(
+                {
+                    "contest_id": contest.id,
+                    "contest_name": contest.name,
+                    "from_level": season.level.value,
+                    "to_level": nxt.value if nxt else None,
+                    "country_group": matched_key,
+                    "promotion_limit": 5,
+                    "rows": rows,
+                }
+            )
+
+        return {
+            "round_id": rnd.id,
+            "round_name": rnd.name,
+            "country": selected_country,
+            "contests": contests_out,
+        }
+    finally:
+        db.close()
 
 
 @router.post("/migrate/check")
