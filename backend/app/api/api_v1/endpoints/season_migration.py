@@ -284,6 +284,26 @@ def get_top_high5_by_country(
                         points_by_id = {r.contestant_id: int(r.total_points or 0) for r in legacy_rows}
                     engagement_by_id = season_migration_service._engagement_by_contestant(db, contestant_ids)
 
+                # Always re-rank against the *displayed* numbers so the table order
+                # matches the visible columns. Order = stars desc -> shares desc ->
+                # likes desc -> comments desc -> views desc -> earliest contestant
+                # (lower id wins). This is the canonical winner rule from
+                # docs/WINNER_AND_MIGRATION_GUIDE.md and prevents any drift between
+                # the original sort source (canonical or fallback) and the columns
+                # we render.
+                ranked = sorted(
+                    ranked,
+                    key=lambda c: (
+                        points_by_id.get(c.id, 0),
+                        engagement_by_id.get(c.id, {}).get("shares", 0),
+                        engagement_by_id.get(c.id, {}).get("likes", 0),
+                        engagement_by_id.get(c.id, {}).get("comments", 0),
+                        engagement_by_id.get(c.id, {}).get("views", 0),
+                        -(c.id or 0),
+                    ),
+                    reverse=True,
+                )
+
                 rows = []
                 for idx, c in enumerate(ranked, start=1):
                     author_name = None
