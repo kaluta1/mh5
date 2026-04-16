@@ -7,7 +7,7 @@ import { Language } from './translations'
 /**
  * Mappe les noms de jours (toutes langues) vers les traductions
  */
-const dayMap: Record<string, Record<Language, string>> = {
+const dayMap: Record<string, Partial<Record<Language, string>>> = {
   // Anglais
   'Monday': { fr: 'Lundi', en: 'Monday', es: 'Lunes', de: 'Montag' },
   'Tuesday': { fr: 'Mardi', en: 'Tuesday', es: 'Martes', de: 'Dienstag' },
@@ -69,7 +69,7 @@ const dayMap: Record<string, Record<Language, string>> = {
 /**
  * Mappe les noms de mois (toutes langues) vers les traductions
  */
-const monthMap: Record<string, Record<Language, string>> = {
+const monthMap: Record<string, Partial<Record<Language, string>>> = {
   // Anglais
   'January': { fr: 'Janvier', en: 'January', es: 'Enero', de: 'Januar' },
   'February': { fr: 'Février', en: 'February', es: 'Febrero', de: 'Februar' },
@@ -155,22 +155,34 @@ export function translateMonth(month: string, language: Language = 'fr'): string
 /**
  * Formate une date selon la langue
  */
+// Map app language code -> BCP 47 locale tag for `toLocaleDateString`.
+// Browsers fall back gracefully on unsupported locales.
+const LOCALE_BY_LANG: Partial<Record<Language, string>> = {
+  fr: 'fr-FR',
+  en: 'en-US',
+  es: 'es-ES',
+  de: 'de-DE',
+  pt: 'pt-PT',
+  sw: 'sw-TZ',
+  ar: 'ar-SA',
+  zh: 'zh-CN',
+  hi: 'hi-IN',
+  ru: 'ru-RU',
+  it: 'it-IT',
+  nl: 'nl-NL',
+  tr: 'tr-TR',
+  ja: 'ja-JP',
+  ko: 'ko-KR',
+}
+
 export function formatDate(date: Date | string, language: Language = 'fr', options?: Intl.DateTimeFormatOptions): string {
   const dateObj = typeof date === 'string' ? new Date(date) : date
-  const localeMap: Record<Language, string> = {
-    fr: 'fr-FR',
-    en: 'en-US',
-    es: 'es-ES',
-    de: 'de-DE'
-  }
-  
   const defaultOptions: Intl.DateTimeFormatOptions = {
     year: 'numeric',
     month: 'long',
     day: 'numeric'
   }
-  
-  return dateObj.toLocaleDateString(localeMap[language], options || defaultOptions)
+  return dateObj.toLocaleDateString(LOCALE_BY_LANG[language] || 'en-US', options || defaultOptions)
 }
 
 /**
@@ -178,16 +190,9 @@ export function formatDate(date: Date | string, language: Language = 'fr', optio
  */
 export function formatShortDate(date: Date | string, language: Language = 'fr'): string {
   const dateObj = typeof date === 'string' ? new Date(date) : date
-  const localeMap: Record<Language, string> = {
-    fr: 'fr-FR',
-    en: 'en-US',
-    es: 'es-ES',
-    de: 'de-DE'
-  }
-  
-  return dateObj.toLocaleDateString(localeMap[language], {
+  return dateObj.toLocaleDateString(LOCALE_BY_LANG[language] || 'en-US', {
     day: 'numeric',
-    month: 'short'
+    month: 'short',
   })
 }
 

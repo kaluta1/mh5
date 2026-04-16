@@ -1,16 +1,45 @@
 // @ts-nocheck
-export type Language = 'en' | 'fr' | 'es' | 'de'
+export type Language =
+  | 'en'
+  | 'fr'
+  | 'es'
+  | 'de'
+  | 'pt'
+  | 'sw'
+  | 'ar'
+  | 'zh'
+  | 'hi'
+  | 'ru'
+  | 'it'
+  | 'nl'
+  | 'tr'
+  | 'ja'
+  | 'ko'
 
 export interface LanguageInfo {
   name: string
   flag: string
+  // Right-to-left languages (currently Arabic) need dir="rtl" on <html>.
+  rtl?: boolean
 }
 
+// Order shown in the language switcher. English first (default), then alphabetical-ish by name.
 export const languages: Record<Language, LanguageInfo> = {
-  fr: { name: 'Français', flag: '🇫🇷' },
   en: { name: 'English', flag: '🇬🇧' },
+  ar: { name: 'العربية', flag: '🇸🇦', rtl: true },
+  zh: { name: '中文', flag: '🇨🇳' },
+  nl: { name: 'Nederlands', flag: '🇳🇱' },
+  fr: { name: 'Français', flag: '🇫🇷' },
+  de: { name: 'Deutsch', flag: '🇩🇪' },
+  hi: { name: 'हिन्दी', flag: '🇮🇳' },
+  it: { name: 'Italiano', flag: '🇮🇹' },
+  ja: { name: '日本語', flag: '🇯🇵' },
+  ko: { name: '한국어', flag: '🇰🇷' },
+  pt: { name: 'Português', flag: '🇵🇹' },
+  ru: { name: 'Русский', flag: '🇷🇺' },
   es: { name: 'Español', flag: '🇪🇸' },
-  de: { name: 'Deutsch', flag: '🇩🇪' }
+  sw: { name: 'Kiswahili', flag: '🇹🇿' },
+  tr: { name: 'Türkçe', flag: '🇹🇷' },
 }
 
 export const maintenanceTranslations = {

@@ -144,42 +144,46 @@ export function getMetadataTranslations(lang: Language = 'en'): MetadataTranslat
   }
 }
 
+// All language codes supported by the app. Keep in sync with `lib/translations.ts`.
+const SUPPORTED_LANGUAGES: Language[] = [
+  'en', 'fr', 'es', 'de', 'pt', 'sw', 'ar', 'zh', 'hi', 'ru', 'it', 'nl', 'tr', 'ja', 'ko',
+]
+
 /**
  * Détecte la langue depuis les headers de la requête
  */
 export function detectLanguageFromHeaders(headers: Headers): Language {
   const acceptLanguage = headers.get('accept-language') || ''
   const cookieLanguage = headers.get('cookie')?.match(/myhigh5-language=([^;]+)/)?.[1]
-  
-  // Priorité: cookie > accept-language > défaut (fr)
-  if (cookieLanguage && ['en', 'fr', 'es', 'de'].includes(cookieLanguage)) {
+
+  if (cookieLanguage && (SUPPORTED_LANGUAGES as string[]).includes(cookieLanguage)) {
     return cookieLanguage as Language
   }
-  
-  // Parser accept-language
+
   if (acceptLanguage) {
-    const languages = acceptLanguage.split(',').map(lang => lang.split(';')[0].trim().toLowerCase())
-    for (const lang of languages) {
-      if (lang.startsWith('fr')) return 'fr'
-      if (lang.startsWith('en')) return 'en'
-      if (lang.startsWith('es')) return 'es'
-      if (lang.startsWith('de')) return 'de'
+    const langs = acceptLanguage.split(',').map((l) => l.split(';')[0].trim().toLowerCase())
+    for (const lang of langs) {
+      const prefix = lang.split('-')[0]
+      if ((SUPPORTED_LANGUAGES as string[]).includes(prefix)) {
+        return prefix as Language
+      }
     }
   }
-  
-  return 'en' // Défaut
+
+  return 'en'
 }
 
 /**
- * Retourne les mots-clés SEO traduits selon la langue
+ * Retourne les mots-clés SEO traduits selon la langue.
+ * Only a few hand-curated lists exist; other languages fall back to English.
  */
 export function getKeywords(lang: Language = 'en'): string[] {
-  const keywordsMap: Record<Language, string[]> = {
+  const keywordsMap: Partial<Record<Language, string[]>> = {
     fr: ["concours", "beauté", "talents", "communauté", "votes", "compétition", "affiliation", "gagner de l'argent", "high5", "myhigh5"],
     en: ["contests", "beauty", "talents", "community", "votes", "competition", "affiliation", "earn money", "high5", "myhigh5"],
     es: ["concursos", "belleza", "talentos", "comunidad", "votos", "competición", "afiliación", "ganar dinero", "high5", "myhigh5"],
     de: ["Wettbewerbe", "Schönheit", "Talente", "Gemeinschaft", "Stimmen", "Wettbewerb", "Affiliate", "Geld verdienen", "high5", "myhigh5"],
   }
-  return keywordsMap[lang] || keywordsMap.en
+  return keywordsMap[lang] || keywordsMap.en!
 }
 

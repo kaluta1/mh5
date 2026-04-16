@@ -1,7 +1,7 @@
 "use client"
 
 import React, { createContext, useContext, useState, useEffect } from 'react'
-import { Language, translations, TranslationKeys } from '@/lib/translations'
+import { Language, languages, translations, TranslationKeys } from '@/lib/translations'
 
 interface LanguageContextType {
   language: Language
@@ -10,6 +10,8 @@ interface LanguageContextType {
 }
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined)
+
+const SUPPORTED_LANGUAGES = Object.keys(languages) as Language[]
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
   // Always default to English - never use browser language or any other default
@@ -21,7 +23,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     const savedLanguage = localStorage.getItem('myhigh5-language') as Language
     // Only use saved language if it's explicitly set and valid
     // Default to English if no preference or invalid value
-    if (savedLanguage && ['en', 'fr', 'es', 'de'].includes(savedLanguage)) {
+    if (savedLanguage && SUPPORTED_LANGUAGES.includes(savedLanguage)) {
       setLanguage(savedLanguage)
     } else {
       // Ensure English is set and saved if no preference exists
@@ -30,9 +32,18 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
-  // Save language to localStorage when it changes
+  // Save language to localStorage and apply lang/dir attributes on <html> when it changes.
+  // The `dir` attribute is needed for Arabic so the layout flips RTL.
   useEffect(() => {
     localStorage.setItem('myhigh5-language', language)
+    if (typeof document !== 'undefined') {
+      const meta = languages[language]
+      const html = document.documentElement
+      if (html) {
+        html.setAttribute('lang', language)
+        html.setAttribute('dir', meta?.rtl ? 'rtl' : 'ltr')
+      }
+    }
   }, [language])
 
   // Translation function with nested key support (e.g., "hero.title")

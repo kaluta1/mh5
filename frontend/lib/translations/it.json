@@ -1,0 +1,432 @@
+{
+  "common": {
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "save": "Save",
+    "edit": "Edit",
+    "delete": "Delete",
+    "search": "Search",
+    "filter": "Filter",
+    "sort": "Sort",
+    "next": "Next",
+    "previous": "Previous",
+    "close": "Close",
+    "or": "Or"
+  },
+  "navigation": {
+    "home": "Home",
+    "contests": "Contests",
+    "clubs": "Clubs",
+    "about": "About",
+    "contact": "Contact",
+    "login": "Login",
+    "register": "Register",
+    "logout": "Logout",
+    "profile": "Profile",
+    "dashboard": "Dashboard"
+  },
+  "hero": {
+    "title": "Compete & Earn",
+    "subtitle": "Global Contest Platform",
+    "description": "Join contests, build your network, and earn through our 10-level affiliate program. Every vote, every referral generates income.",
+    "cta_primary": "Start Earning",
+    "cta_secondary": "Learn More",
+    "affiliate": {
+      "title": "Affiliate Program",
+      "description": "Earn up to 10 levels deep from referrals",
+      "revenue_share": "20% to participants, 5% to sponsors"
+    },
+    "carousel": {
+      "winner_1": "Beauty Contest Winner 2024",
+      "winner_2": "Talent Show Champion",
+      "winner_3": "Sports Club Leader",
+      "winner_4": "Pet Contest Star"
+    }
+  },
+  "auth": {
+    "login": {
+      "title": "Welcome Back",
+      "subtitle": "Sign in to your MyHigh5 account",
+      "email_placeholder": "your@email.com or username",
+      "password_placeholder": "Your password",
+      "forgot_password": "Forgot password?",
+      "submit": "Sign In",
+      "loading": "Signing in...",
+      "no_account": "Don't have an account?",
+      "register_link": "Sign up",
+      "error": "Login error",
+      "errors": {
+        "invalid_credentials": "Invalid email/username or password",
+        "timeout": "Connection timeout. The server is taking too long to respond. Please try again.",
+        "network_error": "Network error. Please check your connection and try again."
+      }
+    },
+    "register": {
+      "title": "Join MyFav",
+      "subtitle": "Create your account and start competing"
+    }
+  },
+  "features": {
+    "title": "Why Choose MyHigh5?",
+    "subtitle": "Discover the features that make MyHigh5 the world's most advanced contest platform.",
+    "items": {
+      "multi_level": {
+        "title": "Multi-Level Contests",
+        "description": "Participate in local, national and international contests across different categories."
+      },
+      "global_community": {
+        "title": "Global Community",
+        "description": "Join over 1 million active participants in 200+ countries worldwide."
+      },
+      "international_reach": {
+        "title": "International Reach",
+        "description": "Competitions organized by continent, region and country for a global experience."
+      },
+      "guaranteed_security": {
+        "title": "Guaranteed Security",
+        "description": "Identity verification and automatic moderation for a safe environment."
+      },
+      "innovative_voting": {
+        "title": "Innovative Voting System",
+        "description": "Vote with our unique MyHigh5 system (5-4-3-2-1 points) by drag & drop."
+      },
+      "varied_categories": {
+        "title": "Varied Categories",
+        "description": "Beauty, Handsome, Latest Hits, Pets, Sports Clubs and much more."
+      }
+    }
+  },
+  "earnings": {
+    "title": "Multiple Revenue Streams",
+    "advertising": "Advertising Revenue",
+    "affiliate": "Affiliate Commissions",
+    "contests": "Contest Prizes",
+    "clubs": "Premium Club Access"
+  },
+  "commissions": {
+    "title": "My Commissions",
+    "subtitle": "Track your earnings and affiliate revenue",
+    "export": "Export",
+    "total_earned": "Total Earned",
+    "pending": "Pending",
+    "pending_amount": "Pending Amount",
+    "paid": "Paid",
+    "paid_amount": "Paid Amount",
+    "cancelled": "Cancelled",
+    "this_month": "This Month",
+    "last_month": "Last Month",
+    "growth": "Growth",
+    "filter_all": "All",
+    "filter_pending": "Pending",
+    "filter_paid": "Paid",
+    "filter_cancelled": "Cancelled",
+    "no_commissions": "No commissions",
+    "no_commissions_desc": "You don't have any commissions yet. Refer users to start earning!",
+    "level": "Level",
+    "direct": "Direct",
+    "indirect": "Indirect",
+    "source": "Source",
+    "amount": "Amount",
+    "date": "Date",
+    "status": "Status",
+    "types": {
+      "AD_REVENUE": "Advertising Revenue",
+      "CLUB_MEMBERSHIP": "Club Membership",
+      "SHOP_PURCHASE": "Shop Purchase",
+      "CONTEST_PARTICIPATION": "Contest Participation",
+      "KYC_PAYMENT": "KYC Payment",
+      "EFM_MEMBERSHIP": "EFM Membership",
+      "FOUNDING_MEMBERSHIP_FEE": "Founding Member Fee",
+      "ANNUAL_MEMBERSHIP_FEE": "Annual FM Fee",
+      "MONTHLY_REVENUE_POOL": "Monthly Pool (5%)",
+      "ANNUAL_PROFIT_POOL": "Annual Pool (10%)"
+    },
+    "type_descriptions": {
+      "AD_REVENUE": "Commission on advertising revenue generated by your referrals",
+      "CLUB_MEMBERSHIP": "Commission on club memberships from your referrals",
+      "SHOP_PURCHASE": "Commission on shop purchases from your referrals",
+      "CONTEST_PARTICIPATION": "Commission on contest participations from your referrals",
+      "KYC_PAYMENT": "Commission on KYC verification payments",
+      "EFM_MEMBERSHIP": "Commission on EFM memberships from your referrals",
+      "FOUNDING_MEMBERSHIP_FEE": "$20 direct / $2 indirect (L2-10) on FM fee ($100)",
+      "ANNUAL_MEMBERSHIP_FEE": "$10 direct / $1 indirect (L2-10) on annual fee ($50)",
+      "MONTHLY_REVENUE_POOL": "Share of 5% monthly net revenue pool",
+      "ANNUAL_PROFIT_POOL": "Share of 10% annual post-tax profit pool"
+    },
+    "rates": {
+      "founding_direct": "$20 per direct referral",
+      "founding_indirect": "$2 per indirect referral (L2-10)",
+      "annual_direct": "$10 per direct referral",
+      "annual_indirect": "$1 per indirect referral (L2-10)"
+    },
+    "sort_by_date": "By date",
+    "sort_by_amount": "By amount",
+    "sort_by_type": "By type",
+    "filter_by_type": "Filter by type",
+    "filter_by_status": "Filter by status"
+  },
+  "cta": {
+    "title": "Ready to Start Your Adventure?",
+    "subtitle": "Join the world's largest contest community. Free registration, instant participation.",
+    "features": {
+      "free_contests": "Free Contests",
+      "active_community": "Active Community",
+      "real_rewards": "Real Rewards"
+    },
+    "button": "Get Started Now"
+  },
+  "testimonials": {
+    "title": "What Our Community Says",
+    "subtitle": "Discover the experiences of our members from around the world.",
+    "items": {
+      "sarah_m": {
+        "name": "Sarah M.",
+        "location": "Paris, France",
+        "text": "MyHigh5 changed my life! I won 3 beauty contests and earned over $5,000 through the affiliate program.",
+        "rating": 5
+      },
+      "carlos_r": {
+        "name": "Carlos R.",
+        "location": "Madrid, Spain",
+        "text": "The voting system is revolutionary. Fair, transparent and really fun to use!",
+        "rating": 5
+      },
+      "emma_l": {
+        "name": "Emma L.",
+        "location": "London, UK",
+        "text": "Amazing global community. I made friends from all continents and discovered incredible talents.",
+        "rating": 5
+      }
+    }
+  },
+  "footer": {
+    "description": "Join the world's largest contest community. Compete, vote and earn through our revolutionary 10-level affiliate program.",
+    "quick_links": {
+      "title": "Quick Links",
+      "about": "About Us",
+      "contests": "Contests",
+      "how_it_works": "How It Works",
+      "affiliate": "Affiliate Program",
+      "support": "Support"
+    },
+    "categories": {
+      "title": "Categories",
+      "beauty": "Beauty",
+      "handsome": "Handsome",
+      "latest_hits": "Latest Hits",
+      "pets": "Pets",
+      "sports_clubs": "Sports Clubs"
+    },
+    "legal": {
+      "title": "Legal",
+      "privacy": "Privacy Policy",
+      "terms": "Terms of Service",
+      "cookies": "Cookie Policy",
+      "gdpr": "GDPR Compliance"
+    },
+    "copyright": " 2024 MyHigh5. All rights reserved."
+  },
+  "dashboard": {
+    "contests": {
+      "edit_nomination": "Edit your Nomination",
+      "edit_participation": "Edit your Participation",
+      "nominate": "Nominate",
+      "participate": "Participate",
+      "edit": "Edit",
+      "participation_form": {
+        "edit_title": "Edit a Contestant",
+        "edit_description": "Update your submission details",
+        "nominate_title": "Nominate a Contestant",
+        "nominate_description": "Import your video from YouTube or Vimeo"
+      }
+    }
+  },
+  "pages": {
+    "contests": {
+      "title": "Discover Our Contests",
+      "subtitle": "Join exciting competitions from local to global level",
+      "search_placeholder": "Search a contest...",
+      "filters": {
+        "all": "All",
+        "city": "City",
+        "country": "Country",
+        "continental": "Continental",
+        "global": "Global"
+      },
+      "stats": {
+        "active": "Active contests",
+        "participants": "Participants",
+        "levels": "Levels"
+      },
+      "no_results": "No contest found",
+      "try_different_filter": "Try another filter or search term",
+      "cta": {
+        "title": "Ready to participate?",
+        "subtitle": "Create your free account and start competing today!",
+        "button": "Create my account"
+      }
+    },
+    "clubs": {
+      "title": "Exclusive Fan Clubs",
+      "subtitle": "Join passionate communities and access exclusive content",
+      "search_placeholder": "Search a club...",
+      "features": {
+        "dsp": "DSP Payment",
+        "multi_admin": "Multi-Admin",
+        "affiliate": "Affiliate Program"
+      },
+      "no_results": "No club found",
+      "try_different_filter": "Try another filter",
+      "cta": {
+        "title": "Create your own Club",
+        "subtitle": "Monetize your content, manage your community and earn through the affiliate program.",
+        "feature1": "Secure payments via DSP",
+        "feature2": "Multi-administrator management",
+        "feature3": "10% commission on sales",
+        "button": "Create my Club"
+      }
+    },
+    "about": {
+      "title": "About MyHigh5",
+      "subtitle": "The first global contest platform connecting talents worldwide, from local to global level.",
+      "mission": {
+        "title": "Our Mission",
+        "description": "Democratize access to contests and allow every talent to shine on the world stage. From local beauty contests to world championships, we create opportunities for everyone."
+      },
+      "values": {
+        "title": "Our Values",
+        "subtitle": "The principles that guide each of our decisions"
+      },
+      "timeline": {
+        "title": "Our Journey"
+      },
+      "team": {
+        "title": "Our Team",
+        "subtitle": "Passionate people dedicated to your success"
+      },
+      "cta": {
+        "title": "Join the MyHigh5 Adventure",
+        "subtitle": "Be part of a global community of talents and start your journey to the top.",
+        "button": "Start Now"
+      }
+    },
+    "contact": {
+      "title": "Contact Us",
+      "subtitle": "Our team is here to help. We usually respond within 24 hours.",
+      "form": {
+        "title": "Send us a message",
+        "name": "Full name",
+        "email": "Email",
+        "category": "Category",
+        "subject": "Subject",
+        "message": "Message",
+        "submit": "Send message"
+      },
+      "faq": {
+        "title": "Frequently Asked Questions"
+      },
+      "hours": {
+        "title": "Support hours"
+      },
+      "categories": {
+        "title": "How can we help you?"
+      }
+    }
+  },
+  "admin": {
+    "accounting": {
+      "title": "Accounting",
+      "subtitle": "Financial overview, journal entries, and reports",
+      "error_loading": "Error loading accounting data",
+      "retry": "Retry",
+      "refresh": "Refresh",
+      "report_failed": "Could not load report",
+      "total_revenue": "Total revenue",
+      "ytd": "Year to date",
+      "journal_tab": "General journal",
+      "coa_tab": "Chart of accounts",
+      "reports_tab": "Financial reports",
+      "operations_tab": "CoA sync and controls",
+      "journal_title": "Journal entries",
+      "journal_desc_paged": "Posted entries, newest first. Use Load more for older history.",
+      "no_journal": "No journal entries yet.",
+      "load_more_journal": "Load more (older entries)",
+      "journal_showing": "Showing",
+      "journal_entries": "entries",
+      "coa_title": "Chart of accounts",
+      "coa_desc": "Accounts and current balances",
+      "no_coa": "No accounts in the database. Run chart-of-accounts initialization on the server.",
+      "reports_hint": "Generate balance sheet, income statement, trial balance, USDT (BSC) treasury summary, or account activity.",
+      "full_pack_hint": "Full pack runs consistency checks and includes balance sheet, income statement, trial balance, USDT (BSC) treasury summary, and ledger summaries.",
+      "full_pack_tab": "Full financial pack",
+      "balance_sheet_title": "Balance sheet",
+      "income_statement_title": "Income statement",
+      "trial_balance_title": "Trial balance",
+      "cash_flow_title": "USDT (BSC) treasury summary",
+      "general_ledger_title": "General ledger",
+      "as_of_date": "As of date",
+      "period_from": "Period from",
+      "period_to": "Period to",
+      "select_account": "Account",
+      "load_report": "Load report",
+      "download_json": "Download JSON",
+      "download_coa_csv": "Download chart of accounts (CSV)",
+      "summary_checks": "Summary checks",
+      "parent_code": "Parent code",
+      "total_assets": "Total assets",
+      "total_liabilities": "Total liabilities",
+      "total_equity": "Total equity",
+      "revenues": "Revenues",
+      "expenses": "Expenses",
+      "net_income": "Net income",
+      "note": "Note",
+      "equity_highlights": "Equity highlights",
+      "coa_register_title": "Chart of accounts register",
+      "period_activity_title": "Period activity by account",
+      "balanced_ok": "Balanced",
+      "balanced_no": "Not balanced",
+      "section_assets": "Assets",
+      "section_liabilities": "Liabilities",
+      "section_equity": "Equity",
+      "no_report_data": "No data for this report.",
+      "statement_total_revenue": "Total revenue",
+      "statement_total_expenses": "Total expenses",
+      "trial_balanced": "Trial balance is balanced",
+      "trial_not_balanced": "Trial balance is not balanced",
+      "total_debits": "Total debits",
+      "total_credits": "Total credits",
+      "opening_balance": "Opening balance",
+      "closing_balance": "Closing balance",
+      "treasury_change_1001": "Change in USDT (BSC) treasury (1001)",
+      "cf_1001_opening": "Opening — USDT (BSC) treasury (1001)",
+      "cf_1001_closing": "Closing — USDT (BSC) treasury (1001)",
+      "operating": "Operating activities",
+      "gl_lines": "Ledger lines",
+      "operations_title": "Ledger health and chart alignment",
+      "operations_desc": "Check ledger integrity, sync the chart of accounts from the server, backfill missing payment journals, and correct founding-member accruals. Existing journals keep the same account IDs when codes are renamed.",
+      "run_ledger_health": "Run ledger health check",
+      "ensure_coa": "Sync chart of accounts",
+      "run_backfill": "Payment journal backfill",
+      "run_founding_pool_backfill": "Founding Members 10% accrual backfill",
+      "founding_pool_backfill_hint": "Use when deposits already have journals but account 2104 is missing. Run a dry run first.",
+      "backfill_dry_run": "Dry run only",
+      "founding_pool_title": "Founding pool month-end",
+      "shufti_settlement_title": "Shufti / KYC provider payment",
+      "table": {
+        "date": "Date",
+        "ref": "Reference",
+        "description": "Description",
+        "debit": "Debit",
+        "credit": "Credit",
+        "status": "Status",
+        "code": "Code",
+        "account": "Account name",
+        "type": "Type",
+        "balance": "Balance"
+      }
+    }
+  }
+}

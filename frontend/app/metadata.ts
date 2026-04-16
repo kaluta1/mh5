@@ -9,11 +9,22 @@ import { headers } from "next/headers"
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myhigh5.com"
 const defaultImage = `${appUrl}/thumbnails.png`
 
-const localeMap: Record<Language, string> = {
+const localeMap: Partial<Record<Language, string>> = {
   fr: "fr_FR",
   en: "en_US",
   es: "es_ES",
   de: "de_DE",
+  pt: "pt_PT",
+  sw: "sw_TZ",
+  ar: "ar_SA",
+  zh: "zh_CN",
+  hi: "hi_IN",
+  ru: "ru_RU",
+  it: "it_IT",
+  nl: "nl_NL",
+  tr: "tr_TR",
+  ja: "ja_JP",
+  ko: "ko_KR",
 }
 
 export function createMetadata({
