@@ -53,6 +53,20 @@ def _country_variants(raw_country: str):
     return variants
 
 
+def _normalized_country_candidates(contestant):
+    values = []
+    # 1) contestant profile country (most direct when present)
+    if getattr(contestant, "country", None):
+        values.append((contestant.country or "").strip().lower())
+    # 2) nomination-specific origin field
+    if getattr(contestant, "nominator_country", None):
+        values.append((contestant.nominator_country or "").strip().lower())
+    # 3) author account country as final fallback
+    if getattr(contestant, "user", None) and getattr(contestant.user, "country", None):
+        values.append((contestant.user.country or "").strip().lower())
+    return [v for v in values if v]
+
+
 @router.get("/top-high5")
 def get_top_high5_by_country(
     round_id: int | None = Query(default=None),
@@ -152,11 +166,11 @@ def get_top_high5_by_country(
                         )
                         .all()
                     )
-                    filtered = [
-                        c
-                        for c in season_contestants
-                        if (c.country or "").strip().lower() in variants
-                    ]
+                    filtered = []
+                    for c in season_contestants:
+                        candidates = _normalized_country_candidates(c)
+                        if any(v in variants for v in candidates):
+                            filtered.append(c)
                     if not filtered:
                         continue
                     ranking_scope = "country_snapshot_on_active_level"
