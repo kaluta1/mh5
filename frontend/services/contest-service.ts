@@ -262,6 +262,8 @@ export interface TopHigh5Row {
 export interface TopHigh5Contest {
   contest_id: number
   contest_name: string
+  category_id?: number | null
+  category_name?: string | null
   from_level: string
   to_level?: string | null
   country_group: string

@@ -312,6 +312,8 @@ def get_top_high5_by_country(
                     {
                         "contest_id": contest.id,
                         "contest_name": contest.name,
+                        "category_id": contest.category_id,
+                        "category_name": (contest.category.name if contest.category else None),
                         "from_level": season.level.value,
                         "to_level": nxt.value if nxt else None,
                         "country_group": matched_key,

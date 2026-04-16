@@ -79,6 +79,20 @@ export default function TopHigh5Page() {
 
   const filteredContests = useMemo<TopHigh5Contest[]>(() => data?.contests || [], [data])
 
+  // Group contests by category so the dashboard renders one section per category,
+  // matching the per-category layout requested by the team.
+  const contestsByCategory = useMemo<Array<{ category: string; contests: TopHigh5Contest[] }>>(() => {
+    const groups = new Map<string, TopHigh5Contest[]>()
+    for (const c of filteredContests) {
+      const key = (c.category_name && c.category_name.trim()) || "Uncategorized"
+      if (!groups.has(key)) groups.set(key, [])
+      groups.get(key)!.push(c)
+    }
+    return Array.from(groups.entries())
+      .sort(([a], [b]) => a.localeCompare(b, undefined, { sensitivity: "base" }))
+      .map(([category, contests]) => ({ category, contests }))
+  }, [filteredContests])
+
   // Near real-time refresh loop: poll every 5s when tab is visible and page is active.
   useEffect(() => {
     if (!isAuthenticated || !activeCountry) return
@@ -213,66 +227,84 @@ export default function TopHigh5Page() {
           )}
         </div>
       ) : (
-        <div className="space-y-6">
-          {filteredContests.map((contest) => (
-            <div
-              key={contest.contest_id}
-              className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-hidden"
-            >
-              <div className="px-4 py-3 bg-gray-50 dark:bg-gray-800/60 border-b border-gray-200 dark:border-gray-700">
-                <h2 className="font-semibold text-gray-900 dark:text-white">
-                  {contest.contest_name}
-                </h2>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  {contest.from_level} <ArrowRightCircle className="inline w-3 h-3 mx-1" /> {contest.to_level} |
-                  Group: {contest.country_group} | Top {contest.promotion_limit} migrate
-                </p>
+        <div className="space-y-8">
+          {contestsByCategory.map(({ category, contests }) => (
+            <section key={category} className="space-y-3">
+              <h2 className="text-lg font-bold text-gray-900 dark:text-white border-l-4 border-myhigh5-primary pl-3">
+                {category}
+              </h2>
+              <div className="space-y-4">
+                {contests.map((contest) => (
+                  <div
+                    key={contest.contest_id}
+                    className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-hidden"
+                  >
+                    <div className="px-4 py-3 bg-gray-50 dark:bg-gray-800/60 border-b border-gray-200 dark:border-gray-700">
+                      <h3 className="font-semibold text-gray-900 dark:text-white">
+                        {contest.contest_name}
+                      </h3>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        {contest.from_level} <ArrowRightCircle className="inline w-3 h-3 mx-1" /> {contest.to_level} |
+                        Group: {contest.country_group} | Top {contest.promotion_limit} migrate
+                      </p>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full text-sm">
+                        <thead className="bg-gray-100 dark:bg-gray-800">
+                          <tr>
+                            <th className="px-3 py-2 text-left">Rank</th>
+                            <th className="px-3 py-2 text-left">Contestant</th>
+                            <th className="px-3 py-2 text-left">City</th>
+                            <th className="px-3 py-2 text-left">Email</th>
+                            <th className="px-3 py-2 text-left">Stars</th>
+                            <th className="px-3 py-2 text-left">Shares</th>
+                            <th className="px-3 py-2 text-left">Likes</th>
+                            <th className="px-3 py-2 text-left">Comments</th>
+                            <th className="px-3 py-2 text-left">Views</th>
+                            <th className="px-3 py-2 text-left">Migrate</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {contest.rows.map((row) => (
+                            <tr
+                              key={row.contestant_id}
+                              className={row.migrates_next_stage ? "bg-emerald-50/70 dark:bg-emerald-900/10" : ""}
+                            >
+                              <td className="px-3 py-2 font-semibold">{row.rank}</td>
+                              <td className="px-3 py-2">
+                                <div className="font-medium text-gray-900 dark:text-white">
+                                  {row.author_name || row.contestant_title || `Contestant #${row.contestant_id}`}
+                                </div>
+                                {row.contestant_title && (
+                                  <div className="text-xs text-gray-500">{row.contestant_title}</div>
+                                )}
+                              </td>
+                              <td className="px-3 py-2">{row.city || "-"}</td>
+                              <td className="px-3 py-2 break-all">{row.author_email || "-"}</td>
+                              <td className="px-3 py-2">{row.stars_points}</td>
+                              <td className="px-3 py-2">{row.shares}</td>
+                              <td className="px-3 py-2">{row.likes}</td>
+                              <td className="px-3 py-2">{row.comments}</td>
+                              <td className="px-3 py-2">{row.views}</td>
+                              <td
+                                className={
+                                  "px-3 py-2 font-semibold " +
+                                  (row.migrates_next_stage
+                                    ? "text-emerald-700 dark:text-emerald-400"
+                                    : "text-gray-500 dark:text-gray-400")
+                                }
+                              >
+                                {row.migrates_next_stage ? "Yes" : "No"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-sm">
-                  <thead className="bg-gray-100 dark:bg-gray-800">
-                    <tr>
-                      <th className="px-3 py-2 text-left">Rank</th>
-                      <th className="px-3 py-2 text-left">Contestant</th>
-                      <th className="px-3 py-2 text-left">City</th>
-                      <th className="px-3 py-2 text-left">Stars</th>
-                      <th className="px-3 py-2 text-left">Shares</th>
-                      <th className="px-3 py-2 text-left">Likes</th>
-                      <th className="px-3 py-2 text-left">Comments</th>
-                      <th className="px-3 py-2 text-left">Views</th>
-                      <th className="px-3 py-2 text-left">Migrate</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {contest.rows.map((row) => (
-                      <tr
-                        key={row.contestant_id}
-                        className={row.migrates_next_stage ? "bg-emerald-50/70 dark:bg-emerald-900/10" : ""}
-                      >
-                        <td className="px-3 py-2 font-semibold">{row.rank}</td>
-                        <td className="px-3 py-2">
-                          <div className="font-medium text-gray-900 dark:text-white">
-                            {row.author_name || row.contestant_title || `Contestant #${row.contestant_id}`}
-                          </div>
-                          {row.contestant_title && (
-                            <div className="text-xs text-gray-500">{row.contestant_title}</div>
-                          )}
-                        </td>
-                        <td className="px-3 py-2">{row.city || "-"}</td>
-                        <td className="px-3 py-2">{row.stars_points}</td>
-                        <td className="px-3 py-2">{row.shares}</td>
-                        <td className="px-3 py-2">{row.likes}</td>
-                        <td className="px-3 py-2">{row.comments}</td>
-                        <td className="px-3 py-2">{row.views}</td>
-                        <td className="px-3 py-2 font-semibold">
-                          {row.migrates_next_stage ? "Yes (Top 5)" : "No"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            </section>
           ))}
         </div>
       )}
