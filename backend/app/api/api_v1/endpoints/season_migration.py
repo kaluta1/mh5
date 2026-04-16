@@ -17,6 +17,7 @@ from app.models.round import Round, RoundStatus, round_contests
 from app.models.contest import Contest
 from app.models.contests import ContestSeason, ContestSeasonLink, SeasonLevel
 from app.models.voting import ContestantVoting
+from app.models.contests import Contestant, ContestantSeason
 
 router = APIRouter()
 
@@ -111,28 +112,85 @@ def get_top_high5_by_country(
                     continue
                 _, season = link
                 nxt = _next_level(season.level)
-                if season.level != SeasonLevel.COUNTRY:
-                    continue
-
-                grouped = season_migration_service.get_top_contestants_by_location(
-                    db,
-                    season.id,
-                    "country",
-                    contest_id=contest.id,
-                    limit=None,
-                    stage_id=None,
-                    diagnostics=False,
-                )
-
                 matched_key = None
-                for key in grouped.keys():
-                    if (key or "").strip().lower() in variants:
-                        matched_key = key
-                        break
-                if matched_key is None:
-                    continue
+                ranking_scope = "country_group"
+                ranked = []
 
-                ranked = grouped.get(matched_key, [])
+                # Primary mode: canonical migration grouping on COUNTRY stage
+                if season.level == SeasonLevel.COUNTRY:
+                    grouped = season_migration_service.get_top_contestants_by_location(
+                        db,
+                        season.id,
+                        "country",
+                        contest_id=contest.id,
+                        limit=None,
+                        stage_id=None,
+                        diagnostics=False,
+                    )
+                    for key in grouped.keys():
+                        if (key or "").strip().lower() in variants:
+                            matched_key = key
+                            break
+                    if matched_key is not None:
+                        ranked = grouped.get(matched_key, [])
+
+                # Fallback mode: when active season is no longer COUNTRY (or no grouped row),
+                # still provide country-specific ranking snapshot from the current active season.
+                if not ranked:
+                    season_contestants = (
+                        db.query(Contestant)
+                        .join(ContestantSeason, ContestantSeason.contestant_id == Contestant.id)
+                        .filter(
+                            and_(
+                                ContestantSeason.season_id == season.id,
+                                ContestantSeason.is_active == True,
+                                Contestant.is_active == True,
+                                Contestant.is_deleted == False,
+                                Contestant.is_qualified == True,
+                                Contestant.season_id == contest.id,
+                            )
+                        )
+                        .all()
+                    )
+                    filtered = [
+                        c
+                        for c in season_contestants
+                        if (c.country or "").strip().lower() in variants
+                    ]
+                    if not filtered:
+                        continue
+                    ranking_scope = "country_snapshot_on_active_level"
+                    matched_key = selected_country
+
+                    fallback_ids = [c.id for c in filtered]
+                    fallback_points_rows = (
+                        db.query(
+                            ContestantVoting.contestant_id,
+                            func.coalesce(func.sum(ContestantVoting.points), 0).label("total_points"),
+                        )
+                        .filter(
+                            and_(
+                                ContestantVoting.season_id == season.id,
+                                ContestantVoting.contestant_id.in_(fallback_ids),
+                            )
+                        )
+                        .group_by(ContestantVoting.contestant_id)
+                        .all()
+                    )
+                    fallback_points = {r.contestant_id: int(r.total_points or 0) for r in fallback_points_rows}
+                    fallback_eng = season_migration_service._engagement_by_contestant(db, fallback_ids)
+                    ranked = sorted(
+                        filtered,
+                        key=lambda c: (
+                            fallback_points.get(c.id, 0),
+                            fallback_eng.get(c.id, {}).get("shares", 0),
+                            fallback_eng.get(c.id, {}).get("likes", 0),
+                            fallback_eng.get(c.id, {}).get("comments", 0),
+                            fallback_eng.get(c.id, {}).get("views", 0),
+                            -(c.id or 0),
+                        ),
+                        reverse=True,
+                    )
                 contestant_ids = [c.id for c in ranked]
                 points_by_id = {}
                 engagement_by_id = {}
@@ -206,6 +264,7 @@ def get_top_high5_by_country(
                         "from_level": season.level.value,
                         "to_level": nxt.value if nxt else None,
                         "country_group": matched_key,
+                        "ranking_scope": ranking_scope,
                         "promotion_limit": 5,
                         "rows": rows,
                     }
