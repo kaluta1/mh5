@@ -42,6 +42,7 @@ export default function ContestantsListPage() {
   const contestId = params.id as string
 
   const [contestName, setContestName] = useState('')
+  const [contestMode, setContestMode] = useState<string>('')
   const [allContestants, setAllContestants] = useState<ContestantData[]>([])
   const [rounds, setRounds] = useState<Round[]>([])
   const [activeRoundId, setActiveRoundId] = useState<number | null>(null)
@@ -78,6 +79,7 @@ export default function ContestantsListPage() {
         roundId: roundIdParam ? parseInt(roundIdParam, 10) : undefined,
       }) as any
       setContestName(data.name || '')
+      setContestMode(String(data.contest_mode || ''))
       setActiveRoundId(data.display_round_id ?? data.active_round_id ?? null)
       const cts = data.contestants || []
       setAllContestants(cts)
@@ -210,7 +212,10 @@ export default function ContestantsListPage() {
           <div className="mb-5">
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">{contestName}</h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-              {filteredContestants.length} {language === 'fr' ? 'participants' : 'contestants'}
+              {filteredContestants.length}{' '}
+              {contestMode === 'nomination'
+                ? (language === 'fr' ? 'nominateurs' : 'nominators')
+                : (language === 'fr' ? 'participants' : 'contestants')}
             </p>
           </div>
 
@@ -313,7 +318,11 @@ export default function ContestantsListPage() {
           {filteredContestants.length === 0 ? (
             <div className="text-center py-20">
               <Trophy className="w-14 h-14 text-gray-200 dark:text-gray-700 mx-auto mb-4" />
-              <p className="text-gray-500 dark:text-gray-400 font-medium">{language === 'fr' ? 'Aucun participant trouvé' : 'No contestants found'}</p>
+              <p className="text-gray-500 dark:text-gray-400 font-medium">{
+                contestMode === 'nomination'
+                  ? (language === 'fr' ? 'Aucun nominateur trouvé' : 'No nominators found')
+                  : (language === 'fr' ? 'Aucun participant trouvé' : 'No contestants found')
+              }</p>
               <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">{language === 'fr' ? 'Essayez de modifier vos filtres' : 'Try adjusting your filters'}</p>
             </div>
           ) : (
@@ -386,7 +395,11 @@ export default function ContestantsListPage() {
                         {contestant.author_name || 'Anonyme'}
                       </h3>
                       <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
-                        {contestant.title || [contestant.author_country, contestant.author_city].filter(Boolean).join(' · ') || (language === 'fr' ? 'Participant' : 'Contestant')}
+                        {contestant.title || [contestant.author_country, contestant.author_city].filter(Boolean).join(' · ') || (
+                          contestMode === 'nomination'
+                            ? (language === 'fr' ? 'Nominateur' : 'Nominator')
+                            : (language === 'fr' ? 'Participant' : 'Contestant')
+                        )}
                       </p>
 
                       {/* Action buttons */}

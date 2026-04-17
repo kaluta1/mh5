@@ -276,49 +276,44 @@ export default function TopHigh5Page() {
                         <thead className="bg-gray-100 dark:bg-gray-800">
                           <tr>
                             <th className="px-3 py-2 text-left">Rank</th>
-                            <th className="px-3 py-2 text-left">Contestant</th>
+                            <th className="px-3 py-2 text-left">Nominator</th>
                             <th className="px-3 py-2 text-left">Email</th>
                             <th className="px-3 py-2 text-left">Stars</th>
                             <th className="px-3 py-2 text-left">Shares</th>
                             <th className="px-3 py-2 text-left">Likes</th>
                             <th className="px-3 py-2 text-left">Comments</th>
                             <th className="px-3 py-2 text-left">Views</th>
-                            <th className="px-3 py-2 text-left">Migrate</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {contest.rows.map((row) => (
-                            <tr
-                              key={row.contestant_id}
-                              className={row.migrates_next_stage ? "bg-emerald-50/70 dark:bg-emerald-900/10" : ""}
-                            >
-                              <td className="px-3 py-2 font-semibold">{row.rank}</td>
-                              <td className="px-3 py-2">
-                                <div className="font-medium text-gray-900 dark:text-white">
-                                  {row.author_name || row.contestant_title || `Contestant #${row.contestant_id}`}
-                                </div>
-                                {row.contestant_title && (
-                                  <div className="text-xs text-gray-500">{row.contestant_title}</div>
-                                )}
-                              </td>
-                              <td className="px-3 py-2 break-all">{row.author_email || "-"}</td>
-                              <td className="px-3 py-2">{row.stars_points}</td>
-                              <td className="px-3 py-2">{row.shares}</td>
-                              <td className="px-3 py-2">{row.likes}</td>
-                              <td className="px-3 py-2">{row.comments}</td>
-                              <td className="px-3 py-2">{row.views}</td>
-                              <td
-                                className={
-                                  "px-3 py-2 font-semibold " +
-                                  (row.migrates_next_stage
-                                    ? "text-emerald-700 dark:text-emerald-400"
-                                    : "text-gray-500 dark:text-gray-400")
-                                }
+                          {/*
+                            Only show the "Top High5" — i.e. the nominators who would migrate
+                            to the next stage. Anything outside the top 5 is excluded.
+                          */}
+                          {contest.rows
+                            .filter((row) => row.migrates_next_stage)
+                            .map((row) => (
+                              <tr
+                                key={row.contestant_id}
+                                className="bg-emerald-50/70 dark:bg-emerald-900/10"
                               >
-                                {row.migrates_next_stage ? "Yes" : "No"}
-                              </td>
-                            </tr>
-                          ))}
+                                <td className="px-3 py-2 font-semibold">{row.rank}</td>
+                                <td className="px-3 py-2">
+                                  <div className="font-medium text-gray-900 dark:text-white">
+                                    {row.author_name || row.contestant_title || `Nominator #${row.contestant_id}`}
+                                  </div>
+                                  {row.contestant_title && (
+                                    <div className="text-xs text-gray-500">{row.contestant_title}</div>
+                                  )}
+                                </td>
+                                <td className="px-3 py-2 break-all">{row.author_email || "-"}</td>
+                                <td className="px-3 py-2">{row.stars_points}</td>
+                                <td className="px-3 py-2">{row.shares}</td>
+                                <td className="px-3 py-2">{row.likes}</td>
+                                <td className="px-3 py-2">{row.comments}</td>
+                                <td className="px-3 py-2">{row.views}</td>
+                              </tr>
+                            ))}
                         </tbody>
                       </table>
                     </div>

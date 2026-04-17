@@ -356,7 +356,7 @@ export default function MyHigh5Page() {
             {t('dashboard.myhigh5.points') || 'Points'}
           </TableHead>
           <TableHead>
-            {t('dashboard.myhigh5.contestant') || 'Contestant'}
+            {t('dashboard.myhigh5.nominator') || 'Nominator'}
           </TableHead>
           <TableHead className="hidden md:table-cell">
             {t('dashboard.myhigh5.location') || 'Localisation'}
@@ -459,9 +459,9 @@ export default function MyHigh5Page() {
                   aria-label={
                     enableDragDrop
                       ? touchReorderEnabled
-                        ? `${t('dashboard.myhigh5.tap_reorder') || 'Tap to select, then tap another photo to reorder'} — ${vote.author_name || 'Contestant'}`
+                        ? `${t('dashboard.myhigh5.tap_reorder') || 'Tap to select, then tap another photo to reorder'} — ${vote.author_name || 'Nominator'}`
                         : t('dashboard.myhigh5.drag_reorder') || 'Drag profile photo to reorder your High5'
-                      : vote.author_name || 'Contestant'
+                      : vote.author_name || 'Nominator'
                   }
                 >
                   {vote.author_avatar_url ? (
@@ -493,7 +493,7 @@ export default function MyHigh5Page() {
                 {/* Name & Title */}
                 <div className="min-w-0">
                   <p className="font-semibold text-gray-900 dark:text-white truncate">
-                    {vote.author_name || 'Contestant'}
+                    {vote.author_name || 'Nominator'}
                   </p>
                   {vote.contestant_title && (
                     <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
@@ -599,14 +599,14 @@ export default function MyHigh5Page() {
             <p className="text-sm text-blue-700 dark:text-blue-300">
               {isCoarsePointer
                 ? t('dashboard.myhigh5.hint_tap') ||
-                  'Tap a contestant’s profile photo to select them, then tap another photo to move them to that rank. Tap the same photo again to cancel.'
+                  'Tap a nominator’s profile photo to select them, then tap another photo to move them to that rank. Tap the same photo again to cancel.'
                 : t('dashboard.myhigh5.hint_dnd') ||
-                  'Hover a contestant’s profile photo to see the High5 hand, then drag from the photo to reorder. 1st place = 5 points … 5th = 1. Max 5 votes per category.'}
+                  'Hover a nominator’s profile photo to see the High5 hand, then drag from the photo to reorder. 1st place = 5 points … 5th = 1. Max 5 votes per category.'}
             </p>
             {isCoarsePointer && touchReorderSource && (
               <p className="text-sm font-medium text-amber-800 dark:text-amber-200 pt-1">
                 {(t('dashboard.myhigh5.tap_reorder_second') ||
-                  'Tap another contestant’s photo to move {name} to that position.').replace(
+                  'Tap another nominator’s photo to move {name} to that position.').replace(
                   '{name}',
                   seasonsData[touchReorderSource.seasonIndex]?.votes[touchReorderSource.voteIndex]?.author_name ||
                     '…'
@@ -623,7 +623,7 @@ export default function MyHigh5Page() {
             {t('dashboard.myhigh5.no_votes') || 'Aucun vote'}
           </h3>
           <p className="text-gray-500 dark:text-gray-400 mb-6">
-            {t('dashboard.myhigh5.no_votes_description') || "Vous n'avez pas encore voté pour des contestants. Explorez les concours pour voter!"}
+            {t('dashboard.myhigh5.no_votes_description') || "You haven’t voted for any nominators yet. Explore the nominations to vote!"}
           </p>
           <Button
             onClick={() => router.push('/dashboard/contests')}
@@ -672,7 +672,7 @@ export default function MyHigh5Page() {
                   <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
                     {season.remaining_slots > 0 && (
                       <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 text-right max-w-[min(100%,14rem)]">
-                        {(t('dashboard.myhigh5.remaining_votes') || 'Vous pouvez encore voter pour {count} contestant(s)').replace('{count}', season.remaining_slots.toString())}
+                        {(t('dashboard.myhigh5.remaining_votes') || 'You can still vote for {count} nominator(s)').replace('{count}', season.remaining_slots.toString())}
                       </p>
                     )}
                     <ChevronDown
