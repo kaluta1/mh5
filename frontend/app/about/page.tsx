@@ -85,7 +85,7 @@ export default function AboutPage() {
 
   const team = [
     { name: "Shafi Kaluta Abedi", roleKey: "team.founder_president", image: "/team/shafi-kaluta-abedi.png" },
-    { name: "Morice wangwe", roleKey: "team.director_ict", image: "/team/morice-wangwe.png" },
+    { name: "Morice Wangwe", roleKey: "team.director_ict", image: "/team/morice-wangwe.png" },
   ]
 
   const teamLabels: Record<string, Record<string, string>> = {
