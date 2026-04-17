@@ -77,26 +77,26 @@ export default function AboutMobilePage() {
   }
 
   const team = [
-    { name: "Shafi Kaluta Abedi", roleKey: "team.founder_president", emoji: "👨‍💼" },
-    { name: "Morice wangwe", roleKey: "team.programmer", emoji: "👨‍💻" },
+    { name: "Shafi Kaluta Abedi", roleKey: "team.founder_president", image: "/team/shafi-kaluta-abedi.png" },
+    { name: "Morice wangwe", roleKey: "team.director_ict", image: "/team/morice-wangwe.png" },
   ]
 
   const teamLabels: Record<string, Record<string, string>> = {
-    en: { 
-      "team.founder_president": "Founder and President", 
-      "team.programmer": "Programmer" 
+    en: {
+      "team.founder_president": "Founder and President",
+      "team.director_ict": "Director of ICT"
     },
-    fr: { 
-      "team.founder_president": "Fondateur et Président", 
-      "team.programmer": "Programmeur" 
+    fr: {
+      "team.founder_president": "Fondateur et Président",
+      "team.director_ict": "Directeur des TIC"
     },
-    es: { 
-      "team.founder_president": "Fundador y Presidente", 
-      "team.programmer": "Programador" 
+    es: {
+      "team.founder_president": "Fundador y Presidente",
+      "team.director_ict": "Director de TIC"
     },
-    de: { 
-      "team.founder_president": "Gründer und Präsident", 
-      "team.programmer": "Programmierer" 
+    de: {
+      "team.founder_president": "Gründer und Präsident",
+      "team.director_ict": "Direktor für IKT"
     },
   }
 
@@ -201,12 +201,21 @@ export default function AboutMobilePage() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
               {team.map((member, index) => (
-                <div 
+                <div
                   key={index}
                   className="text-center group"
                 >
-                  <div className="w-20 h-20 mx-auto mb-3 rounded-full bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 transition-transform duration-300">
-                    {member.emoji}
+                  <div className="w-20 h-20 mx-auto mb-3 rounded-full bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 transition-transform duration-300 overflow-hidden">
+                    {member.image ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={member.image}
+                        alt={member.name}
+                        className="w-full h-full object-cover object-top"
+                      />
+                    ) : (
+                      member.emoji
+                    )}
                   </div>
                   <h3 className="font-bold text-gray-900 dark:text-white">
                     {member.name}
