@@ -1,9 +1,9 @@
+/* Import MyHigh5 color palette (MUST be first: @import rules must precede all other rules). */
+@import '../styles/colors.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* Import MyHigh5 color palette */
-@import '../styles/colors.css';
 
 @layer base {
   :root {
