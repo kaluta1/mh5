@@ -356,7 +356,7 @@ export default function MyHigh5Page() {
             {t('dashboard.myhigh5.points') || 'Points'}
           </TableHead>
           <TableHead>
-            {t('dashboard.myhigh5.nominator') || 'Nominator'}
+            Nominator
           </TableHead>
           <TableHead className="hidden md:table-cell">
             {t('dashboard.myhigh5.location') || 'Localisation'}

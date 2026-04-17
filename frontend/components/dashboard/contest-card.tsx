@@ -714,9 +714,8 @@ export function ContestCard({
                 <span className="relative z-10 font-semibold group-hover/view:text-white transition-colors duration-300">
                   {t('dashboard.contests.view') || 'View'}{' '}
                   {isNomination
-                    ? (t('dashboard.contests.nominator') || 'Nominator')
-                    : (t('dashboard.contests.contestant') || 'Participant')}
-                  {contestants > 1 ? 's' : ''}
+                    ? (contestants > 1 ? 'Nominators' : 'Nominator')
+                    : `${t('dashboard.contests.contestant') || 'Participant'}${contestants > 1 ? 's' : ''}`}
                 </span>
                 <ArrowRight className="w-3.5 h-3.5 ml-1.5 group-hover/view:translate-x-1 group-hover/view:text-myhigh5-secondary transition-all duration-300 relative z-10 flex-shrink-0" />
               </Button>
@@ -734,9 +733,8 @@ export function ContestCard({
               <span className="relative z-10 font-semibold group-hover/view:drop-shadow-sm transition-all duration-300">
                 {t('dashboard.contests.view') || 'View'} {contestants}{' '}
                 {isNomination
-                  ? (t('dashboard.contests.nominator') || 'Nominator')
-                  : (t('dashboard.contests.contestant') || 'Participant')}
-                {contestants > 1 ? 's' : ''}
+                  ? (contestants > 1 ? 'Nominators' : 'Nominator')
+                  : `${t('dashboard.contests.contestant') || 'Participant'}${contestants > 1 ? 's' : ''}`}
               </span>
               <ArrowRight className="w-3.5 h-3.5 ml-1.5 group-hover/view:translate-x-1 group-hover/view:scale-110 transition-all duration-300 relative z-10 flex-shrink-0" />
             </Button>
