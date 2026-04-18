@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Trophy, Search, ArrowRightCircle, Building2, Flag, Map, Globe2, Globe } from "lucide-react"
+import { Trophy, Search, ArrowRightCircle, Building2, Flag, Map as MapIcon, Globe2, Globe } from "lucide-react"
 
 const LEVEL_OPTIONS: Array<{
   value: TopHigh5Level
@@ -21,7 +21,7 @@ const LEVEL_OPTIONS: Array<{
 }> = [
   { value: "city", label: "City", icon: Building2, requiresCountry: true, helper: "Top 5 per city (filtered by country)" },
   { value: "country", label: "Country", icon: Flag, requiresCountry: true, helper: "Top 5 for the selected country" },
-  { value: "regional", label: "Regional", icon: Map, requiresCountry: true, helper: "Top 5 per region (filtered by country)" },
+  { value: "regional", label: "Regional", icon: MapIcon, requiresCountry: true, helper: "Top 5 per region (filtered by country)" },
   { value: "continent", label: "Continent", icon: Globe2, requiresCountry: true, helper: "Top 5 per continent (filtered by country)" },
   { value: "global", label: "Global", icon: Globe, requiresCountry: false, helper: "Top 5 worldwide — no country filter" },
 ]
