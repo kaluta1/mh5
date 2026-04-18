@@ -271,10 +271,13 @@ export interface TopHigh5Contest {
   rows: TopHigh5Row[]
 }
 
+export type TopHigh5Level = 'city' | 'country' | 'regional' | 'continent' | 'global'
+
 export interface TopHigh5Response {
   round_id: number
   round_name: string
   country: string
+  level?: TopHigh5Level
   contests: TopHigh5Contest[]
   fallback_applied?: boolean
   diagnostics?: {
@@ -284,6 +287,7 @@ export interface TopHigh5Response {
     country_variants: string[]
     active_links_by_level: Record<string, number>
     nomination_contests_in_round: number
+    requested_level?: TopHigh5Level
   }
 }
 
@@ -1145,12 +1149,14 @@ class ContestService {
   async getTopHigh5ByCountry(params?: {
     roundId?: number
     country?: string
+    level?: TopHigh5Level
   }): Promise<TopHigh5Response> {
     try {
       const response = await api.get<TopHigh5Response>('/api/v1/seasons/top-high5', {
         params: {
           round_id: params?.roundId,
           country: params?.country,
+          level: params?.level,
         },
       })
       return response.data
@@ -1160,6 +1166,7 @@ class ContestService {
         round_id: 0,
         round_name: '',
         country: params?.country || '',
+        level: params?.level,
         contests: [],
       }
     }

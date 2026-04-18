@@ -5,11 +5,26 @@ import { useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@/hooks/use-auth"
 import { useLanguage } from "@/contexts/language-context"
-import { contestService, TopHigh5Contest, TopHigh5Response } from "@/services/contest-service"
+import { contestService, TopHigh5Contest, TopHigh5Level, TopHigh5Response } from "@/services/contest-service"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Trophy, Search, ArrowRightCircle } from "lucide-react"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Trophy, Search, ArrowRightCircle, Building2, Flag, Map, Globe2, Globe } from "lucide-react"
+
+const LEVEL_OPTIONS: Array<{
+  value: TopHigh5Level
+  label: string
+  icon: React.ComponentType<{ className?: string }>
+  requiresCountry: boolean
+  helper: string
+}> = [
+  { value: "city", label: "City", icon: Building2, requiresCountry: true, helper: "Top 5 per city (filtered by country)" },
+  { value: "country", label: "Country", icon: Flag, requiresCountry: true, helper: "Top 5 for the selected country" },
+  { value: "regional", label: "Regional", icon: Map, requiresCountry: true, helper: "Top 5 per region (filtered by country)" },
+  { value: "continent", label: "Continent", icon: Globe2, requiresCountry: true, helper: "Top 5 per continent (filtered by country)" },
+  { value: "global", label: "Global", icon: Globe, requiresCountry: false, helper: "Top 5 worldwide — no country filter" },
+]
 
 function TopHigh5Skeleton() {
   return (
@@ -29,6 +44,7 @@ export default function TopHigh5Page() {
   const searchParams = useSearchParams()
   const [countryInput, setCountryInput] = useState("")
   const [roundIdInput, setRoundIdInput] = useState("")
+  const [activeLevel, setActiveLevel] = useState<TopHigh5Level>("country")
   const [data, setData] = useState<TopHigh5Response | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeCountry, setActiveCountry] = useState("")
@@ -37,6 +53,14 @@ export default function TopHigh5Page() {
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null)
   const [isAutoRefreshing, setIsAutoRefreshing] = useState(false)
   const [showDiagnostics, setShowDiagnostics] = useState(false)
+  // Flag so we only seed the country input from the signed-in user once, never
+  // overwriting whatever the user has typed afterwards.
+  const [didSeedCountry, setDidSeedCountry] = useState(false)
+
+  const currentLevelMeta = useMemo(
+    () => LEVEL_OPTIONS.find((opt) => opt.value === activeLevel) ?? LEVEL_OPTIONS[1],
+    [activeLevel],
+  )
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -45,47 +69,75 @@ export default function TopHigh5Page() {
   }, [isLoading, isAuthenticated, router])
 
   useEffect(() => {
+    if (didSeedCountry) return
     if (!isLoading && isAuthenticated) {
       const fallbackCountry =
         (user as any)?.country || (user as any)?.author_country || "Tanzania"
       const urlRoundIdRaw = searchParams?.get("round_id") || ""
+      const urlLevelRaw = (searchParams?.get("level") || "").toLowerCase() as TopHigh5Level
+      const urlCountryRaw = searchParams?.get("country") || ""
       const parsedRoundId = urlRoundIdRaw && !Number.isNaN(Number(urlRoundIdRaw)) ? Number(urlRoundIdRaw) : undefined
-      setCountryInput(fallbackCountry)
+      const initialLevel: TopHigh5Level = LEVEL_OPTIONS.some((o) => o.value === urlLevelRaw)
+        ? urlLevelRaw
+        : "country"
+      const initialCountry = urlCountryRaw || fallbackCountry
+
+      setCountryInput(initialCountry)
       setRoundIdInput(urlRoundIdRaw)
-      fetchData(fallbackCountry, { roundId: parsedRoundId })
+      setActiveLevel(initialLevel)
+      setDidSeedCountry(true)
+      fetchData({ country: initialCountry, roundId: parsedRoundId, level: initialLevel })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoading, isAuthenticated, user?.id])
+  }, [isLoading, isAuthenticated, user?.id, didSeedCountry])
 
-  const fetchData = async (
-    country: string,
-    options?: { silent?: boolean; roundId?: number }
-  ) => {
+  const fetchData = async (opts: {
+    country: string
+    level: TopHigh5Level
+    roundId?: number
+    silent?: boolean
+  }) => {
     try {
-      if (!options?.silent) {
+      if (!opts.silent) {
         setLoading(true)
       } else {
         setIsAutoRefreshing(true)
       }
       setError(null)
+      const isGlobal = opts.level === "global"
+      const trimmedCountry = opts.country.trim()
       const response = await contestService.getTopHigh5ByCountry({
-        country: country.trim(),
-        roundId: options?.roundId,
+        country: isGlobal ? undefined : trimmedCountry,
+        roundId: opts.roundId,
+        level: opts.level,
       })
       setData(response)
-      setActiveCountry(country.trim())
-      setActiveRoundId(options?.roundId)
+      setActiveCountry(isGlobal ? "" : trimmedCountry)
+      setActiveRoundId(opts.roundId)
       setLastUpdatedAt(new Date())
     } catch (e: any) {
       setError(e?.message || "Failed to load Top High5")
       setData(null)
     } finally {
-      if (!options?.silent) {
+      if (!opts.silent) {
         setLoading(false)
       } else {
         setIsAutoRefreshing(false)
       }
     }
+  }
+
+  const handleLevelChange = (next: string) => {
+    const nextLevel = next as TopHigh5Level
+    if (nextLevel === activeLevel) return
+    setActiveLevel(nextLevel)
+    const parsed = roundIdInput && !Number.isNaN(Number(roundIdInput)) ? Number(roundIdInput) : undefined
+    fetchData({ country: countryInput, level: nextLevel, roundId: parsed })
+  }
+
+  const handleSearch = () => {
+    const parsed = roundIdInput && !Number.isNaN(Number(roundIdInput)) ? Number(roundIdInput) : undefined
+    fetchData({ country: countryInput, level: activeLevel, roundId: parsed })
   }
 
   const filteredContests = useMemo<TopHigh5Contest[]>(() => data?.contests || [], [data])
@@ -106,30 +158,32 @@ export default function TopHigh5Page() {
 
   // Near real-time refresh loop: poll every 5s when tab is visible and page is active.
   useEffect(() => {
-    if (!isAuthenticated || !activeCountry) return
+    if (!isAuthenticated) return
+    // Non-global levels require a country context to refresh; global does not.
+    if (activeLevel !== "global" && !activeCountry) return
     let intervalId: ReturnType<typeof setInterval> | null = null
+
+    const refresh = () =>
+      fetchData({
+        country: activeCountry,
+        level: activeLevel,
+        roundId: activeRoundId,
+        silent: true,
+      })
 
     const tick = () => {
       if (document.visibilityState !== "visible") return
-      void fetchData(activeCountry, { silent: true, roundId: activeRoundId })
+      void refresh()
     }
 
     intervalId = setInterval(tick, 5000)
 
     const onVisibility = () => {
-      if (document.visibilityState === "visible") {
-        void fetchData(activeCountry, { silent: true, roundId: activeRoundId })
-      }
+      if (document.visibilityState === "visible") void refresh()
     }
-
-    const onWindowFocus = () => {
-      void fetchData(activeCountry, { silent: true, roundId: activeRoundId })
-    }
-
+    const onWindowFocus = () => void refresh()
     // Same-tab refresh signal from MyHigh5 reorder flow
-    const onVoteChanged = () => {
-      void fetchData(activeCountry, { silent: true, roundId: activeRoundId })
-    }
+    const onVoteChanged = () => void refresh()
 
     document.addEventListener("visibilitychange", onVisibility)
     window.addEventListener("focus", onWindowFocus)
@@ -142,7 +196,7 @@ export default function TopHigh5Page() {
       window.removeEventListener("vote-changed", onVoteChanged)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, activeCountry, activeRoundId])
+  }, [isAuthenticated, activeCountry, activeRoundId, activeLevel])
 
   if (isLoading || loading) {
     return <TopHigh5Skeleton />
@@ -164,38 +218,69 @@ export default function TopHigh5Page() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
+      <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4 space-y-4">
+        <div className="space-y-1">
+          <div className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+            Stage
+          </div>
+          <Tabs value={activeLevel} onValueChange={handleLevelChange}>
+            <TabsList className="flex flex-wrap h-auto gap-1 bg-gray-100 dark:bg-gray-800 p-1">
+              {LEVEL_OPTIONS.map((opt) => {
+                const Icon = opt.icon
+                return (
+                  <TabsTrigger key={opt.value} value={opt.value} className="gap-1.5">
+                    <Icon className="w-4 h-4" />
+                    {opt.label}
+                  </TabsTrigger>
+                )
+              })}
+            </TabsList>
+          </Tabs>
+          <p className="text-xs text-gray-500 dark:text-gray-400">{currentLevelMeta.helper}</p>
+        </div>
+
         <div className="flex flex-col md:flex-row gap-3 md:items-center">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <Input
               value={countryInput}
               onChange={(e) => setCountryInput(e.target.value)}
-              placeholder="Country (e.g. Tanzania, Benin)"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSearch()
+              }}
+              placeholder={
+                currentLevelMeta.requiresCountry
+                  ? "Country (e.g. Tanzania, Benin)"
+                  : "Country filter disabled for Global"
+              }
+              disabled={!currentLevelMeta.requiresCountry}
               className="pl-9"
             />
           </div>
           <Input
             value={roundIdInput}
             onChange={(e) => setRoundIdInput(e.target.value.replace(/[^0-9]/g, ""))}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleSearch()
+            }}
             placeholder="Round id (optional, e.g. 3 = March 2026)"
             className="md:w-72"
             inputMode="numeric"
           />
-          <Button
-            onClick={() => {
-              const parsed = roundIdInput && !Number.isNaN(Number(roundIdInput)) ? Number(roundIdInput) : undefined
-              fetchData(countryInput, { roundId: parsed })
-            }}
-          >
-            Show Top High5
-          </Button>
+          <Button onClick={handleSearch}>Show Top High5</Button>
         </div>
+
         {data && (
-          <div className="text-xs text-gray-500 dark:text-gray-400 mt-3 flex flex-wrap items-center gap-2">
+          <div className="text-xs text-gray-500 dark:text-gray-400 flex flex-wrap items-center gap-2">
             <span>Round: {data.round_name} (id {data.round_id})</span>
             <span>|</span>
-            <span>Country: {data.country || activeCountry}</span>
+            <span>Stage: {(data.level || activeLevel).toUpperCase()}</span>
+            {activeLevel !== "global" && (
+              <>
+                <span>|</span>
+                <span>Country: {data.country || activeCountry}</span>
+              </>
+            )}
             <span>|</span>
             <span>{isAutoRefreshing ? "Refreshing live..." : "Live sync every 5s"}</span>
             {lastUpdatedAt && (
@@ -257,18 +342,31 @@ export default function TopHigh5Page() {
                 {category}
               </h2>
               <div className="space-y-4">
-                {contests.map((contest) => (
+                {contests.map((contest, idx) => (
                   <div
-                    key={contest.contest_id}
+                    key={`${contest.contest_id}-${contest.country_group ?? "group"}-${idx}`}
                     className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-hidden"
                   >
                     <div className="px-4 py-3 bg-gray-50 dark:bg-gray-800/60 border-b border-gray-200 dark:border-gray-700">
                       <h3 className="font-semibold text-gray-900 dark:text-white">
                         {contest.contest_name}
+                        {contest.country_group && (
+                          <span className="ml-2 inline-flex items-center rounded-full bg-myhigh5-primary/10 text-myhigh5-primary px-2 py-0.5 text-xs font-medium">
+                            {contest.country_group}
+                          </span>
+                        )}
                       </h3>
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        {contest.from_level} <ArrowRightCircle className="inline w-3 h-3 mx-1" /> {contest.to_level} |
-                        Group: {contest.country_group} | Top {contest.promotion_limit} migrate
+                        {contest.from_level}
+                        {contest.to_level ? (
+                          <>
+                            <ArrowRightCircle className="inline w-3 h-3 mx-1" />
+                            {contest.to_level}
+                          </>
+                        ) : (
+                          <span className="ml-1">(final stage)</span>
+                        )}
+                        {" | "}Top {contest.promotion_limit} migrate
                       </p>
                     </div>
                     <div className="overflow-x-auto">

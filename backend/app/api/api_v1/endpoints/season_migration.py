@@ -67,30 +67,69 @@ def _normalized_country_candidates(contestant):
     return [v for v in values if v]
 
 
+_LEVEL_MAP = {
+    "city": SeasonLevel.CITY,
+    "country": SeasonLevel.COUNTRY,
+    "regional": SeasonLevel.REGIONAL,
+    "continent": SeasonLevel.CONTINENT,
+    "global": SeasonLevel.GLOBAL,
+}
+
+_LEVEL_TO_LOCATION_FIELD = {
+    SeasonLevel.CITY: "city",
+    SeasonLevel.COUNTRY: "country",
+    SeasonLevel.REGIONAL: "region",
+    SeasonLevel.CONTINENT: "continent",
+    SeasonLevel.GLOBAL: None,  # no grouping; treat all contestants as one pool
+}
+
+
 @router.get("/top-high5")
 def get_top_high5_by_country(
     round_id: int | None = Query(default=None),
     country: str | None = Query(default=None),
+    level: str | None = Query(
+        default=None,
+        description="Stage filter: city | country | regional | continent | global. Defaults to country.",
+    ),
     current_user: User | None = Depends(deps.get_current_active_user_optional),
 ):
     """
-    Read-only preview for Top High5 by country (nomination contests).
-    Returns full ranked rows for that country and marks top-5 as migrates_next_stage=True.
+    Read-only preview for Top High5 per stage (nomination contests).
+
+    - `level=country` (default): top 5 for the selected country.
+    - `level=city` / `regional` / `continent`: top 5 grouped by that location
+      within the selected country. One leaderboard per distinct location value.
+    - `level=global`: top 5 worldwide, no country filter.
     """
     from app.db.session import SessionLocal
 
     db = SessionLocal()
     try:
-        selected_country = (country or "").strip()
-        if not selected_country and current_user:
-            selected_country = (current_user.country or "").strip()
-        if not selected_country:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Country is required (query ?country=... or authenticated user country).",
-            )
+        # Resolve the requested stage; default to COUNTRY for backward compatibility.
+        requested_level = SeasonLevel.COUNTRY
+        if level:
+            parsed = _LEVEL_MAP.get(level.strip().lower())
+            if parsed is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid level. Must be one of: city, country, regional, continent, global.",
+                )
+            requested_level = parsed
 
-        variants = _country_variants(selected_country)
+        is_global = requested_level == SeasonLevel.GLOBAL
+
+        selected_country = (country or "").strip()
+        if not is_global:
+            if not selected_country and current_user:
+                selected_country = (current_user.country or "").strip()
+            if not selected_country:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Country is required (query ?country=... or authenticated user country).",
+                )
+
+        variants = _country_variants(selected_country) if selected_country else set()
 
         def _diagnostics_for_round(rnd: Round):
             # Active contest-season links per level
@@ -127,6 +166,7 @@ def get_top_high5_by_country(
                 "country_variants": sorted(list(variants)),
                 "active_links_by_level": active_links_by_level,
                 "nomination_contests_in_round": int(nomination_contests),
+                "requested_level": requested_level.value,
             }
 
         def _build_for_round(rnd: Round):
@@ -162,38 +202,23 @@ def get_top_high5_by_country(
                 if not link:
                     continue
                 _, season = link
+
+                # Only show contests whose active season matches the requested level.
+                if season.level != requested_level:
+                    continue
+
                 nxt = _next_level(season.level)
-                matched_key = None
-                ranking_scope = "country_group"
-                ranked = []
+                location_field = _LEVEL_TO_LOCATION_FIELD.get(season.level)
 
-                # Primary mode: canonical migration grouping on COUNTRY stage
-                if season.level == SeasonLevel.COUNTRY:
-                    grouped = season_migration_service.get_top_contestants_by_location(
-                        db,
-                        season.id,
-                        "country",
-                        contest_id=contest.id,
-                        limit=None,
-                        stage_id=None,
-                        diagnostics=False,
-                    )
-                    for key in grouped.keys():
-                        if (key or "").strip().lower() in variants:
-                            matched_key = key
-                            break
-                    if matched_key is not None:
-                        ranked = grouped.get(matched_key, [])
+                # Build one or more "contest leaderboards". For country/global there is
+                # a single leaderboard; for city/regional/continent we emit one per
+                # distinct location value within the selected country.
+                per_location_groups: list[tuple[str | None, list]] = []
 
-                # Fallback mode: when active season is no longer COUNTRY (or no grouped row),
-                # still provide country-specific ranking snapshot from the current active season.
-                # NOTE: do NOT filter by Contestant.is_qualified here. A previous migration
-                # step may have set is_qualified=False on non-promoted contestants; the
-                # snapshot view should still show them so voting leaderboards never go
-                # silently empty after a migration cycle. The "would migrate" highlight
-                # is computed below via top-N rank, not via is_qualified.
-                if not ranked:
-                    season_contestants = (
+                if season.level == SeasonLevel.GLOBAL:
+                    # Global: no country filter, no grouping. Take all qualified contestants
+                    # in the season for this contest and rank them together.
+                    all_contestants = (
                         db.query(Contestant)
                         .join(ContestantSeason, ContestantSeason.contestant_id == Contestant.id)
                         .filter(
@@ -207,57 +232,135 @@ def get_top_high5_by_country(
                         )
                         .all()
                     )
-                    filtered = []
-                    for c in season_contestants:
-                        candidates = _normalized_country_candidates(c)
-                        if any(v in variants for v in candidates):
-                            filtered.append(c)
-                    if not filtered:
-                        continue
-                    ranking_scope = "country_snapshot_on_active_level"
-                    matched_key = selected_country
+                    if all_contestants:
+                        per_location_groups.append(("Global", all_contestants))
 
-                    fallback_ids = [c.id for c in filtered]
-                    fallback_points_rows = (
-                        db.query(
-                            ContestantVoting.contestant_id,
-                            func.coalesce(func.sum(ContestantVoting.points), 0).label("total_points"),
-                        )
-                        .filter(
-                            and_(
-                                ContestantVoting.season_id == season.id,
-                                ContestantVoting.contestant_id.in_(fallback_ids),
+                elif season.level == SeasonLevel.COUNTRY:
+                    # Canonical grouping by country. Match the user-selected country
+                    # against the group keys (case / alias insensitive).
+                    grouped = season_migration_service.get_top_contestants_by_location(
+                        db,
+                        season.id,
+                        "country",
+                        contest_id=contest.id,
+                        limit=None,
+                        stage_id=None,
+                        diagnostics=False,
+                    )
+                    matched_key = None
+                    for key in grouped.keys():
+                        if (key or "").strip().lower() in variants:
+                            matched_key = key
+                            break
+                    if matched_key is not None:
+                        per_location_groups.append((matched_key, grouped.get(matched_key, [])))
+                    else:
+                        # Fallback: rebuild snapshot from active season contestants
+                        # whose country matches the search (handles seasons where no
+                        # canonical grouping key landed on the exact label).
+                        season_contestants = (
+                            db.query(Contestant)
+                            .join(ContestantSeason, ContestantSeason.contestant_id == Contestant.id)
+                            .filter(
+                                and_(
+                                    ContestantSeason.season_id == season.id,
+                                    ContestantSeason.is_active == True,
+                                    Contestant.is_active == True,
+                                    Contestant.is_deleted == False,
+                                    Contestant.season_id == contest.id,
+                                )
                             )
+                            .all()
                         )
-                        .group_by(ContestantVoting.contestant_id)
-                        .all()
+                        filtered = [
+                            c for c in season_contestants
+                            if any(v in variants for v in _normalized_country_candidates(c))
+                        ]
+                        if filtered:
+                            per_location_groups.append((selected_country, filtered))
+
+                else:
+                    # city / regional / continent: group by location_field, then keep
+                    # only groups whose contestants are in the selected country.
+                    grouped = season_migration_service.get_top_contestants_by_location(
+                        db,
+                        season.id,
+                        location_field,
+                        contest_id=contest.id,
+                        limit=None,
+                        stage_id=None,
+                        diagnostics=False,
                     )
-                    fallback_points = {r.contestant_id: int(r.total_points or 0) for r in fallback_points_rows}
-                    fallback_eng = season_migration_service._engagement_by_contestant(db, fallback_ids)
-                    ranked = sorted(
-                        filtered,
-                        key=lambda c: (
-                            fallback_points.get(c.id, 0),
-                            fallback_eng.get(c.id, {}).get("shares", 0),
-                            fallback_eng.get(c.id, {}).get("likes", 0),
-                            fallback_eng.get(c.id, {}).get("comments", 0),
-                            fallback_eng.get(c.id, {}).get("views", 0),
-                            -(c.id or 0),
-                        ),
-                        reverse=True,
+                    for key, members in grouped.items():
+                        if not key:
+                            continue
+                        country_matching_members = [
+                            c for c in members
+                            if any(v in variants for v in _normalized_country_candidates(c))
+                        ]
+                        if country_matching_members:
+                            per_location_groups.append((key, country_matching_members))
+
+                if not per_location_groups:
+                    continue
+
+                # Render one contest_out per location group. Maintains a stable
+                # alphabetical order so the dashboard lists them predictably.
+                per_location_groups.sort(key=lambda kv: (kv[0] or "").lower())
+
+                for matched_key, ranked in per_location_groups:
+                    rows = _build_rows_for_group(db, contest, season, ranked)
+                    ranking_scope = (
+                        "global" if season.level == SeasonLevel.GLOBAL else
+                        "country_group" if season.level == SeasonLevel.COUNTRY else
+                        f"{location_field}_in_country"
                     )
-                contestant_ids = [c.id for c in ranked]
-                points_by_id = {}
-                engagement_by_id = {}
-                if contestant_ids:
-                    points_rows = (
+                    contests_out.append(
+                        {
+                            "contest_id": contest.id,
+                            "contest_name": contest.name,
+                            "category_id": contest.category_id,
+                            "category_name": (contest.category.name if contest.category else None),
+                            "from_level": season.level.value,
+                            "to_level": nxt.value if nxt else None,
+                            "country_group": matched_key,
+                            "ranking_scope": ranking_scope,
+                            "promotion_limit": 5,
+                            "rows": rows,
+                        }
+                    )
+            return contests_out
+
+        def _build_rows_for_group(db, contest, season, ranked):
+            """Compute stars/engagement and produce ranked rows for a single group."""
+            contestant_ids = [c.id for c in ranked]
+            points_by_id: dict[int, int] = {}
+            engagement_by_id: dict[int, dict] = {}
+            if contestant_ids:
+                points_rows = (
+                    db.query(
+                        ContestantVoting.contestant_id,
+                        func.coalesce(func.sum(ContestantVoting.points), 0).label("total_points"),
+                    )
+                    .filter(
+                        and_(
+                            ContestantVoting.season_id == season.id,
+                            ContestantVoting.contest_id == contest.id,
+                            ContestantVoting.contestant_id.in_(contestant_ids),
+                        )
+                    )
+                    .group_by(ContestantVoting.contestant_id)
+                    .all()
+                )
+                points_by_id = {r.contestant_id: int(r.total_points or 0) for r in points_rows}
+                if not points_by_id:
+                    legacy_rows = (
                         db.query(
                             ContestantVoting.contestant_id,
                             func.coalesce(func.sum(ContestantVoting.points), 0).label("total_points"),
                         )
                         .filter(
                             and_(
-                                ContestantVoting.season_id == season.id,
                                 ContestantVoting.contest_id == contest.id,
                                 ContestantVoting.contestant_id.in_(contestant_ids),
                             )
@@ -265,88 +368,52 @@ def get_top_high5_by_country(
                         .group_by(ContestantVoting.contestant_id)
                         .all()
                     )
-                    points_by_id = {r.contestant_id: int(r.total_points or 0) for r in points_rows}
-                    if not points_by_id:
-                        legacy_rows = (
-                            db.query(
-                                ContestantVoting.contestant_id,
-                                func.coalesce(func.sum(ContestantVoting.points), 0).label("total_points"),
-                            )
-                            .filter(
-                                and_(
-                                    ContestantVoting.contest_id == contest.id,
-                                    ContestantVoting.contestant_id.in_(contestant_ids),
-                                )
-                            )
-                            .group_by(ContestantVoting.contestant_id)
-                            .all()
-                        )
-                        points_by_id = {r.contestant_id: int(r.total_points or 0) for r in legacy_rows}
-                    engagement_by_id = season_migration_service._engagement_by_contestant(db, contestant_ids)
+                    points_by_id = {r.contestant_id: int(r.total_points or 0) for r in legacy_rows}
+                engagement_by_id = season_migration_service._engagement_by_contestant(db, contestant_ids)
 
-                # Always re-rank against the *displayed* numbers so the table order
-                # matches the visible columns. Order = stars desc -> shares desc ->
-                # likes desc -> comments desc -> views desc -> earliest contestant
-                # (lower id wins). This is the canonical winner rule from
-                # docs/WINNER_AND_MIGRATION_GUIDE.md and prevents any drift between
-                # the original sort source (canonical or fallback) and the columns
-                # we render.
-                ranked = sorted(
-                    ranked,
-                    key=lambda c: (
-                        points_by_id.get(c.id, 0),
-                        engagement_by_id.get(c.id, {}).get("shares", 0),
-                        engagement_by_id.get(c.id, {}).get("likes", 0),
-                        engagement_by_id.get(c.id, {}).get("comments", 0),
-                        engagement_by_id.get(c.id, {}).get("views", 0),
-                        -(c.id or 0),
-                    ),
-                    reverse=True,
-                )
+            # Canonical winner order: stars desc -> shares -> likes -> comments ->
+            # views -> earliest contestant. Kept in sync with the rendered columns.
+            sorted_ranked = sorted(
+                ranked,
+                key=lambda c: (
+                    points_by_id.get(c.id, 0),
+                    engagement_by_id.get(c.id, {}).get("shares", 0),
+                    engagement_by_id.get(c.id, {}).get("likes", 0),
+                    engagement_by_id.get(c.id, {}).get("comments", 0),
+                    engagement_by_id.get(c.id, {}).get("views", 0),
+                    -(c.id or 0),
+                ),
+                reverse=True,
+            )
 
-                rows = []
-                for idx, c in enumerate(ranked, start=1):
-                    author_name = None
-                    author_email = None
-                    if c.user:
-                        author_name = c.user.full_name or c.user.username or c.user.email
-                        author_email = c.user.email
-                    e = engagement_by_id.get(c.id, {})
-                    rows.append(
-                        {
-                            "rank": idx,
-                            "migrates_next_stage": idx <= 5,
-                            "contestant_id": c.id,
-                            "contestant_title": c.title,
-                            "author_name": author_name,
-                            "author_email": author_email,
-                            "city": c.city,
-                            "country": c.country,
-                            "region": c.region,
-                            "continent": c.continent,
-                            "stars_points": points_by_id.get(c.id, 0),
-                            "shares": e.get("shares", 0),
-                            "likes": e.get("likes", 0),
-                            "comments": e.get("comments", 0),
-                            "views": e.get("views", 0),
-                        }
-                    )
-
-                contests_out.append(
+            rows = []
+            for idx, c in enumerate(sorted_ranked, start=1):
+                author_name = None
+                author_email = None
+                if c.user:
+                    author_name = c.user.full_name or c.user.username or c.user.email
+                    author_email = c.user.email
+                e = engagement_by_id.get(c.id, {})
+                rows.append(
                     {
-                        "contest_id": contest.id,
-                        "contest_name": contest.name,
-                        "category_id": contest.category_id,
-                        "category_name": (contest.category.name if contest.category else None),
-                        "from_level": season.level.value,
-                        "to_level": nxt.value if nxt else None,
-                        "country_group": matched_key,
-                        "ranking_scope": ranking_scope,
-                        "promotion_limit": 5,
-                        "rows": rows,
+                        "rank": idx,
+                        "migrates_next_stage": idx <= 5,
+                        "contestant_id": c.id,
+                        "contestant_title": c.title,
+                        "author_name": author_name,
+                        "author_email": author_email,
+                        "city": c.city,
+                        "country": c.country,
+                        "region": c.region,
+                        "continent": c.continent,
+                        "stars_points": points_by_id.get(c.id, 0),
+                        "shares": e.get("shares", 0),
+                        "likes": e.get("likes", 0),
+                        "comments": e.get("comments", 0),
+                        "views": e.get("views", 0),
                     }
                 )
-            return contests_out
+            return rows
 
         if round_id is not None:
             rnd = db.query(Round).filter(Round.id == round_id).first()
@@ -357,6 +424,7 @@ def get_top_high5_by_country(
                 "round_id": rnd.id,
                 "round_name": rnd.name,
                 "country": selected_country,
+                "level": requested_level.value,
                 "contests": contests_out,
                 "fallback_applied": False,
                 "diagnostics": _diagnostics_for_round(rnd),
@@ -390,6 +458,7 @@ def get_top_high5_by_country(
             "round_id": chosen_round.id,
             "round_name": chosen_round.name,
             "country": selected_country,
+            "level": requested_level.value,
             "contests": chosen_contests,
             "fallback_applied": fallback_applied,
             "diagnostics": _diagnostics_for_round(chosen_round),
