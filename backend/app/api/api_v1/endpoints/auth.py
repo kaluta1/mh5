@@ -33,6 +33,13 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+
+@router.get("/health")
+def auth_health():
+    """Lightweight probe for load balancers / uptime checks (no DB)."""
+    return {"status": "ok", "service": "auth"}
+
+
 @router.post("/register", response_model=User, status_code=status.HTTP_201_CREATED)
 def register_user(
     *,
