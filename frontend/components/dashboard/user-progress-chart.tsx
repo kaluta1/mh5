@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
+import { Line, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { TrendingUp, Users } from 'lucide-react'
 import { useLanguage } from '@/contexts/language-context'
 import { cn } from '@/lib/utils'
@@ -72,8 +72,8 @@ export function UserProgressChart({ data, title, period = 'week', onPeriodChange
       <CardContent>
         <div className="overflow-x-auto">
         <div className="min-w-[500px]">
-        <ResponsiveContainer width="100%" height={300}>
-          <AreaChart data={data} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+        <ResponsiveContainer width="100%" height={300} minWidth={0}>
+          <ComposedChart data={data} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
@@ -132,7 +132,7 @@ export function UserProgressChart({ data, title, period = 'week', onPeriodChange
               dot={{ fill: '#f59e0b', r: 4 }}
               name={t('admin.dashboard.chart_labels.new_users')}
             />
-          </AreaChart>
+          </ComposedChart>
         </ResponsiveContainer>
         </div>
         </div>

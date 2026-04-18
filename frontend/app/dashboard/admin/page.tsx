@@ -17,7 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 // Note: Recharts kept as direct import for admin page (admin-only, not frequently accessed)
-import { LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
+import { Line, Area, ComposedChart, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { cn } from '@/lib/utils'
 
 interface DepositData {
@@ -465,8 +465,8 @@ export default function AdminDashboard() {
               ) : stats.deposits.chart_data && stats.deposits.chart_data.length > 0 ? (
                 <div className="overflow-x-auto">
                 <div className="min-w-[500px]">
-                <ResponsiveContainer width="100%" height={300}>
-                  <AreaChart data={stats.deposits.chart_data} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                <ResponsiveContainer width="100%" height={300} minWidth={0}>
+                  <ComposedChart data={stats.deposits.chart_data} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                     <defs>
                       <linearGradient id="colorDeposits" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
@@ -516,7 +516,7 @@ export default function AdminDashboard() {
                       dot={{ fill: '#3b82f6', r: 4 }}
                       name={t('admin.dashboard.statistics.count')}
                     />
-                  </AreaChart>
+                  </ComposedChart>
                 </ResponsiveContainer>
                 </div>
                 </div>
@@ -558,8 +558,8 @@ export default function AdminDashboard() {
               ) : stats.withdrawals.chart_data && stats.withdrawals.chart_data.length > 0 ? (
                 <div className="overflow-x-auto">
                 <div className="min-w-[500px]">
-                <ResponsiveContainer width="100%" height={300}>
-                  <AreaChart data={stats.withdrawals.chart_data} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                <ResponsiveContainer width="100%" height={300} minWidth={0}>
+                  <ComposedChart data={stats.withdrawals.chart_data} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                     <defs>
                       <linearGradient id="colorWithdrawals" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3}/>
@@ -609,7 +609,7 @@ export default function AdminDashboard() {
                       dot={{ fill: '#f59e0b', r: 4 }}
                       name={t('admin.dashboard.statistics.count')}
                     />
-                  </AreaChart>
+                  </ComposedChart>
                 </ResponsiveContainer>
                 </div>
                 </div>
@@ -652,8 +652,8 @@ export default function AdminDashboard() {
       <div>
                   <div className="overflow-x-auto">
                   <div className="min-w-[500px]">
-                  <ResponsiveContainer width="100%" height={300}>
-                    <AreaChart data={userProgressData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                  <ResponsiveContainer width="100%" height={300} minWidth={0}>
+                    <ComposedChart data={userProgressData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                       <defs>
                         <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
@@ -709,7 +709,7 @@ export default function AdminDashboard() {
                         dot={{ fill: '#f59e0b', r: 4 }}
                         name={t('admin.dashboard.chart_labels.new_users')}
                       />
-                    </AreaChart>
+                    </ComposedChart>
                   </ResponsiveContainer>
                   </div>
                   </div>
@@ -738,7 +738,7 @@ export default function AdminDashboard() {
               <CardContent>
                 <div className="overflow-x-auto">
                 <div className="min-w-[500px]">
-                <ResponsiveContainer width="100%" height={300}>
+                <ResponsiveContainer width="100%" height={300} minWidth={0}>
                   <BarChart data={stats.categories.chart_data} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-700" />
                     <XAxis 
@@ -785,8 +785,8 @@ export default function AdminDashboard() {
       </div>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
+                <ResponsiveContainer width="100%" height={300} minWidth={0}>
+                  <PieChart data={reportsByTypeData}>
                     <Pie
                       data={reportsByTypeData}
                       cx="50%"

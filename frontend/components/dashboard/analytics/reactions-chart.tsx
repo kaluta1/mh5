@@ -33,9 +33,9 @@ export function ReactionsChart({
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{chartTitle}</h3>
         <p className="text-sm text-gray-500 dark:text-gray-400">{chartSubtitle}</p>
       </div>
-      <div className="h-64">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
+      <div className="h-64 min-h-[256px] min-w-0">
+        <ResponsiveContainer width="100%" height={256} minWidth={0}>
+          <PieChart data={data}>
             <Pie
               data={data as unknown as Array<{[key: string]: string | number}>}
               cx="50%"

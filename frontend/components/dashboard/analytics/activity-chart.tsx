@@ -46,9 +46,9 @@ export function ActivityChart({
           <p className="text-sm text-gray-500 dark:text-gray-400">{chartSubtitle}</p>
         </div>
       </div>
-      <div className="h-64 overflow-x-auto">
-        <div className="min-w-[500px] h-full">
-        <ResponsiveContainer width="100%" height="100%">
+      <div className="h-64 min-h-[256px] min-w-0 overflow-x-auto">
+        <div className="min-w-[500px] h-[256px]">
+        <ResponsiveContainer width="100%" height={256} minWidth={0}>
           <AreaChart data={translatedData}>
             <defs>
               <linearGradient id="colorVotes" x1="0" y1="0" x2="0" y2="1">
