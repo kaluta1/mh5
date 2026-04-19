@@ -214,7 +214,7 @@ export default function MyHigh5Page() {
   }, [activeTab, isLoading, isAuthenticated, user])
 
   const openNominatedEntry = (contestId: number, contestantId: number) => {
-    router.push(`/dashboard/contests/${contestId}/contestant/${contestantId}`)
+    router.push(`/dashboard/contests/${contestId}/contestant/${contestantId}?entryType=nomination`)
   }
 
   const formatDate = (dateString: string) => {

@@ -439,7 +439,7 @@ export default function TopHigh5Page() {
                                       )}
                                     </div>
                                     <Link
-                                      href={`/dashboard/contests/${contest.contest_id}/contestant/${row.contestant_id}`}
+                                      href={`/dashboard/contests/${contest.contest_id}/contestant/${row.contestant_id}?entryType=nomination`}
                                       className="flex-shrink-0 rounded-md p-1 text-myhigh5-primary hover:bg-myhigh5-primary/10"
                                       title={t("dashboard.myhigh5.open_top_entry") || "Watch this entry"}
                                       aria-label={t("dashboard.myhigh5.open_top_entry") || "Watch this entry"}

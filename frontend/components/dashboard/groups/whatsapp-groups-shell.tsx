@@ -50,6 +50,7 @@ import {
 import { useAuth } from "@/hooks/use-auth"
 import { useLanguage } from "@/contexts/language-context"
 import { useToast } from "@/components/ui/toast"
+import { useSocket } from "@/hooks/use-socket"
 
 type ListFilter = "all" | "joined"
 
@@ -152,10 +153,61 @@ export function WhatsAppGroupsShell() {
   const [joining, setJoining] = useState(false)
   const [inviteCode, setInviteCode] = useState("")
 
+  // Socket integration for real-time messaging
+  const { isConnected, joinGroup, leaveGroup, notifyNewMessage } = useSocket({
+    onNewMessage: (socketMessage) => {
+      // Handle incoming group messages
+      if (socketMessage.group_id && socketMessage.group_id === selectedId) {
+        // Check if message already exists (avoid duplicates)
+        setMessages((prev) => {
+          const exists = prev.some((m) => m.id === socketMessage.message_id)
+          if (exists) return prev
+          // Add new message from socket
+          const newMessage: GroupMessage = {
+            id: socketMessage.message_id,
+            group_id: socketMessage.group_id,
+            sender_id: socketMessage.sender_id,
+            content: socketMessage.content,
+            message_type: socketMessage.message_type as 'text' | 'image' | 'file' | 'video' | 'audio' | 'system',
+            created_at: socketMessage.created_at,
+            updated_at: socketMessage.created_at,
+            status: 'sent',
+            is_edited: false,
+            is_deleted: false,
+            sender: {
+              id: socketMessage.sender_id,
+              username: socketMessage.sender_name,
+              full_name: socketMessage.sender_name,
+            },
+          }
+          return [...prev, newMessage]
+        })
+        // Update preview
+        setPreviews((p) => ({
+          ...p,
+          [socketMessage.group_id!]: {
+            text: socketMessage.content.slice(0, 72),
+            time: socketMessage.created_at,
+          },
+        }))
+      }
+    },
+  })
+
   useEffect(() => {
     setPreviewMembers([])
     setInviteCode("")
   }, [selectedId])
+
+  // Join/leave group room for real-time messaging
+  useEffect(() => {
+    if (selectedId && selectedGroup?.is_member) {
+      joinGroup(selectedId)
+      return () => {
+        leaveGroup(selectedId)
+      }
+    }
+  }, [selectedId, selectedGroup?.is_member, joinGroup, leaveGroup])
 
   useEffect(() => {
     if (!groupInfoOpen || !selectedId || Number.isNaN(selectedId) || !selectedGroup) {
@@ -380,6 +432,8 @@ export function WhatsAppGroupsShell() {
           time: sent.created_at,
         },
       }))
+      // Notify via socket so other users receive instantly
+      notifyNewMessage(selectedId, sent.id)
     } catch (e: unknown) {
       addToast(
         (e as { response?: { data?: { detail?: string } } })?.response?.data
@@ -469,7 +523,12 @@ export function WhatsAppGroupsShell() {
       setCreateOpen(false)
       setNewGroup({ name: "", description: "", is_private: false })
       selectGroup(g.id)
+      // Immediately load members so the creator (owner) is recognized as admin
+      const mem = await socialService.getGroupMembers(g.id)
+      setMembers(mem)
       addToast("Group created.", "success")
+      // Open add member dialog for convenience after group creation
+      setTimeout(() => setAddUserOpen(true), 300)
     } catch (e: unknown) {
       const msg =
         (e as { response?: { data?: { detail?: string } } })?.response?.data
