@@ -2,8 +2,10 @@
 Groups API Endpoints for Feed System
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session
+from sqlalchemy import or_
+from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
+from pydantic import BaseModel, Field
 import secrets
 import string
 
@@ -12,8 +14,15 @@ from app.api.deps import get_current_active_user
 from app.models.user import User
 from app.models.social_group import SocialGroup, GroupMember, GroupType, GroupMemberRole
 from app.schemas.feed_group import GroupCreate, GroupResponse, GroupMemberResponse
+from app.crud.crud_social import crud_social_group
+from app.crud.crud_user import crud_user
+from app.schemas.social import SocialGroupUpdate
 
 router = APIRouter()
+
+
+class AddMemberByUsernameBody(BaseModel):
+    username: str = Field(..., min_length=1, max_length=128)
 
 
 @router.post("", response_model=GroupResponse, status_code=status.HTTP_201_CREATED)
@@ -105,29 +114,39 @@ def list_groups(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """List groups"""
+    """
+    List groups. Public groups are visible to everyone.
+    Private groups are only listed for members (creator is a member; admins can add
+    others by username — those users then see the group here).
+    """
     query = db.query(SocialGroup).filter(SocialGroup.is_deleted == False)
-    
+
+    user_memberships = db.query(GroupMember.group_id).filter(
+        GroupMember.user_id == current_user.id
+    ).all()
+    user_group_ids = {m[0] for m in user_memberships}
+    if user_group_ids:
+        query = query.filter(
+            or_(
+                SocialGroup.group_type == GroupType.PUBLIC,
+                SocialGroup.id.in_(user_group_ids),
+            )
+        )
+    else:
+        query = query.filter(SocialGroup.group_type == GroupType.PUBLIC)
+
     if group_type:
         query = query.filter(SocialGroup.group_type == group_type)
-    
-    # Eager load creator relationship
-    from sqlalchemy.orm import joinedload
-    groups = query.options(joinedload(SocialGroup.creator)).offset(skip).limit(limit).all()
-    
-    # Get user's group memberships for is_member flag
-    user_group_ids = set()
-    if current_user:
-        user_memberships = db.query(GroupMember.group_id).filter(
-            GroupMember.user_id == current_user.id
-        ).all()
-        user_group_ids = {m[0] for m in user_memberships}
+
+    groups = query.options(joinedload(SocialGroup.creator)).order_by(
+        SocialGroup.created_at.desc()
+    ).offset(skip).limit(limit).all()
     
     result = []
     for g in groups:
         group_response = GroupResponse.model_validate(g)
         group_dict = group_response.model_dump()
-        group_dict['is_member'] = g.id in user_group_ids
+        group_dict["is_member"] = g.id in user_group_ids
         result.append(GroupResponse(**group_dict))
     
     return result
@@ -150,19 +169,29 @@ def get_group(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Group not found"
         )
-    
-    # Check if current user is a member
-    is_member = False
-    if current_user:
-        member = db.query(GroupMember).filter(
+
+    member = (
+        db.query(GroupMember)
+        .filter(
             GroupMember.group_id == group_id,
-            GroupMember.user_id == current_user.id
-        ).first()
-        is_member = member is not None
-    
-    # Eager load creator
-    from sqlalchemy.orm import joinedload
-    group = db.query(SocialGroup).options(joinedload(SocialGroup.creator)).filter(SocialGroup.id == group_id).first()
+            GroupMember.user_id == current_user.id,
+        )
+        .first()
+    )
+    is_member = member is not None
+
+    if group.group_type == GroupType.PRIVATE and not is_member:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This is a private group. Only members can view it.",
+        )
+
+    group = (
+        db.query(SocialGroup)
+        .options(joinedload(SocialGroup.creator))
+        .filter(SocialGroup.id == group_id)
+        .first()
+    )
     
     group_response = GroupResponse.model_validate(group)
     group_dict = group_response.model_dump()
@@ -188,10 +217,27 @@ def list_group_members(
             detail="Group not found"
         )
 
-    from sqlalchemy.orm import joinedload
-    members = db.query(GroupMember).options(joinedload(GroupMember.user)).filter(
-        GroupMember.group_id == group_id
-    ).all()
+    is_member = (
+        db.query(GroupMember)
+        .filter(
+            GroupMember.group_id == group_id,
+            GroupMember.user_id == current_user.id,
+        )
+        .first()
+        is not None
+    )
+    if group.group_type == GroupType.PRIVATE and not is_member:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only members can view the member list of a private group.",
+        )
+
+    members = (
+        db.query(GroupMember)
+        .options(joinedload(GroupMember.user))
+        .filter(GroupMember.group_id == group_id)
+        .all()
+    )
 
     return [GroupMemberResponse.model_validate(member) for member in members]
 
@@ -292,3 +338,71 @@ def leave_group(
     db.commit()
     
     return {"message": "Successfully left group"}
+
+
+@router.put("/{group_id}", response_model=GroupResponse)
+def update_feed_group(
+    group_id: int,
+    body: SocialGroupUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Update group name / description / settings (admins and owners)."""
+    group = crud_social_group.get(db, group_id)
+    if not group or group.is_deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Group not found",
+        )
+    role = crud_social_group.get_member_role(db, group_id, current_user.id)
+    if role not in (GroupMemberRole.ADMIN, GroupMemberRole.OWNER):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only group admins can update settings",
+        )
+    updated = crud_social_group.update(db, group, body)
+    db.refresh(updated)
+    group_load = (
+        db.query(SocialGroup)
+        .options(joinedload(SocialGroup.creator))
+        .filter(SocialGroup.id == updated.id)
+        .first()
+    )
+    group_response = GroupResponse.model_validate(group_load)
+    group_dict = group_response.model_dump()
+    group_dict["is_member"] = True
+    return GroupResponse(**group_dict)
+
+
+@router.post("/{group_id}/members/by-username", status_code=status.HTTP_200_OK)
+def add_group_member_by_username(
+    group_id: int,
+    body: AddMemberByUsernameBody,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Add a member by username (admins and owners) — WhatsApp-style."""
+    group = crud_social_group.get(db, group_id)
+    if not group or group.is_deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Group not found",
+        )
+    role = crud_social_group.get_member_role(db, group_id, current_user.id)
+    if role not in (GroupMemberRole.ADMIN, GroupMemberRole.OWNER):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can add members",
+        )
+    uname = body.username.strip()
+    u = crud_user.get_by_username(db, uname)
+    if not u:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No user with username {uname!r}",
+        )
+    try:
+        crud_social_group.add_member(db, group_id, u.id, GroupMemberRole.MEMBER)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    return {"success": True, "user_id": u.id, "username": u.username}

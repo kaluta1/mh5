@@ -491,13 +491,17 @@ class CRUDGroupMessage:
         db: Session, 
         group_id: int, 
         skip: int = 0, 
-        limit: int = 50
+        limit: int = 50,
+        search: Optional[str] = None,
     ) -> List[GroupMessage]:
-        """Récupère les messages d'un groupe"""
-        return db.query(GroupMessage).filter(
+        """Récupère les messages d'un groupe. ``search`` filtre le contenu (comme recherche WhatsApp)."""
+        q = db.query(GroupMessage).options(joinedload(GroupMessage.sender)).filter(
             GroupMessage.group_id == group_id,
             GroupMessage.is_deleted == False
-        ).order_by(desc(GroupMessage.created_at)).offset(skip).limit(limit).all()
+        )
+        if search and search.strip():
+            q = q.filter(GroupMessage.content.ilike(f"%{search.strip()}%"))
+        return q.order_by(desc(GroupMessage.created_at)).offset(skip).limit(limit).all()
     
     def create(self, db: Session, obj_in: GroupMessageCreate, group_id: int, sender_id: int) -> GroupMessage:
         """Crée un nouveau message"""

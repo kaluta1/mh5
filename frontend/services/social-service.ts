@@ -363,9 +363,33 @@ export const socialService = {
     return apiService.get(`/api/v1/feed/groups/${groupId}/members`)
   },
 
-  async getGroupMessages(groupId: number, skip: number = 0, limit: number = 50): Promise<GroupMessage[]> {
-    const response = await apiService.get(`/api/v1/social/groups/${groupId}/messages?skip=${skip}&limit=${limit}`) as any
+  async getGroupMessages(
+    groupId: number,
+    skip: number = 0,
+    limit: number = 50,
+    search?: string,
+  ): Promise<GroupMessage[]> {
+    const q = new URLSearchParams({ skip: String(skip), limit: String(limit) })
+    if (search?.trim()) q.set('search', search.trim())
+    const response = await apiService.get(
+      `/api/v1/social/groups/${groupId}/messages?${q.toString()}`,
+    ) as any
     return response?.messages || []
+  },
+
+  /** Update group (name, description, …) — feed API; admins/owners only. */
+  async updateFeedGroup(groupId: number, data: { name?: string; description?: string }): Promise<SocialGroup> {
+    const response = await apiService.put(`/api/v1/feed/groups/${groupId}`, data) as any
+    return {
+      ...response,
+      is_private: response.group_type === 'private',
+      members_count: response.member_count || 0,
+    } as SocialGroup
+  },
+
+  /** Add member by @username — admins/owners only. */
+  async addGroupMemberByUsername(groupId: number, username: string): Promise<void> {
+    await apiService.post(`/api/v1/feed/groups/${groupId}/members/by-username`, { username })
   },
 
   async sendGroupMessage(groupId: number, data: { content: string; message_type?: string; media_id?: number; reply_to_id?: number }): Promise<GroupMessage> {

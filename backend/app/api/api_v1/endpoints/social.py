@@ -696,6 +696,10 @@ def get_messages(
     group_id: int,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
+    search: Optional[str] = Query(
+        None,
+        description="Filtre les messages par texte (recherche type WhatsApp)",
+    ),
     current_user: User = Depends(get_current_active_user)
 ) -> Any:
     """Récupérer les messages d'un groupe"""
@@ -710,7 +714,8 @@ def get_messages(
         db,
         group_id=group_id,
         skip=skip,
-        limit=limit
+        limit=limit,
+        search=search,
     )
     
     result = []
