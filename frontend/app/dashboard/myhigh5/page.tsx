@@ -213,8 +213,8 @@ export default function MyHigh5Page() {
     }
   }, [activeTab, isLoading, isAuthenticated, user])
 
-  const handleViewContestant = (contestantId: number) => {
-    router.push(`/dashboard/contestants/${contestantId}`)
+  const openNominatedEntry = (contestId: number, contestantId: number) => {
+    router.push(`/dashboard/contests/${contestId}/contestant/${contestantId}`)
   }
 
   const formatDate = (dateString: string) => {
@@ -356,7 +356,7 @@ export default function MyHigh5Page() {
             {t('dashboard.myhigh5.points') || 'Points'}
           </TableHead>
           <TableHead>
-            Nominator
+            {t('dashboard.myhigh5.nominator_column') || 'Nominator'}
           </TableHead>
           <TableHead className="hidden md:table-cell">
             {t('dashboard.myhigh5.location') || 'Localisation'}
@@ -545,9 +545,11 @@ export default function MyHigh5Page() {
                 size="sm"
                 onClick={(e) => {
                   e.stopPropagation()
-                  handleViewContestant(vote.contestant_id)
+                  openNominatedEntry(vote.contest_id, vote.contestant_id)
                 }}
                 className="p-2 h-auto"
+                title={t('dashboard.myhigh5.open_entry') || 'Open nomination entry'}
+                aria-label={t('dashboard.myhigh5.open_entry') || 'Open nomination entry'}
               >
                 <ExternalLink className="w-4 h-4" />
               </Button>

@@ -1,46 +1,13 @@
 // @ts-nocheck
-export type Language =
-  | 'en'
-  | 'fr'
-  | 'es'
-  | 'de'
-  | 'pt'
-  | 'sw'
-  | 'ar'
-  | 'zh'
-  | 'hi'
-  | 'ru'
-  | 'it'
-  | 'nl'
-  | 'tr'
-  | 'ja'
-  | 'ko'
+import { LANGUAGE_CODES } from "./locale-registry"
 
-export interface LanguageInfo {
-  name: string
-  flag: string
-  // Right-to-left languages (currently Arabic) need dir="rtl" on <html>.
-  rtl?: boolean
-}
-
-// Order shown in the language switcher. English first (default), then alphabetical-ish by name.
-export const languages: Record<Language, LanguageInfo> = {
-  en: { name: 'English', flag: '🇬🇧' },
-  ar: { name: 'العربية', flag: '🇸🇦', rtl: true },
-  zh: { name: '中文', flag: '🇨🇳' },
-  nl: { name: 'Nederlands', flag: '🇳🇱' },
-  fr: { name: 'Français', flag: '🇫🇷' },
-  de: { name: 'Deutsch', flag: '🇩🇪' },
-  hi: { name: 'हिन्दी', flag: '🇮🇳' },
-  it: { name: 'Italiano', flag: '🇮🇹' },
-  ja: { name: '日本語', flag: '🇯🇵' },
-  ko: { name: '한국어', flag: '🇰🇷' },
-  pt: { name: 'Português', flag: '🇵🇹' },
-  ru: { name: 'Русский', flag: '🇷🇺' },
-  es: { name: 'Español', flag: '🇪🇸' },
-  sw: { name: 'Kiswahili', flag: '🇹🇿' },
-  tr: { name: 'Türkçe', flag: '🇹🇷' },
-}
+/** UI locales (100) — see `locale-registry.ts`. String bundles: `translations` below. */
+export {
+  languages,
+  LANGUAGE_CODES,
+  type Language,
+  type LanguageInfo,
+} from "./locale-registry"
 
 export const maintenanceTranslations = {
   en: {
@@ -3600,7 +3567,13 @@ const translationsBase = {
         history_tab: "Historique",
         no_history: "Aucun historique",
         no_history_description: "Vous n'avez pas encore d'historique de votes.",
-        inactive: "Terminé"
+        inactive: "Terminé",
+        hint_categories:
+          "Seules les catégories dans lesquelles vous avez voté au moins une fois sont listées. Développez une section pour voir et réorganiser vos votes.",
+        no_votes_in_category: "Vous n'avez pas encore voté dans cette catégorie.",
+        nominator_column: "Nominateur",
+        open_entry: "Ouvrir la candidature / la nomination",
+        open_top_entry: "Voir cette entrée",
       },
       leaderboard: {
         title: "Classement des Sponsors",
@@ -7974,7 +7947,13 @@ const translationsBase = {
         history_tab: "History",
         no_history: "No history",
         no_history_description: "You don't have any vote history yet.",
-        inactive: "Ended"
+        inactive: "Ended",
+        hint_categories:
+          "Only categories where you have cast at least one vote are listed. Expand a section to see and reorder your votes.",
+        no_votes_in_category: "You have not voted in this category yet.",
+        nominator_column: "Nominator",
+        open_entry: "Open nomination entry",
+        open_top_entry: "Watch this entry",
       },
       leaderboard: {
         title: "Sponsors Leaderboard",
@@ -13254,7 +13233,7 @@ const translationsBase = {
   }
 }
 
-export const translations: Record<Language, TranslationKeys> = {
+const translationsCore = {
   ...translationsBase,
   pt: translationsBase.en,
   sw: translationsBase.en,
@@ -13267,4 +13246,15 @@ export const translations: Record<Language, TranslationKeys> = {
   tr: translationsBase.en,
   ja: translationsBase.en,
   ko: translationsBase.en,
+}
+
+/** Locales without a dedicated object reuse English until translated (or wired to a TMS / MT API). */
+const translationsExtra = Object.fromEntries(
+  /** @type {import('./locale-registry').Language[]} */
+  (LANGUAGE_CODES).filter((code) => !(code in translationsCore)).map((code) => [code, translationsBase.en]),
+)
+
+export const translations = {
+  ...translationsCore,
+  ...translationsExtra,
 }

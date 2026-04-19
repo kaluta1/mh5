@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { useEffect, useMemo, useState } from "react"
+import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@/hooks/use-auth"
 import { useLanguage } from "@/contexts/language-context"
@@ -10,7 +11,17 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Trophy, Search, ArrowRightCircle, Building2, Flag, Map as MapIcon, Globe2, Globe } from "lucide-react"
+import {
+  Trophy,
+  Search,
+  ArrowRightCircle,
+  Building2,
+  Flag,
+  Map as MapIcon,
+  Globe2,
+  Globe,
+  ExternalLink,
+} from "lucide-react"
 
 const LEVEL_OPTIONS: Array<{
   value: TopHigh5Level
@@ -25,6 +36,11 @@ const LEVEL_OPTIONS: Array<{
   { value: "continent", label: "Continent", icon: Globe2, requiresCountry: true, helper: "Top 5 per continent (filtered by country)" },
   { value: "global", label: "Global", icon: Globe, requiresCountry: false, helper: "Top 5 worldwide — no country filter" },
 ]
+
+/** Anchor for deep links: `/dashboard/top-high5#th5-<contestId>-<contestantId>` scrolls to the row. */
+function topHigh5DomId(contestId: number, contestantId: number) {
+  return `th5-${contestId}-${contestantId}`
+}
 
 function TopHigh5Skeleton() {
   return (
@@ -198,6 +214,18 @@ export default function TopHigh5Page() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, activeCountry, activeRoundId, activeLevel])
 
+  // Deep link: scroll to `#th5-<contestId>-<contestantId>` after rows render (category funnel).
+  useEffect(() => {
+    if (loading || !filteredContests.length) return
+    const id = window.location.hash.replace(/^#/, "")
+    if (!id || !id.startsWith("th5-")) return
+    const el = document.getElementById(id)
+    if (!el) return
+    requestAnimationFrame(() => {
+      el.scrollIntoView({ behavior: "smooth", block: "center" })
+    })
+  }, [loading, filteredContests, contestsByCategory])
+
   if (isLoading || loading) {
     return <TopHigh5Skeleton />
   }
@@ -336,8 +364,12 @@ export default function TopHigh5Page() {
         </div>
       ) : (
         <div className="space-y-8">
-          {contestsByCategory.map(({ category, contests }) => (
-            <section key={category} className="space-y-3">
+          {contestsByCategory.map(({ category, contests }, categoryIndex) => (
+            <section
+              key={category}
+              id={`th5-cat-${categoryIndex}`}
+              className="space-y-3 scroll-mt-24"
+            >
               <h2 className="text-lg font-bold text-gray-900 dark:text-white border-l-4 border-myhigh5-primary pl-3">
                 {category}
               </h2>
@@ -392,16 +424,29 @@ export default function TopHigh5Page() {
                             .map((row) => (
                               <tr
                                 key={row.contestant_id}
-                                className="bg-emerald-50/70 dark:bg-emerald-900/10"
+                                id={topHigh5DomId(contest.contest_id, row.contestant_id)}
+                                className="bg-emerald-50/70 dark:bg-emerald-900/10 scroll-mt-20"
                               >
                                 <td className="px-3 py-2 font-semibold">{row.rank}</td>
                                 <td className="px-3 py-2">
-                                  <div className="font-medium text-gray-900 dark:text-white">
-                                    {row.author_name || row.contestant_title || `Nominator #${row.contestant_id}`}
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0">
+                                      <div className="font-medium text-gray-900 dark:text-white">
+                                        {row.author_name || row.contestant_title || `Nominator #${row.contestant_id}`}
+                                      </div>
+                                      {row.contestant_title && (
+                                        <div className="text-xs text-gray-500">{row.contestant_title}</div>
+                                      )}
+                                    </div>
+                                    <Link
+                                      href={`/dashboard/contests/${contest.contest_id}/contestant/${row.contestant_id}`}
+                                      className="flex-shrink-0 rounded-md p-1 text-myhigh5-primary hover:bg-myhigh5-primary/10"
+                                      title={t("dashboard.myhigh5.open_top_entry") || "Watch this entry"}
+                                      aria-label={t("dashboard.myhigh5.open_top_entry") || "Watch this entry"}
+                                    >
+                                      <ExternalLink className="h-4 w-4" />
+                                    </Link>
                                   </div>
-                                  {row.contestant_title && (
-                                    <div className="text-xs text-gray-500">{row.contestant_title}</div>
-                                  )}
                                 </td>
                                 <td className="px-3 py-2">{row.stars_points}</td>
                                 <td className="px-3 py-2">{row.shares}</td>
