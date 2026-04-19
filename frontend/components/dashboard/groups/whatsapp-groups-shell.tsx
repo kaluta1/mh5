@@ -1428,22 +1428,34 @@ export function WhatsAppGroupsShell() {
                     )}
                   </div>
                   <div className="flex flex-wrap items-center gap-2 min-w-0">
-                    <div className="[&_button]:!bg-myhigh5-primary [&_button]:!text-white [&_button]:hover:!bg-myhigh5-primary/90 [&_button]:!rounded-lg [&_button]:!px-3 [&_button]:!py-2 [&_button]:!text-sm [&_button]:!h-auto [&_button]:!font-medium">
-                      <UploadButton
-                        endpoint="profileAvatar"
-                        onClientUploadComplete={(res) => {
-                          void handleGroupAvatarFromUpload(
-                            res as { url?: string; ufsUrl?: string }[],
-                          )
-                        }}
-                        onUploadError={(err) =>
-                          addToast(
-                            err instanceof Error ? err.message : "Upload failed",
-                            "error",
-                          )
-                        }
-                      />
-                    </div>
+                    <UploadButton
+                      endpoint="profileAvatar"
+                      onClientUploadComplete={(res) => {
+                        void handleGroupAvatarFromUpload(
+                          res as { url?: string; ufsUrl?: string }[],
+                        )
+                      }}
+                      onUploadError={(err) =>
+                        addToast(
+                          err instanceof Error ? err.message : "Upload failed",
+                          "error",
+                        )
+                      }
+                      content={{
+                        button: ({ ready }) => (
+                          <button
+                            type="button"
+                            disabled={!ready}
+                            className="bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {ready ? "Upload photo" : "Loading..."}
+                          </button>
+                        ),
+                        allowedContent: () => (
+                          <span className="text-xs text-gray-500">Max 2 MB</span>
+                        )
+                      }}
+                    />
                     {selectedGroup?.avatar_url ? (
                       <Button
                         type="button"
