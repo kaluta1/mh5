@@ -505,14 +505,16 @@ class CRUDGroupMessage:
     
     def create(self, db: Session, obj_in: GroupMessageCreate, group_id: int, sender_id: int) -> GroupMessage:
         """Crée un nouveau message"""
+        # Pydantic `MessageType` differs from SQLAlchemy's — always store using the ORM enum
+        msg_type = MessageType(obj_in.message_type.value)
         db_obj = GroupMessage(
             group_id=group_id,
             sender_id=sender_id,
             content=obj_in.content,
-            message_type=obj_in.message_type,
+            message_type=msg_type,
             media_id=obj_in.media_id,
             reply_to_id=obj_in.reply_to_id,
-            status=MessageStatus.SENT
+            status=MessageStatus.SENT,
         )
         db.add(db_obj)
         db.commit()

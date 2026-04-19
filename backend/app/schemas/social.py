@@ -1,5 +1,5 @@
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
 from enum import Enum
 
@@ -267,6 +267,17 @@ class GroupMessageUpdate(BaseModel):
     content: Optional[str] = None
 
 
+class MessageSenderBrief(BaseModel):
+    """User row exposed on group messages — must not use dict (breaks ORM validation)."""
+
+    id: int
+    username: str
+    full_name: Optional[str] = None
+    avatar_url: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class GroupMessageResponse(GroupMessageBase):
     id: int
     group_id: int
@@ -278,12 +289,11 @@ class GroupMessageResponse(GroupMessageBase):
     deleted_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
-    sender: Optional[dict] = None
+    sender: Optional[MessageSenderBrief] = None
     reply_to: Optional["GroupMessageResponse"] = None
     read_by: List[int] = Field(default_factory=list)
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Schémas pour le Feed

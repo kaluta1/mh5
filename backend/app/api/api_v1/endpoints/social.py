@@ -1,6 +1,6 @@
 from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_, or_
 import asyncio
 
@@ -28,7 +28,7 @@ from app.crud.crud_private_message import (
     crud_private_conversation, crud_private_message, crud_group_invitation
 )
 from app.models.post import Post, PostReaction
-from app.models.social_group import GroupMember, GroupMemberRole
+from app.models.social_group import GroupMember, GroupMemberRole, GroupMessage
 from app.models.private_message import ConversationParticipant
 from app.services.social_socket import social_socket_service
 
@@ -672,7 +672,19 @@ def create_message(
         group_id=group_id,
         sender_id=current_user.id
     )
-    
+
+    msg = (
+        db.query(GroupMessage)
+        .options(joinedload(GroupMessage.sender))
+        .filter(GroupMessage.id == message.id)
+        .first()
+    )
+    if not msg:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Message created but could not be loaded",
+        )
+
     # Notifier via Socket.IO en arrière-plan
     def notify_message():
         try:
@@ -685,8 +697,8 @@ def create_message(
             print(f"Erreur notification Socket.IO: {e}")
     
     background_tasks.add_task(notify_message)
-    
-    return message
+
+    return msg
 
 
 @router.get("/groups/{group_id}/messages", response_model=MessageListResponse)
@@ -738,7 +750,8 @@ def get_messages(
             "sender": {
                 "id": message.sender.id,
                 "username": message.sender.username,
-                "avatar_url": message.sender.avatar_url
+                "full_name": getattr(message.sender, "full_name", None),
+                "avatar_url": message.sender.avatar_url,
             } if message.sender else None,
             "reply_to": None,
             "read_by": [r.user_id for r in message.read_receipts]

@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import {
   ArrowLeft,
   Globe,
+  Info,
   Loader2,
   Lock,
   MessageCircle,
@@ -46,6 +47,31 @@ import { useLanguage } from "@/contexts/language-context"
 import { useToast } from "@/components/ui/toast"
 
 type ListFilter = "all" | "joined"
+
+/** Use when i18n key may be missing — `t()` returns the key string in that case. */
+function tf(t: (key: string) => string, key: string, fallback: string): string {
+  const v = t(key)
+  return v === key ? fallback : v
+}
+
+function roleLabelText(
+  role: string | null | undefined,
+  t: (key: string) => string,
+): string {
+  const r = (role || "").toLowerCase()
+  switch (r) {
+    case "owner":
+      return tf(t, "dashboard.groups.role_owner", "Owner")
+    case "admin":
+      return tf(t, "dashboard.groups.role_admin", "Admin")
+    case "moderator":
+      return tf(t, "dashboard.groups.role_moderator", "Moderator")
+    case "member":
+      return tf(t, "dashboard.groups.role_member", "Group member")
+    default:
+      return r ? r : ""
+  }
+}
 
 function parseApiDate(value: string) {
   if (!value) return new Date()
@@ -115,6 +141,41 @@ export function WhatsAppGroupsShell() {
   })
   const [creating, setCreating] = useState(false)
 
+  const [groupInfoOpen, setGroupInfoOpen] = useState(false)
+  const [previewMembers, setPreviewMembers] = useState<GroupMember[]>([])
+  const [previewMembersLoading, setPreviewMembersLoading] = useState(false)
+  const [joining, setJoining] = useState(false)
+  const [inviteCode, setInviteCode] = useState("")
+
+  useEffect(() => {
+    setPreviewMembers([])
+    setInviteCode("")
+  }, [selectedId])
+
+  useEffect(() => {
+    if (!groupInfoOpen || !selectedId || Number.isNaN(selectedId) || !selectedGroup) {
+      return
+    }
+    if (selectedGroup.is_member || selectedGroup.is_private) {
+      return
+    }
+    let cancel = false
+    setPreviewMembersLoading(true)
+    ;(async () => {
+      try {
+        const mem = await socialService.getGroupMembers(selectedId)
+        if (!cancel) setPreviewMembers(mem)
+      } catch {
+        if (!cancel) setPreviewMembers([])
+      } finally {
+        if (!cancel) setPreviewMembersLoading(false)
+      }
+    })()
+    return () => {
+      cancel = true
+    }
+  }, [groupInfoOpen, selectedId, selectedGroup])
+
   useEffect(() => {
     const t = window.setTimeout(
       () => setDebouncedChatSearch(chatSearch.trim()),
@@ -130,7 +191,7 @@ export function WhatsAppGroupsShell() {
       setGroups(data)
     } catch (e) {
       console.error(e)
-      addToast(t("errors.generic") || "Failed to load groups", "error")
+      addToast(tf(t, "errors.generic", "Failed to load groups"), "error")
     } finally {
       setListLoading(false)
     }
@@ -206,11 +267,6 @@ export function WhatsAppGroupsShell() {
     setChatSearch("")
   }
 
-  const clearSelection = () => {
-    router.replace("/dashboard/groups", { scroll: false })
-    setMobilePanel("list")
-  }
-
   useEffect(() => {
     if (!selectedId || Number.isNaN(selectedId)) return
     if (!selectedGroup) return
@@ -262,6 +318,16 @@ export function WhatsAppGroupsShell() {
 
   const isAdmin =
     myRole === "admin" || myRole === "owner" || myRole === "moderator"
+
+  const headerSubtitle = useMemo(() => {
+    if (!selectedGroup) return ""
+    const countLabel = `${selectedGroup.members_count} ${tf(t, "dashboard.groups.members", "members")}`
+    if (!selectedGroup.is_member) {
+      return `${countLabel} · ${tf(t, "dashboard.groups.not_a_member", "Not a member")}`
+    }
+    const rl = roleLabelText(myRole, t)
+    return rl ? `${countLabel} · ${rl}` : countLabel
+  }, [selectedGroup, myRole, t])
 
   const filteredList = useMemo(() => {
     let rows = groups
@@ -356,6 +422,32 @@ export function WhatsAppGroupsShell() {
     }
   }
 
+  const handleJoin = async () => {
+    if (!selectedId || !selectedGroup) return
+    setJoining(true)
+    try {
+      await socialService.joinGroup(
+        selectedId,
+        selectedGroup.is_private ? inviteCode.trim() || undefined : undefined,
+      )
+      const g = await socialService.getGroup(selectedId)
+      setGroups((prev) => {
+        const rest = prev.filter((x) => x.id !== g.id)
+        return [g, ...rest]
+      })
+      addToast("Successfully joined the group.", "success")
+      setInviteCode("")
+    } catch (e: unknown) {
+      const msg =
+        (e as { response?: { data?: { detail?: string } } })?.response?.data
+          ?.detail ||
+        tf(t, "errors.generic", "Could not join")
+      addToast(String(msg), "error")
+    } finally {
+      setJoining(false)
+    }
+  }
+
   const handleCreate = async () => {
     if (!newGroup.name.trim()) return
     setCreating(true)
@@ -379,69 +471,77 @@ export function WhatsAppGroupsShell() {
   return (
     <div
       className={cn(
-        "-mx-4 sm:-mx-6 lg:-mx-8 min-h-[calc(100dvh-8rem)] flex flex-col border border-gray-200/80 dark:border-gray-700/80 rounded-none md:rounded-xl overflow-hidden bg-[#f8f9fa] dark:bg-gray-950",
+        "-mx-4 sm:-mx-6 lg:-mx-8 min-h-[calc(100dvh-8rem)] flex flex-col border border-gray-200/80 dark:border-gray-700/80 rounded-none md:rounded-xl overflow-hidden bg-white dark:bg-gray-950",
       )}
     >
       <div className="flex flex-1 min-h-0">
         {/* Left — conversation list */}
         <aside
           className={cn(
-            "flex flex-col w-full md:w-[380px] md:min-w-[320px] border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900",
+            "flex flex-col w-full md:w-[min(100%,420px)] md:min-w-[300px] lg:w-[400px] border-r border-gray-200 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-900/80",
             selectedId && mobilePanel === "chat" ? "hidden md:flex" : "flex",
           )}
         >
-          <div className="flex items-center justify-between px-3 py-3 border-b border-gray-100 dark:border-gray-800">
-            <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
-              {t("dashboard.groups.title")}
+          <div className="flex items-center justify-between gap-2 px-3 py-3 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/90">
+            <h1 className="text-lg font-semibold text-gray-900 dark:text-white tracking-tight">
+              {tf(t, "dashboard.groups.title", "Groups")}
             </h1>
             <Button
               variant="ghost"
               size="icon"
-              className="shrink-0"
+              className="shrink-0 text-myhigh5-primary hover:text-myhigh5-primary hover:bg-myhigh5-primary/10"
               onClick={() => setCreateOpen(true)}
-              aria-label={t("dashboard.groups.create_group")}
+              aria-label={tf(t, "dashboard.groups.create_group", "Create a group")}
             >
               <Plus className="h-5 w-5" />
             </Button>
           </div>
-          <div className="px-2 py-2 border-b border-gray-100 dark:border-gray-800 space-y-2">
+          <div className="px-2 py-2 border-b border-gray-200 dark:border-gray-800 space-y-2 bg-white dark:bg-gray-900/50">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input
                 value={listQuery}
                 onChange={(e) => setListQuery(e.target.value)}
-                placeholder={t("dashboard.groups.search_placeholder")}
-                className="pl-9 rounded-full bg-gray-100 dark:bg-gray-800 border-0"
+                placeholder={tf(
+                  t,
+                  "dashboard.groups.search_placeholder",
+                  "Search groups…",
+                )}
+                className="pl-9 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700"
               />
             </div>
-            <div className="flex gap-1.5">
+            <div className="flex gap-2">
               {(["all", "joined"] as const).map((f) => (
                 <button
                   key={f}
                   type="button"
                   onClick={() => setListFilter(f)}
                   className={cn(
-                    "px-3 py-1 rounded-full text-xs font-medium transition-colors",
+                    "px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border",
                     listFilter === f
-                      ? "bg-emerald-600 text-white"
-                      : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200",
+                      ? "border-myhigh5-primary bg-myhigh5-primary text-white shadow-sm"
+                      : "border-transparent bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700/50",
                   )}
                 >
                   {f === "all"
-                    ? t("dashboard.groups.filter_all") || "All"
-                    : t("dashboard.groups.filter_mine") || "My groups"}
+                    ? tf(t, "dashboard.groups.filter_all", "All")
+                    : tf(t, "dashboard.groups.filter_mine", "My groups")}
                 </button>
               ))}
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto min-h-0">
+          <div className="flex-1 overflow-y-auto min-h-0 bg-white dark:bg-gray-900">
             {listLoading ? (
               <div className="flex justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+                <Loader2 className="h-8 w-8 animate-spin text-myhigh5-primary" />
               </div>
             ) : filteredList.length === 0 ? (
               <div className="p-6 text-center text-sm text-gray-500">
-                {t("dashboard.groups.no_groups_found")}
+                {tf(
+                  t,
+                  "dashboard.groups.no_groups_found",
+                  "No groups match your search.",
+                )}
               </div>
             ) : (
               filteredList.map((g) => {
@@ -452,11 +552,12 @@ export function WhatsAppGroupsShell() {
                     type="button"
                     onClick={() => selectGroup(g.id)}
                     className={cn(
-                      "w-full text-left flex gap-3 px-3 py-2.5 border-b border-gray-100/80 dark:border-gray-800/80 hover:bg-gray-50 dark:hover:bg-gray-800/80 transition-colors",
-                      selectedId === g.id && "bg-emerald-50/80 dark:bg-emerald-950/30",
+                      "w-full text-left flex gap-3 px-3 py-3 border-b border-gray-100 dark:border-gray-800/90 hover:bg-myhigh5-primary/[0.06] dark:hover:bg-gray-800/80 transition-colors",
+                      selectedId === g.id &&
+                        "bg-myhigh5-primary/10 dark:bg-myhigh5-primary/15 border-l-[3px] border-l-myhigh5-primary",
                     )}
                   >
-                    <div className="h-12 w-12 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center overflow-hidden shrink-0">
+                    <div className="h-12 w-12 rounded-full bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
                       {g.avatar_url ? (
                         <img
                           src={g.avatar_url}
@@ -482,7 +583,11 @@ export function WhatsAppGroupsShell() {
                         {pv?.text ||
                           g.description?.slice(0, 48) ||
                           (g.is_member
-                            ? t("dashboard.groups.tap_to_chat") || "Tap to chat"
+                            ? tf(
+                                t,
+                                "dashboard.groups.tap_to_chat",
+                                "Open conversation",
+                              )
                             : "—")}
                       </p>
                     </div>
@@ -496,76 +601,80 @@ export function WhatsAppGroupsShell() {
         {/* Right — chat */}
         <section
           className={cn(
-            "flex-1 flex flex-col min-w-0 min-h-0 bg-[#efeae2] dark:bg-gray-900",
+            "flex-1 flex flex-col min-w-0 min-h-0 bg-gray-100/90 dark:bg-gray-950 border-l border-gray-200 dark:border-gray-800",
             !selectedId ? "hidden md:flex" : "",
             selectedId && mobilePanel === "list" ? "hidden md:flex" : "flex",
           )}
         >
           {!selectedGroup ? (
-            <div className="flex-1 hidden md:flex flex-col items-center justify-center text-center px-6 border-l border-gray-200/80 dark:border-gray-800">
-              <MessageCircle className="h-20 w-20 text-gray-300 dark:text-gray-600 mb-4" />
-              <p className="text-lg font-medium text-gray-600 dark:text-gray-300">
-                {t("dashboard.groups.select_chat") || "Select a group to start"}
+            <div className="flex-1 hidden md:flex flex-col items-center justify-center text-center px-6">
+              <MessageCircle className="h-16 w-16 text-myhigh5-primary/30 dark:text-myhigh5-primary/25 mb-4" />
+              <p className="text-base font-medium text-gray-600 dark:text-gray-300 max-w-sm">
+                {tf(
+                  t,
+                  "dashboard.groups.select_chat",
+                  "Select a group to open the conversation.",
+                )}
               </p>
             </div>
           ) : (
             <>
-              {/* Chat header */}
-              <header className="flex items-center gap-2 px-2 py-2 bg-[#f0f2f5] dark:bg-gray-900 border-b border-gray-200/90 dark:border-gray-800">
+              {/* Chat header — tap row for group info */}
+              <header className="flex items-center gap-2 px-2 py-2.5 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-sm">
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="md:hidden"
-                  onClick={() => {
-                    clearSelection()
-                  }}
+                  className="md:hidden shrink-0"
+                  onClick={() => setMobilePanel("list")}
+                  aria-label="Back to list"
                 >
                   <ArrowLeft className="h-5 w-5" />
                 </Button>
-                <div className="h-10 w-10 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center overflow-hidden shrink-0">
-                  {selectedGroup.avatar_url ? (
-                    <img
-                      src={selectedGroup.avatar_url}
-                      alt=""
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <Users className="h-5 w-5 text-white" />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-gray-900 dark:text-white truncate">
-                    {selectedGroup.name}
+                <button
+                  type="button"
+                  onClick={() => setGroupInfoOpen(true)}
+                  className="flex flex-1 min-w-0 items-center gap-2 rounded-lg px-1 py-0.5 text-left hover:bg-gray-100 dark:hover:bg-gray-800/80 transition-colors -m-0.5"
+                >
+                  <div className="h-10 w-10 rounded-full bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary flex items-center justify-center overflow-hidden shrink-0 shadow-sm ring-2 ring-white dark:ring-gray-800">
+                    {selectedGroup.avatar_url ? (
+                      <img
+                        src={selectedGroup.avatar_url}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <Users className="h-5 w-5 text-white" />
+                    )}
                   </div>
-                  <div className="text-xs text-gray-500 truncate">
-                    {selectedGroup.members_count}{" "}
-                    {t("dashboard.groups.members")} ·{" "}
-                    {myRole === "owner"
-                      ? t("dashboard.groups.role_owner") || "Owner"
-                      : myRole === "admin"
-                        ? t("dashboard.groups.role_admin") || "Admin"
-                        : myRole === "moderator"
-                          ? "Moderator"
-                          : t("dashboard.groups.role_member") || "Member"}
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-gray-900 dark:text-white truncate">
+                      {selectedGroup.name}
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                      {headerSubtitle}
+                    </div>
                   </div>
-                </div>
-                {selectedGroup.is_member && (
-                  <div className="flex items-center gap-0.5 shrink-0">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className={cn(chatSearchOpen && "bg-gray-200 dark:bg-gray-800")}
-                      onClick={() =>
-                        setChatSearchOpen((v) => {
-                          if (v) setChatSearch("")
-                          return !v
-                        })
-                      }
-                      aria-label="Search messages"
-                    >
-                      <Search className="h-5 w-5 text-gray-600 dark:text-gray-300" />
-                    </Button>
-                    {selectedGroup.is_member && (
+                  <Info className="h-4 w-4 shrink-0 text-gray-400 hidden sm:block" aria-hidden />
+                </button>
+                <div className="flex items-center gap-0.5 shrink-0">
+                  {selectedGroup.is_member && (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className={cn(
+                          chatSearchOpen && "bg-myhigh5-primary/10 dark:bg-gray-800",
+                        )}
+                        onClick={() =>
+                          setChatSearchOpen((v) => {
+                            if (v) setChatSearch("")
+                            return !v
+                          })
+                        }
+                        aria-label="Search messages"
+                      >
+                        <Search className="h-5 w-5 text-gray-600 dark:text-gray-300" />
+                      </Button>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="icon" aria-label="Menu">
@@ -573,64 +682,140 @@ export function WhatsAppGroupsShell() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() => setGroupInfoOpen(true)}
+                          >
+                            <Info className="h-4 w-4 mr-2" />
+                            {tf(
+                              t,
+                              "dashboard.groups.group_info",
+                              "Group information",
+                            )}
+                          </DropdownMenuItem>
                           {isAdmin && (
                             <>
                               <DropdownMenuItem
                                 onClick={() => setSettingsOpen(true)}
                               >
                                 <Settings className="h-4 w-4 mr-2" />
-                                {t("dashboard.groups.group_settings") || "Group settings"}
+                                {tf(
+                                  t,
+                                  "dashboard.groups.group_settings",
+                                  "Group settings",
+                                )}
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 onClick={() => setAddUserOpen(true)}
                               >
                                 <Plus className="h-4 w-4 mr-2" />
-                                {t("dashboard.groups.add_member") || "Add member"}
+                                {tf(
+                                  t,
+                                  "dashboard.groups.add_member",
+                                  "Add member",
+                                )}
                               </DropdownMenuItem>
                             </>
                           )}
                         </DropdownMenuContent>
                       </DropdownMenu>
-                    )}
-                  </div>
-                )}
+                    </>
+                  )}
+                </div>
               </header>
 
               {chatSearchOpen && selectedGroup.is_member && (
-                <div className="px-3 py-2 bg-[#f0f2f5] dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
+                <div className="px-3 py-2 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
                   <Input
                     value={chatSearch}
                     onChange={(e) => setChatSearch(e.target.value)}
-                    placeholder={
-                      t("dashboard.groups.search_messages_placeholder") ||
-                      "Search in conversation..."
-                    }
-                    className="rounded-lg"
+                    placeholder={tf(
+                      t,
+                      "dashboard.groups.search_messages_placeholder",
+                      "Search messages in this chat…",
+                    )}
+                    className="rounded-lg border-gray-200 dark:border-gray-700"
                   />
                 </div>
               )}
 
               {/* Messages */}
-              <div
-                className="flex-1 overflow-y-auto px-2 py-3 min-h-0"
-                style={{
-                  backgroundColor: "var(--wa-bg, #efeae2)",
-                  backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23c4c4c4' fill-opacity='0.12'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2V6h4V4H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-                }}
-              >
+              <div className="flex-1 overflow-y-auto px-3 py-3 min-h-0 bg-[#eef1f8] dark:bg-gray-900/50">
                 {!selectedGroup.is_member ? (
-                  <div className="text-center text-sm text-gray-600 py-8 px-4 bg-white/80 dark:bg-gray-800/80 rounded-lg">
-                    {t("dashboard.groups.join_to_chat")}
+                  <div className="max-w-md mx-auto mt-4 space-y-4">
+                    <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-5 shadow-sm text-center">
+                      <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+                        {tf(
+                          t,
+                          "dashboard.groups.join_to_chat",
+                          "Join this group to read and send messages.",
+                        )}
+                      </p>
+                      {selectedGroup.is_private ? (
+                        <div className="space-y-3 text-left">
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            {tf(
+                              t,
+                              "dashboard.groups.invite_code_hint",
+                              "Enter the invite code you received from a member.",
+                            )}
+                          </p>
+                          <Input
+                            value={inviteCode}
+                            onChange={(e) => setInviteCode(e.target.value)}
+                            placeholder={tf(
+                              t,
+                              "dashboard.groups.invite_code",
+                              "Invite code",
+                            )}
+                            className="font-mono"
+                          />
+                          <Button
+                            className="w-full bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white"
+                            disabled={joining || !inviteCode.trim()}
+                            onClick={() => void handleJoin()}
+                          >
+                            {joining ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              tf(t, "dashboard.groups.join_group", "Join group")
+                            )}
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button
+                          className="w-full sm:w-auto min-w-[200px] bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white"
+                          disabled={joining}
+                          onClick={() => void handleJoin()}
+                        >
+                          {joining ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                              {tf(t, "dashboard.groups.joining", "Joining…")}
+                            </>
+                          ) : (
+                            tf(t, "dashboard.groups.join_group", "Join group")
+                          )}
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 ) : msgLoading ? (
                   <div className="flex justify-center py-12">
-                    <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+                    <Loader2 className="h-8 w-8 animate-spin text-myhigh5-primary" />
                   </div>
                 ) : orderedMessages.length === 0 ? (
-                  <div className="text-center text-sm text-gray-600 py-8">
+                  <div className="text-center text-sm text-gray-600 dark:text-gray-400 py-8">
                     {debouncedChatSearch
-                      ? t("dashboard.groups.no_search_hits") || "No messages match."
-                      : t("dashboard.groups.no_messages")}
+                      ? tf(
+                          t,
+                          "dashboard.groups.no_search_hits",
+                          "No messages match your search.",
+                        )
+                      : tf(
+                          t,
+                          "dashboard.groups.no_messages",
+                          "No messages yet. Say hello.",
+                        )}
                   </div>
                 ) : (
                   <div className="space-y-2 max-w-3xl mx-auto">
@@ -646,14 +831,14 @@ export function WhatsAppGroupsShell() {
                         >
                           <div
                             className={cn(
-                              "max-w-[85%] rounded-lg px-2 py-1.5 shadow-sm text-sm",
+                              "max-w-[85%] rounded-xl px-3 py-2 shadow-sm text-sm border border-transparent",
                               mine
-                                ? "bg-[#d9fdd3] dark:bg-emerald-900/50 text-gray-900 dark:text-gray-100"
-                                : "bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100",
+                                ? "bg-myhigh5-primary text-white border-myhigh5-primary/80"
+                                : "bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-200 dark:border-gray-700",
                             )}
                           >
                             {!mine && (
-                              <div className="text-xs font-medium text-emerald-700 dark:text-emerald-400 mb-0.5">
+                              <div className="text-xs font-medium text-myhigh5-primary dark:text-myhigh5-secondary mb-0.5">
                                 {message.sender?.full_name ||
                                   message.sender?.username ||
                                   `#${message.sender_id}`}
@@ -664,7 +849,8 @@ export function WhatsAppGroupsShell() {
                             </div>
                             <div
                               className={cn(
-                                "text-[10px] text-right mt-0.5 opacity-70",
+                                "text-[10px] text-right mt-0.5",
+                                mine ? "text-white/80" : "opacity-70",
                               )}
                             >
                               {parseApiDate(
@@ -684,14 +870,16 @@ export function WhatsAppGroupsShell() {
 
               {/* Composer */}
               {selectedGroup.is_member && (
-                <footer className="flex items-end gap-2 px-2 py-2 bg-[#f0f2f5] dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800">
+                <footer className="flex items-end gap-2 px-3 py-2.5 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800">
                   <Textarea
                     value={messageText}
                     onChange={(e) => setMessageText(e.target.value)}
-                    placeholder={
-                      t("dashboard.messages.type_message") || "Type a message"
-                    }
-                    className="min-h-[44px] max-h-32 resize-none rounded-xl border-0 bg-white dark:bg-gray-800 shadow-inner"
+                    placeholder={tf(
+                      t,
+                      "dashboard.messages.type_message",
+                      "Type a message",
+                    )}
+                    className="min-h-[44px] max-h-32 resize-none rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/80"
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !e.shiftKey) {
                         e.preventDefault()
@@ -701,7 +889,7 @@ export function WhatsAppGroupsShell() {
                   />
                   <Button
                     size="icon"
-                    className="rounded-full shrink-0 bg-emerald-600 hover:bg-emerald-700"
+                    className="rounded-full shrink-0 bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white"
                     disabled={sending || !messageText.trim()}
                     onClick={() => void handleSend()}
                   >
@@ -714,18 +902,161 @@ export function WhatsAppGroupsShell() {
         </section>
       </div>
 
+      {/* Group information (profile) */}
+      <Dialog open={groupInfoOpen} onOpenChange={setGroupInfoOpen}>
+        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {tf(t, "dashboard.groups.group_info", "Group information")}
+            </DialogTitle>
+          </DialogHeader>
+          {selectedGroup && (
+            <div className="space-y-5 pt-1">
+              <div className="flex items-start gap-3">
+                <div className="h-14 w-14 rounded-full bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary flex items-center justify-center overflow-hidden shrink-0 shadow-md">
+                  {selectedGroup.avatar_url ? (
+                    <img
+                      src={selectedGroup.avatar_url}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <Users className="h-7 w-7 text-white" />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-gray-900 dark:text-white text-lg leading-tight">
+                    {selectedGroup.name}
+                  </p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-1.5">
+                    {selectedGroup.is_private ? (
+                      <>
+                        <Lock className="h-3.5 w-3.5 shrink-0" />
+                        {tf(t, "dashboard.groups.private", "Private")}
+                      </>
+                    ) : (
+                      <>
+                        <Globe className="h-3.5 w-3.5 shrink-0" />
+                        {tf(t, "dashboard.groups.public", "Public")}
+                      </>
+                    )}
+                    <span className="text-gray-300 dark:text-gray-600">·</span>
+                    {selectedGroup.members_count}{" "}
+                    {tf(t, "dashboard.groups.members", "members")}
+                  </p>
+                </div>
+              </div>
+              <div>
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1.5">
+                  {tf(t, "dashboard.groups.description_label", "Description")}
+                </h3>
+                <p className="text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap rounded-lg bg-gray-50 dark:bg-gray-800/80 p-3 border border-gray-100 dark:border-gray-700">
+                  {selectedGroup.description?.trim()
+                    ? selectedGroup.description
+                    : tf(
+                        t,
+                        "dashboard.groups.no_description",
+                        "No description yet.",
+                      )}
+                </p>
+              </div>
+              <div>
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">
+                  {tf(t, "dashboard.groups.members_heading", "Members")}
+                </h3>
+                {selectedGroup.is_member ? (
+                  msgLoading && members.length === 0 ? (
+                    <div className="flex justify-center py-6">
+                      <Loader2 className="h-6 w-6 animate-spin text-myhigh5-primary" />
+                    </div>
+                  ) : (
+                    <ul className="space-y-2 max-h-[40vh] overflow-y-auto pr-1">
+                      {members.map((m) => (
+                        <li
+                          key={m.id}
+                          className="flex items-center justify-between gap-2 rounded-lg border border-gray-100 dark:border-gray-800 px-3 py-2 bg-white dark:bg-gray-900/50"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <UserAvatar
+                              user={m.user || { id: m.user_id }}
+                              className="h-9 w-9 shrink-0"
+                            />
+                            <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                              {m.user?.full_name ||
+                                m.user?.username ||
+                                `User #${m.user_id}`}
+                            </span>
+                          </div>
+                          <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0 capitalize">
+                            {roleLabelText(m.role, t)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )
+                ) : selectedGroup.is_private ? (
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    {tf(
+                      t,
+                      "dashboard.groups.members_private_hint",
+                      "Member list is available after you join this group.",
+                    )}
+                  </p>
+                ) : previewMembersLoading ? (
+                  <div className="flex justify-center py-6">
+                    <Loader2 className="h-6 w-6 animate-spin text-myhigh5-primary" />
+                  </div>
+                ) : previewMembers.length === 0 ? (
+                  <p className="text-sm text-gray-500">
+                    {tf(
+                      t,
+                      "dashboard.groups.no_members_preview",
+                      "No members loaded.",
+                    )}
+                  </p>
+                ) : (
+                  <ul className="space-y-2 max-h-[40vh] overflow-y-auto pr-1">
+                    {previewMembers.map((m) => (
+                      <li
+                        key={m.id}
+                        className="flex items-center justify-between gap-2 rounded-lg border border-gray-100 dark:border-gray-800 px-3 py-2 bg-white dark:bg-gray-900/50"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <UserAvatar
+                            user={m.user || { id: m.user_id }}
+                            className="h-9 w-9 shrink-0"
+                          />
+                          <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                            {m.user?.full_name ||
+                              m.user?.username ||
+                              `User #${m.user_id}`}
+                          </span>
+                        </div>
+                        <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0 capitalize">
+                          {roleLabelText(m.role, t)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Settings */}
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {t("dashboard.groups.group_settings") || "Group settings"}
+              {tf(t, "dashboard.groups.group_settings", "Group settings")}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2">
             <div>
               <label className="text-xs font-medium text-gray-500">
-                {t("dashboard.groups.group_name")}
+                {tf(t, "dashboard.groups.group_name", "Group name")}
               </label>
               <Input
                 value={editName}
@@ -734,7 +1065,7 @@ export function WhatsAppGroupsShell() {
             </div>
             <div>
               <label className="text-xs font-medium text-gray-500">
-                {t("dashboard.groups.description")}
+                {tf(t, "dashboard.groups.description", "Description")}
               </label>
               <Textarea
                 value={editDesc}
@@ -745,12 +1076,12 @@ export function WhatsAppGroupsShell() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setSettingsOpen(false)}>
-              {t("dashboard.groups.cancel")}
+              {tf(t, "dashboard.groups.cancel", "Cancel")}
             </Button>
             <Button
               onClick={() => void saveSettings()}
               disabled={savingSettings || !editName.trim()}
-              className="bg-emerald-600 hover:bg-emerald-700"
+              className="bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white"
             >
               {savingSettings ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
             </Button>
@@ -762,12 +1093,15 @@ export function WhatsAppGroupsShell() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {t("dashboard.groups.add_member") || "Add member"}
+              {tf(t, "dashboard.groups.add_member", "Add member")}
             </DialogTitle>
           </DialogHeader>
           <p className="text-sm text-gray-500">
-            {t("dashboard.groups.add_by_username_hint") ||
-              "Enter the exact username (without @)."}
+            {tf(
+              t,
+              "dashboard.groups.add_by_username_hint",
+              "Enter the exact username (without @).",
+            )}
           </p>
           <Input
             placeholder="username"
@@ -776,12 +1110,12 @@ export function WhatsAppGroupsShell() {
           />
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddUserOpen(false)}>
-              {t("dashboard.groups.cancel")}
+              {tf(t, "dashboard.groups.cancel", "Cancel")}
             </Button>
             <Button
               onClick={() => void addMember()}
               disabled={addingUser || !addUsername.trim()}
-              className="bg-emerald-600 hover:bg-emerald-700"
+              className="bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white"
             >
               {addingUser ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add"}
             </Button>
@@ -792,18 +1126,28 @@ export function WhatsAppGroupsShell() {
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{t("dashboard.groups.create_new_group")}</DialogTitle>
+            <DialogTitle>
+              {tf(t, "dashboard.groups.create_new_group", "Create a new group")}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <Input
-              placeholder={t("dashboard.groups.group_name_placeholder")}
+              placeholder={tf(
+                t,
+                "dashboard.groups.group_name_placeholder",
+                "Group name",
+              )}
               value={newGroup.name}
               onChange={(e) =>
                 setNewGroup({ ...newGroup, name: e.target.value })
               }
             />
             <Textarea
-              placeholder={t("dashboard.groups.description_placeholder")}
+              placeholder={tf(
+                t,
+                "dashboard.groups.description_placeholder",
+                "What is this group about?",
+              )}
               value={newGroup.description}
               onChange={(e) =>
                 setNewGroup({ ...newGroup, description: e.target.value })
@@ -815,36 +1159,52 @@ export function WhatsAppGroupsShell() {
                 variant={newGroup.is_private ? "outline" : "default"}
                 size="sm"
                 onClick={() => setNewGroup({ ...newGroup, is_private: false })}
+                className={
+                  !newGroup.is_private
+                    ? "bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white"
+                    : ""
+                }
               >
                 <Globe className="h-4 w-4 mr-1" />
-                {t("dashboard.groups.public")}
+                {tf(t, "dashboard.groups.public", "Public")}
               </Button>
               <Button
                 type="button"
                 variant={newGroup.is_private ? "default" : "outline"}
                 size="sm"
                 onClick={() => setNewGroup({ ...newGroup, is_private: true })}
+                className={
+                  newGroup.is_private
+                    ? "bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white"
+                    : ""
+                }
               >
                 <Lock className="h-4 w-4 mr-1" />
-                {t("dashboard.groups.private")}
+                {tf(t, "dashboard.groups.private", "Private")}
               </Button>
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400">
               {newGroup.is_private
-                ? t("dashboard.groups.private_visibility_help") ||
-                  "Private groups are hidden from people who are not members. Anyone you add by username becomes a member and will see this group."
-                : t("dashboard.groups.public_visibility_help") ||
-                  "Public groups appear in everyone’s list and can be joined without an invite code."}
+                ? tf(
+                    t,
+                    "dashboard.groups.private_visibility_help",
+                    "Private groups are hidden from people who are not members. Anyone an admin adds by username becomes a member and will see this group.",
+                  )
+                : tf(
+                    t,
+                    "dashboard.groups.public_visibility_help",
+                    "Public groups appear for everyone and can be joined without an invite code.",
+                  )}
             </p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>
-              {t("dashboard.groups.cancel")}
+              {tf(t, "dashboard.groups.cancel", "Cancel")}
             </Button>
             <Button
               onClick={() => void handleCreate()}
               disabled={creating || !newGroup.name.trim()}
-              className="bg-emerald-600 hover:bg-emerald-700"
+              className="bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white"
             >
               {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create"}
             </Button>
