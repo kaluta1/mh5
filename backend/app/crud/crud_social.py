@@ -475,6 +475,25 @@ class CRUDSocialGroup:
         ).first()
         return member.role if member else None
 
+    def update_member_role(
+        self,
+        db: Session,
+        group_id: int,
+        user_id: int,
+        new_role: GroupMemberRole,
+    ) -> Optional[GroupMember]:
+        """Met à jour le rôle d'un membre (promote/demote admin)."""
+        member = db.query(GroupMember).filter(
+            GroupMember.group_id == group_id,
+            GroupMember.user_id == user_id,
+        ).first()
+        if not member:
+            return None
+        member.role = new_role
+        db.commit()
+        db.refresh(member)
+        return member
+
 
 class CRUDGroupMessage:
     """CRUD pour les messages de groupe"""

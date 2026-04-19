@@ -20,7 +20,7 @@ export default function GroupsPage() {
   }
 
   return (
-    <div className="h-[calc(100vh-4rem)] sm:h-[calc(100vh-5rem)] md:h-[min(720px,calc(100vh-6rem))] -mx-2 sm:-mx-4 md:-mx-6 flex flex-col min-h-0">
+    <div className="h-[calc(100vh-4rem)] sm:h-[calc(100vh-5rem)] md:h-[min(780px,calc(100vh-6rem))] w-full min-w-0 flex flex-col min-h-0">
       <WhatsAppGroupsShell />
     </div>
   )

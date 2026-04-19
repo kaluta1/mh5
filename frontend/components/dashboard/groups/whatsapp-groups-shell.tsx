@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
   ArrowLeft,
+  Camera,
   Globe,
   Info,
   Loader2,
@@ -15,6 +16,8 @@ import {
   Search,
   Send,
   Settings,
+  Shield,
+  Trash2,
   Users,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -34,6 +37,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { UserAvatar } from "@/components/user/user-avatar"
+import { UploadButton } from "@/components/ui/upload-button"
 import { cn } from "@/lib/utils"
 import {
   socialService,
@@ -318,6 +322,12 @@ export function WhatsAppGroupsShell() {
 
   const isAdmin =
     myRole === "admin" || myRole === "owner" || myRole === "moderator"
+  const isOwner = myRole === "owner"
+
+  const [memberActionUserId, setMemberActionUserId] = useState<number | null>(
+    null,
+  )
+  const [savingAvatar, setSavingAvatar] = useState(false)
 
   const headerSubtitle = useMemo(() => {
     if (!selectedGroup) return ""
@@ -468,13 +478,100 @@ export function WhatsAppGroupsShell() {
     }
   }
 
+  const refreshGroupAndMembers = async () => {
+    if (!selectedId) return
+    const g = await socialService.getGroup(selectedId)
+    setGroups((prev) => prev.map((x) => (x.id === g.id ? g : x)))
+    const mem = await socialService.getGroupMembers(selectedId)
+    setMembers(mem)
+  }
+
+  const handleGroupAvatarFromUpload = async (
+    res: { url?: string; ufsUrl?: string }[],
+  ) => {
+    if (!selectedId || !res?.length) return
+    const url = res[0].url || res[0].ufsUrl
+    if (!url) return
+    setSavingAvatar(true)
+    try {
+      const updated = await socialService.updateFeedGroup(selectedId, {
+        avatar_url: url,
+      })
+      setGroups((prev) =>
+        prev.map((g) => (g.id === selectedId ? { ...g, ...updated } : g)),
+      )
+      addToast("Group photo updated.", "success")
+    } catch (e: unknown) {
+      const msg =
+        (e as { response?: { data?: { detail?: string } } })?.response?.data
+          ?.detail || "Could not update photo"
+      addToast(String(msg), "error")
+    } finally {
+      setSavingAvatar(false)
+    }
+  }
+
+  const promoteMember = async (userId: number) => {
+    if (!selectedId) return
+    setMemberActionUserId(userId)
+    try {
+      await socialService.updateGroupMemberRole(selectedId, userId, "admin")
+      await refreshGroupAndMembers()
+      addToast("Member is now an admin.", "success")
+    } catch (e: unknown) {
+      const msg =
+        (e as { response?: { data?: { detail?: string } } })?.response?.data
+          ?.detail || "Action failed"
+      addToast(String(msg), "error")
+    } finally {
+      setMemberActionUserId(null)
+    }
+  }
+
+  const demoteMember = async (userId: number) => {
+    if (!selectedId) return
+    setMemberActionUserId(userId)
+    try {
+      await socialService.updateGroupMemberRole(selectedId, userId, "member")
+      await refreshGroupAndMembers()
+      addToast("Admin role removed.", "success")
+    } catch (e: unknown) {
+      const msg =
+        (e as { response?: { data?: { detail?: string } } })?.response?.data
+          ?.detail || "Action failed"
+      addToast(String(msg), "error")
+    } finally {
+      setMemberActionUserId(null)
+    }
+  }
+
+  const removeMemberFromGroup = async (userId: number) => {
+    if (!selectedId) return
+    if (!confirm("Remove this person from the group?")) return
+    setMemberActionUserId(userId)
+    try {
+      await socialService.removeGroupMember(selectedId, userId)
+      await refreshGroupAndMembers()
+      addToast("Member removed.", "success")
+    } catch (e: unknown) {
+      const msg =
+        (e as { response?: { data?: { detail?: string } } })?.response?.data
+          ?.detail || "Action failed"
+      addToast(String(msg), "error")
+    } finally {
+      setMemberActionUserId(null)
+    }
+  }
+
+  const normRole = (r: string | undefined) => (r || "").toLowerCase()
+
   return (
     <div
       className={cn(
-        "-mx-4 sm:-mx-6 lg:-mx-8 min-h-[calc(100dvh-8rem)] flex flex-col border border-gray-200/80 dark:border-gray-700/80 rounded-none md:rounded-xl overflow-hidden bg-white dark:bg-gray-950",
+        "w-full min-w-0 min-h-[calc(100dvh-8rem)] flex flex-col border border-gray-200/80 dark:border-gray-700/80 rounded-xl overflow-hidden bg-white dark:bg-gray-950 shadow-sm",
       )}
     >
-      <div className="flex flex-1 min-h-0">
+      <div className="flex flex-1 min-h-0 min-w-0">
         {/* Left — conversation list */}
         <aside
           className={cn(
@@ -482,8 +579,8 @@ export function WhatsAppGroupsShell() {
             selectedId && mobilePanel === "chat" ? "hidden md:flex" : "flex",
           )}
         >
-          <div className="flex items-center justify-between gap-2 px-3 py-3 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/90">
-            <h1 className="text-lg font-semibold text-gray-900 dark:text-white tracking-tight">
+          <div className="flex items-center justify-between gap-2 px-3 py-3 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/90 min-w-0">
+            <h1 className="text-lg font-semibold text-gray-900 dark:text-white tracking-tight truncate min-w-0 pr-1">
               {tf(t, "dashboard.groups.title", "Groups")}
             </h1>
             <Button
@@ -620,7 +717,7 @@ export function WhatsAppGroupsShell() {
           ) : (
             <>
               {/* Chat header — tap row for group info */}
-              <header className="flex items-center gap-2 px-2 py-2.5 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-sm">
+              <header className="flex items-center gap-2 px-2 py-2.5 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-sm min-w-0 overflow-hidden">
                 <Button
                   variant="ghost"
                   size="icon"
@@ -879,7 +976,7 @@ export function WhatsAppGroupsShell() {
                       "dashboard.messages.type_message",
                       "Type a message",
                     )}
-                    className="min-h-[44px] max-h-32 resize-none rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/80"
+                    className="min-h-[40px] max-h-32 resize-none rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/80 py-2"
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !e.shiftKey) {
                         e.preventDefault()
@@ -912,16 +1009,52 @@ export function WhatsAppGroupsShell() {
           </DialogHeader>
           {selectedGroup && (
             <div className="space-y-5 pt-1">
-              <div className="flex items-start gap-3">
-                <div className="h-14 w-14 rounded-full bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary flex items-center justify-center overflow-hidden shrink-0 shadow-md">
-                  {selectedGroup.avatar_url ? (
-                    <img
-                      src={selectedGroup.avatar_url}
-                      alt=""
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <Users className="h-7 w-7 text-white" />
+              <div className="flex items-start gap-3 min-w-0">
+                <div className="relative h-14 w-14 shrink-0">
+                  <div className="h-14 w-14 rounded-full bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary flex items-center justify-center overflow-hidden shadow-md ring-2 ring-white dark:ring-gray-800">
+                    {selectedGroup.avatar_url ? (
+                      <img
+                        src={selectedGroup.avatar_url}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <Users className="h-7 w-7 text-white" />
+                    )}
+                  </div>
+                  {isAdmin && selectedGroup.is_member && (
+                    <div className="absolute -bottom-1 -right-1 rounded-full bg-white dark:bg-gray-900 p-0.5 shadow border border-gray-200 dark:border-gray-700">
+                      <UploadButton
+                        endpoint="profileAvatar"
+                        content={{
+                          button: () => (
+                            <button
+                              type="button"
+                              className="h-7 w-7 rounded-full bg-myhigh5-primary text-white flex items-center justify-center hover:bg-myhigh5-primary/90"
+                              aria-label="Change group photo"
+                              disabled={savingAvatar}
+                            >
+                              {savingAvatar ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Camera className="h-3.5 w-3.5" />
+                              )}
+                            </button>
+                          ),
+                        }}
+                        onClientUploadComplete={(res) => {
+                          void handleGroupAvatarFromUpload(
+                            res as { url?: string; ufsUrl?: string }[],
+                          )
+                        }}
+                        onUploadError={(err) =>
+                          addToast(
+                            err instanceof Error ? err.message : "Upload failed",
+                            "error",
+                          )
+                        }
+                      />
+                    </div>
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
@@ -971,27 +1104,91 @@ export function WhatsAppGroupsShell() {
                     </div>
                   ) : (
                     <ul className="space-y-2 max-h-[40vh] overflow-y-auto pr-1">
-                      {members.map((m) => (
-                        <li
-                          key={m.id}
-                          className="flex items-center justify-between gap-2 rounded-lg border border-gray-100 dark:border-gray-800 px-3 py-2 bg-white dark:bg-gray-900/50"
-                        >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <UserAvatar
-                              user={m.user || { id: m.user_id }}
-                              className="h-9 w-9 shrink-0"
-                            />
-                            <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                              {m.user?.full_name ||
-                                m.user?.username ||
-                                `User #${m.user_id}`}
+                      {members.map((m) => {
+                        const r = normRole(m.role)
+                        const isSelf = m.user_id === user?.id
+                        const showMenu =
+                          isAdmin && !isSelf && r !== "owner"
+                        const busy = memberActionUserId === m.user_id
+                        const canPromote = r === "member" && isAdmin
+                        const canDemote = r === "admin" && isOwner
+                        const canRemove =
+                          (r === "member" && isAdmin) ||
+                          (r === "admin" && isOwner)
+                        return (
+                          <li
+                            key={m.id}
+                            className="flex items-center gap-2 rounded-lg border border-gray-100 dark:border-gray-800 px-2 py-2 pr-1 bg-white dark:bg-gray-900/50 min-w-0"
+                          >
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                              <UserAvatar
+                                user={m.user || { id: m.user_id }}
+                                className="h-9 w-9 shrink-0"
+                              />
+                              <div className="min-w-0 flex-1">
+                                <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                  {m.user?.full_name ||
+                                    m.user?.username ||
+                                    `User #${m.user_id}`}
+                                </div>
+                                <div className="text-[11px] text-gray-500 sm:hidden capitalize">
+                                  {roleLabelText(m.role, t)}
+                                </div>
+                              </div>
+                            </div>
+                            <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0 capitalize hidden sm:inline">
+                              {roleLabelText(m.role, t)}
                             </span>
-                          </div>
-                          <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0 capitalize">
-                            {roleLabelText(m.role, t)}
-                          </span>
-                        </li>
-                      ))}
+                            {showMenu ? (
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 shrink-0"
+                                    aria-label="Member actions"
+                                  >
+                                    {busy ? (
+                                      <Loader2 className="h-4 w-4 animate-spin text-myhigh5-primary" />
+                                    ) : (
+                                      <MoreVertical className="h-4 w-4" />
+                                    )}
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-52">
+                                  {canPromote && (
+                                    <DropdownMenuItem
+                                      onClick={() => void promoteMember(m.user_id)}
+                                    >
+                                      <Shield className="h-4 w-4 mr-2" />
+                                      Make admin
+                                    </DropdownMenuItem>
+                                  )}
+                                  {canDemote && (
+                                    <DropdownMenuItem
+                                      onClick={() => void demoteMember(m.user_id)}
+                                    >
+                                      <Shield className="h-4 w-4 mr-2 opacity-70" />
+                                      Remove admin role
+                                    </DropdownMenuItem>
+                                  )}
+                                  {canRemove && (
+                                    <DropdownMenuItem
+                                      className="text-red-600 focus:text-red-600"
+                                      onClick={() =>
+                                        void removeMemberFromGroup(m.user_id)
+                                      }
+                                    >
+                                      <Trash2 className="h-4 w-4 mr-2" />
+                                      Remove from group
+                                    </DropdownMenuItem>
+                                  )}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            ) : null}
+                          </li>
+                        )
+                      })}
                     </ul>
                   )
                 ) : selectedGroup.is_private ? (
@@ -1054,6 +1251,45 @@ export function WhatsAppGroupsShell() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2">
+            {isAdmin && (
+              <div>
+                <label className="text-xs font-medium text-gray-500 block mb-2">
+                  {tf(t, "dashboard.groups.group_photo", "Group photo")}
+                </label>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="h-16 w-16 rounded-full overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 shrink-0">
+                    {selectedGroup?.avatar_url ? (
+                      <img
+                        src={selectedGroup.avatar_url}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="h-full w-full flex items-center justify-center text-gray-400">
+                        <Users className="h-8 w-8" />
+                      </div>
+                    )}
+                  </div>
+                  <UploadButton
+                    endpoint="profileAvatar"
+                    onClientUploadComplete={(res) => {
+                      void handleGroupAvatarFromUpload(
+                        res as { url?: string; ufsUrl?: string }[],
+                      )
+                    }}
+                    onUploadError={(err) =>
+                      addToast(
+                        err instanceof Error ? err.message : "Upload failed",
+                        "error",
+                      )
+                    }
+                  />
+                  {savingAvatar && (
+                    <Loader2 className="h-5 w-5 animate-spin text-myhigh5-primary" />
+                  )}
+                </div>
+              </div>
+            )}
             <div>
               <label className="text-xs font-medium text-gray-500">
                 {tf(t, "dashboard.groups.group_name", "Group name")}

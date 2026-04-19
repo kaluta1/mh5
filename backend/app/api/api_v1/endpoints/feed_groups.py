@@ -4,7 +4,7 @@ Groups API Endpoints for Feed System
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
-from typing import List, Optional
+from typing import List, Literal, Optional
 from pydantic import BaseModel, Field
 import secrets
 import string
@@ -23,6 +23,12 @@ router = APIRouter()
 
 class AddMemberByUsernameBody(BaseModel):
     username: str = Field(..., min_length=1, max_length=128)
+
+
+class MemberRoleUpdateBody(BaseModel):
+    """Promote to admin or demote to member (owner is fixed)."""
+
+    role: Literal["member", "admin"]
 
 
 @router.post("", response_model=GroupResponse, status_code=status.HTTP_201_CREATED)
@@ -406,3 +412,145 @@ def add_group_member_by_username(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     return {"success": True, "user_id": u.id, "username": u.username}
+
+
+@router.delete("/{group_id}/members/{target_user_id}", status_code=status.HTTP_204_NO_CONTENT)
+def remove_group_member(
+    group_id: int,
+    target_user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Remove a member (admins: members only; owner: anyone except owner)."""
+    group = crud_social_group.get(db, group_id)
+    if not group or group.is_deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Group not found",
+        )
+    actor_role = crud_social_group.get_member_role(db, group_id, current_user.id)
+    if actor_role not in (GroupMemberRole.ADMIN, GroupMemberRole.OWNER):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can remove members",
+        )
+    target = (
+        db.query(GroupMember)
+        .filter(
+            GroupMember.group_id == group_id,
+            GroupMember.user_id == target_user_id,
+        )
+        .first()
+    )
+    if not target:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Member not found",
+        )
+    if target.role == GroupMemberRole.OWNER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot remove the group owner",
+        )
+    if target_user_id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Use leave group to remove yourself",
+        )
+    if actor_role == GroupMemberRole.ADMIN and target.role in (
+        GroupMemberRole.ADMIN,
+        GroupMemberRole.OWNER,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the owner can remove an admin",
+        )
+    ok = crud_social_group.remove_member(db, group_id, target_user_id)
+    if not ok:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Could not remove member",
+        )
+    return None
+
+
+@router.patch("/{group_id}/members/{target_user_id}", response_model=GroupMemberResponse)
+def patch_group_member_role(
+    group_id: int,
+    target_user_id: int,
+    body: MemberRoleUpdateBody,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Promote a member to admin, or demote an admin to member (owner only for demote)."""
+    group = crud_social_group.get(db, group_id)
+    if not group or group.is_deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Group not found",
+        )
+    actor_role = crud_social_group.get_member_role(db, group_id, current_user.id)
+    if actor_role not in (GroupMemberRole.ADMIN, GroupMemberRole.OWNER):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can change roles",
+        )
+    new_role = (
+        GroupMemberRole.ADMIN
+        if body.role == "admin"
+        else GroupMemberRole.MEMBER
+    )
+    target = (
+        db.query(GroupMember)
+        .options(joinedload(GroupMember.user))
+        .filter(
+            GroupMember.group_id == group_id,
+            GroupMember.user_id == target_user_id,
+        )
+        .first()
+    )
+    if not target:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Member not found",
+        )
+    if target.role == GroupMemberRole.OWNER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot change the owner role",
+        )
+    if new_role == GroupMemberRole.ADMIN:
+        if actor_role not in (GroupMemberRole.OWNER, GroupMemberRole.ADMIN):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not allowed",
+            )
+    if new_role == GroupMemberRole.MEMBER and target.role == GroupMemberRole.ADMIN:
+        if actor_role != GroupMemberRole.OWNER:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only the owner can demote an admin",
+            )
+    if target_user_id == current_user.id and new_role == GroupMemberRole.MEMBER:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot demote yourself",
+        )
+    updated = crud_social_group.update_member_role(
+        db, group_id, target_user_id, new_role
+    )
+    if not updated:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Update failed",
+        )
+    member_row = (
+        db.query(GroupMember)
+        .options(joinedload(GroupMember.user))
+        .filter(
+            GroupMember.group_id == group_id,
+            GroupMember.user_id == target_user_id,
+        )
+        .first()
+    )
+    return GroupMemberResponse.model_validate(member_row)

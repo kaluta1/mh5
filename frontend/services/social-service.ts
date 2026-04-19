@@ -377,8 +377,11 @@ export const socialService = {
     return response?.messages || []
   },
 
-  /** Update group (name, description, …) — feed API; admins/owners only. */
-  async updateFeedGroup(groupId: number, data: { name?: string; description?: string }): Promise<SocialGroup> {
+  /** Update group (name, description, avatar, …) — feed API; admins/owners only. */
+  async updateFeedGroup(
+    groupId: number,
+    data: { name?: string; description?: string; avatar_url?: string | null },
+  ): Promise<SocialGroup> {
     const response = await apiService.put(`/api/v1/feed/groups/${groupId}`, data) as any
     return {
       ...response,
@@ -390,6 +393,20 @@ export const socialService = {
   /** Add member by @username — admins/owners only. */
   async addGroupMemberByUsername(groupId: number, username: string): Promise<void> {
     await apiService.post(`/api/v1/feed/groups/${groupId}/members/by-username`, { username })
+  },
+
+  /** Remove a member — admins (members only) or owner. */
+  async removeGroupMember(groupId: number, userId: number): Promise<void> {
+    await apiService.delete(`/api/v1/feed/groups/${groupId}/members/${userId}`)
+  },
+
+  /** Promote to admin or demote to member — owner required to demote an admin. */
+  async updateGroupMemberRole(
+    groupId: number,
+    userId: number,
+    role: 'member' | 'admin',
+  ): Promise<GroupMember> {
+    return apiService.patch(`/api/v1/feed/groups/${groupId}/members/${userId}`, { role }) as Promise<GroupMember>
   },
 
   async sendGroupMessage(groupId: number, data: { content: string; message_type?: string; media_id?: number; reply_to_id?: number }): Promise<GroupMessage> {

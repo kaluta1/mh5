@@ -335,6 +335,12 @@ export const apiService = {
     return response.data
   },
 
+  // PATCH request
+  async patch<T>(endpoint: string, data?: unknown): Promise<T> {
+    const response = await api.patch(endpoint, data)
+    return response.data
+  },
+
   // DELETE request
   async delete<T>(endpoint: string, invalidateCache?: string): Promise<T> {
     const response = await api.delete(endpoint)

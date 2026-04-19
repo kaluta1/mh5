@@ -261,6 +261,7 @@
       "invite_code": "Invite code",
       "invite_code_hint": "Enter the invite code you received from a member.",
       "create_new_group": "Create a new group",
+      "group_photo": "Group photo",
       "group_name": "Group name",
       "group_name_placeholder": "Group name",
       "description": "Description",
