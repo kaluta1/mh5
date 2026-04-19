@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { formatDistanceToNow } from 'date-fns'
-import { fr, enUS } from 'date-fns/locale'
+import { getDateFnsLocale } from '@/lib/date-utils'
 import { Send, Heart } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -29,8 +29,7 @@ export function CommentDialog({ open, onOpenChange, postId, onCommentAdded }: Co
   const [isLoading, setIsLoading] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   
-  // Get date-fns locale based on current language
-  const dateLocale = language === 'fr' ? fr : enUS
+  const dateLocale = getDateFnsLocale(language)
 
   useEffect(() => {
     if (open && postId) {

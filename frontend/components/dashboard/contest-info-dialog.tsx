@@ -23,7 +23,7 @@ interface ContestInfoDialogProps {
 
 function DescriptionWithDialog({ description, maxLength = 200 }: { description: string; maxLength?: number }) {
   const [showDialog, setShowDialog] = useState(false)
-  const { t, language } = useLanguage()
+  const { t } = useLanguage()
   const shouldTruncate = description && description.length > maxLength
   const truncatedDescription = shouldTruncate ? description.substring(0, maxLength) + '...' : description
 
@@ -48,7 +48,7 @@ function DescriptionWithDialog({ description, maxLength = 200 }: { description: 
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              {language === 'fr' ? 'Description complète' : language === 'es' ? 'Descripción completa' : language === 'de' ? 'Vollständige Beschreibung' : 'Full Description'}
+              {t('contestant_detail.full_description')}
             </DialogTitle>
           </DialogHeader>
           <div className="mt-4">

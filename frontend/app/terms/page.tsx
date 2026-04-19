@@ -390,7 +390,7 @@ export default function TermsPage() {
             <Link href="/">
               <Button variant="ghost" className="mb-8 text-myhigh5-primary hover:bg-myhigh5-primary/10">
                 <ArrowLeft className="w-4 h-4 mr-2" />
-                {language === 'fr' ? 'Retour' : language === 'es' ? 'Volver' : language === 'de' ? 'Zurück' : 'Back'}
+                {t('common.back')}
               </Button>
             </Link>
 

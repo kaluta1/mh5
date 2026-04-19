@@ -61,7 +61,18 @@ export function TransactionTable({
     fr: 'fr-FR',
     en: 'en-US',
     es: 'es-ES',
-    de: 'de-DE'
+    de: 'de-DE',
+    pt: 'pt-PT',
+    sw: 'sw-TZ',
+    ar: 'ar-SA',
+    zh: 'zh-CN',
+    hi: 'hi-IN',
+    ru: 'ru-RU',
+    it: 'it-IT',
+    nl: 'nl-NL',
+    tr: 'tr-TR',
+    ja: 'ja-JP',
+    ko: 'ko-KR',
   }
 
   const formatCurrency = (amount: number) => {

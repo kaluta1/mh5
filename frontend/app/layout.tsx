@@ -14,6 +14,7 @@ import { CookieConsent } from "@/components/ui/cookie-consent"
 import { ErrorBoundary } from "@/components/error-boundary"
 import { ReownAppKitProvider } from "@/components/reown-appkit-provider"
 import { getMetadataTranslations, detectLanguageFromHeaders, getKeywords } from "@/lib/metadata-translations"
+import { LANGUAGE_PREFERENCE_KEY, SUPPORTED_LANGUAGE_CODES } from "@/lib/language-cookie"
 import { API_ORIGIN } from "@/lib/config"
 import { headers } from "next/headers"
 
@@ -128,6 +129,8 @@ export default function RootLayout({
   }
 
   const apiOriginJson = JSON.stringify(API_ORIGIN)
+  const serverLangJson = JSON.stringify(htmlLang)
+  const supportedLangsJson = JSON.stringify(SUPPORTED_LANGUAGE_CODES)
 
   return (
     <html lang={htmlLang} suppressHydrationWarning>
@@ -139,6 +142,35 @@ export default function RootLayout({
         <link rel="dns-prefetch" href="https://fonts.gstatic.com" />
       </head>
       <body className={inter.className}>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                var KEY = ${JSON.stringify(LANGUAGE_PREFERENCE_KEY)};
+                var SUPPORTED = ${supportedLangsJson};
+                function valid(l) { return l && SUPPORTED.indexOf(l) !== -1; }
+                function readCookie() {
+                  var m = document.cookie.match(new RegExp(KEY + '=([^;]+)'));
+                  if (!m) return null;
+                  try { return decodeURIComponent(m[1]); } catch (e) { return m[1]; }
+                }
+                try {
+                  var fromStorage = null;
+                  try { fromStorage = localStorage.getItem(KEY); } catch (e) {}
+                  var fromCookie = readCookie();
+                  var lang = valid(fromStorage) ? fromStorage : (valid(fromCookie) ? fromCookie : ${serverLangJson});
+                  if (valid(lang)) {
+                    document.documentElement.setAttribute('lang', lang);
+                    document.documentElement.setAttribute('dir', lang === 'ar' ? 'rtl' : 'ltr');
+                    if (valid(fromStorage) && fromStorage !== fromCookie) {
+                      document.cookie = KEY + '=' + encodeURIComponent(fromStorage) + '; path=/; max-age=31536000; SameSite=Lax';
+                    }
+                  }
+                } catch (e) {}
+              })();
+            `,
+          }}
+        />
         <script
           dangerouslySetInnerHTML={{
             __html: `

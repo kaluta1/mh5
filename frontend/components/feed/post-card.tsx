@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { formatDistanceToNow } from 'date-fns'
-import { enUS, fr } from 'date-fns/locale'
+import { getDateFnsLocale } from '@/lib/date-utils'
 import { 
   Heart, 
   MessageCircle, 
@@ -22,13 +22,6 @@ import { LinkPreview } from './link-preview'
 import { MentionText } from './mention-text'
 import { cn } from '@/lib/utils'
 import { useLanguage } from '@/contexts/language-context'
-
-const localeMap: Record<string, any> = {
-  en: enUS,
-  fr: fr,
-  es: enUS,
-  de: enUS
-}
 
 function parseFeedDate(value: string): Date {
   // Backend often returns naive UTC timestamps without a trailing timezone marker.
@@ -67,7 +60,7 @@ export function PostCard({
   showFullContent = false,
 }: PostCardProps) {
   const { t, language } = useLanguage()
-  const dateLocale = localeMap[language] || enUS
+  const dateLocale = getDateFnsLocale(language)
   const [isLiked, setIsLiked] = useState(post.is_liked)
   const [likesCount, setLikesCount] = useState(post.likes_count)
   const canManagePost = currentUserId === post.author_id

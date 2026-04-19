@@ -3,6 +3,7 @@
  * Utilisé côté serveur pour générer les métadonnées selon la langue
  */
 import { Language, translations } from './translations'
+import { LANGUAGE_PREFERENCE_KEY, SUPPORTED_LANGUAGE_CODES } from './language-cookie'
 
 export interface MetadataTranslations {
   siteName: string
@@ -144,19 +145,24 @@ export function getMetadataTranslations(lang: Language = 'en'): MetadataTranslat
   }
 }
 
-// All language codes supported by the app. Keep in sync with `lib/translations.ts`.
-const SUPPORTED_LANGUAGES: Language[] = [
-  'en', 'fr', 'es', 'de', 'pt', 'sw', 'ar', 'zh', 'hi', 'ru', 'it', 'nl', 'tr', 'ja', 'ko',
-]
-
 /**
  * Détecte la langue depuis les headers de la requête
  */
 export function detectLanguageFromHeaders(headers: Headers): Language {
   const acceptLanguage = headers.get('accept-language') || ''
-  const cookieLanguage = headers.get('cookie')?.match(/myhigh5-language=([^;]+)/)?.[1]
+  const rawCookie = headers.get('cookie')?.match(
+    new RegExp(`${LANGUAGE_PREFERENCE_KEY}=([^;]+)`)
+  )?.[1]
+  let cookieLanguage: string | undefined
+  if (rawCookie) {
+    try {
+      cookieLanguage = decodeURIComponent(rawCookie)
+    } catch {
+      cookieLanguage = rawCookie
+    }
+  }
 
-  if (cookieLanguage && (SUPPORTED_LANGUAGES as string[]).includes(cookieLanguage)) {
+  if (cookieLanguage && (SUPPORTED_LANGUAGE_CODES as string[]).includes(cookieLanguage)) {
     return cookieLanguage as Language
   }
 
@@ -164,7 +170,7 @@ export function detectLanguageFromHeaders(headers: Headers): Language {
     const langs = acceptLanguage.split(',').map((l) => l.split(';')[0].trim().toLowerCase())
     for (const lang of langs) {
       const prefix = lang.split('-')[0]
-      if ((SUPPORTED_LANGUAGES as string[]).includes(prefix)) {
+      if ((SUPPORTED_LANGUAGE_CODES as string[]).includes(prefix)) {
         return prefix as Language
       }
     }

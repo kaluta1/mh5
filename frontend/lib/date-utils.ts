@@ -2,7 +2,81 @@
  * Utilitaires pour formater les dates selon la langue
  */
 
+import type { Locale } from 'date-fns/locale'
+import {
+  arSA,
+  de,
+  enUS,
+  es,
+  fr,
+  hi,
+  it,
+  ja,
+  ko,
+  nl,
+  pt,
+  ru,
+  tr,
+  zhCN,
+} from 'date-fns/locale'
 import { Language } from './translations'
+
+/** date-fns locale per app language (Swahili: no locale in date-fns → enUS). */
+const DATE_FNS_LOCALE_BY_LANG: Partial<Record<Language, Locale>> = {
+  en: enUS,
+  fr,
+  es,
+  de,
+  pt,
+  sw: enUS,
+  ar: arSA,
+  zh: zhCN,
+  hi,
+  ru,
+  it,
+  nl,
+  tr,
+  ja,
+  ko,
+}
+
+export function getDateFnsLocale(language: Language): Locale {
+  return DATE_FNS_LOCALE_BY_LANG[language] ?? enUS
+}
+
+/** Ordinal rank label (1st / 1er / 1º …) for contest UI; non-Latin languages use English-style ordinals. */
+export function formatOrdinalRank(value: number, language: Language): string {
+  if (!value) return ''
+  if (language === 'fr') {
+    if (value === 1) return '1er'
+    if (value === 2) return '2ème'
+    if (value === 3) return '3ème'
+    return `${value}ème`
+  }
+  if (language === 'es') {
+    if (value === 1) return '1º'
+    if (value === 2) return '2º'
+    if (value === 3) return '3º'
+    return `${value}º`
+  }
+  if (language === 'de') {
+    if (value === 1) return '1.'
+    if (value === 2) return '2.'
+    if (value === 3) return '3.'
+    return `${value}.`
+  }
+  const pr = new Intl.PluralRules('en-US', { type: 'ordinal' })
+  const rule = pr.select(value)
+  const suffixes: Record<string, string> = {
+    zero: 'th',
+    one: 'st',
+    two: 'nd',
+    few: 'rd',
+    many: 'th',
+    other: 'th',
+  }
+  return `${value}${suffixes[rule] ?? 'th'}`
+}
 
 /**
  * Mappe les noms de jours (toutes langues) vers les traductions
@@ -157,7 +231,7 @@ export function translateMonth(month: string, language: Language = 'fr'): string
  */
 // Map app language code -> BCP 47 locale tag for `toLocaleDateString`.
 // Browsers fall back gracefully on unsupported locales.
-const LOCALE_BY_LANG: Partial<Record<Language, string>> = {
+export const LOCALE_BY_LANG: Partial<Record<Language, string>> = {
   fr: 'fr-FR',
   en: 'en-US',
   es: 'es-ES',

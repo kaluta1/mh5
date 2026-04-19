@@ -15,6 +15,8 @@ import {
 import { CheckCircle, XCircle, Eye, AlertCircle, FileText, ExternalLink } from 'lucide-react'
 import api from '@/lib/api'
 import { API_URL } from '@/lib/config'
+import { LOCALE_BY_LANG } from '@/lib/date-utils'
+import type { Language } from '@/lib/translations'
 
 interface KYCVerification {
   id: number
@@ -173,19 +175,21 @@ export default function AdminKYC() {
     return email.includes(query) || fullName.includes(query)
   })
 
+  const dateLocale = LOCALE_BY_LANG[language as Language] || 'en-US'
+
   const getStatusBadge = (status: string) => {
     const badges: Record<string, { bg: string; text: string; label: string }> = {
       pending: { bg: 'bg-yellow-100', text: 'text-yellow-800', label: t('admin.kyc.pending') || 'Pending' },
-      in_progress: { bg: 'bg-blue-100', text: 'text-blue-800', label: language === 'fr' ? 'En cours' : 'In progress' },
+      in_progress: { bg: 'bg-blue-100', text: 'text-blue-800', label: t('admin.kyc.status_in_progress') },
       pending_proof_of_address: {
         bg: 'bg-teal-100',
         text: 'text-teal-900',
-        label: language === 'fr' ? 'Justificatif domicile' : 'Proof of address',
+        label: t('admin.kyc.status_proof_of_address'),
       },
       approved: { bg: 'bg-green-100', text: 'text-green-800', label: t('admin.kyc.approved') || 'Approved' },
       rejected: { bg: 'bg-red-100', text: 'text-red-800', label: t('admin.kyc.rejected') || 'Rejected' },
-      requires_review: { bg: 'bg-orange-100', text: 'text-orange-800', label: language === 'fr' ? 'Révision requise' : 'Requires review' },
-      expired: { bg: 'bg-gray-100', text: 'text-gray-800', label: 'Expired' },
+      requires_review: { bg: 'bg-orange-100', text: 'text-orange-800', label: t('admin.kyc.status_requires_review') },
+      expired: { bg: 'bg-gray-100', text: 'text-gray-800', label: t('admin.kyc.status_expired') },
     }
     const badge = badges[status] || badges.pending
     return <span className={`px-2 py-1 rounded text-sm font-medium ${badge.bg} ${badge.text}`}>{badge.label}</span>
@@ -223,10 +227,10 @@ export default function AdminKYC() {
             variant={filter === 'pending_proof_of_address' ? 'default' : 'outline'}
             onClick={() => setFilter('pending_proof_of_address')}
           >
-            {language === 'fr' ? 'Justif. domicile' : 'PoA pending'}
+            {t('admin.kyc.filter_poa_short')}
           </Button>
           <Button variant={filter === 'in_progress' ? 'default' : 'outline'} onClick={() => setFilter('in_progress')}>
-            {language === 'fr' ? 'En cours' : 'In progress'}
+            {t('admin.kyc.filter_in_progress')}
           </Button>
           <Button variant={filter === 'approved' ? 'default' : 'outline'} onClick={() => setFilter('approved')}>
             {t('admin.kyc.approved') || 'Approved'}
@@ -235,7 +239,7 @@ export default function AdminKYC() {
             {t('admin.kyc.rejected') || 'Rejected'}
           </Button>
           <Button variant={filter === 'all' ? 'default' : 'outline'} onClick={() => setFilter('all')}>
-            {language === 'fr' ? 'Tous' : 'All'}
+            {t('admin.reports.all')}
           </Button>
         </div>
       </div>
@@ -277,7 +281,7 @@ export default function AdminKYC() {
                       <div className="grid grid-cols-2 gap-4 mt-4">
                         <div>
                           <p className="text-xs text-gray-500 uppercase tracking-wide">
-                            {language === 'fr' ? 'Vérifications' : 'Verifications'}
+                            {t('admin.kyc.verifications_label')}
                           </p>
                           <div className="flex gap-2 mt-1">
                             <div
@@ -337,8 +341,8 @@ export default function AdminKYC() {
                       <div className="mt-3 flex gap-2 flex-wrap items-center">
                         {getStatusBadge(verification.status)}
                         <span className="text-xs text-gray-500">
-                          {language === 'fr' ? 'Soumis le' : 'Submitted on'}{' '}
-                          {new Date(verification.submitted_at).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US')}
+                          {t('admin.kyc.submitted_on')}{' '}
+                          {new Date(verification.submitted_at).toLocaleDateString(dateLocale)}
                         </span>
                       </div>
 
@@ -382,7 +386,7 @@ export default function AdminKYC() {
                             onClick={() =>
                               handleReject(
                                 verification.id,
-                                language === 'fr' ? 'Rejeté par l\'administrateur' : 'Rejected by administrator'
+                                t('admin.kyc.reject_default_reason')
                               )
                             }
                           >
@@ -403,17 +407,15 @@ export default function AdminKYC() {
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{language === 'fr' ? 'Détail KYC' : 'KYC detail'}</DialogTitle>
+            <DialogTitle>{t('admin.kyc.detail_title')}</DialogTitle>
             <DialogDescription>
-              {language === 'fr'
-                ? 'Documents enregistrés, dont le justificatif de domicile après vérification.'
-                : 'Stored documents, including proof of address after verification.'}
+              {t('admin.kyc.detail_description')}
             </DialogDescription>
           </DialogHeader>
 
           {detailLoading && (
             <div className="flex justify-center py-8 text-sm text-gray-500">
-              {language === 'fr' ? 'Chargement…' : 'Loading…'}
+              {t('common.loading')}
             </div>
           )}
 
@@ -432,7 +434,7 @@ export default function AdminKYC() {
               {detail.verified_address ? (
                 <div className="rounded-lg border border-gray-200 dark:border-gray-600 p-3 bg-gray-50 dark:bg-gray-900/40">
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
-                    {language === 'fr' ? 'Adresse résidentielle déclarée (verrouillée)' : 'Declared residential address'}
+                    {t('admin.kyc.declared_address_title')}
                   </p>
                   <p className="text-sm whitespace-pre-wrap text-gray-800 dark:text-gray-200">{detail.verified_address}</p>
                 </div>
@@ -441,13 +443,11 @@ export default function AdminKYC() {
               <div>
                 <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
                   <FileText className="h-4 w-4" />
-                  {language === 'fr' ? 'Justificatif de domicile' : 'Proof of address'}
+                  {t('admin.kyc.proof_of_address_heading')}
                 </h4>
                 {poaDocuments.length === 0 ? (
                   <p className="text-sm text-gray-500">
-                    {language === 'fr'
-                      ? 'Aucun document de type facture / relevé / lettre enregistré pour cette vérification.'
-                      : 'No utility bill / bank statement / address letter on file for this verification.'}
+                    {t('admin.kyc.no_poa_documents')}
                   </p>
                 ) : (
                   <div className="space-y-4">
@@ -465,13 +465,13 @@ export default function AdminKYC() {
                             <div className="text-sm space-y-1 bg-amber-50 dark:bg-amber-950/30 p-2 rounded">
                               {meta.name && (
                                 <p>
-                                  <span className="font-medium">{language === 'fr' ? 'Nom saisi' : 'Name on doc'}: </span>
+                                  <span className="font-medium">{t('admin.kyc.name_on_document')}: </span>
                                   {meta.name}
                                 </p>
                               )}
                               {meta.address && (
                                 <p>
-                                  <span className="font-medium">{language === 'fr' ? 'Adresse saisie' : 'Address on doc'}: </span>
+                                  <span className="font-medium">{t('admin.kyc.address_on_document')}: </span>
                                   {meta.address}
                                 </p>
                               )}
@@ -479,7 +479,7 @@ export default function AdminKYC() {
                           )}
                           {front && (
                             <div>
-                              <p className="text-xs text-gray-500 mb-1">{language === 'fr' ? 'Fichier principal' : 'Main file'}</p>
+                              <p className="text-xs text-gray-500 mb-1">{t('admin.kyc.main_file')}</p>
                               {isLikelyImageUrl(front) ? (
                                 <a href={front} target="_blank" rel="noopener noreferrer" className="block">
                                   <img src={front} alt="PoA front" className="max-h-64 rounded border object-contain" />
@@ -492,14 +492,14 @@ export default function AdminKYC() {
                                   className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline"
                                 >
                                   <ExternalLink className="h-4 w-4" />
-                                  PDF / {language === 'fr' ? 'Ouvrir le fichier' : 'Open file'}
+                                  PDF / {t('admin.kyc.open_file')}
                                 </a>
                               )}
                             </div>
                           )}
                           {back && (
                             <div>
-                              <p className="text-xs text-gray-500 mb-1">{language === 'fr' ? 'Deuxième page' : 'Second page'}</p>
+                              <p className="text-xs text-gray-500 mb-1">{t('admin.kyc.second_page')}</p>
                               {isLikelyImageUrl(back) ? (
                                 <a href={back} target="_blank" rel="noopener noreferrer" className="block">
                                   <img src={back} alt="PoA back" className="max-h-64 rounded border object-contain" />
@@ -512,7 +512,7 @@ export default function AdminKYC() {
                                   className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline"
                                 >
                                   <ExternalLink className="h-4 w-4" />
-                                  PDF / {language === 'fr' ? 'Ouvrir le fichier' : 'Open file'}
+                                  PDF / {t('admin.kyc.open_file')}
                                 </a>
                               )}
                             </div>
@@ -527,7 +527,7 @@ export default function AdminKYC() {
               {(detail.documents || []).filter((d) => !POA_TYPES.has(d.document_type)).length > 0 && (
                 <div>
                   <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
-                    {language === 'fr' ? 'Autres documents' : 'Other documents'}
+                    {t('admin.kyc.other_documents')}
                   </h4>
                   <ul className="text-sm text-gray-600 space-y-2">
                     {(detail.documents || [])
@@ -539,7 +539,7 @@ export default function AdminKYC() {
                             {doc.document_type}:{' '}
                             {front ? (
                               <a href={front} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                                {language === 'fr' ? 'Voir' : 'View'}
+                                {t('admin.kyc.view_document')}
                               </a>
                             ) : (
                               '—'
@@ -563,7 +563,7 @@ export default function AdminKYC() {
                     onClick={() =>
                       handleReject(
                         detail.id,
-                        language === 'fr' ? 'Rejeté par l\'administrateur' : 'Rejected by administrator'
+                        t('admin.kyc.reject_default_reason')
                       )
                     }
                   >

@@ -13,18 +13,12 @@ interface ContestantDescriptionProps {
 
 export function ContestantDescription({ description, maxLength = 200 }: ContestantDescriptionProps) {
   const [isOpen, setIsOpen] = React.useState(false)
-  const { t, language } = useLanguage()
+  const { t } = useLanguage()
 
   if (!description || description.trim() === '') {
     return (
       <p className="text-sm text-gray-400 dark:text-gray-500 italic">
-        {language === 'fr'
-          ? 'Aucune description disponible'
-          : language === 'es'
-            ? 'No hay descripción disponible'
-            : language === 'de'
-              ? 'Keine Beschreibung verfügbar'
-              : 'No description available'}
+        {t('dashboard.contests.no_description')}
       </p>
     )
   }
@@ -45,7 +39,7 @@ export function ContestantDescription({ description, maxLength = 200 }: Contesta
               className="ml-1 p-0 h-auto text-myhigh5-primary dark:text-myhigh5-secondary underline"
               onClick={() => setIsOpen(true)}
             >
-              {t('common.view_more') || (language === 'fr' ? 'Voir plus' : language === 'es' ? 'Ver más' : language === 'de' ? 'Mehr anzeigen' : 'View more')}
+              {t('common.view_more')}
             </Button>
           </>
         ) : (

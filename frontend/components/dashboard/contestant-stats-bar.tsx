@@ -1,7 +1,8 @@
 'use client'
 
-import { ThumbsUp, Image as ImageIcon, Video, Trophy, MessageCircle, Heart, Share2, Medal } from 'lucide-react'
+import { ThumbsUp, Image as ImageIcon, Video, Trophy, MessageCircle, Heart, Share2 } from 'lucide-react'
 import { useLanguage } from '@/contexts/language-context'
+import { formatOrdinalRank } from '@/lib/date-utils'
 
 interface ContestantStatsBarProps {
   votes: number
@@ -36,32 +37,7 @@ export function ContestantStatsBar({
 }: ContestantStatsBarProps) {
   const { t, language } = useLanguage()
 
-  const getRankText = (value?: number) => {
-    if (!value) return ''
-    if (language === 'fr') {
-      if (value === 1) return '1er'
-      if (value === 2) return '2ème'
-      if (value === 3) return '3ème'
-      return `${value}ème`
-    } else if (language === 'es') {
-      if (value === 1) return '1º'
-      if (value === 2) return '2º'
-      if (value === 3) return '3º'
-      return `${value}º`
-    } else if (language === 'de') {
-      if (value === 1) return '1.'
-      if (value === 2) return '2.'
-      if (value === 3) return '3.'
-      return `${value}.`
-    } else {
-      if (value === 1) return '1st'
-      if (value === 2) return '2nd'
-      if (value === 3) return '3rd'
-      return `${value}th`
-    }
-  }
-
-  const items = [
+  const baseItems = [
     {
       key: 'votes',
       value: votes,
@@ -112,6 +88,20 @@ export function ContestantStatsBar({
       bg: 'bg-indigo-600'
     }
   ]
+
+  const items =
+    rank != null && rank > 0
+      ? [
+          {
+            key: 'rank',
+            value: formatOrdinalRank(rank, language),
+            label: t('dashboard.contests.rank') || 'Rank',
+            icon: <Trophy className="w-4 h-4 text-white" />,
+            bg: 'bg-amber-500',
+          },
+          ...baseItems,
+        ]
+      : baseItems
 
   const clickHandlers: Record<string, (() => void) | undefined> = {
     votes: onVotesClick,

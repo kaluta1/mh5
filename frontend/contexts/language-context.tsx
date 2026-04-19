@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react'
 import { Language, languages, translations, TranslationKeys } from '@/lib/translations'
+import { LANGUAGE_PREFERENCE_KEY, setLanguagePreferenceClient } from '@/lib/language-cookie'
 
 interface LanguageContextType {
   language: Language
@@ -20,7 +21,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   // Load saved language from localStorage on mount ONLY if user explicitly set it
   // Default is always English
   useEffect(() => {
-    const savedLanguage = localStorage.getItem('myhigh5-language') as Language
+    const savedLanguage = localStorage.getItem(LANGUAGE_PREFERENCE_KEY) as Language
     // Only use saved language if it's explicitly set and valid
     // Default to English if no preference or invalid value
     if (savedLanguage && SUPPORTED_LANGUAGES.includes(savedLanguage)) {
@@ -28,14 +29,15 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     } else {
       // Ensure English is set and saved if no preference exists
       setLanguage('en')
-      localStorage.setItem('myhigh5-language', 'en')
+      localStorage.setItem(LANGUAGE_PREFERENCE_KEY, 'en')
     }
   }, [])
 
   // Save language to localStorage and apply lang/dir attributes on <html> when it changes.
   // The `dir` attribute is needed for Arabic so the layout flips RTL.
   useEffect(() => {
-    localStorage.setItem('myhigh5-language', language)
+    localStorage.setItem(LANGUAGE_PREFERENCE_KEY, language)
+    setLanguagePreferenceClient(language)
     if (typeof document !== 'undefined') {
       const meta = languages[language]
       const html = document.documentElement

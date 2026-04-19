@@ -508,7 +508,7 @@ export default function ContactMobilePage() {
           <div className="container px-4 md:px-6">
             <div className="max-w-4xl mx-auto">
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6 text-center">
-                {language === 'fr' ? 'Comment pouvons-nous vous aider ?' : language === 'es' ? '¿Cómo podemos ayudarte?' : language === 'de' ? 'Wie können wir Ihnen helfen?' : 'How can we help you?'}
+                {t('pages.contact.categories.title')}
               </h2>
               <div className="grid md:grid-cols-2 gap-4">
                 {supportCategories.map((category, index) => (

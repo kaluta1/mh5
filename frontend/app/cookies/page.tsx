@@ -18,7 +18,7 @@ import {
 import { Button } from "@/components/ui/button"
 
 export default function CookiesPage() {
-  const { language } = useLanguage()
+  const { language, t } = useLanguage()
 
   const content: Record<string, {
     title: string
@@ -275,7 +275,7 @@ export default function CookiesPage() {
             <Link href="/">
               <Button variant="ghost" className="mb-8 text-myhigh5-primary hover:bg-myhigh5-primary/10">
                 <ArrowLeft className="w-4 h-4 mr-2" />
-                {language === 'fr' ? 'Retour' : language === 'es' ? 'Volver' : language === 'de' ? 'Zurück' : 'Back'}
+                {t('common.back')}
               </Button>
             </Link>
 

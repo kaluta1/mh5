@@ -39,7 +39,7 @@ export function ContestantsSidebar({
   filterContinent,
   roundId
 }: ContestantsSidebarProps) {
-  const { t, language } = useLanguage()
+  const { t } = useLanguage()
   const router = useRouter()
 
   const topContestants = contestants.slice(0, 5)
@@ -55,7 +55,7 @@ export function ContestantsSidebar({
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
               <span className="w-7 h-7 rounded-lg bg-gradient-to-br from-yellow-400 to-amber-500 flex items-center justify-center text-sm shadow-sm">&#127942;</span>
-              {language === 'fr' ? 'Classement' : language === 'es' ? 'Clasificación' : language === 'de' ? 'Rangliste' : 'Leaderboard'}
+              {t('dashboard.nav.leaderboard')}
             </h3>
             {contestants.length >= 1 && (
               <Button
@@ -71,7 +71,7 @@ export function ContestantsSidebar({
                   router.push(`/dashboard/contests/${contestId}/contestants${qs ? `?${qs}` : ''}`)
                 }}
               >
-                {language === 'fr' ? 'Voir tout' : language === 'es' ? 'Ver todo' : language === 'de' ? 'Alle anzeigen' : 'View all'}
+                {t('dashboard.wallet.see_all')}
               </Button>
             )}
           </div>
@@ -137,7 +137,7 @@ export function ContestantsSidebar({
                     }}
                   >
                     <UserPlus className="w-3 h-3 mr-1" />
-                    {language === 'fr' ? 'Suivre' : language === 'es' ? 'Seguir' : language === 'de' ? 'Folgen' : 'Follow'}
+                    {t('dashboard.profile.follow')}
                   </Button>
                   <Button
                     size="sm"
@@ -149,7 +149,7 @@ export function ContestantsSidebar({
                     }}
                   >
                     <MessageCircle className="w-3 h-3 mr-1" />
-                    {language === 'fr' ? 'Message' : language === 'es' ? 'Mensaje' : language === 'de' ? 'Nachricht' : 'Message'}
+                    {t('dashboard.contests.message_cta')}
                   </Button>
                 </div> */}
               </div>

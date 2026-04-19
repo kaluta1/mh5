@@ -236,7 +236,7 @@ export function SettingsDemographicsTab({ user, onUpdate }: SettingsDemographics
                   : 'border-gray-300 dark:border-gray-600 focus:ring-myhigh5-primary focus:border-transparent'
                 }`}
             >
-              <option value="">{language === 'fr' ? 'Jour' : language === 'es' ? 'Día' : language === 'de' ? 'Tag' : 'Day'}</option>
+              <option value="">{t('profile_setup.dob_select_day')}</option>
               {days.map((d) => (
                 <option key={d} value={d}>
                   {d}
@@ -256,7 +256,7 @@ export function SettingsDemographicsTab({ user, onUpdate }: SettingsDemographics
                   : 'border-gray-300 dark:border-gray-600 focus:ring-myhigh5-primary focus:border-transparent'
                 }`}
             >
-              <option value="">{language === 'fr' ? 'Mois' : language === 'es' ? 'Mes' : language === 'de' ? 'Monat' : 'Month'}</option>
+              <option value="">{t('profile_setup.dob_select_month')}</option>
               {months.map((m, index) => (
                 <option key={index + 1} value={(index + 1).toString()}>
                   {m}
@@ -276,7 +276,7 @@ export function SettingsDemographicsTab({ user, onUpdate }: SettingsDemographics
                   : 'border-gray-300 dark:border-gray-600 focus:ring-myhigh5-primary focus:border-transparent'
                 }`}
             >
-              <option value="">{language === 'fr' ? 'Année' : language === 'es' ? 'Año' : language === 'de' ? 'Jahr' : 'Year'}</option>
+              <option value="">{t('profile_setup.dob_select_year')}</option>
               {years.map((y) => (
                 <option key={y} value={y.toString()}>
                   {y}

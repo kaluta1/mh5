@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { format } from 'date-fns'
-import { enUS, fr } from 'date-fns/locale'
+import { LOCALE_BY_LANG, getDateFnsLocale } from '@/lib/date-utils'
 import { Loader2, RefreshCw, FileText, BarChart3, TrendingUp, AlertCircle, PieChart } from 'lucide-react'
 import api from '@/lib/api'
 import { Input } from '@/components/ui/input'
@@ -79,8 +79,8 @@ export default function AdminAccounting() {
     const [loading, setLoading] = useState(true)
     const [data, setData] = useState<any>(EMPTY)
     const [error, setError] = useState<Error | null>(null)
-    const dateLocale = language === 'fr' ? fr : enUS
-    const numberLocale = language === 'fr' ? 'fr-FR' : 'en-US'
+    const dateLocale = getDateFnsLocale(language)
+    const numberLocale = LOCALE_BY_LANG[language] || 'en-US'
 
     const todayStr = format(new Date(), 'yyyy-MM-dd')
     const [reportKind, setReportKind] = useState<ReportKind>('balance')
@@ -336,7 +336,7 @@ export default function AdminAccounting() {
                                             <TableRow key={entry.id}>
                                                 <TableCell>
                                                     {entry.entryDate
-                                                        ? format(new Date(entry.entryDate), language === 'fr' ? 'dd/MM/yyyy HH:mm' : 'MM/dd/yyyy HH:mm', { locale: dateLocale })
+                                                        ? format(new Date(entry.entryDate), 'P p', { locale: dateLocale })
                                                         : '—'}
                                                 </TableCell>
                                                 <TableCell className="font-mono text-xs">{entry.entryNumber}</TableCell>

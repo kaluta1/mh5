@@ -2,6 +2,8 @@ import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios'
 import { cacheService } from './cache-service'
 import { logger } from './logger'
 import { API_URL } from './config'
+import { LANGUAGE_PREFERENCE_KEY } from './language-cookie'
+import { languages } from './translations'
 
 // Must match lib/config.ts (localhost in dev when NEXT_PUBLIC_API_URL is unset — not always myhigh5.com).
 const API_BASE_URL = API_URL.replace(/\/+$/, '')
@@ -35,9 +37,9 @@ const addCommonHeaders = (config: InternalAxiosRequestConfig) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
-  // Ajouter la langue depuis localStorage si disponible
-  const savedLanguage = localStorage.getItem('myhigh5-language')
-  if (savedLanguage && ['en', 'fr', 'es', 'de'].includes(savedLanguage)) {
+  const savedLanguage = localStorage.getItem(LANGUAGE_PREFERENCE_KEY)
+  const supported = Object.keys(languages)
+  if (savedLanguage && supported.includes(savedLanguage)) {
     config.headers['Accept-Language'] = savedLanguage
   }
   return config

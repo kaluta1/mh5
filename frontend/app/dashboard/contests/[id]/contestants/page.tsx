@@ -34,7 +34,7 @@ interface ContestantData {
 }
 
 export default function ContestantsListPage() {
-  const { t, language } = useLanguage()
+  const { t } = useLanguage()
   const { user } = useAuth()
   const router = useRouter()
   const params = useParams()
@@ -214,8 +214,8 @@ export default function ContestantsListPage() {
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
               {filteredContestants.length}{' '}
               {contestMode === 'nomination'
-                ? (language === 'fr' ? 'nominateurs' : 'nominators')
-                : (language === 'fr' ? 'participants' : 'contestants')}
+                ? t('dashboard.contests.count_suffix_nominators')
+                : t('dashboard.contests.count_suffix_entries')}
             </p>
           </div>
 
@@ -232,7 +232,7 @@ export default function ContestantsListPage() {
                 }`}
               >
                 <MapPin className="w-4 h-4" />
-                {selectedCountry && selectedCountry !== 'all' ? selectedCountry : (language === 'fr' ? 'Tous les pays' : 'All countries')}
+                {selectedCountry && selectedCountry !== 'all' ? selectedCountry : t('dashboard.contests.all_countries')}
                 <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showCountryDropdown ? 'rotate-180' : ''}`} />
               </button>
               {showCountryDropdown && (
@@ -241,7 +241,7 @@ export default function ContestantsListPage() {
                     <div className="relative">
                       <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
                       <input type="text" value={countrySearch} onChange={(e) => setCountrySearch(e.target.value)}
-                        placeholder={language === 'fr' ? 'Rechercher un pays...' : 'Search country...'}
+                        placeholder={t('dashboard.contests.search_country_placeholder')}
                         className="w-full pl-8 pr-3 py-2 text-sm bg-gray-50 dark:bg-gray-700/50 border-0 rounded-lg focus:outline-none focus:ring-2 focus:ring-myhigh5-primary/30 text-gray-900 dark:text-white placeholder-gray-400"
                         autoFocus />
                     </div>
@@ -249,7 +249,7 @@ export default function ContestantsListPage() {
                   <div className="max-h-48 overflow-y-auto py-1">
                     <button onClick={() => selectCountry('all')}
                       className={`w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors flex items-center gap-2 ${!selectedCountry || selectedCountry === 'all' ? 'text-myhigh5-primary dark:text-white font-medium' : 'text-gray-700 dark:text-gray-300'}`}>
-                      <Globe className="w-4 h-4" /> {language === 'fr' ? 'Tous les pays' : 'All countries'}
+                      <Globe className="w-4 h-4" /> {t('dashboard.contests.all_countries')}
                     </button>
                     {filteredCountryList.map(country => (
                       <button key={country} onClick={() => selectCountry(country)}
@@ -257,7 +257,7 @@ export default function ContestantsListPage() {
                         {country}
                       </button>
                     ))}
-                    {filteredCountryList.length === 0 && <p className="px-4 py-3 text-xs text-gray-400 text-center">{language === 'fr' ? 'Aucun pays trouvé' : 'No country found'}</p>}
+                    {filteredCountryList.length === 0 && <p className="px-4 py-3 text-xs text-gray-400 text-center">{t('dashboard.contests.no_country_found')}</p>}
                   </div>
                 </div>
               )}
@@ -270,7 +270,7 @@ export default function ContestantsListPage() {
                 <div className="flex gap-1.5 overflow-x-auto">
                   <button onClick={() => setSelectedRound('all')}
                     className={`px-3.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${selectedRound === 'all' ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'}`}>
-                    {language === 'fr' ? 'Tous' : 'All'}
+                    {t('dashboard.profile.all_rounds')}
                   </button>
                   {rounds.map(round => (
                     <button key={round.id} onClick={() => setSelectedRound(String(round.id))}
@@ -283,7 +283,7 @@ export default function ContestantsListPage() {
                               : 'text-blue-600 dark:text-blue-400'
                           }`}
                         >
-                          VOTE NOW
+                          {t('dashboard.contests.vote_now_badge')}
                         </span>
                       )}
                       <span className="flex items-center gap-1.5">
@@ -320,10 +320,10 @@ export default function ContestantsListPage() {
               <Trophy className="w-14 h-14 text-gray-200 dark:text-gray-700 mx-auto mb-4" />
               <p className="text-gray-500 dark:text-gray-400 font-medium">{
                 contestMode === 'nomination'
-                  ? (language === 'fr' ? 'Aucun nominateur trouvé' : 'No nominators found')
-                  : (language === 'fr' ? 'Aucun participant trouvé' : 'No contestants found')
+                  ? t('dashboard.contests.no_nominators_found')
+                  : t('dashboard.contests.no_contestants_found')
               }</p>
-              <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">{language === 'fr' ? 'Essayez de modifier vos filtres' : 'Try adjusting your filters'}</p>
+              <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">{t('dashboard.contests.try_adjust_filters')}</p>
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
@@ -397,8 +397,8 @@ export default function ContestantsListPage() {
                       <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
                         {contestant.title || [contestant.author_country, contestant.author_city].filter(Boolean).join(' · ') || (
                           contestMode === 'nomination'
-                            ? (language === 'fr' ? 'Nominateur' : 'Nominator')
-                            : (language === 'fr' ? 'Participant' : 'Contestant')
+                            ? t('contestant_detail.nominator_label')
+                            : t('contestant_detail.contestant_label')
                         )}
                       </p>
 
@@ -414,7 +414,7 @@ export default function ContestantsListPage() {
                                 className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-semibold bg-myhigh5-primary text-white hover:bg-myhigh5-primary/90 transition-all"
                               >
                                 <ThumbsUp className="w-4 h-4" />
-                                Vote
+                                {t('dashboard.contests.vote_cta')}
                               </button>
                             ) : (
                               <button
@@ -426,7 +426,7 @@ export default function ContestantsListPage() {
                                 }`}
                               >
                                 {isFollowed ? <UserCheck className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
-                                {isFollowed ? (language === 'fr' ? 'Suivi' : 'Following') : (language === 'fr' ? 'Suivre' : 'Follow')}
+                                {isFollowed ? t('dashboard.contests.followed_label') : t('dashboard.profile.follow')}
                               </button>
                             )}
 
@@ -436,12 +436,12 @@ export default function ContestantsListPage() {
                               className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-semibold bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-all"
                             >
                               <MessageCircle className="w-4 h-4" />
-                              Message
+                              {t('dashboard.contests.message_cta')}
                             </button>
                           </>
                         ) : (
                           <div className="text-center py-1.5 text-xs text-gray-400 dark:text-gray-500 font-medium">
-                            {language === 'fr' ? 'Votre participation' : 'Your entry'}
+                            {t('dashboard.contests.your_entry')}
                           </div>
                         )}
                       </div>

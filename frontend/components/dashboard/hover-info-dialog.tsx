@@ -23,7 +23,7 @@ export function HoverInfoDialog({
   data,
   onClose
 }: HoverInfoDialogProps) {
-  const { t, language } = useLanguage()
+  const { t } = useLanguage()
   
   const handleOpenChange = (open: boolean) => {
     if (onOpenChange) {
@@ -37,17 +37,17 @@ export function HoverInfoDialog({
   const getTitle = () => {
     switch (type) {
       case 'author':
-        return language === 'fr' ? 'Détails de l\'auteur' : language === 'es' ? 'Detalles del autor' : language === 'de' ? 'Autorendetails' : 'Author Details'
+        return t('dashboard.contests.hover_title_author')
       case 'description':
-        return language === 'fr' ? 'Description' : language === 'es' ? 'Descripción' : language === 'de' ? 'Beschreibung' : 'Description'
+        return t('contestant_detail.description_section')
       case 'votes':
-        return t('dashboard.contests.votes') || (language === 'fr' ? 'Votes' : language === 'es' ? 'Votos' : language === 'de' ? 'Stimmen' : 'Votes')
+        return t('dashboard.contests.votes')
       case 'reactions':
-        return language === 'fr' ? 'Réactions' : language === 'es' ? 'Reacciones' : language === 'de' ? 'Reaktionen' : 'Reactions'
+        return t('dashboard.contests.hover_title_reactions')
       case 'favorites':
-        return language === 'fr' ? 'Favoris' : language === 'es' ? 'Favoritos' : language === 'de' ? 'Favoriten' : 'Favorites'
+        return t('dashboard.contests.hover_title_favorites')
       case 'shares':
-        return language === 'fr' ? 'Partages' : language === 'es' ? 'Compartidos' : language === 'de' ? 'Geteilt' : 'Shares'
+        return t('dashboard.contests.hover_title_shares')
       default:
         return ''
     }
