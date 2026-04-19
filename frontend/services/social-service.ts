@@ -380,7 +380,11 @@ export const socialService = {
   /** Update group (name, description, avatar, …) — feed API; admins/owners only. */
   async updateFeedGroup(
     groupId: number,
-    data: { name?: string; description?: string; avatar_url?: string | null },
+    data: {
+      name?: string
+      description?: string
+      avatar_url?: string | null
+    },
   ): Promise<SocialGroup> {
     const response = await apiService.put(`/api/v1/feed/groups/${groupId}`, data) as any
     return {

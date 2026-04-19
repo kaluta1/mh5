@@ -5,11 +5,11 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
   ArrowLeft,
-  Camera,
   Globe,
   Info,
   Loader2,
   Lock,
+  LogOut,
   MessageCircle,
   MoreVertical,
   Plus,
@@ -34,6 +34,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { UserAvatar } from "@/components/user/user-avatar"
@@ -328,6 +329,7 @@ export function WhatsAppGroupsShell() {
     null,
   )
   const [savingAvatar, setSavingAvatar] = useState(false)
+  const [leavingGroup, setLeavingGroup] = useState(false)
 
   const headerSubtitle = useMemo(() => {
     if (!selectedGroup) return ""
@@ -542,6 +544,59 @@ export function WhatsAppGroupsShell() {
       addToast(String(msg), "error")
     } finally {
       setMemberActionUserId(null)
+    }
+  }
+
+  const removeGroupPhoto = async () => {
+    if (!selectedId) return
+    setSavingAvatar(true)
+    try {
+      const updated = await socialService.updateFeedGroup(selectedId, {
+        avatar_url: null,
+      })
+      setGroups((prev) =>
+        prev.map((g) => (g.id === selectedId ? { ...g, ...updated } : g)),
+      )
+      addToast("Group photo removed.", "success")
+    } catch (e: unknown) {
+      const msg =
+        (e as { response?: { data?: { detail?: string } } })?.response?.data
+          ?.detail || "Could not remove photo"
+      addToast(String(msg), "error")
+    } finally {
+      setSavingAvatar(false)
+    }
+  }
+
+  const handleLeaveGroup = async () => {
+    if (!selectedId) return
+    if (
+      !confirm(
+        tf(
+          t,
+          "dashboard.groups.leave_confirm",
+          "Leave this group? You can rejoin if it is public or you get an invite.",
+        ),
+      )
+    )
+      return
+    setLeavingGroup(true)
+    try {
+      await socialService.leaveGroup(selectedId)
+      await loadGroups()
+      addToast(
+        tf(t, "dashboard.groups.left_group", "You left the group."),
+        "success",
+      )
+      router.replace("/dashboard/groups", { scroll: false })
+      setMobilePanel("list")
+    } catch (e: unknown) {
+      const msg =
+        (e as { response?: { data?: { detail?: string } } })?.response?.data
+          ?.detail || "Could not leave group"
+      addToast(String(msg), "error")
+    } finally {
+      setLeavingGroup(false)
     }
   }
 
@@ -813,6 +868,27 @@ export function WhatsAppGroupsShell() {
                               </DropdownMenuItem>
                             </>
                           )}
+                          {selectedGroup.is_member && myRole !== "owner" && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                className="text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950/30"
+                                disabled={leavingGroup}
+                                onClick={() => void handleLeaveGroup()}
+                              >
+                                {leavingGroup ? (
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                ) : (
+                                  <LogOut className="h-4 w-4 mr-2" />
+                                )}
+                                {tf(
+                                  t,
+                                  "dashboard.groups.leave_group",
+                                  "Leave group",
+                                )}
+                              </DropdownMenuItem>
+                            </>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </>
@@ -1009,74 +1085,96 @@ export function WhatsAppGroupsShell() {
           </DialogHeader>
           {selectedGroup && (
             <div className="space-y-5 pt-1">
-              <div className="flex items-start gap-3 min-w-0">
-                <div className="relative h-14 w-14 shrink-0">
-                  <div className="h-14 w-14 rounded-full bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary flex items-center justify-center overflow-hidden shadow-md ring-2 ring-white dark:ring-gray-800">
-                    {selectedGroup.avatar_url ? (
-                      <img
-                        src={selectedGroup.avatar_url}
-                        alt=""
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <Users className="h-7 w-7 text-white" />
-                    )}
-                  </div>
-                  {isAdmin && selectedGroup.is_member && (
-                    <div className="absolute -bottom-1 -right-1 rounded-full bg-white dark:bg-gray-900 p-0.5 shadow border border-gray-200 dark:border-gray-700">
-                      <UploadButton
-                        endpoint="profileAvatar"
-                        content={{
-                          button: () => (
-                            <button
-                              type="button"
-                              className="h-7 w-7 rounded-full bg-myhigh5-primary text-white flex items-center justify-center hover:bg-myhigh5-primary/90"
-                              aria-label="Change group photo"
-                              disabled={savingAvatar}
-                            >
-                              {savingAvatar ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              ) : (
-                                <Camera className="h-3.5 w-3.5" />
-                              )}
-                            </button>
-                          ),
-                        }}
-                        onClientUploadComplete={(res) => {
-                          void handleGroupAvatarFromUpload(
-                            res as { url?: string; ufsUrl?: string }[],
-                          )
-                        }}
-                        onUploadError={(err) =>
-                          addToast(
-                            err instanceof Error ? err.message : "Upload failed",
-                            "error",
-                          )
-                        }
-                      />
-                    </div>
+              <div className="flex flex-col sm:flex-row gap-4 min-w-0">
+                <div className="h-20 w-20 shrink-0 rounded-2xl bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary flex items-center justify-center overflow-hidden shadow-md ring-2 ring-gray-100 dark:ring-gray-800">
+                  {selectedGroup.avatar_url ? (
+                    <img
+                      src={selectedGroup.avatar_url}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <Users className="h-10 w-10 text-white" />
                   )}
                 </div>
-                <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-gray-900 dark:text-white text-lg leading-tight">
-                    {selectedGroup.name}
-                  </p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-1.5">
-                    {selectedGroup.is_private ? (
-                      <>
-                        <Lock className="h-3.5 w-3.5 shrink-0" />
-                        {tf(t, "dashboard.groups.private", "Private")}
-                      </>
-                    ) : (
-                      <>
-                        <Globe className="h-3.5 w-3.5 shrink-0" />
-                        {tf(t, "dashboard.groups.public", "Public")}
-                      </>
-                    )}
-                    <span className="text-gray-300 dark:text-gray-600">·</span>
-                    {selectedGroup.members_count}{" "}
-                    {tf(t, "dashboard.groups.members", "members")}
-                  </p>
+                <div className="min-w-0 flex-1 space-y-3">
+                  <div>
+                    <p className="font-semibold text-gray-900 dark:text-white text-lg leading-tight">
+                      {selectedGroup.name}
+                    </p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 flex flex-wrap items-center gap-1.5">
+                      {selectedGroup.is_private ? (
+                        <>
+                          <Lock className="h-3.5 w-3.5 shrink-0" />
+                          {tf(t, "dashboard.groups.private", "Private")}
+                        </>
+                      ) : (
+                        <>
+                          <Globe className="h-3.5 w-3.5 shrink-0" />
+                          {tf(t, "dashboard.groups.public", "Public")}
+                        </>
+                      )}
+                      <span className="text-gray-300 dark:text-gray-600">·</span>
+                      {selectedGroup.members_count}{" "}
+                      {tf(t, "dashboard.groups.members", "members")}
+                    </p>
+                  </div>
+                  {isAdmin && selectedGroup.is_member && (
+                    <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-900/50 p-3 space-y-2">
+                      <p className="text-xs font-medium text-gray-600 dark:text-gray-300">
+                        {tf(
+                          t,
+                          "dashboard.groups.group_photo_hint",
+                          "Group photo (visible to all members)",
+                        )}
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="[&_button]:!bg-myhigh5-primary [&_button]:!text-white [&_button]:hover:!bg-myhigh5-primary/90 [&_button]:!rounded-lg [&_button]:!px-3 [&_button]:!py-2 [&_button]:!text-sm [&_button]:!h-auto [&_button]:!font-medium">
+                          <UploadButton
+                            endpoint="profileAvatar"
+                            onClientUploadComplete={(res) => {
+                              void handleGroupAvatarFromUpload(
+                                res as { url?: string; ufsUrl?: string }[],
+                              )
+                            }}
+                            onUploadError={(err) =>
+                              addToast(
+                                err instanceof Error
+                                  ? err.message
+                                  : "Upload failed",
+                                "error",
+                              )
+                            }
+                          />
+                        </div>
+                        {selectedGroup.avatar_url ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={savingAvatar}
+                            onClick={() => void removeGroupPhoto()}
+                          >
+                            {savingAvatar ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              tf(
+                                t,
+                                "dashboard.groups.remove_photo",
+                                "Remove photo",
+                              )
+                            )}
+                          </Button>
+                        ) : null}
+                        {savingAvatar && (
+                          <span className="text-xs text-gray-500 flex items-center gap-1">
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            {tf(t, "dashboard.groups.saving_photo", "Saving…")}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
               <div>
@@ -1252,12 +1350,12 @@ export function WhatsAppGroupsShell() {
           </DialogHeader>
           <div className="space-y-3 py-2">
             {isAdmin && (
-              <div>
-                <label className="text-xs font-medium text-gray-500 block mb-2">
+              <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-900/40 p-3 space-y-3">
+                <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 block">
                   {tf(t, "dashboard.groups.group_photo", "Group photo")}
                 </label>
-                <div className="flex items-center gap-3 flex-wrap">
-                  <div className="h-16 w-16 rounded-full overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 shrink-0">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                  <div className="h-16 w-16 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 shrink-0">
                     {selectedGroup?.avatar_url ? (
                       <img
                         src={selectedGroup.avatar_url}
@@ -1270,24 +1368,50 @@ export function WhatsAppGroupsShell() {
                       </div>
                     )}
                   </div>
-                  <UploadButton
-                    endpoint="profileAvatar"
-                    onClientUploadComplete={(res) => {
-                      void handleGroupAvatarFromUpload(
-                        res as { url?: string; ufsUrl?: string }[],
-                      )
-                    }}
-                    onUploadError={(err) =>
-                      addToast(
-                        err instanceof Error ? err.message : "Upload failed",
-                        "error",
-                      )
-                    }
-                  />
-                  {savingAvatar && (
-                    <Loader2 className="h-5 w-5 animate-spin text-myhigh5-primary" />
-                  )}
+                  <div className="flex flex-wrap items-center gap-2 min-w-0">
+                    <div className="[&_button]:!bg-myhigh5-primary [&_button]:!text-white [&_button]:hover:!bg-myhigh5-primary/90 [&_button]:!rounded-lg [&_button]:!px-3 [&_button]:!py-2 [&_button]:!text-sm [&_button]:!h-auto [&_button]:!font-medium">
+                      <UploadButton
+                        endpoint="profileAvatar"
+                        onClientUploadComplete={(res) => {
+                          void handleGroupAvatarFromUpload(
+                            res as { url?: string; ufsUrl?: string }[],
+                          )
+                        }}
+                        onUploadError={(err) =>
+                          addToast(
+                            err instanceof Error ? err.message : "Upload failed",
+                            "error",
+                          )
+                        }
+                      />
+                    </div>
+                    {selectedGroup?.avatar_url ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={savingAvatar}
+                        onClick={() => void removeGroupPhoto()}
+                      >
+                        {tf(
+                          t,
+                          "dashboard.groups.remove_photo",
+                          "Remove photo",
+                        )}
+                      </Button>
+                    ) : null}
+                    {savingAvatar ? (
+                      <Loader2 className="h-5 w-5 animate-spin text-myhigh5-primary shrink-0" />
+                    ) : null}
+                  </div>
                 </div>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                  {tf(
+                    t,
+                    "dashboard.groups.group_photo_settings_hint",
+                    "Upload a square image (max 2 MB). It appears in the chat header and group list.",
+                  )}
+                </p>
               </div>
             )}
             <div>

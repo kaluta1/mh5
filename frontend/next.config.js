@@ -138,6 +138,15 @@ const nextConfig = {
     const backendUrl = (process.env.NEXT_PUBLIC_API_URL || 'https://mh5-hbjp.onrender.com').replace(/\/+$/, '')
 
     return [
+      // Legacy UploadThing client URL — forward to App Router handler
+      {
+        source: '/ut',
+        destination: '/api/uploadthing',
+      },
+      {
+        source: '/ut/:path*',
+        destination: '/api/uploadthing/:path*',
+      },
       {
         source: '/s/c/:id',
         destination: `${backendUrl}/api/v1/share/c/:id`,
