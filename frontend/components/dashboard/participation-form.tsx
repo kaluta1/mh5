@@ -1,7 +1,6 @@
 'use client'
 
 import React, { useState, useEffect, useRef, useMemo } from 'react'
-import dynamic from 'next/dynamic'
 import { X, Upload, FileText, Image as ImageIcon, Video, Eye, Link, Plus, AlertCircle, CheckCircle, Loader2, MapPin, Globe, ChevronRight, ChevronLeft, Clock, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,8 +17,8 @@ import { getCitiesByCountry } from '@/lib/geography'
 import { contestService } from '@/services/contest-service'
 import { getRoundNominationDeadlineMs } from '@/lib/nomination-deadline'
 
-// WYSIWYG Editor - chargé dynamiquement pour éviter les erreurs SSR
-const ReactQuill = dynamic(() => import('react-quill'), { ssr: false, loading: () => <div className="w-full h-40 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center"><Loader2 className="w-6 h-6 text-gray-400 animate-spin" /></div> })
+type ReactQuillModule = typeof import('react-quill')
+type ReactQuillComponent = ReactQuillModule['default']
 
 interface MediaRequirements {
   requiresVideo?: boolean
@@ -90,6 +89,27 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
   const { t } = useLanguage()
   const router = useRouter()
   const { addToast } = useToast()
+  const [ReactQuillComponent, setReactQuillComponent] = useState<ReactQuillComponent | null>(null)
+  const [quillLoadFailed, setQuillLoadFailed] = useState(false)
+
+  // Load react-quill lazily and degrade gracefully if the module crashes at runtime.
+  useEffect(() => {
+    let mounted = true
+    import('react-quill')
+      .then((mod) => {
+        if (!mounted) return
+        setReactQuillComponent(() => mod.default)
+      })
+      .catch((err) => {
+        console.error('Failed to load react-quill, falling back to textarea:', err)
+        if (!mounted) return
+        setQuillLoadFailed(true)
+      })
+
+    return () => {
+      mounted = false
+    }
+  }, [])
 
   // Stepper state
   const [currentStep, setCurrentStep] = useState(0)
@@ -597,7 +617,8 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
               <FileText className="w-4 h-4" />
               {t('participation.content_description') || 'Description du contenu'} *
             </h3>
-            <ReactQuill
+            {ReactQuillComponent && !quillLoadFailed ? (
+              <ReactQuillComponent
                 theme="snow"
                 value={description}
                 onChange={setDescription}
@@ -606,6 +627,16 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
                 placeholder={t('participation.content_description_placeholder') || 'Décrivez votre candidature (20-500 caractères)'}
                 readOnly={isSubmitting}
               />
+            ) : (
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder={t('participation.content_description_placeholder') || 'Décrivez votre candidature (20-500 caractères)'}
+                disabled={isSubmitting}
+                rows={6}
+                className="w-full px-4 py-3 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-400 focus:outline-none focus:ring-2 border-gray-300 dark:border-gray-600 focus:ring-blue-500"
+              />
+            )}
             <div className="flex items-center justify-between mt-2">
               <p className={`text-xs ${hasDescriptionError ? 'text-red-500 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>
                 {plainDescriptionLength}/500 {plainDescriptionLength < 20 && plainDescriptionLength > 0 ? `(min. 20)` : ''}
