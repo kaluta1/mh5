@@ -15,6 +15,7 @@ from app.models.payment import Deposit, ProductType, DepositStatus
 from app.models.transaction import UserTransaction, TransactionType, TransactionStatus
 from app.models.clubs import FanClub, ClubMembership, ClubAdmin
 from app.models.follow import Affiliation
+from app.models.affiliate import AffiliateTree
 from app.models.category import Category
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any, Dict, Any
@@ -2460,6 +2461,20 @@ async def get_user_details(
             )
             if affiliation:
                 sponsor = db.query(User).filter(User.id == affiliation.affiliate_id).first()
+                if sponsor:
+                    sponsor_info = {
+                        'id': sponsor.id,
+                        'full_name': sponsor.full_name,
+                        'username': sponsor.username,
+                        'email': sponsor.email,
+                        'personal_referral_code': sponsor.personal_referral_code
+                    }
+
+        # Source 3 (fallback): affiliate_tree.user_id -> sponsor_id
+        if sponsor_info is None:
+            tree_row = db.query(AffiliateTree).filter(AffiliateTree.user_id == user.id).first()
+            if tree_row and tree_row.sponsor_id:
+                sponsor = db.query(User).filter(User.id == tree_row.sponsor_id).first()
                 if sponsor:
                     sponsor_info = {
                         'id': sponsor.id,

@@ -688,10 +688,23 @@ def create_message(
     # Notifier via Socket.IO en arrière-plan
     def notify_message():
         try:
+            sender_name = (
+                (msg.sender.full_name if msg.sender and msg.sender.full_name else None)
+                or (msg.sender.username if msg.sender and msg.sender.username else None)
+                or "Utilisateur"
+            )
             asyncio.run(social_socket_service.emit_to_group(
                 group_id,
                 "new_message",
-                {"message_id": message.id, "group_id": group_id}
+                {
+                    "message_id": msg.id,
+                    "group_id": group_id,
+                    "sender_id": msg.sender_id,
+                    "sender_name": sender_name,
+                    "content": msg.content or "",
+                    "message_type": msg.message_type.value if hasattr(msg.message_type, "value") else str(msg.message_type),
+                    "created_at": msg.created_at.isoformat() if msg.created_at else None,
+                }
             ))
         except Exception as e:
             print(f"Erreur notification Socket.IO: {e}")

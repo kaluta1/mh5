@@ -158,6 +158,23 @@ export function WhatsAppGroupsShell() {
     onNewMessage: (socketMessage) => {
       // Handle incoming group messages
       if (socketMessage.group_id && socketMessage.group_id === selectedId) {
+        // Some backends emit only message_id/group_id; refresh thread in that case.
+        if (
+          !socketMessage.content ||
+          !socketMessage.created_at ||
+          !socketMessage.sender_id
+        ) {
+          void socialService
+            .getGroupMessages(selectedId, 0, 80, debouncedChatSearch || undefined)
+            .then((m) => {
+              setMessages(Array.isArray(m) ? m.slice().reverse() : [])
+            })
+            .catch(() => {
+              // Ignore refresh failure; next poll/manual action can recover.
+            })
+          return
+        }
+
         // Check if message already exists (avoid duplicates)
         setMessages((prev) => {
           const exists = prev.some((m) => m.id === socketMessage.message_id)
@@ -186,7 +203,7 @@ export function WhatsAppGroupsShell() {
         setPreviews((p) => ({
           ...p,
           [socketMessage.group_id!]: {
-            text: socketMessage.content.slice(0, 72),
+            text: (socketMessage.content || "").slice(0, 72),
             time: socketMessage.created_at,
           },
         }))
@@ -1428,34 +1445,22 @@ export function WhatsAppGroupsShell() {
                     )}
                   </div>
                   <div className="flex flex-wrap items-center gap-2 min-w-0">
-                    <UploadButton
-                      endpoint="profileAvatar"
-                      onClientUploadComplete={(res) => {
-                        void handleGroupAvatarFromUpload(
-                          res as { url?: string; ufsUrl?: string }[],
-                        )
-                      }}
-                      onUploadError={(err) =>
-                        addToast(
-                          err instanceof Error ? err.message : "Upload failed",
-                          "error",
-                        )
-                      }
-                      content={{
-                        button: ({ ready }) => (
-                          <button
-                            type="button"
-                            disabled={!ready}
-                            className="bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {ready ? "Upload photo" : "Loading..."}
-                          </button>
-                        ),
-                        allowedContent: () => (
-                          <span className="text-xs text-gray-500">Max 2 MB</span>
-                        )
-                      }}
-                    />
+                    <div className="[&_button]:!bg-myhigh5-primary [&_button]:!text-white [&_button]:hover:!bg-myhigh5-primary/90 [&_button]:!rounded-lg [&_button]:!px-3 [&_button]:!py-2 [&_button]:!text-sm [&_button]:!h-auto [&_button]:!font-medium">
+                      <UploadButton
+                        endpoint="profileAvatar"
+                        onClientUploadComplete={(res) => {
+                          void handleGroupAvatarFromUpload(
+                            res as { url?: string; ufsUrl?: string }[],
+                          )
+                        }}
+                        onUploadError={(err) =>
+                          addToast(
+                            err instanceof Error ? err.message : "Upload failed",
+                            "error",
+                          )
+                        }
+                      />
+                    </div>
                     {selectedGroup?.avatar_url ? (
                       <Button
                         type="button"

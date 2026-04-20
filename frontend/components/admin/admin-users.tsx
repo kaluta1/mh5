@@ -600,6 +600,12 @@ export default function AdminUsers() {
                   {selectedUser.username && (
                     <p className="text-sm text-gray-500 dark:text-gray-500">@{selectedUser.username}</p>
                   )}
+                  <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">
+                    <span className="font-semibold">Referred by:</span>{" "}
+                    {selectedUser.sponsor
+                      ? (selectedUser.sponsor.full_name || selectedUser.sponsor.username || selectedUser.sponsor.email || `User #${selectedUser.sponsor.id}`)
+                      : 'Not referred'}
+                  </p>
                 </div>
               </div>
 
@@ -663,14 +669,6 @@ export default function AdminUsers() {
                       <p className="text-sm text-gray-900 dark:text-white">{selectedUser.continent}</p>
                     </div>
                   )}
-                  <div>
-                    <p className="text-xs font-semibold text-gray-600 dark:text-gray-400">Referred by</p>
-                    <p className="text-sm text-gray-900 dark:text-white">
-                      {selectedUser.sponsor
-                        ? (selectedUser.sponsor.full_name || selectedUser.sponsor.username || selectedUser.sponsor.email || `User #${selectedUser.sponsor.id}`)
-                        : 'Not referred'}
-                    </p>
-                  </div>
                 </div>
               </div>
 
@@ -699,14 +697,6 @@ export default function AdminUsers() {
                       {selectedUser.kyc_status === 'verified' ? t('admin.users.kyc_verified') || 'Vérifié' : t('admin.users.kyc_pending') || 'En attente'}
                     </span>
                   </div>
-                </div>
-                <div className="mt-4">
-                  <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Referred by</p>
-                  <p className="text-sm text-gray-900 dark:text-white">
-                    {selectedUser.sponsor
-                      ? (selectedUser.sponsor.full_name || selectedUser.sponsor.username || selectedUser.sponsor.email || `User #${selectedUser.sponsor.id}`)
-                      : 'Not referred'}
-                  </p>
                 </div>
               </div>
 
