@@ -76,6 +76,7 @@ export default function TopHigh5Page() {
   const searchParams = useSearchParams()
   const [countryInput, setCountryInput] = useState("")
   const [roundIdInput, setRoundIdInput] = useState("")
+  const [categorySearch, setCategorySearch] = useState("")
   const [activeLevel, setActiveLevel] = useState<TopHigh5Level>("country")
   const [data, setData] = useState<TopHigh5Response | null>(null)
   const [loading, setLoading] = useState(true)
@@ -187,6 +188,14 @@ export default function TopHigh5Page() {
       .sort(([a], [b]) => a.localeCompare(b, undefined, { sensitivity: "base" }))
       .map(([category, contests]) => ({ category, contests }))
   }, [filteredContests])
+
+  const visibleCategories = useMemo(() => {
+    const q = categorySearch.trim().toLowerCase()
+    if (!q) return contestsByCategory
+    return contestsByCategory.filter(({ category }) =>
+      category.toLowerCase().includes(q),
+    )
+  }, [contestsByCategory, categorySearch])
 
   // Near real-time refresh loop: poll every 5s when tab is visible and page is active.
   useEffect(() => {
@@ -314,6 +323,18 @@ export default function TopHigh5Page() {
           <Button onClick={handleSearch}>Show Top High5</Button>
         </div>
 
+        <div className="flex flex-col md:flex-row gap-3 md:items-center">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Input
+              value={categorySearch}
+              onChange={(e) => setCategorySearch(e.target.value)}
+              placeholder="Search category (e.g. Adventure, Comedy)"
+              className="pl-9"
+            />
+          </div>
+        </div>
+
         {data && (
           <div className="text-xs text-gray-500 dark:text-gray-400 flex flex-wrap items-center gap-2">
             <span>Round: {data.round_name} (id {data.round_id})</span>
@@ -378,9 +399,15 @@ export default function TopHigh5Page() {
             </div>
           )}
         </div>
+      ) : !visibleCategories.length ? (
+        <div className="rounded-xl border border-dashed border-gray-300 dark:border-gray-700 p-5">
+          <div className="text-center text-gray-500 py-6">
+            No category matches your search.
+          </div>
+        </div>
       ) : (
         <div className="space-y-8">
-          {contestsByCategory.map(({ category, contests }, categoryIndex) => (
+          {visibleCategories.map(({ category, contests }, categoryIndex) => (
             <section
               key={category}
               id={`th5-cat-${categoryIndex}`}
