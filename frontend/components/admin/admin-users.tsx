@@ -46,6 +46,14 @@ interface UserDetails {
   last_login?: string
   bio?: string
   gender?: string
+  sponsor_id?: number | null
+  sponsor?: {
+    id: number
+    full_name?: string
+    username?: string
+    email?: string
+    personal_referral_code?: string
+  } | null
   contest_comments?: Array<{
     id: number
     content: string
@@ -655,6 +663,14 @@ export default function AdminUsers() {
                       <p className="text-sm text-gray-900 dark:text-white">{selectedUser.continent}</p>
                     </div>
                   )}
+                  <div>
+                    <p className="text-xs font-semibold text-gray-600 dark:text-gray-400">Referred by</p>
+                    <p className="text-sm text-gray-900 dark:text-white">
+                      {selectedUser.sponsor
+                        ? (selectedUser.sponsor.full_name || selectedUser.sponsor.username || selectedUser.sponsor.email || `User #${selectedUser.sponsor.id}`)
+                        : 'Not referred'}
+                    </p>
+                  </div>
                 </div>
               </div>
 

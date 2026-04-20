@@ -2434,6 +2434,19 @@ async def get_user_details(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Utilisateur non trouvé"
             )
+
+        # Récupérer le parrain (utilisateur ayant référé ce compte), si présent
+        sponsor_info = None
+        if user.sponsor_id:
+            sponsor = db.query(User).filter(User.id == user.sponsor_id).first()
+            if sponsor:
+                sponsor_info = {
+                    'id': sponsor.id,
+                    'full_name': sponsor.full_name,
+                    'username': sponsor.username,
+                    'email': sponsor.email,
+                    'personal_referral_code': sponsor.personal_referral_code
+                }
         
         # Récupérer les statistiques
         participations_count = db.query(Contestant).filter(Contestant.user_id == user.id).count()
@@ -2670,6 +2683,8 @@ async def get_user_details(
             'region': user.region,
             'gender': user.gender.value if user.gender else None,
             'phone_number': user.phone_number,
+            'sponsor_id': user.sponsor_id,
+            'sponsor': sponsor_info,
             'kyc_status': 'verified' if user.identity_verified else 'pending',
             'kyc_verified_at': user.verification_date,
             'participations_count': participations_count,
