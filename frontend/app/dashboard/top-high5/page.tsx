@@ -42,6 +42,22 @@ function topHigh5DomId(contestId: number, contestantId: number) {
   return `th5-${contestId}-${contestantId}`
 }
 
+function getTopHigh5EmptyMessage(level: TopHigh5Level) {
+  switch (level) {
+    case "city":
+      return "No nominated yet."
+    case "regional":
+      return "No regional migration."
+    case "continent":
+      return "No continental migration."
+    case "global":
+      return "No global migration."
+    case "country":
+    default:
+      return "No country winners found for this selection."
+  }
+}
+
 function TopHigh5Skeleton() {
   return (
     <div className="space-y-4">
@@ -338,7 +354,7 @@ export default function TopHigh5Page() {
       {!filteredContests.length ? (
         <div className="rounded-xl border border-dashed border-gray-300 dark:border-gray-700 p-5">
           <div className="text-center text-gray-500 py-6">
-            No country winners found for this selection.
+            {getTopHigh5EmptyMessage(activeLevel)}
           </div>
           {data?.diagnostics && (
             <div className="mt-2">
@@ -406,7 +422,7 @@ export default function TopHigh5Page() {
                         <thead className="bg-gray-100 dark:bg-gray-800">
                           <tr>
                             <th className="px-3 py-2 text-left">Rank</th>
-                            <th className="px-3 py-2 text-left">Nominator</th>
+                            <th className="px-3 py-2 text-left">Content</th>
                             <th className="px-3 py-2 text-left">Stars</th>
                             <th className="px-3 py-2 text-left">Shares</th>
                             <th className="px-3 py-2 text-left">Likes</th>
@@ -429,24 +445,15 @@ export default function TopHigh5Page() {
                               >
                                 <td className="px-3 py-2 font-semibold">{row.rank}</td>
                                 <td className="px-3 py-2">
-                                  <div className="flex items-start justify-between gap-2">
-                                    <div className="min-w-0">
-                                      <div className="font-medium text-gray-900 dark:text-white">
-                                        {row.author_name || row.contestant_title || `Nominator #${row.contestant_id}`}
-                                      </div>
-                                      {row.contestant_title && (
-                                        <div className="text-xs text-gray-500">{row.contestant_title}</div>
-                                      )}
-                                    </div>
-                                    <Link
-                                      href={`/dashboard/contests/${contest.contest_id}/contestant/${row.contestant_id}?entryType=nomination`}
-                                      className="flex-shrink-0 rounded-md p-1 text-myhigh5-primary hover:bg-myhigh5-primary/10"
-                                      title={t("dashboard.myhigh5.open_top_entry") || "Watch this entry"}
-                                      aria-label={t("dashboard.myhigh5.open_top_entry") || "Watch this entry"}
-                                    >
-                                      <ExternalLink className="h-4 w-4" />
-                                    </Link>
-                                  </div>
+                                  <Link
+                                    href={`/dashboard/contests/${contest.contest_id}/contestant/${row.contestant_id}?entryType=nomination`}
+                                    className="inline-flex items-center gap-1 text-gray-900 dark:text-white font-medium hover:text-myhigh5-primary transition-colors"
+                                    title={t("dashboard.myhigh5.open_top_entry") || "Watch this entry"}
+                                    aria-label={t("dashboard.myhigh5.open_top_entry") || "Watch this entry"}
+                                  >
+                                    <span>{row.contestant_title || `Content #${row.contestant_id}`}</span>
+                                    <ExternalLink className="h-4 w-4 text-myhigh5-primary" />
+                                  </Link>
                                 </td>
                                 <td className="px-3 py-2">{row.stars_points}</td>
                                 <td className="px-3 py-2">{row.shares}</td>

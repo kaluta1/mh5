@@ -53,6 +53,19 @@ function setToCache(key: string, data: any) {
   contestsCache.set(key, { data, timestamp: Date.now() })
 }
 
+type NominationMigrationLevel = 'all' | 'city' | 'country' | 'regional' | 'continental' | 'global'
+
+function normalizeContestLevel(level?: string): Exclude<NominationMigrationLevel, 'all'> | null {
+  if (!level) return null
+  const raw = String(level).trim().toLowerCase()
+  if (raw === 'city') return 'city'
+  if (raw === 'country') return 'country'
+  if (raw === 'regional' || raw === 'region') return 'regional'
+  if (raw === 'continental' || raw === 'continent') return 'continental'
+  if (raw === 'global') return 'global'
+  return null
+}
+
 function ContestsPageContent() {
   const { t } = useLanguage()
   const { user, isAuthenticated, isLoading } = useAuth()
@@ -87,6 +100,7 @@ function ContestsPageContent() {
     return urlCountry || ''
   })
   const [filterLevel, setFilterLevel] = useState<string>('all') // Level filter for participations: 'city', 'country', 'all'
+  const [nominationMigrationLevel, setNominationMigrationLevel] = useState<NominationMigrationLevel>('all')
 
   // Data States
   const [rounds, setRounds] = useState<Round[]>([])
@@ -484,7 +498,12 @@ function ContestsPageContent() {
       filtered = filtered.filter(c => c.status === filterLevel)
     }
 
-    // 4. Always sort - ensure consistent ordering
+    // 4. Filter by migration stage (for nominations tab)
+    if (categoryTab === 'nomination' && nominationMigrationLevel !== 'all') {
+      filtered = filtered.filter((c) => normalizeContestLevel(c.status) === nominationMigrationLevel)
+    }
+
+    // 5. Always sort - ensure consistent ordering
     filtered.sort((a, b) => {
       switch (sortBy) {
         case 'participants':
@@ -518,7 +537,7 @@ function ContestsPageContent() {
     })
 
     return filtered
-  }, [rawContests, activeTab, committedSearch, sortBy, categoryTab, filterLevel])
+  }, [rawContests, activeTab, committedSearch, sortBy, categoryTab, filterLevel, nominationMigrationLevel])
 
   // Déterminer si le round actif est fermé (soumissions terminées)
   const activeRoundData = rounds.find((r: any) => String(r.id) === activeRoundId)
@@ -640,6 +659,33 @@ function ContestsPageContent() {
               ))}
             </div>
           )}
+
+          {categoryTab === 'nomination' && (
+            <div className="flex items-center gap-2 mt-3 flex-wrap">
+              <MapPin className="w-4 h-4 text-gray-400 dark:text-gray-500" />
+              <span className="text-sm text-gray-500 mr-1">Migration stage:</span>
+              {[
+                { value: 'all', label: 'All' },
+                { value: 'city', label: 'City' },
+                { value: 'country', label: 'Country' },
+                { value: 'regional', label: 'Regional' },
+                { value: 'continental', label: 'Continental' },
+                { value: 'global', label: 'Global' },
+              ].map((stage) => (
+                <button
+                  key={stage.value}
+                  onClick={() => setNominationMigrationLevel(stage.value as NominationMigrationLevel)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                    nominationMigrationLevel === stage.value
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-900 dark:bg-gray-800/60 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-300'
+                  }`}
+                >
+                  {stage.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Main Category Tabs (Nomination / Participations) */}
@@ -659,6 +705,7 @@ function ContestsPageContent() {
                   setFilterCountry('');
                 }
                 setFilterLevel('all'); // Reset level filter
+                setNominationMigrationLevel('all');
               }}
               className={`px-6 py-3 text-base font-semibold transition-colors border-b-2 ${categoryTab === 'nomination' ? 'border-blue-500 text-blue-600 dark:text-blue-400 bg-blue-500/5' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}`}
             >
@@ -673,6 +720,7 @@ function ContestsPageContent() {
                 setFilterCountry(''); // Reset country filter for participations
                 setFilterContinent('all');
                 setFilterLevel('all'); // Default to all levels for participations
+                setNominationMigrationLevel('all');
               }}
               className={`px-6 py-3 text-base font-semibold transition-colors border-b-2 ${categoryTab === 'participations' ? 'border-blue-500 text-blue-600 dark:text-blue-400 bg-blue-500/5' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}`}
             >
@@ -764,7 +812,21 @@ function ContestsPageContent() {
           </div>
         ) : (
           <div className="text-center py-20">
-            <p className="text-gray-500 dark:text-gray-400">{t('contests.no_contests') || 'Aucun concours trouvé correspondant aux critères.'}</p>
+            <p className="text-gray-500 dark:text-gray-400">
+              {categoryTab === 'nomination'
+                ? nominationMigrationLevel === 'city'
+                  ? 'No nominated yet.'
+                  : nominationMigrationLevel === 'regional'
+                    ? 'No regional migration.'
+                    : nominationMigrationLevel === 'continental'
+                      ? 'No continental migration.'
+                      : nominationMigrationLevel === 'global'
+                        ? 'No global migration.'
+                        : nominationMigrationLevel === 'country'
+                          ? 'No country migration.'
+                          : (t('contests.no_contests') || 'No nomination contests found for this selection.')
+                : (t('contests.no_contests') || 'Aucun concours trouvé correspondant aux critères.')}
+            </p>
           </div>
         )}
 
