@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useCallback, useState } from 'react'
-import { io, Socket } from 'socket.io-client'
+import type { Socket } from 'socket.io-client'
 
 interface SocketMessage {
   message_id: number
@@ -26,13 +26,25 @@ export function useSocket(options: UseSocketOptions = {}) {
   const socketRef = useRef<Socket | null>(null)
   const [isConnected, setIsConnected] = useState(false)
   const optionsRef = useRef(options)
+  const [ioClient, setIoClient] = useState<typeof import('socket.io-client') | null>(null)
 
   // Keep options ref up to date without triggering reconnection
   useEffect(() => {
     optionsRef.current = options
   }, [options])
 
+  // Dynamically import socket.io-client to avoid SSR issues
   useEffect(() => {
+    let mounted = true
+    import('socket.io-client').then((mod) => {
+      if (mounted) setIoClient(mod)
+    })
+    return () => { mounted = false }
+  }, [])
+
+  useEffect(() => {
+    if (!ioClient) return
+
     const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
     if (!token) {
       console.log('No access token available for socket connection')
@@ -43,7 +55,7 @@ export function useSocket(options: UseSocketOptions = {}) {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
     
     // Create socket connection
-    const socket = io(apiUrl, {
+    const socket = ioClient.io(apiUrl, {
       transports: ['websocket', 'polling'],
       auth: {
         token: token,
@@ -93,7 +105,7 @@ export function useSocket(options: UseSocketOptions = {}) {
       socket.disconnect()
       socketRef.current = null
     }
-  }, [])
+  }, [ioClient])
 
   const joinGroup = useCallback((groupId: number) => {
     const socket = socketRef.current
