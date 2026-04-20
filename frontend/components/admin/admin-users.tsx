@@ -700,6 +700,14 @@ export default function AdminUsers() {
                     </span>
                   </div>
                 </div>
+                <div className="mt-4">
+                  <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Referred by</p>
+                  <p className="text-sm text-gray-900 dark:text-white">
+                    {selectedUser.sponsor
+                      ? (selectedUser.sponsor.full_name || selectedUser.sponsor.username || selectedUser.sponsor.email || `User #${selectedUser.sponsor.id}`)
+                      : 'Not referred'}
+                  </p>
+                </div>
               </div>
 
               {/* Close Button */}

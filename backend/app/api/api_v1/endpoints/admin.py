@@ -14,6 +14,7 @@ from app.models.comment import Comment, Report
 from app.models.payment import Deposit, ProductType, DepositStatus
 from app.models.transaction import UserTransaction, TransactionType, TransactionStatus
 from app.models.clubs import FanClub, ClubMembership, ClubAdmin
+from app.models.follow import Affiliation
 from app.models.category import Category
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any, Dict, Any
@@ -2435,7 +2436,8 @@ async def get_user_details(
                 detail="Utilisateur non trouvé"
             )
 
-        # Récupérer le parrain (utilisateur ayant référé ce compte), si présent
+        # Récupérer le parrain (utilisateur ayant référé ce compte), si présent.
+        # Source 1: users.sponsor_id (nouveau flux)
         sponsor_info = None
         if user.sponsor_id:
             sponsor = db.query(User).filter(User.id == user.sponsor_id).first()
@@ -2447,6 +2449,25 @@ async def get_user_details(
                     'email': sponsor.email,
                     'personal_referral_code': sponsor.personal_referral_code
                 }
+
+        # Source 2 (fallback legacy): table affiliation.referred_user_id -> affiliate_id
+        if sponsor_info is None:
+            affiliation = (
+                db.query(Affiliation)
+                .filter(Affiliation.referred_user_id == user.id)
+                .order_by(Affiliation.created_at.desc())
+                .first()
+            )
+            if affiliation:
+                sponsor = db.query(User).filter(User.id == affiliation.affiliate_id).first()
+                if sponsor:
+                    sponsor_info = {
+                        'id': sponsor.id,
+                        'full_name': sponsor.full_name,
+                        'username': sponsor.username,
+                        'email': sponsor.email,
+                        'personal_referral_code': sponsor.personal_referral_code
+                    }
         
         # Récupérer les statistiques
         participations_count = db.query(Contestant).filter(Contestant.user_id == user.id).count()
