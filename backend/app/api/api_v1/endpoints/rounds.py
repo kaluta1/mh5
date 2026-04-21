@@ -275,6 +275,25 @@ def _enrich_round_data(
                     valid_ids = [vc.id for vc in valid_contests]
                     # Build contest_mode map for entry_type filtering
                     mode_map = {vc.id: getattr(vc, 'contest_mode', 'participation') for vc in valid_contests}
+                    # Resolve active ContestSeason id per contest so we can count entries
+                    # saved either as season_id == contest.id (legacy) or season_id == active season id.
+                    from app.models.contests import ContestSeasonLink
+                    active_links = db.query(
+                        ContestSeasonLink.contest_id,
+                        ContestSeasonLink.season_id
+                    ).filter(
+                        ContestSeasonLink.contest_id.in_(valid_ids),
+                        ContestSeasonLink.is_active == True
+                    ).all()
+                    linked_season_by_contest = {
+                        row[0]: row[1] for row in active_links if row and row[0] is not None and row[1] is not None
+                    }
+                    season_to_contest = {}
+                    for contest_id in valid_ids:
+                        season_to_contest[contest_id] = contest_id
+                        linked_sid = linked_season_by_contest.get(contest_id)
+                        if linked_sid is not None:
+                            season_to_contest[linked_sid] = contest_id
 
                     # Single query: count per season_id grouped
                     batch_query = db.query(
@@ -282,7 +301,7 @@ def _enrich_round_data(
                         ContestantModel.entry_type,
                         func.count(ContestantModel.id)
                     ).filter(
-                        ContestantModel.season_id.in_(valid_ids),
+                        ContestantModel.season_id.in_(list(season_to_contest.keys())),
                         ContestantModel.round_id == round_id,
                         ContestantModel.is_deleted == False
                     )
@@ -298,9 +317,14 @@ def _enrich_round_data(
                     ).all()
 
                     for sid, etype, cnt in batch_results:
-                        expected = 'nomination' if mode_map.get(sid) == 'nomination' else 'participation'
+                        contest_id = season_to_contest.get(sid)
+                        if contest_id is None:
+                            continue
+                        expected = 'nomination' if mode_map.get(contest_id) == 'nomination' else 'participation'
                         if etype == expected:
-                            contest_participant_counts[sid] = cnt
+                            contest_participant_counts[contest_id] = (
+                                contest_participant_counts.get(contest_id, 0) + int(cnt or 0)
+                            )
                 except Exception as e:
                     logger.warning(f"Batch count failed: {e}")
 
@@ -329,12 +353,35 @@ def _enrich_round_data(
                         user_contestants = [uc for uc in all_user_contestants if uc.round_id == round_id]
                         # Déterminer le entry_type attendu pour ce tab
                         expected_type = 'nomination' if contest_mode == 'nomination' else 'participation'
-                        # Filtrer par entry_type ET par contest valide
+                        # Filtrer par entry_type ET par contest valide.
+                        # Accept both legacy season_id==contest.id and season_id==active linked season id.
                         valid_contest_ids = {vc.id for vc in valid_contests}
+                        linked_season_by_contest = {}
+                        try:
+                            from app.models.contests import ContestSeasonLink
+                            links = db.query(
+                                ContestSeasonLink.contest_id,
+                                ContestSeasonLink.season_id
+                            ).filter(
+                                ContestSeasonLink.contest_id.in_(list(valid_contest_ids)),
+                                ContestSeasonLink.is_active == True
+                            ).all()
+                            linked_season_by_contest = {
+                                row[0]: row[1] for row in links if row and row[0] is not None and row[1] is not None
+                            }
+                        except Exception:
+                            linked_season_by_contest = {}
                         user_contested_contest_ids = {
-                            uc.season_id for uc in user_contestants
-                            if uc.season_id and uc.season_id in valid_contest_ids
-                            and getattr(uc, 'entry_type', 'participation') == expected_type
+                            contest_id
+                            for contest_id in valid_contest_ids
+                            if any(
+                                (
+                                    uc.season_id == contest_id
+                                    or uc.season_id == linked_season_by_contest.get(contest_id)
+                                )
+                                and getattr(uc, 'entry_type', 'participation') == expected_type
+                                for uc in user_contestants
+                            )
                         }
                 except Exception as e:
                     logger.warning(f"Error batch-checking user participation for round {round_id}: {str(e)}")
