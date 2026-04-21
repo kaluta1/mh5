@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vanilla i18n Example</title>
+  </head>
+  <body>
+    <header>
+      <label for="languageSwitcher">Language:</label>
+      <select id="languageSwitcher">
+        <option value="en">English</option>
+        <option value="sw">Kiswahili</option>
+      </select>
+    </header>
+
+    <main>
+      <h1 data-i18n="home.title">Welcome</h1>
+      <p data-i18n="home.subtitle">This is a multilingual example.</p>
+      <button data-i18n="home.cta">Get Started</button>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+  </html>

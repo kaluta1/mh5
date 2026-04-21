@@ -1,6 +1,6 @@
 /**
- * Locales with hand-maintained JSON in `translations.ts` (not English-copy aliases).
- * All other selector codes use AI + cache on top of the English source strings.
+ * All supported locales are native JSON bundles now.
+ * AI runtime translation has been removed.
  */
 export const LOCALES_WITH_NATIVE_BUNDLE = [
   "fr",
@@ -22,5 +22,5 @@ export const LOCALES_WITH_NATIVE_BUNDLE = [
 export type NativeBundleLocale = (typeof LOCALES_WITH_NATIVE_BUNDLE)[number]
 
 export function localeUsesAiTranslation(language: string): boolean {
-  return language !== "en" && !LOCALES_WITH_NATIVE_BUNDLE.includes(language as NativeBundleLocale)
+  return false
 }

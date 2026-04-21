@@ -11,9 +11,25 @@ import {
 import { Globe, Loader2 } from "lucide-react"
 import { useLanguage } from "@/contexts/language-context"
 import { languages, Language } from "@/lib/translations"
+import { Input } from "@/components/ui/input"
 
 export function LanguageSelector() {
   const { language, setLanguage, aiTranslationPending } = useLanguage()
+  const [query, setQuery] = React.useState("")
+
+  const languageEntries = React.useMemo(
+    () => Object.entries(languages),
+    [],
+  )
+
+  const filteredLanguages = React.useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return languageEntries
+    return languageEntries.filter(([code, meta]) => {
+      const name = meta.name.toLowerCase()
+      return code.toLowerCase().includes(q) || name.includes(q)
+    })
+  }, [languageEntries, query])
 
   return (
     <DropdownMenu>
@@ -28,7 +44,20 @@ export function LanguageSelector() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="max-h-[min(24rem,70vh)] overflow-y-auto">
-        {Object.entries(languages).map(([code, { name, flag }]) => (
+        <div className="p-2 sticky top-0 z-10 bg-popover border-b">
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search language..."
+            className="h-8"
+          />
+        </div>
+        {filteredLanguages.length === 0 && (
+          <div className="px-2 py-2 text-xs text-muted-foreground">
+            No language found
+          </div>
+        )}
+        {filteredLanguages.map(([code, { name, flag }]) => (
           <DropdownMenuItem
             key={code}
             onClick={() => setLanguage(code as Language)}

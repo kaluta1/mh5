@@ -11,6 +11,36 @@ import nl from "./translations/nl.json"
 import tr from "./translations/tr.json"
 import ja from "./translations/ja.json"
 import ko from "./translations/ko.json"
+import id from "./translations/id.json"
+import ur from "./translations/ur.json"
+import bn from "./translations/bn.json"
+import te from "./translations/te.json"
+import ta from "./translations/ta.json"
+import vi from "./translations/vi.json"
+import th from "./translations/th.json"
+import fa from "./translations/fa.json"
+import pl from "./translations/pl.json"
+import uk from "./translations/uk.json"
+import ms from "./translations/ms.json"
+import tl from "./translations/tl.json"
+import ro from "./translations/ro.json"
+import el from "./translations/el.json"
+import he from "./translations/he.json"
+import cs from "./translations/cs.json"
+import hu from "./translations/hu.json"
+import sv from "./translations/sv.json"
+import da from "./translations/da.json"
+import no from "./translations/no.json"
+import fi from "./translations/fi.json"
+import mr from "./translations/mr.json"
+import pa from "./translations/pa.json"
+import ml from "./translations/ml.json"
+import kn from "./translations/kn.json"
+import gu from "./translations/gu.json"
+import am from "./translations/am.json"
+import yo from "./translations/yo.json"
+import ha from "./translations/ha.json"
+import rw from "./translations/rw.json"
 
 /** UI locales (100) — see `locale-registry.ts`. String bundles: `translations` below. */
 export {
@@ -13244,25 +13274,77 @@ const translationsBase = {
   }
 }
 
+function mergeLocaleWithEnglish(base: any, candidate: any): any {
+  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+    return base
+  }
+  const out: Record<string, any> = Array.isArray(base) ? [...base] : { ...base }
+  for (const [key, value] of Object.entries(candidate)) {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      out[key] = mergeLocaleWithEnglish(base?.[key] ?? {}, value)
+    } else {
+      out[key] = value
+    }
+  }
+  return out
+}
+
+const EN_BASE = translationsBase.en
+
 const translationsCore = {
-  ...translationsBase,
-  pt,
-  sw,
-  ar,
-  zh,
-  hi,
-  ru,
-  it,
-  nl,
-  tr,
-  ja,
-  ko,
+  en: EN_BASE,
+  fr: mergeLocaleWithEnglish(EN_BASE, translationsBase.fr),
+  es: mergeLocaleWithEnglish(EN_BASE, translationsBase.es),
+  de: mergeLocaleWithEnglish(EN_BASE, translationsBase.de),
+  pt: mergeLocaleWithEnglish(EN_BASE, pt),
+  sw: mergeLocaleWithEnglish(EN_BASE, sw),
+  ar: mergeLocaleWithEnglish(EN_BASE, ar),
+  zh: mergeLocaleWithEnglish(EN_BASE, zh),
+  hi: mergeLocaleWithEnglish(EN_BASE, hi),
+  ru: mergeLocaleWithEnglish(EN_BASE, ru),
+  it: mergeLocaleWithEnglish(EN_BASE, it),
+  nl: mergeLocaleWithEnglish(EN_BASE, nl),
+  tr: mergeLocaleWithEnglish(EN_BASE, tr),
+  ja: mergeLocaleWithEnglish(EN_BASE, ja),
+  ko: mergeLocaleWithEnglish(EN_BASE, ko),
+  id: mergeLocaleWithEnglish(EN_BASE, id),
+  ur: mergeLocaleWithEnglish(EN_BASE, ur),
+  bn: mergeLocaleWithEnglish(EN_BASE, bn),
+  te: mergeLocaleWithEnglish(EN_BASE, te),
+  ta: mergeLocaleWithEnglish(EN_BASE, ta),
+  vi: mergeLocaleWithEnglish(EN_BASE, vi),
+  th: mergeLocaleWithEnglish(EN_BASE, th),
+  fa: mergeLocaleWithEnglish(EN_BASE, fa),
+  pl: mergeLocaleWithEnglish(EN_BASE, pl),
+  uk: mergeLocaleWithEnglish(EN_BASE, uk),
+  ms: mergeLocaleWithEnglish(EN_BASE, ms),
+  tl: mergeLocaleWithEnglish(EN_BASE, tl),
+  ro: mergeLocaleWithEnglish(EN_BASE, ro),
+  el: mergeLocaleWithEnglish(EN_BASE, el),
+  he: mergeLocaleWithEnglish(EN_BASE, he),
+  cs: mergeLocaleWithEnglish(EN_BASE, cs),
+  hu: mergeLocaleWithEnglish(EN_BASE, hu),
+  sv: mergeLocaleWithEnglish(EN_BASE, sv),
+  da: mergeLocaleWithEnglish(EN_BASE, da),
+  no: mergeLocaleWithEnglish(EN_BASE, no),
+  fi: mergeLocaleWithEnglish(EN_BASE, fi),
+  mr: mergeLocaleWithEnglish(EN_BASE, mr),
+  pa: mergeLocaleWithEnglish(EN_BASE, pa),
+  ml: mergeLocaleWithEnglish(EN_BASE, ml),
+  kn: mergeLocaleWithEnglish(EN_BASE, kn),
+  gu: mergeLocaleWithEnglish(EN_BASE, gu),
+  am: mergeLocaleWithEnglish(EN_BASE, am),
+  yo: mergeLocaleWithEnglish(EN_BASE, yo),
+  ha: mergeLocaleWithEnglish(EN_BASE, ha),
+  rw: mergeLocaleWithEnglish(EN_BASE, rw),
 }
 
 /** Locales without a dedicated object reuse English until translated (or wired to a TMS / MT API). */
 const translationsExtra = Object.fromEntries(
   /** @type {import('./locale-registry').Language[]} */
-  (LANGUAGE_CODES).filter((code) => !(code in translationsCore)).map((code) => [code, translationsBase.en]),
+  (LANGUAGE_CODES)
+    .filter((code) => !(code in translationsCore))
+    .map((code) => [code, EN_BASE]),
 )
 
 export const translations = {

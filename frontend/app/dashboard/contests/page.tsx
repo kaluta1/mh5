@@ -456,8 +456,9 @@ function ContestsPageContent() {
         participationEndDate: contestsData?.submission_end_date,
         votingStartDate: contestsData?.voting_start_date,
         votingEndDate: contestsData?.voting_end_date,
-        currentUserParticipated: Boolean(c.currentUserParticipated || c.current_user_participated || c.current_user_contesting),
-        // Explicitly check for true value - default to false if undefined/null
+        // Contest-level flags only. Do not mix with round-level "current_user_participated"
+        // to avoid showing Edit on contests/categories where user has no submission.
+        currentUserParticipated: Boolean(c.currentUserParticipated === true || c.current_user_participated === true),
         currentUserContesting: Boolean(c.currentUserContesting === true || c.current_user_contesting === true),
         topContestants: [] // Not fetching top contestants per contest in new query yet
       }
@@ -764,10 +765,10 @@ function ContestsPageContent() {
                   isFavorite={false}
                   isNomination={categoryTab === 'nomination'}
                   contest_mode={contest.contest_mode}
-                  currentUserContesting={(categoryTab === 'nomination' ? contest.currentUserParticipated : contest.currentUserContesting) || false}
+                  currentUserContesting={(categoryTab === 'nomination' ? contest.currentUserContesting : contest.currentUserParticipated) || false}
                   onToggleFavorite={() => { }}
                   isRoundClosed={isRoundClosed}
-                  onParticipate={() => handleParticipate(contest.id, (categoryTab === 'nomination' ? contest.currentUserParticipated : contest.currentUserContesting) || false, activeRoundId)}
+                  onParticipate={() => handleParticipate(contest.id, (categoryTab === 'nomination' ? contest.currentUserContesting : contest.currentUserParticipated) || false, activeRoundId)}
                   onViewContestants={() => {
                     const params = new URLSearchParams()
                     params.set('roundId', activeRoundId)
