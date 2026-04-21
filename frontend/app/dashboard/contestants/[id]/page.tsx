@@ -76,6 +76,25 @@ export default function ContestantDetailPage() {
     }
   }, [isLoading, isAuthenticated, contestantId])
 
+  // Count view only after user stays on page for 30 seconds.
+  useEffect(() => {
+    if (!contestantId || loading || !isAuthenticated) return
+    let cancelled = false
+    const timer = setTimeout(() => {
+      if (cancelled) return
+      void api
+        .post(`/api/v1/contestants/${contestantId}/view`, { watched_seconds: 30 })
+        .catch(() => {
+          // Analytics tracking should not affect UX.
+        })
+    }, 30000)
+
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [contestantId, loading, isAuthenticated])
+
   if (isLoading || loading) {
     return <ContestantDetailSkeleton />
   }

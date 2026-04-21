@@ -205,6 +205,7 @@ export function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
                   <div className="space-y-1">
                     {section.items.map((item) => {
                       const Icon = item.icon
+                      const label = t(item.name) || item.name
                       const isActive = item.href === "/dashboard"
                         ? pathname === "/dashboard"
                         : pathname.startsWith(item.href)
@@ -222,7 +223,7 @@ export function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
                         >
                           <Icon className="h-5 w-5 flex-shrink-0" />
                           <span className="text-sm font-medium">
-                            {t(item.name)}
+                            {label}
                           </span>
                         </button>
                       )

@@ -24,6 +24,7 @@ from app.models.user import User
 from app.models.voting import ContestantVoting
 from app.models.voting import ContestantShare, ContestLike, ContestComment, PageView, ContestantReaction
 from app.models.round import Round, RoundStatus
+from app.models.comment import Comment
 
 
 class SeasonMigrationService:
@@ -70,6 +71,7 @@ class SeasonMigrationService:
             ContestantReaction.contestant_id
         ).all()
 
+        # Legacy contest comments table
         comments_rows = db.query(
             ContestComment.contestant_id,
             func.count(ContestComment.id).label("comments_count"),
@@ -77,6 +79,18 @@ class SeasonMigrationService:
             ContestComment.contestant_id.in_(contestant_ids)
         ).group_by(
             ContestComment.contestant_id
+        ).all()
+
+        # Current comments table used by /api/v1/comments endpoints
+        comments_rows_v2 = db.query(
+            Comment.contestant_id,
+            func.count(Comment.id).label("comments_count"),
+        ).filter(
+            Comment.contestant_id.in_(contestant_ids),
+            Comment.is_hidden == False,
+            Comment.is_deleted == False,
+        ).group_by(
+            Comment.contestant_id
         ).all()
 
         views_rows = db.query(
@@ -92,6 +106,7 @@ class SeasonMigrationService:
         likes_by_id = {r.contestant_id: int(r.likes_count or 0) for r in likes_rows}
         reaction_likes_by_id = {r.contestant_id: int(r.likes_count or 0) for r in reaction_like_rows}
         comments_by_id = {r.contestant_id: int(r.comments_count or 0) for r in comments_rows}
+        comments_v2_by_id = {r.contestant_id: int(r.comments_count or 0) for r in comments_rows_v2}
         views_by_id = {r.contestant_id: int(r.views_count or 0) for r in views_rows}
 
         out: Dict[int, Dict[str, int]] = {}
@@ -99,7 +114,7 @@ class SeasonMigrationService:
             out[cid] = {
                 "shares": shares_by_id.get(cid, 0),
                 "likes": likes_by_id.get(cid, 0) + reaction_likes_by_id.get(cid, 0),
-                "comments": comments_by_id.get(cid, 0),
+                "comments": comments_by_id.get(cid, 0) + comments_v2_by_id.get(cid, 0),
                 "views": views_by_id.get(cid, 0),
             }
         return out

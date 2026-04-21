@@ -155,6 +155,7 @@ export function DashboardSidebar({ isCollapsed = false, onToggleCollapse }: Dash
                 <div className="space-y-1">
                   {section.items.map((item) => {
                     const Icon = item.icon
+                    const label = t(item.name) || item.name
                     const isActive = item.href === "/dashboard"
                       ? pathname === "/dashboard"
                       : pathname.startsWith(item.href)
@@ -170,7 +171,7 @@ export function DashboardSidebar({ isCollapsed = false, onToggleCollapse }: Dash
                             ? "bg-myhigh5-primary text-white shadow-lg shadow-myhigh5-primary/30"
                             : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800/50 hover:text-gray-900 dark:hover:text-white"
                         )}
-                        title={isCollapsed ? t(item.name) : undefined}
+                        title={isCollapsed ? label : undefined}
                       >
                         <Icon className={cn(
                           "h-5 w-5 flex-shrink-0 transition-transform duration-200",
@@ -179,7 +180,7 @@ export function DashboardSidebar({ isCollapsed = false, onToggleCollapse }: Dash
 
                         {!isCollapsed && (
                           <span className="text-sm font-medium">
-                            {t(item.name)}
+                            {label}
                           </span>
                         )}
                       </Link>
