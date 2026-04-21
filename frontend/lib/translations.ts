@@ -1,5 +1,16 @@
 // @ts-nocheck
 import { LANGUAGE_CODES } from "./locale-registry"
+import pt from "./translations/pt.json"
+import sw from "./translations/sw.json"
+import ar from "./translations/ar.json"
+import zh from "./translations/zh.json"
+import hi from "./translations/hi.json"
+import ru from "./translations/ru.json"
+import it from "./translations/it.json"
+import nl from "./translations/nl.json"
+import tr from "./translations/tr.json"
+import ja from "./translations/ja.json"
+import ko from "./translations/ko.json"
 
 /** UI locales (100) — see `locale-registry.ts`. String bundles: `translations` below. */
 export {
@@ -13235,17 +13246,17 @@ const translationsBase = {
 
 const translationsCore = {
   ...translationsBase,
-  pt: translationsBase.en,
-  sw: translationsBase.en,
-  ar: translationsBase.en,
-  zh: translationsBase.en,
-  hi: translationsBase.en,
-  ru: translationsBase.en,
-  it: translationsBase.en,
-  nl: translationsBase.en,
-  tr: translationsBase.en,
-  ja: translationsBase.en,
-  ko: translationsBase.en,
+  pt,
+  sw,
+  ar,
+  zh,
+  hi,
+  ru,
+  it,
+  nl,
+  tr,
+  ja,
+  ko,
 }
 
 /** Locales without a dedicated object reuse English until translated (or wired to a TMS / MT API). */
