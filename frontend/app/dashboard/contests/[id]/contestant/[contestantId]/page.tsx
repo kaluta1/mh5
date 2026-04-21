@@ -114,6 +114,7 @@ function ContestantDetailContent() {
   const [hoverTimeout, setHoverTimeout] = useState<NodeJS.Timeout | null>(null)
   const [showShareDialog, setShowShareDialog] = useState(false)
   const [shareLink, setShareLink] = useState('')
+  const [videoViewTracked, setVideoViewTracked] = useState(false)
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       router.push('/')
@@ -280,9 +281,14 @@ function ContestantDetailContent() {
     }
   }, [contestantId, contestant, user])
 
-  // Count one view only after user stays 30 seconds on contestant page.
+  // Count one view after 30s page dwell for non-video flows.
+  // For nomination video, tracking is handled by VideoEmbed onViewed30s.
   useEffect(() => {
     if (!contestantId || pageLoading || !isAuthenticated) return
+    const hasNominationVideo =
+      (searchParams.get('entryType') === 'nomination' || contestant?.entry_type === 'nomination' || contestMode === 'nomination')
+      && !!contestant?.video_media_ids
+    if (hasNominationVideo) return
     let cancelled = false
     const timer = setTimeout(() => {
       if (cancelled) return
@@ -294,7 +300,7 @@ function ContestantDetailContent() {
       cancelled = true
       clearTimeout(timer)
     }
-  }, [contestantId, pageLoading, isAuthenticated])
+  }, [contestantId, pageLoading, isAuthenticated, contestant?.video_media_ids, contestant?.entry_type, contestMode, searchParams])
 
   const handleReactionSelect = async (reactionType: string) => {
     try {
@@ -568,6 +574,16 @@ function ContestantDetailContent() {
     !!contestant.nominator_city
   const nominationLabel = contestant.contest_category || contestant.contest_title
 
+  const handleVideoViewed30s = async () => {
+    if (videoViewTracked) return
+    try {
+      await contestService.trackContestantView(Number(contestantId), 30)
+      setVideoViewTracked(true)
+    } catch {
+      // Ignore telemetry errors.
+    }
+  }
+
   return (
     <div className="min-h-screen ">
       {/* Hero Header */}
@@ -747,6 +763,7 @@ function ContestantDetailContent() {
                       url={videos[0].url}
                       className="w-full h-full"
                       allowFullscreen={true}
+                      onViewed30s={handleVideoViewed30s}
                     />
                   </div>
                 </div>

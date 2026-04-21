@@ -12,6 +12,7 @@ interface VideoEmbedProps {
   allowFullscreen?: boolean
   width?: string | number
   height?: string | number
+  onViewed30s?: () => void
 }
 
 interface TikTokMeta {
@@ -130,9 +131,14 @@ export function VideoEmbed({
   autoplay = false,
   allowFullscreen = true,
   width = '100%',
-  height = '100%'
+  height = '100%',
+  onViewed30s
 }: VideoEmbedProps) {
   const { t } = useLanguage()
+  const [watchSeconds, setWatchSeconds] = useState(0)
+  const [viewReported, setViewReported] = useState(false)
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const visibleRef = useRef(true)
 
   const cleanedUrl = url ? cleanVideoUrl(url) : ''
   const videoInfo: VideoInfo = cleanedUrl ? convertToEmbedUrl(cleanedUrl) : { platform: 'unknown', embedUrl: '', originalUrl: '' }
@@ -140,6 +146,43 @@ export function VideoEmbed({
   const tiktokMeta = useTikTokMeta(
     videoInfo.platform === 'tiktok' ? videoInfo.originalUrl : undefined
   )
+
+  useEffect(() => {
+    setWatchSeconds(0)
+    setViewReported(false)
+  }, [cleanedUrl])
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        visibleRef.current = Boolean(entries[0]?.isIntersecting)
+      },
+      { threshold: 0.5 }
+    )
+    if (containerRef.current) observer.observe(containerRef.current)
+    return () => observer.disconnect()
+  }, [])
+
+  useEffect(() => {
+    if (viewReported || !onViewed30s) return
+    if (watchSeconds >= 30) {
+      setViewReported(true)
+      onViewed30s()
+    }
+  }, [watchSeconds, viewReported, onViewed30s])
+
+  // For iframe-based platforms (YouTube/TikTok/etc.), use dwell-time while visible.
+  useEffect(() => {
+    if (!url) return
+    const isDirect = videoInfo.platform === 'direct'
+    if (isDirect) return
+    const tick = setInterval(() => {
+      if (document.visibilityState !== 'visible') return
+      if (!visibleRef.current) return
+      setWatchSeconds((s) => s + 1)
+    }, 1000)
+    return () => clearInterval(tick)
+  }, [url, videoInfo.platform])
 
   if (!url) {
     return (
@@ -154,14 +197,20 @@ export function VideoEmbed({
   // ── Direct video file ──
   if (videoInfo.platform === 'direct') {
     return (
-      <video
-        src={videoInfo.embedUrl}
-        controls
-        autoPlay={autoplay}
-        className={className}
-        style={{ width, height }}
-        playsInline
-      />
+      <div ref={containerRef}>
+        <video
+          src={videoInfo.embedUrl}
+          controls
+          autoPlay={autoplay}
+          className={className}
+          style={{ width, height }}
+          playsInline
+          onTimeUpdate={(e) => {
+            const sec = Math.floor((e.currentTarget.currentTime || 0))
+            if (sec > watchSeconds) setWatchSeconds(sec)
+          }}
+        />
+      </div>
     )
   }
 
@@ -203,6 +252,7 @@ export function VideoEmbed({
     if (resolvedTikTokId) {
       return (
         <div
+          ref={containerRef}
           className={`${className} flex items-center justify-center bg-black rounded-xl overflow-hidden`}
           style={{ width, height }}
         >
@@ -220,27 +270,31 @@ export function VideoEmbed({
 
     if (tiktokMeta.embedHtml) {
       return (
-        <TikTokOEmbed
-          embedHtml={tiktokMeta.embedHtml}
-          originalUrl={openUrl}
-          title={tiktokMeta.title}
-          className={className}
-          width={width}
-          height={height}
-        />
+        <div ref={containerRef}>
+          <TikTokOEmbed
+            embedHtml={tiktokMeta.embedHtml}
+            originalUrl={openUrl}
+            title={tiktokMeta.title}
+            className={className}
+            width={width}
+            height={height}
+          />
+        </div>
       )
     }
 
     if (openUrl) {
       return (
-        <TikTokOEmbed
-          embedHtml=""
-          originalUrl={openUrl}
-          title={tiktokMeta.title}
-          className={className}
-          width={width}
-          height={height}
-        />
+        <div ref={containerRef}>
+          <TikTokOEmbed
+            embedHtml=""
+            originalUrl={openUrl}
+            title={tiktokMeta.title}
+            className={className}
+            width={width}
+            height={height}
+          />
+        </div>
       )
     }
 
@@ -274,8 +328,24 @@ export function VideoEmbed({
       const embedUrl = `https://www.youtube.com/embed/${videoInfo.videoId}${iframeParams.toString() ? '?' + iframeParams.toString() : ''}`
 
       return (
+        <div ref={containerRef}>
+          <iframe
+            src={embedUrl}
+            className={`${className} rounded-xl`}
+            style={{ width, height }}
+            frameBorder="0"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowFullScreen={allowFullscreen}
+            title="YouTube video"
+          />
+        </div>
+      )
+    }
+
+    return (
+      <div ref={containerRef}>
         <iframe
-          src={embedUrl}
+          src={videoInfo.originalUrl}
           className={`${className} rounded-xl`}
           style={{ width, height }}
           frameBorder="0"
@@ -283,19 +353,7 @@ export function VideoEmbed({
           allowFullScreen={allowFullscreen}
           title="YouTube video"
         />
-      )
-    }
-
-    return (
-      <iframe
-        src={videoInfo.originalUrl}
-        className={`${className} rounded-xl`}
-        style={{ width, height }}
-        frameBorder="0"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-        allowFullScreen={allowFullscreen}
-        title="YouTube video"
-      />
+      </div>
     )
   }
 
@@ -309,30 +367,34 @@ export function VideoEmbed({
       : videoInfo.embedUrl
 
     return (
-      <iframe
-        src={embedUrl}
-        className={`${className} rounded-xl`}
-        style={{ width, height }}
-        frameBorder="0"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-        allowFullScreen={allowFullscreen}
-        title="Vimeo video"
-      />
+      <div ref={containerRef}>
+        <iframe
+          src={embedUrl}
+          className={`${className} rounded-xl`}
+          style={{ width, height }}
+          frameBorder="0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          allowFullScreen={allowFullscreen}
+          title="Vimeo video"
+        />
+      </div>
     )
   }
 
   // ── Facebook ──
   if (videoInfo.platform === 'facebook') {
     return (
-      <iframe
-        src={videoInfo.embedUrl}
-        className={`${className} rounded-xl`}
-        style={{ width, height }}
-        frameBorder="0"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-        allowFullScreen={allowFullscreen}
-        title="Facebook video"
-      />
+      <div ref={containerRef}>
+        <iframe
+          src={videoInfo.embedUrl}
+          className={`${className} rounded-xl`}
+          style={{ width, height }}
+          frameBorder="0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          allowFullScreen={allowFullscreen}
+          title="Facebook video"
+        />
+      </div>
     )
   }
 
