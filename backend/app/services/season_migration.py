@@ -22,7 +22,7 @@ from app.models.contests import (
 )
 from app.models.user import User
 from app.models.voting import ContestantVoting
-from app.models.voting import ContestantShare, ContestLike, ContestComment, PageView
+from app.models.voting import ContestantShare, ContestLike, ContestComment, PageView, ContestantReaction
 from app.models.round import Round, RoundStatus
 
 
@@ -48,6 +48,7 @@ class SeasonMigrationService:
             ContestantShare.contestant_id
         ).all()
 
+        # Legacy likes table (kept for backward compatibility)
         likes_rows = db.query(
             ContestLike.contestant_id,
             func.count(ContestLike.id).label("likes_count"),
@@ -55,6 +56,18 @@ class SeasonMigrationService:
             ContestLike.contestant_id.in_(contestant_ids)
         ).group_by(
             ContestLike.contestant_id
+        ).all()
+
+        # Current reactions table used by frontend like/love/wow/dislike interactions.
+        # For Top High5 "likes" metric, count positive reactions as likes-equivalent.
+        reaction_like_rows = db.query(
+            ContestantReaction.contestant_id,
+            func.count(ContestantReaction.id).label("likes_count"),
+        ).filter(
+            ContestantReaction.contestant_id.in_(contestant_ids),
+            ContestantReaction.reaction_type.in_(["like", "love", "wow"]),
+        ).group_by(
+            ContestantReaction.contestant_id
         ).all()
 
         comments_rows = db.query(
@@ -77,6 +90,7 @@ class SeasonMigrationService:
 
         shares_by_id = {r.contestant_id: int(r.shares_count or 0) for r in shares_rows}
         likes_by_id = {r.contestant_id: int(r.likes_count or 0) for r in likes_rows}
+        reaction_likes_by_id = {r.contestant_id: int(r.likes_count or 0) for r in reaction_like_rows}
         comments_by_id = {r.contestant_id: int(r.comments_count or 0) for r in comments_rows}
         views_by_id = {r.contestant_id: int(r.views_count or 0) for r in views_rows}
 
@@ -84,7 +98,7 @@ class SeasonMigrationService:
         for cid in contestant_ids:
             out[cid] = {
                 "shares": shares_by_id.get(cid, 0),
-                "likes": likes_by_id.get(cid, 0),
+                "likes": likes_by_id.get(cid, 0) + reaction_likes_by_id.get(cid, 0),
                 "comments": comments_by_id.get(cid, 0),
                 "views": views_by_id.get(cid, 0),
             }

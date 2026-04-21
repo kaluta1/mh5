@@ -34,7 +34,7 @@ const LEVEL_OPTIONS: Array<{
   { value: "country", label: "Country", icon: Flag, requiresCountry: true, helper: "Top 5 for the selected country" },
   { value: "regional", label: "Regional", icon: MapIcon, requiresCountry: true, helper: "Top 5 per region (filtered by country)" },
   { value: "continent", label: "Continent", icon: Globe2, requiresCountry: true, helper: "Top 5 per continent (filtered by country)" },
-  { value: "global", label: "Global", icon: Globe, requiresCountry: false, helper: "Top 5 worldwide — no country filter" },
+  { value: "global", label: "Global", icon: Globe, requiresCountry: false, helper: "Top 5 worldwide - no country filter" },
 ]
 
 /** Anchor for deep links: `/dashboard/top-high5#th5-<contestId>-<contestantId>` scrolls to the row. */
@@ -42,19 +42,19 @@ function topHigh5DomId(contestId: number, contestantId: number) {
   return `th5-${contestId}-${contestantId}`
 }
 
-function getTopHigh5EmptyMessage(level: TopHigh5Level) {
+function getTopHigh5EmptyMessage(level: TopHigh5Level, t: (key: string) => string) {
   switch (level) {
     case "city":
-      return "No nominated yet."
+      return t("dashboard.contests.empty_nomination_city") || "No nominated yet."
     case "regional":
-      return "No regional migration."
+      return t("dashboard.contests.empty_nomination_regional") || "No regional migration."
     case "continent":
-      return "No continental migration."
+      return t("dashboard.contests.empty_nomination_continental") || "No continental migration."
     case "global":
-      return "No global migration."
+      return t("dashboard.contests.empty_nomination_global") || "No global migration."
     case "country":
     default:
-      return "No country winners found for this selection."
+      return t("dashboard.contests.empty_nomination_country") || "No country winners found for this selection."
   }
 }
 
@@ -93,6 +93,23 @@ export default function TopHigh5Page() {
   const currentLevelMeta = useMemo(
     () => LEVEL_OPTIONS.find((opt) => opt.value === activeLevel) ?? LEVEL_OPTIONS[1],
     [activeLevel],
+  )
+  const levelOptions = useMemo(
+    () =>
+      LEVEL_OPTIONS.map((opt) => ({
+        ...opt,
+        label:
+          opt.value === "city"
+            ? t("dashboard.contests.level_city") || opt.label
+            : opt.value === "country"
+              ? t("dashboard.contests.level_country") || opt.label
+              : opt.value === "regional"
+                ? t("dashboard.contests.level_regional") || opt.label
+                : opt.value === "continent"
+                  ? t("dashboard.contests.level_continental") || opt.label
+                  : t("dashboard.contests.level_global") || opt.label,
+      })),
+    [t],
   )
 
   useEffect(() => {
@@ -263,7 +280,9 @@ export default function TopHigh5Page() {
           <Trophy className="w-6 h-6" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Top High5</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            {t("dashboard.myhigh5.title") || "Top High5"}
+          </h1>
           <p className="text-sm text-gray-600 dark:text-gray-400">
             {t("dashboard.myhigh5.description") ||
               "Top 5 by country for each nomination category and migration preview."}
@@ -274,11 +293,11 @@ export default function TopHigh5Page() {
       <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4 space-y-4">
         <div className="space-y-1">
           <div className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
-            Stage
+            {t("dashboard.contests.filter_level") || "Stage"}
           </div>
           <Tabs value={activeLevel} onValueChange={handleLevelChange}>
             <TabsList className="flex flex-wrap h-auto gap-1 bg-gray-100 dark:bg-gray-800 p-1">
-              {LEVEL_OPTIONS.map((opt) => {
+              {levelOptions.map((opt) => {
                 const Icon = opt.icon
                 return (
                   <TabsTrigger key={opt.value} value={opt.value} className="gap-1.5">
@@ -301,11 +320,7 @@ export default function TopHigh5Page() {
               onKeyDown={(e) => {
                 if (e.key === "Enter") handleSearch()
               }}
-              placeholder={
-                currentLevelMeta.requiresCountry
-                  ? "Country (e.g. Tanzania, Benin)"
-                  : "Country filter disabled for Global"
-              }
+              placeholder={t("settings.country") || "Country"}
               disabled={!currentLevelMeta.requiresCountry}
               className="pl-9"
             />
@@ -316,11 +331,11 @@ export default function TopHigh5Page() {
             onKeyDown={(e) => {
               if (e.key === "Enter") handleSearch()
             }}
-            placeholder="Round id (optional, e.g. 3 = March 2026)"
+            placeholder={t("dashboard.contests.round_id") || "Round id (optional, e.g. 3 = March 2026)"}
             className="md:w-72"
             inputMode="numeric"
           />
-          <Button onClick={handleSearch}>Show Top High5</Button>
+          <Button onClick={handleSearch}>{t("dashboard.myhigh5.show_top_high5") || "Show Top High5"}</Button>
         </div>
 
         <div className="flex flex-col md:flex-row gap-3 md:items-center">
@@ -329,7 +344,7 @@ export default function TopHigh5Page() {
             <Input
               value={categorySearch}
               onChange={(e) => setCategorySearch(e.target.value)}
-              placeholder="Search category (e.g. Adventure, Comedy)"
+              placeholder={t("dashboard.contests.search_placeholder") || "Search category"}
               className="pl-9"
             />
           </div>
@@ -339,26 +354,26 @@ export default function TopHigh5Page() {
           <div className="text-xs text-gray-500 dark:text-gray-400 flex flex-wrap items-center gap-2">
             <span>Round: {data.round_name} (id {data.round_id})</span>
             <span>|</span>
-            <span>Stage: {(data.level || activeLevel).toUpperCase()}</span>
+            <span>{t("dashboard.contests.filter_level") || "Stage"}: {(data.level || activeLevel).toUpperCase()}</span>
             {activeLevel !== "global" && (
               <>
                 <span>|</span>
-                <span>Country: {data.country || activeCountry}</span>
+                <span>{t("settings.country") || "Country"}: {data.country || activeCountry}</span>
               </>
             )}
             <span>|</span>
-            <span>{isAutoRefreshing ? "Refreshing live..." : "Live sync every 5s"}</span>
+            <span>{isAutoRefreshing ? (t("common.loading") || "Refreshing live...") : "Live sync every 5s"}</span>
             {lastUpdatedAt && (
               <>
                 <span>|</span>
-                <span>Last update: {lastUpdatedAt.toLocaleTimeString()}</span>
+                <span>{t("common.refresh") || "Last update"}: {lastUpdatedAt.toLocaleTimeString()}</span>
               </>
             )}
             {data.fallback_applied && (
               <>
                 <span>|</span>
                 <span className="text-amber-700 dark:text-amber-400">
-                  Auto-selected latest round with winners
+                  {t("dashboard.myhigh5.auto_selected_round") || "Auto-selected latest round with winners"}
                 </span>
               </>
             )}
@@ -375,7 +390,7 @@ export default function TopHigh5Page() {
       {!filteredContests.length ? (
         <div className="rounded-xl border border-dashed border-gray-300 dark:border-gray-700 p-5">
           <div className="text-center text-gray-500 py-6">
-            {getTopHigh5EmptyMessage(activeLevel)}
+            {getTopHigh5EmptyMessage(activeLevel, t)}
           </div>
           {data?.diagnostics && (
             <div className="mt-2">
@@ -402,7 +417,7 @@ export default function TopHigh5Page() {
       ) : !visibleCategories.length ? (
         <div className="rounded-xl border border-dashed border-gray-300 dark:border-gray-700 p-5">
           <div className="text-center text-gray-500 py-6">
-            No category matches your search.
+            {t("dashboard.contests.no_contests") || "No category matches your search."}
           </div>
         </div>
       ) : (
@@ -448,13 +463,13 @@ export default function TopHigh5Page() {
                       <table className="min-w-full text-sm">
                         <thead className="bg-gray-100 dark:bg-gray-800">
                           <tr>
-                            <th className="px-3 py-2 text-left">Rank</th>
-                            <th className="px-3 py-2 text-left">Content</th>
-                            <th className="px-3 py-2 text-left">Stars</th>
-                            <th className="px-3 py-2 text-left">Shares</th>
-                            <th className="px-3 py-2 text-left">Likes</th>
-                            <th className="px-3 py-2 text-left">Comments</th>
-                            <th className="px-3 py-2 text-left">Views</th>
+                            <th className="px-3 py-2 text-left">{t("dashboard.myhigh5.rank") || "Rank"}</th>
+                            <th className="px-3 py-2 text-left">{t("dashboard.myhigh5.content") || "Content"}</th>
+                            <th className="px-3 py-2 text-left">{t("dashboard.myhigh5.stars") || "Stars"}</th>
+                            <th className="px-3 py-2 text-left">{t("dashboard.myhigh5.shares") || "Shares"}</th>
+                            <th className="px-3 py-2 text-left">{t("dashboard.myhigh5.likes") || "Likes"}</th>
+                            <th className="px-3 py-2 text-left">{t("dashboard.myhigh5.comments") || "Comments"}</th>
+                            <th className="px-3 py-2 text-left">{t("dashboard.myhigh5.views") || "Views"}</th>
                           </tr>
                         </thead>
                         <tbody>

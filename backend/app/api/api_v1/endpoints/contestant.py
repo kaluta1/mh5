@@ -1,5 +1,5 @@
 from typing import List, Optional, Any, Set, Tuple, Dict
-from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks, Request
 import json
 import re
 from urllib.parse import parse_qs, unquote, urlparse
@@ -11,7 +11,7 @@ from app.api import deps
 from app.crud import contestant as crud_contestant, report
 from app.models.user import User
 from app.models.contests import Contestant, ContestSubmission, ContestSeason, ContestStage, ContestantSeason, SeasonLevel
-from app.models.voting import MyFavorites, Vote, ContestantReaction, ContestantShare, ReactionType, ContestantVoting, ContestLike, ContestComment
+from app.models.voting import MyFavorites, Vote, ContestantReaction, ContestantShare, ReactionType, ContestantVoting, ContestLike, ContestComment, PageView
 from app.models.contest import Contest
 from app.schemas.comment import ContestantReportCreate, ReportResponse
 from app.schemas.voting import (
@@ -2006,9 +2006,24 @@ def get_contestant(
     *,
     db: Session = Depends(deps.get_db),
     contestant_id: int,
+    request: Request,
     current_user: Optional[User] = Depends(deps.get_current_active_user_optional)
 ) -> ContestantWithAuthorAndStats:
     """Récupère les détails d'une candidature avec infos auteur et stats enrichies"""
+    try:
+        db.add(
+            PageView(
+                user_id=current_user.id if current_user else None,
+                contestant_id=contestant_id,
+                ip_address=(request.client.host if request.client else None),
+                user_agent=request.headers.get("user-agent"),
+            )
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        # Never fail contestant details because of analytics tracking.
+
     contestant_data = crud_contestant.get_with_stats(
         db, contestant_id, current_user_id=current_user.id if current_user else None
     )
