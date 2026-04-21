@@ -280,6 +280,22 @@ function ContestantDetailContent() {
     }
   }, [contestantId, contestant, user])
 
+  // Count one view only after user stays 30 seconds on contestant page.
+  useEffect(() => {
+    if (!contestantId || pageLoading || !isAuthenticated) return
+    let cancelled = false
+    const timer = setTimeout(() => {
+      if (cancelled) return
+      void contestService.trackContestantView(Number(contestantId), 30).catch(() => {
+        // Non-blocking analytics: ignore failures.
+      })
+    }, 30000)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [contestantId, pageLoading, isAuthenticated])
+
   const handleReactionSelect = async (reactionType: string) => {
     try {
       if (selectedReaction === reactionType) {

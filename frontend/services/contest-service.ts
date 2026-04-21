@@ -562,6 +562,12 @@ class ContestService {
     }
   }
 
+  async trackContestantView(contestantId: number, watchedSeconds: number = 30): Promise<void> {
+    await api.post(`/api/v1/contestants/${contestantId}/view`, {
+      watched_seconds: watchedSeconds,
+    })
+  }
+
   /**
    * Récupère la liste des concours avec pagination et recherche
    */

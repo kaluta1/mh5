@@ -77,19 +77,19 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
               if (fallback && typeof fallback === "object" && fk in fallback) {
                 fallback = fallback[fk]
               } else {
-                return key
+                return ""
               }
             }
-            return typeof fallback === "string" ? fallback : key
+            return typeof fallback === "string" ? fallback : ""
           }
         }
 
         if (typeof value === "string") {
           return value
         }
-        return key
+        return ""
       } catch {
-        return key
+        return ""
       }
     },
     [language],

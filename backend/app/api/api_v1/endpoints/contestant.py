@@ -1,5 +1,5 @@
 from typing import List, Optional, Any, Set, Tuple, Dict
-from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks, Request, Body
 import json
 import re
 from urllib.parse import parse_qs, unquote, urlparse
@@ -2006,24 +2006,9 @@ def get_contestant(
     *,
     db: Session = Depends(deps.get_db),
     contestant_id: int,
-    request: Request,
     current_user: Optional[User] = Depends(deps.get_current_active_user_optional)
 ) -> ContestantWithAuthorAndStats:
     """Récupère les détails d'une candidature avec infos auteur et stats enrichies"""
-    try:
-        db.add(
-            PageView(
-                user_id=current_user.id if current_user else None,
-                contestant_id=contestant_id,
-                ip_address=(request.client.host if request.client else None),
-                user_agent=request.headers.get("user-agent"),
-            )
-        )
-        db.commit()
-    except Exception:
-        db.rollback()
-        # Never fail contestant details because of analytics tracking.
-
     contestant_data = crud_contestant.get_with_stats(
         db, contestant_id, current_user_id=current_user.id if current_user else None
     )
@@ -2034,6 +2019,41 @@ def get_contestant(
         )
     
     return ContestantWithAuthorAndStats(**contestant_data)
+
+
+@router.post("/{contestant_id}/view", status_code=status.HTTP_201_CREATED)
+def track_contestant_view(
+    *,
+    db: Session = Depends(deps.get_db),
+    contestant_id: int,
+    request: Request,
+    current_user: Optional[User] = Depends(deps.get_current_active_user_optional),
+    watched_seconds: int = Body(default=30, embed=True),
+) -> dict:
+    """
+    Track a contestant page view after a minimum dwell time.
+    Frontend should call this only after user stays on page >= 30s.
+    """
+    contestant = crud_contestant.get(db, contestant_id)
+    if not contestant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
+
+    if watched_seconds < 30:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A view is counted only after at least 30 seconds.",
+        )
+
+    db.add(
+        PageView(
+            user_id=current_user.id if current_user else None,
+            contestant_id=contestant_id,
+            ip_address=(request.client.host if request.client else None),
+            user_agent=request.headers.get("user-agent"),
+        )
+    )
+    db.commit()
+    return {"message": "View tracked"}
 
 
 @router.post("/{contestant_id}/submission")
