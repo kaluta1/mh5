@@ -7,6 +7,7 @@ import { detectVideoPlatform } from '@/lib/utils/video-platforms'
 import { useLanguage } from '@/contexts/language-context'
 import { useAuth } from '@/hooks/use-auth'
 import { commentsService, Comment } from '@/lib/services/comments-service'
+import { contestService } from '@/services/contest-service'
 
 // Icônes SVG plateformes
 function TikTokIcon({ className }: { className?: string }) {
@@ -86,6 +87,7 @@ export function VideoPreviewDialog({
   const [commentsLoading, setCommentsLoading] = useState(false)
   const [submittingComment, setSubmittingComment] = useState(false)
   const [commentsCount, setCommentsCount] = useState(initialCommentsCount)
+  const [viewTracked, setViewTracked] = useState(false)
   const commentsEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -142,11 +144,26 @@ export function VideoPreviewDialog({
   if (!isOpen) return null
 
   const platform = detectVideoPlatform(videoUrl)
-  const isDirect = platform === 'direct'
   const config = PLATFORM_CONFIG[platform]
   const isTikTok = platform === 'tiktok'
   const isInstagram = platform === 'instagram'
   const isVertical = isTikTok || isInstagram
+
+  useEffect(() => {
+    if (!isOpen) {
+      setViewTracked(false)
+    }
+  }, [isOpen, contestantId, videoUrl])
+
+  const handleViewed30s = async () => {
+    if (!contestantId || viewTracked) return
+    try {
+      await contestService.trackContestantView(Number(contestantId), 30)
+      setViewTracked(true)
+    } catch {
+      // Ignore analytics errors in preview dialog.
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-[999999] flex items-center justify-center" onClick={onClose}>
@@ -184,24 +201,15 @@ export function VideoPreviewDialog({
             ? 'w-full sm:w-[480px] h-[55vh] sm:h-[85vh]'
             : 'w-full lg:w-[65%] aspect-video lg:aspect-auto lg:h-full'
         }`}>
-          {isDirect ? (
-            <video
-              src={videoUrl}
-              title={videoTitle}
-              controls
-              autoPlay
-              className="w-full h-full object-contain"
-            />
-          ) : (
-            <VideoEmbed
-              url={videoUrl}
-              className="w-full h-full"
-              autoplay={true}
-              allowFullscreen={true}
-              width="100%"
-              height="100%"
-            />
-          )}
+          <VideoEmbed
+            url={videoUrl}
+            className="w-full h-full"
+            autoplay={true}
+            allowFullscreen={true}
+            width="100%"
+            height="100%"
+            onViewed30s={handleViewed30s}
+          />
         </div>
 
         {/* Right / Bottom Panel */}
