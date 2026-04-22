@@ -1,12 +1,15 @@
 import os
 import uuid
 from typing import Dict, Any
+import logging
 import aiofiles
 from fastapi import UploadFile
 import boto3
 from PIL import Image
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 # Proof-of-address: scans / photos / PDF bills
 KYC_POA_MAX_BYTES = 10 * 1024 * 1024
@@ -89,9 +92,14 @@ async def store_media(file: UploadFile, user_id: int) -> Dict[str, Any]:
     
     # Déterminer le chemin du fichier selon le type de stockage
     if settings.STORAGE_TYPE == "s3":
-        return await store_in_s3(file, filename, user_id)
-    else:  # local par défaut
-        return await store_locally(file, filename, user_id)
+        try:
+            return await store_in_s3(file, filename, user_id)
+        except Exception as e:
+            # Production safety: if S3 is misconfigured, do not block user uploads.
+            logger.exception("S3 upload failed, falling back to local storage: %s", e)
+            return await store_locally(file, filename, user_id)
+    # local par défaut
+    return await store_locally(file, filename, user_id)
 
 
 async def store_locally(file: UploadFile, filename: str, user_id: int) -> Dict[str, Any]:

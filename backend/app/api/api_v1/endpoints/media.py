@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, File, UploadFile, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_active_user
-from app.crud import crud_media
+from app.crud import media as crud_media
 from app.db.session import get_db
 from app.schemas.media import MediaCreate, Media
 from app.core.storage import store_media
