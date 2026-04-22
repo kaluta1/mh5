@@ -150,32 +150,36 @@
     }
   },
   "features": {
-    "title": "Why Choose MyHigh5?",
-    "subtitle": "Discover the features that make MyHigh5 the world's most advanced contest platform.",
+    "title": "Kwa nini uchague MyHigh5?",
+    "subtitle": "Gundua vipengele vinavyoifanya MyHigh5 kuwa jukwaa la mashindano la kisasa zaidi duniani.",
     "items": {
       "multi_level": {
-        "title": "Multi-Level Contests",
-        "description": "Participate in local, national and international contests across different categories."
+        "title": "Mashindano ya ngazi nyingi",
+        "description": "Shiriki mashindano ya mtaa, kitaifa na kimataifa katika kategoria tofauti."
+      },
+      "financial_rewards": {
+        "title": "Zawadi za kifedha",
+        "description": "Pata kamisheni za ushirika kutoka mapato yanayotokana na mtandao wako wa marejeo."
       },
       "global_community": {
-        "title": "Global Community",
-        "description": "Join over 1 million active participants in 200+ countries worldwide."
+        "title": "Jamii ya kimataifa",
+        "description": "Jiunge na washiriki hai zaidi ya milioni 1 katika nchi zaidi ya 200 duniani."
       },
       "international_reach": {
-        "title": "International Reach",
-        "description": "Competitions organized by continent, region and country for a global experience."
+        "title": "Ufikivu wa kimataifa",
+        "description": "Mashindano yaliyopangwa kwa bara, kanda na nchi kwa uzoefu wa kimataifa."
       },
       "guaranteed_security": {
-        "title": "Guaranteed Security",
-        "description": "Identity verification and automatic moderation for a safe environment."
+        "title": "Usalama uliohakikishwa",
+        "description": "Uthibitisho wa utambulisho na udhibiti wa maudhui kiotomatiki kwa mazingira salama."
       },
       "innovative_voting": {
-        "title": "Innovative Voting System",
-        "description": "Vote with our unique MyHigh5 system (5-4-3-2-1 points) by drag & drop."
+        "title": "Mfumo bunifu wa upigaji kura",
+        "description": "Piga kura kwa mfumo wa kipekee wa MyHigh5 (alama 5-4-3-2-1)."
       },
       "varied_categories": {
-        "title": "Varied Categories",
-        "description": "Beauty, Handsome, Latest Hits, Pets, Sports Clubs and much more."
+        "title": "Kategoria nyingi",
+        "description": "Urembo, vipaji, muziki, wanyama wa kufugwa, vilabu vya michezo na mengi zaidi."
       }
     }
   },
@@ -325,16 +329,38 @@
   },
   "dashboard": {
     "contests": {
-      "edit_nomination": "Edit your Nomination",
-      "edit_participation": "Edit your Participation",
-      "nominate": "Nominate",
-      "participate": "Participate",
-      "edit": "Edit",
+      "title": "Mashindano",
+      "subtitle": "Gundua na ushiriki mashindano",
+      "search_placeholder": "Tafuta...",
+      "all": "Yote",
+      "city": "Jiji",
+      "country": "Nchi",
+      "regional": "Kikanda",
+      "continental": "Kibara",
+      "global": "Kimataifa",
+      "migration_stage": "Hatua ya uhamaji",
+      "loading_more": "Inapakia...",
+      "view": "Tazama",
+      "contestant": "Mshiriki",
+      "nominator": "Mteuaji",
+      "nominators": "Wateuaji",
+      "open": "Wazi",
+      "edit_nomination": "Hariri uteuzi wako",
+      "edit_participation": "Hariri ushiriki wako",
+      "nominate": "Teua",
+      "participate": "Shiriki",
+      "edit": "Hariri",
+      "no_nominated_yet": "Hakuna walioteuliwa bado.",
+      "no_regional_migration": "Hakuna uhamaji wa kikanda.",
+      "no_continental_migration": "Hakuna uhamaji wa kibara.",
+      "no_global_migration": "Hakuna uhamaji wa kimataifa.",
+      "no_country_migration": "Hakuna uhamaji wa nchi.",
+      "no_nomination_contests": "Hakuna mashindano ya uteuzi kwa chaguo hili.",
       "participation_form": {
-        "edit_title": "Edit a Contestant",
-        "edit_description": "Update your submission details",
-        "nominate_title": "Nominate a Contestant",
-        "nominate_description": "Import your video from YouTube or Vimeo"
+        "edit_title": "Hariri mshiriki",
+        "edit_description": "Sasisha maelezo ya wasilisho lako",
+        "nominate_title": "Teua mshiriki",
+        "nominate_description": "Ingiza video yako kutoka YouTube au Vimeo"
       }
     }
   },

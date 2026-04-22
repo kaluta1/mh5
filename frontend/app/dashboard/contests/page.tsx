@@ -664,14 +664,14 @@ function ContestsPageContent() {
           {categoryTab === 'nomination' && (
             <div className="flex items-center gap-2 mt-3 flex-wrap">
               <MapPin className="w-4 h-4 text-gray-400 dark:text-gray-500" />
-              <span className="text-sm text-gray-500 mr-1">Migration stage:</span>
+              <span className="text-sm text-gray-500 mr-1">{t('dashboard.contests.migration_stage')}:</span>
               {[
-                { value: 'all', label: 'All' },
-                { value: 'city', label: 'City' },
-                { value: 'country', label: 'Country' },
-                { value: 'regional', label: 'Regional' },
-                { value: 'continental', label: 'Continental' },
-                { value: 'global', label: 'Global' },
+                { value: 'all', label: t('dashboard.contests.all') },
+                { value: 'city', label: t('dashboard.contests.city') },
+                { value: 'country', label: t('dashboard.contests.country') },
+                { value: 'regional', label: t('dashboard.contests.regional') },
+                { value: 'continental', label: t('dashboard.contests.continental') },
+                { value: 'global', label: t('dashboard.contests.global') },
               ].map((stage) => (
                 <button
                   key={stage.value}
@@ -796,7 +796,7 @@ function ContestsPageContent() {
               {loadingMore && (
                 <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>Chargement...</span>
+                  <span>{t('dashboard.contests.loading_more')}</span>
                 </div>
               )}
               {!hasMore && allContests.length > 0 && (
@@ -816,17 +816,17 @@ function ContestsPageContent() {
             <p className="text-gray-500 dark:text-gray-400">
               {categoryTab === 'nomination'
                 ? nominationMigrationLevel === 'city'
-                  ? 'No nominated yet.'
+                  ? t('dashboard.contests.no_nominated_yet')
                   : nominationMigrationLevel === 'regional'
-                    ? 'No regional migration.'
+                    ? t('dashboard.contests.no_regional_migration')
                     : nominationMigrationLevel === 'continental'
-                      ? 'No continental migration.'
+                      ? t('dashboard.contests.no_continental_migration')
                       : nominationMigrationLevel === 'global'
-                        ? 'No global migration.'
+                        ? t('dashboard.contests.no_global_migration')
                         : nominationMigrationLevel === 'country'
-                          ? 'No country migration.'
-                          : (t('contests.no_contests') || 'No nomination contests found for this selection.')
-                : (t('contests.no_contests') || 'Aucun concours trouvé correspondant aux critères.')}
+                          ? t('dashboard.contests.no_country_migration')
+                          : t('dashboard.contests.no_nomination_contests')
+                : t('contests.no_contests')}
             </p>
           </div>
         )}
