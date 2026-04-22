@@ -380,33 +380,76 @@ def _enrich_round_data(
                         # Filtrer par entry_type ET par contest valide.
                         # Accept both legacy season_id==contest.id and season_id==active linked season id.
                         valid_contest_ids = {vc.id for vc in valid_contests}
-                        linked_season_by_contest = {}
+                        # Map contest -> active ContestSeason ORM (not just season_id int).
+                        # A shared season_id across categories must not mark the user as
+                        # "contesting" in every category — only the contest that actually owns
+                        # the entry (align with _resolve_contest_for_contestant_vote in contestant.py).
+                        season_by_contest_id: dict = {}
                         try:
-                            from app.models.contests import ContestSeasonLink
-                            links = db.query(
-                                ContestSeasonLink.contest_id,
-                                ContestSeasonLink.season_id
-                            ).filter(
-                                ContestSeasonLink.contest_id.in_(list(valid_contest_ids)),
-                                ContestSeasonLink.is_active == True
-                            ).all()
-                            linked_season_by_contest = {
-                                row[0]: row[1] for row in links if row and row[0] is not None and row[1] is not None
-                            }
-                        except Exception:
-                            linked_season_by_contest = {}
-                        user_contested_contest_ids = {
-                            contest_id
-                            for contest_id in valid_contest_ids
-                            if any(
-                                (
-                                    uc.season_id == contest_id
-                                    or uc.season_id == linked_season_by_contest.get(contest_id)
-                                )
-                                and getattr(uc, 'entry_type', 'participation') == expected_type
-                                for uc in user_contestants
+                            from app.models.contests import (
+                                ContestSeason,
+                                ContestSeasonLink,
                             )
-                        }
+
+                            if valid_contest_ids:
+                                rows = (
+                                    db.query(ContestSeasonLink.contest_id, ContestSeason)
+                                    .join(
+                                        ContestSeason,
+                                        ContestSeason.id == ContestSeasonLink.season_id,
+                                    )
+                                    .filter(
+                                        ContestSeasonLink.contest_id.in_(
+                                            list(valid_contest_ids)
+                                        ),
+                                        ContestSeasonLink.is_active == True,
+                                    )
+                                    .all()
+                                )
+                                for cid, s in rows:
+                                    if cid is not None and s is not None and cid not in season_by_contest_id:
+                                        season_by_contest_id[cid] = s
+                                for cid in valid_contest_ids:
+                                    season_by_contest_id.setdefault(cid, None)
+                        except Exception:
+                            season_by_contest_id = {
+                                c: None for c in valid_contest_ids
+                            } if valid_contest_ids else {}
+
+                        from app.api.api_v1.endpoints import contestant as contestant_ep
+
+                        contested_ids: set = set()
+                        unique_seasons: dict = {}
+                        for _cid, _se in season_by_contest_id.items():
+                            if _se is not None and _se.id not in unique_seasons:
+                                unique_seasons[_se.id] = _se
+                        for uc in user_contestants:
+                            if (
+                                getattr(uc, "entry_type", "participation")
+                                != expected_type
+                            ):
+                                continue
+                            for _s in unique_seasons.values():
+                                resolved = (
+                                    contestant_ep._resolve_contest_for_contestant_vote(
+                                        db, uc, _s
+                                    )
+                                )
+                                if (
+                                    resolved
+                                    and resolved.id in valid_contest_ids
+                                ):
+                                    contested_ids.add(resolved.id)
+                            # Legacy rows store Contestant.season_id as the contest id (no
+                            # disambiguation needed); keep this path without the old
+                            # uc.season_id == <linked season> bug for shared seasons.
+                            for _cid in valid_contest_ids:
+                                if (
+                                    uc.season_id is not None
+                                    and uc.season_id == _cid
+                                ):
+                                    contested_ids.add(_cid)
+                        user_contested_contest_ids = contested_ids
                 except Exception as e:
                     logger.warning(f"Error batch-checking user participation for round {round_id}: {str(e)}")
 
