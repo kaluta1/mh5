@@ -1,9 +1,14 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { UploadButton as UTUploadButton } from '@/lib/uploadthing'
+import { useEffect, useRef, useState } from 'react'
+import { generateReactHelpers } from '@uploadthing/react'
 import type { OurFileRouter } from '@/app/api/uploadthing/core'
 import { useLanguage } from '@/contexts/language-context'
+import { Upload, Loader2 } from 'lucide-react'
+
+const { useUploadThing } = generateReactHelpers<OurFileRouter>({
+  url: process.env.NEXT_PUBLIC_UPLOADTHING_URL?.replace(/\/+$/, '') || '/api/uploadthing',
+})
 
 interface UploadButtonProps {
   endpoint: keyof OurFileRouter
@@ -28,6 +33,22 @@ export function UploadButton({
   const { t } = useLanguage()
   const [token, setToken] = useState<string | null>(null)
   const [isReady, setIsReady] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const { startUpload, isUploading } = useUploadThing(endpoint, {
+    headers: token
+      ? {
+          Authorization: `Bearer ${token}`,
+          ...customHeaders,
+        }
+      : customHeaders,
+    onClientUploadComplete: (res) => {
+      onClientUploadComplete?.(res)
+    },
+    onUploadError: (error) => {
+      handleUploadError(error)
+    },
+  })
 
   useEffect(() => {
     // Récupérer le token depuis le localStorage
@@ -90,24 +111,60 @@ export function UploadButton({
     )
   }
 
+  const buttonContent = content?.button
+    ? content.button({})
+    : (t('profile_setup.choose_photo') || 'Choose photo')
+
+  const handlePickFile = () => {
+    if (isUploading) return
+    inputRef.current?.click()
+  }
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || [])
+    if (!files.length) return
+    try {
+      await startUpload(files)
+    } catch (error) {
+      handleUploadError(error)
+    } finally {
+      event.currentTarget.value = ''
+    }
+  }
+
   return (
-    <UTUploadButton
-      endpoint={endpoint}
-      onClientUploadComplete={onClientUploadComplete}
-      onUploadError={handleUploadError}
-      className={className}
-      content={
-        content ?? {
-          button: () => (
-            <span>{t('profile_setup.choose_photo') || 'Choose photo'}</span>
-          ),
-          allowedContent: () => <span className="sr-only">upload</span>,
-        }
-      }
-      headers={{
-        Authorization: `Bearer ${token}`,
-        ...customHeaders
-      }}
-    />
+    <div className={className}>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleFileChange}
+        className="hidden"
+        disabled={isUploading}
+      />
+      <button
+        type="button"
+        onClick={handlePickFile}
+        disabled={isUploading}
+        className="inline-flex items-center justify-center gap-2 rounded-lg bg-myhigh5-primary px-3 py-2 text-sm font-medium text-white transition hover:bg-myhigh5-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {isUploading ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" />
+            {t('common.uploading') || 'Uploading...'}
+          </>
+        ) : (
+          <>
+            <Upload className="h-4 w-4" />
+            {buttonContent}
+          </>
+        )}
+      </button>
+      {content?.allowedContent ? (
+        <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          {content.allowedContent()}
+        </div>
+      ) : null}
+    </div>
   )
 }
