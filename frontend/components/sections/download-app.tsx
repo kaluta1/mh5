@@ -30,15 +30,15 @@ export function DownloadApp() {
             <div className="text-center lg:text-left text-white">
               <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full px-4 py-2 text-sm font-semibold mb-6">
                 <Smartphone className="w-4 h-4" />
-                <span>{t('landing.download_app.badge') || 'Application mobile'}</span>
+                <span>{t('landing.download_app.badge')}</span>
               </div>
               
               <h2 className="text-4xl sm:text-5xl md:text-6xl font-black tracking-tight mb-6 leading-tight">
-                {t('landing.download_app.title') || 'Téléchargez l\'application MyHigh5'}
+                {t('landing.download_app.title')}
               </h2>
               
               <p className="text-lg md:text-xl opacity-90 mb-8 leading-relaxed max-w-xl mx-auto lg:mx-0">
-                {t('landing.download_app.subtitle') || 'Participez aux concours, votez et gagnez de l\'argent où que vous soyez avec notre application mobile'}
+                {t('landing.download_app.subtitle')}
               </p>
 
               {/* Download Buttons */}
@@ -58,8 +58,8 @@ export function DownloadApp() {
                 >
                   <Apple className="w-6 h-6 mr-3" />
                   <div className="text-left">
-                    <div className="text-xs opacity-70">{t('landing.download_app.download_on') || 'Télécharger'}</div>
-                    <div className="text-lg font-bold">{t('landing.download_app.app_store') || 'App iOS'}</div>
+                    <div className="text-xs opacity-70">{t('landing.download_app.download_on')}</div>
+                    <div className="text-lg font-bold">{t('landing.download_app.app_store')}</div>
                   </div>
                 </Button>
                 
@@ -79,8 +79,8 @@ export function DownloadApp() {
                 >
                   <Play className="w-6 h-6 mr-3" />
                   <div className="text-left">
-                    <div className="text-xs opacity-70">{t('landing.download_app.available_on') || 'Télécharger'}</div>
-                    <div className="text-lg font-bold">{t('landing.download_app.google_play') || 'App Android'}</div>
+                    <div className="text-xs opacity-70">{t('landing.download_app.available_on')}</div>
+                    <div className="text-lg font-bold">{t('landing.download_app.google_play')}</div>
                   </div>
                 </Button>
               </div>
@@ -89,11 +89,11 @@ export function DownloadApp() {
               <div className="grid grid-cols-2 gap-4 max-w-md mx-auto lg:mx-0">
                 <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
                   <div className="text-2xl font-bold mb-1">24/7</div>
-                  <div className="text-sm opacity-90">{t('landing.download_app.access_24_7') || 'Accès continu'}</div>
+                  <div className="text-sm opacity-90">{t('landing.download_app.access_24_7')}</div>
                 </div>
                 <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
                   <div className="text-2xl font-bold mb-1">100%</div>
-                  <div className="text-sm opacity-90">{t('landing.download_app.free') || 'Gratuit'}</div>
+                  <div className="text-sm opacity-90">{t('landing.download_app.free')}</div>
                 </div>
               </div>
             </div>
@@ -111,7 +111,7 @@ export function DownloadApp() {
                           <QrCode className="w-20 h-20 text-white" />
                         </div>
                         <div className="text-white text-sm font-semibold">
-                          {t('landing.download_app.scan_qr') || 'Scannez pour télécharger'}
+                          {t('landing.download_app.scan_qr')}
                         </div>
                       </div>
                     </div>

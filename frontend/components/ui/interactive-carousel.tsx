@@ -12,10 +12,12 @@ const carouselSlides = [
     icon: Trophy,
     title: "Concours de Beauté",
     titleEn: "Beauty Contests",
+    titleSw: "Mashindano ya Urembo",
     titleEs: "Concursos de Belleza", 
     titleDe: "Schönheitswettbewerbe",
     description: "Découvrez les plus belles femmes",
     descriptionEn: "Discover the most attractive women",
+    descriptionSw: "Gundua vipaji bora vya urembo",
     descriptionEs: "Descubre las mujeres más atractivas",
     descriptionDe: "Entdecken Sie die attraktivsten Frauen",
     gradient: "from-pink-100 to-purple-100",
@@ -27,10 +29,12 @@ const carouselSlides = [
     icon: Users,
     title: "Concours de Charme",
     titleEn: "Handsome Contests",
+    titleSw: "Mashindano ya Mvuto",
     titleEs: "Concursos de Atractivo",
     titleDe: "Attraktivitätswettbewerbe",
     description: "Montrez votre charisme et votre personnalité",
     descriptionEn: "Show your charisma and personality",
+    descriptionSw: "Onyesha haiba na utu wako",
     descriptionEs: "Muestra tu carisma y personalidad",
     descriptionDe: "Zeigen Sie Ihr Charisma und Ihre Persönlichkeit",
     gradient: "from-blue-100 to-cyan-100",
@@ -42,10 +46,12 @@ const carouselSlides = [
     icon: Music,
     title: "Musiques",
     titleEn: "Musics",
+    titleSw: "Muziki",
     titleEs: "Músicas",
     titleDe: "Musik",
     description: "Promouvez votre musique et votez pour les chansons que vous aimez",
     descriptionEn: "Promote your music and vote for the songs you like",
+    descriptionSw: "Tangaza muziki wako na piga kura kwa nyimbo unazopenda",
     descriptionEs: "Promociona tu música y vota por las canciones que te gustan",
     descriptionDe: "Bewerben Sie Ihre Musik und stimmen Sie für die Songs, die Ihnen gefallen",
     gradient: "from-green-100 to-emerald-100",
@@ -57,10 +63,12 @@ const carouselSlides = [
     icon: Heart,
     title: "Animaux de Compagnie",
     titleEn: "Pet Contests",
+    titleSw: "Mashindano ya Wanyama wa Kufugwa",
     titleEs: "Concursos de Mascotas",
     titleDe: "Haustier-Wettbewerbe",
     description: "Vos animaux de compagnie préférés méritent d'être célébrés",
     descriptionEn: "Your favorite pets deserve to be celebrated",
+    descriptionSw: "Wanyama wako wa kufugwa wanastahili kusherehekewa",
     descriptionEs: "Tus mascotas favoritas merecen ser celebradas",
     descriptionDe: "Ihre Lieblingshaustiere verdienen es, gefeiert zu werden",
     gradient: "from-orange-100 to-red-100",
@@ -72,10 +80,12 @@ const carouselSlides = [
     icon: Gamepad2,
     title: "Sports",
     titleEn: "Sports",
+    titleSw: "Michezo",
     titleEs: "Deportes",
     titleDe: "Sport",
     description: "Promouvez votre sport favori et votez pour vos équipes et joueurs préférés",
     descriptionEn: "Promote your favorite sport and vote for your favorite teams and players.",
+    descriptionSw: "Tangaza mchezo unaoupenda na piga kura kwa timu na wachezaji unaowapenda",
     descriptionEs: "Promociona tu deporte favorito y vota por tus equipos y jugadores favoritos",
     descriptionDe: "Bewerben Sie Ihren Lieblingssport und stimmen Sie für Ihre Lieblingsteams und -spieler",
     gradient: "from-purple-100 to-indigo-100",
@@ -87,10 +97,12 @@ const carouselSlides = [
     icon: Zap,
     title: "Danseurs",
     titleEn: "Dancers",
+    titleSw: "Wachezaji wa Ngoma",
     titleEs: "Bailarines",
     titleDe: "Tänzer",
     description: "Montrez vos talents de danse et votez pour vos danseurs préférés",
     descriptionEn: "Showcase your dancing skills and vote for your favorite dancers",
+    descriptionSw: "Onyesha kipaji chako cha kucheza na piga kura kwa wachezaji unaowapenda",
     descriptionEs: "Muestra tus habilidades de baile y vota por tus bailarines favoritos",
     descriptionDe: "Zeigen Sie Ihre Tanzfähigkeiten und stimmen Sie für Ihre Lieblingstänzer",
     gradient: "from-yellow-100 to-amber-100",
@@ -102,10 +114,12 @@ const carouselSlides = [
     icon: Mountain,
     title: "Merveille Naturelle",
     titleEn: "Natural Wonder",
+    titleSw: "Maajabu ya Asili",
     titleEs: "Maravilla Natural",
     titleDe: "Naturwunder",
     description: "Promouvez votre lieu naturel préféré pour que d'autres puissent le découvrir",
     descriptionEn: "Promote your favorite natural scenic location for others to discover",
+    descriptionSw: "Tangaza eneo lako la asili unalolipenda ili wengine waligundue",
     descriptionEs: "Promociona tu lugar natural favorito para que otros lo descubran",
     descriptionDe: "Bewerben Sie Ihren Lieblingsort in der Natur, damit andere ihn entdecken können",
     gradient: "from-teal-100 to-cyan-100",
@@ -117,10 +131,12 @@ const carouselSlides = [
     icon: Star,
     title: "Personne Célèbre",
     titleEn: "Famous Person",
+    titleSw: "Mtu Maarufu",
     titleEs: "Persona Famoso",
     titleDe: "Berühmte Person",
     description: "Faites-nous connaître qui est votre modèle",
     descriptionEn: "Let's know who is your role model",
+    descriptionSw: "Tuambie ni nani anayekutia moyo",
     descriptionEs: "Hagamos saber quién es tu modelo a seguir",
     descriptionDe: "Lassen Sie uns wissen, wer Ihr Vorbild ist",
     gradient: "from-rose-100 to-pink-100",
@@ -163,18 +179,20 @@ export function InteractiveCarousel() {
   const getTitle = (slide: typeof carouselSlides[0]) => {
     switch (language) {
       case 'en': return slide.titleEn
+      case 'sw': return slide.titleSw
       case 'es': return slide.titleEs
       case 'de': return slide.titleDe
-      default: return slide.title
+      default: return slide.titleEn
     }
   }
 
   const getDescription = (slide: typeof carouselSlides[0]) => {
     switch (language) {
       case 'en': return slide.descriptionEn
+      case 'sw': return slide.descriptionSw
       case 'es': return slide.descriptionEs
       case 'de': return slide.descriptionDe
-      default: return slide.description
+      default: return slide.descriptionEn
     }
   }
 

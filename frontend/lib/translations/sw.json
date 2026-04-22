@@ -30,11 +30,19 @@
     "dashboard": "Dashibodi"
   },
   "hero": {
+    "title_line1": "Jiunge na jukwaa kubwa zaidi",
+    "title_line2": "la mashindano",
+    "title_line3": "duniani",
     "title": "Compete & Earn",
-    "subtitle": "Global Contest Platform",
+    "subtitle": "Jukwaa la Mashindano Duniani",
+    "cta": "Anza Sasa",
     "description": "Join contests, build your network, and earn through our 10-level affiliate program. Every vote, every referral generates income.",
     "cta_primary": "Start Earning",
     "cta_secondary": "Learn More",
+    "trust": {
+      "support": "Msaada wa 24/7",
+      "free": "Kujiunga ni Bure"
+    },
     "affiliate": {
       "title": "Affiliate Program",
       "description": "Earn up to 10 levels deep from referrals",
@@ -45,6 +53,77 @@
       "winner_2": "Talent Show Champion",
       "winner_3": "Sports Club Leader",
       "winner_4": "Pet Contest Star"
+    }
+  },
+  "landing": {
+    "ways_to_earn": {
+      "badge": "Pata kipato",
+      "title": "Njia tofauti za kupata kipato",
+      "subtitle": "Jiunge na mpango wetu wa ushirika na upate kamisheni kutoka vyanzo vingi vya mapato",
+      "kyc_payments": {
+        "title": "Malipo ya KYC",
+        "description": "Pata kamisheni wanachama wa mtandao wako wanapokamilisha uthibitisho wa KYC.",
+        "commission": "20% Kiwango cha 1, 2% Viwango vya 2-10"
+      },
+      "founding_membership": {
+        "title": "Uanachama wa Mwanzilishi",
+        "description": "Pata kamisheni wanachama wa mtandao wako wanapojiunga kama waanzilishi.",
+        "commission": "$20 Kiwango cha 1, $2 Viwango vya 2-10"
+      },
+      "annual_membership": {
+        "title": "Ada ya Uanachama wa Mwaka",
+        "description": "Pata kamisheni waanzilishi wanapolipa ada ya mwaka.",
+        "commission": "$10 Kiwango cha 1, $1 Viwango vya 2-10"
+      },
+      "club_memberships": {
+        "title": "Uanachama wa Vilabu",
+        "description": "Pata kamisheni kutoka ada za vilabu vinavyolipiwa ndani ya mtandao wako.",
+        "commission": "20% Kiwango cha 1, 2% Viwango vya 2-10"
+      },
+      "shop_purchases": {
+        "title": "Ununuzi wa Duka",
+        "description": "Pata kamisheni kutoka ununuzi wa bidhaa za kidijitali ndani ya mtandao wako.",
+        "commission": "20% Kiwango cha 1, 2% Viwango vya 2-10"
+      },
+      "ad_revenue": {
+        "title": "Mgawanyo wa Mapato ya Matangazo",
+        "description": "Pata kamisheni kutoka mapato ya matangazo kwenye kurasa za mashindano za mtandao wako.",
+        "commission": "10% Kiwango cha 1, 1% Viwango vya 2-10"
+      },
+      "ad_campaigns": {
+        "title": "Kampeni za Matangazo",
+        "description": "Pata kamisheni kutoka kampeni za matangazo zinazonunuliwa na wanachama wa mtandao wako.",
+        "commission": "Muundo wa kamisheni hubadilika"
+      }
+    },
+    "faq": {
+      "badge": "Maswali yanayoulizwa mara kwa mara",
+      "title": "Maswali yanayoulizwa mara kwa mara",
+      "subtitle": "Pata majibu ya maswali ya kawaida kuhusu MyHigh5",
+      "question_1": "Ninawezaje kupata kipato kwenye MyHigh5?",
+      "answer_1": "Unaweza kupata kipato kupitia zawadi za mashindano, kamisheni za ushirika, na manufaa ya uanachama wa mwanzilishi.",
+      "question_2": "Mpango wa ushirika unafanyaje kazi?",
+      "answer_2": "Unapata 10% kwa marejeo ya moja kwa moja (kiwango cha 1) na 1% kwa viwango vya 2-10 kwa shughuli zinazostahili.",
+      "question_3": "Uanachama wa mwanzilishi ni nini?",
+      "answer_3": "Ni uanachama wa muda maalum wenye manufaa ya ziada ya mgawanyo wa mapato na faida.",
+      "question_4": "Ninajiungaje na mashindano?",
+      "answer_4": "Fungua akaunti ya bure, kamilisha wasifu wako, kisha tuma maudhui kulingana na masharti ya shindano.",
+      "question_5": "Mashindano ni ya bure?",
+      "answer_5": "Ndiyo. Mashindano mengi ni ya bure, ingawa hatua za uthibitisho zinaweza kuwa na gharama.",
+      "question_6": "Ninatoaje mapato yangu?",
+      "answer_6": "Tumia pochi yako kwenye dashibodi na fuata njia za utoaji zilizopo."
+    },
+    "download_app": {
+      "badge": "Programu ya simu",
+      "title": "Pakua programu ya MyHigh5",
+      "subtitle": "Shiriki mashindano, piga kura, na upate kipato popote ulipo kwa kutumia programu yetu ya simu.",
+      "download_on": "Pakua",
+      "app_store": "Programu ya iOS",
+      "available_on": "Pakua",
+      "google_play": "Programu ya Android",
+      "access_24_7": "Upatikanaji 24/7",
+      "free": "Bure",
+      "scan_qr": "Skani kupakua"
     }
   },
   "auth": {
@@ -205,6 +284,19 @@
   },
   "footer": {
     "description": "Join the world's largest contest community. Compete, vote and earn through our revolutionary 10-level affiliate program.",
+    "newsletter": {
+      "badge": "Jarida",
+      "title": "Pata taarifa mpya",
+      "subtitle": "Pokea masasisho ya bidhaa, habari za mashindano, na mbinu za ukuaji.",
+      "placeholder": "Weka barua pepe yako",
+      "subscribe": "Jiandikishe",
+      "terms": "Kwa kujiandikisha, unakubali masharti na sera yetu ya faragha."
+    },
+    "brand": {
+      "countries": "Jukwaa la kimataifa",
+      "support": "Msaada wa 24/7",
+      "email": "infos@myhigh5.com"
+    },
     "quick_links": {
       "title": "Quick Links",
       "about": "About Us",
@@ -215,6 +307,7 @@
     },
     "categories": {
       "title": "Categories",
+      "no_categories": "Hakuna kategoria zilizopatikana",
       "beauty": "Beauty",
       "handsome": "Handsome",
       "latest_hits": "Latest Hits",

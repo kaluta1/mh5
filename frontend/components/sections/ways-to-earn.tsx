@@ -11,51 +11,51 @@ export function WaysToEarn() {
     {
       key: 'kyc_payments',
       icon: Users,
-      title: t('landing.ways_to_earn.kyc_payments.title') || 'KYC Payments',
-      description: t('landing.ways_to_earn.kyc_payments.description') || 'Earn commissions when members in your network complete their KYC verification',
-      commission: t('landing.ways_to_earn.kyc_payments.commission') || '20% on Level 1, 2% on Levels 2-10'
+      title: t('landing.ways_to_earn.kyc_payments.title'),
+      description: t('landing.ways_to_earn.kyc_payments.description'),
+      commission: t('landing.ways_to_earn.kyc_payments.commission')
     },
     {
       key: 'founding_membership',
       icon: BookOpen,
-      title: t('landing.ways_to_earn.founding_membership.title') || 'Founding Membership',
-      description: t('landing.ways_to_earn.founding_membership.description') || 'Earn commissions when network members join as Founding Members ($100 joining fee)',
-      commission: t('landing.ways_to_earn.founding_membership.commission') || '$20 on Level 1, $2 on Levels 2-10'
+      title: t('landing.ways_to_earn.founding_membership.title'),
+      description: t('landing.ways_to_earn.founding_membership.description'),
+      commission: t('landing.ways_to_earn.founding_membership.commission')
     },
     {
       key: 'annual_membership',
       icon: Award,
-      title: t('landing.ways_to_earn.annual_membership.title') || 'Annual Membership Fee',
-      description: t('landing.ways_to_earn.annual_membership.description') || 'Earn commissions when Founding Members pay their annual membership fee ($50)',
-      commission: t('landing.ways_to_earn.annual_membership.commission') || '$10 on Level 1, $1 on Levels 2-10'
+      title: t('landing.ways_to_earn.annual_membership.title'),
+      description: t('landing.ways_to_earn.annual_membership.description'),
+      commission: t('landing.ways_to_earn.annual_membership.commission')
     },
     {
       key: 'club_memberships',
       icon: Users,
-      title: t('landing.ways_to_earn.club_memberships.title') || 'Club Memberships',
-      description: t('landing.ways_to_earn.club_memberships.description') || 'Earn commissions on paid club membership fees. The website charges 20% of membership fees, and you earn a share of that.',
-      commission: t('landing.ways_to_earn.club_memberships.commission') || '20% on Level 1, 2% on Levels 2-10'
+      title: t('landing.ways_to_earn.club_memberships.title'),
+      description: t('landing.ways_to_earn.club_memberships.description'),
+      commission: t('landing.ways_to_earn.club_memberships.commission')
     },
     {
       key: 'shop_purchases',
       icon: ShoppingBag,
-      title: t('landing.ways_to_earn.shop_purchases.title') || 'Shop Purchases',
-      description: t('landing.ways_to_earn.shop_purchases.description') || 'Earn commissions on digital content purchases in the MyHigh5 shop. The website charges 20% platform fees, and you earn a share of that.',
-      commission: t('landing.ways_to_earn.shop_purchases.commission') || '20% on Level 1, 2% on Levels 2-10'
+      title: t('landing.ways_to_earn.shop_purchases.title'),
+      description: t('landing.ways_to_earn.shop_purchases.description'),
+      commission: t('landing.ways_to_earn.shop_purchases.commission')
     },
     {
       key: 'ad_revenue',
       icon: Megaphone,
-      title: t('landing.ways_to_earn.ad_revenue.title') || 'Ad Revenue Sharing',
-      description: t('landing.ways_to_earn.ad_revenue.description') || 'Earn commissions from ad revenues generated on contest pages of members in your network',
-      commission: t('landing.ways_to_earn.ad_revenue.commission') || '10% on Level 1, 1% on Levels 2-10'
+      title: t('landing.ways_to_earn.ad_revenue.title'),
+      description: t('landing.ways_to_earn.ad_revenue.description'),
+      commission: t('landing.ways_to_earn.ad_revenue.commission')
     },
     {
       key: 'ad_campaigns',
       icon: Target,
-      title: t('landing.ways_to_earn.ad_campaigns.title') || 'Advertisement Campaigns',
-      description: t('landing.ways_to_earn.ad_campaigns.description') || 'Earn commissions from advertising campaigns purchased by members in your network through the native ad platform',
-      commission: t('landing.ways_to_earn.ad_campaigns.commission') || 'Variable commission structure'
+      title: t('landing.ways_to_earn.ad_campaigns.title'),
+      description: t('landing.ways_to_earn.ad_campaigns.description'),
+      commission: t('landing.ways_to_earn.ad_campaigns.commission')
     }
   ]
 
@@ -69,13 +69,13 @@ export function WaysToEarn() {
         <div className="text-center max-w-3xl mx-auto mb-16 md:mb-20">
           <div className="inline-flex items-center gap-2 bg-myhigh5-primary/10 text-myhigh5-primary rounded-full px-4 py-2 text-sm font-semibold mb-6">
             <DollarSign className="w-4 h-4" />
-            <span>{t('landing.ways_to_earn.badge') || 'Gagnez de l\'argent'}</span>
+            <span>{t('landing.ways_to_earn.badge')}</span>
           </div>
           <h2 className="text-4xl sm:text-5xl md:text-6xl font-black tracking-tight mb-6 bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">
-            {t('landing.ways_to_earn.title') || 'Différentes façons de gagner'}
+            {t('landing.ways_to_earn.title')}
           </h2>
           <p className="text-lg md:text-xl text-gray-600 dark:text-gray-400 leading-relaxed">
-            {t('landing.ways_to_earn.subtitle') || 'Rejoignez notre programme d\'affiliation et gagnez des commissions sur plusieurs sources de revenus'}
+            {t('landing.ways_to_earn.subtitle')}
           </p>
         </div>
 

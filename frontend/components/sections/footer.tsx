@@ -119,10 +119,10 @@ export function Footer() {
       await newsletterService.subscribe(subscriptionData)
       setSubscribed(true)
       setEmail("")
-      addToast(t('common.success') || 'Inscription réussie !', 'success')
+      addToast(t('common.success'), 'success')
       setTimeout(() => setSubscribed(false), 5000)
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Une erreur est survenue'
+      const errorMessage = error instanceof Error ? error.message : t('common.error')
       addToast(errorMessage, 'error')
     } finally {
       setIsSubmitting(false)
@@ -155,8 +155,8 @@ export function Footer() {
   const quickLinks = [
     { name: t('footer.quick_links.about'), href: "/about", icon: Users },
     { name: t('footer.quick_links.contests'), href: "/contests", icon: Trophy },
-    { name: t('navigation.clubs') || "Fan Clubs", href: "/clubs", icon: Sparkles },
-    { name: t('navigation.contact') || "Contact", href: "/contact", icon: Mail },
+    { name: t('navigation.clubs'), href: "/clubs", icon: Sparkles },
+    { name: t('navigation.contact'), href: "/contact", icon: Mail },
   ]
 
   // Les catégories sont maintenant chargées depuis l'API
@@ -183,7 +183,7 @@ export function Footer() {
             <div>
               <div className="inline-flex items-center gap-2 bg-myhigh5-primary/10 text-myhigh5-primary rounded-full px-3 py-1 text-sm font-medium mb-4">
                 <Mail className="w-4 h-4" />
-                Newsletter
+                {t('footer.newsletter.badge')}
               </div>
               <h3 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-2">
                 {t('footer.newsletter.title')}
@@ -196,7 +196,7 @@ export function Footer() {
               {subscribed ? (
                 <div className="flex items-center gap-3 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 p-4 rounded-xl">
                   <CheckCircle className="w-6 h-6" />
-                  <span className="font-medium">{t('common.success') || "Inscription réussie !"}</span>
+                  <span className="font-medium">{t('common.success')}</span>
                 </div>
               ) : (
                 <form onSubmit={handleSubscribe} className="flex flex-col sm:flex-row gap-3">
@@ -214,7 +214,7 @@ export function Footer() {
                     className="h-12 px-6 rounded-xl bg-gradient-to-r from-myhigh5-primary to-myhigh5-secondary hover:shadow-lg transition-all disabled:opacity-50"
                   >
                     <Send className="w-4 h-4 mr-2" />
-                    {isSubmitting ? (t('common.loading') || 'Chargement...') : t('footer.newsletter.subscribe')}
+                    {isSubmitting ? t('common.loading') : t('footer.newsletter.subscribe')}
                   </Button>
                 </form>
               )}
@@ -312,7 +312,7 @@ export function Footer() {
             </ul>
             ) : (
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                {t('footer.categories.no_categories') || 'Aucune catégorie disponible'}
+                {t('footer.categories.no_categories')}
               </p>
             )}
           </div>
