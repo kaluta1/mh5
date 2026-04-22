@@ -1,5 +1,6 @@
 /* Import MyHigh5 color palette (MUST be first: @import rules must precede all other rules). */
 @import '../styles/colors.css';
+@import "@uploadthing/react/styles.css";
 
 @tailwind base;
 @tailwind components;

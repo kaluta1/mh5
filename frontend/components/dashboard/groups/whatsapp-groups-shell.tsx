@@ -57,7 +57,7 @@ type ListFilter = "all" | "joined"
 /** Use when i18n key may be missing — `t()` returns the key string in that case. */
 function tf(t: (key: string) => string, key: string, fallback: string): string {
   const v = t(key)
-  return v === key ? fallback : v
+  return !v || v === key ? fallback : v
 }
 
 function roleLabelText(
