@@ -1208,6 +1208,10 @@ export function WhatsAppGroupsShell() {
                         <div className="[&_button]:!bg-myhigh5-primary [&_button]:!text-white [&_button]:hover:!bg-myhigh5-primary/90 [&_button]:!rounded-lg [&_button]:!px-3 [&_button]:!py-2 [&_button]:!text-sm [&_button]:!h-auto [&_button]:!font-medium">
                           <UploadButton
                             endpoint="profileAvatar"
+                            content={{
+                              button: () => <span>{tf(t, "dashboard.groups.group_photo_choose", "Choose photo")}</span>,
+                              allowedContent: () => null,
+                            }}
                             onClientUploadComplete={(res) => {
                               void handleGroupAvatarFromUpload(
                                 res as { url?: string; ufsUrl?: string }[],
@@ -1448,6 +1452,10 @@ export function WhatsAppGroupsShell() {
                     <div className="[&_button]:!bg-myhigh5-primary [&_button]:!text-white [&_button]:hover:!bg-myhigh5-primary/90 [&_button]:!rounded-lg [&_button]:!px-3 [&_button]:!py-2 [&_button]:!text-sm [&_button]:!h-auto [&_button]:!font-medium">
                       <UploadButton
                         endpoint="profileAvatar"
+                        content={{
+                          button: () => <span>{tf(t, "dashboard.groups.group_photo_choose", "Choose photo")}</span>,
+                          allowedContent: () => null,
+                        }}
                         onClientUploadComplete={(res) => {
                           void handleGroupAvatarFromUpload(
                             res as { url?: string; ufsUrl?: string }[],

@@ -73,6 +73,7 @@ export function Header({ user, onLoginClick, onLogout }: HeaderProps) {
     ...(isAuthenticated ? [{ name: t('navigation.dashboard'), href: "/dashboard", icon: LayoutDashboard }] : []),
     // ...(isAuthenticated ? [{ name: 'Feed', href: "/dashboard/feed", icon: MessageSquare }] : []),
     { name: t('navigation.contests'), href: isAuthenticated ? "/dashboard/contests" : "/contests", icon: Trophy },
+    { name: t('navigation.pitching') || 'Pitching', href: "/pitching", icon: MessageSquare },
     { name: t('navigation.about'), href: "/about", icon: Info },
     { name: t('navigation.contact'), href: "/contact", icon: Mail }
   ]

@@ -235,6 +235,10 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
                 <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-2 bg-gray-50 dark:bg-gray-700/50">
                   <UploadButton
                     endpoint="profileAvatar"
+                    content={{
+                      button: () => <span>{t('profile_setup.choose_photo') || 'Choose photo'}</span>,
+                      allowedContent: () => null,
+                    }}
                     onClientUploadComplete={async (res) => {
                       if (res && res.length > 0) {
                         await handleAvatarChange(res[0].url)
@@ -258,6 +262,10 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
             <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-6 bg-gray-50 dark:bg-gray-700/50 w-full max-w-xs">
               <UploadButton
                 endpoint="profileAvatar"
+                content={{
+                  button: () => <span>{t('profile_setup.choose_photo') || 'Choose photo'}</span>,
+                  allowedContent: () => null,
+                }}
                 onClientUploadComplete={async (res) => {
                   if (res && res.length > 0) {
                     await handleAvatarChange(res[0].url)

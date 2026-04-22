@@ -96,7 +96,14 @@ export function UploadButton({
       onClientUploadComplete={onClientUploadComplete}
       onUploadError={handleUploadError}
       className={className}
-      content={content}
+      content={
+        content ?? {
+          button: () => (
+            <span>{t('profile_setup.choose_photo') || 'Choose photo'}</span>
+          ),
+          allowedContent: () => <span className="sr-only">upload</span>,
+        }
+      }
       headers={{
         Authorization: `Bearer ${token}`,
         ...customHeaders

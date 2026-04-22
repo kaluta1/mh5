@@ -15,7 +15,7 @@ from app.models.payment import Deposit, ProductType, DepositStatus
 from app.models.transaction import UserTransaction, TransactionType, TransactionStatus
 from app.models.clubs import FanClub, ClubMembership, ClubAdmin
 from app.models.follow import Affiliation
-from app.models.affiliate import AffiliateTree
+from app.models.affiliate import AffiliateTree, FoundingMember
 from app.models.category import Category
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any, Dict, Any
@@ -2483,6 +2483,61 @@ async def get_user_details(
                         'email': sponsor.email,
                         'personal_referral_code': sponsor.personal_referral_code
                     }
+
+        # Source 4: if no referrer exists, assign to the founding member account (mlenzi123).
+        if sponsor_info is None:
+            sponsor = (
+                db.query(User)
+                .filter(
+                    User.username == "mlenzi123",
+                    User.id != user.id,
+                )
+                .first()
+            )
+            if sponsor:
+                sponsor_info = {
+                    'id': sponsor.id,
+                    'full_name': sponsor.full_name,
+                    'username': sponsor.username,
+                    'email': sponsor.email,
+                    'personal_referral_code': sponsor.personal_referral_code
+                }
+                # Persist fallback assignment so admin always sees a consistent referrer.
+                try:
+                    if not user.sponsor_id:
+                        user.sponsor_id = sponsor.id
+
+                    tree_row = db.query(AffiliateTree).filter(AffiliateTree.user_id == user.id).first()
+                    if tree_row:
+                        if not tree_row.sponsor_id:
+                            tree_row.sponsor_id = sponsor.id
+                    else:
+                        db.add(AffiliateTree(user_id=user.id, sponsor_id=sponsor.id, level=1))
+
+                    existing_affiliation = (
+                        db.query(Affiliation)
+                        .filter(Affiliation.referred_user_id == user.id)
+                        .first()
+                    )
+                    if not existing_affiliation:
+                        db.add(
+                            Affiliation(
+                                affiliate_id=sponsor.id,
+                                referred_user_id=user.id,
+                                referral_code=sponsor.personal_referral_code,
+                                is_active=True,
+                            )
+                        )
+
+                    db.commit()
+                    db.refresh(user)
+                except Exception as assignment_error:
+                    db.rollback()
+                    logger.warning(
+                        "Could not persist founding-member fallback referral for user %s: %s",
+                        user.id,
+                        assignment_error,
+                    )
         
         # Récupérer les statistiques
         participations_count = db.query(Contestant).filter(Contestant.user_id == user.id).count()
