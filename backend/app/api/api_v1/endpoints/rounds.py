@@ -12,6 +12,7 @@ from app.schemas import round as round_schema
 from app.api import deps
 from app.models.round import Round, RoundStatus
 from app.scripts.generate_monthly_rounds import generate_monthly_round
+from app.crud.crud_contest import _get_country_match_patterns
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -306,11 +307,17 @@ def _enrich_round_data(
                         ContestantModel.is_deleted == False
                     )
                     if filter_country and filter_country != 'all':
+                        patterns = _get_country_match_patterns(filter_country)
+                        country_conds = []
+                        for pat in patterns:
+                            country_conds.append(ContestantModel.country.ilike(pat))
+                        # Do NOT include NULL countries when a specific country is selected.
+                        # Otherwise cards can show "1 participant" while the filtered contest view shows none.
+                        if country_conds:
+                            batch_query = batch_query.filter(or_(*country_conds))
+                    if filter_continent and filter_continent != 'all':
                         batch_query = batch_query.filter(
-                            or_(
-                                func.lower(ContestantModel.country) == func.lower(filter_country),
-                                ContestantModel.country == None
-                            )
+                            ContestantModel.continent.ilike(f"%{str(filter_continent).strip()}%")
                         )
                     batch_results = batch_query.group_by(
                         ContestantModel.season_id, ContestantModel.entry_type
