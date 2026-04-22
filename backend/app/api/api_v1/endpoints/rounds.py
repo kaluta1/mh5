@@ -1,7 +1,7 @@
 from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func, or_
+from sqlalchemy import or_
 from datetime import date, datetime
 import logging
 import traceback
@@ -272,85 +272,122 @@ def _enrich_round_data(
             from app.models.contests import Contestant as ContestantModel
             contest_participant_counts = {}
             if valid_contests:
-                try:
-                    valid_ids = [vc.id for vc in valid_contests]
-                    # Build contest_mode map for entry_type filtering
-                    mode_map = {vc.id: getattr(vc, 'contest_mode', 'participation') for vc in valid_contests}
-                    # Resolve active ContestSeason id per contest so we can count entries
-                    # saved either as season_id == contest.id (legacy) or season_id == active season id.
-                    from app.models.contests import ContestSeasonLink
-                    active_links = db.query(
-                        ContestSeasonLink.contest_id,
-                        ContestSeasonLink.season_id
-                    ).filter(
-                        ContestSeasonLink.contest_id.in_(valid_ids),
-                        ContestSeasonLink.is_active == True
-                    ).all()
-                    linked_season_by_contest = {
-                        row[0]: row[1] for row in active_links if row and row[0] is not None and row[1] is not None
-                    }
-                    season_to_contest = {}
-                    for contest_id in valid_ids:
-                        season_to_contest[contest_id] = contest_id
-                        linked_sid = linked_season_by_contest.get(contest_id)
-                        if linked_sid is not None:
-                            season_to_contest[linked_sid] = contest_id
+                valid_ids = [vc.id for vc in valid_contests]
+                valid_contest_ids = set(valid_ids)
+                mode_map = {
+                    vc.id: getattr(vc, "contest_mode", "participation")
+                    for vc in valid_contests
+                }
 
-                    # Single query: count per season_id grouped
-                    batch_query = db.query(
-                        ContestantModel.season_id,
-                        ContestantModel.entry_type,
-                        func.count(ContestantModel.id)
-                    ).filter(
-                        ContestantModel.season_id.in_(list(season_to_contest.keys())),
+                def _entry_type_for_contest(cid: int) -> str:
+                    return "nomination" if mode_map.get(cid) == "nomination" else "participation"
+
+                # One ContestSeason per contest (for resolve). Shared linked season rows
+                # must not be bucketed to a single contest for counts or edit flags.
+                season_by_contest_id: dict = {}
+                try:
+                    from app.models.contests import ContestSeason, ContestSeasonLink
+
+                    if valid_contest_ids:
+                        rows = (
+                            db.query(ContestSeasonLink.contest_id, ContestSeason)
+                            .join(
+                                ContestSeason,
+                                ContestSeason.id == ContestSeasonLink.season_id,
+                            )
+                            .filter(
+                                ContestSeasonLink.contest_id.in_(list(valid_contest_ids)),
+                                ContestSeasonLink.is_active == True,
+                            )
+                            .all()
+                        )
+                        for cid, s in rows:
+                            if (
+                                cid is not None
+                                and s is not None
+                                and cid not in season_by_contest_id
+                            ):
+                                season_by_contest_id[cid] = s
+                        for cid in valid_contest_ids:
+                            season_by_contest_id.setdefault(cid, None)
+                except Exception:
+                    season_by_contest_id = {
+                        c: None for c in valid_contest_ids
+                    } if valid_contest_ids else {}
+
+                from app.api.api_v1.endpoints import contestant as contestant_ep
+
+                unique_seasons: dict = {}
+                for _cid, _se in season_by_contest_id.items():
+                    if _se is not None and _se.id not in unique_seasons:
+                        unique_seasons[_se.id] = _se
+
+                try:
+                    contest_participant_counts = {cid: 0 for cid in valid_ids}
+                    uq = db.query(ContestantModel).filter(
                         ContestantModel.round_id == round_id,
-                        ContestantModel.is_deleted == False
+                        ContestantModel.is_deleted == False,
                     )
-                    if filter_country and filter_country != 'all':
+                    if filter_country and filter_country != "all":
                         patterns = _get_country_match_patterns(filter_country)
                         country_conds = []
                         for pat in patterns:
                             country_conds.append(ContestantModel.country.ilike(pat))
-                        # Do NOT include NULL countries when a specific country is selected.
-                        # Otherwise cards can show "1 participant" while the filtered contest view shows none.
                         if country_conds:
-                            batch_query = batch_query.filter(or_(*country_conds))
-                    if filter_continent and filter_continent != 'all':
-                        batch_query = batch_query.filter(
-                            ContestantModel.continent.ilike(f"%{str(filter_continent).strip()}%")
+                            uq = uq.filter(or_(*country_conds))
+                    if filter_continent and filter_continent != "all":
+                        uq = uq.filter(
+                            ContestantModel.continent.ilike(
+                                f"%{str(filter_continent).strip()}%"
+                            )
                         )
-                    batch_results = batch_query.group_by(
-                        ContestantModel.season_id, ContestantModel.entry_type
-                    ).all()
+                    all_ucs_in_round = uq.all()
 
-                    # Keep direct contest counts isolated from linked-season counts.
-                    # Some environments may have shared/linked season ids across contests.
-                    # If we always sum both, card counters can show contestants that do not
-                    # belong to the contest detail view.
-                    direct_counts_by_contest = {}
-                    linked_counts_by_contest = {}
-
-                    for sid, etype, cnt in batch_results:
-                        contest_id = season_to_contest.get(sid)
-                        if contest_id is None:
-                            continue
-                        expected = 'nomination' if mode_map.get(contest_id) == 'nomination' else 'participation'
-                        if etype != expected:
-                            continue
-
-                        amount = int(cnt or 0)
-                        if sid == contest_id:
-                            direct_counts_by_contest[contest_id] = direct_counts_by_contest.get(contest_id, 0) + amount
-                        else:
-                            linked_counts_by_contest[contest_id] = linked_counts_by_contest.get(contest_id, 0) + amount
-
-                    for contest_id in valid_ids:
-                        direct = direct_counts_by_contest.get(contest_id, 0)
-                        linked = linked_counts_by_contest.get(contest_id, 0)
-                        # Prefer strict contest-specific count first.
-                        contest_participant_counts[contest_id] = direct if direct > 0 else linked
+                    for uc in all_ucs_in_round:
+                        target: Optional[int] = None
+                        for _s in unique_seasons.values():
+                            resolved = (
+                                contestant_ep._resolve_contest_for_contestant_vote(
+                                    db, uc, _s
+                                )
+                            )
+                            if (
+                                not resolved
+                                or resolved.id not in valid_contest_ids
+                            ):
+                                continue
+                            if getattr(uc, "entry_type", "participation") != _entry_type_for_contest(
+                                resolved.id
+                            ):
+                                continue
+                            target = resolved.id
+                            break
+                        if target is None:
+                            for _cid in valid_contest_ids:
+                                if (
+                                    getattr(uc, "entry_type", "participation")
+                                    != _entry_type_for_contest(_cid)
+                                ):
+                                    continue
+                                if (
+                                    uc.season_id is not None
+                                    and uc.season_id == _cid
+                                ):
+                                    target = _cid
+                                    break
+                        if target is not None:
+                            contest_participant_counts[target] = (
+                                contest_participant_counts.get(target, 0) + 1
+                            )
                 except Exception as e:
                     logger.warning(f"Batch count failed: {e}")
+                    try:
+                        contest_participant_counts = {
+                            cid: 0
+                            for cid in [vc.id for vc in valid_contests]
+                        }
+                    except Exception:
+                        pass
 
             valid_contests.sort(key=lambda c: contest_participant_counts.get(c.id, 0), reverse=True)
 
@@ -377,52 +414,9 @@ def _enrich_round_data(
                         user_contestants = [uc for uc in all_user_contestants if uc.round_id == round_id]
                         # Déterminer le entry_type attendu pour ce tab
                         expected_type = 'nomination' if contest_mode == 'nomination' else 'participation'
-                        # Filtrer par entry_type ET par contest valide.
-                        # Accept both legacy season_id==contest.id and season_id==active linked season id.
-                        valid_contest_ids = {vc.id for vc in valid_contests}
-                        # Map contest -> active ContestSeason ORM (not just season_id int).
-                        # A shared season_id across categories must not mark the user as
-                        # "contesting" in every category — only the contest that actually owns
-                        # the entry (align with _resolve_contest_for_contestant_vote in contestant.py).
-                        season_by_contest_id: dict = {}
-                        try:
-                            from app.models.contests import (
-                                ContestSeason,
-                                ContestSeasonLink,
-                            )
-
-                            if valid_contest_ids:
-                                rows = (
-                                    db.query(ContestSeasonLink.contest_id, ContestSeason)
-                                    .join(
-                                        ContestSeason,
-                                        ContestSeason.id == ContestSeasonLink.season_id,
-                                    )
-                                    .filter(
-                                        ContestSeasonLink.contest_id.in_(
-                                            list(valid_contest_ids)
-                                        ),
-                                        ContestSeasonLink.is_active == True,
-                                    )
-                                    .all()
-                                )
-                                for cid, s in rows:
-                                    if cid is not None and s is not None and cid not in season_by_contest_id:
-                                        season_by_contest_id[cid] = s
-                                for cid in valid_contest_ids:
-                                    season_by_contest_id.setdefault(cid, None)
-                        except Exception:
-                            season_by_contest_id = {
-                                c: None for c in valid_contest_ids
-                            } if valid_contest_ids else {}
-
-                        from app.api.api_v1.endpoints import contestant as contestant_ep
-
+                        # Reuse same ContestSeason + resolve() scope as card participant counts
+                        # (season_by_contest_id, unique_seasons, valid_contest_ids, contestant_ep).
                         contested_ids: set = set()
-                        unique_seasons: dict = {}
-                        for _cid, _se in season_by_contest_id.items():
-                            if _se is not None and _se.id not in unique_seasons:
-                                unique_seasons[_se.id] = _se
                         for uc in user_contestants:
                             if (
                                 getattr(uc, "entry_type", "participation")
