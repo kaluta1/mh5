@@ -1,5 +1,7 @@
 from typing import Any, List
+import os
 from fastapi import APIRouter, Depends, File, UploadFile, HTTPException, status
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_active_user
@@ -7,8 +9,25 @@ from app.crud import media as crud_media
 from app.db.session import get_db
 from app.schemas.media import MediaCreate, Media
 from app.core.storage import store_media
+from app.core.config import settings
 
 router = APIRouter()
+
+
+@router.get("/file/{user_id}/{filename}")
+def serve_local_media_file(user_id: int, filename: str):
+    """
+    Serve locally stored media files through API route.
+    This avoids dependency on reverse-proxy static `/media/*` mapping.
+    """
+    safe_name = os.path.basename(filename)
+    file_path = os.path.join(settings.LOCAL_STORAGE_PATH, str(user_id), safe_name)
+    if not os.path.isfile(file_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Media file not found"
+        )
+    return FileResponse(file_path)
 
 @router.post("/upload", response_model=Media)
 async def upload_media(

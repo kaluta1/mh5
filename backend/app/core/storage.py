@@ -11,6 +11,18 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+
+def _build_public_media_url(user_id: int, filename: str) -> str:
+    """
+    Build a browser-safe media URL served by backend API (works even when `/media/*`
+    is not exposed by reverse proxy).
+    """
+    base = (settings.BACKEND_PUBLIC_URL or settings.FRONTEND_URL or "").rstrip("/")
+    path = f"/api/v1/media/file/{user_id}/{filename}"
+    if base:
+        return f"{base}{path}"
+    return path
+
 # Proof-of-address: scans / photos / PDF bills
 KYC_POA_MAX_BYTES = 10 * 1024 * 1024
 KYC_POA_ALLOWED_CT_PREFIXES = ("image/", "application/pdf")
@@ -67,7 +79,7 @@ async def store_kyc_proof_file(file: UploadFile, user_id: int) -> Dict[str, Any]
     async with aiofiles.open(file_path, "wb") as out_file:
         await out_file.write(content)
 
-    url = f"/media/{user_id}/{filename}"
+    url = _build_public_media_url(user_id, filename)
     metadata: Dict[str, Any] = {}
     if content_type.startswith("image/"):
         try:
@@ -118,8 +130,8 @@ async def store_locally(file: UploadFile, filename: str, user_id: int) -> Dict[s
         content = await file.read()
         await out_file.write(content)
     
-    # URL relative
-    url = f"/media/{user_id}/{filename}"
+    # Public URL served by backend API route
+    url = _build_public_media_url(user_id, filename)
     
     # Récupérer les métadonnées pour les images
     metadata = {}
