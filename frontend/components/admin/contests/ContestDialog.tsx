@@ -10,9 +10,10 @@ import { useLanguage } from '@/contexts/language-context'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { generateReactHelpers } from '@uploadthing/react'
 import type { OurFileRouter } from '@/app/api/uploadthing/core'
+import { UPLOADTHING_URL } from '@/lib/uploadthing'
 
 const { useUploadThing } = generateReactHelpers<OurFileRouter>({
-  url: process.env.NEXT_PUBLIC_UPLOADTHING_URL?.replace(/\/+$/, "") || "/api/uploadthing",
+  url: UPLOADTHING_URL,
 })
 
 interface ContestDialogProps {

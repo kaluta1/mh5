@@ -5,9 +5,10 @@ import { generateReactHelpers } from '@uploadthing/react'
 import type { OurFileRouter } from '@/app/api/uploadthing/core'
 import { useLanguage } from '@/contexts/language-context'
 import { Upload, Loader2 } from 'lucide-react'
+import { UPLOADTHING_URL } from '@/lib/uploadthing'
 
 const { useUploadThing } = generateReactHelpers<OurFileRouter>({
-  url: process.env.NEXT_PUBLIC_UPLOADTHING_URL?.replace(/\/+$/, '') || '/api/uploadthing',
+  url: UPLOADTHING_URL,
 })
 
 interface UploadButtonProps {
