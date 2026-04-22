@@ -22,28 +22,36 @@ async def upload_media(
     """
     Upload un nouveau média (image ou vidéo).
     """
-    # Vérifier le type de fichier
-    content_type = file.content_type
-    if not content_type.startswith(('image/', 'video/')):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Le fichier doit être une image ou une vidéo"
+    try:
+        # Vérifier le type de fichier
+        content_type = file.content_type or ""
+        if not content_type.startswith(('image/', 'video/')):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Le fichier doit être une image ou une vidéo"
+            )
+
+        # Stocker le fichier
+        media_info = await store_media(file, current_user.id)
+
+        # Créer l'entrée en base de données
+        media_data = MediaCreate(
+            title=title or file.filename or "uploaded-media",
+            description=description or "",
+            media_type=content_type.split('/')[0],
+            path=media_info["path"],
+            url=media_info["url"],
+            user_id=current_user.id
         )
-    
-    # Stocker le fichier
-    media_info = await store_media(file, current_user.id)
-    
-    # Créer l'entrée en base de données
-    media_data = MediaCreate(
-        title=title or file.filename,
-        description=description or "",
-        media_type=content_type.split('/')[0],
-        path=media_info["path"],
-        url=media_info["url"],
-        user_id=current_user.id
-    )
-    media = crud_media.create_media(db=db, obj_in=media_data)
-    return media
+        media = crud_media.create(db=db, obj_in=media_data)
+        return media
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Media upload failed: {str(e)}"
+        )
 
 @router.get("/", response_model=List[Media])
 def read_medias(
