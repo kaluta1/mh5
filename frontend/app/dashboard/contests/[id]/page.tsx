@@ -484,27 +484,10 @@ export default function ContestDetailPage() {
   const effectiveContinent = (filterContinent && filterContinent !== 'all' ? filterContinent : '') || ''
 
   const locationFilteredContestants = React.useMemo(() => {
-    const list = contest?.contestants ?? []
-    if (!effectiveCountry && !effectiveContinent) return list
-    return list.filter((c) => {
-      const matchCountry = !effectiveCountry || (() => {
-        const cc = (c.country || '').toLowerCase().trim()
-        if (!cc) return false
-        const codeFilter = getCountryCode(effectiveCountry)
-        const codeContestant = getCountryCode(c.country)
-        if (codeFilter && codeContestant && codeFilter === codeContestant) return true
-        if (effectiveCountry.toLowerCase().trim() === cc) return true
-        if (cc.includes(effectiveCountry.toLowerCase().trim()) || effectiveCountry.toLowerCase().trim().includes(cc)) return true
-        return false
-      })()
-      const matchContinent = !effectiveContinent || (() => {
-        const cc = (c.continent || '').toLowerCase().trim()
-        if (!cc) return false
-        return cc.includes(effectiveContinent.toLowerCase()) || effectiveContinent.toLowerCase().includes(cc) || effectiveContinent.toLowerCase() === cc
-      })()
-      return matchCountry && matchContinent
-    })
-  }, [contest?.contestants, effectiveCountry, effectiveContinent, getCountryCode, user?.country])
+    // The backend already applies country/continent filters based on URL query params.
+    // Re-filtering here can hide valid results when author_country is missing but user country matched server-side.
+    return contest?.contestants ?? []
+  }, [contest?.contestants])
 
   if (isLoading || pageLoading) {
     return <ContestDetailSkeleton />
@@ -515,7 +498,8 @@ export default function ContestDetailPage() {
     return null
   }
 
-  const participantsCount = contest.contest.entries_count ?? contest.contestants.length
+  // Keep header count aligned with what the current page actually displays.
+  const participantsCount = locationFilteredContestants.length
 
   // Fonction pour formater la localisation selon le niveau de saison
   const formatLocation = (contestant: Contestant): string => {
