@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useLanguage } from "@/contexts/language-context"
+import { normalizeMediaUrl } from "@/lib/media-url"
 
 interface UserDropdownProps {
   user: {
@@ -48,7 +49,7 @@ export function UserDropdown({ user, onLogout, onSettings, onProfile, onKYC }: U
         .slice(0, 2)
     : 'U'
   
-  const avatarUrl = user.avatar_url || user.profile_photo || user.avatar
+  const avatarUrl = normalizeMediaUrl(user.avatar_url || user.profile_photo || user.avatar)
 
   return (
     <DropdownMenu>

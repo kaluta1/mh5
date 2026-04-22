@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '@/hooks/use-auth'
 import { useLanguage } from '@/contexts/language-context'
+import { normalizeMediaUrl } from '@/lib/media-url'
 import { useToast } from '@/components/ui/toast'
 import { SettingsSkeleton } from '@/components/ui/skeleton'
 import { SettingsProfileTab } from '@/components/dashboard/settings-profile-tab'
@@ -161,7 +162,7 @@ export default function SettingsPage() {
               <div className="relative group">
                 {user?.avatar_url ? (
                   <img 
-                    src={user.avatar_url} 
+                    src={normalizeMediaUrl(user.avatar_url)} 
                     alt="Avatar" 
                     className="w-28 h-28 rounded-2xl object-cover border-4 border-myhigh5-primary/30 shadow-lg"
                   />
