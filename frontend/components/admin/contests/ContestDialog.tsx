@@ -8,13 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { X, ImagePlus, Loader2 } from 'lucide-react'
 import { useLanguage } from '@/contexts/language-context'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { generateReactHelpers } from '@uploadthing/react'
-import type { OurFileRouter } from '@/app/api/uploadthing/core'
-import { UPLOADTHING_URL } from '@/lib/uploadthing'
-
-const { useUploadThing } = generateReactHelpers<OurFileRouter>({
-  url: UPLOADTHING_URL,
-})
+import { API_URL } from '@/lib/config'
 
 interface ContestDialogProps {
     isOpen: boolean
@@ -79,23 +73,6 @@ export function ContestDialog({
         setAccessToken(token)
     }, [])
 
-    const { startUpload } = useUploadThing('imageUploader', {
-        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
-        onClientUploadComplete: (res) => {
-            if (res?.[0]) {
-                const url = res[0].url
-                setUploadedImage(url)
-                setFormData(prev => ({ ...prev, image_url: url, cover_image_url: url }))
-                setErrors(prev => ({ ...prev, image: '' }))
-            }
-            setIsUploading(false)
-        },
-        onUploadError: (error) => {
-            setUploadError(error.message || 'Upload failed')
-            setIsUploading(false)
-        },
-    })
-
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0]
         if (!file) return
@@ -106,9 +83,44 @@ export function ContestDialog({
         reader.onloadend = () => setUploadedImage(reader.result as string)
         reader.readAsDataURL(file)
 
-        // Upload to UploadThing
+        // Upload to backend media endpoint
         setIsUploading(true)
-        await startUpload([file])
+        try {
+            const formData = new FormData()
+            formData.append('file', file)
+            formData.append('title', file.name)
+
+            const response = await fetch(`${API_URL}/api/v1/media/upload`, {
+                method: 'POST',
+                headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+                body: formData,
+            })
+
+            if (!response.ok) {
+                let message = 'Upload failed'
+                try {
+                    const errorData = await response.json()
+                    message = errorData?.detail || errorData?.error || message
+                } catch {
+                    // Keep generic error message
+                }
+                throw new Error(message)
+            }
+
+            const data = await response.json()
+            const url = data?.url || data?.path
+            if (!url) {
+                throw new Error('Upload succeeded but no image URL was returned')
+            }
+
+            setUploadedImage(url)
+            setFormData(prev => ({ ...prev, image_url: url, cover_image_url: url }))
+            setErrors(prev => ({ ...prev, image: '' }))
+        } catch (error: unknown) {
+            setUploadError(error instanceof Error ? error.message : 'Upload failed')
+        } finally {
+            setIsUploading(false)
+        }
     }
 
     // Determine contest mode from initialData

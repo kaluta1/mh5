@@ -1,15 +1,10 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { generateReactHelpers } from '@uploadthing/react'
 import type { OurFileRouter } from '@/app/api/uploadthing/core'
 import { useLanguage } from '@/contexts/language-context'
 import { Upload, Loader2 } from 'lucide-react'
-import { UPLOADTHING_URL } from '@/lib/uploadthing'
-
-const { useUploadThing } = generateReactHelpers<OurFileRouter>({
-  url: UPLOADTHING_URL,
-})
+import { API_URL } from '@/lib/config'
 
 interface UploadButtonProps {
   endpoint: keyof OurFileRouter
@@ -34,22 +29,8 @@ export function UploadButton({
   const { t } = useLanguage()
   const [token, setToken] = useState<string | null>(null)
   const [isReady, setIsReady] = useState(false)
+  const [isUploading, setIsUploading] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
-
-  const { startUpload, isUploading } = useUploadThing(endpoint, {
-    headers: token
-      ? {
-          Authorization: `Bearer ${token}`,
-          ...customHeaders,
-        }
-      : customHeaders,
-    onClientUploadComplete: (res) => {
-      onClientUploadComplete?.(res)
-    },
-    onUploadError: (error) => {
-      handleUploadError(error)
-    },
-  })
 
   useEffect(() => {
     // Récupérer le token depuis le localStorage
@@ -125,10 +106,53 @@ export function UploadButton({
     const files = Array.from(event.target.files || [])
     if (!files.length) return
     try {
-      await startUpload(files)
+      setIsUploading(true)
+
+      const uploadedResults: Array<{ url: string; name: string; size: number; type: string }> = []
+      for (const file of files) {
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('title', file.name)
+
+        const response = await fetch(`${API_URL}/api/v1/media/upload`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            ...customHeaders,
+          },
+          body: formData,
+        })
+
+        if (!response.ok) {
+          let message = 'Upload failed'
+          try {
+            const errorData = await response.json()
+            message = errorData?.detail || errorData?.error || message
+          } catch {
+            // Keep generic message when body is not JSON
+          }
+          throw new Error(message)
+        }
+
+        const data = await response.json()
+        const url = data?.url || data?.path
+        if (!url) {
+          throw new Error('Upload succeeded but no file URL was returned')
+        }
+
+        uploadedResults.push({
+          url,
+          name: data?.title || file.name,
+          size: file.size,
+          type: file.type,
+        })
+      }
+
+      onClientUploadComplete?.(uploadedResults)
     } catch (error) {
       handleUploadError(error)
     } finally {
+      setIsUploading(false)
       event.currentTarget.value = ''
     }
   }
