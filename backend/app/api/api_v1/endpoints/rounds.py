@@ -323,15 +323,32 @@ def _enrich_round_data(
                         ContestantModel.season_id, ContestantModel.entry_type
                     ).all()
 
+                    # Keep direct contest counts isolated from linked-season counts.
+                    # Some environments may have shared/linked season ids across contests.
+                    # If we always sum both, card counters can show contestants that do not
+                    # belong to the contest detail view.
+                    direct_counts_by_contest = {}
+                    linked_counts_by_contest = {}
+
                     for sid, etype, cnt in batch_results:
                         contest_id = season_to_contest.get(sid)
                         if contest_id is None:
                             continue
                         expected = 'nomination' if mode_map.get(contest_id) == 'nomination' else 'participation'
-                        if etype == expected:
-                            contest_participant_counts[contest_id] = (
-                                contest_participant_counts.get(contest_id, 0) + int(cnt or 0)
-                            )
+                        if etype != expected:
+                            continue
+
+                        amount = int(cnt or 0)
+                        if sid == contest_id:
+                            direct_counts_by_contest[contest_id] = direct_counts_by_contest.get(contest_id, 0) + amount
+                        else:
+                            linked_counts_by_contest[contest_id] = linked_counts_by_contest.get(contest_id, 0) + amount
+
+                    for contest_id in valid_ids:
+                        direct = direct_counts_by_contest.get(contest_id, 0)
+                        linked = linked_counts_by_contest.get(contest_id, 0)
+                        # Prefer strict contest-specific count first.
+                        contest_participant_counts[contest_id] = direct if direct > 0 else linked
                 except Exception as e:
                     logger.warning(f"Batch count failed: {e}")
 
