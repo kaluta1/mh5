@@ -100,6 +100,12 @@ class Settings(BaseModel):
     SMTP_FROM_EMAIL: str = os.getenv("SMTP_FROM_EMAIL", "infos@myhigh5.com")
     SMTP_FROM_NAME: str = os.getenv("SMTP_FROM_NAME", "MyHigh5")
     
+    # Annual Ads — sponsor embed / SSO / webhooks (secrets only via env)
+    ANNUALADS_SSO_SECRET: str = _first_nonempty_env("ANNUALADS_SSO_SECRET", "annualads_sso_secret")
+    ANNUALADS_TENANT_ID: str = _first_nonempty_env("ANNUALADS_TENANT_ID", "annualads_tenant_id")
+    ANNUALADS_TENANT_API_KEY: str = _first_nonempty_env("ANNUALADS_TENANT_API_KEY", "annualads_tenant_api_key")
+    ANNUALADS_WEBHOOK_SECRET: str = _first_nonempty_env("ANNUALADS_WEBHOOK_SECRET", "annualads_webhook_secret")
+    
     # FRONTEND
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
     # Public base URL of this API (no trailing slash), e.g. https://myhigh5.com or https://api.example.com.

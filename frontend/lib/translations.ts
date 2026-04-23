@@ -1279,6 +1279,7 @@ export interface TranslationKeys {
         search: string
         pages: string
         wallet: string
+        sponsored?: string
         affiliates: string
         commissions: string
         leaderboard: string
@@ -7076,6 +7077,7 @@ const translationsBase = {
         search: "Search",
         pages: "Pages",
         wallet: "Wallet",
+        sponsored: "Sponsored",
         affiliates: "Affiliates",
         commissions: "Commissions",
         leaderboard: "Leaderboard",

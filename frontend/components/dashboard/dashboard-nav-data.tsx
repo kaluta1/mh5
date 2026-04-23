@@ -10,6 +10,7 @@ import {
   FileText,
   Hand,
   LayoutDashboard,
+  Megaphone,
   Network,
   Percent,
   Rss,
@@ -61,6 +62,7 @@ export const userNavSections: DashboardNavSection[] = [
     titleLabel: "Business",
     items: [
       { name: "dashboard.nav.wallet", label: "Wallet", href: "/dashboard/wallet", icon: Wallet },
+      { name: "dashboard.nav.sponsored", label: "Sponsored", href: "/dashboard/sponsored", icon: Megaphone },
       { name: "dashboard.nav.affiliates", label: "Affiliates", href: "/dashboard/affiliates", icon: UserPlus },
       { name: "dashboard.nav.commissions", label: "Commissions", href: "/dashboard/commissions", icon: DollarSign },
       { name: "dashboard.nav.leaderboard", label: "Leaderboard", href: "/dashboard/leaderboard", icon: Award },
