@@ -3,18 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import api from '@/lib/api'
 import { Megaphone, AlertCircle, Loader2 } from 'lucide-react'
-import { API_URL } from '@/lib/config'
+import { ANNUALADS_EMBED_URL, ANNUALADS_SSO_TARGET_ORIGIN, API_URL } from '@/lib/config'
 
-const DEFAULT_SSO_TARGET = 'https://www.annualads.com'
-
-const embedUrl =
-  typeof process !== 'undefined' && process.env.NEXT_PUBLIC_ANNUALADS_EMBED_URL
-    ? process.env.NEXT_PUBLIC_ANNUALADS_EMBED_URL.trim()
-    : ''
-
-const ssoTargetOrigin =
-  (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_ANNUALADS_SSO_TARGET_ORIGIN?.trim()) ||
-  DEFAULT_SSO_TARGET
+const embedUrl = ANNUALADS_EMBED_URL
+const ssoTargetOrigin = ANNUALADS_SSO_TARGET_ORIGIN
 
 type SsoPayload = {
   token: string
@@ -122,10 +114,13 @@ export default function SponsoredPage() {
         >
           <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
           <div className="text-sm">
-            <p className="font-medium">Set the embed URL</p>
+            <p className="font-medium">Set the embed URL for this environment</p>
             <p className="mt-1 text-amber-800/90 dark:text-amber-200/90">
-              Add <code className="rounded bg-amber-100/80 dark:bg-amber-900/50 px-1">NEXT_PUBLIC_ANNUALADS_EMBED_URL</code> to{' '}
-              <code className="rounded px-1">.env.local</code> — the full iframe <code>src</code> from Annual Ads (host, path, query key).
+              Add <code className="rounded bg-amber-100/80 dark:bg-amber-900/50 px-1">NEXT_PUBLIC_ANNUALADS_EMBED_URL</code> with
+              the full Annual Ads iframe <code>src</code> (host, path, <code>key</code> query). For{' '}
+              <strong>local dev</strong>, use <code className="rounded px-1">.env.local</code>. For{' '}
+              <strong>myhigh5.com (production)</strong>, set the same variable in your host (Vercel / server) and run a{' '}
+              <strong>new build</strong> — laptop-only <code className="rounded px-1">.env</code> files are not used there.
             </p>
           </div>
         </div>

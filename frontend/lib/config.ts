@@ -28,6 +28,25 @@ const fallbackUrl = isProduction ? DEFAULT_PUBLIC_API_URL : 'http://localhost:80
 
 export const API_URL = normalizeApiUrl(rawApiUrl || fallbackUrl)
 
+/**
+ * Annual Ads embed iframe `src` (full URL with query key). Next.js inlines this at build time
+ * for client bundles — it must be set in the same env you use for `next build` (Vercel / VPS
+ * / Docker), not only on your laptop, or production will show "Set the embed URL".
+ */
+function stripEnvQuotes(s: string): string {
+  const t = s.trim()
+  if (t.length >= 2 && ((t[0] === '"' && t[t.length - 1] === '"') || (t[0] === "'" && t[t.length - 1] === "'"))) {
+    return t.slice(1, -1).trim()
+  }
+  return t
+}
+
+export const ANNUALADS_EMBED_URL = stripEnvQuotes(process.env.NEXT_PUBLIC_ANNUALADS_EMBED_URL || '')
+
+export const ANNUALADS_SSO_TARGET_ORIGIN = stripEnvQuotes(
+  process.env.NEXT_PUBLIC_ANNUALADS_SSO_TARGET_ORIGIN || 'https://www.annualads.com'
+)
+
 /** Origin only (for preconnect / dns-prefetch); works when API_URL includes /api/v1. */
 export const API_ORIGIN = (() => {
   try {
