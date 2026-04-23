@@ -1,14 +1,9 @@
 'use client'
 
-
-
-import { useAuth } from '@/hooks/use-auth'
-import { useLanguage } from '@/contexts/language-context'
-import { BookOpen, DollarSign, Users, Gift, CheckCircle2, AlertCircle } from 'lucide-react'
+import Link from 'next/link'
+import { BookOpen, DollarSign, Users, Gift, CheckCircle2, AlertCircle, Percent } from 'lucide-react'
 
 export default function FoundingMemberPage() {
-  const { user } = useAuth()
-  const { t } = useLanguage()
 
 
 
@@ -29,6 +24,13 @@ export default function FoundingMemberPage() {
             Become a MyHigh5 Founding Member and unlock exclusive financial rewards and opportunities.
           </p>
         </div>
+        <Link
+          href="/dashboard/founding-member/fmr"
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-myhigh5-primary/30 bg-myhigh5-primary/10 dark:bg-myhigh5-primary/20 px-4 py-2.5 text-sm font-semibold text-myhigh5-primary hover:bg-myhigh5-primary/15 dark:hover:bg-myhigh5-primary/30 transition-colors whitespace-nowrap"
+        >
+          <Percent className="w-4 h-4" />
+          View FMP &amp; FMR
+        </Link>
       </div>
 
       {/* Main Content */}

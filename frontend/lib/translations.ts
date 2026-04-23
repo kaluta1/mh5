@@ -1289,6 +1289,7 @@ export interface TranslationKeys {
         business: string
         resources: string
         founding_member: string
+        fmr: string
         affiliate_program: string
         affiliate_agreement: string
         account: string
@@ -7085,6 +7086,7 @@ const translationsBase = {
         business: "Business",
         resources: "Resources",
         founding_member: "Founding Membership",
+        fmr: "FMP & FMR",
         affiliate_program: "Affiliate Program",
         affiliate_agreement: "Affiliate Agreement",
         account: "Account",
