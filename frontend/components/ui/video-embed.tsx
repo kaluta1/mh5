@@ -197,13 +197,13 @@ export function VideoEmbed({
   // ── Direct video file ──
   if (videoInfo.platform === 'direct') {
     return (
-      <div ref={containerRef}>
+      <div ref={containerRef} className={`relative h-full w-full min-h-0 ${className}`}>
         <video
           src={videoInfo.embedUrl}
           controls
           autoPlay={autoplay}
-          className={className}
-          style={{ width, height }}
+          className="h-full w-full object-contain"
+          style={{ maxHeight: '100%' }}
           playsInline
           onTimeUpdate={(e) => {
             const sec = Math.floor((e.currentTarget.currentTime || 0))
@@ -253,13 +253,12 @@ export function VideoEmbed({
       return (
         <div
           ref={containerRef}
-          className={`${className} flex items-center justify-center bg-black rounded-xl overflow-hidden`}
-          style={{ width, height }}
+          className={`relative h-full w-full min-h-0 overflow-hidden rounded-xl bg-black ${className}`}
         >
           <iframe
             src={`https://www.tiktok.com/embed/v2/${resolvedTikTokId}`}
-            className="rounded-lg"
-            style={{ width: '100%', height: '100%', minHeight: '500px', border: 'none' }}
+            className="absolute inset-0 h-full w-full rounded-lg border-0"
+            style={{ maxHeight: '100%' }}
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen={allowFullscreen}
             title="TikTok video"
@@ -318,6 +317,8 @@ export function VideoEmbed({
   }
 
   // ── YouTube ──
+  // Use a filling wrapper: percentage height on iframe only works with an explicit
+  // parent height; aspect-video / relative parents must size this `relative` box.
   if (videoInfo.platform === 'youtube') {
     if (videoInfo.videoId) {
       const iframeParams = new URLSearchParams()
@@ -328,11 +329,14 @@ export function VideoEmbed({
       const embedUrl = `https://www.youtube.com/embed/${videoInfo.videoId}${iframeParams.toString() ? '?' + iframeParams.toString() : ''}`
 
       return (
-        <div ref={containerRef}>
+        <div
+          ref={containerRef}
+          className={`relative h-full w-full min-h-0 ${className}`}
+        >
           <iframe
             src={embedUrl}
-            className={`${className} rounded-xl`}
-            style={{ width, height }}
+            className="absolute inset-0 h-full w-full rounded-xl border-0"
+            style={{ maxHeight: '100%' }}
             frameBorder="0"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
             allowFullScreen={allowFullscreen}
@@ -343,11 +347,11 @@ export function VideoEmbed({
     }
 
     return (
-      <div ref={containerRef}>
+      <div ref={containerRef} className={`relative h-full w-full min-h-0 ${className}`}>
         <iframe
           src={videoInfo.originalUrl}
-          className={`${className} rounded-xl`}
-          style={{ width, height }}
+          className="absolute inset-0 h-full w-full rounded-xl border-0"
+          style={{ maxHeight: '100%' }}
           frameBorder="0"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
           allowFullScreen={allowFullscreen}
@@ -367,11 +371,11 @@ export function VideoEmbed({
       : videoInfo.embedUrl
 
     return (
-      <div ref={containerRef}>
+      <div ref={containerRef} className={`relative h-full w-full min-h-0 ${className}`}>
         <iframe
           src={embedUrl}
-          className={`${className} rounded-xl`}
-          style={{ width, height }}
+          className="absolute inset-0 h-full w-full rounded-xl border-0"
+          style={{ maxHeight: '100%' }}
           frameBorder="0"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
           allowFullScreen={allowFullscreen}
@@ -384,11 +388,11 @@ export function VideoEmbed({
   // ── Facebook ──
   if (videoInfo.platform === 'facebook') {
     return (
-      <div ref={containerRef}>
+      <div ref={containerRef} className={`relative h-full w-full min-h-0 ${className}`}>
         <iframe
           src={videoInfo.embedUrl}
-          className={`${className} rounded-xl`}
-          style={{ width, height }}
+          className="absolute inset-0 h-full w-full rounded-xl border-0"
+          style={{ maxHeight: '100%' }}
           frameBorder="0"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
           allowFullScreen={allowFullscreen}

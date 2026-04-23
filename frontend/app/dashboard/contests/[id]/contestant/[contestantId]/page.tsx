@@ -718,7 +718,7 @@ function ContestantDetailContent() {
             </div>
 
             {/* Center Column - Media & Description (Full on Mobile, 2/3 on Desktop) */}
-            <div className="col-span-1 lg:col-span-2 space-y-6">
+            <div className="col-span-1 min-w-0 lg:col-span-2 space-y-6">
               {/* Description */}
               <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-3xl p-6 md:p-8 shadow-lg border border-gray-100 dark:border-gray-700/50 hover:shadow-xl transition-all duration-300">
                 <div className="flex items-center justify-between gap-2 mb-4">
@@ -757,11 +757,11 @@ function ContestantDetailContent() {
 
               {/* Media: Video embed for nominations, Gallery for participations */}
               {isNomination && videos.length > 0 ? (
-                <div className="rounded-2xl overflow-hidden shadow-lg">
-                  <div className="aspect-video w-full">
+                <div className="overflow-hidden rounded-2xl bg-black shadow-lg">
+                  <div className="relative w-full aspect-video min-h-0">
                     <VideoEmbed
                       url={videos[0].url}
-                      className="w-full h-full"
+                      className="h-full w-full"
                       allowFullscreen={true}
                       onViewed30s={handleVideoViewed30s}
                     />
