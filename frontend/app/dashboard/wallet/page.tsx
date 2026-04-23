@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, useRef } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { useLanguage } from '@/contexts/language-context'
 import { useToast } from '@/components/ui/toast'
@@ -20,9 +20,12 @@ import { PaymentDialog } from '@/components/dialogs/payment-dialog-v2'
 import { TransactionTable, Transaction } from '@/components/wallet/transaction-table'
 
 
+type PaymentProduct = 'kyc' | 'mfm_membership' | 'annual_membership'
+
 export default function WalletPage() {
   const { t } = useLanguage()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { user, isAuthenticated, isLoading } = useAuth()
   const { addToast } = useToast()
   
@@ -34,6 +37,8 @@ export default function WalletPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [pageLoading, setPageLoading] = useState(true)
   const [showPaymentDialog, setShowPaymentDialog] = useState(false)
+  const [paymentInitialProduct, setPaymentInitialProduct] = useState<PaymentProduct>('kyc')
+  const openedMfmFromQuery = useRef(false)
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', { 
@@ -50,6 +55,16 @@ export default function WalletPage() {
       loadWalletData()
     }
   }, [isLoading, isAuthenticated, router])
+
+  // Pitching / deep links: open payment flow on MFM (MyHigh5 Founding Member) by default
+  useEffect(() => {
+    if (isLoading || !isAuthenticated || openedMfmFromQuery.current) return
+    if (searchParams.get('product') === 'mfm') {
+      openedMfmFromQuery.current = true
+      setPaymentInitialProduct('mfm_membership')
+      setShowPaymentDialog(true)
+    }
+  }, [isLoading, isAuthenticated, searchParams])
 
   const loadWalletData = async () => {
     try {
@@ -144,7 +159,10 @@ export default function WalletPage() {
             </Button>
           </Link>
           <Button 
-            onClick={() => setShowPaymentDialog(true)}
+            onClick={() => {
+              setPaymentInitialProduct('kyc')
+              setShowPaymentDialog(true)
+            }}
             className="rounded-xl bg-sky-600 hover:bg-sky-700 shadow-lg shadow-sky-600/25"
           >
             <ShoppingBag className="w-4 h-4 mr-2" />
@@ -242,9 +260,10 @@ export default function WalletPage() {
       
       {/* Payment Dialog */}
       <PaymentDialog
+        key={paymentInitialProduct + String(showPaymentDialog)}
         open={showPaymentDialog}
         onOpenChange={setShowPaymentDialog}
-        initialProductCode="kyc"
+        initialProductCode={paymentInitialProduct}
         onPaymentInitiated={() => {
           loadWalletData()
         }}

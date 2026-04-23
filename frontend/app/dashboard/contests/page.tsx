@@ -75,7 +75,6 @@ function ContestsPageContent() {
 
   // State
   const [activeRoundId, setActiveRoundId] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<string>('all') // Contest Type tab
   const [categoryTab, setCategoryTab] = useState<'nomination' | 'participations'>(() => {
     if (typeof window !== 'undefined') {
       const savedTab = localStorage.getItem('contests_category_tab')
@@ -467,44 +466,27 @@ function ContestsPageContent() {
     // Removed debug logs for performance
   }, [allContests, contestsData])
 
-  // Extract contest types from ALL loaded contests (so tabs don't disappear)
-  const contestTypes = useMemo(() => {
-    const types = new Set<string>()
-    rawContests.forEach((c: any) => c.contestType && types.add(c.contestType))
-
-    const list = [{ id: 'all', label: t('dashboard.contests.all') || 'All', value: null }]
-    Array.from(types).sort().forEach(type => {
-      list.push({ id: type, label: type.charAt(0).toUpperCase() + type.slice(1).replace(/_/g, ' '), value: type })
-    })
-    return list
-  }, [rawContests, t])
-
   // Filter and Sort Contests for Display
   const displayedContests = useMemo(() => {
     let filtered = rawContests.slice()
 
-    // 1. Filter by Tab (Type)
-    if (activeTab !== 'all') {
-      filtered = filtered.filter(c => c.contestType === activeTab)
-    }
-
-    // 2. Filter by Search
+    // 1. Filter by Search
     if (committedSearch) {
       const lower = committedSearch.toLowerCase()
       filtered = filtered.filter(c => c.title.toLowerCase().includes(lower))
     }
 
-    // 3. Filter by Level (for participations tab)
+    // 2. Filter by Level (for participations tab)
     if (categoryTab === 'participations' && filterLevel !== 'all') {
       filtered = filtered.filter(c => c.status === filterLevel)
     }
 
-    // 4. Filter by migration stage (for nominations tab)
+    // 3. Filter by migration stage (for nominations tab)
     if (categoryTab === 'nomination' && nominationMigrationLevel !== 'all') {
       filtered = filtered.filter((c) => normalizeContestLevel(c.status) === nominationMigrationLevel)
     }
 
-    // 5. Always sort - ensure consistent ordering
+    // 4. Always sort - ensure consistent ordering
     filtered.sort((a, b) => {
       switch (sortBy) {
         case 'participants':
@@ -538,7 +520,7 @@ function ContestsPageContent() {
     })
 
     return filtered
-  }, [rawContests, activeTab, committedSearch, sortBy, categoryTab, filterLevel, nominationMigrationLevel])
+  }, [rawContests, committedSearch, sortBy, categoryTab, filterLevel, nominationMigrationLevel])
 
   // Déterminer si le round actif est fermé (soumissions terminées)
   const activeRoundData = rounds.find((r: any) => String(r.id) === activeRoundId)
@@ -695,7 +677,6 @@ function ContestsPageContent() {
             <button
               onClick={() => {
                 setCategoryTab('nomination');
-                setActiveTab('all');
                 setSearchTerm('');
                 setCommittedSearch('');
                 setFilterContinent('all');
@@ -715,7 +696,6 @@ function ContestsPageContent() {
             <button
               onClick={() => {
                 setCategoryTab('participations');
-                setActiveTab('all');
                 setSearchTerm('');
                 setCommittedSearch('');
                 setFilterCountry(''); // Reset country filter for participations
@@ -729,26 +709,6 @@ function ContestsPageContent() {
             </button>
           </div>
         </div>
-
-        {/* Type Tabs (Generated from ALL contests in round) */}
-        {contestTypes.length > 1 && (
-          <div className="mb-8 border-b border-gray-200 dark:border-gray-800">
-            <div className="flex space-x-6 overflow-x-auto scrollbar-hide">
-              {contestTypes.map((type) => (
-                <button
-                  key={type.id}
-                  onClick={() => setActiveTab(type.id || 'all')}
-                  className={`pb-4 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${activeTab === (type.id || 'all')
-                    ? 'border-blue-500 text-blue-500'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:border-gray-700'
-                    }`}
-                >
-                  {type.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* Contests Grid */}
         {contestsLoading && !contestsData ? (

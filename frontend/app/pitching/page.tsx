@@ -1,3 +1,5 @@
+import Link from 'next/link'
+
 export default function MyHigh5LandingPage() {
   const incomeStreams = [
     {
@@ -54,8 +56,11 @@ export default function MyHigh5LandingPage() {
   return (
     <div className="min-h-screen bg-[#030712] text-white">
       <header className="sticky top-0 z-50 border-b border-white/10 bg-[#030712]/85 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-3">
+        <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-4 sm:px-6 lg:px-8">
+          <Link
+            href="/dashboard"
+            className="flex shrink-0 items-center gap-3 rounded-xl outline-none transition hover:opacity-90 focus-visible:ring-2 focus-visible:ring-blue-500"
+          >
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#1D4ED8] text-lg font-extrabold shadow-lg shadow-blue-900/40">
               M5
             </div>
@@ -63,28 +68,15 @@ export default function MyHigh5LandingPage() {
               <div className="text-lg font-extrabold tracking-tight">MyHigh5</div>
               <div className="text-xs text-slate-400">Global Contest Platform</div>
             </div>
-          </div>
+          </Link>
 
-          <nav className="hidden items-center gap-8 lg:flex">
+          <nav className="hidden flex-1 items-center justify-center gap-8 lg:flex">
             {["Home", "How It Works", "Earnings", "Founders", "FAQ"].map((item) => (
               <a key={item} href="#" className="text-sm text-slate-300 transition hover:text-white">
                 {item}
               </a>
             ))}
           </nav>
-
-          <div className="hidden items-center gap-3 sm:flex">
-            <button className="rounded-2xl border border-white/15 bg-white/5 px-4 py-2.5 text-sm font-semibold text-slate-100 transition hover:bg-white/10">
-              Log In
-            </button>
-            <button className="rounded-2xl bg-[#2563EB] px-4 py-2.5 text-sm font-semibold shadow-lg shadow-blue-900/40 transition hover:bg-[#1D4ED8]">
-              Join Free
-            </button>
-          </div>
-
-          <button className="rounded-2xl border border-white/15 bg-white/5 px-3 py-2 text-sm font-semibold sm:hidden">
-            Menu
-          </button>
         </div>
       </header>
 
@@ -107,12 +99,12 @@ export default function MyHigh5LandingPage() {
               </p>
 
               <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-                <button className="rounded-2xl bg-[#2563EB] px-6 py-3.5 text-base font-bold shadow-lg shadow-blue-900/40 transition hover:bg-[#1D4ED8]">
+                <Link
+                  href="/dashboard"
+                  className="inline-flex items-center justify-center rounded-2xl bg-[#2563EB] px-6 py-3.5 text-base font-bold shadow-lg shadow-blue-900/40 transition hover:bg-[#1D4ED8]"
+                >
                   Get Started Free
-                </button>
-                <button className="rounded-2xl border border-white/15 bg-white/5 px-6 py-3.5 text-base font-semibold text-slate-100 transition hover:bg-white/10">
-                  Become a Founding Member
-                </button>
+                </Link>
               </div>
 
               <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -281,9 +273,12 @@ export default function MyHigh5LandingPage() {
                   </div>
                 </div>
               </div>
-              <button className="mt-6 w-full rounded-2xl bg-white px-6 py-4 text-base font-bold text-slate-900 transition hover:scale-[1.01]">
+              <Link
+                href="/dashboard/wallet?product=mfm"
+                className="mt-6 flex w-full items-center justify-center rounded-2xl bg-white px-6 py-4 text-base font-bold text-slate-900 transition hover:scale-[1.01]"
+              >
                 Claim Founding Member Position
-              </button>
+              </Link>
             </div>
           </div>
         </div>
