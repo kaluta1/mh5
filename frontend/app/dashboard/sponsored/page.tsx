@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import api from '@/lib/api'
 import { Megaphone, AlertCircle, Loader2 } from 'lucide-react'
-import { ANNUALADS_EMBED_URL, ANNUALADS_SSO_TARGET_ORIGIN, API_URL } from '@/lib/config'
+import { ANNUALADS_EMBED_URL, ANNUALADS_SSO_TARGET_ORIGIN } from '@/lib/config'
 
 const embedUrl = ANNUALADS_EMBED_URL
 const ssoTargetOrigin = ANNUALADS_SSO_TARGET_ORIGIN
@@ -76,8 +76,6 @@ export default function SponsoredPage() {
   const onIframeLoad = useCallback(() => {
     postSsoToIframe()
   }, [postSsoToIframe])
-
-  const webhookDisplay = `${API_URL.replace(/\/$/, '')}/api/v1/webhooks/sponsor-payment`
 
   return (
     <div className="space-y-6 pb-10">
@@ -156,22 +154,6 @@ export default function SponsoredPage() {
           />
         </div>
       )}
-
-      <div className="text-xs text-gray-500 dark:text-gray-500 space-y-2 border-t border-gray-100 dark:border-gray-800 pt-6">
-        <p>
-          <span className="font-medium text-gray-600 dark:text-gray-400">Webhook URL for Annual Ads tenant</span>
-        </p>
-        <code className="block rounded bg-gray-100 dark:bg-gray-900 px-2 py-1.5 text-[11px] sm:text-xs break-all text-gray-800 dark:text-gray-200">
-          {webhookDisplay}
-        </code>
-        <p>
-          Set the matching secret in backend <code className="rounded px-0.5 bg-gray-100 dark:bg-gray-900">ANNUALADS_WEBHOOK_SECRET</code>
-          . SSO secret: <code className="rounded px-0.5 bg-gray-100 dark:bg-gray-900">ANNUALADS_SSO_SECRET</code>, tenant id:{' '}
-          <code className="rounded px-0.5 bg-gray-100 dark:bg-gray-900">ANNUALADS_TENANT_ID</code>, API key:{' '}
-          <code className="rounded px-0.5 bg-gray-100 dark:bg-gray-900">ANNUALADS_TENANT_API_KEY</code>.
-        </p>
-        <p>Keep all secrets only in server environment variables, not in the repo or frontend.</p>
-      </div>
     </div>
   )
 }
