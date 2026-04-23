@@ -1,8 +1,10 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import api from '@/lib/api'
-import { Megaphone, AlertCircle, Loader2 } from 'lucide-react'
+import { useAuth } from '@/hooks/use-auth'
+import { Megaphone, AlertCircle, Loader2, User, RefreshCw } from 'lucide-react'
 import { ANNUALADS_EMBED_URL, ANNUALADS_SSO_TARGET_ORIGIN } from '@/lib/config'
 
 const embedUrl = ANNUALADS_EMBED_URL
@@ -14,13 +16,30 @@ type SsoPayload = {
   tenant_id: string
 }
 
+function messageForSsoFailure(status: number | undefined): string {
+  if (status === 503) {
+    return 'Sponsor sign-in is not set up on the server yet. Your administrator can finish configuration, then you can use Retry.'
+  }
+  if (status === 401) {
+    return 'Your session expired. Sign in again, then return to this page.'
+  }
+  return 'Could not link your account to sponsors right now. Use Retry in a moment.'
+}
+
 export default function SponsoredPage() {
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth()
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const ssoPayloadRef = useRef<SsoPayload | null>(null)
   const [loading, setLoading] = useState(false)
   const [hasSsoToken, setHasSsoToken] = useState(false)
-  const [ssoError, setSsoError] = useState<string | null>(null)
+  const [ssoErrorText, setSsoErrorText] = useState<string | null>(null)
   const [embedMissing, setEmbedMissing] = useState(!embedUrl)
+
+  const displayName =
+    user?.full_name?.trim() ||
+    [user?.first_name, user?.last_name].filter(Boolean).join(' ').trim() ||
+    user?.username ||
+    ''
 
   const postSsoToIframe = useCallback(() => {
     const w = iframeRef.current?.contentWindow
@@ -34,44 +53,39 @@ export default function SponsoredPage() {
       },
       ssoTargetOrigin
     )
-  }, [])
+  }, [ssoTargetOrigin])
 
   const fetchSso = useCallback(async () => {
-    if (!embedUrl) return
+    if (!embedUrl || !isAuthenticated) return
     setLoading(true)
-    setSsoError(null)
+    setSsoErrorText(null)
     try {
       const res = await api.get<SsoPayload>('/api/v1/sponsor-embed/sso-token')
       if (res.status >= 400 || !res.data?.token) {
         ssoPayloadRef.current = null
         setHasSsoToken(false)
-        const detail = (res.data as { detail?: string })?.detail
-        setSsoError(detail || 'SSO token not available')
+        setSsoErrorText(messageForSsoFailure(res.status))
         return
       }
       ssoPayloadRef.current = res.data
       setHasSsoToken(true)
+      setSsoErrorText(null)
       postSsoToIframe()
     } catch (e: unknown) {
       ssoPayloadRef.current = null
       setHasSsoToken(false)
-      const resp = e && typeof e === 'object' && 'response' in e ? (e as { response?: { data?: { detail?: string }; status?: number } }).response : undefined
-      setSsoError(
-        resp?.data?.detail ||
-          (resp?.status === 503
-            ? 'SSO is not configured on the API (ANNUALADS_SSO_SECRET / ANNUALADS_TENANT_ID).'
-            : 'Could not load SSO token.')
-      )
+      const resp = e && typeof e === 'object' && 'response' in e ? (e as { response?: { status?: number } }).response : undefined
+      setSsoErrorText(messageForSsoFailure(resp?.status))
     } finally {
       setLoading(false)
     }
-  }, [postSsoToIframe])
+  }, [isAuthenticated, postSsoToIframe])
 
   useEffect(() => {
     setEmbedMissing(!embedUrl)
-    if (!embedUrl) return
+    if (!embedUrl || !isAuthenticated) return
     void fetchSso()
-  }, [embedUrl, fetchSso])
+  }, [embedUrl, isAuthenticated, fetchSso])
 
   const onIframeLoad = useCallback(() => {
     postSsoToIframe()
@@ -79,28 +93,58 @@ export default function SponsoredPage() {
 
   return (
     <div className="space-y-6 pb-10">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+        <div className="space-y-2">
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-myhigh5-primary flex items-center justify-center shadow-lg shadow-myhigh5-primary/25">
               <Megaphone className="w-5 h-5 text-white" />
             </div>
             Sponsored
           </h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-2 max-w-2xl">
-            Sponsor opportunities (Annual Ads embed). SSO signs in the current MyHigh5 member when the API is
-            configured.
-          </p>
+
+          {authLoading ? (
+            <p className="text-sm text-gray-400 dark:text-gray-500">Loading account…</p>
+          ) : isAuthenticated && displayName ? (
+            <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300 flex items-center gap-2">
+              <User className="w-4 h-4 text-myhigh5-primary flex-shrink-0" />
+              <span>
+                <span className="text-gray-500 dark:text-gray-400">Signed in as</span>{' '}
+                <span className="font-semibold text-gray-900 dark:text-white">{displayName}</span>
+                {user?.username && displayName !== user.username ? (
+                  <span className="text-gray-500 dark:text-gray-500"> @{user.username}</span>
+                ) : null}
+              </span>
+            </p>
+          ) : isAuthenticated ? (
+            <p className="text-sm text-gray-600 dark:text-gray-300 flex items-center gap-2">
+              <User className="w-4 h-4 text-myhigh5-primary" />
+              <span>
+                <span className="text-gray-500">Signed in</span>
+                {user?.email ? (
+                  <span className="font-medium text-gray-900 dark:text-white"> · {user.email}</span>
+                ) : null}
+              </span>
+            </p>
+          ) : (
+            <p className="text-sm text-amber-800 dark:text-amber-200/90">
+              You are not signed in.{' '}
+              <Link href="/" className="font-medium text-myhigh5-primary underline">
+                Go to the home page to sign in
+              </Link>
+            </p>
+          )}
         </div>
-        {embedUrl && (
+
+        {embedUrl && isAuthenticated && (
           <button
             type="button"
             onClick={() => void fetchSso()}
             disabled={loading}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 disabled:opacity-50"
+            className="inline-flex items-center gap-2 self-start rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 disabled:opacity-50"
+            title="Link your account to the embed again"
           >
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-            Refresh SSO
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            Retry
           </button>
         )}
       </div>
@@ -112,36 +156,32 @@ export default function SponsoredPage() {
         >
           <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
           <div className="text-sm">
-            <p className="font-medium">Set the embed URL for this environment</p>
+            <p className="font-medium">Sponsor page is not fully configured on this host</p>
             <p className="mt-1 text-amber-800/90 dark:text-amber-200/90">
-              Add <code className="rounded bg-amber-100/80 dark:bg-amber-900/50 px-1">NEXT_PUBLIC_ANNUALADS_EMBED_URL</code> with
-              the full Annual Ads iframe <code>src</code> (host, path, <code>key</code> query). For{' '}
-              <strong>local dev</strong>, use <code className="rounded px-1">.env.local</code>. For{' '}
-              <strong>myhigh5.com (production)</strong>, set the same variable in your host (Vercel / server) and run a{' '}
-              <strong>new build</strong> — laptop-only <code className="rounded px-1">.env</code> files are not used there.
+              The embed URL must be set in the app environment, then a new build is required.
             </p>
           </div>
         </div>
       )}
 
-      {ssoError && (
-        <div
-          className="flex items-start gap-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/50 p-3 text-sm text-gray-600 dark:text-gray-400"
-          role="status"
-        >
-          <span className="font-medium text-gray-700 dark:text-gray-300">SSO:</span>
-          {ssoError}
-        </div>
+      {isAuthenticated && embedUrl && ssoErrorText && !loading && (
+        <p className="text-sm text-amber-800 dark:text-amber-200/90" role="status">
+          {ssoErrorText}
+        </p>
       )}
 
-      {embedUrl && loading && !hasSsoToken && (
+      {embedUrl && isAuthenticated && loading && !hasSsoToken && !ssoErrorText && (
         <div className="flex items-center gap-2 text-sm text-gray-500">
           <Loader2 className="w-4 h-4 animate-spin" />
-          Loading SSO…
+          Linking your account…
         </div>
       )}
 
-      {embedUrl && (
+      {embedUrl && isAuthenticated && !ssoErrorText && hasSsoToken && !loading && (
+        <p className="text-xs text-gray-500 dark:text-gray-500">Your account is linked for this session.</p>
+      )}
+
+      {embedUrl && isAuthenticated && (
         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 overflow-hidden shadow-sm">
           <iframe
             ref={iframeRef}
@@ -153,6 +193,10 @@ export default function SponsoredPage() {
             referrerPolicy="strict-origin-when-cross-origin"
           />
         </div>
+      )}
+
+      {embedUrl && !isAuthenticated && !authLoading && (
+        <p className="text-sm text-gray-500">Sign in to view sponsors and link your account.</p>
       )}
     </div>
   )
