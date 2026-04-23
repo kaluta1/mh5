@@ -11,6 +11,7 @@ from .affiliate import AffiliateTree, CommissionRate, AffiliateCommission, Refer
 from .advertising import AdCampaign, AdCreative, AdPlacement, AdImpression, AdClick, AdRevenueShare, AdBudgetTransaction, AdPerformanceMetrics
 from .accounting import ChartOfAccounts, JournalEntry, JournalLine, FinancialReport, RevenueTransaction, TaxConfiguration, AuditTrail
 from .founding_pool import FoundingPoolSnapshot, FoundingPoolSnapshotLine
+from .fmr import MemberFmpLedger, MemberFmpBalance
 from .media import Media
 from .contest import Contest, ContestTemplate, Location, ContestEntry, ContestVote
 from .category import Category
@@ -44,6 +45,7 @@ __all__ = [
     "AdCampaign", "AdCreative", "AdPlacement", "AdImpression", "AdClick", "AdRevenueShare", "AdBudgetTransaction", "AdPerformanceMetrics",
     "ChartOfAccounts", "JournalEntry", "JournalLine", "FinancialReport", "RevenueTransaction", "TaxConfiguration", "AuditTrail",
     "FoundingPoolSnapshot", "FoundingPoolSnapshotLine",
+    "MemberFmpLedger", "MemberFmpBalance",
     "Media", "Contest", "ContestTemplate", "Location", "ContestEntry", "ContestVote",
     "Category",
     "Prize", "PrizeWinner", "Commission",

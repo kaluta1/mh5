@@ -1,3 +1,4 @@
+import logging
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, desc, func
@@ -10,6 +11,8 @@ from app.schemas.kyc import (
     KYCDocumentCreate, KYCDocumentUpdate,
     KYCAuditLogCreate, KYCStatistics
 )
+
+logger = logging.getLogger(__name__)
 
 
 class CRUDKYCVerification:
@@ -164,6 +167,16 @@ class CRUDKYCVerification:
                 u.status = UserStatus.ACTIVE
 
         db.add(verification)
+        try:
+            from app.services.fmr_service import record_referral_kyc_fmp
+
+            record_referral_kyc_fmp(
+                db,
+                verified_user_id=int(verification.user_id),
+                kyc_verification_id=int(verification.id),
+            )
+        except Exception:
+            logger.exception("FMP referral accrual after KYC approval (auto PoA) failed")
         db.commit()
         db.refresh(verification)
         self._create_audit_log(
@@ -192,7 +205,18 @@ class CRUDKYCVerification:
                 verification.user.verification_date = datetime.utcnow()
                 if verification.user.status == UserStatus.PENDING_VERIFICATION:
                     verification.user.status = UserStatus.ACTIVE
-            
+
+            db.add(verification)
+            try:
+                from app.services.fmr_service import record_referral_kyc_fmp
+
+                record_referral_kyc_fmp(
+                    db,
+                    verified_user_id=int(verification.user_id),
+                    kyc_verification_id=int(verification.id),
+                )
+            except Exception:
+                logger.exception("FMP referral accrual after KYC approval (admin) failed")
             db.commit()
             db.refresh(verification)
             

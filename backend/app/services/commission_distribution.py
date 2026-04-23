@@ -258,6 +258,10 @@ def process_payment_validation(
             payment_accounting.process_founding_membership_payment_accounting(
                 db, deposit, commissions, journal_commit=journal_commit
             )
+            if user:
+                from app.services.fmr_service import record_founding_join_fmp
+
+                record_founding_join_fmp(db, int(user.id), int(deposit.id))
         elif product_code == "club_membership":
             payment_accounting.process_club_membership_payment_accounting(
                 db, deposit, commissions, journal_commit=journal_commit

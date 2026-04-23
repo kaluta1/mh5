@@ -18,6 +18,7 @@ from app.models.accounting import ChartOfAccounts, JournalEntry, JournalLine
 from app.models.affiliate import FoundingMember
 from app.models.founding_pool import FoundingPoolSnapshot, FoundingPoolSnapshotLine
 from app.services.accounting_service import accounting_service
+from app.services import fmr_service
 from app.services.financial_report_service import POSTED_STATUSES
 
 Q2 = Decimal("0.01")
@@ -58,6 +59,22 @@ def _active_founding_members(db: Session) -> Tuple[List[FoundingMember], Dict[in
     for m in members:
         weights[int(m.user_id)] = Decimal(str(m.founding_membership_ratio or 0))
     return members, weights
+
+
+def _pool_recipients_and_weights(
+    db: Session,
+) -> Tuple[List[int], Dict[int, Decimal], str]:
+    """
+    Prefer Founding Membership Ratio from FMP (FMR = user FMP / global FMP).
+    Falls back to legacy founding_members.founding_membership_ratio when no FMP balances.
+    """
+    uids, fmp_weights = fmr_service.fmp_weights_for_pool(db)
+    if uids and fmp_weights:
+        s = sum(fmp_weights.values(), Decimal(0))
+        if s > 0:
+            return uids, fmp_weights, "fmp"
+    members, legacy_weights = _active_founding_members(db)
+    return [int(m.user_id) for m in members], legacy_weights, "legacy_ratio"
 
 
 def split_pool_amount(total: Decimal, user_ids: List[int], weights: Dict[int, Decimal]) -> Dict[int, Decimal]:
@@ -118,18 +135,17 @@ def prepare_founding_pool_month(
         raise ValueError(f"Period {year}-{month:02d} is approved — post the snapshot or reverse the journal first")
 
     accrued = net_change_account_2104_in_month(db, year, month)
-    members, weights = _active_founding_members(db)
-    if not members:
-        raise ValueError("No active founding members to allocate")
+    user_ids, weights, _weight_mode = _pool_recipients_and_weights(db)
+    if not user_ids:
+        raise ValueError("No founding members / FMP holders to allocate")
 
-    user_ids = [int(m.user_id) for m in members]
     shares = split_pool_amount(accrued, user_ids, weights)
 
     if existing and existing.status == "draft":
         db.execute(delete(FoundingPoolSnapshotLine).where(FoundingPoolSnapshotLine.snapshot_id == existing.id))
         snap = existing
         snap.accrued_pool_amount = float(accrued)
-        snap.member_count = len(members)
+        snap.member_count = len(user_ids)
         snap.prepared_by_user_id = user_id
         if notes is not None:
             snap.notes = notes
@@ -139,7 +155,7 @@ def prepare_founding_pool_month(
             period_year=year,
             period_month=month,
             accrued_pool_amount=float(accrued),
-            member_count=len(members),
+            member_count=len(user_ids),
             status="draft",
             prepared_by_user_id=user_id,
             notes=notes,
@@ -148,13 +164,16 @@ def prepare_founding_pool_month(
 
     db.flush()
 
+    total_w = sum((weights.get(uid, Decimal(0)) for uid in user_ids), Decimal(0))
     for uid in user_ids:
+        w = weights.get(uid, Decimal(0))
+        fmr = (w / total_w) if total_w > 0 else Decimal(0)
         db.add(
             FoundingPoolSnapshotLine(
                 snapshot_id=snap.id,
                 user_id=uid,
                 share_amount=float(shares.get(uid, Decimal(0))),
-                weight_ratio=float(weights.get(uid, Decimal(0))),
+                weight_ratio=float(fmr),
             )
         )
     db.commit()

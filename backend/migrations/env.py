@@ -77,6 +77,7 @@ from app.models.accounting import (
     RevenueTransaction, TaxConfiguration, AuditTrail
 )
 from app.models.founding_pool import FoundingPoolSnapshot, FoundingPoolSnapshotLine
+from app.models.fmr import MemberFmpLedger, MemberFmpBalance
 from app.models.contact_message import ContactMessage
 from app.models.social_group import (
     SocialGroup, GroupMember, GroupJoinRequest, GroupMessage, 

@@ -56,7 +56,7 @@ export default function MyHigh5LandingPage() {
   return (
     <div className="min-h-screen bg-[#030712] text-white">
       <header className="sticky top-0 z-50 border-b border-white/10 bg-[#030712]/85 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-4 sm:px-6 lg:px-8">
+        <div className="mx-auto flex max-w-7xl items-center px-4 py-4 sm:px-6 lg:px-8">
           <Link
             href="/dashboard"
             className="flex shrink-0 items-center gap-3 rounded-xl outline-none transition hover:opacity-90 focus-visible:ring-2 focus-visible:ring-blue-500"
@@ -69,14 +69,6 @@ export default function MyHigh5LandingPage() {
               <div className="text-xs text-slate-400">Global Contest Platform</div>
             </div>
           </Link>
-
-          <nav className="hidden flex-1 items-center justify-center gap-8 lg:flex">
-            {["Home", "How It Works", "Earnings", "Founders", "FAQ"].map((item) => (
-              <a key={item} href="#" className="text-sm text-slate-300 transition hover:text-white">
-                {item}
-              </a>
-            ))}
-          </nav>
         </div>
       </header>
 
@@ -89,7 +81,7 @@ export default function MyHigh5LandingPage() {
           <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-14">
             <div>
               <div className="mb-4 inline-flex items-center rounded-full border border-blue-400/20 bg-blue-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-blue-200 sm:text-sm">
-                Based on MyHigh5 current blue, white, and dark visual direction
+                The one and only 360-degree localized global contest platform
               </div>
               <h1 className="max-w-3xl text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl lg:text-6xl">
                 Turn local contests into global recognition and recurring income
