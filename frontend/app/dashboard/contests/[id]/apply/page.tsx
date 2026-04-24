@@ -626,6 +626,34 @@ export default function ApplyToContestPage() {
 
       // Display the error message to the user
       addToast(errorMessage, 'error')
+
+      // Recovery path: backend says submission already exists for this round/contest.
+      // Auto-switch to edit mode so user does not stay stuck on "Nominate".
+      if (
+        errorDetail &&
+        errorDetail.toLowerCase().includes('already') &&
+        errorDetail.toLowerCase().includes('submission') &&
+        user?.id
+      ) {
+        try {
+          const userContestants = await contestService.getContestantsByContest(contestId, { user_id: user.id, skip: 0, limit: 50 })
+          const targetRoundId = roundIdParam ? parseInt(roundIdParam, 10) : undefined
+          const expectedType = isNomination ? 'nomination' : 'participation'
+          const matched = userContestants.find((uc: any) => {
+            const typeMatch = !uc?.entry_type || uc.entry_type === expectedType
+            const contestMatch = !uc?.season_id || uc.season_id === parseInt(contestId)
+            const roundMatch = !targetRoundId || !uc?.round_id || uc.round_id === targetRoundId
+            return typeMatch && contestMatch && roundMatch
+          })
+          if (matched?.id) {
+            setParticipantId(matched.id)
+            setUserAlreadyParticipating(true)
+            setIsEditingParticipation(true)
+          }
+        } catch {
+          // keep original error toast behavior
+        }
+      }
     } finally {
       setIsSubmitting(false)
     }

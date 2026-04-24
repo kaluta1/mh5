@@ -227,24 +227,29 @@ def read_contests(
                     ).all()
                     
                     for contest_id in contest_ids:
-                        # Determine expected season_id for this contest
-                        expected_sid = season_by_contest.get(contest_id, contest_id)
+                        expected_entry_type = 'nomination' if contest_mode_map.get(contest_id) == 'nomination' else 'participation'
 
                         # 1. First, check active round (contest-specific check)
                         if contest_id in active_rounds_by_contest:
                             target_round_id = active_rounds_by_contest[contest_id]
-                            # User is contesting if they have a contestant record for this round
-                            # AND the contestant belongs to THIS specific contest (via season_id)
+                            # Contestant.season_id is canonically contest.id in this codebase.
+                            # Include entry_type match to avoid cross-tab confusion.
                             is_contesting = any(
-                                uc.round_id == target_round_id and uc.season_id == expected_sid
+                                uc.round_id == target_round_id
+                                and uc.season_id == contest_id
+                                and (getattr(uc, "entry_type", "participation") or "participation") == expected_entry_type
                                 for uc in user_contestants
                             )
                             if is_contesting:
                                 current_user_contesting_map[contest_id] = True
                                 continue
                                 
-                        # 2. Fallback: check season_id == contest_id (no active round)
-                        is_contesting = any(uc.season_id == contest_id for uc in user_contestants)
+                        # 2. Fallback: check contest ownership + entry_type (no active round resolution)
+                        is_contesting = any(
+                            uc.season_id == contest_id
+                            and (getattr(uc, "entry_type", "participation") or "participation") == expected_entry_type
+                            for uc in user_contestants
+                        )
                         if is_contesting:
                             current_user_contesting_map[contest_id] = True
                 except Exception as e:
