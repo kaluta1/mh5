@@ -1791,9 +1791,17 @@ def create_contestant(
         db, target_round_id, current_user.id, season_id=season_id
     )
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="You already have a submission for this round of the contest"
+        # Idempotent behavior: if submission already exists for this round/contest,
+        # return it as success so frontend can open/edit instead of hard-failing with 400.
+        return ContestantSubmissionResponse(
+            id=existing.id,
+            season_id=existing.season_id,
+            round_id=existing.round_id,
+            user_id=existing.user_id,
+            title=existing.title,
+            description=existing.description,
+            registration_date=existing.registration_date,
+            message="Submission already exists for this round. Returning existing submission."
         )
 
     from app.services.contest_entry_eligibility import raise_if_user_missing_contest_entry_requirements
