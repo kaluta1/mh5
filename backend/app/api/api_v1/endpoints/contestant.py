@@ -1244,18 +1244,38 @@ def get_contest_contestants(
     - filter_city: Affiche uniquement les contestants de cette ville
     - user_id: Affiche uniquement les contestants de cet utilisateur
     """
-    # Essayer d'abord de trouver une ContestSeason avec cet ID
-    season = db.query(ContestSeason).filter(ContestSeason.id == contest_id).first()
-    
-    # Si pas trouvé, chercher dans la table Contest
-    if not season:
-        from app.models.contest import Contest as MyfavContest
-        contest = db.query(MyfavContest).filter(MyfavContest.id == contest_id).first()
-        if not contest:
+    # IMPORTANT: this route is called with Contest.id from frontend.
+    # Resolve Contest first to avoid collisions with ContestSeason.id values.
+    from app.models.contest import Contest as MyfavContest
+    contest = db.query(MyfavContest).filter(
+        MyfavContest.id == contest_id,
+        MyfavContest.is_deleted == False
+    ).first()
+
+    season = None
+    real_contest_id = None
+    if contest:
+        real_contest_id = contest.id
+    else:
+        season = db.query(ContestSeason).filter(
+            ContestSeason.id == contest_id,
+            ContestSeason.is_deleted == False
+        ).first()
+        if not season:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Contest not found"
             )
+        from app.models.contests import ContestSeasonLink
+        link = db.query(ContestSeasonLink).filter(
+            ContestSeasonLink.season_id == season.id,
+            ContestSeasonLink.is_active == True
+        ).first()
+        if link:
+            real_contest_id = link.contest_id
+        else:
+            # Legacy fallback: keep provided id if no active link exists.
+            real_contest_id = contest_id
     
     # FIXED: Simplified query to avoid database errors and 503 responses
     from app.models.round import Round
@@ -1274,7 +1294,7 @@ def get_contest_contestants(
         try:
             # Method 1: Via round_contests table
             round_ids_via_table = db.query(round_contests.c.round_id).filter(
-                round_contests.c.contest_id == contest_id
+                round_contests.c.contest_id == real_contest_id
             ).all()
             if round_ids_via_table:
                 all_round_ids.extend([r[0] for r in round_ids_via_table])
@@ -1283,7 +1303,7 @@ def get_contest_contestants(
         
         try:
             # Method 2: Via legacy round.contest_id
-            legacy_rounds = db.query(Round.id).filter(Round.contest_id == contest_id).all()
+            legacy_rounds = db.query(Round.id).filter(Round.contest_id == real_contest_id).all()
             if legacy_rounds:
                 all_round_ids.extend([r[0] for r in legacy_rounds])
         except Exception as e:
@@ -1304,7 +1324,7 @@ def get_contest_contestants(
         debug_conditions = []
         if all_round_ids:
             debug_conditions.append(Contestant.round_id.in_(all_round_ids))
-        debug_conditions.append(Contestant.season_id == contest_id)
+        debug_conditions.append(Contestant.season_id == real_contest_id)
         
         if debug_conditions:
             debug_results = debug_query.filter(or_(*debug_conditions)).limit(10).all()
@@ -1324,7 +1344,7 @@ def get_contest_contestants(
         query = db.query(Contestant).filter(Contestant.is_deleted == False)
         
         # Filter by season_id only (round_id is shared between ALL contests)
-        query = query.filter(Contestant.season_id == contest_id)
+        query = query.filter(Contestant.season_id == real_contest_id)
         
         # Apply geographic filters
         if filter_country:
@@ -1357,7 +1377,7 @@ def get_contest_contestants(
             try:
                 fallback1 = db.query(Contestant).filter(
                     Contestant.is_deleted == False,
-                    Contestant.season_id == contest_id
+                    Contestant.season_id == real_contest_id
                 ).limit(limit).all()
                 logger.info(f"[get_contest_contestants] Fallback 1 (season_id only): Found {len(fallback1)} contestants")
                 if fallback1:
@@ -1461,7 +1481,7 @@ def get_contest_contestants(
                 user_votes = {row[0] for row in user_votes_list}
                 cv_rows = db.query(ContestantVoting.contestant_id).filter(
                     ContestantVoting.user_id == current_user_id,
-                    ContestantVoting.contest_id == contest_id,
+                    ContestantVoting.contest_id == real_contest_id,
                     ContestantVoting.contestant_id.in_(contestant_ids),
                 ).all()
                 user_votes.update(row[0] for row in cv_rows)
