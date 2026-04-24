@@ -455,7 +455,8 @@ class CRUDContest:
         filter_region: Optional[str] = None,
         filter_continent: Optional[str] = None,
         include_top_contestants: bool = False,
-        entry_type: Optional[str] = None
+        entry_type: Optional[str] = None,
+        round_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Enrichit un contest avec les statistiques (nombre de participants et votes).
@@ -555,6 +556,8 @@ class CRUDContest:
                     Contestant.entry_type == contest_entry_type,
                     or_(*conditions) if len(conditions) > 1 else conditions[0]
                 )
+            if round_id is not None:
+                base_entries_query = base_entries_query.filter(Contestant.round_id == round_id)
         else:
             # No conditions - return 0 (contest has no rounds or seasons linked yet)
             base_entries_query = db.query(func.count(Contestant.id.distinct()))\
@@ -571,6 +574,8 @@ class CRUDContest:
                     Contestant.entry_type == contest_entry_type,
                     or_(*conditions) if len(conditions) > 1 else conditions[0]
                 )
+            if round_id is not None:
+                entries_query = entries_query.filter(Contestant.round_id == round_id)
         else:
             # No conditions - return 0
             entries_query = db.query(func.count(Contestant.id.distinct()))\
@@ -1096,7 +1101,15 @@ class CRUDContest:
             current_user = db.query(User).filter(User.id == current_user_id).first()
         
         # Enrichir le contest avec les stats
-        contest_data = self.enrich_contest_with_stats(db, contest_obj, current_user=current_user, entry_type=entry_type)
+        contest_data = self.enrich_contest_with_stats(
+            db,
+            contest_obj,
+            current_user=current_user,
+            filter_country=filter_country,
+            filter_continent=filter_continent,
+            entry_type=entry_type,
+            round_id=round_id,
+        )
         
         # Récupérer la saison active d'abord
         from app.models.contests import ContestantSeason
