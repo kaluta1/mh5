@@ -1749,11 +1749,21 @@ def create_contestant(
         )
 
     # Déterminer le type d'entrée (nomination ou participation)
-    # Le contest_mode du concours détermine toujours le type d'entrée (source de vérité)
-    if contest and hasattr(contest, 'contest_mode') and contest.contest_mode == 'nomination':
-        submission_entry_type = "nomination"
-    else:
-        submission_entry_type = "participation"
+    # Le contest_mode du concours détermine toujours le type d'entrée (source de vérité).
+    # IMPORTANT: si l'ID URL correspond d'abord à ContestSeason, `contest` peut rester None.
+    # On doit donc toujours re-résoudre le contest réel avant de fixer entry_type.
+    contest_mode_value = None
+    contest_for_mode = contest
+    if contest_for_mode is None and real_contest_id:
+        from app.models.contest import Contest as ContestModelForEntryType
+        contest_for_mode = db.query(ContestModelForEntryType).filter(
+            ContestModelForEntryType.id == real_contest_id,
+            ContestModelForEntryType.is_deleted == False
+        ).first()
+    if contest_for_mode and hasattr(contest_for_mode, "contest_mode"):
+        raw_mode = contest_for_mode.contest_mode
+        contest_mode_value = (raw_mode.value if hasattr(raw_mode, "value") else str(raw_mode)).strip().lower()
+    submission_entry_type = "nomination" if contest_mode_value == "nomination" else "participation"
     
     # Vérifier que l'utilisateur n'a pas déjà une candidature POUR CE ROUND ET CE CONTEST
     # Un seul entry par contest par round (peu importe le type nomination/participation)
