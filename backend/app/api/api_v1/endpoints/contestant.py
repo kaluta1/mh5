@@ -1577,36 +1577,37 @@ def create_contestant(
     """
     from app.services.contest_status import contest_status_service
     
-    # Essayer d'abord de trouver une ContestSeason avec cet ID
-    season = db.query(ContestSeason).filter(
-        ContestSeason.id == contest_id,
-        ContestSeason.is_deleted == False
-    ).first()
-    
-    # Si pas trouvé, chercher dans la table Contest
+    # IMPORTANT: route /contests/{contest_id}/participate receives Contest.id from frontend.
+    # We must resolve Contest first to avoid accidental collisions with ContestSeason IDs.
     contest = None
-    if not season:
-        from app.models.contest import Contest as MyfavContest
-        contest = db.query(MyfavContest).filter(
-            MyfavContest.id == contest_id,
-            MyfavContest.is_deleted == False
-        ).first()
-        if not contest:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Contest not found"
-            )
-        # Vérifier que les soumissions sont autorisées
-        is_allowed, error_message = contest_status_service.check_submission_allowed(db, contest_id)
+    season = None
+    from app.models.contest import Contest as MyfavContest
+    contest = db.query(MyfavContest).filter(
+        MyfavContest.id == contest_id,
+        MyfavContest.is_deleted == False
+    ).first()
+
+    if contest:
+        # Canonical storage: Contestant.season_id stores contest.id in this codebase
+        season_id = contest.id
+        is_allowed, error_message = contest_status_service.check_submission_allowed(db, contest.id)
         if not is_allowed:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=error_message
             )
-        # Utiliser l'ID du Contest directement comme season_id
-        # Le modèle Contestant accepte n'importe quel season_id
-        season_id = contest_id
     else:
+        # Fallback legacy path: allow ContestSeason id only when no contest matches.
+        season = db.query(ContestSeason).filter(
+            ContestSeason.id == contest_id,
+            ContestSeason.is_deleted == False
+        ).first()
+        if not season:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Contest not found"
+            )
+
         season_id = season.id
         # Si c'est une saison, vérifier si elle est liée à un contest
         from app.models.contests import ContestSeasonLink
@@ -1615,7 +1616,6 @@ def create_contestant(
             ContestSeasonLink.is_active == True
         ).first()
         if contest_link:
-            from app.models.contest import Contest as MyfavContest
             contest = db.query(MyfavContest).filter(
                 MyfavContest.id == contest_link.contest_id,
                 MyfavContest.is_deleted == False
