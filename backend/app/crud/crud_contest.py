@@ -45,6 +45,15 @@ def _get_country_match_patterns(country: str) -> List[str]:
     return patterns
 
 
+def _normalize_contest_mode(mode: Any) -> str:
+    """Normalize enum/string contest_mode to a comparable lowercase string."""
+    if mode is None:
+        return "participation"
+    value = mode.value if hasattr(mode, "value") else str(mode)
+    normalized = str(value).strip().lower()
+    return normalized or "participation"
+
+
 class CRUDContest:
     def get(self, db: Session, id: int) -> Optional[Contest]:
         """Récupère un concours par son ID"""
@@ -187,7 +196,7 @@ class CRUDContest:
         location_id = obj_in.location_id if obj_in.location_id and obj_in.location_id > 0 else None
         template_id = obj_in.template_id if obj_in.template_id and obj_in.template_id > 0 else None
         # voting_type_id removed - using contest_mode
-        contest_mode_value = getattr(obj_in, 'contest_mode', 'participation')
+        contest_mode_value = _normalize_contest_mode(getattr(obj_in, 'contest_mode', 'participation'))
         category_id = obj_in.category_id if obj_in.category_id and obj_in.category_id > 0 else None
         
         # Si category_id est fourni, récupération de la catégorie (inchangé)
@@ -548,7 +557,8 @@ class CRUDContest:
         # This ensures the count is accurate even when no user is logged in
         # Filter by entry_type based on contest_mode to show correct count per tab
         # Utiliser entry_type explicite si fourni, sinon déduire du contest_mode
-        contest_entry_type = entry_type if entry_type else ('nomination' if getattr(contest, 'contest_mode', 'participation') == 'nomination' else 'participation')
+        contest_mode = _normalize_contest_mode(getattr(contest, 'contest_mode', 'participation'))
+        contest_entry_type = entry_type if entry_type else ('nomination' if contest_mode == 'nomination' else 'participation')
         if conditions:
             base_entries_query = db.query(func.count(Contestant.id.distinct()))\
                 .filter(
@@ -671,7 +681,8 @@ class CRUDContest:
                 
                 existing = None
                 # Déterminer le entry_type attendu basé sur le contest_mode
-                expected_entry_type = 'nomination' if getattr(contest, 'contest_mode', 'participation') == 'nomination' else 'participation'
+                contest_mode = _normalize_contest_mode(getattr(contest, 'contest_mode', 'participation'))
+                expected_entry_type = 'nomination' if contest_mode == 'nomination' else 'participation'
                 if target_round_id:
                     existing = crud_contestant.get_by_round_and_user(
                         db, target_round_id, current_user.id,
@@ -1175,7 +1186,7 @@ class CRUDContest:
                 contains_eager(Contestant.user)
             )
         # Filtrer par entry_type basé sur le contest_mode (données corrigées)
-        contest_mode = getattr(contest_obj, 'contest_mode', 'participation')
+        contest_mode = _normalize_contest_mode(getattr(contest_obj, 'contest_mode', 'participation'))
         effective_entry_type = entry_type or ('nomination' if contest_mode == 'nomination' else 'participation')
         contestants_query = contestants_query.filter(Contestant.entry_type == effective_entry_type)
         logger.info(f"[get_contest_with_enriched_contestants] Querying by season_id={filter_season_id}, entry_type={effective_entry_type}")

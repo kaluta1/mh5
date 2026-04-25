@@ -14,6 +14,14 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def _normalize_contest_mode(mode: Any) -> str:
+    if mode is None:
+        return "participation"
+    value = mode.value if hasattr(mode, "value") else str(mode)
+    normalized = str(value).strip().lower()
+    return normalized or "participation"
+
+
 class ParticipateRequest(BaseModel):
     """Request schema for participating in a contest"""
     title: str
@@ -161,7 +169,7 @@ def read_contests(
             # Batch count contestants by season_id (legacy) or round_id
             # Check both via ContestSeasonLink and direct contest_id (legacy)
             # Build contest_mode map for entry_type filtering
-            contest_mode_map = {c.id: getattr(c, 'contest_mode', 'participation') for c in contests}
+            contest_mode_map = {c.id: _normalize_contest_mode(getattr(c, 'contest_mode', 'participation')) for c in contests}
 
             for contest_id in contest_ids:
                 count = 0
@@ -277,7 +285,7 @@ def read_contests(
                 "is_submission_open": c.is_submission_open,
                 "is_voting_open": c.is_voting_open,
                 "level": c.level,
-                "contest_mode": getattr(c, 'contest_mode', 'participation'),
+                "contest_mode": _normalize_contest_mode(getattr(c, 'contest_mode', 'participation')),
                 "entries_count": contestant_counts.get(c.id, 0),
                 "contestants": contestant_counts.get(c.id, 0),  # For compatibility
                 "participant_count": getattr(c, 'participant_count', 0),
