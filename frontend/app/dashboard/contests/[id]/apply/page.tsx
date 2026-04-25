@@ -87,11 +87,6 @@ export default function ApplyToContestPage() {
         setNeedsProfileSetup(false)
       }
 
-      // Check KYC status
-      if (user && !user?.is_verified) {
-        setNeedsKYC(true)
-      }
-
       // 2. Set Contest Data
       setContest({
         ...c,
@@ -121,6 +116,8 @@ export default function ApplyToContestPage() {
       const normalizedContestMode = String(c.contest_mode ?? '').split('.').pop()?.trim().toLowerCase()
       let expectedEntryType = entryTypeParam || (normalizedContestMode === 'nomination' ? 'nomination' : 'participation')
       setIsNomination(expectedEntryType === 'nomination')
+      // KYC hint should only be shown for participation flows.
+      setNeedsKYC(Boolean(user && !user?.is_verified && expectedEntryType !== 'nomination'))
 
       // 3. User Participation check
       // The backend returns current_user_participation by season (ignores round_id and entry_type)
@@ -296,10 +293,11 @@ export default function ApplyToContestPage() {
     void loadVerificationStatus()
   }, [user?.id])
 
-  // Participation (not nomination): if API returns no verification flags, still require KYC + visual proof
+  // Participation only: if API returns no verification flags, still require KYC + visual proof.
+  // Nomination flow must NOT be blocked by KYC/verification dialogs.
   const verificationGateContest = useMemo(() => {
     if (!contest) return null
-    if (isNomination) return contest
+    if (isNomination) return null
     const anyExplicit =
       !!contest.requires_kyc ||
       !!contest.requires_visual_verification ||
@@ -849,8 +847,8 @@ export default function ApplyToContestPage() {
         </div>
       </div>
 
-      {/* Verification Dialogs */}
-      {contest && (
+      {/* Verification Dialogs (participation only) */}
+      {contest && !isNomination && (
         <>
           <VerificationRequirementsDialog
             isOpen={showVerificationDialog}
