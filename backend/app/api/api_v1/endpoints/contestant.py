@@ -1843,7 +1843,12 @@ def create_contestant(
             ContestModelForEligibility.is_deleted == False,
         ).first()
     if eligibility_contest:
-        raise_if_user_missing_contest_entry_requirements(db, current_user, eligibility_contest)
+        raise_if_user_missing_contest_entry_requirements(
+            db,
+            current_user,
+            eligibility_contest,
+            entry_type=submission_entry_type,
+        )
     
     # ============================================
     # MODÉRATION DU CONTENU AVANT CRÉATION
@@ -2298,7 +2303,12 @@ def update_contestant(
                 MyfavContestForEligibility.is_deleted == False,
             ).first()
     if entry_contest:
-        raise_if_user_missing_contest_entry_requirements(db, current_user, entry_contest)
+        raise_if_user_missing_contest_entry_requirements(
+            db,
+            current_user,
+            entry_contest,
+            entry_type=(getattr(contestant, "entry_type", None) or contestant_data.entry_type),
+        )
     
     # ============================================
     # MODÉRATION DU CONTENU AVANT MISE À JOUR

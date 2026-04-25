@@ -1,7 +1,7 @@
 """
 Server-side enforcement: user must satisfy contest verification flags before entry.
 """
-from typing import Tuple
+from typing import Optional, Tuple
 
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
@@ -25,12 +25,17 @@ def _has_approved(db: Session, user_id: int, types: Tuple[str, ...]) -> bool:
 
 
 def raise_if_user_missing_contest_entry_requirements(
-    db: Session, user: User, contest: Contest
+    db: Session, user: User, contest: Contest, entry_type: Optional[str] = None
 ) -> None:
     """
     Ensures the current user meets all contest-level verification requirements
-    (KYC, visual, voice, brand, content). Used for create/update contestant.
+    (KYC, visual, voice, brand, content) for participation entries.
+    Nomination entries must not be blocked by KYC/verification requirements.
     """
+    normalized_entry_type = (entry_type or "").strip().lower()
+    if normalized_entry_type == "nomination":
+        return
+
     if contest.requires_kyc:
         kyc_ok = bool(
             getattr(user, "is_verified", False)
