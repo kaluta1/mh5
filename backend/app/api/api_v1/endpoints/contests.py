@@ -22,6 +22,10 @@ def _normalize_contest_mode(mode: Any) -> str:
     return normalized or "participation"
 
 
+def _entry_type_from_contest_mode(mode: Any) -> str:
+    return "nomination" if _normalize_contest_mode(mode) == "nomination" else "participation"
+
+
 class ParticipateRequest(BaseModel):
     """Request schema for participating in a contest"""
     title: str
@@ -174,7 +178,7 @@ def read_contests(
             for contest_id in contest_ids:
                 count = 0
                 # Determine expected entry_type based on contest_mode
-                expected_entry_type = 'nomination' if contest_mode_map.get(contest_id) == 'nomination' else 'participation'
+                expected_entry_type = _entry_type_from_contest_mode(contest_mode_map.get(contest_id))
                 # Check via season_id from ContestSeasonLink
                 if contest_id in season_by_contest:
                     season_id = season_by_contest[contest_id]
@@ -235,7 +239,7 @@ def read_contests(
                     ).all()
                     
                     for contest_id in contest_ids:
-                        expected_entry_type = 'nomination' if contest_mode_map.get(contest_id) == 'nomination' else 'participation'
+                        expected_entry_type = _entry_type_from_contest_mode(contest_mode_map.get(contest_id))
 
                         # 1. First, check active round (contest-specific check)
                         if contest_id in active_rounds_by_contest:
@@ -585,42 +589,48 @@ def read_contest(
             active_round = crud.round.get_active_round_for_contest(db, contest_id)
             target_round_id = active_round.id if active_round else None
 
+        expected_entry_type = _entry_type_from_contest_mode(getattr(contest_obj, "contest_mode", "participation"))
         participation = None
         if target_round_id:
             # Pass season_id to scope to THIS specific contest (rounds are shared)
-            # Don't filter by entry_type here - frontend filters via URL entryType param
+            # Filter by entry_type to avoid cross-tab confusion (nomination vs participation).
             participation = crud_contestant.get_by_round_and_user(
                 db=db,
                 round_id=target_round_id,
                 user_id=current_user.id,
+                entry_type=expected_entry_type,
                 season_id=contest_id
             )
         else:
-            # Fallback to season logic if no active round
-            season_link = db.query(ContestSeasonLink).filter(
-                ContestSeasonLink.contest_id == contest_id,
-                ContestSeasonLink.is_active == True
-            ).first()
+            # Canonical storage in this codebase: Contestant.season_id == contest_id.
+            # Check this first, then fallback to linked ContestSeason for legacy data.
+            participation = crud_contestant.get_by_season_and_user(
+                db=db,
+                season_id=contest_id,
+                user_id=current_user.id,
+                entry_type=expected_entry_type,
+            )
+            if participation:
+                season_link = None
+            # Fallback to season logic if no active round / no canonical record
+            else:
+                season_link = db.query(ContestSeasonLink).filter(
+                    ContestSeasonLink.contest_id == contest_id,
+                    ContestSeasonLink.is_active == True
+                ).first()
 
-            season_id = None
-            if season_link:
+            if not participation and season_link:
                 season = db.query(ContestSeason).filter(
                     ContestSeason.id == season_link.season_id,
                     ContestSeason.is_deleted == False
                 ).first()
                 if season:
-                    season_id = season.id
-            
-            # 2. Fallback to contest.id if no active season found (legacy behavior)
-            if not season_id:
-                season_id = contest_id
-
-            # Check if we have participation
-            participation = crud_contestant.get_by_season_and_user(
-                db=db,
-                season_id=season_id,
-                user_id=current_user.id
-            )
+                    participation = crud_contestant.get_by_season_and_user(
+                        db=db,
+                        season_id=season.id,
+                        user_id=current_user.id,
+                        entry_type=expected_entry_type,
+                    )
 
         if participation:
             try:

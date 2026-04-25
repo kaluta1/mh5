@@ -1745,15 +1745,27 @@ def create_contestant(
                         if link:
                             break
                     if not link:
-                        raise HTTPException(
-                            status_code=status.HTTP_400_BAD_REQUEST, 
-                            detail=f"Requested round does not belong to this contest/season"
-                        )
+                        # Frontend can send stale round_id from cached URLs. Fall back to active round.
+                        from app import crud
+                        fallback_round = crud.round.get_active_round_for_contest(db, real_contest_id) if real_contest_id else None
+                        if fallback_round:
+                            target_round_id = fallback_round.id
+                        else:
+                            raise HTTPException(
+                                status_code=status.HTTP_400_BAD_REQUEST, 
+                                detail=f"Requested round does not belong to this contest/season"
+                            )
             else:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST, 
-                    detail=f"Requested round does not belong to this contest"
-                )
+                # Frontend can send stale round_id from cached URLs. Fall back to active round.
+                from app import crud
+                fallback_round = crud.round.get_active_round_for_contest(db, real_contest_id) if real_contest_id else None
+                if fallback_round:
+                    target_round_id = fallback_round.id
+                else:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST, 
+                        detail=f"Requested round does not belong to this contest"
+                    )
     else:
         # Trouver le round actif
         if real_contest_id:

@@ -303,7 +303,11 @@ export default function ContestDetailPage() {
         return
       }
 
-      const contestMode = contest?.contest?.contest_mode
+      const contestModeRaw = contest?.contest?.contest_mode as any
+      const contestMode =
+        typeof contestModeRaw === 'string'
+          ? contestModeRaw.trim().toLowerCase()
+          : String(contestModeRaw ?? '').trim().toLowerCase()
       const desiredEntryType = contestMode === 'nomination' ? 'nomination' : 'participation'
       const displayRoundId =
         contest?.contest?.display_round_id ??
