@@ -1,6 +1,23 @@
+ 'use client'
+
 import Link from 'next/link'
+import { useEffect, useMemo } from 'react'
+import { useSearchParams } from 'next/navigation'
 
 export default function MyHigh5LandingPage() {
+  const searchParams = useSearchParams()
+  const referralCode = useMemo(
+    () => searchParams.get('ref') || searchParams.get('referral') || '',
+    [searchParams]
+  )
+  const referralQuery = referralCode ? `ref=${encodeURIComponent(referralCode)}` : ''
+
+  useEffect(() => {
+    if (!referralCode) return
+    localStorage.setItem('referral_code', referralCode)
+    localStorage.setItem('referralCode', referralCode)
+  }, [referralCode])
+
   const incomeStreams = [
     {
       title: "Annual Verification Fees",
@@ -35,6 +52,7 @@ export default function MyHigh5LandingPage() {
   const contestFlow = [
     "Join for free and nominate contestants or vote without account verification.",
     "Verify your account only if you want to participate with your own content.",
+    "Each member gets a unique invitation link to share. Referred affiliates appear on the Affiliate page and contribute to your earnings.",
     "Participation contests begin at city level, nomination contests begin at country level.",
     "The first round is for nomination or participation, the next round is for voting.",
     "Top contestants advance from city or country level to regional, continental, and global stages."
@@ -92,7 +110,7 @@ export default function MyHigh5LandingPage() {
 
               <div className="mt-7 flex flex-col gap-3 sm:flex-row">
                 <Link
-                  href="/dashboard"
+                  href={referralQuery ? `/register?${referralQuery}` : '/register'}
                   className="inline-flex items-center justify-center rounded-2xl bg-[#2563EB] px-6 py-3.5 text-base font-bold shadow-lg shadow-blue-900/40 transition hover:bg-[#1D4ED8]"
                 >
                   Get Started Free
@@ -245,6 +263,9 @@ export default function MyHigh5LandingPage() {
               <p className="mt-4 max-w-2xl text-base text-blue-50/90 sm:text-lg">
                 Founding Members gain monthly revenue participation, annual profit-sharing privileges, and the advantage of receiving randomly allocated referrals from members who join without using someone else&apos;s personal invitation link.
               </p>
+              <p className="mt-3 max-w-2xl text-sm text-blue-100/90 sm:text-base">
+                When someone joins from your unique invitation link and buys Founding Member, your affiliate percentage is credited to your earnings.
+              </p>
             </div>
             <div className="rounded-[28px] bg-slate-950/25 p-6 backdrop-blur sm:p-8">
               <div className="grid gap-4 sm:grid-cols-2">
@@ -261,12 +282,12 @@ export default function MyHigh5LandingPage() {
                 <div className="rounded-2xl bg-white/10 p-5 sm:col-span-2">
                   <div className="text-sm text-blue-100">Core Privileges</div>
                   <div className="mt-2 text-blue-50">
-                    Share in 10% of monthly website revenues, share in annual profit allocated for Founding Members, receive random referral allocation, and unlock 10-level affiliate earnings.
+                    Share in 10% of monthly website revenues, share in annual post-tax profit allocated for Founding Members, and receive random referral allocation
                   </div>
                 </div>
               </div>
               <Link
-                href="/dashboard/wallet?product=mfm"
+                href={referralQuery ? `/dashboard/wallet?product=mfm&${referralQuery}` : '/dashboard/wallet?product=mfm'}
                 className="mt-6 flex w-full items-center justify-center rounded-2xl bg-white px-6 py-4 text-base font-bold text-slate-900 transition hover:scale-[1.01]"
               >
                 Claim Founding Member Position
@@ -282,12 +303,12 @@ export default function MyHigh5LandingPage() {
           MyHigh5 combines contest participation, verified identity, recurring engagement, and network-driven monetization into one growth-ready digital platform.
         </p>
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-          <button className="rounded-2xl bg-[#2563EB] px-6 py-3 font-semibold transition hover:bg-[#1D4ED8]">
+          <Link
+            href={referralQuery ? `/register?${referralQuery}` : '/register'}
+            className="rounded-2xl bg-[#2563EB] px-6 py-3 font-semibold transition hover:bg-[#1D4ED8]"
+          >
             Join MyHigh5 Free
-          </button>
-          <button className="rounded-2xl border border-white/15 bg-white/5 px-6 py-3 font-semibold transition hover:bg-white/10">
-            Explore Earning Opportunities
-          </button>
+          </Link>
         </div>
       </section>
 
