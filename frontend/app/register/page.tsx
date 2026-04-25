@@ -48,6 +48,10 @@ function RegisterPageContent() {
     hasNumber: false,
     hasSpecialChar: false
   })
+  const postAuthReturnUrl =
+    searchParams.get('returnUrl') ||
+    (typeof window !== 'undefined' ? localStorage.getItem('returnUrl') : '') ||
+    ''
 
   // Vérifier si un code de parrainage est présent dans l'URL ou localStorage
   useEffect(() => {
@@ -69,10 +73,22 @@ function RegisterPageContent() {
   useEffect(() => {
     const accessToken = localStorage.getItem('access_token')
     if (accessToken) {
-      router.push('/dashboard')
+      if (postAuthReturnUrl && postAuthReturnUrl !== '/login' && postAuthReturnUrl !== '/') {
+        localStorage.removeItem('returnUrl')
+        router.push(postAuthReturnUrl)
+      } else {
+        router.push('/dashboard')
+      }
       return
     }
-  }, [router])
+  }, [router, postAuthReturnUrl])
+
+  useEffect(() => {
+    const returnUrl = searchParams.get('returnUrl')
+    if (returnUrl) {
+      localStorage.setItem('returnUrl', returnUrl)
+    }
+  }, [searchParams])
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }))
@@ -296,6 +312,18 @@ function RegisterPageContent() {
 
       // Afficher le message de succès
       setIsSuccess(true)
+
+      // If backend returns auth tokens on registration, redirect directly to target page.
+      if (response.access_token) {
+        const returnUrl = searchParams.get('returnUrl') || localStorage.getItem('returnUrl')
+        if (returnUrl && returnUrl !== '/login' && returnUrl !== '/') {
+          localStorage.removeItem('returnUrl')
+          router.push(returnUrl)
+        } else {
+          router.push('/dashboard')
+        }
+        return
+      }
       
     } catch (err: any) {
       console.error('Registration error:', err)
@@ -443,7 +471,14 @@ function RegisterPageContent() {
                   {t('auth.register.success_message') || 'Bienvenue ! Votre compte a été créé avec succès.'}
                 </p>
                 <Button
-                  onClick={() => router.push('/login')}
+                  onClick={() => {
+                    const returnUrl = searchParams.get('returnUrl') || localStorage.getItem('returnUrl')
+                    if (returnUrl && returnUrl !== '/login' && returnUrl !== '/') {
+                      router.push(`/login?returnUrl=${encodeURIComponent(returnUrl)}`)
+                    } else {
+                      router.push('/login')
+                    }
+                  }}
                   className="w-full h-12 text-lg font-semibold bg-gradient-to-r from-myhigh5-primary to-purple-600 hover:from-myhigh5-primary-dark hover:to-purple-700 text-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
                 >
                   <Heart className="mr-2 h-5 w-5" />
@@ -684,7 +719,7 @@ function RegisterPageContent() {
                   {t('auth.register.have_account')}{' '}
                 </span>
                 <Link
-                  href="/login"
+                  href={postAuthReturnUrl ? `/login?returnUrl=${encodeURIComponent(postAuthReturnUrl)}` : '/login'}
                   className="text-sm font-semibold text-myhigh5-primary hover:text-myhigh5-primary-dark dark:text-myhigh5-blue-400 dark:hover:text-myhigh5-blue-300 transition-colors"
                 >
                   {t('auth.register.login_link')}

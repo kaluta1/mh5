@@ -12,6 +12,8 @@ export default function MyHigh5LandingPage() {
   const [siteOrigin, setSiteOrigin] = useState('')
   const [copiedInviteLink, setCopiedInviteLink] = useState(false)
   const effectiveReferralCode = (user?.personal_referral_code || referralCode || '').trim()
+  const claimTarget = '/dashboard/wallet?product=mfm'
+  const claimReturnUrl = encodeURIComponent(claimTarget)
   const referralQuery = effectiveReferralCode ? `ref=${encodeURIComponent(effectiveReferralCode)}` : ''
   const invitationLink = useMemo(() => {
     if (!siteOrigin || !effectiveReferralCode) return ''
@@ -336,7 +338,13 @@ export default function MyHigh5LandingPage() {
                 </div>
               </div>
               <Link
-                href={referralQuery ? `/dashboard/wallet?product=mfm&${referralQuery}` : '/dashboard/wallet?product=mfm'}
+                href={
+                  user
+                    ? (referralQuery ? `/dashboard/wallet?product=mfm&${referralQuery}` : '/dashboard/wallet?product=mfm')
+                    : (referralQuery
+                      ? `/register?${referralQuery}&returnUrl=${claimReturnUrl}`
+                      : `/register?returnUrl=${claimReturnUrl}`)
+                }
                 className="mt-6 flex w-full items-center justify-center rounded-2xl bg-white px-6 py-4 text-base font-bold text-slate-900 transition hover:scale-[1.01]"
               >
                 Claim Founding Member Position
