@@ -17,7 +17,7 @@ export default function MyHigh5LandingPage() {
   const referralQuery = effectiveReferralCode ? `ref=${encodeURIComponent(effectiveReferralCode)}` : ''
   const invitationLink = useMemo(() => {
     if (!siteOrigin || !effectiveReferralCode) return ''
-    return `${siteOrigin}/register?ref=${encodeURIComponent(effectiveReferralCode)}`
+    return `${siteOrigin}/pitching?ref=${encodeURIComponent(effectiveReferralCode)}`
   }, [siteOrigin, effectiveReferralCode])
 
   useEffect(() => {
