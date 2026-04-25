@@ -258,9 +258,30 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
     }
   }, [nominatorCountry, isNomination])
 
+  const getFriendlyUploadErrorMessage = (rawError: string) => {
+    const message = String(rawError || '')
+    const lower = message.toLowerCase()
+    const isTooLarge =
+      lower.includes('too large') ||
+      lower.includes('payload too large') ||
+      lower.includes('entity too large') ||
+      lower.includes('file is too big') ||
+      lower.includes('413') ||
+      lower.includes('size limit') ||
+      lower.includes('max size')
+
+    if (isTooLarge) {
+      return t('dashboard.contests.participation_form.error.file_too_large')
+        || 'File is too large (max 100MB). Please choose a smaller image.'
+    }
+
+    return `${t('participation.uploadError') || "Erreur d'upload"}: ${message}`
+  }
+
   // Hook pour upload modéré des images
   const imageUpload = useModeratedUpload({
     accessToken,
+    maxSizeMB: 100,
     onSuccess: (result) => {
       // Extra safety: never accept image uploads in nomination mode.
       if (isNomination) return
@@ -271,7 +292,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
       if (flags && flags.length > 0) {
         addToast(t('moderation.content_rejected') || `⚠️ ${error}`, 'error')
       } else {
-        addToast(`${t('participation.uploadError') || "Erreur d'upload"}: ${error}`, 'error')
+        addToast(getFriendlyUploadErrorMessage(error), 'error')
       }
     }
   })
@@ -279,6 +300,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
   // Hook pour upload modéré des vidéos
   const videoUpload = useModeratedUpload({
     accessToken,
+    maxSizeMB: mediaRequirements?.videoMaxSizeMb ?? 100,
     onSuccess: (result) => {
       setVideoDuplicateError('')
       setVideoUrl(result.url)
@@ -288,7 +310,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
       if (flags && flags.length > 0) {
         addToast(t('moderation.content_rejected') || `⚠️ ${error}`, 'error')
       } else {
-        addToast(`${t('participation.uploadError') || "Erreur d'upload"}: ${error}`, 'error')
+        addToast(getFriendlyUploadErrorMessage(error), 'error')
       }
     }
   })

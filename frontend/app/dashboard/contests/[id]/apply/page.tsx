@@ -590,17 +590,30 @@ export default function ApplyToContestPage() {
       if (errorDetail) {
         const errorLower = errorDetail.toLowerCase()
 
+        // Détecter les erreurs de taille de fichier (image/vidéo trop volumineuse)
+        if (
+          errorLower.includes('too large') ||
+          errorLower.includes('payload too large') ||
+          errorLower.includes('entity too large') ||
+          errorLower.includes('413') ||
+          errorLower.includes('file is too big') ||
+          errorLower.includes('size limit')
+        ) {
+          errorMessage = t('dashboard.contests.participation_form.error.file_too_large')
+            || 'File is too large (max 100MB). Please choose a smaller image.'
+        }
         // Détecter les erreurs de pays du nominateur
-        if (errorLower.includes('nominator country') || errorLower.includes('country must match')) {
+        else if (errorLower.includes('nominator country') || errorLower.includes('country must match')) {
           errorMessage = errorDetail // Show the actual backend message
         }
         // Détecter les erreurs de genre
         else if (errorLower.includes('masculin') || errorLower.includes('male') || errorLower.includes('male participants only')) {
-          errorMessage = t('dashboard.contests.participation_form.error.gender_restriction_male') || errorDetail
+          errorMessage = errorDetail || t('dashboard.contests.participation_form.error.gender_restriction_male')
         } else if (errorLower.includes('féminin') || errorLower.includes('female') || errorLower.includes('female participants only')) {
-          errorMessage = t('dashboard.contests.participation_form.error.gender_restriction_female') || errorDetail
+          errorMessage = errorDetail || t('dashboard.contests.participation_form.error.gender_restriction_female')
         } else if (errorLower.includes('genre') || errorLower.includes('gender') || errorLower.includes('gender information')) {
-          errorMessage = t('dashboard.contests.participation_form.error.gender_not_set') || errorDetail
+          // Show backend detail directly so users see exact required action.
+          errorMessage = errorDetail || t('dashboard.contests.participation_form.error.gender_not_set')
         }
         // Détecter les erreurs de soumission déjà effectuée
         else if (errorLower.includes('already') && (errorLower.includes('submission') || errorLower.includes('candidature'))) {
