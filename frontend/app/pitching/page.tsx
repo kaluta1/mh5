@@ -2,15 +2,29 @@
 
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
+import { useAuth } from '@/hooks/use-auth'
+import { useToast } from '@/components/ui/toast'
 
 export default function MyHigh5LandingPage() {
+  const { user } = useAuth()
+  const { addToast } = useToast()
   const [referralCode, setReferralCode] = useState('')
-  const referralQuery = referralCode ? `ref=${encodeURIComponent(referralCode)}` : ''
+  const [siteOrigin, setSiteOrigin] = useState('')
+  const [copiedInviteLink, setCopiedInviteLink] = useState(false)
+  const effectiveReferralCode = (user?.personal_referral_code || referralCode || '').trim()
+  const referralQuery = effectiveReferralCode ? `ref=${encodeURIComponent(effectiveReferralCode)}` : ''
+  const invitationLink = useMemo(() => {
+    if (!siteOrigin || !effectiveReferralCode) return ''
+    return `${siteOrigin}/register?ref=${encodeURIComponent(effectiveReferralCode)}`
+  }, [siteOrigin, effectiveReferralCode])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
+    setSiteOrigin(window.location.origin)
     const params = new URLSearchParams(window.location.search)
-    const code = params.get('ref') || params.get('referral') || ''
+    const codeFromUrl = params.get('ref') || params.get('referral') || ''
+    const codeFromStorage = localStorage.getItem('referral_code') || localStorage.getItem('referralCode') || ''
+    const code = codeFromUrl || codeFromStorage
     if (!code) return
     setReferralCode(code)
   }, [])
@@ -20,6 +34,18 @@ export default function MyHigh5LandingPage() {
     localStorage.setItem('referral_code', referralCode)
     localStorage.setItem('referralCode', referralCode)
   }, [referralCode])
+
+  const handleCopyInvitationLink = async () => {
+    if (!invitationLink) return
+    try {
+      await navigator.clipboard.writeText(invitationLink)
+      setCopiedInviteLink(true)
+      addToast('Invitation link copied', 'success')
+      setTimeout(() => setCopiedInviteLink(false), 2000)
+    } catch {
+      addToast('Could not copy invitation link', 'error')
+    }
+  }
 
   const incomeStreams = [
     {
@@ -118,6 +144,26 @@ export default function MyHigh5LandingPage() {
                 >
                   Get Started Free
                 </Link>
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-blue-400/20 bg-white/5 p-4">
+                <div className="text-sm font-semibold text-blue-200">Your Unique Invitation Link</div>
+                <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                  <div className="flex-1 rounded-xl border border-white/10 bg-[#0B1220] px-3 py-2 text-xs text-slate-200 sm:text-sm break-all">
+                    {invitationLink || 'Login to get your personal invitation link'}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCopyInvitationLink}
+                    disabled={!invitationLink}
+                    className="rounded-xl bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {copiedInviteLink ? 'Copied' : 'Copy Link'}
+                  </button>
+                </div>
+                <p className="mt-2 text-xs text-slate-300">
+                  Share this link. Referred affiliates are tracked on your Affiliate page and their qualified purchases contribute to your earnings.
+                </p>
               </div>
 
               <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
