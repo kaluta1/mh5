@@ -362,7 +362,7 @@ export function ContestCard({
                       </div>
                     </div>
                     {/* Voting Type */}
-                    {contest_mode === 'nomination' && (
+                    {String(contest_mode ?? '').split('.').pop()?.trim().toLowerCase() === 'nomination' && (
                       <div className="mt-2 px-2 py-1 bg-amber-100 dark:bg-amber-900/30 rounded text-xs text-amber-700 dark:text-amber-300">
                         Nomination
                       </div>

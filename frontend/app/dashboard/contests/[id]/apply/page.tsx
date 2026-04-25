@@ -118,7 +118,8 @@ export default function ApplyToContestPage() {
 
       // Determine effective entry type based on query param (if present) or contest mode.
       // If the URL param is missing and we don't find a match, we'll retry the "other" entry type.
-      let expectedEntryType = entryTypeParam || (c.contest_mode === 'nomination' ? 'nomination' : 'participation')
+      const normalizedContestMode = String(c.contest_mode ?? '').split('.').pop()?.trim().toLowerCase()
+      let expectedEntryType = entryTypeParam || (normalizedContestMode === 'nomination' ? 'nomination' : 'participation')
       setIsNomination(expectedEntryType === 'nomination')
 
       // 3. User Participation check

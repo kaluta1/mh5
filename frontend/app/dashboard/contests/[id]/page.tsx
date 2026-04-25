@@ -551,7 +551,7 @@ export default function ContestDetailPage() {
   })
 
   // Déterminer si c'est une nomination
-  const isNomination = contest.contest.contest_mode === 'nomination'
+  const isNomination = String(contest.contest.contest_mode ?? '').split('.').pop()?.trim().toLowerCase() === 'nomination'
   const hasNoContestants = filteredContestants.length === 0
 
   // Déterminer si l'utilisateur peut participer (pays sélectionné = son pays ou aucun filtre)

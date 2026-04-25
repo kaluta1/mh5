@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Optional, Union, TYPE_CHECKING
 from datetime import datetime, date, timedelta
 
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, cast, String
 
 from app.models.contest import Contest, ContestEntry, ContestVote
 from app.models.contests import Contestant, ContestantRanking
@@ -49,9 +49,14 @@ def _normalize_contest_mode(mode: Any) -> str:
     """Normalize enum/string contest_mode to a comparable lowercase string."""
     if mode is None:
         return "participation"
-    value = mode.value if hasattr(mode, "value") else str(mode)
-    normalized = str(value).strip().lower()
-    return normalized or "participation"
+    value = mode.value if hasattr(mode, "value") else mode
+    text = str(value).strip().strip('"').strip("'")
+    if not text:
+        return "participation"
+    token = text.split(".")[-1].strip().lower()
+    if token in {"nomination", "participation"}:
+        return token
+    return "participation"
 
 
 class CRUDContest:
@@ -113,7 +118,14 @@ class CRUDContest:
         
         # Filtrer par contest_mode si fourni
         if "contest_mode" in filters and filters["contest_mode"]:
-            query = query.filter(Contest.contest_mode == filters["contest_mode"])
+            requested_mode = _normalize_contest_mode(filters["contest_mode"])
+            mode_text = func.lower(cast(Contest.contest_mode, String))
+            query = query.filter(
+                or_(
+                    mode_text == requested_mode,
+                    mode_text.like(f"%.{requested_mode}"),
+                )
+            )
 
         # Appliquer les filtres restants dynamiquement
         for field, value in filters.items():

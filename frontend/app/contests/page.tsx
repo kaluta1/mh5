@@ -156,7 +156,8 @@ function ContestsPageContent() {
     // The backend returns only the contests matching the categoryTab (nomination or participations)
     // However, we keep a safety check in case the backend filter didn't work
     let categoryFiltered = allContests.filter(contest => {
-      const isNomination = contest.contest_mode === 'nomination'
+      const normalizedMode = String(contest.contest_mode ?? '').split('.').pop()?.trim().toLowerCase()
+      const isNomination = normalizedMode === 'nomination'
       const matches = categoryTab === 'nomination'
         ? isNomination
         : !isNomination

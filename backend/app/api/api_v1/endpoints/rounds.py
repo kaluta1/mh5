@@ -18,6 +18,19 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+def _normalize_contest_mode(mode: Any) -> str:
+    if mode is None:
+        return "participation"
+    value = mode.value if hasattr(mode, "value") else mode
+    text = str(value).strip().strip('"').strip("'")
+    if not text:
+        return "participation"
+    token = text.split(".")[-1].strip().lower()
+    if token in {"nomination", "participation"}:
+        return token
+    return "participation"
+
+
 def _to_date_value(value: Any) -> Optional[date]:
     """Normalize ORM/JSON dates to date for comparisons."""
     if value is None:
@@ -94,6 +107,7 @@ def read_rounds(
     Inclut le nombre de participants et si l'utilisateur actuel a participé.
     """
     try:
+        contest_mode = _normalize_contest_mode(contest_mode) if contest_mode else None
         user_id = current_user.id if current_user else None
         
         # Simple query - fetch rounds without complex joins first
@@ -251,7 +265,7 @@ def _enrich_round_data(
             for c in contests:
                 # Filter by contest_mode
                 if contest_mode is not None:
-                    c_mode = getattr(c, 'contest_mode', 'participation')
+                    c_mode = _normalize_contest_mode(getattr(c, 'contest_mode', 'participation'))
                     if c_mode != contest_mode:
                         continue
                 
@@ -275,7 +289,7 @@ def _enrich_round_data(
                 valid_ids = [vc.id for vc in valid_contests]
                 valid_contest_ids = set(valid_ids)
                 mode_map = {
-                    vc.id: getattr(vc, "contest_mode", "participation")
+                    vc.id: _normalize_contest_mode(getattr(vc, "contest_mode", "participation"))
                     for vc in valid_contests
                 }
 
@@ -468,7 +482,7 @@ def _enrich_round_data(
                         "image_url": getattr(contest, 'image_url', None),
                         "created_at": getattr(contest, 'created_at', None),
                         "updated_at": getattr(contest, 'updated_at', None),
-                        "contest_mode": getattr(contest, 'contest_mode', 'participation'),
+                        "contest_mode": _normalize_contest_mode(getattr(contest, 'contest_mode', 'participation')),
                         "current_user_contesting": bool(is_contesting)  # Explicitly convert to bool
                     }
                     r_data.setdefault("contests", []).append(contest_data)

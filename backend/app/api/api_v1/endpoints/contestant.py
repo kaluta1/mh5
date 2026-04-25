@@ -76,6 +76,24 @@ def _clean_video_url(value: str) -> str:
     return (match.group(0) if match else cleaned).rstrip("/")
 
 
+def _normalize_contest_mode(mode: Any) -> str:
+    """Normalize contest_mode from enum/string variants to nomination/participation."""
+    if mode is None:
+        return "participation"
+
+    raw_value = mode.value if hasattr(mode, "value") else mode
+    text = str(raw_value).strip().strip('"').strip("'")
+    if not text:
+        return "participation"
+
+    # Handle values like "ContestMode.NOMINATION"
+    token = text.split(".")[-1].strip().lower()
+    if token in {"nomination", "participation"}:
+        return token
+
+    return "participation"
+
+
 def _canonicalize_social_media_url(url: str) -> Optional[str]:
     if not url:
         return None
@@ -1793,8 +1811,7 @@ def create_contestant(
             ContestModelForEntryType.is_deleted == False
         ).first()
     if contest_for_mode and hasattr(contest_for_mode, "contest_mode"):
-        raw_mode = contest_for_mode.contest_mode
-        contest_mode_value = (raw_mode.value if hasattr(raw_mode, "value") else str(raw_mode)).strip().lower()
+        contest_mode_value = _normalize_contest_mode(contest_for_mode.contest_mode)
     submission_entry_type = "nomination" if contest_mode_value == "nomination" else "participation"
     
     # Vérifier que l'utilisateur n'a pas déjà une candidature POUR CE ROUND ET CE CONTEST
@@ -2634,7 +2651,7 @@ def vote_for_contestant(
     if (
         season_level == "city"
         and contest
-        and (getattr(contest, "contest_mode", "") or "").strip().lower() == "nomination"
+        and _normalize_contest_mode(getattr(contest, "contest_mode", None)) == "nomination"
     ):
         season_level = "country"
 

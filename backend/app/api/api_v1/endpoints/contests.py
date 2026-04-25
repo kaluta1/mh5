@@ -17,9 +17,14 @@ logger = logging.getLogger(__name__)
 def _normalize_contest_mode(mode: Any) -> str:
     if mode is None:
         return "participation"
-    value = mode.value if hasattr(mode, "value") else str(mode)
-    normalized = str(value).strip().lower()
-    return normalized or "participation"
+    value = mode.value if hasattr(mode, "value") else mode
+    text = str(value).strip().strip('"').strip("'")
+    if not text:
+        return "participation"
+    token = text.split(".")[-1].strip().lower()
+    if token in {"nomination", "participation"}:
+        return token
+    return "participation"
 
 
 def _entry_type_from_contest_mode(mode: Any) -> str:

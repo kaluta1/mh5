@@ -79,7 +79,7 @@ export default function ContestantsListPage() {
         roundId: roundIdParam ? parseInt(roundIdParam, 10) : undefined,
       }) as any
       setContestName(data.name || '')
-      setContestMode(String(data.contest_mode || ''))
+      setContestMode(String(data.contest_mode || '').split('.').pop()?.trim().toLowerCase() || 'participation')
       setActiveRoundId(data.display_round_id ?? data.active_round_id ?? null)
       const cts = data.contestants || []
       setAllContestants(cts)
