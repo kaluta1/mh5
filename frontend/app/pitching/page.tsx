@@ -1,16 +1,19 @@
- 'use client'
+'use client'
 
 import Link from 'next/link'
-import { useEffect, useMemo } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useEffect, useMemo, useState } from 'react'
 
 export default function MyHigh5LandingPage() {
-  const searchParams = useSearchParams()
-  const referralCode = useMemo(
-    () => searchParams.get('ref') || searchParams.get('referral') || '',
-    [searchParams]
-  )
+  const [referralCode, setReferralCode] = useState('')
   const referralQuery = referralCode ? `ref=${encodeURIComponent(referralCode)}` : ''
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    const code = params.get('ref') || params.get('referral') || ''
+    if (!code) return
+    setReferralCode(code)
+  }, [])
 
   useEffect(() => {
     if (!referralCode) return
