@@ -73,7 +73,8 @@ export default function TransactionsPage() {
           product_code: t.product_code,
           source_user: t.source_user,
           deposit_id: t.deposit_id,
-          external_payment_id: t.external_payment_id
+          external_payment_id: t.external_payment_id,
+          aggregate: Boolean(t.aggregate),
         })))
       }
     } catch (error) {

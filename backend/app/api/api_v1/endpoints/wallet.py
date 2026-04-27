@@ -3,7 +3,7 @@ Wallet API Endpoints
 """
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_
+from sqlalchemy import func, and_, case
 from typing import List, Optional
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -117,23 +117,7 @@ def get_wallet_transactions(
     Combine les commissions et les dépôts.
     """
     transactions = []
-    
-    # Récupérer les commissions
-    commissions_query = db.query(AffiliateCommission).filter(
-        AffiliateCommission.user_id == current_user.id
-    )
-    
-    if transaction_type == "commission":
-        commissions = commissions_query.order_by(
-            AffiliateCommission.transaction_date.desc()
-        ).offset(skip).limit(limit).all()
-    elif transaction_type in ["deposit", "withdrawal"]:
-        commissions = []
-    else:
-        commissions = commissions_query.order_by(
-            AffiliateCommission.transaction_date.desc()
-        ).limit(limit // 2).all()
-    
+
     # Mapping des types de commission pour l'affichage
     commission_type_labels = {
         "KYC_PAYMENT": "KYC",
@@ -148,42 +132,120 @@ def get_wallet_transactions(
         "ANNUAL_PROFIT_POOL": "Pool Annuel"
     }
     
-    for c in commissions:
-        # Récupérer le nom de l'utilisateur source
-        source_user = db.query(User).filter(User.id == c.source_user_id).first()
-        source_name = source_user.full_name or source_user.username if source_user else "Utilisateur"
-        
-        # Type de commission pour l'affichage
-        comm_type_value = c.commission_type.value if c.commission_type else None
-        comm_type_label = commission_type_labels.get(comm_type_value, comm_type_value)
-        
-        # Description avec le type
-        level_str = "direct" if c.level == 1 else f"N{c.level}"
-        description = f"Commission {comm_type_label} ({level_str}) - {source_name}"
-        
-        # Mapping des statuts
-        if c.status == CommissionStatus.PAID:
-            status = "completed"
-        elif c.status == CommissionStatus.APPROVED:
-            status = "approved"
-        elif c.status == CommissionStatus.PENDING:
-            status = "pending"
+    def build_commission_transactions() -> List[dict]:
+        """
+        Level 1: one row per commission with referral username visible.
+        Levels 2–10: aggregated per (level, commission_type) — no indirect referral identities.
+        """
+        out: List[dict] = []
+
+        # --- Level 1: detail rows (direct referrals)
+        l1_rows = (
+            db.query(AffiliateCommission)
+            .filter(
+                AffiliateCommission.user_id == current_user.id,
+                AffiliateCommission.level == 1,
+            )
+            .order_by(AffiliateCommission.transaction_date.desc())
+            .all()
+        )
+        for c in l1_rows:
+            source_user = db.query(User).filter(User.id == c.source_user_id).first()
+            referral_username = (
+                (source_user.username or source_user.full_name or "User").strip()
+                if source_user
+                else "User"
+            )
+            comm_type_value = c.commission_type.value if c.commission_type else None
+            comm_type_label = commission_type_labels.get(comm_type_value, comm_type_value)
+            description = f"{comm_type_label} · Level 1 · {referral_username}"
+
+            if c.status == CommissionStatus.PAID:
+                status = "completed"
+            elif c.status == CommissionStatus.APPROVED:
+                status = "approved"
+            elif c.status == CommissionStatus.PENDING:
+                status = "pending"
+            else:
+                status = "failed"
+
+            out.append(
+                {
+                    "id": f"comm_{c.id}",
+                    "type": "credit",
+                    "category": "commission",
+                    "amount": float(c.commission_amount) if c.commission_amount else 0,
+                    "description": description,
+                    "date": c.transaction_date.isoformat() if c.transaction_date else None,
+                    "status": status,
+                    "commission_type": comm_type_value,
+                    "commission_type_label": comm_type_label,
+                    "level": 1,
+                    "source_user": referral_username,
+                    "aggregate": False,
+                }
+            )
+
+        # --- Levels 2–10: totals only (privacy)
+        agg_rows = (
+            db.query(
+                AffiliateCommission.level,
+                AffiliateCommission.commission_type,
+                func.sum(AffiliateCommission.commission_amount).label("total_amt"),
+                func.max(AffiliateCommission.transaction_date).label("last_dt"),
+                func.max(
+                    case(
+                        (AffiliateCommission.status == CommissionStatus.PENDING, 1),
+                        else_=0,
+                    )
+                ).label("has_pending"),
+            )
+            .filter(
+                AffiliateCommission.user_id == current_user.id,
+                AffiliateCommission.level >= 2,
+                AffiliateCommission.level <= 10,
+            )
+            .group_by(AffiliateCommission.level, AffiliateCommission.commission_type)
+            .all()
+        )
+        for row in agg_rows:
+            level = row.level
+            ct_enum = row.commission_type
+            total_amt = row.total_amt or Decimal(0)
+            last_dt = row.last_dt
+            has_pending = bool(row.has_pending)
+            comm_type_value = ct_enum.value if ct_enum else None
+            comm_type_label = commission_type_labels.get(comm_type_value, comm_type_value)
+            description = f"Level {level} · {comm_type_label} · Total (indirect)"
+
+            safe_ct = comm_type_value or "NONE"
+            out.append(
+                {
+                    "id": f"agg_comm_{level}_{safe_ct}",
+                    "type": "credit",
+                    "category": "commission",
+                    "amount": float(total_amt),
+                    "description": description,
+                    "date": last_dt.isoformat() if last_dt else None,
+                    "status": "pending" if has_pending else "completed",
+                    "commission_type": comm_type_value,
+                    "commission_type_label": comm_type_label,
+                    "level": level,
+                    "source_user": None,
+                    "aggregate": True,
+                }
+            )
+
+        out.sort(key=lambda x: x["date"] or "", reverse=True)
+        return out
+
+    if transaction_type not in ("deposit", "withdrawal"):
+        commission_items = build_commission_transactions()
+        if transaction_type == "commission":
+            transactions.extend(commission_items[skip : skip + limit])
         else:
-            status = "failed"
-        
-        transactions.append({
-            "id": f"comm_{c.id}",
-            "type": "credit",
-            "category": "commission",
-            "amount": float(c.commission_amount) if c.commission_amount else 0,
-            "description": description,
-            "date": c.transaction_date.isoformat() if c.transaction_date else None,
-            "status": status,
-            "commission_type": comm_type_value,
-            "commission_type_label": comm_type_label,
-            "level": c.level,
-            "source_user": source_name
-        })
+            half = max(1, limit // 2)
+            transactions.extend(commission_items[:half])
     
     # Récupérer les dépôts (uniquement en attente et validés)
     if transaction_type in [None, "deposit"]:

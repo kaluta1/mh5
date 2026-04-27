@@ -4526,7 +4526,11 @@ const translationsBase = {
         pay: "Payer",
         invoice: "Facture",
         download_invoice: "Télécharger la facture",
-        buy_service: "Acheter un service"
+        buy_service: "Acheter un service",
+        payment_video_title: "Comment payer et créditer votre portefeuille",
+        payment_video_subtitle: "Visionnez ce tutoriel avant d’effectuer un paiement.",
+        commission_privacy_note:
+          "Niveau 1 : commissions détaillées par filleul direct. Niveaux 2 à 10 : uniquement le type de commission et le total par niveau (réseau indirect agrégé pour protéger la vie privée)."
       },
       affiliates: {
         title: "Programme Affilié",
@@ -7320,7 +7324,11 @@ const translationsBase = {
         pay: "Pay",
         invoice: "Invoice",
         download_invoice: "Download invoice",
-        buy_service: "Buy a service"
+        buy_service: "Buy a service",
+        payment_video_title: "How to pay and top up your wallet",
+        payment_video_subtitle: "Watch this short tutorial before completing a payment.",
+        commission_privacy_note:
+          "Level 1: commissions shown per direct referral username. Levels 2–10: commission type and total per level only (indirect network aggregated for privacy)."
       },
       affiliates: {
         title: "Affiliate Program",
@@ -9885,7 +9893,11 @@ const translationsBase = {
         commission_affiliate: "Comisión de afiliado",
         welcome_bonus: "Bono de bienvenida",
         bank_withdrawal: "Retiro bancario",
-        premium_votes: "Compra de votos premium"
+        premium_votes: "Compra de votos premium",
+        payment_video_title: "Cómo pagar y recargar tu billetera",
+        payment_video_subtitle: "Mira este tutorial antes de completar un pago.",
+        commission_privacy_note:
+          "Nivel 1: comisiones por referido directo. Niveles 2 a 10: solo tipo de comisión y total por nivel (red indirecta agregada por privacidad)."
       },
       affiliates: {
         title: "Programa de Afiliados",
@@ -12332,7 +12344,11 @@ const translationsBase = {
         commission_affiliate: "Partner-Provision",
         welcome_bonus: "Willkommensbonus",
         bank_withdrawal: "Bankabhebung",
-        premium_votes: "Premium-Stimmen kaufen"
+        premium_votes: "Premium-Stimmen kaufen",
+        payment_video_title: "So bezahlen Sie und laden Ihre Wallet auf",
+        payment_video_subtitle: "Sehen Sie sich dieses kurze Tutorial an, bevor Sie eine Zahlung abschließen.",
+        commission_privacy_note:
+          "Stufe 1: Provisionen pro direktem Referral. Stufen 2–10: nur Provisionsart und Summe pro Stufe (indirektes Netz aus Datenschutzgründen aggregiert)."
       },
       affiliates: {
         title: "Partner-Programm",

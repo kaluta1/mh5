@@ -30,9 +30,11 @@ export interface Transaction {
   commission_type_label?: string
   level?: number
   product_code?: string
-  source_user?: string
+  source_user?: string | null
   deposit_id?: number
   external_payment_id?: string
+  /** Server aggregates levels 2–10 without indirect referral identities */
+  aggregate?: boolean
 }
 
 interface TransactionTableProps {

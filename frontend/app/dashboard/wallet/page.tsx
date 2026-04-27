@@ -103,7 +103,8 @@ export default function WalletPage() {
           product_code: t.product_code,
           source_user: t.source_user,
           deposit_id: t.deposit_id,
-          external_payment_id: t.external_payment_id
+          external_payment_id: t.external_payment_id,
+          aggregate: Boolean(t.aggregate),
         })))
       }
     } catch (error) {
@@ -135,6 +136,27 @@ export default function WalletPage() {
 
   return (
     <div className="space-y-6">
+      {/* Payment tutorial (YouTube) */}
+      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 overflow-hidden shadow-sm">
+        <div className="p-4 sm:p-6 border-b border-gray-100 dark:border-gray-700">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+            {t('dashboard.wallet.payment_video_title')}
+          </h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            {t('dashboard.wallet.payment_video_subtitle')}
+          </p>
+        </div>
+        <div className="aspect-video bg-black/90">
+          <iframe
+            src="https://www.youtube-nocookie.com/embed/8HoKgDQySJ8"
+            title={t('dashboard.wallet.payment_video_title')}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowFullScreen
+            className="w-full h-full min-h-[220px]"
+          />
+        </div>
+      </div>
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -235,17 +257,22 @@ export default function WalletPage() {
       {/* Recent Transactions */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 overflow-hidden">
         <div className="p-6 border-b border-gray-100 dark:border-gray-700">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-              <History className="w-5 h-5 text-gray-500" />
-              {t('dashboard.wallet.recent_transactions')}
-            </h2>
-            <Link href="/dashboard/wallet/transactions">
-              <Button variant="ghost" size="sm" className="text-myhigh5-primary hover:text-myhigh5-primary/80">
-                {t('dashboard.wallet.see_all')}
-                <ChevronRight className="w-4 h-4 ml-1" />
-              </Button>
-            </Link>
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-4">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                <History className="w-5 h-5 text-gray-500" />
+                {t('dashboard.wallet.recent_transactions')}
+              </h2>
+              <Link href="/dashboard/wallet/transactions">
+                <Button variant="ghost" size="sm" className="text-myhigh5-primary hover:text-myhigh5-primary/80">
+                  {t('dashboard.wallet.see_all')}
+                  <ChevronRight className="w-4 h-4 ml-1" />
+                </Button>
+              </Link>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+              {t('dashboard.wallet.commission_privacy_note')}
+            </p>
           </div>
         </div>
         
