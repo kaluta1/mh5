@@ -29,22 +29,22 @@ export default function ContactPage() {
     en: [
       { title: "Email", description: "Send us an email", value: "infos@myhigh5.com" },
       { title: "Live Chat", description: "Instant response", value: "Available 24/7" },
-      { title: "Headquarters", description: "In progress", value: "British Columbia" }
+      { title: "Headquarters", description: "Registered Office", value: "77 HIGH STREET, #10-12B HIGH STREET PLAZA, SINGAPORE 179433." }
     ],
     fr: [
       { title: "Email", description: "Envoyez-nous un email", value: "infos@myhigh5.com" },
       { title: "Chat en direct", description: "Réponse instantanée", value: "Disponible 24/7" },
-      { title: "Siège social", description: "En cours", value: "Colombie-Britannique" }
+      { title: "Siège social", description: "Bureau enregistré", value: "77 HIGH STREET, #10-12B HIGH STREET PLAZA, SINGAPOUR 179433." }
     ],
     es: [
       { title: "Email", description: "Envíanos un email", value: "infos@myhigh5.com" },
       { title: "Chat en vivo", description: "Respuesta instantánea", value: "Disponible 24/7" },
-      { title: "Sede central", description: "En progreso", value: "Columbia Británica" }
+      { title: "Sede central", description: "Oficina registrada", value: "77 HIGH STREET, #10-12B HIGH STREET PLAZA, SINGAPUR 179433." }
     ],
     de: [
       { title: "E-Mail", description: "Senden Sie uns eine E-Mail", value: "infos@myhigh5.com" },
       { title: "Live-Chat", description: "Sofortige Antwort", value: "24/7 verfügbar" },
-      { title: "Hauptsitz", description: "In Bearbeitung", value: "British Columbia" }
+      { title: "Hauptsitz", description: "Eingetragener Sitz", value: "77 HIGH STREET, #10-12B HIGH STREET PLAZA, SINGAPUR 179433." }
     ]
   }
 
