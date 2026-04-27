@@ -47,6 +47,10 @@ export default function FAQMobilePage() {
     {
       question: t('landing.faq.question_6') || 'Comment puis-je retirer mes gains ?',
       answer: t('landing.faq.answer_6') || 'Vous pouvez retirer vos gains via votre portefeuille dans le tableau de bord. Les paiements sont traités mensuellement avec un seuil minimum de 50$ CAD. Les méthodes de paiement incluent le virement bancaire (pour les affiliés canadiens), PayPal, ou la cryptomonnaie.'
+    },
+    {
+      question: t('landing.faq.question_7') || 'Comment déterminez-vous la qualité des gagnants dans des catégories comme le football et la boxe sans juges professionnels ?',
+      answer: t('landing.faq.answer_7') || 'Nos concours ne sont pas destinés à être jugés professionnellement, car le professionnalisme n\'est qu\'une partie des facteurs qui influencent l\'attrait d\'un participant. Un participant peut ne pas gagner selon des standards professionnels, tout en étant préféré par le public grâce au divertissement qu\'il apporte pendant le concours ou via d\'autres contenus, comme son interaction avec les fans.\n\nDans l\'environnement actuel des réseaux sociaux hautement connectés, la performance jugée professionnellement n\'est qu\'un élément parmi d\'autres de ce qui résonne auprès du public. MyHigh5 est conçu comme une plateforme de vote pilotée par les utilisateurs, où l\'engagement du public, incluant les votes, partages, likes, commentaires et vues, détermine les gagnants.'
     }
   ]
 

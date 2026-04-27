@@ -33,6 +33,10 @@ export function FAQ() {
     {
       question: t('landing.faq.question_6'),
       answer: t('landing.faq.answer_6')
+    },
+    {
+      question: t('landing.faq.question_7'),
+      answer: t('landing.faq.answer_7')
     }
   ]
 
