@@ -35,8 +35,8 @@ export function FAQ() {
       answer: t('landing.faq.answer_6')
     },
     {
-      question: t('landing.faq.question_7'),
-      answer: t('landing.faq.answer_7')
+      question: t('landing.faq.question_7') || 'How do you determine the quality of winners in categories such as football and boxing without involving professional judges?',
+      answer: t('landing.faq.answer_7') || "Our contests are not intended to be professionally judged, because professionalism is only one part of the overall factors that influence a contestant's appeal. A participant may not win by professional standards, yet still be preferred by the audience due to the entertainment they provide during the contest or through other content, such as their interaction with fans.\n\nIn today's highly connected social media environment, professionally judged performance is only one element of what resonates with an audience. MyHigh5 is designed as a user-driven voting platform, where audience engagement, including voting, sharing, liking, commenting, and viewing, determines the winners."
     }
   ]
 

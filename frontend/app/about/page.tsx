@@ -168,6 +168,15 @@ export default function AboutPage() {
                   </li>
                 ))}
               </ul>
+              <div className="mt-8 rounded-xl border border-gray-200 dark:border-gray-700 bg-white/70 dark:bg-gray-800/60 p-4">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-900 dark:text-white mb-2">
+                  Registered Office
+                </h3>
+                <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                  The registered office of the company is situated in the Republic of Singapore.
+                  77 HIGH STREET, #10-12B HIGH STREET PLAZA, SINGAPORE 179433.
+                </p>
+              </div>
             </div>
             <div className="relative">
               <div className="aspect-square rounded-3xl bg-gradient-to-br from-myhigh5-primary/20 to-myhigh5-secondary/20 flex items-center justify-center">
