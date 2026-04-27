@@ -7700,7 +7700,7 @@ const translationsBase = {
         view_details: "View Details",
         already_voted: "Already voted",
         already_voted_message: "You have already voted for this contestant.",
-        cannot_vote: "You cannot vote for this contestant",
+        cannot_vote: "Voting hasn't started yet",
         owner_cannot_vote: "Owner, cannot vote",
         own_cannot_vote: "Own, cannot vote",
         restriction_different_city: "Different city",
