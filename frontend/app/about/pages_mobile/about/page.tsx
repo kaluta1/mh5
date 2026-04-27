@@ -140,14 +140,8 @@ export default function AboutMobilePage() {
                 ))}
               </ul>
               <div className="mt-6 rounded-xl border border-gray-200 dark:border-gray-700 bg-white/70 dark:bg-gray-800/60 p-3">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-900 dark:text-white mb-1.5">
-                  Registered Office Address
-                </h3>
-                <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed mb-1">
-                  The registered office of the Company is situated in the Republic of Singapore.
-                </p>
-                <p className="text-xs font-medium text-gray-900 dark:text-white leading-relaxed">
-                  77 High Street, #10-12B High Street Plaza, Singapore 179433.
+                <p className="text-xs font-semibold text-gray-900 dark:text-white leading-relaxed">
+                  Registered Office: 77 HIGH STREET, #10-12B HIGH STREET PLAZA, SINGAPORE 179433.
                 </p>
               </div>
             </div>
