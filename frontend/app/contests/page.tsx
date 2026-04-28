@@ -61,14 +61,6 @@ function ContestsPageContent() {
   const [selectedContestId, setSelectedContestId] = useState<string | null>(null)
   const [shouldGoToParticipate, setShouldGoToParticipate] = useState(false)
 
-  const getContestMode = (contest: Contest): string => {
-    return String(contest.contest_mode ?? "").split(".").pop()?.trim().toLowerCase() || ""
-  }
-
-  const getContestParticipantsCount = (contest: Contest): number => {
-    return Number(contest.participant_count) || Number(contest.contestants) || 0
-  }
-
   // Extraire les types de contests disponibles depuis les données du backend
   const contestTypes = React.useMemo(() => {
     const types = new Set<string>()
@@ -159,18 +151,12 @@ function ContestsPageContent() {
       return
     }
 
-    // Filter contests with custom business rules:
-    // - Nomination tab: nomination contests that already have participants
-    // - Participation tab: participation contests + nomination contests with 0 participants
+    // Backend already applies nomination/participation tab rules.
+    // Keep a safety check in frontend in case backend filtering is bypassed.
     let categoryFiltered = allContests.filter(contest => {
-      const normalizedMode = getContestMode(contest)
-      const participantsCount = getContestParticipantsCount(contest)
-
-      if (categoryTab === 'nomination') {
-        return normalizedMode === 'nomination' && participantsCount > 0
-      }
-
-      return normalizedMode === 'participation' || (normalizedMode === 'nomination' && participantsCount === 0)
+      const normalizedMode = String(contest.contest_mode ?? '').split('.').pop()?.trim().toLowerCase()
+      const isNomination = normalizedMode === 'nomination'
+      return categoryTab === 'nomination' ? isNomination : !isNomination
     })
 
     // Filtrer par type si un onglet est sélectionné (mais pas "all")
@@ -215,6 +201,10 @@ function ContestsPageContent() {
     try {
       setIsLoading(true)
 
+      // For nomination tab request nomination mode.
+      // For participation tab request participation mode (backend also adds empty nominations there).
+      const contestMode = categoryTab === 'nomination' ? 'nomination' : categoryTab === 'participations' ? 'participation' : undefined
+
       const pageSize = 50
       const loadedContests: Contest[] = []
       let skip = 0
@@ -225,7 +215,7 @@ function ContestsPageContent() {
           pageSize,
           activeSearchTerm || undefined,
           undefined, // votingLevel n'est plus utilisé
-          undefined // Fetch both modes, then apply custom frontend tab rules
+          contestMode
         )
 
         if (!contests || !Array.isArray(contests) || contests.length === 0) {
@@ -546,14 +536,6 @@ function ContestsPageContent() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6">
               {filteredContests.map((contest, index) => (
-                (() => {
-                  const participantsCount = getContestParticipantsCount(contest)
-                  const isShiftedNomination =
-                    categoryTab === 'participations' &&
-                    getContestMode(contest) === 'nomination' &&
-                    participantsCount === 0
-
-                  return (
                 <ContestCard
                   key={contest.id}
                   id={contest.id.toString()}
@@ -561,7 +543,7 @@ function ContestsPageContent() {
                   description={contest.description}
                   coverImage={contest.coverImage}
                   startDate={contest.startDate}
-                  status={isShiftedNomination ? 'city' : contest.status}
+                  status={contest.status}
                   received={contest.received}
                   contestants={contest.contestants}
                   likes={contest.likes}
@@ -594,8 +576,6 @@ function ContestsPageContent() {
                   onParticipate={() => handleParticipateClick(contest.id)}
                   onOpenDetails={() => handleContestClick(contest.id)}
                 />
-                  )
-                })()
               ))}
             </div>
           )}

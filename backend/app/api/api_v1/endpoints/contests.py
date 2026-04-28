@@ -323,6 +323,32 @@ def read_contests(
             reverse=True  # Descending order - highest participant count first
         )
     
+    # Backend business rule for tab consistency (Meme Contest only):
+    # - nomination tab: hide empty "Meme Contest" nominations
+    # - participation tab: include empty "Meme Contest" nominations as city level
+    requested_mode = (contest_mode or "").strip().lower()
+    if requested_mode in {"nomination", "participation"}:
+        filtered_contests = []
+        for item in enriched_contests:
+            normalized_mode = _normalize_contest_mode(item.get("contest_mode"))
+            participants_count = int(item.get("entries_count") or item.get("contestants") or item.get("participant_count") or 0)
+            contest_name = str(item.get("name") or "").strip().lower()
+            is_meme_contest = contest_name == "meme contest"
+
+            if requested_mode == "nomination":
+                # Only special-case Meme Contest with zero participants.
+                # Other nomination contests keep default behavior.
+                if not (is_meme_contest and normalized_mode == "nomination" and participants_count == 0):
+                    filtered_contests.append(item)
+            else:
+                if normalized_mode == "participation" or (is_meme_contest and normalized_mode == "nomination" and participants_count == 0):
+                    # Render shifted empty Meme Contest nomination in city level for participation tab UX.
+                    if is_meme_contest and normalized_mode == "nomination" and participants_count == 0:
+                        item = {**item, "level": "city"}
+                    filtered_contests.append(item)
+
+        enriched_contests = filtered_contests
+
     logger.info(f"Successfully enriched {len(enriched_contests)} out of {len(contests)} contests")
     return enriched_contests
 
