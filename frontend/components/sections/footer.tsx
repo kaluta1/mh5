@@ -12,6 +12,7 @@ import {
   Youtube, 
   Mail, 
   Phone, 
+  Home,
   Heart,
   Send,
   Globe,
@@ -24,7 +25,6 @@ import {
 import { useLanguage } from "@/contexts/language-context"
 import { newsletterService, type NewsletterSubscriptionData } from "@/services/newsletter-service"
 import { useToast } from "@/components/ui/toast"
-import api from "@/lib/api"
 
 const socialLinks = [
   { name: "Facebook", icon: Facebook, href: "https://facebook.com/myhigh5", color: "hover:bg-blue-600" },
@@ -41,8 +41,6 @@ export function Footer() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [deviceInfo, setDeviceInfo] = useState<NewsletterSubscriptionData['device_info']>(null)
   const [locationInfo, setLocationInfo] = useState<NewsletterSubscriptionData['location_info']>(null)
-  const [categories, setCategories] = useState<Array<{ id: number; name: string; slug: string }>>([])
-  const [categoriesLoading, setCategoriesLoading] = useState(true)
 
   const getBrowserName = (): string => {
     if (typeof window === 'undefined') return 'Unknown'
@@ -129,41 +127,12 @@ export function Footer() {
     }
   }
 
-  // Charger les catégories depuis l'API
-  useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        setCategoriesLoading(true)
-        const response = await api.get('/api/v1/categories/', {
-          params: { active_only: true },
-          timeout: 30000, // Timeout spécifique pour cette requête
-        })
-        if (response.data && Array.isArray(response.data)) {
-          setCategories(response.data)
-        }
-      } catch (error: unknown) {
-        // En cas d'erreur, on garde un tableau vide (l'UI gère déjà ce cas)
-        setCategories([])
-      } finally {
-        setCategoriesLoading(false)
-      }
-    }
-
-    fetchCategories()
-  }, [])
-
   const quickLinks = [
     { name: t('footer.quick_links.about'), href: "/about", icon: Users },
     { name: t('footer.quick_links.contests'), href: "/contests", icon: Trophy },
     { name: t('navigation.clubs'), href: "/clubs", icon: Sparkles },
     { name: t('navigation.contact'), href: "/contact", icon: Mail },
   ]
-
-  // Les catégories sont maintenant chargées depuis l'API
-  const categoryLinks = categories.map(category => ({
-    name: category.name,
-    href: `/contests?category=${category.slug}`
-  }))
 
   const legalLinks = [
     { name: t('footer.legal.privacy'), href: "/privacy" },
@@ -262,6 +231,12 @@ export function Footer() {
                 </div>
                 <span className="text-sm">{t('footer.brand.email')}</span>
               </a>
+              <div className="flex items-center gap-3 text-gray-600 dark:text-gray-400">
+                <div className="w-8 h-8 rounded-lg bg-myhigh5-primary/10 flex items-center justify-center">
+                  <Home className="w-4 h-4 text-myhigh5-primary" />
+                </div>
+                <span className="text-sm">MyHigh5 HQ, Dubai, United Arab Emirates</span>
+              </div>
             </div>
           </div>
 
@@ -287,34 +262,15 @@ export function Footer() {
 
           {/* Categories */}
           <div className="space-y-4">
-            <h4 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">
+            <Link
+              href="https://myhigh5.com/contests"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider hover:text-myhigh5-primary dark:hover:text-myhigh5-cyan-400 transition-colors"
+            >
               {t('footer.categories.title')}
-            </h4>
-            {categoriesLoading ? (
-              <ul className="space-y-3">
-                {[...Array(3)].map((_, i) => (
-                  <li key={i} className="h-4 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
-                ))}
-              </ul>
-            ) : categoryLinks.length > 0 ? (
-            <ul className="space-y-3">
-                {categoryLinks.slice(0, 6).map((link) => (
-                <li key={link.name}>
-                  <Link 
-                    href={link.href}
-                    className="group flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-myhigh5-primary dark:hover:text-myhigh5-cyan-400 transition-colors"
-                  >
-                    <ArrowRight className="w-3 h-3 opacity-0 -ml-5 group-hover:opacity-100 group-hover:ml-0 transition-all" />
-                    <span className="text-sm">{link.name}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-            ) : (
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                {t('footer.categories.no_categories')}
-              </p>
-            )}
+              <ArrowRight className="w-4 h-4" />
+            </Link>
           </div>
 
           {/* Legal */}

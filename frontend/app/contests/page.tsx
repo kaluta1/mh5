@@ -3,6 +3,7 @@
 import * as React from "react"
 import { useState, useEffect, useMemo, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
+import Script from "next/script"
 import { Header } from "@/components/layout/header"
 import { Footer } from "@/components/sections/footer"
 import { ContestCard } from "@/components/dashboard/contest-card"
@@ -598,6 +599,17 @@ function ContestsPageContent() {
           )}
         </section>
 
+        <section className="container px-4 md:px-6 py-4">
+          <ins
+            className="adsbygoogle"
+            style={{ display: "block" }}
+            data-ad-client="ca-pub-5582556318526474"
+            data-ad-slot="8189486989"
+            data-ad-format="auto"
+            data-full-width-responsive="true"
+          />
+        </section>
+
         {/* CTA Section */}
         <section className="container px-4 md:px-6 py-12">
           <div className="relative overflow-hidden bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary rounded-3xl p-8 md:p-16">
@@ -644,6 +656,10 @@ function ContestsPageContent() {
       </main>
 
       <Footer />
+
+      <Script id="adsense-mh5-contests" strategy="afterInteractive">
+        {`(adsbygoogle = window.adsbygoogle || []).push({});`}
+      </Script>
 
       {/* Auth Required Dialog */}
       <Dialog open={showAuthDialog} onOpenChange={setShowAuthDialog}>
