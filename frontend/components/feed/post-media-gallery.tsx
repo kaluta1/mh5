@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import Image from 'next/image'
 import { PostMedia } from '@/services/social-service'
 import { ImagePreviewDialog } from '@/components/ui/image-preview-dialog'
 import { VideoPreviewDialog } from '@/components/ui/video-preview-dialog'
@@ -26,12 +25,12 @@ export function PostMediaGallery({ media }: PostMediaGalleryProps) {
             className="relative w-full rounded-lg overflow-hidden cursor-pointer"
             onClick={() => setSelectedImage(item.url)}
           >
-            <Image
+            <img
               src={item.url}
               alt="Post media"
-              width={800}
-              height={600}
               className="w-full h-auto object-cover"
+              loading="lazy"
+              referrerPolicy="no-referrer"
             />
           </div>
           {selectedImage && (
@@ -192,11 +191,12 @@ function MediaItem({
         className="relative w-full aspect-square rounded-lg overflow-hidden cursor-pointer"
         onClick={() => onImageClick(item.url)}
       >
-        <Image
+        <img
           src={item.url}
           alt="Post media"
-          fill
-          className="object-cover"
+          className="h-full w-full object-cover"
+          loading="lazy"
+          referrerPolicy="no-referrer"
         />
       </div>
     )
