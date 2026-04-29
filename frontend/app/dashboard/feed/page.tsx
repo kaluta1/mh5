@@ -131,7 +131,10 @@ export default function FeedPage() {
 
   const handleShareOut = async (post: Post) => {
     const origin = typeof window !== 'undefined' ? window.location.origin : ''
-    const shareUrl = `${origin}/dashboard/feed/${post.id}`
+    const referralCode = user?.personal_referral_code?.trim()
+    const shareUrl = referralCode
+      ? `${origin}/s/f/${post.id}?ref=${encodeURIComponent(referralCode)}`
+      : `${origin}/s/f/${post.id}`
     const title = post.author?.full_name || post.author?.username || 'MyHigh5'
     const text = (post.content || '').slice(0, 280)
 

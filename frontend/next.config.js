@@ -160,6 +160,10 @@ const nextConfig = {
         destination: `${backendUrl}/api/v1/share/u/:username`,
       },
       {
+        source: '/s/f/:id',
+        destination: `${backendUrl}/api/v1/share/f/:id`,
+      },
+      {
         source: '/s/r/:code',
         destination: `${backendUrl}/api/v1/share/r/:code`,
       },

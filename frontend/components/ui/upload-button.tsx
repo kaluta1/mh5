@@ -97,6 +97,8 @@ export function UploadButton({
     ? content.button({})
     : (t('profile_setup.choose_photo') || 'Choose photo')
 
+  const acceptedTypes = endpoint === 'videoUploader' ? 'video/*' : 'image/*'
+
   const handlePickFile = () => {
     if (isUploading) return
     inputRef.current?.click()
@@ -162,7 +164,7 @@ export function UploadButton({
       <input
         ref={inputRef}
         type="file"
-        accept="image/*"
+        accept={acceptedTypes}
         onChange={handleFileChange}
         className="hidden"
         disabled={isUploading}

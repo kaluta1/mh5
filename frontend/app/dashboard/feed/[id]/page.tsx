@@ -84,7 +84,10 @@ export default function PostDetailPage() {
 
   const handleShareOut = async (p: Post) => {
     const origin = typeof window !== 'undefined' ? window.location.origin : ''
-    const shareUrl = `${origin}/dashboard/feed/${p.id}`
+    const referralCode = user?.personal_referral_code?.trim()
+    const shareUrl = referralCode
+      ? `${origin}/s/f/${p.id}?ref=${encodeURIComponent(referralCode)}`
+      : `${origin}/s/f/${p.id}`
     const title = p.author?.full_name || p.author?.username || 'MyHigh5'
     const text = (p.content || '').slice(0, 280)
     try {

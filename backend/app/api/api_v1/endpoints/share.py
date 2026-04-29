@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from fastapi import Depends
 from typing import Optional
 import html
@@ -11,6 +11,7 @@ from app.crud import contestant as crud_contestant
 from app.crud import user as crud_user
 from app.models.contests import Contestant
 from app.models.user import User
+from app.models.post import Post, PostVisibility
 
 router = APIRouter()
 
@@ -99,6 +100,98 @@ async def share_username_short(
         redirect_path = f"{redirect_path}?{urlencode({'ref': referral_code})}"
 
     return RedirectResponse(url=redirect_path, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+
+
+@router.get("/f/{post_id}", response_class=HTMLResponse)
+async def share_feed_post(
+    post_id: int,
+    ref: Optional[str] = None,
+    db: Session = Depends(deps.get_db),
+):
+    """
+    Public share page for a feed post with Open Graph tags.
+    Adds referral code to the destination URL when available.
+    """
+    post = (
+        db.query(Post)
+        .options(joinedload(Post.author), joinedload(Post.media))
+        .filter(
+            Post.id == post_id,
+            Post.is_deleted.is_(False),
+            Post.visibility == PostVisibility.PUBLIC,
+        )
+        .first()
+    )
+
+    if not post:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Post not found"
+        )
+
+    referral_code = ref or (post.author.personal_referral_code if post.author else None)
+
+    flutter_url = f"https://myhigh5.com/dashboard/feed/{post_id}"
+    if referral_code:
+        flutter_url += f"?{urlencode({'ref': referral_code})}"
+
+    author_name = "MyHigh5 user"
+    if post.author:
+        author_name = html.escape(
+            post.author.full_name
+            or post.author.username
+            or "MyHigh5 user"
+        )
+
+    content_text = (post.content or "").strip()
+    title = html.escape(f"{author_name} shared a post on MyHigh5")
+    description = html.escape(content_text[:200] or "See this post on MyHigh5.")
+
+    image_url = "https://myhigh5.com/icons/Icon-512.png"
+    for post_media in post.media or []:
+        media = getattr(post_media, "media", None)
+        media_url = getattr(media, "url", None)
+        media_type = (getattr(media, "media_type", "") or "").lower()
+        if media_url and media_type == "image":
+            image_url = media_url
+            break
+
+    html_content = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="{flutter_url}">
+    <meta property="og:title" content="{title}">
+    <meta property="og:description" content="{description}">
+    <meta property="og:image" content="{image_url}">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:site_name" content="MyHigh5">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:url" content="{flutter_url}">
+    <meta name="twitter:title" content="{title}">
+    <meta name="twitter:description" content="{description}">
+    <meta name="twitter:image" content="{image_url}">
+
+    <title>{title}</title>
+    <meta http-equiv="refresh" content="0.5; url={flutter_url}">
+
+    <script>
+        setTimeout(function() {{
+            window.location.href = "{flutter_url}";
+        }}, 500);
+    </script>
+</head>
+<body>
+    <p>Redirecting to MyHigh5 post...</p>
+</body>
+</html>"""
+
+    return HTMLResponse(content=html_content)
 
 
 @router.get("/r/{referral_code}", response_class=HTMLResponse)

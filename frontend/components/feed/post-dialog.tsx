@@ -232,12 +232,15 @@ export function PostDialog({ open, onOpenChange, onPostCreated, postToEdit, onPo
                         <>
                           <UploadButton
                             endpoint="imageUploader"
+                            content={{
+                              button: () => t('profile_setup.choose_photo') || 'Choose photo',
+                            }}
                             onClientUploadComplete={(res) => {
                               if (res) {
                                 const uploadedIds = res
-                                  .map((r: any) => Number.parseInt(String(r?.key ?? ''), 10))
+                                  .map((r: any) => Number.parseInt(String(r?.id ?? r?.key ?? ''), 10))
                                   .filter((id: number) => Number.isInteger(id) && id > 0)
-                                setMediaIds([...mediaIds, ...uploadedIds])
+                                setMediaIds((prev) => [...prev, ...uploadedIds])
                               }
                             }}
                             onUploadError={(error) => {
@@ -246,12 +249,15 @@ export function PostDialog({ open, onOpenChange, onPostCreated, postToEdit, onPo
                           />
                           <UploadButton
                             endpoint="videoUploader"
+                            content={{
+                              button: () => t('dashboard.feed.video') || 'Choose video',
+                            }}
                             onClientUploadComplete={(res) => {
                               if (res) {
                                 const uploadedIds = res
-                                  .map((r: any) => Number.parseInt(String(r?.key ?? ''), 10))
+                                  .map((r: any) => Number.parseInt(String(r?.id ?? r?.key ?? ''), 10))
                                   .filter((id: number) => Number.isInteger(id) && id > 0)
-                                setMediaIds([...mediaIds, ...uploadedIds])
+                                setMediaIds((prev) => [...prev, ...uploadedIds])
                               }
                             }}
                             onUploadError={(error) => {
