@@ -7081,7 +7081,7 @@ const translationsBase = {
         search: "Search",
         pages: "Pages",
         wallet: "Wallet",
-        sponsored: "Sponsored",
+        sponsored: "MyHigh5 Sponsors",
         affiliates: "Affiliates",
         commissions: "Commissions",
         leaderboard: "Leaderboard",
