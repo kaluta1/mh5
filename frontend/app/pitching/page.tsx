@@ -97,9 +97,23 @@ export default function MyHigh5LandingPage() {
   ]
 
   const footerLinks = {
-    Platform: ["Home", "Contests", "Clubs", "Sponsors"],
-    Company: ["About", "Contact", "FAQ", "Download App"],
-    Legal: ["Privacy Policy", "Terms of Service", "Cookie Policy"]
+    Platform: [
+      { label: "Home", href: "/" },
+      { label: "Contests", href: "/contests" },
+      { label: "Clubs", href: "/clubs" },
+      { label: "Sponsors", href: "/dashboard/sponsored" },
+    ],
+    Company: [
+      { label: "About", href: "/about" },
+      { label: "Contact", href: "/contact" },
+      { label: "FAQ", href: "/pages_mobile/faq" },
+      { label: "Download App", href: "/#download-app" },
+    ],
+    Legal: [
+      { label: "Privacy Policy", href: "/privacy" },
+      { label: "Terms of Service", href: "/terms" },
+      { label: "Cookie Policy", href: "/cookies" },
+    ]
   }
 
   return (
@@ -392,10 +406,10 @@ export default function MyHigh5LandingPage() {
                 <h3 className="text-sm font-bold uppercase tracking-[0.16em] text-slate-300">{group}</h3>
                 <ul className="mt-4 space-y-3">
                   {links.map((link) => (
-                    <li key={link}>
-                      <a href="#" className="text-slate-400 transition hover:text-white">
-                        {link}
-                      </a>
+                    <li key={link.label}>
+                      <Link href={link.href} className="text-slate-400 transition hover:text-white">
+                        {link.label}
+                      </Link>
                     </li>
                   ))}
                 </ul>
