@@ -1,4 +1,5 @@
 import api, { apiService } from '@/lib/api'
+import { API_URL } from '@/lib/config'
 
 export interface Post {
   id: number
@@ -200,6 +201,37 @@ export interface CreateGroupRequest {
   avatar_url?: string
 }
 
+function getApiOrigin(): string {
+  try {
+    return new URL(API_URL).origin
+  } catch {
+    if (typeof window !== 'undefined') return window.location.origin
+    return 'https://myhigh5.com'
+  }
+}
+
+function normalizeMediaUrl(rawUrl: unknown): string {
+  if (typeof rawUrl !== 'string') return ''
+  const value = rawUrl.trim()
+  if (!value) return ''
+
+  // Guard against accidentally persisted local filesystem paths.
+  if (/^[a-zA-Z]:\\/.test(value)) return ''
+
+  const origin = getApiOrigin()
+
+  // Some rows still contain localhost URLs from earlier environments.
+  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(value)) {
+    return value.replace(/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i, origin)
+  }
+
+  // Ensure relative API paths resolve correctly.
+  if (value.startsWith('/')) return `${origin}${value}`
+  if (value.startsWith('api/')) return `${origin}/${value}`
+
+  return value
+}
+
 function normalizePost(post: any): Post {
   return {
     id: post.id,
@@ -213,8 +245,8 @@ function normalizePost(post: any): Post {
           post_id: item.post_id ?? post.id,
           media_id: item.media_id ?? 0,
           media_type: item.media_type || 'image',
-          url: item.url || item.media_url || '',
-          thumbnail_url: item.thumbnail_url,
+          url: normalizeMediaUrl(item.url || item.media_url || ''),
+          thumbnail_url: normalizeMediaUrl(item.thumbnail_url),
           order: item.order ?? index,
         }))
       : [],
