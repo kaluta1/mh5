@@ -132,7 +132,7 @@ export function UploadButton({
         }
       }
 
-      const uploadedResults: Array<{ url: string; name: string; size: number; type: string }> = []
+      const uploadedResults: Array<{ id?: number; url: string; name: string; size: number; type: string }> = []
       for (const file of files) {
         const formData = new FormData()
         formData.append('file', file)
@@ -148,6 +148,11 @@ export function UploadButton({
         })
 
         if (!response.ok) {
+          if (response.status === 413) {
+            throw new Error(
+              `${t('verification.file_too_large_with_size') || 'File is too large. Maximum size allowed'}: ${maxSizeLabel}`
+            )
+          }
           let message = 'Upload failed'
           try {
             const errorData = await response.json()
@@ -165,6 +170,7 @@ export function UploadButton({
         }
 
         uploadedResults.push({
+          id: typeof data?.id === 'number' ? data.id : undefined,
           url,
           name: data?.title || file.name,
           size: file.size,

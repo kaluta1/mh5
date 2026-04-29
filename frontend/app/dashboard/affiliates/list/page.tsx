@@ -127,12 +127,21 @@ export default function AffiliatesListPage() {
 
       if (response.ok) {
         const data = await response.json()
+        const countsByLevel: Record<number, number> = Object.entries(data.level_stats || {}).reduce(
+          (acc, [level, stat]: [string, any]) => {
+            acc[Number(level)] = Number(stat?.count || 0)
+            return acc
+          },
+          {} as Record<number, number>
+        )
 
         // Transform API data to match Affiliate interface
         const transformedAffiliates: Affiliate[] = data.referrals.map((r: any) => ({
           id: r.id?.toString() || '',
-          name: r.full_name || [r.first_name, r.last_name].filter(Boolean).join(' ') || r.username || 'N/A',
-          email: r.email || '',
+          name: (r.level || 1) === 1
+            ? (r.username || 'N/A')
+            : `Level ${r.level || 1} referrals (total: ${countsByLevel[r.level || 1] || 0})`,
+          email: (r.level || 1) === 1 ? (r.email || '') : '',
           avatar: r.avatar_url,
           joinedAt: r.created_at || new Date().toISOString(),
           level: r.level || 1,

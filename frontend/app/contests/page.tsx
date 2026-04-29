@@ -169,26 +169,30 @@ function ContestsPageContent() {
 
     // La recherche est maintenant gérée côté backend, pas besoin de filtrer ici
 
-    // Sort contests by participants count (descending - most first) for consistent display
-    // Backend already sorts, but ensure frontend also sorts correctly
+    // Keep contests with participants first (desc),
+    // then place zero-participant contests below in alphabetical order.
     const sortedContests = [...categoryFiltered].sort((a, b) => {
-      // Always prioritize participants count (descending - most first)
       const aContestants = Number(a.participant_count) || Number(a.contestants) || 0
       const bContestants = Number(b.participant_count) || Number(b.contestants) || 0
 
-      // Primary sort: participants count (high to low)
+      const aHasParticipants = aContestants > 0
+      const bHasParticipants = bContestants > 0
+
+      if (aHasParticipants && !bHasParticipants) return -1
+      if (!aHasParticipants && bHasParticipants) return 1
+
+      // Both have participants: participants count high to low
       if (bContestants !== aContestants) {
         return bContestants - aContestants
       }
 
-      // Secondary sort: votes if participants are equal
+      // Same participants count (or both zero): votes then title A-Z
       const aReceived = Number(a.received) || 0
       const bReceived = Number(b.received) || 0
       if (bReceived !== aReceived) {
         return bReceived - aReceived
       }
 
-      // Tertiary sort: by title for consistency
       return a.title.localeCompare(b.title)
     })
 

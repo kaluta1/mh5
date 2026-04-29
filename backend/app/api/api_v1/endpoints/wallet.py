@@ -121,7 +121,7 @@ def get_wallet_transactions(
     # Mapping des types de commission pour l'affichage
     commission_type_labels = {
         "KYC_PAYMENT": "KYC",
-        "FOUNDING_MEMBERSHIP_FEE": "KYC",
+        "FOUNDING_MEMBERSHIP_FEE": "MFM Joining Fee",
         "ANNUAL_MEMBERSHIP_FEE": "Cotisation FM",
         "EFM_MEMBERSHIP": "EFM",
         "CLUB_MEMBERSHIP": "Club",

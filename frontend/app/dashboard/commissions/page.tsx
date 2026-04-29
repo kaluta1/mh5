@@ -14,7 +14,6 @@ import {
   XCircle,
   Filter,
   Download,
-  Euro,
   Users,
   CreditCard,
   ShoppingBag,
@@ -57,13 +56,9 @@ interface CommissionStats {
 export default function CommissionsPage() {
   const { t, language } = useLanguage()
   
-  // Mapping des langues vers les locales
-  const localeMap: Record<string, string> = {
-    fr: 'fr-FR',
-    en: 'en-US',
-    es: 'es-ES',
-    de: 'de-DE'
-  }
+  const locale = 'en-US'
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat(locale, { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(amount)
   const router = useRouter()
   const { user, isAuthenticated, isLoading } = useAuth()
   
@@ -175,13 +170,13 @@ export default function CommissionsPage() {
       // Founding Members = KYC (même produit)
       'founding_membership': {
         icon: BadgeCheck,
-        label: t('dashboard.commissions.types.KYC_PAYMENT'),
+        label: t('dashboard.commissions.types.MFM_MEMBERSHIP') || 'MFM Joining Fee',
         color: 'text-indigo-600 dark:text-indigo-400',
         bgColor: 'bg-indigo-100 dark:bg-indigo-900/30'
       },
       'FOUNDING_MEMBERSHIP_FEE': {
         icon: BadgeCheck,
-        label: t('dashboard.commissions.types.KYC_PAYMENT'),
+        label: t('dashboard.commissions.types.MFM_MEMBERSHIP') || 'MFM Joining Fee',
         color: 'text-indigo-600 dark:text-indigo-400',
         bgColor: 'bg-indigo-100 dark:bg-indigo-900/30'
       },
@@ -387,10 +382,11 @@ export default function CommissionsPage() {
           <div className="flex items-center gap-3 mb-3">
             <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
               <Euro className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+              <DollarSign className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
             </div>
           </div>
           <p className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
-            {stats.totalEarned.toLocaleString('fr-FR', { style: 'currency', currency: 'USD' })}
+            {formatCurrency(stats.totalEarned)}
           </p>
           <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
             {t('dashboard.commissions.total_earned') || 'Total gagné'}
@@ -405,7 +401,7 @@ export default function CommissionsPage() {
             </div>
           </div>
           <p className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
-            {stats.pendingAmount.toLocaleString('fr-FR', { style: 'currency', currency: 'USD' })}
+            {formatCurrency(stats.pendingAmount)}
           </p>
           <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
             {t('dashboard.commissions.pending_amount') || 'En attente'}
@@ -420,7 +416,7 @@ export default function CommissionsPage() {
             </div>
           </div>
           <p className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
-            {stats.thisMonth.toLocaleString('fr-FR', { style: 'currency', currency: 'USD' })}
+            {formatCurrency(stats.thisMonth)}
           </p>
           <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
             {t('dashboard.commissions.this_month') || 'Ce mois'}
@@ -572,14 +568,14 @@ export default function CommissionsPage() {
                     </div>
                     
                     <p className="text-xs text-gray-400 dark:text-gray-500">
-                      {new Date(commission.createdAt).toLocaleDateString(localeMap[language] || 'en-US', {
+                      {new Date(commission.createdAt).toLocaleDateString(locale, {
                         day: 'numeric',
                         month: 'long',
                         year: 'numeric'
                       })}
                       {commission.baseAmount && (
                         <span className="ml-2">
-                          • Base: {commission.baseAmount.toLocaleString(localeMap[language] || 'en-US', { style: 'currency', currency: 'USD' })}
+                          • Base: {formatCurrency(commission.baseAmount)}
                         </span>
                       )}
                     </p>
@@ -591,10 +587,10 @@ export default function CommissionsPage() {
                         ? 'text-gray-400 line-through' 
                         : 'text-emerald-600 dark:text-emerald-400'
                     }`}>
-                      +{commission.amount.toLocaleString('fr-FR', { style: 'currency', currency: 'USD' })}
+                      +{formatCurrency(commission.amount)}
                     </p>
                     <p className={`text-xs ${commission.type === 'direct' ? 'text-emerald-600 dark:text-emerald-400' : 'text-blue-600 dark:text-blue-400'}`}>
-                      {commission.type === 'direct' ? '20%' : '2%'}
+                      {commission.type === 'direct' ? '10%' : '1%'}
                     </p>
                   </div>
                 </div>

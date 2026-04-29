@@ -235,7 +235,7 @@ export function Footer() {
                 <div className="w-8 h-8 rounded-lg bg-myhigh5-primary/10 flex items-center justify-center">
                   <Home className="w-4 h-4 text-myhigh5-primary" />
                 </div>
-                <span className="text-sm">10-12B HIGH STREET PLAZA, SINGAPORE</span>
+                <span className="text-sm">77 HIGH STREET, #10-12B HIGH STREET PLAZA, SINGAPORE 179433</span>
               </div>
             </div>
           </div>
