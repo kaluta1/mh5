@@ -92,6 +92,7 @@ function ContestantDetailContent() {
 
   const [contestant, setContestant] = useState<ContestantDetail | null>(null)
   const [contestMode, setContestMode] = useState<string | null>(null)
+  const [contestDisplayTitle, setContestDisplayTitle] = useState<string | null>(null)
   const [pageLoading, setPageLoading] = useState(true)
   const [selectedMedia, setSelectedMedia] = useState<Media | null>(null)
   const [isFavorite, setIsFavorite] = useState(false)
@@ -138,6 +139,12 @@ function ContestantDetailContent() {
         try {
           const contestRes = await api.get(`/api/v1/contests/${data.contest_id || contestId}`)
           setContestMode(contestRes.data?.contest_mode || contestRes.data?.entry_type || null)
+          setContestDisplayTitle(
+            contestRes.data?.title ||
+            contestRes.data?.name ||
+            contestRes.data?.contest_title ||
+            null
+          )
         } catch { /* ignore, fallback to other checks */ }
 
         // Vérifier si c'est un favori
@@ -572,9 +579,9 @@ function ContestantDetailContent() {
     contestMode === 'nomination' ||
     !!contestant.nominator_country ||
     !!contestant.nominator_city
-  // UI-only fix: show the real contest name first (e.g. Beauty contest),
-  // and only fall back to category when title is unavailable.
-  const nominationLabel = contestant.contest_title || contestant.contest_category
+  // "Nominated for" should reflect the current contest title.
+  // Prefer fresh contest endpoint title, then fallback to contestant payload.
+  const nominationLabel = contestDisplayTitle || contestant.contest_title || contestant.contest_category
 
   const handleVideoViewed30s = async () => {
     if (videoViewTracked) return
