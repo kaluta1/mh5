@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/hooks/use-auth'
 import { useLanguage } from '@/contexts/language-context'
-import { Award, Trophy, Medal, User, MapPin, Calendar, Coins, CircleHelp } from 'lucide-react'
+import { Award, Trophy, Medal, User, MapPin, Calendar, Coins, Circle } from 'lucide-react'
 import { cacheService } from '@/lib/cache-service'
 
 interface TopSponsor {
@@ -289,7 +289,7 @@ export default function LeaderboardPage() {
                                 className="ml-1 text-red-500 hover:text-red-600 dark:hover:text-red-400"
                                 aria-label="DSP information"
                               >
-                                <CircleHelp className="w-4 h-4" />
+                                <Circle className="w-4 h-4" />
                               </button>
                             </div>
                             <div className="text-xs text-gray-600 dark:text-gray-400">
