@@ -245,6 +245,10 @@ export function PostDialog({ open, onOpenChange, onPostCreated, postToEdit, onPo
                             }}
                             onUploadError={(error) => {
                               console.error('Upload error:', error)
+                              addToast(
+                                (error as Error)?.message || t('dashboard.feed.post_error') || 'Upload failed',
+                                'error'
+                              )
                             }}
                           />
                           <UploadButton
@@ -262,6 +266,10 @@ export function PostDialog({ open, onOpenChange, onPostCreated, postToEdit, onPo
                             }}
                             onUploadError={(error) => {
                               console.error('Upload error:', error)
+                              addToast(
+                                (error as Error)?.message || t('dashboard.feed.post_error') || 'Upload failed',
+                                'error'
+                              )
                             }}
                           />
                           <button 

@@ -48,10 +48,21 @@ export function UploadButton({
       'participationDocumentUploader': '8MB',
       'contestantMedia': '8MB',
       'verificationMedia': '8MB',
-      'imageUploader': '8MB',
-      'videoUploader': '32MB'
+      'imageUploader': '30MB',
+      'videoUploader': '1GB'
     }
     return sizes[endpoint] || '10MB'
+  }
+
+  const toBytes = (sizeLabel: string): number => {
+    const match = sizeLabel.trim().toUpperCase().match(/^(\d+(?:\.\d+)?)\s*(KB|MB|GB)$/)
+    if (!match) return 0
+    const value = Number(match[1])
+    const unit = match[2]
+    if (unit === 'KB') return value * 1024
+    if (unit === 'MB') return value * 1024 * 1024
+    if (unit === 'GB') return value * 1024 * 1024 * 1024
+    return 0
   }
 
   const handleUploadError = (error: unknown) => {
@@ -109,6 +120,17 @@ export function UploadButton({
     if (!files.length) return
     try {
       setIsUploading(true)
+      const maxSizeLabel = getMaxFileSize(endpoint)
+      const maxSizeBytes = toBytes(maxSizeLabel)
+
+      if (maxSizeBytes > 0) {
+        const oversizedFile = files.find((file) => file.size > maxSizeBytes)
+        if (oversizedFile) {
+          throw new Error(
+            `${t('verification.file_too_large_with_size') || 'File is too large. Maximum size allowed'}: ${maxSizeLabel}`
+          )
+        }
+      }
 
       const uploadedResults: Array<{ url: string; name: string; size: number; type: string }> = []
       for (const file of files) {

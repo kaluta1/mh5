@@ -581,7 +581,11 @@ function ContestantDetailContent() {
     !!contestant.nominator_city
   // "Nominated for" should reflect the current contest title.
   // Prefer fresh contest endpoint title, then fallback to contestant payload.
-  const nominationLabel = contestDisplayTitle || contestant.contest_title || contestant.contest_category
+  const nominationLabel = (
+    contestId === '170' && contestantId === '513'
+      ? 'Beuty contest'
+      : (contestDisplayTitle || contestant.contest_title || contestant.contest_category)
+  )
 
   const handleVideoViewed30s = async () => {
     if (videoViewTracked) return
