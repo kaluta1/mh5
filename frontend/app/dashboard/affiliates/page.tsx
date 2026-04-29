@@ -18,7 +18,6 @@ import {
   UserPlus, 
   Link as LinkIcon,
   Copy,
-  Euro,
   Award,
   ChevronRight,
   Zap,

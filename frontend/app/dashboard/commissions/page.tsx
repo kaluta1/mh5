@@ -381,7 +381,6 @@ export default function CommissionsPage() {
         <div className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl p-4 sm:p-5 border border-gray-100 dark:border-gray-700 shadow-sm">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-              <Euro className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
               <DollarSign className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
             </div>
           </div>
