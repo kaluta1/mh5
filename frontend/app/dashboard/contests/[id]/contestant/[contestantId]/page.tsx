@@ -572,7 +572,9 @@ function ContestantDetailContent() {
     contestMode === 'nomination' ||
     !!contestant.nominator_country ||
     !!contestant.nominator_city
-  const nominationLabel = contestant.contest_category || contestant.contest_title
+  // UI-only fix: show the real contest name first (e.g. Beauty contest),
+  // and only fall back to category when title is unavailable.
+  const nominationLabel = contestant.contest_title || contestant.contest_category
 
   const handleVideoViewed30s = async () => {
     if (videoViewTracked) return
