@@ -60,7 +60,7 @@ interface KYCStats {
 }
 
 export default function AffiliatesListPage() {
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
   const router = useRouter()
   const { user, isAuthenticated, isLoading } = useAuth()
   const { addToast } = useToast()
@@ -98,6 +98,13 @@ export default function AffiliatesListPage() {
   useEffect(() => {
     filterAffiliates()
   }, [searchQuery, affiliates])
+
+  const formatGroupedLevelLabel = (level: number, count: number) => {
+    if (language === 'fr') return `Niveau ${level} parrainages (total : ${count})`
+    if (language === 'es') return `Nivel ${level} referidos (total: ${count})`
+    if (language === 'de') return `Stufe ${level} Empfehlungen (gesamt: ${count})`
+    return `Level ${level} referrals (total: ${count})`
+  }
 
   const loadAffiliatesData = async () => {
     try {
@@ -140,7 +147,7 @@ export default function AffiliatesListPage() {
           id: r.id?.toString() || '',
           name: (r.level || 1) === 1
             ? (r.username || 'N/A')
-            : `Level ${r.level || 1} referrals (total: ${countsByLevel[r.level || 1] || 0})`,
+            : formatGroupedLevelLabel(r.level || 1, countsByLevel[r.level || 1] || 0),
           email: (r.level || 1) === 1 ? (r.email || '') : '',
           avatar: r.avatar_url,
           joinedAt: r.created_at || new Date().toISOString(),
@@ -234,7 +241,8 @@ export default function AffiliatesListPage() {
   const totalPages = Math.ceil(filteredAffiliates.length / itemsPerPage)
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
+    const locale = language === 'fr' ? 'fr-FR' : language === 'es' ? 'es-ES' : language === 'de' ? 'de-DE' : 'en-US'
+    return new Intl.NumberFormat(locale, {
       style: 'currency',
       currency: 'USD'
     }).format(amount)
@@ -572,7 +580,9 @@ export default function AffiliatesListPage() {
                     </p>
                     <div className="flex items-center gap-1 text-xs text-gray-400 mt-1 md:hidden">
                       <Calendar className="w-3 h-3" />
-                      {new Date(affiliate.joinedAt).toLocaleDateString('fr-FR')}
+                      {new Date(affiliate.joinedAt).toLocaleDateString(
+                        language === 'fr' ? 'fr-FR' : language === 'es' ? 'es-ES' : language === 'de' ? 'de-DE' : 'en-US'
+                      )}
                     </div>
                   </div>
                 </div>
