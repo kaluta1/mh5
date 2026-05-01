@@ -16,7 +16,15 @@ services:
       - key: FRONTEND_URL
         sync: false # e.g. https://myhigh5.com — must match the public site; used for Shufti URL fallback + redirects
       - key: BACKEND_PUBLIC_URL
-        sync: false # e.g. https://myhigh5.com if API is same host; else your Render URL — Shufti callback/redirect base
+        sync: false # use https://api.myhigh5.com in production (webhook base + callback base)
+      - key: ANNUALADS_TENANT_ID
+        sync: false
+      - key: ANNUALADS_API_KEY
+        sync: false
+      - key: ANNUALADS_SSO_SECRET
+        sync: false
+      - key: ANNUALADS_WEBHOOK_SECRET
+        sync: false
       - key: SHUFTI_CALLBACK_URL
         sync: false # optional override: https://YOUR_DOMAIN/api/v1/kyc/webhook/shufti-pro
       - key: SHUFTI_REDIRECT_URL

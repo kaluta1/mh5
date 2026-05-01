@@ -1936,6 +1936,63 @@ class ContestantUpdateRequest(BaseModel):
     class Config:
         from_attributes = True
 
+class ContestantBulkApproveRequest(BaseModel):
+    contestant_ids: List[int]
+
+    class Config:
+        from_attributes = True
+
+@router.post("/contestants/bulk-approve")
+async def bulk_approve_contestants(
+    payload: ContestantBulkApproveRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Approuve plusieurs candidats en une seule opération (admin uniquement)
+    """
+    check_admin(current_user)
+
+    unique_ids = list({int(cid) for cid in payload.contestant_ids if cid})
+    if not unique_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Aucun candidat sélectionné"
+        )
+
+    try:
+        matched_count = db.query(Contestant).filter(Contestant.id.in_(unique_ids)).count()
+        if matched_count == 0:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Aucun candidat correspondant trouvé"
+            )
+
+        approved_count = db.query(Contestant).filter(
+            Contestant.id.in_(unique_ids),
+            Contestant.verification_status != "verified"
+        ).update(
+            {Contestant.verification_status: "verified"},
+            synchronize_session=False
+        )
+
+        db.commit()
+
+        return {
+            "message": f"{approved_count} candidat(s) approuvé(s) avec succès",
+            "requested_count": len(unique_ids),
+            "matched_count": matched_count,
+            "approved_count": approved_count,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Erreur lors de l'approbation en lot: {str(e)}"
+        )
+
 @router.get("/seasons/by-level/{level}")
 async def get_seasons_by_level(
     level: str,

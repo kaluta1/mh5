@@ -5,7 +5,7 @@ Configure secrets in env (never commit real values):
   ANNUALADS_SSO_SECRET, ANNUALADS_TENANT_ID, ANNUALADS_TENANT_API_KEY, ANNUALADS_WEBHOOK_SECRET
 
 Webhook URL to register in Annual Ads tenant:
-  {BACKEND_PUBLIC_URL or request base}/api/v1/webhooks/sponsor-payment
+  https://api.myhigh5.com/api/v1/webhooks/sponsor-payment
 """
 
 from __future__ import annotations
@@ -116,6 +116,14 @@ async def sponsor_payment_webhook(request: Request) -> dict[str, Any]:
 
     if not sig or not ts:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing signature headers")
+
+    # Replay protection: reject requests older/newer than 5 minutes.
+    try:
+        timestamp = int(ts)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid webhook timestamp")
+    if abs(time.time() - timestamp) > 300:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Stale timestamp")
 
     if not _verify_webhook_signature(secret, ts, raw, sig):
         logger.warning("Invalid sponsor payment webhook signature")

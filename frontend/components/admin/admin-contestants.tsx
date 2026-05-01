@@ -98,6 +98,8 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
     verification_status: 'pending' as 'pending' | 'verified' | 'rejected'
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [selectedContestantIds, setSelectedContestantIds] = useState<number[]>([])
+  const [bulkApproving, setBulkApproving] = useState(false)
 
   useEffect(() => {
     fetchContestants()
@@ -436,6 +438,10 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
     c.author_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     c.title?.toLowerCase().includes(searchTerm.toLowerCase())
   )
+  const pendingFilteredContestants = filteredContestants.filter((c) => c.verification_status === 'pending')
+  const allPendingFilteredSelected =
+    pendingFilteredContestants.length > 0 &&
+    pendingFilteredContestants.every((c) => selectedContestantIds.includes(c.id))
 
   const getStatusBadge = (status: string) => {
     const badges: Record<string, { bg: string; text: string; label: string }> = {
@@ -445,6 +451,68 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
     }
     const badge = badges[status] || badges.pending
     return <span className={`px-2 py-1 rounded text-sm font-medium ${badge.bg} ${badge.text}`}>{badge.label}</span>
+  }
+
+  const toggleContestantSelection = (contestantId: number, checked: boolean) => {
+    setSelectedContestantIds((prev) => {
+      if (checked) {
+        if (prev.includes(contestantId)) return prev
+        return [...prev, contestantId]
+      }
+      return prev.filter((id) => id !== contestantId)
+    })
+  }
+
+  const toggleSelectAllPendingFiltered = (checked: boolean) => {
+    if (!checked) {
+      setSelectedContestantIds((prev) =>
+        prev.filter((id) => !pendingFilteredContestants.some((c) => c.id === id))
+      )
+      return
+    }
+    setSelectedContestantIds((prev) => {
+      const next = new Set(prev)
+      for (const c of pendingFilteredContestants) next.add(c.id)
+      return Array.from(next)
+    })
+  }
+
+  const handleBulkApprove = async (ids: number[]) => {
+    const uniqueIds = Array.from(new Set(ids))
+    if (uniqueIds.length === 0) {
+      addToast(t('admin.contestants.bulk_no_selection') || 'Aucun candidat sélectionné', 'error')
+      return
+    }
+
+    try {
+      setBulkApproving(true)
+      const response = await api.post('/api/v1/admin/contestants/bulk-approve', {
+        contestant_ids: uniqueIds,
+      })
+
+      const approvedCount = Number(response?.data?.approved_count || 0)
+      const matchedCount = Number(response?.data?.matched_count || uniqueIds.length)
+
+      setContestants((prev) =>
+        prev.map((c) =>
+          uniqueIds.includes(c.id) ? { ...c, verification_status: 'verified' } : c
+        )
+      )
+      setSelectedContestantIds((prev) => prev.filter((id) => !uniqueIds.includes(id)))
+
+      addToast(
+        `${approvedCount}/${matchedCount} ${t('admin.contestants.bulk_approve_success') || 'candidats approuvés avec succès'}`,
+        'success'
+      )
+    } catch (error) {
+      console.error("Erreur lors de l'approbation en lot:", error)
+      addToast(
+        t('admin.contestants.bulk_approve_error') || "Erreur lors de l'approbation en lot",
+        'error'
+      )
+    } finally {
+      setBulkApproving(false)
+    }
   }
 
   return (
@@ -505,6 +573,29 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
               {t('admin.contestants.verified') || 'Vérifiés'}
             </Button>
           </div>
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            onClick={() => handleBulkApprove(selectedContestantIds)}
+            disabled={bulkApproving || selectedContestantIds.length === 0}
+            className="bg-green-600 hover:bg-green-700"
+          >
+            {bulkApproving ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <CheckCircle2 className="h-4 w-4 mr-2" />
+            )}
+            {t('admin.contestants.approve_selected') || 'Approuver la sélection'} ({selectedContestantIds.length})
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => handleBulkApprove(pendingFilteredContestants.map((c) => c.id))}
+            disabled={bulkApproving || pendingFilteredContestants.length === 0}
+          >
+            {t('admin.contestants.approve_all_pending') || 'Approuver tous les en attente'} ({pendingFilteredContestants.length})
+          </Button>
         </div>
       </div>
 
@@ -702,6 +793,15 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
                 <table className="w-full">
                   <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
                     <tr>
+                      <th className="px-3 py-4 text-left text-xs font-semibold text-gray-900 dark:text-white">
+                        <input
+                          type="checkbox"
+                          checked={allPendingFilteredSelected}
+                          onChange={(e) => toggleSelectAllPendingFiltered(e.target.checked)}
+                          aria-label="Select all pending contestants"
+                          disabled={pendingFilteredContestants.length === 0}
+                        />
+                      </th>
                       <th className="px-6 py-4 text-left text-xs font-semibold text-gray-900 dark:text-white">{t('admin.contestants.author') || 'Auteur'}</th>
                       <th className="px-6 py-4 text-left text-xs font-semibold text-gray-900 dark:text-white">Titre</th>
                       <th className="px-6 py-4 text-left text-xs font-semibold text-gray-900 dark:text-white">{t('admin.contestants.status') || 'Statut'}</th>
@@ -716,6 +816,16 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
                   <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                     {filteredContestants.map((contestant) => (
                       <tr key={contestant.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                        <td className="px-3 py-4">
+                          {contestant.verification_status === 'pending' ? (
+                            <input
+                              type="checkbox"
+                              checked={selectedContestantIds.includes(contestant.id)}
+                              onChange={(e) => toggleContestantSelection(contestant.id, e.target.checked)}
+                              aria-label={`Select contestant ${contestant.id}`}
+                            />
+                          ) : null}
+                        </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
                             {contestant.author_avatar_url && (
@@ -806,7 +916,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
                                   size="sm"
                                   className="gap-1 bg-green-600 hover:bg-green-700 disabled:opacity-50"
                                   onClick={() => handleApprove(contestant.id)}
-                                  disabled={loadingContestantId === contestant.id}
+                                  disabled={loadingContestantId === contestant.id || bulkApproving}
                                 >
                                   {loadingContestantId === contestant.id && loadingAction === 'approve' ? (
                                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -820,7 +930,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
                                   variant="destructive"
                                   className="gap-1 disabled:opacity-50"
                                   onClick={() => handleReject(contestant.id)}
-                                  disabled={loadingContestantId === contestant.id}
+                                  disabled={loadingContestantId === contestant.id || bulkApproving}
                                 >
                                   {loadingContestantId === contestant.id && loadingAction === 'reject' ? (
                                     <Loader2 className="h-4 w-4 animate-spin" />

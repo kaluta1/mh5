@@ -41,7 +41,24 @@ function stripEnvQuotes(s: string): string {
   return t
 }
 
-export const ANNUALADS_EMBED_URL = stripEnvQuotes(process.env.NEXT_PUBLIC_ANNUALADS_EMBED_URL || '')
+const annualAdsEmbedBase = stripEnvQuotes(process.env.NEXT_PUBLIC_ANNUALADS_EMBED_BASE || '')
+const annualAdsApiKey = stripEnvQuotes(
+  process.env.NEXT_PUBLIC_ANNUALADS_API_KEY || process.env.NEXT_PUBLIC_ANNUALADS_TENANT_API_KEY || ''
+)
+
+const annualAdsEmbedUrlFromBase = (() => {
+  if (!annualAdsEmbedBase || !annualAdsApiKey) return ''
+  try {
+    const url = new URL(annualAdsEmbedBase)
+    url.searchParams.set('key', annualAdsApiKey)
+    return url.toString()
+  } catch {
+    return ''
+  }
+})()
+
+export const ANNUALADS_EMBED_URL =
+  stripEnvQuotes(process.env.NEXT_PUBLIC_ANNUALADS_EMBED_URL || '') || annualAdsEmbedUrlFromBase
 
 export const ANNUALADS_SSO_TARGET_ORIGIN = stripEnvQuotes(
   process.env.NEXT_PUBLIC_ANNUALADS_SSO_TARGET_ORIGIN || 'https://www.annualads.com'

@@ -103,7 +103,12 @@ class Settings(BaseModel):
     # Annual Ads — sponsor embed / SSO / webhooks (secrets only via env)
     ANNUALADS_SSO_SECRET: str = _first_nonempty_env("ANNUALADS_SSO_SECRET", "annualads_sso_secret")
     ANNUALADS_TENANT_ID: str = _first_nonempty_env("ANNUALADS_TENANT_ID", "annualads_tenant_id")
-    ANNUALADS_TENANT_API_KEY: str = _first_nonempty_env("ANNUALADS_TENANT_API_KEY", "annualads_tenant_api_key")
+    ANNUALADS_TENANT_API_KEY: str = _first_nonempty_env(
+        "ANNUALADS_TENANT_API_KEY",
+        "ANNUALADS_API_KEY",
+        "annualads_tenant_api_key",
+        "annualads_api_key",
+    )
     ANNUALADS_WEBHOOK_SECRET: str = _first_nonempty_env("ANNUALADS_WEBHOOK_SECRET", "annualads_webhook_secret")
     
     # FRONTEND
