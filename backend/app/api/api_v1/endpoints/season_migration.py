@@ -467,13 +467,39 @@ def get_top_high5_by_country(
             else:
                 outside_level_window.append(r)
 
+        # First preference: rounds that already have active links for requested level.
+        level_linked_round_ids = {
+            row[0]
+            for row in (
+                db.query(ContestSeason.round_id)
+                .join(ContestSeasonLink, ContestSeasonLink.season_id == ContestSeason.id)
+                .filter(ContestSeason.level == requested_level)
+                .filter(ContestSeason.is_deleted == False)
+                .filter(ContestSeasonLink.is_active == True)
+                .filter(ContestSeason.round_id.isnot(None))
+                .distinct()
+                .all()
+            )
+            if row and row[0] is not None
+        }
+
+        linked_in_window = [r for r in in_level_window if r.id in level_linked_round_ids]
+        unlinked_in_window = [r for r in in_level_window if r.id not in level_linked_round_ids]
+        linked_outside_window = [r for r in outside_level_window if r.id in level_linked_round_ids]
+        unlinked_outside_window = [r for r in outside_level_window if r.id not in level_linked_round_ids]
+
         # Secondary preference for currently voting-open rounds within each bucket.
         def _prioritize_voting_open(rounds):
             open_rounds = [r for r in rounds if bool(r.is_voting_open)]
             closed_rounds = [r for r in rounds if not bool(r.is_voting_open)]
             return open_rounds + closed_rounds
 
-        search_rounds = _prioritize_voting_open(in_level_window) + _prioritize_voting_open(outside_level_window)
+        search_rounds = (
+            _prioritize_voting_open(linked_in_window)
+            + _prioritize_voting_open(unlinked_in_window)
+            + _prioritize_voting_open(linked_outside_window)
+            + _prioritize_voting_open(unlinked_outside_window)
+        )
 
         chosen_round = candidate_rounds[0]
         chosen_contests = []
