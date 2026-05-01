@@ -1213,18 +1213,30 @@ class SeasonMigrationService:
                 next_level = SeasonLevel.GLOBAL
             
             if should_promote and next_level:
-                # Vérifier qu'on n'a pas déjà promu
-                existing_next = db.query(ContestSeason).filter(
+                # Vérifier qu'on n'a pas déjà promu CE contest vers ce niveau.
+                # NOTE: A round can contain multiple contests, so checking only
+                # (round_id, level) incorrectly blocks other contests.
+                existing_next = db.query(ContestSeasonLink).join(
+                    ContestSeason, ContestSeason.id == ContestSeasonLink.season_id
+                ).filter(
                     and_(
+                        ContestSeasonLink.contest_id == contest_id,
+                        ContestSeasonLink.is_active == True,
                         ContestSeason.round_id == round_obj.id,
-                        ContestSeason.level == next_level
+                        ContestSeason.level == next_level,
+                        ContestSeason.is_deleted == False,
                     )
                 ).first()
                 
                 if not existing_next:
                     try:
                         result = SeasonMigrationService.promote_to_next_level(
-                            db, season.level, next_level, contest_id, limit=limit
+                            db,
+                            season.level,
+                            next_level,
+                            contest_id,
+                            limit=limit,
+                            from_season_id=season.id,
                         )
                         results.append({
                             "contest_id": contest_id, 
