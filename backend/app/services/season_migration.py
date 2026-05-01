@@ -324,6 +324,9 @@ class SeasonMigrationService:
                     "  - Strict contest scope returned 0 contestants; retrying with season-only scope"
                 )
                 print("[Migration]   Strict contest scope empty; retry with season-only scope")
+            # Disable strict scope for the remainder of this call path (diagnostics
+            # and fallback selection) once we confirmed strict contest linkage is empty.
+            strict_contest_scope = False
             contestants_query = db.query(Contestant).join(
                 ContestantSeason, ContestantSeason.contestant_id == Contestant.id
             ).filter(
