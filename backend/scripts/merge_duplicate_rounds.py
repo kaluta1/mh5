@@ -31,11 +31,25 @@ _BACKEND_ROOT = os.path.dirname(_SCRIPT_DIR)
 if _BACKEND_ROOT not in sys.path:
     sys.path.insert(0, _BACKEND_ROOT)
 
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy import select, delete, insert, func
 from sqlalchemy.orm import Session
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("merge_duplicate_rounds")
+
+
+def _table_has_column(session: Session, table_name: str, column_name: str) -> bool:
+    """True if the live DB has this column (models may be ahead of migrations)."""
+    bind = session.get_bind()
+    if bind is None:
+        return False
+    try:
+        insp = sa_inspect(bind)
+        cols = insp.get_columns(table_name)
+    except Exception:
+        return False
+    return any(c.get("name") == column_name for c in cols)
 
 
 def _setup():
@@ -153,38 +167,49 @@ def merge_round_into(
             {ContestSeason.round_id: keep_id}, synchronize_session=False
         )
 
-    # 5) contest_votes (legacy score votes)
-    if not dry_run:
-        db.query(ContestVote).filter(ContestVote.round_id == duplicate_id).update(
-            {ContestVote.round_id: keep_id}, synchronize_session=False
+    # 5) contest_votes (legacy score votes) — column may be missing on older DBs
+    if _table_has_column(db, "contest_votes", "round_id"):
+        if not dry_run:
+            db.query(ContestVote).filter(ContestVote.round_id == duplicate_id).update(
+                {ContestVote.round_id: keep_id}, synchronize_session=False
+            )
+    else:
+        logger.warning(
+            "Skipping contest_votes.round_id update: column missing on this database."
         )
 
     # 6) user_vote_rankings — unique (user_id, round_id, contestant_id)
-    rankings = (
-        db.query(UserVoteRanking).filter(UserVoteRanking.round_id == duplicate_id).all()
-    )
-    for vr in rankings:
-        existing = (
-            db.query(UserVoteRanking)
-            .filter(
-                UserVoteRanking.user_id == vr.user_id,
-                UserVoteRanking.round_id == keep_id,
-                UserVoteRanking.contestant_id == vr.contestant_id,
-            )
-            .first()
+    if _table_has_column(db, "user_vote_rankings", "round_id"):
+        rankings = (
+            db.query(UserVoteRanking).filter(UserVoteRanking.round_id == duplicate_id).all()
         )
-        if existing:
-            if vr.points > existing.points:
-                existing.position = vr.position
-                existing.points = vr.points
-                existing.updated_at = datetime.utcnow()
-            if not dry_run:
-                db.delete(vr)
-            stats["vote_rankings_deleted"] += 1
-        else:
-            if not dry_run:
-                vr.round_id = keep_id
-            stats["vote_rankings_merged"] += 1
+        for vr in rankings:
+            existing = (
+                db.query(UserVoteRanking)
+                .filter(
+                    UserVoteRanking.user_id == vr.user_id,
+                    UserVoteRanking.round_id == keep_id,
+                    UserVoteRanking.contestant_id == vr.contestant_id,
+                )
+                .first()
+            )
+            if existing:
+                if vr.points > existing.points:
+                    existing.position = vr.position
+                    existing.points = vr.points
+                    existing.updated_at = datetime.utcnow()
+                if not dry_run:
+                    db.delete(vr)
+                stats["vote_rankings_deleted"] += 1
+            else:
+                if not dry_run:
+                    vr.round_id = keep_id
+                stats["vote_rankings_merged"] += 1
+    else:
+        logger.warning(
+            "Skipping user_vote_rankings: round_id column missing on this database "
+            "(run pending Alembic migrations if ranked votes should be tied to rounds)."
+        )
 
     # 7) Legacy Round.contest_id on duplicate row (rare)
     if dup.contest_id and not dry_run:
