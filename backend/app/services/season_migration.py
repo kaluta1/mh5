@@ -1270,7 +1270,11 @@ class SeasonMigrationService:
                 ContestSeason.is_deleted == False,
                 ContestSeason.round_id.isnot(None)
             )
-        ).all()
+        ).order_by(ContestSeason.id.desc()).all()
+        
+        # Safety guard: avoid multi-hop promotions in a single run for same contest
+        # (e.g. country->regional then regional->continent immediately).
+        promoted_contests_this_run = set()
         
         for season in active_seasons:
             if not season.round:
@@ -1292,6 +1296,10 @@ class SeasonMigrationService:
                 continue
             
             contest_id = contest_link.contest_id
+            
+            # Prevent multiple stage promotions for the same contest in one execution.
+            if contest_id in promoted_contests_this_run:
+                continue
             
             # Déterminer si une promotion est nécessaire
             next_level = None
@@ -1358,6 +1366,9 @@ class SeasonMigrationService:
                             "action": f"promote_{season.level.value}_to_{next_level.value}", 
                             "result": result
                         })
+                        # Mark as processed only when a real promotion happened.
+                        if isinstance(result, dict) and not result.get("error") and not result.get("skipped"):
+                            promoted_contests_this_run.add(contest_id)
                     except Exception as e:
                         logger.error(f"Error promoting contest {contest_id}: {e}")
                         results.append({
