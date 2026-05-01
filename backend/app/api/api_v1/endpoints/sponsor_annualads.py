@@ -152,8 +152,19 @@ async def sponsor_payment_webhook(
     if effective_event != "sponsor_payment_confirmed":
         return {"ok": True, "received": True, "event": effective_event}
 
-    payment = payload.get("payment") or {}
-    tx_hash = str(payment.get("tx_hash") or "").strip().lower()
+    data_block = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+    payment = (
+        payload.get("payment")
+        or data_block.get("payment")
+        or data_block
+        or {}
+    )
+    tx_hash = str(
+        payment.get("tx_hash")
+        or payment.get("transaction_hash")
+        or data_block.get("tx_hash")
+        or ""
+    ).strip().lower()
     if not tx_hash:
         raise HTTPException(status_code=400, detail="Missing payment.tx_hash")
 
@@ -192,9 +203,13 @@ async def sponsor_payment_webhook(
         except (InvalidOperation, TypeError, ValueError):
             return Decimal("0")
 
-    gross = _to_decimal(payment.get("amount"))
+    gross = _to_decimal(payment.get("amount") or payment.get("gross_amount"))
     platform_fee = _to_decimal(payment.get("platform_fee"))
-    client_revenue = _to_decimal(payment.get("client_revenue"))
+    client_revenue = _to_decimal(
+        payment.get("client_revenue")
+        or payment.get("net_amount")
+        or data_block.get("client_revenue")
+    )
     if client_revenue <= 0:
         client_revenue = gross - platform_fee
     if client_revenue <= 0:
