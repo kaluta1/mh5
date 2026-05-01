@@ -294,14 +294,20 @@ class SeasonMigrationService:
             if raw in alias_map:
                 variants.add(alias_map[raw])
             contestants_query = contestants_query.filter(
-                func.lower(func.trim(Contestant.country)).in_(list(variants))
+                func.lower(
+                    func.trim(
+                        func.coalesce(Contestant.country, Contestant.nominator_country)
+                    )
+                ).in_(list(variants))
             )
         
         # Filtrer par localisation non nulle
         if location_field == 'city':
             contestants_query = contestants_query.filter(Contestant.city.isnot(None))
         elif location_field == 'country':
-            contestants_query = contestants_query.filter(Contestant.country.isnot(None))
+            contestants_query = contestants_query.filter(
+                func.coalesce(Contestant.country, Contestant.nominator_country).isnot(None)
+            )
         elif location_field == 'region':
             contestants_query = contestants_query.filter(Contestant.region.isnot(None))
         elif location_field == 'continent':
@@ -348,7 +354,9 @@ class SeasonMigrationService:
             if location_field == 'city':
                 contestants_query = contestants_query.filter(Contestant.city.isnot(None))
             elif location_field == 'country':
-                contestants_query = contestants_query.filter(Contestant.country.isnot(None))
+                contestants_query = contestants_query.filter(
+                    func.coalesce(Contestant.country, Contestant.nominator_country).isnot(None)
+                )
             elif location_field == 'region':
                 contestants_query = contestants_query.filter(Contestant.region.isnot(None))
             elif location_field == 'continent':
@@ -508,7 +516,7 @@ class SeasonMigrationService:
             if location_field == 'city':
                 location_value = contestant.city
             elif location_field == 'country':
-                location_value = contestant.country
+                location_value = contestant.country or contestant.nominator_country
             elif location_field == 'region':
                 location_value = contestant.region
             elif location_field == 'continent':
