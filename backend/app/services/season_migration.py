@@ -276,8 +276,9 @@ class SeasonMigrationService:
                 Contestant.is_qualified == True
             )
         )
-        if contest_id is not None:
-            # Keep winner selection scoped to the current contest only.
+        strict_contest_scope = bool(contest_id is not None)
+        if strict_contest_scope:
+            # Preferred scope for clean data: contestant belongs to the current contest.
             contestants_query = contestants_query.filter(Contestant.season_id == contest_id)
         if country_filter:
             raw = country_filter.strip().lower()
@@ -307,6 +308,52 @@ class SeasonMigrationService:
             contestants_query = contestants_query.filter(Contestant.continent.isnot(None))
         
         contestants = contestants_query.all()
+
+        # Legacy-data fallback:
+        # some DB rows have valid ContestantSeason links but contestant.season_id no longer
+        # matches contest_id. In that case, keep season scoping and continue.
+        if strict_contest_scope and not contestants:
+            if diagnostics:
+                logger.warning(
+                    "  - Strict contest scope returned 0 contestants; retrying with season-only scope"
+                )
+                print("[Migration]   Strict contest scope empty; retry with season-only scope")
+            contestants_query = db.query(Contestant).join(
+                ContestantSeason, ContestantSeason.contestant_id == Contestant.id
+            ).filter(
+                and_(
+                    ContestantSeason.season_id == season_id,
+                    ContestantSeason.is_active == True,
+                    Contestant.is_active == True,
+                    Contestant.is_deleted == False,
+                    Contestant.is_qualified == True
+                )
+            )
+            if country_filter:
+                raw = country_filter.strip().lower()
+                alias_map = {
+                    "tanzania": "tz",
+                    "tz": "tanzania",
+                    "uganda": "ug",
+                    "ug": "uganda",
+                    "kenya": "ke",
+                    "ke": "kenya",
+                }
+                variants = {raw}
+                if raw in alias_map:
+                    variants.add(alias_map[raw])
+                contestants_query = contestants_query.filter(
+                    func.lower(func.trim(Contestant.country)).in_(list(variants))
+                )
+            if location_field == 'city':
+                contestants_query = contestants_query.filter(Contestant.city.isnot(None))
+            elif location_field == 'country':
+                contestants_query = contestants_query.filter(Contestant.country.isnot(None))
+            elif location_field == 'region':
+                contestants_query = contestants_query.filter(Contestant.region.isnot(None))
+            elif location_field == 'continent':
+                contestants_query = contestants_query.filter(Contestant.continent.isnot(None))
+            contestants = contestants_query.all()
         
         if diagnostics:
             logger.info(f"  - Qualified contestants with {location_field} location: {len(contestants)}")
@@ -325,7 +372,7 @@ class SeasonMigrationService:
                     Contestant.is_qualified == True
                 )
             )
-            if contest_id is not None:
+            if strict_contest_scope:
                 base_q = base_q.filter(Contestant.season_id == contest_id)
 
             contestants_without_location = base_q.count()
@@ -341,7 +388,7 @@ class SeasonMigrationService:
                     Contestant.is_qualified == False
                 )
             )
-            if contest_id is not None:
+            if strict_contest_scope:
                 not_qualified_q = not_qualified_q.filter(Contestant.season_id == contest_id)
             contestants_not_qualified = not_qualified_q.count()
             
