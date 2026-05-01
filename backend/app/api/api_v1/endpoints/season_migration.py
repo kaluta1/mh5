@@ -177,6 +177,11 @@ def get_top_high5_by_country(
             }
 
         def _build_for_round(rnd: Round):
+            # Business rule: City Top High5 is reserved for participation flow.
+            # Nomination Top High5 should not expose city-level contestants for now.
+            if requested_level == SeasonLevel.CITY:
+                return []
+
             contest_ids = [
                 r[0]
                 for r in db.execute(
