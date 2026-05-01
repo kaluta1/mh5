@@ -555,13 +555,12 @@ def get_top_high5_by_country(
                 fallback_applied = idx != 0
                 break
 
-        # If no contests matched country filter, anchor diagnostics/selected round to
-        # the current calendar window for the requested level first (business rule:
-        # in May, regional should point to March round window), then fallback to a
-        # linked round if no in-window round exists.
+        # If no contests matched country filter, keep selected round aligned with the
+        # prioritized search order (which already applies business month mapping).
+        # Fallback to linked rounds only if search list is empty.
         if not chosen_contests:
-            if in_level_window:
-                chosen_round = _prioritize_voting_open(in_level_window)[0]
+            if search_rounds:
+                chosen_round = search_rounds[0]
                 fallback_applied = True
             else:
                 linked_candidates = linked_in_window + linked_outside_window
