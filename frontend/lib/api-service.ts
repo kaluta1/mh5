@@ -95,6 +95,7 @@ export const ApiService = {
         roundId?: number;
         contestMode?: string;
         filterCountry?: string;
+        filterRegion?: string;
         filterContinent?: string;
         searchTerm?: string;
         contestLimit?: number;
@@ -117,6 +118,7 @@ export const ApiService = {
 
     getContest: async (id: number, params?: {
         filterCountry?: string;
+        filterRegion?: string;
         filterContinent?: string;
         entryType?: string;
         /** Calendar round (March vs April); only contestants for this round */
@@ -127,6 +129,7 @@ export const ApiService = {
         const response = await api.get<Contest>(`/contests/${id}`, {
             params: {
                 filter_country: params?.filterCountry,
+                filter_region: params?.filterRegion,
                 filter_continent: params?.filterContinent,
                 entry_type: params?.entryType,
                 round_id: params?.roundId,

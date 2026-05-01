@@ -1088,6 +1088,7 @@ class CRUDContest:
     def get_contest_with_enriched_contestants(
         self, db: Session, contest_id: int, current_user_id: Optional[int] = None,
         filter_country: Optional[str] = None, filter_continent: Optional[str] = None,
+        filter_region: Optional[str] = None,
         entry_type: Optional[str] = None,
         round_id: Optional[int] = None,
     ) -> Dict[str, Any]:
@@ -1129,6 +1130,7 @@ class CRUDContest:
             contest_obj,
             current_user=current_user,
             filter_country=filter_country,
+            filter_region=filter_region,
             filter_continent=filter_continent,
             entry_type=entry_type,
             round_id=round_id,
@@ -1220,6 +1222,20 @@ class CRUDContest:
             season_level = season.level.value if hasattr(season.level, "value") else str(season.level)
             if isinstance(season_level, str):
                 season_level = season_level.lower()
+
+        # Once a contest migrates beyond its start level, the visible roster is
+        # the active ContestantSeason membership for that level (e.g. March top
+        # 5 winners in REGIONAL), not every original contestant from the round.
+        if season and season_level in ("regional", "region", "continent", "global"):
+            active_season_member_ids = db.query(ContestantSeason.contestant_id).filter(
+                ContestantSeason.season_id == season.id,
+                ContestantSeason.is_active == True,
+            )
+            contestants_query = contestants_query.filter(Contestant.id.in_(active_season_member_ids))
+            logger.info(
+                f"[get_contest_with_enriched_contestants] Scoping visible roster to active "
+                f"ContestantSeason links for {season_level} season_id={season.id}"
+            )
         
         # =====================================================
         # FILTRAGE GÉOGRAPHIQUE
@@ -1238,6 +1254,7 @@ class CRUDContest:
         # Sinon, utiliser la localisation de l'utilisateur connecté par défaut
         effective_country = None
         effective_continent = None
+        effective_region = None
         
         # Check for explicit "ALL" intention
         # If user explicitly requests "all", we should NOT fallback to their location
@@ -1263,6 +1280,8 @@ class CRUDContest:
         elif filter_continent and is_valid_location(filter_continent):
             # Filtre explicite par continent uniquement (pas de pays)
             effective_continent = filter_continent
+        if filter_region and is_valid_location(filter_region):
+            effective_region = filter_region
             
         # Fallback to current_user location ONLY if no explicit "all" and no specific filter
         if current_user and not is_explicit_all_country and not is_explicit_all_continent:
@@ -1289,6 +1308,12 @@ class CRUDContest:
                     conds.append(Contestant.country.ilike(pat))
                     conds.append(User.country.ilike(pat))
                 location_conditions.append(or_(*conds))
+            if effective_region:
+                logger.info(f"[get_contest_with_enriched_contestants] Filtering by region: '{effective_region}'")
+                location_conditions.append(or_(
+                    Contestant.region.ilike(f"%{effective_region}%"),
+                    User.region.ilike(f"%{effective_region}%")
+                ))
             elif effective_continent:
                 logger.info(f"[get_contest_with_enriched_contestants] Filtering by continent: '{effective_continent}'")
                 # Filtrer par continent si pas de pays
@@ -1309,8 +1334,10 @@ class CRUDContest:
             # DEBUG: Log the filter values
             logger.info(f"[get_contest_with_enriched_contestants] User ID: {current_user_id}")
             logger.info(f"[get_contest_with_enriched_contestants] Incoming Filter Country: '{filter_country}'")
+            logger.info(f"[get_contest_with_enriched_contestants] Incoming Filter Region: '{filter_region}'")
             logger.info(f"[get_contest_with_enriched_contestants] Incoming Filter Continent: '{filter_continent}'")
             logger.info(f"[get_contest_with_enriched_contestants] Effective Country: '{effective_country}'")
+            logger.info(f"[get_contest_with_enriched_contestants] Effective Region: '{effective_region}'")
             logger.info(f"[get_contest_with_enriched_contestants] Effective Continent: '{effective_continent}'")
             # DEBUG: First check what contestants actually exist
             debug_sample = db.query(
@@ -1331,7 +1358,11 @@ class CRUDContest:
             # IMPORTANT: Only try fallbacks if we DID NOT apply a location or entry_type filter.
             # If we applied a filter and got 0 results, that means there are simply no contestants matching.
             # We should NOT fallback to showing all contestants in that case.
-            applied_location_filter = effective_country is not None or effective_continent is not None
+            applied_location_filter = (
+                effective_country is not None
+                or effective_region is not None
+                or effective_continent is not None
+            )
             applied_entry_type_filter = effective_entry_type is not None
 
             if (
@@ -1375,20 +1406,22 @@ class CRUDContest:
         contestant_ids = [c.id for c in contestants]
         logger.info(f"[get_contest_with_enriched_contestants] Returning {len(contestant_ids)} contestant IDs")
         
-        # Récupérer tous les votes avec utilisateurs (depuis ContestantVoting)
-        # Scope par contest_id (aligné sur POST /contestants/{id}/vote). Filtrer uniquement par
-        # season_id via ContestSeasonLink peut exclure les votes si la saison active du lien ≠
-        # celle enregistrée sur ContestantVoting — has_voted faux et compteurs / rangs périmés.
+        # Récupérer tous les votes avec utilisateurs (depuis ContestantVoting).
+        # Scope by active ContestSeason when available so users can vote again at
+        # REGIONAL after having voted in COUNTRY, and the regional leaderboard
+        # starts from regional votes only.
         votes_data = []
         try:
             if contestant_ids:
-                votes_data = db.query(ContestantVoting, User)\
+                votes_query = db.query(ContestantVoting, User)\
                     .join(User, ContestantVoting.user_id == User.id)\
                     .filter(
                         ContestantVoting.contestant_id.in_(contestant_ids),
                         ContestantVoting.contest_id == contest_id,
-                    )\
-                    .all()
+                    )
+                if season:
+                    votes_query = votes_query.filter(ContestantVoting.season_id == season.id)
+                votes_data = votes_query.all()
         except Exception as e:
             logger.warning(f"Error fetching votes: {e}")
             votes_data = []
@@ -1543,13 +1576,14 @@ class CRUDContest:
         # Votes de l'utilisateur pour ce concours (même clé que l'enregistrement du vote API)
         user_votes_in_season = {}
         if current_user_id and contestant_ids:
-            user_votes = db.query(ContestantVoting)\
-                .filter(
-                    ContestantVoting.user_id == current_user_id,
-                    ContestantVoting.contest_id == contest_id,
-                    ContestantVoting.contestant_id.in_(contestant_ids),
-                )\
-                .all()
+            user_votes_query = db.query(ContestantVoting).filter(
+                ContestantVoting.user_id == current_user_id,
+                ContestantVoting.contest_id == contest_id,
+                ContestantVoting.contestant_id.in_(contestant_ids),
+            )
+            if season:
+                user_votes_query = user_votes_query.filter(ContestantVoting.season_id == season.id)
+            user_votes = user_votes_query.all()
             user_votes_in_season = {vote.contestant_id: vote for vote in user_votes}
         
         # Déterminer le niveau de la saison (city, country, regional, continent, global, etc.)
@@ -1663,12 +1697,41 @@ class CRUDContest:
                 # Global ou niveau inconnu -> pas de restriction géographique
                 return True
 
+        from app.services.contest_status import contest_status_service
+
+        def _is_voting_open_for_active_season() -> bool:
+            """Prefer stage-specific season windows for migrated levels."""
+            if not season or not getattr(season, "round", None):
+                return False
+            lvl = (season_level or "").lower()
+            window_fields = {
+                "city": ("city_season_start_date", "city_season_end_date"),
+                "country": ("country_season_start_date", "country_season_end_date"),
+                "regional": ("regional_start_date", "regional_end_date"),
+                "region": ("regional_start_date", "regional_end_date"),
+                "continent": ("continental_start_date", "continental_end_date"),
+                "global": ("global_start_date", "global_end_date"),
+            }.get(lvl)
+            if not window_fields:
+                return False
+            round_obj = season.round
+            start_date = getattr(round_obj, window_fields[0], None)
+            end_date = getattr(round_obj, window_fields[1], None)
+            if not start_date or not end_date:
+                return False
+            now_vote = contest_status_service._utc_now()
+            from datetime import datetime, time as time_type
+            start_dt = datetime.combine(start_date, time_type.min)
+            end_dt = datetime.combine(end_date, time_type(23, 59, 59))
+            return start_dt <= now_vote <= end_dt
+
         # Helper : vote ouvert pour le round (même logique que round_voting_open_at : grâce nomination, etc.)
         def _is_voting_open_for_round(c):
+            if _is_voting_open_for_active_season():
+                return True
             if not c.round_id:
                 return True  # Pas de round = pas de restriction
             from app.models.round import Round as RoundModel
-            from app.services.contest_status import contest_status_service
 
             r = db.query(RoundModel).filter(RoundModel.id == c.round_id).first()
             if not r or not r.voting_start_date or not r.voting_end_date:

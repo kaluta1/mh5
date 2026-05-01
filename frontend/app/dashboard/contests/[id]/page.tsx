@@ -142,6 +142,9 @@ export default function ContestDetailPage() {
   const [filterCountry, setFilterCountry] = React.useState<string>(() => {
     return searchParams.get('country') || 'all'
   })
+  const [filterRegion, setFilterRegion] = React.useState<string>(() => {
+    return searchParams.get('region') || 'all'
+  })
   const [filterContinent, setFilterContinent] = React.useState<string>(() => {
     return searchParams.get('continent') || 'all'
   })
@@ -151,29 +154,36 @@ export default function ContestDetailPage() {
   // Sync state from URL when params change (e.g. navigation from list with country=Uganda)
   React.useEffect(() => {
     const urlCountry = searchParams.get('country') || ''
+    const urlRegion = searchParams.get('region') || 'all'
     const urlContinent = searchParams.get('continent') || 'all'
     setFilterCountry(urlCountry)
+    setFilterRegion(urlRegion)
     setFilterContinent(urlContinent)
   }, [searchParams])
 
   // Default to 'all' when no URL params (don't auto-filter by user country)
   React.useEffect(() => {
     const urlCountry = searchParams.get('country')
+    const urlRegion = searchParams.get('region')
     const urlContinent = searchParams.get('continent')
-    if (urlCountry || urlContinent) return
+    if (urlCountry || urlRegion || urlContinent) return
     // No auto-filter by user country: show all contestants by default
     setFilterCountry('all')
+    setFilterRegion('all')
     setFilterContinent('all')
   }, [searchParams])
 
   // Mettre à jour l'URL quand les filtres changent
-  const updateUrlWithFilters = React.useCallback((continent: string, country: string) => {
+  const updateUrlWithFilters = React.useCallback((continent: string, country: string, region?: string) => {
     const params = new URLSearchParams()
     if (continent) {
       params.set('continent', continent)
     }
     if (country) {
       params.set('country', country)
+    }
+    if (region && region !== 'all') {
+      params.set('region', region)
     }
     // Préserver le entryType dans l'URL
     if (entryType) {
@@ -202,6 +212,7 @@ export default function ContestDetailPage() {
       // Fetch contest data
       const c = await ApiService.getContest(parseInt(contestId), {
         filterCountry: (!filterCountry || filterCountry === 'all') ? undefined : filterCountry,
+        filterRegion: (!filterRegion || filterRegion === 'all') ? undefined : filterRegion,
         filterContinent: filterContinent === 'all' ? undefined : filterContinent,
         entryType: entryType,
         roundId: roundIdFromUrl ? parseInt(roundIdFromUrl, 10) : undefined,
@@ -238,7 +249,8 @@ export default function ContestDetailPage() {
           name: ct.author_name || `Contestant #${index + 1}`,
           country: ct.author_country,
           city: ct.author_city,
-          continent: ct.author?.continent, // check if existing schema had this nested or flat
+          continent: ct.author_continent ?? ct.author?.continent,
+          region: ct.author_region ?? ct.region ?? ct.author?.region,
           avatar: ct.author_avatar_url || '👤',
           participationTitle: ct.title,
           description: ct.description ?? '',
@@ -292,7 +304,7 @@ export default function ContestDetailPage() {
         setPageLoading(false)
       }
     }
-  }, [contestId, filterCountry, filterContinent, entryType, roundIdFromUrl, t])
+  }, [contestId, filterCountry, filterRegion, filterContinent, entryType, roundIdFromUrl, t])
 
   // Decide if the current user already submitted (so the CTA should show "Edit").
   // This is needed because `current_user_contesting` from the API can be inaccurate for nominations.
@@ -611,12 +623,12 @@ export default function ContestDetailPage() {
             filterContinent={filterContinent}
             onContinentChange={(value) => {
               setFilterContinent(value)
-              updateUrlWithFilters(value, filterCountry)
+              updateUrlWithFilters(value, filterCountry, filterRegion)
             }}
             filterCountry={filterCountry}
             onCountryChange={(value) => {
               setFilterCountry(value)
-              updateUrlWithFilters(filterContinent, value)
+              updateUrlWithFilters(filterContinent, value, filterRegion)
             }}
             showSort={false}
             showSearchButton={false}

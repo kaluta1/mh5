@@ -2606,44 +2606,6 @@ def vote_for_contestant(
             detail="No active contest found for this season. Open the contest from the list and vote again, or pass contest_id.",
         )
     
-    # Vérifier que le vote est ouvert pour ce contest
-    is_allowed, error_message = contest_status_service.check_voting_allowed(db, contest.id)
-    if not is_allowed:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error_message
-        )
-    
-    # Vérifier que le round du contestant est en phase de vote (pas en soumission)
-    if contestant.round_id:
-        from app.models.round import Round as RoundModel
-        from datetime import datetime, time as time_type
-
-        contestant_round = db.query(RoundModel).filter(RoundModel.id == contestant.round_id).first()
-        if contestant_round and contestant_round.voting_start_date and contestant_round.voting_end_date:
-            now_vote = contest_status_service._utc_now()
-            vs = datetime.combine(contestant_round.voting_start_date, time_type.min)
-            ve = datetime.combine(contestant_round.voting_end_date, time_type(23, 59, 59))
-            if now_vote < vs:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Voting for {contestant_round.name} has not started yet. Submission phase is active until {contestant_round.submission_end_date}. Voting starts on {contestant_round.voting_start_date}."
-                )
-            if now_vote > ve:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Voting for {contestant_round.name} has ended on {contestant_round.voting_end_date}."
-                )
-            if not contest_status_service.round_voting_open_at(contestant_round, now_vote):
-                nom_close = contest_status_service.round_nomination_closes_at(contestant_round)
-                detail = (
-                    f"Voting for {contestant_round.name} opens after nominations close "
-                    f"({nom_close.isoformat()} UTC)."
-                    if nom_close
-                    else f"Voting is not open yet for {contestant_round.name}."
-                )
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
-
     # Règles de vote basées sur la localisation et le niveau de la saison
     # (Les concours en mode "nomination" utilisent toujours le niveau country, jamais city — même si la saison est city.)
     # city      -> seuls les utilisateurs de la même ville (et même pays) peuvent voter
@@ -2664,6 +2626,57 @@ def vote_for_contestant(
         and _normalize_contest_mode(getattr(contest, "contest_mode", None)) == "nomination"
     ):
         season_level = "country"
+
+    def _season_voting_window_status() -> tuple[Optional[bool], str]:
+        """Use stage-specific round dates for migrated levels before legacy round voting dates."""
+        from datetime import datetime, time as time_type
+
+        round_obj = getattr(season, "round", None)
+        if not round_obj:
+            return None, ""
+
+        lvl = (season_level or "").lower()
+        window_fields = {
+            "city": ("city_season_start_date", "city_season_end_date"),
+            "country": ("country_season_start_date", "country_season_end_date"),
+            "regional": ("regional_start_date", "regional_end_date"),
+            "region": ("regional_start_date", "regional_end_date"),
+            "continent": ("continental_start_date", "continental_end_date"),
+            "global": ("global_start_date", "global_end_date"),
+        }
+        fields = window_fields.get(lvl)
+        if not fields:
+            return None, ""
+
+        start_date = getattr(round_obj, fields[0], None)
+        end_date = getattr(round_obj, fields[1], None)
+        if not start_date or not end_date:
+            return None, ""
+
+        now_vote = contest_status_service._utc_now()
+        start_dt = datetime.combine(start_date, time_type.min)
+        end_dt = datetime.combine(end_date, time_type(23, 59, 59))
+        if now_vote < start_dt:
+            return False, f"Voting for {round_obj.name} {lvl} level starts on {start_date}."
+        if now_vote > end_dt:
+            return False, f"Voting for {round_obj.name} {lvl} level ended on {end_date}."
+        return True, ""
+
+    season_window_open, season_window_message = _season_voting_window_status()
+    if season_window_open is False:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=season_window_message,
+        )
+    elif season_window_open is None:
+        # Legacy fallback: if the active ContestSeason lacks stage dates, use the
+        # general contest/round voting check.
+        is_allowed, error_message = contest_status_service.check_voting_allowed(db, contest.id)
+        if not is_allowed:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_message
+            )
 
     from app.models.user import User as MyfavUser
 

@@ -31,6 +31,68 @@ class SeasonMigrationService:
     """Service pour gérer les migrations de saisons"""
 
     @staticmethod
+    def _contestants_for_contest_in_season(
+        db: Session,
+        season_id: int,
+        contest_id: int,
+        *,
+        active_only: bool = True,
+        qualified_only: bool = False,
+    ) -> List[Contestant]:
+        """
+        Return contestants for one contest inside a shared ContestSeason.
+
+        ContestSeason rows are shared by level+round, while Contestant.season_id
+        usually stores the contest id. Keep contest-scoped operations from
+        affecting other contests in the same season, with a legacy fallback when
+        older rows do not preserve Contestant.season_id == contest_id.
+        """
+        filters = [
+            ContestantSeason.season_id == season_id,
+            Contestant.is_active == True,
+            Contestant.is_deleted == False,
+            Contestant.season_id == contest_id,
+        ]
+        if active_only:
+            filters.append(ContestantSeason.is_active == True)
+        if qualified_only:
+            filters.append(or_(Contestant.is_qualified == True, Contestant.is_qualified.is_(None)))
+
+        scoped = db.query(Contestant).join(
+            ContestantSeason, ContestantSeason.contestant_id == Contestant.id
+        ).filter(and_(*filters)).all()
+        if scoped:
+            return scoped
+
+        fallback_filters = [
+            ContestantSeason.season_id == season_id,
+            Contestant.is_active == True,
+            Contestant.is_deleted == False,
+        ]
+        if active_only:
+            fallback_filters.append(ContestantSeason.is_active == True)
+        if qualified_only:
+            fallback_filters.append(or_(Contestant.is_qualified == True, Contestant.is_qualified.is_(None)))
+
+        voted_ids = [
+            row[0]
+            for row in db.query(ContestantVoting.contestant_id).filter(
+                ContestantVoting.contest_id == contest_id,
+                ContestantVoting.season_id == season_id,
+            ).distinct().all()
+        ]
+        if voted_ids:
+            fallback_filters.append(Contestant.id.in_(voted_ids))
+            return db.query(Contestant).join(
+                ContestantSeason, ContestantSeason.contestant_id == Contestant.id
+            ).filter(and_(*fallback_filters)).all()
+
+        # Last resort for legacy data: use active season links only.
+        return db.query(Contestant).join(
+            ContestantSeason, ContestantSeason.contestant_id == Contestant.id
+        ).filter(and_(*fallback_filters)).all()
+
+    @staticmethod
     def _engagement_by_contestant(db: Session, contestant_ids: List[int]) -> Dict[int, Dict[str, int]]:
         """
         Build engagement metrics used for deterministic winner tie-breaks.
@@ -982,17 +1044,16 @@ class SeasonMigrationService:
                 "promoted_contestant_ids": [],
             }
         
-        # Marquer les non sélectionnés comme non qualifiés
-        all_contestants = db.query(Contestant).join(
-            ContestantSeason
-        ).filter(
-            and_(
-                ContestantSeason.season_id == from_season.id,
-                ContestantSeason.is_active == True,
-                Contestant.is_active == True,
-                Contestant.is_deleted == False
-            )
-        ).all()
+        # Mark non-selected contestants from this contest only. A ContestSeason is
+        # shared by all contests for a round/level, so season-only cleanup would
+        # incorrectly disqualify contestants from other contests in the same round.
+        all_contestants = SeasonMigrationService._contestants_for_contest_in_season(
+            db,
+            from_season.id,
+            contest_id,
+            active_only=True,
+            qualified_only=False,
+        )
         
         selected_ids = {c.id for c in selected_contestants}
         for contestant in all_contestants:
@@ -1275,8 +1336,9 @@ class SeasonMigrationService:
             )
         ).order_by(ContestSeason.id.desc()).all()
         
-        # Safety guard: avoid multi-hop promotions in a single run for same contest
-        # (e.g. country->regional then regional->continent immediately).
+        # Safety guard: avoid multi-hop promotions in a single run for the same
+        # contest+round, while still allowing the same contest to be processed
+        # independently in another calendar round.
         promoted_contests_this_run = set()
         
         for season in active_seasons:
@@ -1285,23 +1347,6 @@ class SeasonMigrationService:
             
             round_obj = season.round
             if round_obj.status == RoundStatus.CANCELLED:
-                continue
-            
-            # Trouver le contest lié à cette saison via ContestSeasonLink
-            contest_link = db.query(ContestSeasonLink).filter(
-                and_(
-                    ContestSeasonLink.season_id == season.id,
-                    ContestSeasonLink.is_active == True
-                )
-            ).first()
-            
-            if not contest_link:
-                continue
-            
-            contest_id = contest_link.contest_id
-            
-            # Prevent multiple stage promotions for the same contest in one execution.
-            if contest_id in promoted_contests_this_run:
                 continue
             
             # Déterminer si une promotion est nécessaire
@@ -1338,22 +1383,43 @@ class SeasonMigrationService:
                 next_level = SeasonLevel.GLOBAL
             
             if should_promote and next_level:
-                # Vérifier qu'on n'a pas déjà promu CE contest vers ce niveau.
-                # NOTE: A round can contain multiple contests, so checking only
-                # (round_id, level) incorrectly blocks other contests.
-                existing_next = db.query(ContestSeasonLink).join(
-                    ContestSeason, ContestSeason.id == ContestSeasonLink.season_id
-                ).filter(
+                # A single ContestSeason is shared by many contests in the round.
+                # Process every active contest link; using `.first()` here left
+                # other March contests stuck at COUNTRY and never visible in REGIONAL.
+                contest_links = db.query(ContestSeasonLink).filter(
                     and_(
-                        ContestSeasonLink.contest_id == contest_id,
-                        ContestSeasonLink.is_active == True,
-                        ContestSeason.round_id == round_obj.id,
-                        ContestSeason.level == next_level,
-                        ContestSeason.is_deleted == False,
+                        ContestSeasonLink.season_id == season.id,
+                        ContestSeasonLink.is_active == True
                     )
-                ).first()
-                
-                if not existing_next:
+                ).order_by(ContestSeasonLink.contest_id.asc()).all()
+
+                for contest_link in contest_links:
+                    contest_id = contest_link.contest_id
+                    promotion_key = (contest_id, round_obj.id)
+
+                    # Prevent multiple stage promotions for the same contest+round
+                    # in one execution (e.g. country->regional then regional->continent).
+                    if promotion_key in promoted_contests_this_run:
+                        continue
+
+                    # Vérifier qu'on n'a pas déjà promu CE contest vers ce niveau.
+                    # NOTE: A round can contain multiple contests, so checking only
+                    # (round_id, level) incorrectly blocks other contests.
+                    existing_next = db.query(ContestSeasonLink).join(
+                        ContestSeason, ContestSeason.id == ContestSeasonLink.season_id
+                    ).filter(
+                        and_(
+                            ContestSeasonLink.contest_id == contest_id,
+                            ContestSeasonLink.is_active == True,
+                            ContestSeason.round_id == round_obj.id,
+                            ContestSeason.level == next_level,
+                            ContestSeason.is_deleted == False,
+                        )
+                    ).first()
+
+                    if existing_next:
+                        continue
+
                     try:
                         result = SeasonMigrationService.promote_to_next_level(
                             db,
@@ -1364,14 +1430,14 @@ class SeasonMigrationService:
                             from_season_id=season.id,
                         )
                         results.append({
-                            "contest_id": contest_id, 
-                            "round_id": round_obj.id, 
-                            "action": f"promote_{season.level.value}_to_{next_level.value}", 
+                            "contest_id": contest_id,
+                            "round_id": round_obj.id,
+                            "action": f"promote_{season.level.value}_to_{next_level.value}",
                             "result": result
                         })
                         # Mark as processed only when a real promotion happened.
                         if isinstance(result, dict) and not result.get("error") and not result.get("skipped"):
-                            promoted_contests_this_run.add(contest_id)
+                            promoted_contests_this_run.add(promotion_key)
                     except Exception as e:
                         logger.error(f"Error promoting contest {contest_id}: {e}")
                         results.append({

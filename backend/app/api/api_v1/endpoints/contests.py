@@ -554,6 +554,7 @@ def read_contest(
     db: Session = Depends(get_db),
     contest_id: int,
     filter_country: str = Query(None, description="Filtrer par pays"),
+    filter_region: str = Query(None, description="Filtrer par région"),
     filter_continent: str = Query(None, description="Filtrer par continent"),
     entry_type: str = Query(None, description="Filtrer par type: nomination ou participation"),
     round_id: Optional[int] = Query(
@@ -590,6 +591,7 @@ def read_contest(
         contest_id=contest_id, 
         current_user_id=current_user_id,
         filter_country=filter_country,
+        filter_region=filter_region,
         filter_continent=filter_continent,
         entry_type=entry_type,
         round_id=round_id,
