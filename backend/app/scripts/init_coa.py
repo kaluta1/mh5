@@ -178,6 +178,20 @@ def init_chart_of_accounts(db: Session):
             "description": "On-chain USDT (BEP-20) on BNB Smart Chain (BSC). Member and platform receipts post here (Dr 1001); "
             "settlements (e.g. Shufti) clear with Cr 1001. Not fiat cash or custodial wallet balance.",
         },
+        {
+            "code": "1030",
+            "name": "Crypto Wallet — USDT (BSC)",
+            "type": AccountType.ASSET,
+            "parent": "1000",
+            "description": "AnnualAds net sponsor proceeds (70%) received in USDT on BSC.",
+        },
+        {
+            "code": "1210",
+            "name": "Receivable from AnnualAds",
+            "type": AccountType.ASSET,
+            "parent": "1000",
+            "description": "Receivable from AnnualAds if settlement is delayed.",
+        },
         {"code": "1200", "name": "Accounts Receivable", "type": AccountType.ASSET, "parent": "1000"},
         # LIABILITIES (2000)
         {"code": "2000", "name": "Liabilities", "type": AccountType.LIABILITY, "parent": None},
@@ -259,6 +273,13 @@ def init_chart_of_accounts(db: Session):
             "Sponsor commissions: separate Dr 5001 / Cr 2001–2002 entry when recognition posts.",
         },
         {
+            "code": "2310",
+            "name": "Deferred Sponsor Revenue",
+            "type": AccountType.LIABILITY,
+            "parent": "2000",
+            "description": "AnnualAds sponsor revenue received net (70%) and deferred for recognition over service period.",
+        },
+        {
             "code": "2120",
             "name": "Club subs — payable to club owner (base fee)",
             "type": AccountType.LIABILITY,
@@ -281,6 +302,13 @@ def init_chart_of_accounts(db: Session):
             "parent": "4000",
             "description": "Net revenue when verification is performed: deferred 2113 released for gross less 10% founding "
             "pool (2104), less Shufti payable (2003), less sponsor commissions (recognized via 5001/2001–2002).",
+        },
+        {
+            "code": "4010",
+            "name": "Sponsor Advertising Revenue — Net",
+            "type": AccountType.REVENUE,
+            "parent": "4000",
+            "description": "Recognized AnnualAds sponsor revenue (net-agent basis).",
         },
         {"code": "4002", "name": "Membership Revenue", "type": AccountType.REVENUE, "parent": "4000"},
         {
@@ -314,6 +342,13 @@ def init_chart_of_accounts(db: Session):
         {"code": "5001", "name": "Commission Expense", "type": AccountType.EXPENSE, "parent": "5000"},
         {"code": "5002", "name": "KYC Provider Expense", "type": AccountType.EXPENSE, "parent": "5000"},
         {"code": "5003", "name": "Ad Revenue Share to Members (Expense)", "type": AccountType.EXPENSE, "parent": "5000"},
+        {
+            "code": "7110",
+            "name": "FX / Crypto Conversion Loss",
+            "type": AccountType.EXPENSE,
+            "parent": "5000",
+            "description": "Loss on conversion/re-measurement from USDT into fiat.",
+        },
     ]
 
     created_count = 0

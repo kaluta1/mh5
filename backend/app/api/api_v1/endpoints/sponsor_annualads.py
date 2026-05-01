@@ -17,11 +17,16 @@ import logging
 import time
 from typing import Any
 
+from decimal import Decimal, InvalidOperation
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy.orm import Session
 from jose import jwt
 from pydantic import BaseModel
 from app.api import deps
 from app.core.config import settings
+from app.services.accounting_service import accounting_service, AccountingError
+from app.models.accounting import ChartOfAccounts, AccountType, JournalEntry
 from app.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -96,7 +101,10 @@ def _verify_webhook_signature(
 
 
 @webhook_router.post("/sponsor-payment")
-async def sponsor_payment_webhook(request: Request) -> dict[str, Any]:
+async def sponsor_payment_webhook(
+    request: Request,
+    db: Session = Depends(deps.get_db),
+) -> dict[str, Any]:
     """
     Receives POST from Annual Ads when a sponsor payment is confirmed.
     Register this URL in the tenant: .../api/v1/webhooks/sponsor-payment
@@ -134,10 +142,118 @@ async def sponsor_payment_webhook(request: Request) -> dict[str, Any]:
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON body")
 
+    effective_event = event or payload.get("event")
     logger.info(
         "sponsor_payment_webhook: event=%s payload_keys=%s",
-        event or payload.get("event"),
+        effective_event,
         list(payload.keys()),
     )
-    # Hook for fulfillment: extend here (DB, email, etc.)
-    return {"ok": True, "received": True, "event": event or payload.get("event")}
+
+    if effective_event != "sponsor_payment_confirmed":
+        return {"ok": True, "received": True, "event": effective_event}
+
+    payment = payload.get("payment") or {}
+    tx_hash = str(payment.get("tx_hash") or "").strip().lower()
+    if not tx_hash:
+        raise HTTPException(status_code=400, detail="Missing payment.tx_hash")
+
+    # CoA accounts from AnnualAds integration spec:
+    # 1030 Crypto Wallet USDT, 2310 Deferred Sponsor Revenue, 4010 Sponsor Revenue Net, 7110 FX loss.
+    def _ensure_account(code: str, name: str, account_type: AccountType, parent_code: str | None = None) -> None:
+        existing = db.query(ChartOfAccounts).filter(ChartOfAccounts.account_code == code).first()
+        if existing:
+            return
+        parent_id = None
+        if parent_code:
+            parent = db.query(ChartOfAccounts).filter(ChartOfAccounts.account_code == parent_code).first()
+            if parent:
+                parent_id = parent.id
+        db.add(
+            ChartOfAccounts(
+                account_code=code,
+                account_name=name,
+                account_type=account_type,
+                parent_id=parent_id,
+                is_active=True,
+                description="Auto-created by AnnualAds sponsor payment integration.",
+            )
+        )
+        db.flush()
+
+    _ensure_account("1030", "Crypto Wallet — USDT (BSC)", AccountType.ASSET, "1000")
+    _ensure_account("1210", "Receivable from AnnualAds", AccountType.ASSET, "1000")
+    _ensure_account("2310", "Deferred Sponsor Revenue", AccountType.LIABILITY, "2000")
+    _ensure_account("4010", "Sponsor Advertising Revenue — Net", AccountType.REVENUE, "4000")
+    _ensure_account("7110", "FX / Crypto Conversion Loss", AccountType.EXPENSE, "5000")
+
+    def _to_decimal(value: Any) -> Decimal:
+        try:
+            return Decimal(str(value or "0"))
+        except (InvalidOperation, TypeError, ValueError):
+            return Decimal("0")
+
+    gross = _to_decimal(payment.get("amount"))
+    platform_fee = _to_decimal(payment.get("platform_fee"))
+    client_revenue = _to_decimal(payment.get("client_revenue"))
+    if client_revenue <= 0:
+        client_revenue = gross - platform_fee
+    if client_revenue <= 0:
+        raise HTTPException(status_code=400, detail="Invalid payment amounts for sponsor accounting")
+
+    entry_description = f"AnnualAds sponsor payment received (deferred) tx:{tx_hash}"
+    existing_entry = (
+        db.query(JournalEntry)
+        .filter(JournalEntry.description == entry_description)
+        .first()
+    )
+    if existing_entry:
+        return {
+            "ok": True,
+            "received": True,
+            "event": effective_event,
+            "status": "already_recorded",
+            "tx_hash": tx_hash,
+            "journal_entry_id": existing_entry.id,
+        }
+
+    # Entry A (IFRS/ASC net-agent treatment):
+    # Dr 1030 (USDT wallet, net 70%) / Cr 2310 (deferred sponsor revenue)
+    try:
+        je = accounting_service.create_journal_entry(
+            db=db,
+            description=entry_description,
+            lines=[
+                {
+                    "account_code": "1030",
+                    "debit": float(client_revenue),
+                    "credit": 0.0,
+                    "description": f"AnnualAds net sponsor inflow tx:{tx_hash}",
+                },
+                {
+                    "account_code": "2310",
+                    "debit": 0.0,
+                    "credit": float(client_revenue),
+                    "description": f"AnnualAds deferred sponsor revenue tx:{tx_hash}",
+                },
+            ],
+            commit=True,
+        )
+    except AccountingError as e:
+        logger.error("AnnualAds accounting posting failed for tx=%s: %s", tx_hash, e)
+        raise HTTPException(status_code=500, detail=f"Accounting posting failed: {str(e)}")
+    except Exception as e:
+        logger.exception("Unexpected error posting AnnualAds accounting for tx=%s", tx_hash)
+        raise HTTPException(status_code=500, detail=f"Accounting posting failed: {str(e)}")
+
+    return {
+        "ok": True,
+        "received": True,
+        "event": effective_event,
+        "status": "recorded",
+        "tx_hash": tx_hash,
+        "gross_amount": float(gross),
+        "platform_fee": float(platform_fee),
+        "client_revenue": float(client_revenue),
+        "journal_entry_id": je.id,
+        "entry_number": je.entry_number,
+    }
