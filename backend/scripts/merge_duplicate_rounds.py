@@ -32,7 +32,7 @@ if _BACKEND_ROOT not in sys.path:
     sys.path.insert(0, _BACKEND_ROOT)
 
 from sqlalchemy import inspect as sa_inspect
-from sqlalchemy import select, delete, insert, func
+from sqlalchemy import select, delete, insert, func, text
 from sqlalchemy.orm import Session
 
 logging.basicConfig(level=logging.INFO)
@@ -52,13 +52,33 @@ def _table_has_column(session: Session, table_name: str, column_name: str) -> bo
     return any(c.get("name") == column_name for c in cols)
 
 
+# Tables that may store round_id; Contest ORM often has no round_id field (N:N via round_contests).
+_ROUND_ID_TABLES = frozenset({"contest", "contest_seasons", "contestants"})
+
+
+def _repoint_round_id_column(
+    db: Session,
+    table: str,
+    duplicate_id: int,
+    keep_id: int,
+    dry_run: bool,
+) -> None:
+    if table not in _ROUND_ID_TABLES:
+        raise ValueError(f"invalid table: {table}")
+    if dry_run or not _table_has_column(db, table, "round_id"):
+        return
+    db.execute(
+        text(f"UPDATE {table} SET round_id = :keep WHERE round_id = :dup"),
+        {"keep": keep_id, "dup": duplicate_id},
+    )
+
+
 def _setup():
     from app.db.session import SessionLocal  # noqa: lazy after path fix
     from app.models.round import Round, round_contests
-    from app.models.contests import ContestSeason, Contestant
-    from app.models.contest import Contest, ContestVote
+    from app.models.contest import ContestVote
     from app.models.vote_ranking import UserVoteRanking
-    return SessionLocal, Round, round_contests, ContestSeason, Contestant, Contest, ContestVote, UserVoteRanking
+    return SessionLocal, Round, round_contests, ContestVote, UserVoteRanking
 
 
 def list_rounds(db: Session, Round) -> None:
@@ -102,9 +122,6 @@ def merge_round_into(
     *,
     Round,
     round_contests,
-    ContestSeason,
-    Contestant,
-    Contest,
     ContestVote,
     UserVoteRanking,
 ) -> dict:
@@ -149,22 +166,13 @@ def merge_round_into(
                 )
             stats["round_contests_copied"] += 1
 
-    # 2) Legacy Contest.round_id
-    if not dry_run:
-        db.query(Contest).filter(Contest.round_id == duplicate_id).update(
-            {Contest.round_id: keep_id}, synchronize_session=False
-        )
-
-    # 3) Contestant.round_id
-    if not dry_run:
-        db.query(Contestant).filter(Contestant.round_id == duplicate_id).update(
-            {Contestant.round_id: keep_id}, synchronize_session=False
-        )
-
-    # 4) contest_seasons: repoint to canonical round
-    if not dry_run:
-        db.query(ContestSeason).filter(ContestSeason.round_id == duplicate_id).update(
-            {ContestSeason.round_id: keep_id}, synchronize_session=False
+    # 2–4) Repoint round_id on rows that still use the duplicate round.
+    # ``contest`` may not have this column; links are usually only in ``round_contests``.
+    for tbl in ("contest", "contest_seasons", "contestants"):
+        _repoint_round_id_column(db, tbl, duplicate_id, keep_id, dry_run)
+    if not _table_has_column(db, "contest", "round_id"):
+        logger.debug(
+            "contest.round_id not in database; only round_contests + other tables were repointed."
         )
 
     # 5) contest_votes (legacy score votes) — column may be missing on older DBs
@@ -211,13 +219,7 @@ def merge_round_into(
             "(run pending Alembic migrations if ranked votes should be tied to rounds)."
         )
 
-    # 7) Legacy Round.contest_id on duplicate row (rare)
-    if dup.contest_id and not dry_run:
-        k = db.query(Contest).filter(Contest.id == dup.contest_id).first()
-        if k and k.round_id == duplicate_id:
-            k.round_id = keep_id
-
-    # 8) Remove remaining association rows for duplicate round, then delete round
+    # 7) Remove remaining association rows for duplicate round, then delete round
     if not dry_run:
         db.execute(delete(round_contests).where(round_contests.c.round_id == duplicate_id))
         db.delete(dup)
@@ -270,7 +272,7 @@ def main() -> None:
     ap.add_argument("--dry-run", action="store_true", help="Show actions without committing")
     args = ap.parse_args()
 
-    SessionLocal, Round, round_contests, ContestSeason, Contestant, Contest, ContestVote, UserVoteRanking = _setup()
+    SessionLocal, Round, round_contests, ContestVote, UserVoteRanking = _setup()
     db = SessionLocal()
     try:
         if args.list:
@@ -295,9 +297,6 @@ def main() -> None:
                 args.dry_run,
                 Round=Round,
                 round_contests=round_contests,
-                ContestSeason=ContestSeason,
-                Contestant=Contestant,
-                Contest=Contest,
                 ContestVote=ContestVote,
                 UserVoteRanking=UserVoteRanking,
             )
