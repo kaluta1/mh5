@@ -507,7 +507,9 @@ def get_top_high5_by_country(
             + _prioritize_voting_open(unlinked_outside_window)
         )
 
-        chosen_round = candidate_rounds[0]
+        # Default to the first prioritized round instead of newest round, so
+        # diagnostics/metadata stay aligned with requested level intent.
+        chosen_round = search_rounds[0] if search_rounds else candidate_rounds[0]
         chosen_contests = []
         fallback_applied = False
         for idx, rnd in enumerate(search_rounds):
@@ -517,6 +519,15 @@ def get_top_high5_by_country(
                 chosen_contests = contests_out
                 fallback_applied = idx != 0
                 break
+
+        # If no contests matched country filter, keep the round aligned to a round
+        # that actually has active links for the requested level (when available),
+        # rather than falling back to the newest unrelated round.
+        if not chosen_contests:
+            linked_candidates = linked_in_window + linked_outside_window
+            if linked_candidates:
+                chosen_round = linked_candidates[0]
+                fallback_applied = True
 
         return {
             "round_id": chosen_round.id,
