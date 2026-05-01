@@ -1163,6 +1163,7 @@ class ContestService {
           round_id: params?.roundId,
           country: params?.country,
           level: params?.level,
+          _ts: Date.now(),
         },
       })
       return response.data

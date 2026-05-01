@@ -1,7 +1,7 @@
 """
 Endpoints pour gérer les migrations de saisons
 """
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Response
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, func, select
 from datetime import date
@@ -87,6 +87,7 @@ _LEVEL_TO_LOCATION_FIELD = {
 
 @router.get("/top-high5")
 def get_top_high5_by_country(
+    response: Response,
     round_id: int | None = Query(default=None),
     country: str | None = Query(default=None),
     level: str | None = Query(
@@ -107,6 +108,11 @@ def get_top_high5_by_country(
 
     db = SessionLocal()
     try:
+        # Prevent stale CDN/browser caches for rapidly-changing leaderboard data.
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+
         # Resolve the requested stage; default to COUNTRY for backward compatibility.
         requested_level = SeasonLevel.COUNTRY
         if level:
