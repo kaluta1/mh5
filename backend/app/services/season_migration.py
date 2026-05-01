@@ -399,6 +399,65 @@ class SeasonMigrationService:
                 print(f"[Migration]   No contestant found for season {season_id}")
                 print(f"[Migration]     - Qualified contestants without location: {contestants_without_location}")
                 print(f"[Migration]     - Non-qualified contestants: {contestants_not_qualified}")
+
+            # Emergency fallback:
+            # If contestants exist in the season but they miss the required location field
+            # (country/region/continent), still select top N from that season as one pool.
+            # This prevents hard-blocked promotions on legacy/incomplete geography data.
+            fallback_contestants = base_q.all()
+            if fallback_contestants:
+                if diagnostics:
+                    logger.warning(
+                        "  - Fallback enabled: promoting from season pool without location grouping"
+                    )
+                    print("[Migration]   Fallback: using season pool without location grouping")
+
+                points_query = db.query(
+                    ContestantVoting.contestant_id,
+                    func.coalesce(func.sum(ContestantVoting.points), 0).label('total_points'),
+                    func.count(ContestantVoting.id).label('vote_count')
+                )
+                if contest_id is not None:
+                    points_query = points_query.filter(
+                        and_(
+                            ContestantVoting.season_id == season_id,
+                            ContestantVoting.contest_id == contest_id,
+                        )
+                    )
+                else:
+                    points_query = points_query.filter(ContestantVoting.season_id == season_id)
+                points_data = points_query.group_by(ContestantVoting.contestant_id).all()
+
+                if not points_data and contest_id is not None:
+                    points_data = db.query(
+                        ContestantVoting.contestant_id,
+                        func.coalesce(func.sum(ContestantVoting.points), 0).label('total_points'),
+                        func.count(ContestantVoting.id).label('vote_count')
+                    ).filter(
+                        ContestantVoting.contest_id == contest_id
+                    ).group_by(
+                        ContestantVoting.contestant_id
+                    ).all()
+
+                points_by_contestant = {p.contestant_id: p.total_points for p in points_data}
+                fallback_ids = [c.id for c in fallback_contestants]
+                engagement_by_id = SeasonMigrationService._engagement_by_contestant(db, fallback_ids)
+
+                sorted_fallback = sorted(
+                    fallback_contestants,
+                    key=lambda c: (
+                        points_by_contestant.get(c.id, 0),
+                        engagement_by_id.get(c.id, {}).get("shares", 0),
+                        engagement_by_id.get(c.id, {}).get("likes", 0),
+                        engagement_by_id.get(c.id, {}).get("comments", 0),
+                        engagement_by_id.get(c.id, {}).get("views", 0),
+                        -(c.id or 0),
+                    ),
+                    reverse=True
+                )
+                selected = sorted_fallback if limit is None else sorted_fallback[:limit]
+                return {"__fallback_pool__": selected}
+
             return {}
         
         # Récupérer les points par contestant depuis ContestantVoting.

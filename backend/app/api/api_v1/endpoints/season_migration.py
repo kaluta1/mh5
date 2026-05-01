@@ -4,6 +4,7 @@ Endpoints pour gérer les migrations de saisons
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, func, select
+from datetime import date
 
 from app.api import deps
 from app.services.season_migration import season_migration_service
@@ -439,9 +440,40 @@ def get_top_high5_by_country(
         if not candidate_rounds:
             raise HTTPException(status_code=404, detail="No available rounds")
 
-        # Prioritize rounds currently open for voting (business expectation: show current voting round first).
-        voting_open_rounds = [r for r in candidate_rounds if bool(r.is_voting_open)]
-        search_rounds = voting_open_rounds + [r for r in candidate_rounds if not bool(r.is_voting_open)]
+        # Prioritize rounds by requested level active window.
+        # This keeps month separation explicit:
+        # - country view -> rounds active in country season (e.g. April round in May)
+        # - regional view -> rounds active in regional season (e.g. March round in May)
+        today = date.today()
+        level_window_map = {
+            SeasonLevel.CITY: ("city_season_start_date", "city_season_end_date"),
+            SeasonLevel.COUNTRY: ("country_season_start_date", "country_season_end_date"),
+            SeasonLevel.REGIONAL: ("regional_start_date", "regional_end_date"),
+            SeasonLevel.CONTINENT: ("continental_start_date", "continental_end_date"),
+            SeasonLevel.GLOBAL: ("global_start_date", "global_end_date"),
+        }
+        start_attr, end_attr = level_window_map.get(requested_level, (None, None))
+
+        in_level_window = []
+        outside_level_window = []
+        for r in candidate_rounds:
+            if not start_attr or not end_attr:
+                outside_level_window.append(r)
+                continue
+            start_val = getattr(r, start_attr, None)
+            end_val = getattr(r, end_attr, None)
+            if start_val and end_val and start_val <= today <= end_val:
+                in_level_window.append(r)
+            else:
+                outside_level_window.append(r)
+
+        # Secondary preference for currently voting-open rounds within each bucket.
+        def _prioritize_voting_open(rounds):
+            open_rounds = [r for r in rounds if bool(r.is_voting_open)]
+            closed_rounds = [r for r in rounds if not bool(r.is_voting_open)]
+            return open_rounds + closed_rounds
+
+        search_rounds = _prioritize_voting_open(in_level_window) + _prioritize_voting_open(outside_level_window)
 
         chosen_round = candidate_rounds[0]
         chosen_contests = []
