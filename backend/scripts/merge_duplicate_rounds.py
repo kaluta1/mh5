@@ -12,6 +12,7 @@ one of those labels may be wrong — list rounds with --list to see real ids.
 
 Usage:
   cd backend && PYTHONPATH=. python scripts/merge_duplicate_rounds.py --list
+  PYTHONPATH=. python scripts/merge_duplicate_rounds.py --duplicates
   PYTHONPATH=. python scripts/merge_duplicate_rounds.py --merge 210:208 --merge 211:209 --dry-run
   PYTHONPATH=. python scripts/merge_duplicate_rounds.py --merge 210:208 --merge 211:209
 """
@@ -30,7 +31,7 @@ _BACKEND_ROOT = os.path.dirname(_SCRIPT_DIR)
 if _BACKEND_ROOT not in sys.path:
     sys.path.insert(0, _BACKEND_ROOT)
 
-from sqlalchemy import select, delete, insert
+from sqlalchemy import select, delete, insert, func
 from sqlalchemy.orm import Session
 
 logging.basicConfig(level=logging.INFO)
@@ -52,6 +53,33 @@ def list_rounds(db: Session, Round) -> None:
         print(f"  id={r.id:>5}  name={r.name!r}  status={r.status}")
 
 
+def list_duplicate_round_names(db: Session, Round) -> None:
+    """Print round names that appear more than once (same display name, different ids)."""
+    dup_names = (
+        db.query(Round.name)
+        .group_by(Round.name)
+        .having(func.count(Round.id) > 1)
+        .all()
+    )
+    if not dup_names:
+        print("No duplicate round names found (each name appears at most once).")
+        return
+    print("Rounds sharing the same name (pick KEEP = canonical row, DUP = merge source):\n")
+    for (name,) in dup_names:
+        rows = (
+            db.query(Round)
+            .filter(Round.name == name)
+            .order_by(Round.id.asc())
+            .all()
+        )
+        ids = [r.id for r in rows]
+        print(f"  name={name!r}")
+        for r in rows:
+            print(f"    id={r.id}  status={r.status}")
+        print(f"  -> Example merge into lowest id: --merge {ids[-1]}:{ids[0]}" if len(ids) == 2 else "")
+        print()
+
+
 def merge_round_into(
     db: Session,
     duplicate_id: int,
@@ -69,9 +97,16 @@ def merge_round_into(
     dup = db.query(Round).filter(Round.id == duplicate_id).first()
     keep = db.query(Round).filter(Round.id == keep_id).first()
     if not dup:
-        raise SystemExit(f"Round id={duplicate_id} not found")
+        raise SystemExit(
+            f"Round id={duplicate_id} not found.\n"
+            "  Run: PYTHONPATH=. python scripts/merge_duplicate_rounds.py --list\n"
+            "  Or:  PYTHONPATH=. python scripts/merge_duplicate_rounds.py --duplicates"
+        )
     if not keep:
-        raise SystemExit(f"Round id={keep_id} not found")
+        raise SystemExit(
+            f"Round id={keep_id} not found.\n"
+            "  Run: PYTHONPATH=. python scripts/merge_duplicate_rounds.py --list"
+        )
     if duplicate_id == keep_id:
         raise SystemExit("duplicate_id and keep_id must differ")
 
@@ -195,6 +230,11 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Merge duplicate rounds into canonical rounds")
     ap.add_argument("--list", action="store_true", help="List recent rounds (ids + names)")
     ap.add_argument(
+        "--duplicates",
+        action="store_true",
+        help="List round names that appear more than once (helps choose DUP:KEEP ids)",
+    )
+    ap.add_argument(
         "--merge",
         action="append",
         type=parse_merge,
@@ -211,9 +251,15 @@ def main() -> None:
         if args.list:
             list_rounds(db, Round)
             return
+        if args.duplicates:
+            list_duplicate_round_names(db, Round)
+            return
         if not args.merge:
             ap.print_help()
-            print("\nExample: --merge 210:208 --merge 211:209")
+            print("\nDiscover ids on this server:")
+            print("  PYTHONPATH=. python scripts/merge_duplicate_rounds.py --list")
+            print("  PYTHONPATH=. python scripts/merge_duplicate_rounds.py --duplicates")
+            print("\nExample: --merge <dup>:<keep> --merge <dup>:<keep>")
             raise SystemExit(1)
 
         for dup_id, keep_id in args.merge:
