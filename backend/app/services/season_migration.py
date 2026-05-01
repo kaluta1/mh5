@@ -273,7 +273,7 @@ class SeasonMigrationService:
                 ContestantSeason.is_active == True,
                 Contestant.is_active == True,
                 Contestant.is_deleted == False,
-                Contestant.is_qualified == True
+                or_(Contestant.is_qualified == True, Contestant.is_qualified.is_(None))
             )
         )
         strict_contest_scope = bool(contest_id is not None)
@@ -326,7 +326,7 @@ class SeasonMigrationService:
                     ContestantSeason.is_active == True,
                     Contestant.is_active == True,
                     Contestant.is_deleted == False,
-                    Contestant.is_qualified == True
+                    or_(Contestant.is_qualified == True, Contestant.is_qualified.is_(None))
                 )
             )
             if country_filter:
@@ -369,7 +369,7 @@ class SeasonMigrationService:
                     ContestantSeason.is_active == True,
                     Contestant.is_active == True,
                     Contestant.is_deleted == False,
-                    Contestant.is_qualified == True
+                    or_(Contestant.is_qualified == True, Contestant.is_qualified.is_(None))
                 )
             )
             if strict_contest_scope:
@@ -831,7 +831,7 @@ class SeasonMigrationService:
                     ContestantSeason.is_active == True,
                     Contestant.is_active == True,
                     Contestant.is_deleted == False,
-                    Contestant.is_qualified == True
+                    or_(Contestant.is_qualified == True, Contestant.is_qualified.is_(None))
                 )
             ).all()
 
