@@ -85,6 +85,18 @@ _LEVEL_TO_LOCATION_FIELD = {
 }
 
 
+def _subtract_months(base: date, months: int) -> date:
+    """Return `base` shifted backward by `months` calendar months."""
+    y, m = base.year, base.month
+    for _ in range(max(0, months)):
+        m -= 1
+        if m == 0:
+            m = 12
+            y -= 1
+    day = min(base.day, 28)
+    return date(y, m, day)
+
+
 @router.get("/top-high5")
 def get_top_high5_by_country(
     response: Response,
@@ -511,6 +523,24 @@ def get_top_high5_by_country(
             + _prioritize_voting_open(linked_outside_window)
             + _prioritize_voting_open(unlinked_outside_window)
         )
+
+        # Business month mapping override for nomination leaderboard UX:
+        # - in May: country => April round, regional => March round, ...
+        level_round_offset = {
+            SeasonLevel.CITY: 0,
+            SeasonLevel.COUNTRY: 1,
+            SeasonLevel.REGIONAL: 2,
+            SeasonLevel.CONTINENT: 3,
+            SeasonLevel.GLOBAL: 4,
+        }
+        target_offset = level_round_offset.get(requested_level)
+        if target_offset is not None:
+            target_date = _subtract_months(today, target_offset)
+            target_name = f"Round {target_date.strftime('%B %Y')}".lower()
+            preferred = [r for r in candidate_rounds if (r.name or "").strip().lower() == target_name]
+            if preferred:
+                preferred_ids = {r.id for r in preferred}
+                search_rounds = preferred + [r for r in search_rounds if r.id not in preferred_ids]
 
         # Default to the first prioritized round instead of newest round, so
         # diagnostics/metadata stay aligned with requested level intent.
