@@ -4,6 +4,7 @@ Gère la progression automatique des contestants à travers les différents nive
 S'exécute toutes les 24h pour vérifier les migrations selon les dates des saisons.
 """
 from datetime import datetime, timedelta, date
+import calendar
 from typing import List, Optional, Dict
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
@@ -29,6 +30,61 @@ from app.models.comment import Comment
 
 class SeasonMigrationService:
     """Service pour gérer les migrations de saisons"""
+
+    @staticmethod
+    def _add_months(base: date, months: int) -> date:
+        month = base.month - 1 + months
+        year = base.year + month // 12
+        month = month % 12 + 1
+        day = min(base.day, calendar.monthrange(year, month)[1])
+        return date(year, month, day)
+
+    @staticmethod
+    def _round_month_start(round_obj: Round) -> Optional[date]:
+        if getattr(round_obj, "submission_start_date", None):
+            return date(round_obj.submission_start_date.year, round_obj.submission_start_date.month, 1)
+        name = (getattr(round_obj, "name", "") or "").strip()
+        if name.lower().startswith("round "):
+            name = name[6:].strip()
+        try:
+            parsed = datetime.strptime(name, "%B %Y")
+            return date(parsed.year, parsed.month, 1)
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _nomination_min_start_for_level(round_obj: Round, level: SeasonLevel) -> Optional[date]:
+        """Calendar guard for nomination stages: country=M+1, regional=M+2, continent=M+3, global=M+4."""
+        month_start = SeasonMigrationService._round_month_start(round_obj)
+        if not month_start:
+            return None
+        offsets = {
+            SeasonLevel.COUNTRY: 1,
+            SeasonLevel.REGIONAL: 2,
+            SeasonLevel.CONTINENT: 3,
+            SeasonLevel.GLOBAL: 4,
+        }
+        offset = offsets.get(level)
+        if offset is None:
+            return None
+        return SeasonMigrationService._add_months(month_start, offset)
+
+    @staticmethod
+    def _canonical_country_label(raw_country: Optional[str]) -> Optional[str]:
+        if not raw_country:
+            return None
+        value = raw_country.strip()
+        if not value:
+            return None
+        aliases = {
+            "tz": "Tanzania",
+            "tanzania": "Tanzania",
+            "ug": "Uganda",
+            "uganda": "Uganda",
+            "ke": "Kenya",
+            "kenya": "Kenya",
+        }
+        return aliases.get(value.lower(), value)
 
     @staticmethod
     def _contestants_for_contest_in_season(
@@ -301,6 +357,8 @@ class SeasonMigrationService:
         limit: Optional[int] = 5,
         stage_id: Optional[int] = None,  # Non utilisé maintenant, gardé pour compatibilité
         diagnostics: bool = True,
+        active_links_only: bool = True,
+        qualified_only: bool = True,
     ) -> Dict[str, List[Contestant]]:
         """
         Récupère les N meilleurs contestants groupés par localisation.
@@ -327,17 +385,18 @@ class SeasonMigrationService:
             print(f"[Migration]   Total contestants linked to season {season_id}: {total_contestants_in_season}")
         
         # Récupérer tous les contestants actifs et qualifiés de la saison via ContestantSeason
+        season_filters = [
+            ContestantSeason.season_id == season_id,
+            Contestant.is_active == True,
+            Contestant.is_deleted == False,
+        ]
+        if active_links_only:
+            season_filters.append(ContestantSeason.is_active == True)
+        if qualified_only:
+            season_filters.append(or_(Contestant.is_qualified == True, Contestant.is_qualified.is_(None)))
         contestants_query = db.query(Contestant).join(
             ContestantSeason, ContestantSeason.contestant_id == Contestant.id
-        ).filter(
-            and_(
-                ContestantSeason.season_id == season_id,
-                ContestantSeason.is_active == True,
-                Contestant.is_active == True,
-                Contestant.is_deleted == False,
-                or_(Contestant.is_qualified == True, Contestant.is_qualified.is_(None))
-            )
-        )
+        ).filter(and_(*season_filters))
         strict_contest_scope = bool(contest_id is not None)
         if strict_contest_scope:
             # Preferred scope for clean data: contestant belongs to the current contest.
@@ -389,17 +448,18 @@ class SeasonMigrationService:
             # Disable strict scope for the remainder of this call path (diagnostics
             # and fallback selection) once we confirmed strict contest linkage is empty.
             strict_contest_scope = False
+            fallback_filters = [
+                ContestantSeason.season_id == season_id,
+                Contestant.is_active == True,
+                Contestant.is_deleted == False,
+            ]
+            if active_links_only:
+                fallback_filters.append(ContestantSeason.is_active == True)
+            if qualified_only:
+                fallback_filters.append(or_(Contestant.is_qualified == True, Contestant.is_qualified.is_(None)))
             contestants_query = db.query(Contestant).join(
                 ContestantSeason, ContestantSeason.contestant_id == Contestant.id
-            ).filter(
-                and_(
-                    ContestantSeason.season_id == season_id,
-                    ContestantSeason.is_active == True,
-                    Contestant.is_active == True,
-                    Contestant.is_deleted == False,
-                    or_(Contestant.is_qualified == True, Contestant.is_qualified.is_(None))
-                )
-            )
+            ).filter(and_(*fallback_filters))
             if country_filter:
                 raw = country_filter.strip().lower()
                 alias_map = {
@@ -436,31 +496,24 @@ class SeasonMigrationService:
             # Vérifier pourquoi aucun contestant n'est trouvé
             base_q = db.query(Contestant).join(
                 ContestantSeason
-            ).filter(
-                and_(
-                    ContestantSeason.season_id == season_id,
-                    ContestantSeason.is_active == True,
-                    Contestant.is_active == True,
-                    Contestant.is_deleted == False,
-                    or_(Contestant.is_qualified == True, Contestant.is_qualified.is_(None))
-                )
-            )
+            ).filter(and_(*season_filters))
             if strict_contest_scope:
                 base_q = base_q.filter(Contestant.season_id == contest_id)
 
             contestants_without_location = base_q.count()
             
+            not_qualified_filters = [
+                ContestantSeason.season_id == season_id,
+                Contestant.is_active == True,
+                Contestant.is_deleted == False,
+                Contestant.is_qualified == False,
+            ]
+            if active_links_only:
+                not_qualified_filters.append(ContestantSeason.is_active == True)
+
             not_qualified_q = db.query(Contestant).join(
                 ContestantSeason
-            ).filter(
-                and_(
-                    ContestantSeason.season_id == season_id,
-                    ContestantSeason.is_active == True,
-                    Contestant.is_active == True,
-                    Contestant.is_deleted == False,
-                    Contestant.is_qualified == False
-                )
-            )
+            ).filter(and_(*not_qualified_filters))
             if strict_contest_scope:
                 not_qualified_q = not_qualified_q.filter(Contestant.season_id == contest_id)
             contestants_not_qualified = not_qualified_q.count()
@@ -581,7 +634,9 @@ class SeasonMigrationService:
             if location_field == 'city':
                 location_value = contestant.city
             elif location_field == 'country':
-                location_value = contestant.country or contestant.nominator_country
+                location_value = SeasonMigrationService._canonical_country_label(
+                    contestant.country or contestant.nominator_country
+                )
             elif location_field == 'region':
                 location_value = contestant.region
             elif location_field == 'continent':
@@ -1396,6 +1451,22 @@ class SeasonMigrationService:
                 for contest_link in contest_links:
                     contest_id = contest_link.contest_id
                     promotion_key = (contest_id, round_obj.id)
+                    contest_obj = db.query(Contest).filter(Contest.id == contest_id).first()
+
+                    # Nomination timeline guard:
+                    # March nominations are voted at COUNTRY in April and become REGIONAL in May.
+                    # April nominations remain COUNTRY in May and should not become REGIONAL until June 1.
+                    if (
+                        contest_obj
+                        and (getattr(contest_obj, "contest_mode", "") or "").strip().lower() == "nomination"
+                    ):
+                        min_start = SeasonMigrationService._nomination_min_start_for_level(round_obj, next_level)
+                        if min_start and today < min_start:
+                            logger.info(
+                                f"Skipping nomination promotion for contest {contest_id}, round {round_obj.id}: "
+                                f"{next_level.value} starts no earlier than {min_start}"
+                            )
+                            continue
 
                     # Prevent multiple stage promotions for the same contest+round
                     # in one execution (e.g. country->regional then regional->continent).

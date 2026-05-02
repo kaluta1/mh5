@@ -149,6 +149,7 @@ def get_top_high5_by_country(
                 )
 
         variants = _country_variants(selected_country) if selected_country else set()
+        today = date.today()
 
         def _diagnostics_for_round(rnd: Round):
             # Active contest-season links per level
@@ -193,6 +194,9 @@ def get_top_high5_by_country(
             # Nomination Top High5 should not expose city-level contestants for now.
             if requested_level == SeasonLevel.CITY:
                 return []
+            min_start = season_migration_service._nomination_min_start_for_level(rnd, requested_level)
+            if min_start and today < min_start:
+                return []
 
             contest_ids = [
                 r[0]
@@ -220,6 +224,7 @@ def get_top_high5_by_country(
                         ContestSeasonLink.contest_id == contest.id,
                         ContestSeasonLink.is_active == True,
                         ContestSeason.round_id == rnd.id,
+                        ContestSeason.level == requested_level,
                     )
                     .first()
                 )
@@ -411,7 +416,7 @@ def get_top_high5_by_country(
             )
 
             rows = []
-            for idx, c in enumerate(sorted_ranked, start=1):
+            for idx, c in enumerate(sorted_ranked[:5], start=1):
                 author_name = None
                 author_email = None
                 if c.user:
@@ -467,7 +472,6 @@ def get_top_high5_by_country(
         # This keeps month separation explicit:
         # - country view -> rounds active in country season (e.g. April round in May)
         # - regional view -> rounds active in regional season (e.g. March round in May)
-        today = date.today()
         level_window_map = {
             SeasonLevel.CITY: ("city_season_start_date", "city_season_end_date"),
             SeasonLevel.COUNTRY: ("country_season_start_date", "country_season_end_date"),

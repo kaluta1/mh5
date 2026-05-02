@@ -1154,6 +1154,50 @@ class CRUDContest:
         target_round_id = crud_round.round.resolve_display_round_id_for_contest(
             db, contest_id, round_id
         )
+        if target_round_id is not None:
+            round_links = db.query(ContestSeasonLink, ContestSeason).join(
+                ContestSeason, ContestSeason.id == ContestSeasonLink.season_id
+            ).filter(
+                ContestSeasonLink.contest_id == contest_id,
+                ContestSeasonLink.is_active == True,
+                ContestSeason.round_id == target_round_id,
+                ContestSeason.is_deleted == False,
+            ).all()
+            if round_links:
+                if _normalize_contest_mode(getattr(contest_obj, "contest_mode", "participation")) == "nomination":
+                    from datetime import date
+                    from app.services.season_migration import SeasonMigrationService
+
+                    today = date.today()
+                    round_obj_for_level = round_links[0][1].round
+                    allowed_links = []
+                    for pair in round_links:
+                        min_start = SeasonMigrationService._nomination_min_start_for_level(
+                            round_obj_for_level,
+                            pair[1].level,
+                        )
+                        if min_start and today < min_start:
+                            continue
+                        allowed_links.append(pair)
+                    round_links = allowed_links
+                if not round_links:
+                    season_link = None
+                    season = None
+                else:
+                    level_rank = {
+                        "city": 1,
+                        "country": 2,
+                        "regional": 3,
+                        "continent": 4,
+                        "global": 5,
+                    }
+                    season_link, season = max(
+                        round_links,
+                        key=lambda pair: level_rank.get(
+                            (pair[1].level.value if hasattr(pair[1].level, "value") else str(pair[1].level)).lower(),
+                            0,
+                        ),
+                    )
         
         # FIXED: Query contestants by the ACTIVE SEASON ID (not contest_id)
         from app.models.round import Round, round_contests

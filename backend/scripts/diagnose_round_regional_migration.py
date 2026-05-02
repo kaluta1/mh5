@@ -23,7 +23,7 @@ from sqlalchemy import select
 
 from app.db.session import SessionLocal
 from app.models.contest import Contest
-from app.models.contests import ContestSeason, ContestSeasonLink, SeasonLevel
+from app.models.contests import ContestSeason, ContestSeasonLink, ContestantSeason, SeasonLevel
 from app.models.round import Round, round_contests
 from app.services.season_migration import SeasonMigrationService
 
@@ -55,6 +55,11 @@ def main() -> None:
     parser.add_argument("--round-id", type=int)
     parser.add_argument("--round-name")
     parser.add_argument("--apply", action="store_true", help="Actually promote missing contests")
+    parser.add_argument(
+        "--repair-existing",
+        action="store_true",
+        help="When REGIONAL already exists, prune active regional links back to the source COUNTRY Top High5.",
+    )
     parser.add_argument("--limit", type=int, default=5)
     args = parser.parse_args()
 
@@ -86,11 +91,11 @@ def main() -> None:
                 .join(ContestSeason, ContestSeason.id == ContestSeasonLink.season_id)
                 .filter(
                     ContestSeasonLink.contest_id == contest.id,
-                    ContestSeasonLink.is_active == True,
                     ContestSeason.round_id == rnd.id,
                     ContestSeason.level == SeasonLevel.COUNTRY,
                     ContestSeason.is_deleted == False,
                 )
+                .order_by(ContestSeasonLink.is_active.desc(), ContestSeasonLink.linked_at.desc())
                 .first()
             )
             regional_link = (
@@ -108,9 +113,108 @@ def main() -> None:
 
             print(f"Contest {contest.id}: {contest.name}")
             if regional_link:
-                _, regional_season = regional_link
+                regional_contest_link, regional_season = regional_link
                 summary["already_regional"] += 1
                 print(f"  REGIONAL already active: season_id={regional_season.id}")
+                if not args.repair_existing:
+                    continue
+                if not country_link:
+                    print("  Cannot repair: missing COUNTRY source season link.")
+                    continue
+                _, country_season = country_link
+                min_regional_start = SeasonMigrationService._nomination_min_start_for_level(
+                    rnd,
+                    SeasonLevel.REGIONAL,
+                )
+                from datetime import date
+                if min_regional_start and date.today() < min_regional_start:
+                    source_ids = {
+                        c.id
+                        for c in SeasonMigrationService._contestants_for_contest_in_season(
+                            db,
+                            country_season.id,
+                            contest.id,
+                            active_only=False,
+                            qualified_only=False,
+                        )
+                    }
+                    print(
+                        f"  REGIONAL is too early for this round. Earliest start: {min_regional_start}. "
+                        f"Source ids to deactivate from regional: {sorted(source_ids)}"
+                    )
+                    if args.apply:
+                        regional_contest_link.is_active = False
+                        (
+                            db.query(ContestantSeason)
+                            .filter(
+                                ContestantSeason.season_id == regional_season.id,
+                                ContestantSeason.contestant_id.in_(list(source_ids) or [-1]),
+                            )
+                            .update({ContestantSeason.is_active: False}, synchronize_session=False)
+                        )
+                        db.commit()
+                        print("  Too-early REGIONAL link deactivated.")
+                    continue
+                grouped = SeasonMigrationService.get_top_contestants_by_location(
+                    db,
+                    country_season.id,
+                    "country",
+                    contest_id=contest.id,
+                    limit=args.limit,
+                    diagnostics=False,
+                    active_links_only=False,
+                    qualified_only=False,
+                )
+                expected_ids = {m.id for members in grouped.values() for m in members}
+                source_ids = {
+                    c.id
+                    for c in SeasonMigrationService._contestants_for_contest_in_season(
+                        db,
+                        country_season.id,
+                        contest.id,
+                        active_only=False,
+                        qualified_only=False,
+                    )
+                }
+                active_regional_links = (
+                    db.query(ContestantSeason)
+                    .filter(
+                        ContestantSeason.season_id == regional_season.id,
+                        ContestantSeason.is_active == True,
+                        ContestantSeason.contestant_id.in_(list(source_ids) or [-1]),
+                    )
+                    .all()
+                )
+                active_ids = {link.contestant_id for link in active_regional_links}
+                extra_ids = active_ids - expected_ids
+                missing_ids = expected_ids - active_ids
+                print(f"  Repair expected ids: {sorted(expected_ids)}")
+                print(f"  Repair active ids:   {sorted(active_ids)}")
+                print(f"  Repair extra ids:    {sorted(extra_ids)}")
+                print(f"  Repair missing ids:  {sorted(missing_ids)}")
+                if args.apply:
+                    for link in active_regional_links:
+                        if link.contestant_id in extra_ids:
+                            link.is_active = False
+                    for cid in missing_ids:
+                        link = (
+                            db.query(ContestantSeason)
+                            .filter(
+                                ContestantSeason.season_id == regional_season.id,
+                                ContestantSeason.contestant_id == cid,
+                            )
+                            .first()
+                        )
+                        if link:
+                            link.is_active = True
+                        else:
+                            db.add(ContestantSeason(
+                                contestant_id=cid,
+                                season_id=regional_season.id,
+                                is_active=True,
+                            ))
+                    db.commit()
+                    print("  Repair applied.")
                 continue
             if not country_link:
                 summary["missing_country"] += 1
