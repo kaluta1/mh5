@@ -19,12 +19,12 @@ const normalizeApiUrl = (url: string): string => {
 const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_BACKEND_URL || ''
 const isProduction = process.env.NODE_ENV === 'production'
 /**
- * Local UI is port 3000; API is port 8000. Set NEXT_PUBLIC_API_URL=http://localhost:8000 in
+ * Local UI default port 3001 (`npm run dev`); API default 8001. Set NEXT_PUBLIC_API_URL=http://localhost:8001 in
  * frontend/.env so login uses your local backend. Without it, `next start` defaults to the
  * public site URL and hits a different database.
  * build (`next start`) defaults to DEFAULT_PUBLIC_API_URL and hits a different database.
  */
-const fallbackUrl = isProduction ? DEFAULT_PUBLIC_API_URL : 'http://localhost:8000'
+const fallbackUrl = isProduction ? DEFAULT_PUBLIC_API_URL : 'http://localhost:8001'
 
 export const API_URL = normalizeApiUrl(rawApiUrl || fallbackUrl)
 

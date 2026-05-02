@@ -40,12 +40,16 @@ class Settings(BaseModel):
     _cors_origins_env: str = os.getenv("BACKEND_CORS_ORIGINS", "")
     BACKEND_CORS_ORIGINS: List[str] = [
         "http://localhost:3000",
+        "http://localhost:3001",
         "http://localhost:8000",
+        "http://localhost:8001",
         "https://myhigh5.vercel.app",
         "https://frontend-rho-eight-72.vercel.app",  # Vercel frontend
         "https://mh5-rx4z.onrender.com",
         "http://127.0.0.1:3000",
-        "http://127.0.0.1:8000"
+        "http://127.0.0.1:3001",
+        "http://127.0.0.1:8000",
+        "http://127.0.0.1:8001",
     ] if not _cors_origins_env else [origin.strip() for origin in _cors_origins_env.split(",") if origin.strip()]
     
     # DATABASE - URL complète depuis .env
@@ -112,7 +116,7 @@ class Settings(BaseModel):
     ANNUALADS_WEBHOOK_SECRET: str = _first_nonempty_env("ANNUALADS_WEBHOOK_SECRET", "annualads_webhook_secret")
     
     # FRONTEND
-    FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3001")
     # Public base URL of this API (no trailing slash), e.g. https://myhigh5.com or https://api.example.com.
     # Used to default Shufti callback/redirect when SHUFTI_CALLBACK_URL / SHUFTI_REDIRECT_URL are unset.
     BACKEND_PUBLIC_URL: str = _first_nonempty_env("BACKEND_PUBLIC_URL", "PUBLIC_BACKEND_URL")

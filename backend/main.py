@@ -167,9 +167,13 @@ app = FastAPI(
 # Configuration CORS - DOIT être avant les autres middlewares
 cors_origins = [
     "http://localhost:3000",
+    "http://localhost:3001",
     "http://localhost:8000",
+    "http://localhost:8001",
     "http://127.0.0.1:3000",
+    "http://127.0.0.1:3001",
     "http://127.0.0.1:8000",
+    "http://127.0.0.1:8001",
     "https://myhigh5.com",
     "https://www.myhigh5.com",
     "https://mh5-hbjp.onrender.com",
@@ -191,12 +195,21 @@ cors_origins = list(set([origin.strip() for origin in cors_origins if origin]))
 
 print(f"CORS Origins configured: {cors_origins}")
 
+# Origin regex: localhost, Vercel/Render deploys, and raw IPv4 (e.g. http://203.0.113.1:3000 on a VPS dev box).
+_CORS_ORIGIN_REGEX = (
+    r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
+    r"|^https://.*\.vercel\.app$"
+    r"|^https://.*\.vercel\.dev$"
+    r"|^https://.*\.onrender\.com$"
+    r"|^https?://(?:[0-9]{1,3}\.){3}[0-9]{1,3}(:\d+)?$"
+)
+
 # IMPORTANT: Ajouter le middleware CORS EN PREMIER
 # Use regex to allow all Vercel deployments and localhost
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,  # Use explicit origins list
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://.*\.vercel\.app$|^https://.*\.vercel\.dev$|^https://.*\.onrender\.com$",  # Allow localhost, all Vercel deployments, and all Render deployments
+    allow_origin_regex=_CORS_ORIGIN_REGEX,
     allow_credentials=True,  # Allow credentials for authentication cookies/tokens
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"],
     allow_headers=["*"],
@@ -218,7 +231,8 @@ class CORSExtraMiddleware(BaseHTTPMiddleware):
                 origin in cors_origins or
                 re.match(r"^https://.*\.vercel\.(app|dev)$", origin) or
                 re.match(r"^https://.*\.onrender\.com$", origin) or
-                re.match(r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$", origin)
+                re.match(r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$", origin) or
+                re.match(r"^https?://(?:[0-9]{1,3}\.){3}[0-9]{1,3}(:\d+)?$", origin)
             )
             if is_allowed:
                 response.headers["Access-Control-Allow-Origin"] = origin

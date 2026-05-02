@@ -49,12 +49,12 @@ python -m app.initial_data
 ## Démarrage
 
 ```bash
-uvicorn main:app --reload
+uvicorn main:app --reload --port 8001
 ```
 
-L'API sera disponible à l'adresse: http://localhost:8000
+L'API sera disponible à l'adresse: http://localhost:8001
 
-La documentation de l'API est accessible à: http://localhost:8000/docs
+La documentation de l'API est accessible à: http://localhost:8001/docs
 
 ## Structure du projet
 
