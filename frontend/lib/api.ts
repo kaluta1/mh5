@@ -1,7 +1,7 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios'
 import { cacheService } from './cache-service'
 import { logger } from './logger'
-import { API_URL } from './config'
+import { API_URL, getEffectiveApiUrl } from './config'
 import { LANGUAGE_PREFERENCE_KEY } from './language-cookie'
 import { languages } from './translations'
 
@@ -31,6 +31,13 @@ const authApi = axios.create({
   },
 })
 
+function resolveRequestBaseURL(): string {
+  if (typeof window === 'undefined') {
+    return API_BASE_URL
+  }
+  return getEffectiveApiUrl()
+}
+
 // Helper pour ajouter les headers communs
 const addCommonHeaders = (config: InternalAxiosRequestConfig) => {
   const token = localStorage.getItem('access_token')
@@ -47,7 +54,10 @@ const addCommonHeaders = (config: InternalAxiosRequestConfig) => {
 
 // Intercepteur pour ajouter le token d'authentification et la langue
 api.interceptors.request.use(
-  (config) => addCommonHeaders(config),
+  (config) => {
+    config.baseURL = resolveRequestBaseURL()
+    return addCommonHeaders(config)
+  },
   (error) => {
     return Promise.reject(error)
   }
@@ -55,7 +65,10 @@ api.interceptors.request.use(
 
 // Intercepteur pour authApi (même configuration mais timeout plus court)
 authApi.interceptors.request.use(
-  (config) => addCommonHeaders(config),
+  (config) => {
+    config.baseURL = resolveRequestBaseURL()
+    return addCommonHeaders(config)
+  },
   (error) => {
     return Promise.reject(error)
   }

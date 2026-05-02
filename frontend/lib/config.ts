@@ -28,6 +28,39 @@ const fallbackUrl = isProduction ? DEFAULT_PUBLIC_API_URL : 'http://localhost:80
 
 export const API_URL = normalizeApiUrl(rawApiUrl || fallbackUrl)
 
+/** Port where FastAPI listens on the same machine as Next (browser uses this hostname + port during VPS dev). */
+export const BACKEND_PUBLIC_PORT =
+  process.env.NEXT_PUBLIC_BACKEND_PUBLIC_PORT?.trim()?.replace(/^["']|["']$/g, '') || '8001'
+
+/**
+ * Effective API origin for browser requests.
+ * When the UI is opened via a public hostname/IP but NEXT_PUBLIC_API_URL still points at
+ * localhost (common on VPS mistakes), callers must use same host + BACKEND_PUBLIC_PORT or
+ * login hits the user's own PC and axios reports "Network Error".
+ */
+export function getEffectiveApiUrl(): string {
+  let base = API_URL.replace(/\/+$/, '')
+  if (typeof window === 'undefined') {
+    return base
+  }
+  const pageHost = window.location.hostname
+  const pageIsLocal = pageHost === 'localhost' || pageHost === '127.0.0.1'
+
+  try {
+    const parsed = new URL(base)
+    const apiLoopback = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1'
+    // Remote browser accessing UI on LAN/VPS URL while env still says localhost → fix server target
+    if (!pageIsLocal && apiLoopback) {
+      base = normalizeApiUrl(
+        `${window.location.protocol}//${pageHost}:${BACKEND_PUBLIC_PORT}`
+      ).replace(/\/+$/, '')
+    }
+  } catch {
+    /* keep base */
+  }
+  return base
+}
+
 /**
  * Annual Ads embed iframe `src` (full URL with query key). Next.js inlines this at build time
  * for client bundles — it must be set in the same env you use for `next build` (Vercel / VPS
