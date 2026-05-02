@@ -2,9 +2,10 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 /**
- * Maintenance page when visitors open the site.
- * Default ON if IS_MAINTENANCE_MODE is unset/empty → show /maintenance.
- * Set IS_MAINTENANCE_MODE=false | 0 | off | no (case-insensitive) to serve the full app.
+ * Forces the maintenance experience for everyone (logged out or logged in — no bypass).
+ *
+ * Defaults to ON when IS_MAINTENANCE_MODE is unset/empty → redirect users to `/maintenance`.
+ * Set IS_MAINTENANCE_MODE=false | 0 | off | no on the deployment to serve the full app again.
  */
 function isMaintenanceModeEnabled(): boolean {
     const v = process.env.IS_MAINTENANCE_MODE?.trim().toLowerCase()
@@ -48,8 +49,8 @@ export function middleware(request: NextRequest) {
             return NextResponse.next()
         }
 
-        // Serve maintenance content without creating an indexable redirect target.
-        const response = NextResponse.rewrite(new URL('/maintenance', request.url))
+        // Temporary redirect so the browser URL shows /maintenance (works with auth cookies; no SPA escape).
+        const response = NextResponse.redirect(new URL('/maintenance', request.url), 307)
         response.headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive')
         response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
         response.headers.set('Pragma', 'no-cache')
