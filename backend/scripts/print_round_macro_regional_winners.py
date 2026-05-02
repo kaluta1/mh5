@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """
-Print Top N per-country winners for one round, grouped under macro-regional pools
-(REGIONAL_VOTING_POOLS in SeasonMigrationService: East/West/Central/North/Southern Africa).
+For each nomination contest linked to the round (= each category):
 
-Uses the COUNTRY season for each nomination contest — no REGIONAL ContestSeasonLink
-required. Countries outside those pools appear under "_outside_pools".
+  • top_per_country — top N nominees per country (same rules as migration / Top High5).
+  • macro_regions — same winners grouped under macro blocs (REGIONAL_VOTING_POOLS:
+    east/west/north/central/southern Africa). Keys are always present; buckets may be [].
+
+Uses the COUNTRY season only — no REGIONAL ContestSeasonLink needed.
 
 Example:
   PYTHONPATH=. python scripts/print_round_macro_regional_winners.py \\
@@ -44,6 +46,10 @@ MACRO_REGION_LABELS: Dict[str, str] = {
     "central_africa": "Central Africa",
 }
 MACRO_ORDER: Tuple[str, ...] = tuple(MACRO_REGION_LABELS.keys()) + ("_outside_pools",)
+
+
+def _empty_macro_regions() -> Dict[str, List[Any]]:
+    return {pid: [] for pid in MACRO_ORDER}
 
 
 def _resolve_round(
@@ -227,7 +233,8 @@ def main() -> None:
                         "contest_name": contest.name,
                         "category_id": contest.category_id,
                         "error": "No COUNTRY season link for this round",
-                        "macro_regions": {},
+                        "top_per_country": [],
+                        "macro_regions": _empty_macro_regions(),
                     }
                 )
                 continue
@@ -246,6 +253,7 @@ def main() -> None:
             )
 
             macro: Dict[str, List[Dict[str, Any]]] = {pid: [] for pid in MACRO_ORDER}
+            top_per_country: List[Dict[str, Any]] = []
 
             for country_label, winners in sorted(
                 grouped.items(), key=lambda kv: (kv[0] or "").lower()
@@ -277,14 +285,17 @@ def main() -> None:
                         }
                     )
 
-                macro[pid].append(
-                    {
-                        "country_group": country_label or "UNKNOWN",
-                        "winner_count": len(country_rows),
-                        "winners": country_rows,
-                    }
-                )
+                bucket = {
+                    "country_group": country_label or "UNKNOWN",
+                    "macro_region_id": pid,
+                    "macro_region_label": MACRO_REGION_LABELS.get(pid, "Outside pools"),
+                    "winner_count": len(country_rows),
+                    "winners": country_rows,
+                }
+                macro[pid].append(bucket)
+                top_per_country.append(bucket)
 
+            macro_out = {pid: macro[pid] for pid in MACRO_ORDER}
             contest_payload = {
                 "contest_id": contest.id,
                 "contest_name": contest.name,
@@ -298,10 +309,14 @@ def main() -> None:
                     )
                     .scalar()
                 ),
-                "macro_regions": {
-                    pid: macro[pid]
+                "top_per_country": top_per_country,
+                "macro_regions": macro_out,
+                "macro_region_summary": {
+                    pid: {
+                        "country_buckets": len(macro[pid]),
+                        "total_winners": sum(b.get("winner_count", 0) for b in macro[pid]),
+                    }
                     for pid in MACRO_ORDER
-                    if macro.get(pid)
                 },
             }
             payload["contests"].append(contest_payload)
