@@ -276,6 +276,7 @@ def get_top_high5_by_country(
                         stage_id=None,
                         diagnostics=False,
                         qualified_only=False,
+                        strict_season_scope=True,
                     )
                     matched_key = None
                     for key in grouped.keys():
@@ -321,6 +322,7 @@ def get_top_high5_by_country(
                         stage_id=None,
                         diagnostics=False,
                         qualified_only=False,
+                        strict_season_scope=True,
                     )
                     for key, members in grouped.items():
                         if not key:
@@ -384,22 +386,6 @@ def get_top_high5_by_country(
                     .all()
                 )
                 points_by_id = {r.contestant_id: int(r.total_points or 0) for r in points_rows}
-                if not points_by_id:
-                    legacy_rows = (
-                        db.query(
-                            ContestantVoting.contestant_id,
-                            func.coalesce(func.sum(ContestantVoting.points), 0).label("total_points"),
-                        )
-                        .filter(
-                            and_(
-                                ContestantVoting.contest_id == contest.id,
-                                ContestantVoting.contestant_id.in_(contestant_ids),
-                            )
-                        )
-                        .group_by(ContestantVoting.contestant_id)
-                        .all()
-                    )
-                    points_by_id = {r.contestant_id: int(r.total_points or 0) for r in legacy_rows}
                 engagement_by_id = season_migration_service._engagement_by_contestant(db, contestant_ids)
 
             # Canonical winner order: stars desc -> shares -> likes -> comments ->

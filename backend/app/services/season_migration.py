@@ -369,6 +369,7 @@ class SeasonMigrationService:
         diagnostics: bool = True,
         active_links_only: bool = True,
         qualified_only: bool = True,
+        strict_season_scope: bool = False,
     ) -> Dict[str, List[Contestant]]:
         """
         Récupère les N meilleurs contestants groupés par localisation.
@@ -449,7 +450,7 @@ class SeasonMigrationService:
         # Legacy-data fallback:
         # some DB rows have valid ContestantSeason links but contestant.season_id no longer
         # matches contest_id. In that case, keep season scoping and continue.
-        if strict_contest_scope and not contestants:
+        if strict_contest_scope and not contestants and not strict_season_scope:
             if diagnostics:
                 logger.warning(
                     "  - Strict contest scope returned 0 contestants; retrying with contest vote scope"
@@ -617,7 +618,7 @@ class SeasonMigrationService:
             points_query = points_query.filter(ContestantVoting.season_id == season_id)
         points_data = points_query.group_by(ContestantVoting.contestant_id).all()
 
-        if not points_data and contest_id is not None:
+        if not points_data and contest_id is not None and not strict_season_scope:
             if diagnostics:
                 logger.warning(
                     f"  - No vote points found with season+contest scope "

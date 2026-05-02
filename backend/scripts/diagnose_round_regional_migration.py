@@ -118,15 +118,30 @@ def main() -> None:
                 print(f"  REGIONAL already active: season_id={regional_season.id}")
                 if not args.repair_existing:
                     continue
-                if not country_link:
-                    print("  Cannot repair: missing COUNTRY source season link.")
-                    continue
-                _, country_season = country_link
+                from datetime import date
                 min_regional_start = SeasonMigrationService._nomination_min_start_for_level(
                     rnd,
                     SeasonLevel.REGIONAL,
                 )
-                from datetime import date
+                if not country_link and min_regional_start and date.today() < min_regional_start:
+                    print(
+                        f"  REGIONAL is too early for this round (no COUNTRY source). "
+                        f"Earliest start: {min_regional_start}. Deactivating regional link."
+                    )
+                    if args.apply:
+                        regional_contest_link.is_active = False
+                        (
+                            db.query(ContestantSeason)
+                            .filter(ContestantSeason.season_id == regional_season.id)
+                            .update({ContestantSeason.is_active: False}, synchronize_session=False)
+                        )
+                        db.commit()
+                        print("  Too-early REGIONAL link deactivated.")
+                    continue
+                if not country_link:
+                    print("  Cannot repair: missing COUNTRY source season link.")
+                    continue
+                _, country_season = country_link
                 if min_regional_start and date.today() < min_regional_start:
                     source_ids = {
                         c.id
