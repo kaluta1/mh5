@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """
-Print Top N winners per location for each nomination contest in a given round,
-using the same scoring rules as season migration / Top High5 (points in that
-season + engagement tie-break).
+Top High5 per country, per category (each nomination contest on the round):
+
+  Default `--limit 5` = up to five winners per country per contest, ranked by the
+  same rules as season migration / Top High5 (votes in that COUNTRY—or REGIONAL—
+  season scope + engagement tie-break).
 
 Levels:
   country  — ContestSeason.level=COUNTRY; groups by nominee country (default).
@@ -11,6 +13,8 @@ Levels:
 Example:
   PYTHONPATH=. python scripts/print_round_country_winners.py --round-id 3
   PYTHONPATH=. python scripts/print_round_country_winners.py --round-name "Round March 2026" --limit 5
+  PYTHONPATH=. python scripts/print_round_country_winners.py --round-name-contains March \\
+    --limit 5 -o ~/top_high5_per_country_per_category.json
   PYTHONPATH=. python scripts/print_round_country_winners.py --round-name-contains "March" --level regional --limit 10 --json --output march_regional.json
   PYTHONPATH=. python scripts/print_round_country_winners.py --round-id 3 --contest-id 15 --country Tanzania
   PYTHONPATH=. python scripts/print_round_country_winners.py --round-id 3 --contest-name Adventure --east-africa-only
@@ -173,7 +177,7 @@ def _points_by_contestant_contest_wide(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Print Top-N per-location winners per nomination contest for one round."
+        description="Top High5-style export: Top N nominees per country (or region) per nomination contest."
     )
     parser.add_argument("--round-id", type=int)
     parser.add_argument("--round-name")
@@ -181,7 +185,12 @@ def main() -> None:
         "--round-name-contains",
         help="Pick latest round whose name contains this substring (case-insensitive), e.g. March",
     )
-    parser.add_argument("--limit", type=int, default=5, help="Top N per country (default 5)")
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=5,
+        help="Top N per country per contest (High5 ⇒ 5); same for regional groups when --level regional.",
+    )
     parser.add_argument("--contest-id", type=int, help="Only one contest/category")
     parser.add_argument(
         "--contest-name",
