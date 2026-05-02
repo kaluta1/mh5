@@ -148,6 +148,29 @@ def _points_by_contestant(
     return {r.contestant_id: int(r.total_points or 0) for r in rows}
 
 
+def _points_by_contestant_contest_wide(
+    db, contest_id: int, contestant_ids: List[int]
+) -> Dict[int, int]:
+    """Sum star points for this contest across all season_id values (diagnostic / reporting)."""
+    if not contestant_ids:
+        return {}
+    rows = (
+        db.query(
+            ContestantVoting.contestant_id,
+            func.coalesce(func.sum(ContestantVoting.points), 0).label("total_points"),
+        )
+        .filter(
+            and_(
+                ContestantVoting.contest_id == contest_id,
+                ContestantVoting.contestant_id.in_(contestant_ids),
+            )
+        )
+        .group_by(ContestantVoting.contestant_id)
+        .all()
+    )
+    return {r.contestant_id: int(r.total_points or 0) for r in rows}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Print Top-N per-location winners per nomination contest for one round."
@@ -194,6 +217,11 @@ def main() -> None:
         "-o",
         metavar="PATH",
         help="Write the same payload as --json to this UTF-8 file path (JSON)",
+    )
+    parser.add_argument(
+        "--include-contest-vote-totals",
+        action="store_true",
+        help="Add stars_points_contest_wide: summed votes for contest_id ignoring season_id (see JSON explainer)",
     )
     args = parser.parse_args()
 
@@ -271,6 +299,13 @@ def main() -> None:
             "east_africa_only": bool(args.east_africa_only),
             "contests": [],
         }
+        if args.include_contest_vote_totals:
+            payload["stars_points_explainer"] = (
+                "stars_points = SUM(ContestantVoting.points) WHERE season_id is this contest's "
+                "country/regional season AND contest_id matches (official stage scope). "
+                "stars_points_contest_wide = same sum but ANY season_id for that contest_id — "
+                "useful when votes were stored under a different season_id so official shows 0."
+            )
 
         for contest in contests:
             link_row = _linked_season_for_contest(db, contest.id, rnd.id, seasonal)
@@ -361,25 +396,31 @@ def main() -> None:
                 points_map = _points_by_contestant(
                     db, geo_season.id, contest.id, cid_list
                 )
+                wide_map = (
+                    _points_by_contestant_contest_wide(db, contest.id, cid_list)
+                    if args.include_contest_vote_totals
+                    else {}
+                )
                 engagement = SeasonMigrationService._engagement_by_contestant(db, cid_list)
 
                 rows = []
                 for rank, c in enumerate(winners, start=1):
                     e = engagement.get(c.id, {})
-                    rows.append(
-                        {
-                            "rank": rank,
-                            "contestant_id": c.id,
-                            "title": (c.title or "")[:120],
-                            "country_on_profile": (c.country or c.nominator_country or ""),
-                            "region_on_profile": (c.region or ""),
-                            "stars_points": points_map.get(c.id, 0),
-                            "shares": e.get("shares", 0),
-                            "likes": e.get("likes", 0),
-                            "comments": e.get("comments", 0),
-                            "views": e.get("views", 0),
-                        }
-                    )
+                    row_out: Dict[str, Any] = {
+                        "rank": rank,
+                        "contestant_id": c.id,
+                        "title": (c.title or "")[:120],
+                        "country_on_profile": (c.country or c.nominator_country or ""),
+                        "region_on_profile": (c.region or ""),
+                        "stars_points": points_map.get(c.id, 0),
+                        "shares": e.get("shares", 0),
+                        "likes": e.get("likes", 0),
+                        "comments": e.get("comments", 0),
+                        "views": e.get("views", 0),
+                    }
+                    if args.include_contest_vote_totals:
+                        row_out["stars_points_contest_wide"] = wide_map.get(c.id, 0)
+                    rows.append(row_out)
 
                 contest_out[groups_json_key][group_key or "UNKNOWN"] = rows
 
@@ -446,9 +487,12 @@ def main() -> None:
                         loc = ""
                         if args.level == "regional" and row.get("region_on_profile"):
                             loc = f" region={row['region_on_profile']!r}"
+                        wide_s = ""
+                        if "stars_points_contest_wide" in row:
+                            wide_s = f" stars_wide={row['stars_points_contest_wide']}"
                         print(
                             f"    {row['rank']}. id={row['contestant_id']} "
-                            f"stars={row['stars_points']} "
+                            f"stars={row['stars_points']}{wide_s} "
                             f"shares={row['shares']} likes={row['likes']} "
                             f"comments={row['comments']} views={row['views']} "
                             f"| {row['title']!r} "
