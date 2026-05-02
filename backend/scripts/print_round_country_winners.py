@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
 """
-Print Top N "winners" per country for each nomination contest in a given round,
-using the same scoring rules as season migration / Top High5 (MyHigh5 points in
-that COUNTRY season + engagement tie-break).
+Print Top N winners per location for each nomination contest in a given round,
+using the same scoring rules as season migration / Top High5 (points in that
+season + engagement tie-break).
+
+Levels:
+  country  — ContestSeason.level=COUNTRY; groups by nominee country (default).
+  regional — ContestSeason.level=REGIONAL; groups by nominee region label.
 
 Example:
   PYTHONPATH=. python scripts/print_round_country_winners.py --round-id 3
   PYTHONPATH=. python scripts/print_round_country_winners.py --round-name "Round March 2026" --limit 5
+  PYTHONPATH=. python scripts/print_round_country_winners.py --round-name-contains "March" --level regional --limit 10 --json --output march_regional.json
   PYTHONPATH=. python scripts/print_round_country_winners.py --round-id 3 --contest-id 15 --country Tanzania
   PYTHONPATH=. python scripts/print_round_country_winners.py --round-id 3 --contest-name Adventure --east-africa-only
 """
@@ -34,13 +39,28 @@ from app.models.voting import ContestantVoting
 from app.services.season_migration import SeasonMigrationService
 
 
-def _resolve_round(db, round_id: int | None, round_name: str | None) -> Round:
+def _resolve_round(
+    db,
+    round_id: int | None,
+    round_name: str | None,
+    round_name_contains: str | None,
+) -> Round:
     if round_id is not None:
         rnd = db.query(Round).filter(Round.id == round_id).first()
+    elif round_name_contains:
+        pat = round_name_contains.strip().lower()
+        if not pat:
+            raise SystemExit("--round-name-contains is empty")
+        rnd = (
+            db.query(Round)
+            .filter(func.lower(Round.name).contains(pat))
+            .order_by(Round.id.desc())
+            .first()
+        )
     elif round_name:
         rnd = db.query(Round).filter(Round.name == round_name).first()
     else:
-        raise SystemExit("Provide --round-id or --round-name")
+        raise SystemExit("Provide --round-id or --round-name or --round-name-contains")
     if not rnd:
         raise SystemExit("Round not found")
     return rnd
@@ -53,8 +73,8 @@ def _contest_ids_for_round(db, round_id: int) -> List[int]:
     return [row[0] for row in rows]
 
 
-def _country_season_for_contest(
-    db, contest_id: int, round_id: int
+def _linked_season_for_contest(
+    db, contest_id: int, round_id: int, season_level: SeasonLevel
 ) -> Optional[Tuple[ContestSeasonLink, ContestSeason]]:
     q = (
         db.query(ContestSeasonLink, ContestSeason)
@@ -62,13 +82,19 @@ def _country_season_for_contest(
         .filter(
             ContestSeasonLink.contest_id == contest_id,
             ContestSeason.round_id == round_id,
-            ContestSeason.level == SeasonLevel.COUNTRY,
+            ContestSeason.level == season_level,
             ContestSeason.is_deleted == False,
         )
         .order_by(ContestSeasonLink.is_active.desc(), ContestSeasonLink.linked_at.desc())
     )
     row = q.first()
     return row
+
+
+def _country_season_for_contest(
+    db, contest_id: int, round_id: int
+) -> Optional[Tuple[ContestSeasonLink, ContestSeason]]:
+    return _linked_season_for_contest(db, contest_id, round_id, SeasonLevel.COUNTRY)
 
 
 def _east_africa_key(country_group_label: str) -> Optional[str]:
@@ -124,10 +150,14 @@ def _points_by_contestant(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Print Top-N per-country winners per nomination contest for one round."
+        description="Print Top-N per-location winners per nomination contest for one round."
     )
     parser.add_argument("--round-id", type=int)
     parser.add_argument("--round-name")
+    parser.add_argument(
+        "--round-name-contains",
+        help="Pick latest round whose name contains this substring (case-insensitive), e.g. March",
+    )
     parser.add_argument("--limit", type=int, default=5, help="Top N per country (default 5)")
     parser.add_argument("--contest-id", type=int, help="Only one contest/category")
     parser.add_argument(
@@ -153,14 +183,34 @@ def main() -> None:
         action="store_true",
         help="Print one JSON object (good for piping)",
     )
+    parser.add_argument(
+        "--level",
+        choices=("country", "regional"),
+        default="country",
+        help="Season link to use: country (default) or regional macro groups",
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
+        metavar="PATH",
+        help="Write the same payload as --json to this UTF-8 file path (JSON)",
+    )
     args = parser.parse_args()
 
     if args.contest_id is not None and args.contest_name:
         raise SystemExit("Use either --contest-id or --contest-name, not both.")
 
+    selectors = sum(
+        1 for x in (args.round_id, args.round_name, args.round_name_contains) if x
+    )
+    if selectors > 1:
+        raise SystemExit(
+            "Use only one of: --round-id, --round-name, --round-name-contains."
+        )
+
     db = SessionLocal()
     try:
-        rnd = _resolve_round(db, args.round_id, args.round_name)
+        rnd = _resolve_round(db, args.round_id, args.round_name, args.round_name_contains)
         contest_ids = _contest_ids_for_round(db, rnd.id)
         if args.contest_id is not None:
             if args.contest_id not in contest_ids:
@@ -208,34 +258,41 @@ def main() -> None:
 
         country_filter_variants = _country_variants(args.country) if args.country else None
 
+        seasonal = SeasonLevel.REGIONAL if args.level == "regional" else SeasonLevel.COUNTRY
+        location_field = "region" if args.level == "regional" else "country"
+        groups_json_key = "regions" if args.level == "regional" else "countries"
+
         payload: Dict[str, Any] = {
             "round_id": rnd.id,
             "round_name": rnd.name,
+            "level": args.level,
+            "limit_per_group": args.limit,
             "limit_per_country": args.limit,
             "east_africa_only": bool(args.east_africa_only),
             "contests": [],
         }
 
         for contest in contests:
-            link_row = _country_season_for_contest(db, contest.id, rnd.id)
+            link_row = _linked_season_for_contest(db, contest.id, rnd.id, seasonal)
             if not link_row:
+                level_label = "REGIONAL" if args.level == "regional" else "COUNTRY"
                 payload["contests"].append(
                     {
                         "contest_id": contest.id,
                         "contest_name": contest.name,
                         "category_id": contest.category_id,
-                        "error": "No COUNTRY season link for this round",
-                        "countries": {},
+                        "error": f"No {level_label} season link for this round",
+                        groups_json_key: {},
                     }
                 )
                 continue
 
-            _, country_season = link_row
+            _, geo_season = link_row
 
             grouped = SeasonMigrationService.get_top_contestants_by_location(
                 db,
-                country_season.id,
-                "country",
+                geo_season.id,
+                location_field,
                 contest_id=contest.id,
                 limit=args.limit,
                 diagnostics=False,
@@ -244,38 +301,65 @@ def main() -> None:
                 strict_season_scope=True,
             )
 
+            link_active_col = (
+                "regional_link_active"
+                if args.level == "regional"
+                else "country_link_active"
+            )
+            season_id_col = (
+                "regional_season_id"
+                if args.level == "regional"
+                else "country_season_id"
+            )
             contest_out: Dict[str, Any] = {
                 "contest_id": contest.id,
                 "contest_name": contest.name,
                 "category_id": contest.category_id,
-                "country_season_id": country_season.id,
-                "country_link_active": bool(
+                season_id_col: geo_season.id,
+                link_active_col: bool(
                     db.query(ContestSeasonLink.is_active)
                     .filter(
                         ContestSeasonLink.contest_id == contest.id,
-                        ContestSeasonLink.season_id == country_season.id,
+                        ContestSeasonLink.season_id == geo_season.id,
                     )
                     .scalar()
                 ),
-                "countries": {},
+                groups_json_key: {},
             }
 
-            for country_key, winners in sorted(
+            east_africa_regions = frozenset(
+                ("east africa", "eastern africa")
+            )
+
+            def _skip_group(label: Optional[str]) -> bool:
+                if args.level != "country":
+                    if args.east_africa_only:
+                        lk = (label or "").strip().lower()
+                        if lk not in east_africa_regions:
+                            return True
+                    return False
+                if args.east_africa_only:
+                    if _east_africa_key(label or "") is None:
+                        return True
+                if country_filter_variants:
+                    canon = SeasonMigrationService._canonical_country_label(label) or ""
+                    raw_l = (label or "").strip().lower()
+                    if (
+                        raw_l not in country_filter_variants
+                        and canon.strip().lower() not in country_filter_variants
+                    ):
+                        return True
+                return False
+
+            for group_key, winners in sorted(
                 grouped.items(), key=lambda kv: (kv[0] or "").lower()
             ):
-                if args.east_africa_only:
-                    if _east_africa_key(country_key or "") is None:
-                        continue
-
-                if country_filter_variants:
-                    canon = SeasonMigrationService._canonical_country_label(country_key) or ""
-                    raw_l = (country_key or "").strip().lower()
-                    if raw_l not in country_filter_variants and canon.strip().lower() not in country_filter_variants:
-                        continue
+                if _skip_group(group_key):
+                    continue
 
                 cid_list = [c.id for c in winners]
                 points_map = _points_by_contestant(
-                    db, country_season.id, contest.id, cid_list
+                    db, geo_season.id, contest.id, cid_list
                 )
                 engagement = SeasonMigrationService._engagement_by_contestant(db, cid_list)
 
@@ -288,6 +372,7 @@ def main() -> None:
                             "contestant_id": c.id,
                             "title": (c.title or "")[:120],
                             "country_on_profile": (c.country or c.nominator_country or ""),
+                            "region_on_profile": (c.region or ""),
                             "stars_points": points_map.get(c.id, 0),
                             "shares": e.get("shares", 0),
                             "likes": e.get("likes", 0),
@@ -296,17 +381,34 @@ def main() -> None:
                         }
                     )
 
-                contest_out["countries"][country_key or "UNKNOWN"] = rows
+                contest_out[groups_json_key][group_key or "UNKNOWN"] = rows
 
             payload["contests"].append(contest_out)
 
+        text = json.dumps(payload, indent=2, default=str)
+        out_path = (args.output or "").strip()
+        if out_path:
+            with open(out_path, "w", encoding="utf-8") as f:
+                f.write(text)
+                f.write("\n")
+            print(f"Wrote {out_path}")
+
         if args.json:
-            print(json.dumps(payload, indent=2, default=str))
+            print(text)
+        elif out_path:
+            pass
         else:
+            per_what = "region" if args.level == "regional" else "country"
             print(f"Round: {rnd.name} (id={rnd.id})")
-            print(f"Top {args.limit} per country · nomination contests only", end="")
+            print(
+                f"Top {args.limit} per {per_what} · {args.level} season · nomination contests only",
+                end="",
+            )
             if args.east_africa_only:
-                print(" · East Africa countries only")
+                if args.level == "regional":
+                    print(" · East Africa / Eastern Africa regions only")
+                else:
+                    print(" · East Africa countries only")
             else:
                 print()
             print()
@@ -319,25 +421,38 @@ def main() -> None:
                     print(f"  ERROR: {cblock['error']}")
                     print()
                     continue
-                print(
-                    f"  COUNTRY season_id={cblock['country_season_id']} "
-                    f"link_active={cblock.get('country_link_active')}"
+                sid = cblock.get("country_season_id") or cblock.get(
+                    "regional_season_id"
                 )
-                countries = cblock.get("countries") or {}
-                if not countries:
-                    print("  (no country groups / no qualifiers for this contest)")
+                lk = (
+                    "country_link_active"
+                    if "country_link_active" in cblock
+                    else "regional_link_active"
+                )
+                print(f"  season_id={sid} link_active={cblock.get(lk)} ({args.level})")
+                groups = cblock.get(groups_json_key) or {}
+                if not groups:
+                    msg = (
+                        "no regional groups"
+                        if args.level == "regional"
+                        else "no country groups"
+                    )
+                    print(f"  ({msg} / no qualifiers for this contest)")
                     print()
                     continue
-                for country, rows in sorted(countries.items(), key=lambda x: x[0].lower()):
-                    print(f"  --- {country} ({len(rows)} shown) ---")
-                    for row in rows:
+                for gname, grow in sorted(groups.items(), key=lambda x: x[0].lower()):
+                    print(f"  --- {gname} ({len(grow)} shown) ---")
+                    for row in grow:
+                        loc = ""
+                        if args.level == "regional" and row.get("region_on_profile"):
+                            loc = f" region={row['region_on_profile']!r}"
                         print(
                             f"    {row['rank']}. id={row['contestant_id']} "
                             f"stars={row['stars_points']} "
                             f"shares={row['shares']} likes={row['likes']} "
                             f"comments={row['comments']} views={row['views']} "
                             f"| {row['title']!r} "
-                            f"[profile_country={row['country_on_profile']!r}]"
+                            f"[profile_country={row['country_on_profile']!r}]{loc}"
                         )
                     print()
                 print()
