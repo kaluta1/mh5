@@ -1002,6 +1002,27 @@ class SeasonMigrationService:
         print(f"[Migration] Promotion contest {contest_id} from {from_level.value} to {to_level.value}")
         print(f"[Migration]   Source season: {from_season.id}")
 
+        if from_season.round is not None:
+            min_target_start = SeasonMigrationService._nomination_min_start_for_level(
+                from_season.round,
+                to_level,
+            )
+            today = date.today()
+            if min_target_start and today < min_target_start:
+                msg = (
+                    f"{to_level.value} is too early for round {from_season.round_id}; "
+                    f"earliest start is {min_target_start}"
+                )
+                logger.warning(msg)
+                print(f"[Migration] WARNING: {msg}")
+                return {
+                    "message": msg,
+                    "skipped": True,
+                    "from_season_id": from_season.id,
+                    "promoted_count": 0,
+                    "promoted_contestant_ids": [],
+                }
+
         repaired_links = SeasonMigrationService._ensure_source_season_links(
             db=db,
             contest_id=contest_id,

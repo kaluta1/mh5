@@ -237,6 +237,19 @@ def main() -> None:
                 continue
 
             _, country_season = country_link
+            from datetime import date
+            min_regional_start = SeasonMigrationService._nomination_min_start_for_level(
+                rnd,
+                SeasonLevel.REGIONAL,
+            )
+            if min_regional_start and date.today() < min_regional_start:
+                print(
+                    f"  REGIONAL is too early for this round. Earliest start: {min_regional_start}. "
+                    "Skipping promotion."
+                )
+                summary["skipped"] += 1
+                continue
+
             repaired = SeasonMigrationService._ensure_source_season_links(
                 db=db,
                 contest_id=contest.id,
