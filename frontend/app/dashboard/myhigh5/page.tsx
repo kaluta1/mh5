@@ -128,6 +128,7 @@ export default function MyHigh5Page() {
   const [pageLoading, setPageLoading] = useState(true)
   const [historyLoading, setHistoryLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('active')
+  const [activeLevel, setActiveLevel] = useState('all')
   const [draggedItem, setDraggedItem] = useState<{ seasonIndex: number; voteIndex: number } | null>(null)
   /** Touch / coarse pointer: first tap selects row, second tap on another row moves there (same as drag-drop). */
   const [touchReorderSource, setTouchReorderSource] = useState<{
@@ -150,6 +151,14 @@ export default function MyHigh5Page() {
     })
   }
 
+  const levelTabs = [
+    { value: 'all', label: 'All' },
+    { value: 'country', label: 'Country' },
+    { value: 'regional', label: 'Regional' },
+    { value: 'continent', label: 'Continent' },
+    { value: 'global', label: 'Global' },
+  ]
+
   // Redirection si non authentifié
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -162,7 +171,7 @@ export default function MyHigh5Page() {
     const loadVotes = async () => {
       try {
         setPageLoading(true)
-        const response = await contestService.getMyHigh5Votes() as MyHigh5Response
+        const response = await contestService.getMyHigh5Votes(activeLevel) as MyHigh5Response
         setSeasonsData(response.seasons || [])
       } catch (error) {
         console.error('Erreur lors du chargement des votes:', error)
@@ -175,13 +184,13 @@ export default function MyHigh5Page() {
     if (!isLoading && isAuthenticated && user) {
       loadVotes()
     }
-  }, [isLoading, isAuthenticated, user])
+  }, [isLoading, isAuthenticated, user, activeLevel])
 
   // Rafraîchir la liste quand un vote / remplacement est fait ailleurs (même flux que My votes)
   useEffect(() => {
     const handler = async () => {
       try {
-        const response = await contestService.getMyHigh5Votes() as MyHigh5Response
+        const response = await contestService.getMyHigh5Votes(activeLevel) as MyHigh5Response
         setSeasonsData(response.seasons || [])
       } catch (error) {
         console.error('Erreur lors du rafraîchissement des votes:', error)
@@ -189,7 +198,7 @@ export default function MyHigh5Page() {
     }
     window.addEventListener('vote-changed', handler)
     return () => window.removeEventListener('vote-changed', handler)
-  }, [])
+  }, [activeLevel])
 
   // Charger l'historique quand on change d'onglet
   useEffect(() => {
@@ -263,7 +272,7 @@ export default function MyHigh5Page() {
     } catch (error) {
       console.error('Erreur lors de la sauvegarde de l\'ordre:', error)
       addToast(t('dashboard.myhigh5.order_error') || 'Erreur lors de la sauvegarde', 'error')
-      const response = await contestService.getMyHigh5Votes() as MyHigh5Response
+      const response = await contestService.getMyHigh5Votes(activeLevel) as MyHigh5Response
       setSeasonsData(response.seasons || [])
     } finally {
       setIsSaving(false)
@@ -593,6 +602,28 @@ export default function MyHigh5Page() {
 
         {/* Active Votes Tab */}
         <TabsContent value="active" className="space-y-6">
+          <div className="flex flex-wrap gap-2">
+            {levelTabs.map((item) => (
+              <Button
+                key={item.value}
+                type="button"
+                variant={activeLevel === item.value ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => {
+                  setActiveLevel(item.value)
+                  setOpenSections(new Set())
+                  setTouchReorderSource(null)
+                }}
+                className={cn(
+                  activeLevel === item.value &&
+                    'bg-gradient-to-r from-myhigh5-primary to-myhigh5-secondary text-white'
+                )}
+              >
+                {item.label}
+              </Button>
+            ))}
+          </div>
+
           {/* Hint explicatif */}
           <div className="px-4 py-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/50 rounded-lg space-y-1">
             <p className="text-sm text-blue-700 dark:text-blue-300">

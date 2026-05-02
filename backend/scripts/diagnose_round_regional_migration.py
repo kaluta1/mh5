@@ -234,6 +234,7 @@ def main() -> None:
                 contest_id=contest.id,
                 limit=args.limit,
                 diagnostics=False,
+                qualified_only=False,
             )
             selected_count = sum(len(items) for items in grouped.values())
             print(f"  COUNTRY source season_id={country_season.id}; repaired_links={repaired}")
@@ -252,6 +253,7 @@ def main() -> None:
                 contest.id,
                 limit=args.limit,
                 from_season_id=country_season.id,
+                source_qualified_only=False,
             )
             print(f"  APPLY result: {result}")
             if isinstance(result, dict) and not result.get("error") and not result.get("skipped"):

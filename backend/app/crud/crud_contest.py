@@ -491,7 +491,7 @@ class CRUDContest:
         import logging
         logger = logging.getLogger(__name__)
 
-        from app.models.contests import ContestSeasonLink, ContestSeason, SeasonLevel
+        from app.models.contests import ContestSeasonLink, ContestSeason, ContestantSeason, SeasonLevel
         from app.models.user import User
         
         # Récupérer la saison active du contest via ContestSeasonLink
@@ -571,7 +571,26 @@ class CRUDContest:
         # Utiliser entry_type explicite si fourni, sinon déduire du contest_mode
         contest_mode = _normalize_contest_mode(getattr(contest, 'contest_mode', 'participation'))
         contest_entry_type = entry_type if entry_type else ('nomination' if contest_mode == 'nomination' else 'participation')
-        if conditions:
+        season_level_lower_for_count = str(season_level or "").lower()
+        count_by_active_season_members = (
+            season_link is not None
+            and season_level_lower_for_count in ("regional", "region", "continent", "global")
+        )
+        if count_by_active_season_members:
+            active_member_ids = db.query(ContestantSeason.contestant_id).filter(
+                ContestantSeason.season_id == season_link.season_id,
+                ContestantSeason.is_active == True,
+            )
+            base_entries_query = db.query(func.count(Contestant.id.distinct()))\
+                .filter(
+                    Contestant.is_deleted == False,
+                    Contestant.entry_type == contest_entry_type,
+                    Contestant.id.in_(active_member_ids),
+                    Contestant.season_id == contest.id,
+                )
+            if round_id is not None:
+                base_entries_query = base_entries_query.filter(Contestant.round_id == round_id)
+        elif conditions:
             base_entries_query = db.query(func.count(Contestant.id.distinct()))\
                 .filter(
                     Contestant.is_deleted == False,
@@ -589,7 +608,21 @@ class CRUDContest:
         total_entries_count = base_entries_query.scalar() or 0
         
         # Compter le nombre de participants selon la saison/round et la localisation
-        if conditions:
+        if count_by_active_season_members:
+            active_member_ids = db.query(ContestantSeason.contestant_id).filter(
+                ContestantSeason.season_id == season_link.season_id,
+                ContestantSeason.is_active == True,
+            )
+            entries_query = db.query(func.count(Contestant.id.distinct()))\
+                .filter(
+                    Contestant.is_deleted == False,
+                    Contestant.entry_type == contest_entry_type,
+                    Contestant.id.in_(active_member_ids),
+                    Contestant.season_id == contest.id,
+                )
+            if round_id is not None:
+                entries_query = entries_query.filter(Contestant.round_id == round_id)
+        elif conditions:
             entries_query = db.query(func.count(Contestant.id.distinct()))\
                 .filter(
                     Contestant.is_deleted == False,

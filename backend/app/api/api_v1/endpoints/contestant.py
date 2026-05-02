@@ -635,6 +635,7 @@ def get_my_votes(
     current_user: User = Depends(deps.get_current_active_user),
     season_id: Optional[int] = Query(None, description="Filter by season_id"),
     contest_id: Optional[int] = Query(None, description="Filter by contest_id"),
+    level: Optional[str] = Query(None, description="Filter by season level: country, regional, continent, global"),
     include_empty_buckets: bool = Query(
         False,
         description="Include every active contest–season MyHigh5 bucket with no votes yet (for dashboard UI)",
@@ -649,7 +650,7 @@ def get_my_votes(
     """
     from sqlalchemy.orm import joinedload
     from sqlalchemy import case, func
-    from app.models.contests import Contestant, ContestSeasonLink
+    from app.models.contests import Contestant, ContestSeason, ContestSeasonLink
     from app.models.contest import Contest
 
     query = db.query(ContestantVoting).options(
@@ -663,6 +664,25 @@ def get_my_votes(
     # Filtrer par season_id si fourni
     if season_id:
         query = query.filter(ContestantVoting.season_id == season_id)
+    if level:
+        level_norm = level.strip().lower()
+        allowed_levels = {"city", "country", "regional", "region", "continent", "global"}
+        if level_norm not in allowed_levels:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid level. Must be one of: city, country, regional, continent, global.",
+            )
+        if level_norm == "region":
+            level_norm = "regional"
+        level_map = {
+            "city": SeasonLevel.CITY,
+            "country": SeasonLevel.COUNTRY,
+            "regional": SeasonLevel.REGIONAL,
+            "continent": SeasonLevel.CONTINENT,
+            "global": SeasonLevel.GLOBAL,
+        }
+        query = query.join(ContestSeason, ContestantVoting.season_id == ContestSeason.id)
+        query = query.filter(ContestSeason.level == level_map[level_norm])
 
     # Filtrer par contest_id : même bucket MyHigh5 que POST /vote (vote_bucket_key + legacy)
     if contest_id:
@@ -720,6 +740,7 @@ def get_my_votes(
         include_empty_buckets
         and season_id is None
         and contest_id is None
+        and level is None
     )
     if inject_empty:
         link_rows = (

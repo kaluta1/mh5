@@ -120,6 +120,21 @@ class SeasonMigrationService:
         if scoped:
             return scoped
 
+        voted_ids = SeasonMigrationService._contestant_ids_from_votes(
+            db,
+            season_id=season_id,
+            contest_id=contest_id,
+        )
+        if voted_ids:
+            vote_filters = [
+                Contestant.id.in_(voted_ids),
+                Contestant.is_active == True,
+                Contestant.is_deleted == False,
+            ]
+            if qualified_only:
+                vote_filters.append(or_(Contestant.is_qualified == True, Contestant.is_qualified.is_(None)))
+            return db.query(Contestant).filter(and_(*vote_filters)).all()
+
         fallback_filters = [
             ContestantSeason.season_id == season_id,
             Contestant.is_active == True,
@@ -130,23 +145,27 @@ class SeasonMigrationService:
         if qualified_only:
             fallback_filters.append(or_(Contestant.is_qualified == True, Contestant.is_qualified.is_(None)))
 
-        voted_ids = [
-            row[0]
-            for row in db.query(ContestantVoting.contestant_id).filter(
-                ContestantVoting.contest_id == contest_id,
-                ContestantVoting.season_id == season_id,
-            ).distinct().all()
-        ]
-        if voted_ids:
-            fallback_filters.append(Contestant.id.in_(voted_ids))
-            return db.query(Contestant).join(
-                ContestantSeason, ContestantSeason.contestant_id == Contestant.id
-            ).filter(and_(*fallback_filters)).all()
-
-        # Last resort for legacy data: use active season links only.
+        # Last resort for legacy data: keep the contest scope. Never return the
+        # whole shared season because that mixes categories in TopHigh5/migration.
+        fallback_filters.append(Contestant.season_id == contest_id)
         return db.query(Contestant).join(
             ContestantSeason, ContestantSeason.contestant_id == Contestant.id
         ).filter(and_(*fallback_filters)).all()
+
+    @staticmethod
+    def _contestant_ids_from_votes(db: Session, season_id: int, contest_id: int) -> List[int]:
+        """Contest-scoped candidate ids, preferring the exact season then legacy contest-only votes."""
+        rows = db.query(ContestantVoting.contestant_id).filter(
+            ContestantVoting.contest_id == contest_id,
+            ContestantVoting.season_id == season_id,
+        ).distinct().all()
+        ids = [row[0] for row in rows if row[0] is not None]
+        if ids:
+            return ids
+        rows = db.query(ContestantVoting.contestant_id).filter(
+            ContestantVoting.contest_id == contest_id,
+        ).distinct().all()
+        return [row[0] for row in rows if row[0] is not None]
 
     @staticmethod
     def _engagement_by_contestant(db: Session, contestant_ids: List[int]) -> Dict[int, Dict[str, int]]:
@@ -244,15 +263,6 @@ class SeasonMigrationService:
         This handles data states where votes/contestants exist but ContestantSeason links are missing.
         Returns number of links created/reactivated.
         """
-        current_count = db.query(ContestantSeason).filter(
-            and_(
-                ContestantSeason.season_id == season_id,
-                ContestantSeason.is_active == True,
-            )
-        ).count()
-        if current_count > 0:
-            return 0
-
         # Prefer contestants that already have votes in this contest/season.
         voted_ids_rows = db.query(ContestantVoting.contestant_id).filter(
             and_(
@@ -442,24 +452,26 @@ class SeasonMigrationService:
         if strict_contest_scope and not contestants:
             if diagnostics:
                 logger.warning(
-                    "  - Strict contest scope returned 0 contestants; retrying with season-only scope"
+                    "  - Strict contest scope returned 0 contestants; retrying with contest vote scope"
                 )
-                print("[Migration]   Strict contest scope empty; retry with season-only scope")
-            # Disable strict scope for the remainder of this call path (diagnostics
-            # and fallback selection) once we confirmed strict contest linkage is empty.
+                print("[Migration]   Strict contest scope empty; retry with contest vote scope")
+            voted_ids = SeasonMigrationService._contestant_ids_from_votes(
+                db,
+                season_id=season_id,
+                contest_id=contest_id,
+            )
             strict_contest_scope = False
             fallback_filters = [
-                ContestantSeason.season_id == season_id,
                 Contestant.is_active == True,
                 Contestant.is_deleted == False,
             ]
-            if active_links_only:
-                fallback_filters.append(ContestantSeason.is_active == True)
             if qualified_only:
                 fallback_filters.append(or_(Contestant.is_qualified == True, Contestant.is_qualified.is_(None)))
-            contestants_query = db.query(Contestant).join(
-                ContestantSeason, ContestantSeason.contestant_id == Contestant.id
-            ).filter(and_(*fallback_filters))
+            if voted_ids:
+                fallback_filters.append(Contestant.id.in_(voted_ids))
+            else:
+                fallback_filters.append(Contestant.season_id == contest_id)
+            contestants_query = db.query(Contestant).filter(and_(*fallback_filters))
             if country_filter:
                 raw = country_filter.strip().lower()
                 alias_map = {
@@ -474,7 +486,7 @@ class SeasonMigrationService:
                 if raw in alias_map:
                     variants.add(alias_map[raw])
                 contestants_query = contestants_query.filter(
-                    func.lower(func.trim(Contestant.country)).in_(list(variants))
+                    func.lower(func.trim(func.coalesce(Contestant.country, Contestant.nominator_country))).in_(list(variants))
                 )
             if location_field == 'city':
                 contestants_query = contestants_query.filter(Contestant.city.isnot(None))
@@ -526,10 +538,10 @@ class SeasonMigrationService:
                 print(f"[Migration]     - Qualified contestants without location: {contestants_without_location}")
                 print(f"[Migration]     - Non-qualified contestants: {contestants_not_qualified}")
 
-            # Emergency fallback:
-            # If contestants exist in the season but they miss the required location field
-            # (country/region/continent), still select top N from that season as one pool.
-            # This prevents hard-blocked promotions on legacy/incomplete geography data.
+            if contest_id is not None:
+                return {}
+
+            # Emergency fallback for non-contest-scoped legacy calls only.
             fallback_contestants = base_q.all()
             if fallback_contestants:
                 if diagnostics:
@@ -949,6 +961,7 @@ class SeasonMigrationService:
         contest_id: int,
         limit: int = 5,  # 5 pour tous sauf GLOBAL (3)
         from_season_id: Optional[int] = None,
+        source_qualified_only: bool = True,
     ) -> dict:
         """
         Promouvoit les meilleurs contestants d'un niveau vers le niveau supérieur.
@@ -1071,7 +1084,13 @@ class SeasonMigrationService:
             # Récupérer les meilleurs par localisation (sans stage_id)
             logger.info(f"  - Selecting top contestants by {location_field} (limit: {limit})")
             grouped_contestants = SeasonMigrationService.get_top_contestants_by_location(
-                db, from_season.id, location_field, contest_id=contest_id, limit=limit, stage_id=None
+                db,
+                from_season.id,
+                location_field,
+                contest_id=contest_id,
+                limit=limit,
+                stage_id=None,
+                qualified_only=source_qualified_only,
             )
             
             logger.info(f"  - Groups found: {len(grouped_contestants)} locations")

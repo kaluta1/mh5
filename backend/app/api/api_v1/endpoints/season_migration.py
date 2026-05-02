@@ -275,6 +275,7 @@ def get_top_high5_by_country(
                         limit=None,
                         stage_id=None,
                         diagnostics=False,
+                        qualified_only=False,
                     )
                     matched_key = None
                     for key in grouped.keys():
@@ -319,6 +320,7 @@ def get_top_high5_by_country(
                         limit=None,
                         stage_id=None,
                         diagnostics=False,
+                        qualified_only=False,
                     )
                     for key, members in grouped.items():
                         if not key:
