@@ -420,6 +420,18 @@ function ContestsPageContent() {
   // Cache API_BASE_URL to avoid repeated lookups
   const API_BASE_URL = useMemo(() => process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000', [])
 
+  // Canonical: opening a pooled REGIONAL/+ contest must not attach ?country= from the grid,
+  // or the detail API filters to Tanzania-only while the card count shows full East Africa pool.
+  const shouldPassCountryNavParam = React.useCallback(
+    (contestStatus: unknown) => {
+      if (!filterCountry || filterCountry === 'all') return false
+      const s = String(contestStatus ?? '').toLowerCase()
+      if (['regional', 'continent', 'continental', 'global'].includes(s)) return false
+      return true
+    },
+    [filterCountry]
+  )
+
   // Raw Contests List (Before filtering by type) - Now uses allContests for infinite scroll
   const rawContests = useMemo(() => {
     if (!allContests || allContests.length === 0) return []
@@ -732,7 +744,7 @@ function ContestsPageContent() {
                   onViewContestants={() => {
                     const params = new URLSearchParams()
                     params.set('roundId', activeRoundId)
-                    if (filterCountry && filterCountry !== 'all') params.set('country', filterCountry)
+                    if (shouldPassCountryNavParam(contest.status)) params.set('country', filterCountry)
                     params.set('continent', filterContinent !== 'all' ? filterContinent : 'all')
                     params.set('entryType', categoryTab === 'nomination' ? 'nomination' : 'participation')
                     const q = params.toString()
@@ -741,7 +753,7 @@ function ContestsPageContent() {
                   onOpenDetails={() => {
                     const params = new URLSearchParams()
                     params.set('roundId', activeRoundId)
-                    if (filterCountry && filterCountry !== 'all') params.set('country', filterCountry)
+                    if (shouldPassCountryNavParam(contest.status)) params.set('country', filterCountry)
                     params.set('continent', filterContinent !== 'all' ? filterContinent : 'all')
                     params.set('entryType', categoryTab === 'nomination' ? 'nomination' : 'participation')
                     const q = params.toString()

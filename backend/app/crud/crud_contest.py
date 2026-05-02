@@ -637,12 +637,31 @@ class CRUDContest:
                 .filter(Contestant.id == -1)  # Impossible condition = 0 results
         
         from app.models.user import User
-        
+
+        pooled_geo_levels = frozenset(
+            {"regional", "region", "continent", "continental", "global"}
+        )
+        season_level_lc = (
+            str(season_level).lower()
+            if season_level
+            else ""
+        )
+        contest_level_lc = (
+            str(getattr(contest, "level", None) or "").lower()
+        )
+
+        skip_explicit_geo_filters = (
+            season_level_lc in pooled_geo_levels or contest_level_lc in pooled_geo_levels
+        )
+
         # Appliquer les filtres géographiques
         # Priorité: filtres explicites > localisation de l'utilisateur
-        has_location_filter = filter_country or filter_region or filter_continent
-        applied_location_filter = False
+        # For REGIONAL pooled rosters never apply country/filter from listing navigation.
+        has_location_filter = bool(
+            filter_country or filter_region or filter_continent
+        ) and not skip_explicit_geo_filters
         
+        applied_location_filter = False
         if has_location_filter:
             # Utiliser les filtres fournis par l'utilisateur
             applied_location_filter = True
@@ -1360,13 +1379,26 @@ class CRUDContest:
             "regional",
             "region",
             "continent",
+            "continental",
             "global",
         )
+        # Pooled phases: listing often passes filter_country=Tanzania from the grid UI; applying it
+        # here would hide other countries' qualifiers (Uganda/Kenya/…) in REGIONAL roster.
+        if suppress_user_country_fallback:
+            effective_country = None
+            effective_region = None
+            effective_continent = None
+
         if current_user and not is_explicit_all_country and not is_explicit_all_continent:
             # Pas de filtre explicite (ni spécifique ni "all") -> utiliser la localisation de l'utilisateur
             if not effective_country and is_valid_location(current_user.country) and not suppress_user_country_fallback:
                 effective_country = current_user.country
-            if not effective_continent and is_valid_location(current_user.continent) and season_level_for_filter != "global":
+            if (
+                not effective_continent
+                and is_valid_location(current_user.continent)
+                and season_level_for_filter != "global"
+                and not suppress_user_country_fallback
+            ):
                 effective_continent = current_user.continent
         
         # Appliquer les filtres à la requête

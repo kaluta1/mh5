@@ -1384,15 +1384,23 @@ def get_contest_contestants(
         
         # Filter by season_id only (round_id is shared between ALL contests)
         query = query.filter(Contestant.season_id == real_contest_id)
-        
-        # Apply geographic filters
-        if filter_country:
+
+        pooled_card_levels = frozenset(
+            {"regional", "region", "continent", "continental", "global"}
+        )
+        suppress_geo_filters = bool(
+            contest
+            and str(getattr(contest, "level", None) or "").lower() in pooled_card_levels
+        )
+
+        # Apply geographic filters (skip for pooled REGIONAL+/ continent stages — listing passes country TZ)
+        if filter_country and not suppress_geo_filters:
             query = query.filter(func.lower(Contestant.country) == func.lower(filter_country))
-        if filter_region:
+        if filter_region and not suppress_geo_filters:
             query = query.filter(func.lower(Contestant.region) == func.lower(filter_region))
-        if filter_continent:
+        if filter_continent and not suppress_geo_filters:
             query = query.filter(func.lower(Contestant.continent) == func.lower(filter_continent))
-        if filter_city:
+        if filter_city and not suppress_geo_filters:
             query = query.filter(func.lower(Contestant.city) == func.lower(filter_city))
         if user_id:
             query = query.filter(Contestant.user_id == user_id)
@@ -1429,7 +1437,9 @@ def get_contest_contestants(
 
             
             # Apply geographic filters to fallback results if we found any
-            if contestants and (filter_country or filter_region or filter_continent or filter_city):
+            if contestants and not suppress_geo_filters and (
+                filter_country or filter_region or filter_continent or filter_city
+            ):
                 original_count = len(contestants)
                 if filter_country:
                     contestants = [c for c in contestants if c.country and func.lower(c.country) == func.lower(filter_country)]
