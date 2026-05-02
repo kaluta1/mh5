@@ -510,7 +510,7 @@ def _enrich_round_data(
                     contest_mode_value = _normalize_contest_mode(getattr(contest, 'contest_mode', 'participation'))
                     display_level = _contest_card_level_for_round(
                         db,
-                        db_round,
+                        round_obj,
                         contest,
                         contest_mode_value,
                     )
