@@ -23,25 +23,28 @@ function isMaintenanceModeEnabled(): boolean {
 export function middleware(request: NextRequest) {
     const isMaintenanceMode = isMaintenanceModeEnabled()
 
-    // If maintenance mode is active
+    // If maintenance mode is active — only the maintenance shell + assets needed to render it.
+    // No dashboards, login, API, etc. Everything else serves the maintenance UI.
     if (isMaintenanceMode) {
-        // List of paths that should remain accessible
-        const allowedPaths = [
+        const { pathname } = request.nextUrl
+
+        const allowedPrefixes = [
             '/maintenance',
             '/_next',
             '/static',
+            '/images',
+        ]
+        const allowedExact = new Set([
             '/favicon.ico',
             '/thumbnails.png',
-            '/images', // Assuming there might be an images folder
-            '/reset-password', // Allow password reset even during maintenance
-            '/forgot-password', // Allow password reset request even during maintenance
-            '/login', // Allow login even during maintenance
-        ]
+            '/robots.txt',
+        ])
 
-        const { pathname } = request.nextUrl
+        const isAllowedAsset =
+            allowedExact.has(pathname) ||
+            allowedPrefixes.some((prefix) => pathname.startsWith(`${prefix}/`) || pathname === prefix)
 
-        // Allow static assets and the maintenance page
-        if (allowedPaths.some(path => pathname.startsWith(path)) || pathname.match(/\.(png|jpg|jpeg|svg|css|js|json)$/)) {
+        if (isAllowedAsset) {
             return NextResponse.next()
         }
 
