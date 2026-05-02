@@ -87,6 +87,44 @@ def _dedupe_voting_open_to_latest_round(result: List[dict]) -> None:
             r["is_voting_open"] = False
 
 
+def _contest_card_level_for_round(db: Session, round_obj: Round, contest: Any, mode: str) -> str:
+    """
+    Resolve the level shown on contest cards from the selected round timeline.
+
+    Business rules for the current nomination flow:
+    - participation contests stay CITY
+    - nomination contests are COUNTRY until that round is allowed to advance
+    - March can show REGIONAL now, but CONTINENT/GLOBAL must not appear early
+    """
+    if mode != "nomination":
+        return "city"
+
+    from app.models.contests import ContestSeason, ContestSeasonLink, SeasonLevel
+    from app.services.season_migration import SeasonMigrationService
+
+    today = date.today()
+    for level in (SeasonLevel.GLOBAL, SeasonLevel.CONTINENT, SeasonLevel.REGIONAL):
+        min_start = SeasonMigrationService._nomination_min_start_for_level(round_obj, level)
+        if min_start and today < min_start:
+            continue
+        active_link = (
+            db.query(ContestSeasonLink.id)
+            .join(ContestSeason, ContestSeason.id == ContestSeasonLink.season_id)
+            .filter(
+                ContestSeasonLink.contest_id == contest.id,
+                ContestSeasonLink.is_active == True,
+                ContestSeason.round_id == round_obj.id,
+                ContestSeason.level == level,
+                ContestSeason.is_deleted == False,
+            )
+            .first()
+        )
+        if active_link:
+            return level.value
+
+    return "country"
+
+
 @router.get("/", response_model=List[round_schema.RoundWithStats])
 def read_rounds(
     db: Session = Depends(deps.get_db),
@@ -469,6 +507,13 @@ def _enrich_round_data(
                     
                     # Strict per-contest check: only true when the user has already contested THIS contest.
                     is_contesting = contest.id in user_contested_contest_ids
+                    contest_mode_value = _normalize_contest_mode(getattr(contest, 'contest_mode', 'participation'))
+                    display_level = _contest_card_level_for_round(
+                        db,
+                        db_round,
+                        contest,
+                        contest_mode_value,
+                    )
                     
                     contest_data = {
                         "id": contest.id,
@@ -476,13 +521,13 @@ def _enrich_round_data(
                         "description": getattr(contest, 'description', None),
                         "contest_type": getattr(contest, 'contest_type', None),
                         "cover_image_url": getattr(contest, 'cover_image_url', None),
-                        "level": getattr(contest, 'level', None),
+                        "level": display_level,
                         "participants_count": participant_count,
                         "votes_count": 0,
                         "image_url": getattr(contest, 'image_url', None),
                         "created_at": getattr(contest, 'created_at', None),
                         "updated_at": getattr(contest, 'updated_at', None),
-                        "contest_mode": _normalize_contest_mode(getattr(contest, 'contest_mode', 'participation')),
+                        "contest_mode": contest_mode_value,
                         "current_user_contesting": bool(is_contesting)  # Explicitly convert to bool
                     }
                     r_data.setdefault("contests", []).append(contest_data)
