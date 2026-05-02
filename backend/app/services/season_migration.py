@@ -69,20 +69,152 @@ class SeasonMigrationService:
             return None
         return SeasonMigrationService._add_months(month_start, offset)
 
-    EAST_AFRICA_COUNTRY_KEYS: ClassVar[FrozenSet[str]] = frozenset(
-        {
-            "tanzania",
-            "tz",
-            "kenya",
-            "ke",
-            "uganda",
-            "ug",
-            "rwanda",
-            "rw",
-            "burundi",
-            "bi",
-        }
+    # Named macro blocs for regional nomination / voting (disjoint country key sets).
+    # Keys are lowercase: ISO2 and normalized country tokens from _country_key / aliases.
+    REGIONAL_VOTING_POOLS: ClassVar[Dict[str, FrozenSet[str]]] = {
+        "east_africa": frozenset(
+            {
+                "tanzania",
+                "tz",
+                "kenya",
+                "ke",
+                "uganda",
+                "ug",
+                "rwanda",
+                "rw",
+                "burundi",
+                "bi",
+                "ethiopia",
+                "et",
+                "eritrea",
+                "er",
+                "djibouti",
+                "dj",
+                "somalia",
+                "so",
+                "south sudan",
+                "south_sudan",
+                "ss",
+                "sudan",
+                "sd",
+            }
+        ),
+        "west_africa": frozenset(
+            {
+                "nigeria",
+                "ng",
+                "ghana",
+                "gh",
+                "senegal",
+                "sn",
+                "ivory coast",
+                "cote d'ivoire",
+                "côte d'ivoire",
+                "ci",
+                "benin",
+                "bj",
+                "togo",
+                "tg",
+                "burkina faso",
+                "burkina",
+                "bf",
+                "mali",
+                "ml",
+                "niger",
+                "ne",
+                "guinea",
+                "gn",
+                "sierra leone",
+                "sl",
+                "liberia",
+                "lr",
+                "gambia",
+                "gm",
+                "cape verde",
+                "cabo verde",
+                "cv",
+                "guinea-bissau",
+                "gw",
+            }
+        ),
+        "southern_africa": frozenset(
+            {
+                "south africa",
+                "za",
+                "zimbabwe",
+                "zw",
+                "zambia",
+                "zm",
+                "botswana",
+                "bw",
+                "namibia",
+                "na",
+                "mozambique",
+                "mz",
+                "malawi",
+                "mw",
+                "angola",
+                "ao",
+                "lesotho",
+                "ls",
+                "eswatini",
+                "sz",
+                "swaziland",
+                "madagascar",
+                "mg",
+                "mauritius",
+                "mu",
+                "seychelles",
+                "sc",
+                "comoros",
+                "km",
+            }
+        ),
+        "north_africa": frozenset(
+            {
+                "egypt",
+                "eg",
+                "morocco",
+                "ma",
+                "algeria",
+                "dz",
+                "tunisia",
+                "tn",
+                "libya",
+                "ly",
+            }
+        ),
+        "central_africa": frozenset(
+            {
+                "cameroon",
+                "cm",
+                "democratic republic of the congo",
+                "dr congo",
+                "drc",
+                "congo-kinshasa",
+                "cd",
+                "republic of the congo",
+                "congo-brazzaville",
+                "cg",
+                "gabon",
+                "ga",
+                "chad",
+                "td",
+                "central african republic",
+                "cf",
+                "equatorial guinea",
+                "gq",
+                "sao tome and principe",
+                "st",
+            }
+        ),
+    }
+
+    ALL_REGIONAL_VOTING_COUNTRY_KEYS: ClassVar[FrozenSet[str]] = frozenset(
+        k for keys in REGIONAL_VOTING_POOLS.values() for k in keys
     )
+
+    EAST_AFRICA_COUNTRY_KEYS: ClassVar[FrozenSet[str]] = REGIONAL_VOTING_POOLS["east_africa"]
 
     @staticmethod
     def _country_key(raw_country: Optional[str]) -> Optional[str]:
@@ -93,23 +225,56 @@ class SeasonMigrationService:
         return canon.strip().lower()
 
     @staticmethod
+    def regional_pool_id_for_raw_country(raw_country: Optional[str]) -> Optional[str]:
+        """First named regional bloc that contains this country, or None."""
+        k = SeasonMigrationService._country_key(raw_country)
+        if not k:
+            return None
+        pools = SeasonMigrationService.REGIONAL_VOTING_POOLS
+        for pid, keys in pools.items():
+            if k in keys:
+                return pid
+        return None
+
+    @staticmethod
+    def nominee_regional_pool_id(contestant: Contestant) -> Optional[str]:
+        """Regional voting bloc for roster / Top High5 (contestant country, nominator, then author)."""
+        for raw in (
+            getattr(contestant, "country", None),
+            getattr(contestant, "nominator_country", None),
+        ):
+            pid = SeasonMigrationService.regional_pool_id_for_raw_country(raw)
+            if pid:
+                return pid
+        user = getattr(contestant, "user", None)
+        if user and getattr(user, "country", None):
+            return SeasonMigrationService.regional_pool_id_for_raw_country(user.country)
+        return None
+
+    @staticmethod
+    def nominee_in_regional_voting_pool(contestant: Contestant) -> bool:
+        """True if the nominee resolves to any configured regional bloc."""
+        return SeasonMigrationService.nominee_regional_pool_id(contestant) is not None
+
+    @staticmethod
+    def nominee_in_east_africa_pool(contestant: Contestant) -> bool:
+        """Backward-compatible: East Africa bloc only."""
+        return SeasonMigrationService.nominee_regional_pool_id(contestant) == "east_africa"
+
+    @staticmethod
     def same_regional_voting_pool(
         voter_country: Optional[str], contestant_country: Optional[str]
     ) -> Optional[bool]:
         """
-        True if both countries belong to the same macro bloc (currently East Africa).
-        None means "no macro rule applies" — fall back to continent+profile region checks.
+        True if both countries belong to the same regional macro bloc.
+        False if either is in a configured bloc and the other is not, or both are in different blocs.
+        None if neither maps to a configured bloc — fall back to continent/profile region checks.
         """
-        vk = SeasonMigrationService._country_key(voter_country)
-        ck = SeasonMigrationService._country_key(contestant_country)
-        if not vk or not ck:
-            return None
-        in_pool_v = vk in SeasonMigrationService.EAST_AFRICA_COUNTRY_KEYS
-        in_pool_c = ck in SeasonMigrationService.EAST_AFRICA_COUNTRY_KEYS
-        if in_pool_v and in_pool_c:
-            return True
-        if in_pool_v != in_pool_c:
-            # One participant is explicitly in-East-Africa pooling; treat as different pool
+        pv = SeasonMigrationService.regional_pool_id_for_raw_country(voter_country)
+        pc = SeasonMigrationService.regional_pool_id_for_raw_country(contestant_country)
+        if pv and pc:
+            return pv == pc
+        if pv or pc:
             return False
         return None
 
@@ -124,13 +289,46 @@ class SeasonMigrationService:
             "tz": "Tanzania",
             "tanzania": "Tanzania",
             "ug": "Uganda",
-            "ug": "Uganda",
+            "uganda": "Uganda",
             "ke": "Kenya",
             "kenya": "Kenya",
             "rw": "Rwanda",
             "rwanda": "Rwanda",
             "bi": "Burundi",
             "burundi": "Burundi",
+            "et": "Ethiopia",
+            "ethiopia": "Ethiopia",
+            "er": "Eritrea",
+            "so": "Somalia",
+            "nigeria": "Nigeria",
+            "ng": "Nigeria",
+            "gh": "Ghana",
+            "ghana": "Ghana",
+            "sn": "Senegal",
+            "senegal": "Senegal",
+            "ci": "Ivory Coast",
+            "za": "South Africa",
+            "south africa": "South Africa",
+            "zw": "Zimbabwe",
+            "zm": "Zambia",
+            "bw": "Botswana",
+            "na": "Namibia",
+            "mz": "Mozambique",
+            "mw": "Malawi",
+            "ao": "Angola",
+            "eg": "Egypt",
+            "ma": "Morocco",
+            "dz": "Algeria",
+            "tn": "Tunisia",
+            "ly": "Libya",
+            "cm": "Cameroon",
+            "cd": "Democratic Republic of the Congo",
+            "cg": "Republic of the Congo",
+            "ga": "Gabon",
+            "td": "Chad",
+            "cf": "Central African Republic",
+            "gq": "Equatorial Guinea",
+            "st": "Sao Tome and Principe",
         }
         return aliases.get(value.lower(), value)
 

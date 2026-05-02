@@ -7,7 +7,7 @@ from sqlalchemy import and_, func, select
 from datetime import date
 
 from app.api import deps
-from app.services.season_migration import season_migration_service
+from app.services.season_migration import SeasonMigrationService, season_migration_service
 from app.tasks.season_migration import (
     process_season_migrations,
     migrate_contest_to_city,
@@ -331,6 +331,14 @@ def get_top_high5_by_country(
                             c for c in members
                             if any(v in variants for v in _normalized_country_candidates(c))
                         ]
+                        if (
+                            season.level == SeasonLevel.REGIONAL
+                            and country_matching_members
+                        ):
+                            country_matching_members = [
+                                c for c in country_matching_members
+                                if SeasonMigrationService.nominee_in_regional_voting_pool(c)
+                            ]
                         if country_matching_members:
                             per_location_groups.append((key, country_matching_members))
 

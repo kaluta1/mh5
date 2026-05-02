@@ -401,6 +401,51 @@ def _resolve_contest_for_contestant_vote(
     return None
 
 
+def _hydrate_vote_season_for_contest_round(
+    db: Session,
+    contestant: Contestant,
+    page_contest: Optional[Contest],
+    initial_season: ContestSeason,
+) -> ContestSeason:
+    """
+    Use the same ContestSeason / phase as contest detail and Top High5 for this round.
+    Falls back to ``initial_season`` when the contestant is not active on the UI phase row.
+    """
+    if page_contest is None or not getattr(contestant, "round_id", None):
+        return initial_season
+    from app.crud import crud_round
+    from app.crud.crud_contest import resolve_nomination_display_season_for_contest_round
+
+    dr = crud_round.round.resolve_display_round_id_for_contest(
+        db,
+        page_contest.id,
+        contestant.round_id,
+    )
+    _, ui_season = resolve_nomination_display_season_for_contest_round(db, page_contest, dr)
+    if ui_season is None:
+        return initial_season
+    pivot = (
+        db.query(ContestantSeason)
+        .filter(
+            ContestantSeason.contestant_id == contestant.id,
+            ContestantSeason.season_id == ui_season.id,
+            ContestantSeason.is_active == True,
+        )
+        .first()
+    )
+    if pivot is None:
+        return initial_season
+    hydrated = (
+        db.query(ContestSeason)
+        .filter(
+            ContestSeason.id == ui_season.id,
+            ContestSeason.is_deleted == False,
+        )
+        .first()
+    )
+    return hydrated or initial_season
+
+
 def _bucket_key_for_contest(contest: Contest) -> str:
     """
     Stable MyHigh5 scope for a contest: one bucket per category FK, else (contest_type, contest_mode).
@@ -2585,6 +2630,15 @@ def vote_for_contestant(
             detail="You cannot vote for your own submission"
         )
     
+    # Optional: contest opened in the UI (required for ambiguous shared seasons).
+    page_contest: Optional[Contest] = None
+    if contest_id is not None:
+        page_contest = db.query(Contest).filter(
+            Contest.id == contest_id, Contest.is_deleted == False
+        ).first()
+        if page_contest is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contest not found")
+
     # Récupérer la saison active du contestant via ContestantSeason
     from app.models.contests import ContestSeason, ContestantSeason, ContestSeasonLink
     from app.services.season_migration import SeasonMigrationService
@@ -2635,13 +2689,14 @@ def vote_for_contestant(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Season not found for this contestant"
         )
+
+    # Match Top High5 / contest detail: use the ContestSeason shown for this contest round.
+    season = _hydrate_vote_season_for_contest_round(db, contestant, page_contest, season)
     
     # Contest associé : préférer le contest_id de la page (évite mélange Bongo Fleva vs Tennis Club).
     contest: Optional[Contest] = None
     if contest_id is not None:
-        c = db.query(Contest).filter(Contest.id == contest_id, Contest.is_deleted == False).first()
-        if not c:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contest not found")
+        c = page_contest
         if _contestant_belongs_to_contest(db, contestant, contest_id, season):
             contest = c
         else:
@@ -2822,7 +2877,7 @@ def vote_for_contestant(
                 return msg
             return None
         if lvl in ("regional", "region"):
-            # East Africa pooled roster: nominee country bloc wins over flaky User.region text.
+            # Macro regional blocs: same-pool wins over flaky User.region text.
             pool = SeasonMigrationService.same_regional_voting_pool(
                 getattr(voter, "country", None),
                 ac_country,
@@ -2832,8 +2887,8 @@ def vote_for_contestant(
             if pool is False:
                 return (
                     "You cannot vote for this contestant in this regional phase because "
-                    "your profile country is outside the pooled East African voting area "
-                    "aligned with these nominees (or theirs is)."
+                    "your profile country is outside the same regional voting pool "
+                    "(e.g. West vs East Africa) as this nominee."
                 )
 
             if not compare_with_unknown(voter.continent, ac_continent):
@@ -3105,6 +3160,12 @@ def replace_fifth_vote(
     if contestant.user_id == current_user.id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot vote for your own submission")
 
+    page_contest: Optional[Contest] = None
+    if contest_id is not None:
+        page_contest = db.query(Contest).filter(Contest.id == contest_id, Contest.is_deleted == False).first()
+        if page_contest is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contest not found")
+
     contestant_season_link = None
     if contest_id is not None:
         contestant_season_link = (
@@ -3145,11 +3206,11 @@ def replace_fifth_vote(
     if not season:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Season not found")
 
+    season = _hydrate_vote_season_for_contest_round(db, contestant, page_contest, season)
+
     contest: Optional[Contest] = None
     if contest_id is not None:
-        c = db.query(Contest).filter(Contest.id == contest_id, Contest.is_deleted == False).first()
-        if not c:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contest not found")
+        c = page_contest
         if _contestant_belongs_to_contest(db, contestant, contest_id, season):
             contest = c
         else:

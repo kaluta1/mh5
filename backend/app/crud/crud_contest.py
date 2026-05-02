@@ -59,6 +59,117 @@ def _normalize_contest_mode(mode: Any) -> str:
     return "participation"
 
 
+def regional_voting_pools_sql_predicate():
+    """
+    Regional nomination roster: nominee country/nominator must map to one configured bloc
+    (East, West, Southern, North, Central Africa — see SeasonMigrationService.REGIONAL_VOTING_POOLS).
+    Matches Python SeasonMigrationService.nominee_in_regional_voting_pool when using DB columns only.
+    """
+    from app.services.season_migration import SeasonMigrationService
+
+    col = func.lower(
+        func.trim(func.coalesce(Contestant.country, Contestant.nominator_country, ""))
+    )
+    return col.in_(tuple(SeasonMigrationService.ALL_REGIONAL_VOTING_COUNTRY_KEYS))
+
+
+def east_africa_regional_sql_predicate():
+    """Backward-compatible alias for regional_voting_pools_sql_predicate."""
+    return regional_voting_pools_sql_predicate()
+
+
+def resolve_nomination_display_season_for_contest_round(
+    db: Session,
+    contest_obj: Contest,
+    target_round_id: Optional[int],
+) -> tuple[Any, Any]:
+    """
+    Pick the ContestSeason (+ link) driving visible roster/counts/timeline for one contest round.
+    Mirrors get_contest_with_enriched_contestants so participant_count matches the opened list.
+
+    Uses the first arbitrary active ContestSeasonLink only when round-scoped seasons are absent.
+    Clears selection when nomination calendar rejects all round-linked phases (prior behavior).
+    """
+    from app.models.contests import ContestSeasonLink, ContestSeason
+
+    contest_id = contest_obj.id
+
+    naive_sl = (
+        db.query(ContestSeasonLink)
+        .filter(
+            ContestSeasonLink.contest_id == contest_id,
+            ContestSeasonLink.is_active == True,
+        )
+        .first()
+    )
+    naive_season = None
+    if naive_sl is not None:
+        naive_season = (
+            db.query(ContestSeason)
+            .filter(
+                ContestSeason.id == naive_sl.season_id,
+                ContestSeason.is_deleted == False,
+            )
+            .first()
+        )
+
+    if target_round_id is None:
+        return naive_sl, naive_season
+
+    pairs = (
+        db.query(ContestSeasonLink, ContestSeason)
+        .join(ContestSeason, ContestSeason.id == ContestSeasonLink.season_id)
+        .filter(
+            ContestSeasonLink.contest_id == contest_id,
+            ContestSeasonLink.is_active == True,
+            ContestSeason.round_id == target_round_id,
+            ContestSeason.is_deleted == False,
+        )
+        .all()
+    )
+    if not pairs:
+        return naive_sl, naive_season
+
+    if _normalize_contest_mode(getattr(contest_obj, "contest_mode", "participation")) == "nomination":
+        from app.services.season_migration import SeasonMigrationService
+
+        round_obj_for_level = pairs[0][1].round
+        allowed_pairs: list = []
+        today = date.today()
+        for sl, seas in pairs:
+            min_start = SeasonMigrationService._nomination_min_start_for_level(
+                round_obj_for_level,
+                seas.level,
+            )
+            if min_start and today < min_start:
+                continue
+            allowed_pairs.append((sl, seas))
+        pairs = allowed_pairs
+
+    if not pairs:
+        return None, None
+
+    level_rank = {
+        "city": 1,
+        "country": 2,
+        "regional": 3,
+        "continent": 4,
+        "global": 5,
+    }
+    season_link, season = max(
+        pairs,
+        key=lambda pr: level_rank.get(
+            (
+                pr[1].level.value
+                if hasattr(pr[1].level, "value")
+                else str(pr[1].level)
+            ).lower(),
+            0,
+        ),
+    )
+    return season_link, season
+
+
 class CRUDContest:
     def get(self, db: Session, id: int) -> Optional[Contest]:
         """Récupère un concours par son ID"""
@@ -494,21 +605,28 @@ class CRUDContest:
         from app.models.contests import ContestSeasonLink, ContestSeason, ContestantSeason, SeasonLevel
         from app.models.user import User
         
-        # Récupérer la saison active du contest via ContestSeasonLink
+        from app.crud import crud_round
+
+        season_link = None
+        season = None
         season_level = None
-        season_link = db.query(ContestSeasonLink).filter(
-            ContestSeasonLink.contest_id == contest.id,
-            ContestSeasonLink.is_active == True
-        ).first()
-        
-        if season_link:
-            season = db.query(ContestSeason).filter(
-                ContestSeason.id == season_link.season_id,
-                ContestSeason.is_deleted == False
-            ).first()
-            if season:
-                season_level = season.level.value if hasattr(season.level, 'value') else str(season.level)
-        
+        display_round_for_scope = crud_round.round.resolve_display_round_id_for_contest(
+            db,
+            contest.id,
+            round_id,
+        )
+        season_link, season = resolve_nomination_display_season_for_contest_round(
+            db,
+            contest,
+            display_round_for_scope,
+        )
+        if season is not None:
+            season_level = (
+                season.level.value
+                if hasattr(season.level, "value")
+                else str(season.level)
+            )
+
         # Si pas de saison trouvée, utiliser le niveau du contest par défaut
         if not season_level:
             season_level = contest.level.lower() if contest.level else None
@@ -576,6 +694,11 @@ class CRUDContest:
             season_link is not None
             and season_level_lower_for_count in ("regional", "region", "continent", "global")
         )
+        ea_regional_nomination_count = (
+            contest_mode == "nomination"
+            and season_level_lower_for_count in ("regional", "region")
+            and count_by_active_season_members
+        )
         if count_by_active_season_members:
             active_member_ids = db.query(ContestantSeason.contestant_id).filter(
                 ContestantSeason.season_id == season_link.season_id,
@@ -588,8 +711,8 @@ class CRUDContest:
                     Contestant.id.in_(active_member_ids),
                     Contestant.season_id == contest.id,
                 )
-            if round_id is not None:
-                base_entries_query = base_entries_query.filter(Contestant.round_id == round_id)
+            if display_round_for_scope is not None:
+                base_entries_query = base_entries_query.filter(Contestant.round_id == display_round_for_scope)
         elif conditions:
             base_entries_query = db.query(func.count(Contestant.id.distinct()))\
                 .filter(
@@ -597,16 +720,13 @@ class CRUDContest:
                     Contestant.entry_type == contest_entry_type,
                     or_(*conditions) if len(conditions) > 1 else conditions[0]
                 )
-            if round_id is not None:
-                base_entries_query = base_entries_query.filter(Contestant.round_id == round_id)
+            if display_round_for_scope is not None:
+                base_entries_query = base_entries_query.filter(Contestant.round_id == display_round_for_scope)
         else:
             # No conditions - return 0 (contest has no rounds or seasons linked yet)
             base_entries_query = db.query(func.count(Contestant.id.distinct()))\
                 .filter(Contestant.id == -1)  # Impossible condition = 0 results
-        
-        # Get total count without location filters (for display purposes)
-        total_entries_count = base_entries_query.scalar() or 0
-        
+
         # Compter le nombre de participants selon la saison/round et la localisation
         if count_by_active_season_members:
             active_member_ids = db.query(ContestantSeason.contestant_id).filter(
@@ -620,8 +740,8 @@ class CRUDContest:
                     Contestant.id.in_(active_member_ids),
                     Contestant.season_id == contest.id,
                 )
-            if round_id is not None:
-                entries_query = entries_query.filter(Contestant.round_id == round_id)
+            if display_round_for_scope is not None:
+                entries_query = entries_query.filter(Contestant.round_id == display_round_for_scope)
         elif conditions:
             entries_query = db.query(func.count(Contestant.id.distinct()))\
                 .filter(
@@ -629,12 +749,19 @@ class CRUDContest:
                     Contestant.entry_type == contest_entry_type,
                     or_(*conditions) if len(conditions) > 1 else conditions[0]
                 )
-            if round_id is not None:
-                entries_query = entries_query.filter(Contestant.round_id == round_id)
+            if display_round_for_scope is not None:
+                entries_query = entries_query.filter(Contestant.round_id == display_round_for_scope)
         else:
             # No conditions - return 0
             entries_query = db.query(func.count(Contestant.id.distinct()))\
                 .filter(Contestant.id == -1)  # Impossible condition = 0 results
+
+        if ea_regional_nomination_count:
+            base_entries_query = base_entries_query.filter(regional_voting_pools_sql_predicate())
+            entries_query = entries_query.filter(regional_voting_pools_sql_predicate())
+        
+        # Get total count without location filters (for display purposes)
+        total_entries_count = base_entries_query.scalar() or 0
         
         from app.models.user import User
 
@@ -1182,68 +1309,18 @@ class CRUDContest:
             round_id=round_id,
         )
         
-        # Récupérer la saison active d'abord
+        # Récupérer la saison active d'abord (alignée sur enrich pour ce round)
         from app.models.contests import ContestantSeason
-        season = None
-        season_link = db.query(ContestSeasonLink).filter(
-            ContestSeasonLink.contest_id == contest_id,
-            ContestSeasonLink.is_active == True
-        ).first()
-        
-        if season_link:
-            season = db.query(ContestSeason).filter(
-                ContestSeason.id == season_link.season_id
-            ).first()
-
-        # One calendar round (March vs April): list only contestants for that round
         from app.crud import crud_round
+
         target_round_id = crud_round.round.resolve_display_round_id_for_contest(
             db, contest_id, round_id
         )
-        if target_round_id is not None:
-            round_links = db.query(ContestSeasonLink, ContestSeason).join(
-                ContestSeason, ContestSeason.id == ContestSeasonLink.season_id
-            ).filter(
-                ContestSeasonLink.contest_id == contest_id,
-                ContestSeasonLink.is_active == True,
-                ContestSeason.round_id == target_round_id,
-                ContestSeason.is_deleted == False,
-            ).all()
-            if round_links:
-                if _normalize_contest_mode(getattr(contest_obj, "contest_mode", "participation")) == "nomination":
-                    from datetime import date
-                    from app.services.season_migration import SeasonMigrationService
-
-                    today = date.today()
-                    round_obj_for_level = round_links[0][1].round
-                    allowed_links = []
-                    for pair in round_links:
-                        min_start = SeasonMigrationService._nomination_min_start_for_level(
-                            round_obj_for_level,
-                            pair[1].level,
-                        )
-                        if min_start and today < min_start:
-                            continue
-                        allowed_links.append(pair)
-                    round_links = allowed_links
-                if not round_links:
-                    season_link = None
-                    season = None
-                else:
-                    level_rank = {
-                        "city": 1,
-                        "country": 2,
-                        "regional": 3,
-                        "continent": 4,
-                        "global": 5,
-                    }
-                    season_link, season = max(
-                        round_links,
-                        key=lambda pair: level_rank.get(
-                            (pair[1].level.value if hasattr(pair[1].level, "value") else str(pair[1].level)).lower(),
-                            0,
-                        ),
-                    )
+        season_link, season = resolve_nomination_display_season_for_contest_round(
+            db,
+            contest_obj,
+            target_round_id,
+        )
         
         # FIXED: Query contestants by the ACTIVE SEASON ID (not contest_id)
         from app.models.round import Round, round_contests
@@ -1313,6 +1390,12 @@ class CRUDContest:
             if isinstance(season_level, str):
                 season_level = season_level.lower()
 
+        if (
+            season_level == "city"
+            and contest_mode == "nomination"
+        ):
+            season_level = "country"
+
         # Once a contest migrates beyond its start level, the visible roster is
         # the active ContestantSeason membership for that level (e.g. March top
         # 5 winners in REGIONAL), not every original contestant from the round.
@@ -1326,6 +1409,11 @@ class CRUDContest:
                 f"[get_contest_with_enriched_contestants] Scoping visible roster to active "
                 f"ContestantSeason links for {season_level} season_id={season.id}"
             )
+            if (
+                contest_mode == "nomination"
+                and season_level in ("regional", "region")
+            ):
+                contestants_query = contestants_query.filter(regional_voting_pools_sql_predicate())
         
         # =====================================================
         # FILTRAGE GÉOGRAPHIQUE

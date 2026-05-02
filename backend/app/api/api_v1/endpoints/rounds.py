@@ -324,6 +324,7 @@ def _enrich_round_data(
             from app.models.contests import Contestant as ContestantModel
             contest_participant_counts = {}
             if valid_contests:
+                valid_contests_by_id = {vc.id: vc for vc in valid_contests}
                 valid_ids = [vc.id for vc in valid_contests]
                 valid_contest_ids = set(valid_ids)
                 mode_map = {
@@ -397,37 +398,44 @@ def _enrich_round_data(
 
                     for uc in all_ucs_in_round:
                         target: Optional[int] = None
-                        for _s in unique_seasons.values():
-                            resolved = (
-                                contestant_ep._resolve_contest_for_contestant_vote(
+                        cid_direct = getattr(uc, "season_id", None)
+                        if (
+                            cid_direct in valid_contest_ids
+                            and getattr(uc, "entry_type", "participation")
+                            == _entry_type_for_contest(cid_direct)
+                        ):
+                            target = cid_direct
+                        if target is None:
+                            for _s in unique_seasons.values():
+                                resolved = contestant_ep._resolve_contest_for_contestant_vote(
                                     db, uc, _s
                                 )
-                            )
-                            if (
-                                not resolved
-                                or resolved.id not in valid_contest_ids
-                            ):
-                                continue
-                            if getattr(uc, "entry_type", "participation") != _entry_type_for_contest(
-                                resolved.id
-                            ):
-                                continue
-                            target = resolved.id
-                            break
-                        if target is None:
-                            for _cid in valid_contest_ids:
                                 if (
-                                    getattr(uc, "entry_type", "participation")
-                                    != _entry_type_for_contest(_cid)
+                                    not resolved
+                                    or resolved.id not in valid_contest_ids
                                 ):
                                     continue
-                                if (
-                                    uc.season_id is not None
-                                    and uc.season_id == _cid
+                                if getattr(uc, "entry_type", "participation") != _entry_type_for_contest(
+                                    resolved.id
                                 ):
-                                    target = _cid
-                                    break
+                                    continue
+                                target = resolved.id
+                                break
                         if target is not None:
+                            c_o = valid_contests_by_id.get(target)
+                            if c_o is not None and round_obj is not None:
+                                from app.services.season_migration import SeasonMigrationService
+
+                                card_level = _contest_card_level_for_round(
+                                    db,
+                                    round_obj,
+                                    c_o,
+                                    _normalize_contest_mode(getattr(c_o, "contest_mode", "participation")),
+                                )
+                                cm = _normalize_contest_mode(getattr(c_o, "contest_mode", "participation"))
+                                if card_level == "regional" and cm == "nomination":
+                                    if not SeasonMigrationService.nominee_in_regional_voting_pool(uc):
+                                        continue
                             contest_participant_counts[target] = (
                                 contest_participant_counts.get(target, 0) + 1
                             )
@@ -475,26 +483,23 @@ def _enrich_round_data(
                                 != expected_type
                             ):
                                 continue
+                            cid_direct = getattr(uc, "season_id", None)
+                            if (
+                                cid_direct in valid_contest_ids
+                                and getattr(uc, "entry_type", "participation")
+                                == _entry_type_for_contest(cid_direct)
+                            ):
+                                contested_ids.add(cid_direct)
+                                continue
                             for _s in unique_seasons.values():
-                                resolved = (
-                                    contestant_ep._resolve_contest_for_contestant_vote(
-                                        db, uc, _s
-                                    )
+                                resolved = contestant_ep._resolve_contest_for_contestant_vote(
+                                    db, uc, _s
                                 )
                                 if (
                                     resolved
                                     and resolved.id in valid_contest_ids
                                 ):
                                     contested_ids.add(resolved.id)
-                            # Legacy rows store Contestant.season_id as the contest id (no
-                            # disambiguation needed); keep this path without the old
-                            # uc.season_id == <linked season> bug for shared seasons.
-                            for _cid in valid_contest_ids:
-                                if (
-                                    uc.season_id is not None
-                                    and uc.season_id == _cid
-                                ):
-                                    contested_ids.add(_cid)
                         user_contested_contest_ids = contested_ids
                 except Exception as e:
                     logger.warning(f"Error batch-checking user participation for round {round_id}: {str(e)}")
