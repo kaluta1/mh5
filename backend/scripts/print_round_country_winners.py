@@ -8,6 +8,7 @@ Example:
   PYTHONPATH=. python scripts/print_round_country_winners.py --round-id 3
   PYTHONPATH=. python scripts/print_round_country_winners.py --round-name "Round March 2026" --limit 5
   PYTHONPATH=. python scripts/print_round_country_winners.py --round-id 3 --contest-id 15 --country Tanzania
+  PYTHONPATH=. python scripts/print_round_country_winners.py --round-id 3 --contest-name Adventure --east-africa-only
 """
 
 from __future__ import annotations
@@ -70,6 +71,14 @@ def _country_season_for_contest(
     return row
 
 
+def _east_africa_key(country_group_label: str) -> Optional[str]:
+    """Normalize grouped country label to bloc key if in EA pool."""
+    k = SeasonMigrationService._country_key(country_group_label)
+    if not k or k not in SeasonMigrationService.EAST_AFRICA_COUNTRY_KEYS:
+        return None
+    return k
+
+
 def _country_variants(raw: str) -> set[str]:
     raw = (raw or "").strip().lower()
     variants = {raw}
@@ -80,6 +89,10 @@ def _country_variants(raw: str) -> set[str]:
         "ug": "uganda",
         "kenya": "ke",
         "ke": "kenya",
+        "rwanda": "rw",
+        "rw": "rwanda",
+        "burundi": "bi",
+        "bi": "burundi",
     }
     if raw in alias_map:
         variants.add(alias_map[raw])
@@ -118,6 +131,15 @@ def main() -> None:
     parser.add_argument("--limit", type=int, default=5, help="Top N per country (default 5)")
     parser.add_argument("--contest-id", type=int, help="Only one contest/category")
     parser.add_argument(
+        "--contest-name",
+        help="Single nomination contest whose name contains this text (case-insensitive), e.g. Adventure",
+    )
+    parser.add_argument(
+        "--east-africa-only",
+        action="store_true",
+        help="Only Tanzania, Kenya, Uganda, Rwanda, Burundi (+ common codes)",
+    )
+    parser.add_argument(
         "--country",
         help="Only print groups matching this country label (aliases: Tanzania, TZ, …)",
     )
@@ -133,6 +155,9 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    if args.contest_id is not None and args.contest_name:
+        raise SystemExit("Use either --contest-id or --contest-name, not both.")
+
     db = SessionLocal()
     try:
         rnd = _resolve_round(db, args.round_id, args.round_name)
@@ -143,6 +168,35 @@ def main() -> None:
                     f"Contest {args.contest_id} is not linked to round {rnd.id}"
                 )
             contest_ids = [args.contest_id]
+        elif args.contest_name:
+            pat = args.contest_name.strip().lower()
+            if not pat:
+                raise SystemExit("--contest-name is empty")
+            rows = (
+                db.query(Contest.id, Contest.name)
+                .filter(
+                    Contest.id.in_(contest_ids or [-1]),
+                    Contest.contest_mode == "nomination",
+                    Contest.is_deleted == False,
+                    func.lower(Contest.name).contains(pat),
+                )
+                .all()
+            )
+            if len(rows) == 0:
+                raise SystemExit(
+                    f"No nomination contest on round {rnd.id} matches name substring {pat!r}"
+                )
+            if len(rows) > 1:
+                labs = [(r.id, r.name) for r in rows[:12]]
+                extra = (
+                    f" (+{len(rows)-12} more)" if len(rows) > 12 else ""
+                )
+                raise SystemExit(
+                    "Multiple contests match {!r}: {}{}. Use --contest-id.".format(
+                        pat, labs, extra
+                    )
+                )
+            contest_ids = [rows[0].id]
 
         contests = (
             db.query(Contest)
@@ -158,6 +212,7 @@ def main() -> None:
             "round_id": rnd.id,
             "round_name": rnd.name,
             "limit_per_country": args.limit,
+            "east_africa_only": bool(args.east_africa_only),
             "contests": [],
         }
 
@@ -208,6 +263,10 @@ def main() -> None:
             for country_key, winners in sorted(
                 grouped.items(), key=lambda kv: (kv[0] or "").lower()
             ):
+                if args.east_africa_only:
+                    if _east_africa_key(country_key or "") is None:
+                        continue
+
                 if country_filter_variants:
                     canon = SeasonMigrationService._canonical_country_label(country_key) or ""
                     raw_l = (country_key or "").strip().lower()
@@ -245,7 +304,11 @@ def main() -> None:
             print(json.dumps(payload, indent=2, default=str))
         else:
             print(f"Round: {rnd.name} (id={rnd.id})")
-            print(f"Top {args.limit} per country · nomination contests only")
+            print(f"Top {args.limit} per country · nomination contests only", end="")
+            if args.east_africa_only:
+                print(" · East Africa countries only")
+            else:
+                print()
             print()
             for cblock in payload["contests"]:
                 print(
