@@ -22,7 +22,7 @@ from sqlalchemy import select
 
 from app.db.session import SessionLocal
 from app.models.contest import Contest
-from app.models.contests import ContestSeason, ContestSeasonLink, ContestantSeason, SeasonLevel
+from app.models.contests import Contestant, ContestSeason, ContestSeasonLink, ContestantSeason, SeasonLevel
 from app.models.round import Round, round_contests
 from app.services.season_migration import SeasonMigrationService
 
@@ -39,15 +39,27 @@ def _resolve_round(db, round_id: int | None, round_name: str | None) -> Round:
     return rnd
 
 
+def _list_rounds(db) -> None:
+    rounds = db.query(Round).order_by(Round.id.desc()).limit(20).all()
+    print("Recent rounds:")
+    for rnd in rounds:
+        print(f"  id={rnd.id} name={rnd.name!r}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Clean premature nomination season levels for a round")
     parser.add_argument("--round-id", type=int)
     parser.add_argument("--round-name")
+    parser.add_argument("--list-rounds", action="store_true")
     parser.add_argument("--apply", action="store_true")
     args = parser.parse_args()
 
     db = SessionLocal()
     try:
+        if args.list_rounds:
+            _list_rounds(db)
+            return
+
         rnd = _resolve_round(db, args.round_id, args.round_name)
         contest_ids = [
             row[0]
@@ -94,7 +106,22 @@ def main() -> None:
             )
             print(f"{level.value}: too early until {min_start}; active contest links={len(rows)}")
             for link, season in rows:
-                member_count = (
+                scoped_member_ids = [
+                    row[0]
+                    for row in (
+                        db.query(ContestantSeason.id)
+                        .join(Contestant, Contestant.id == ContestantSeason.contestant_id)
+                        .filter(
+                            ContestantSeason.season_id == season.id,
+                            ContestantSeason.is_active == True,
+                            Contestant.season_id == link.contest_id,
+                            Contestant.round_id == rnd.id,
+                        )
+                        .all()
+                    )
+                ]
+                member_count = len(scoped_member_ids)
+                total_active_in_shared_season = (
                     db.query(ContestantSeason)
                     .filter(
                         ContestantSeason.season_id == season.id,
@@ -104,20 +131,19 @@ def main() -> None:
                 )
                 print(
                     f"  contest_id={link.contest_id} season_id={season.id} "
-                    f"active_memberships={member_count}"
+                    f"scoped_memberships={member_count} "
+                    f"(shared_season_active_total={total_active_in_shared_season})"
                 )
                 total_links += 1
                 total_memberships += member_count
                 if args.apply:
                     link.is_active = False
-                    (
-                        db.query(ContestantSeason)
-                        .filter(
-                            ContestantSeason.season_id == season.id,
-                            ContestantSeason.is_active == True,
+                    if scoped_member_ids:
+                        (
+                            db.query(ContestantSeason)
+                            .filter(ContestantSeason.id.in_(scoped_member_ids))
+                            .update({ContestantSeason.is_active: False}, synchronize_session=False)
                         )
-                        .update({ContestantSeason.is_active: False}, synchronize_session=False)
-                    )
 
         if args.apply:
             db.commit()
