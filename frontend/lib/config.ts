@@ -16,7 +16,33 @@ const normalizeApiUrl = (url: string): string => {
   return normalized
 }
 
-const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_BACKEND_URL || ''
+/**
+ * Some .env files mistakenly list two origins separated by a comma.
+ * `new URL("http://localhost:8000,https://myhigh5.com")` throws — pick one explicit origin.
+ */
+function parseNextPublicApiUrl(raw: string, nodeEnv: string | undefined): string {
+  const trimmed = (raw || '').trim()
+  if (!trimmed) return ''
+  const parts = trimmed
+    .split(',')
+    .map((s) => s.trim().replace(/\/+$/, ''))
+    .filter(Boolean)
+  if (parts.length === 1) return parts[0]
+  const prod = nodeEnv === 'production'
+  if (prod) {
+    const httpsPublic = parts.find(
+      (p) => p.startsWith('https://') && !/(localhost|127\.0\.0\.1)/i.test(p)
+    )
+    if (httpsPublic) return httpsPublic
+  }
+  const local = parts.find((p) => /localhost|127\.0\.0\.1/i.test(p))
+  return local ?? parts[0]
+}
+
+const rawApiUrl = parseNextPublicApiUrl(
+  process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_BACKEND_URL || '',
+  process.env.NODE_ENV
+)
 const isProduction = process.env.NODE_ENV === 'production'
 /**
  * Local UI default port 3001 (`npm run dev`); API default 8001. Set NEXT_PUBLIC_API_URL=http://localhost:8001 in
@@ -51,9 +77,16 @@ export function getEffectiveApiUrl(): string {
     const apiLoopback = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1'
     // Remote browser accessing UI on LAN/VPS URL while env still says localhost → fix server target
     if (!pageIsLocal && apiLoopback) {
-      base = normalizeApiUrl(
-        `${window.location.protocol}//${pageHost}:${BACKEND_PUBLIC_PORT}`
-      ).replace(/\/+$/, '')
+      const port = window.location.port
+      const defaultWebPort = port === '' || port === '443' || port === '80'
+      // Production behind nginx on 443/80: API is same host (e.g. /api/v1 → uvicorn), not :8001 in the browser
+      if (defaultWebPort) {
+        base = normalizeApiUrl(window.location.origin).replace(/\/+$/, '')
+      } else {
+        base = normalizeApiUrl(
+          `${window.location.protocol}//${pageHost}:${BACKEND_PUBLIC_PORT}`
+        ).replace(/\/+$/, '')
+      }
     }
   } catch {
     /* keep base */

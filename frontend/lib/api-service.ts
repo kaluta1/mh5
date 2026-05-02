@@ -1,25 +1,17 @@
 
 import axios from 'axios';
-import { API_URL as CONFIG_API_ORIGIN } from './config';
+import { API_URL as CONFIG_API_ORIGIN, getEffectiveApiUrl } from './config';
 
-// Same origin resolution as lib/api.ts (production default Render URL when env is missing).
-// Must not default to localhost in production — that breaks deployed sites and yields empty admin data.
-const getApiUrl = () => {
-    let url =
-        process.env.NEXT_PUBLIC_API_URL ||
-        process.env.NEXT_PUBLIC_BACKEND_URL ||
-        CONFIG_API_ORIGIN ||
-        'http://localhost:8000';
-    if (url.endsWith('/')) {
-        url = url.slice(0, -1);
-    }
-    if (!url.includes('/api/v1')) {
-        url = `${url}/api/v1`;
-    }
-    return url;
-}
+/** Single source of truth: config.ts (handles comma-separated broken env + fallbacks). */
+const getApiV1Base = () => {
+    const origin =
+        typeof window !== 'undefined'
+            ? getEffectiveApiUrl().replace(/\/+$/, '')
+            : CONFIG_API_ORIGIN.replace(/\/+$/, '');
+    return origin.endsWith('/api/v1') ? origin : `${origin}/api/v1`;
+};
 
-const API_URL = getApiUrl();
+const API_URL = getApiV1Base();
 
 // Create axios instance with performance optimizations
 export const api = axios.create({
@@ -35,8 +27,8 @@ export const api = axios.create({
 // Add auth token interceptor
 api.interceptors.request.use(
     (config) => {
-        // Check if running in browser
         if (typeof window !== 'undefined') {
+            config.baseURL = getApiV1Base();
             const token = localStorage.getItem('access_token');
             if (token) {
                 config.headers.Authorization = `Bearer ${token}`;
