@@ -5,7 +5,7 @@ S'exécute toutes les 24h pour vérifier les migrations selon les dates des sais
 """
 from datetime import datetime, timedelta, date
 import calendar
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, FrozenSet, ClassVar
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
 
@@ -69,6 +69,50 @@ class SeasonMigrationService:
             return None
         return SeasonMigrationService._add_months(month_start, offset)
 
+    EAST_AFRICA_COUNTRY_KEYS: ClassVar[FrozenSet[str]] = frozenset(
+        {
+            "tanzania",
+            "tz",
+            "kenya",
+            "ke",
+            "uganda",
+            "ug",
+            "rwanda",
+            "rw",
+            "burundi",
+            "bi",
+        }
+    )
+
+    @staticmethod
+    def _country_key(raw_country: Optional[str]) -> Optional[str]:
+        """Lowercase normalized key for pooling / bloc checks."""
+        canon = SeasonMigrationService._canonical_country_label(raw_country)
+        if not canon:
+            return None
+        return canon.strip().lower()
+
+    @staticmethod
+    def same_regional_voting_pool(
+        voter_country: Optional[str], contestant_country: Optional[str]
+    ) -> Optional[bool]:
+        """
+        True if both countries belong to the same macro bloc (currently East Africa).
+        None means "no macro rule applies" — fall back to continent+profile region checks.
+        """
+        vk = SeasonMigrationService._country_key(voter_country)
+        ck = SeasonMigrationService._country_key(contestant_country)
+        if not vk or not ck:
+            return None
+        in_pool_v = vk in SeasonMigrationService.EAST_AFRICA_COUNTRY_KEYS
+        in_pool_c = ck in SeasonMigrationService.EAST_AFRICA_COUNTRY_KEYS
+        if in_pool_v and in_pool_c:
+            return True
+        if in_pool_v != in_pool_c:
+            # One participant is explicitly in-East-Africa pooling; treat as different pool
+            return False
+        return None
+
     @staticmethod
     def _canonical_country_label(raw_country: Optional[str]) -> Optional[str]:
         if not raw_country:
@@ -80,9 +124,13 @@ class SeasonMigrationService:
             "tz": "Tanzania",
             "tanzania": "Tanzania",
             "ug": "Uganda",
-            "uganda": "Uganda",
+            "ug": "Uganda",
             "ke": "Kenya",
             "kenya": "Kenya",
+            "rw": "Rwanda",
+            "rwanda": "Rwanda",
+            "bi": "Burundi",
+            "burundi": "Burundi",
         }
         return aliases.get(value.lower(), value)
 
@@ -320,43 +368,66 @@ class SeasonMigrationService:
     
     @staticmethod
     def get_or_create_season(
-        db: Session, 
-        level: SeasonLevel, 
+        db: Session,
+        level: SeasonLevel,
         title: Optional[str] = None,
-        round_id: Optional[int] = None
+        round_id: Optional[int] = None,
+        contest_id: Optional[int] = None,
     ) -> ContestSeason:
         """
-        Récupère ou crée une saison pour un niveau donné et un round donné.
+        Resolve or create a ContestSeason.
+
+        When ``contest_id`` is provided, prefer a season already linked via
+        ContestSeasonLink for that contest. If none exists, fall back to any season
+        for (level, round_id) — legacy shared bucket so COUNTRY→REGIONAL pooling keeps
+        one regional roster per round when links already exist.
         """
         if title is None:
             title = f"Saison {level.value.capitalize()}"
-        
-        # Chercher une saison existante pour ce niveau et ce round
+
+        if contest_id is not None:
+            scoped = (
+                db.query(ContestSeason)
+                .join(
+                    ContestSeasonLink,
+                    ContestSeasonLink.season_id == ContestSeason.id,
+                )
+                .filter(
+                    ContestSeason.level == level,
+                    ContestSeason.is_deleted == False,
+                    ContestSeasonLink.contest_id == contest_id,
+                )
+            )
+            if round_id is not None:
+                scoped = scoped.filter(ContestSeason.round_id == round_id)
+            season = scoped.order_by(ContestSeason.id.asc()).first()
+            if season:
+                return season
+
         query = db.query(ContestSeason).filter(
             and_(
                 ContestSeason.level == level,
-                ContestSeason.is_deleted == False
+                ContestSeason.is_deleted == False,
             )
         )
-        
-        if round_id:
+        if round_id is not None:
             query = query.filter(ContestSeason.round_id == round_id)
-            
-        season = query.first()
-        
+
+        season = query.order_by(ContestSeason.id.asc()).first()
+
         if not season:
             season = ContestSeason(
                 title=title,
                 level=level,
                 is_deleted=False,
-                round_id=round_id
+                round_id=round_id,
             )
             db.add(season)
             db.commit()
             db.refresh(season)
-        
+
         return season
-    
+
     @staticmethod
     def get_top_contestants_by_location(
         db: Session,
@@ -1102,9 +1173,22 @@ class SeasonMigrationService:
             location_field = location_field_map.get(to_level)
             if not location_field:
                 return {"error": f"Invalid target level: {to_level.value}"}
-            
-            # Récupérer les meilleurs par localisation (sans stage_id)
-            logger.info(f"  - Selecting top contestants by {location_field} (limit: {limit})")
+
+            pool_qualified = source_qualified_only
+            strict_scope = False
+            if (
+                from_level == SeasonLevel.COUNTRY
+                and to_level == SeasonLevel.REGIONAL
+            ):
+                # Pool top‑N per country for this contest only (ignore flaky is_qualified
+                # churn from shared-country seasons).
+                pool_qualified = False
+                strict_scope = True
+
+            logger.info(
+                f"  - Selecting top contestants by {location_field} (limit: {limit}, "
+                f"qualified_only={pool_qualified}, strict_scope={strict_scope})"
+            )
             grouped_contestants = SeasonMigrationService.get_top_contestants_by_location(
                 db,
                 from_season.id,
@@ -1112,7 +1196,9 @@ class SeasonMigrationService:
                 contest_id=contest_id,
                 limit=limit,
                 stage_id=None,
-                qualified_only=source_qualified_only,
+                diagnostics=False,
+                qualified_only=pool_qualified,
+                strict_season_scope=strict_scope,
             )
             
             logger.info(f"  - Groups found: {len(grouped_contestants)} locations")
@@ -1168,7 +1254,8 @@ class SeasonMigrationService:
             db,
             to_level,
             title=f"Saison {to_level.value.capitalize()} - {contest.name} - {round_name}",
-            round_id=round_id
+            round_id=round_id,
+            contest_id=contest_id,
         )
         logger.info(f"  - Destination season: {to_season.id} (level {to_level.value})")
         print(f"[Migration]   Destination season: {to_season.id}")

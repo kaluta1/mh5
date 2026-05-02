@@ -2576,13 +2576,37 @@ def vote_for_contestant(
         )
     
     # Récupérer la saison active du contestant via ContestantSeason
-    from app.models.contests import ContestSeason, ContestantSeason
-    
-    # Récupérer la saison active pour ce contestant
-    contestant_season_link = db.query(ContestantSeason).filter(
-        ContestantSeason.contestant_id == contestant_id,
-        ContestantSeason.is_active == True
-    ).first()
+    from app.models.contests import ContestSeason, ContestantSeason, ContestSeasonLink
+    from app.services.season_migration import SeasonMigrationService
+
+    contestant_season_link = None
+    if contest_id is not None:
+        contestant_season_link = (
+            db.query(ContestantSeason)
+            .join(ContestSeason, ContestantSeason.season_id == ContestSeason.id)
+            .join(
+                ContestSeasonLink,
+                ContestSeasonLink.season_id == ContestSeason.id,
+            )
+            .filter(
+                ContestantSeason.contestant_id == contestant_id,
+                ContestSeasonLink.contest_id == contest_id,
+                ContestantSeason.is_active == True,
+                ContestSeason.is_deleted == False,
+            )
+            .order_by(ContestSeason.id.desc())
+            .first()
+        )
+    if not contestant_season_link:
+        contestant_season_link = (
+            db.query(ContestantSeason)
+            .filter(
+                ContestantSeason.contestant_id == contestant_id,
+                ContestantSeason.is_active == True,
+            )
+            .order_by(ContestantSeason.joined_at.desc())
+            .first()
+        )
     
     if not contestant_season_link:
         raise HTTPException(
@@ -2788,6 +2812,20 @@ def vote_for_contestant(
                 return msg
             return None
         if lvl in ("regional", "region"):
+            # East Africa pooled roster: nominee country bloc wins over flaky User.region text.
+            pool = SeasonMigrationService.same_regional_voting_pool(
+                getattr(voter, "country", None),
+                ac_country,
+            )
+            if pool is True:
+                return None
+            if pool is False:
+                return (
+                    "You cannot vote for this contestant in this regional phase because "
+                    "your profile country is outside the pooled East African voting area "
+                    "aligned with these nominees (or theirs is)."
+                )
+
             if not compare_with_unknown(voter.continent, ac_continent):
                 msg = (
                     "You cannot vote for this contestant because this season is limited to the same continent and region. "
@@ -3044,25 +3082,47 @@ def replace_fifth_vote(
     Appelé après confirmation de l'utilisateur via le dialogue frontend.
     """
     from app.services.contest_status import contest_status_service
-    from app.models.contests import ContestSeason, ContestantSeason
+    from app.models.contests import ContestSeason, ContestantSeason, ContestSeasonLink
     from sqlalchemy import case
     import logging
+
     logger = logging.getLogger(__name__)
 
-    # Vérifier que le contestant existe
     contestant = crud_contestant.get(db, contestant_id)
     if not contestant:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
 
-    # Vérifier que l'utilisateur ne vote pas pour sa propre candidature
     if contestant.user_id == current_user.id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot vote for your own submission")
 
-    # Récupérer la saison active du contestant
-    contestant_season_link = db.query(ContestantSeason).filter(
-        ContestantSeason.contestant_id == contestant_id,
-        ContestantSeason.is_active == True
-    ).first()
+    contestant_season_link = None
+    if contest_id is not None:
+        contestant_season_link = (
+            db.query(ContestantSeason)
+            .join(ContestSeason, ContestantSeason.season_id == ContestSeason.id)
+            .join(
+                ContestSeasonLink,
+                ContestSeasonLink.season_id == ContestSeason.id,
+            )
+            .filter(
+                ContestantSeason.contestant_id == contestant_id,
+                ContestSeasonLink.contest_id == contest_id,
+                ContestantSeason.is_active == True,
+                ContestSeason.is_deleted == False,
+            )
+            .order_by(ContestSeason.id.desc())
+            .first()
+        )
+    if not contestant_season_link:
+        contestant_season_link = (
+            db.query(ContestantSeason)
+            .filter(
+                ContestantSeason.contestant_id == contestant_id,
+                ContestantSeason.is_active == True,
+            )
+            .order_by(ContestantSeason.joined_at.desc())
+            .first()
+        )
 
     if not contestant_season_link:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This contestant is not active in any season")
