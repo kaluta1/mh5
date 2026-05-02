@@ -1,9 +1,27 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
+/**
+ * Maintenance page when visitors open the site.
+ * Default ON if IS_MAINTENANCE_MODE is unset/empty → show /maintenance.
+ * Set IS_MAINTENANCE_MODE=false | 0 | off | no (case-insensitive) to serve the full app.
+ */
+function isMaintenanceModeEnabled(): boolean {
+    const v = process.env.IS_MAINTENANCE_MODE?.trim().toLowerCase()
+    if (v === undefined || v === '') {
+        return true
+    }
+    if (['false', '0', 'off', 'no'].includes(v)) {
+        return false
+    }
+    if (['true', '1', 'on', 'yes'].includes(v)) {
+        return true
+    }
+    return true
+}
+
 export function middleware(request: NextRequest) {
-    // Check if maintenance mode is enabled
-    const isMaintenanceMode = process.env.IS_MAINTENANCE_MODE?.trim() === 'true'
+    const isMaintenanceMode = isMaintenanceModeEnabled()
 
     // If maintenance mode is active
     if (isMaintenanceMode) {
