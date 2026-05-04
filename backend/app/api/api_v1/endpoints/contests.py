@@ -553,12 +553,15 @@ def read_contest(
     *,
     db: Session = Depends(get_db),
     contest_id: int,
-    filter_country: str = Query(None, description="Filtrer par pays"),
-    filter_region: str = Query(None, description="Filtrer par région"),
-    filter_continent: str = Query(None, description="Filtrer par continent"),
-    entry_type: str = Query(None, description="Filtrer par type: nomination ou participation"),
+    filter_country: Optional[str] = Query(None, alias="filterCountry", description="Filtrer par pays"),
+    country: Optional[str] = Query(None, description="Legacy: filtrer par pays (même effet que filterCountry)"),
+    filter_region: Optional[str] = Query(None, alias="filterRegion", description="Filtrer par région"),
+    filter_continent: Optional[str] = Query(None, alias="filterContinent", description="Filtrer par continent"),
+    continent_q: Optional[str] = Query(None, alias="continent", description="Legacy: filtrer par continent"),
+    entry_type: Optional[str] = Query(None, alias="entryType", description="Filtrer par type: nomination ou participation"),
     round_id: Optional[int] = Query(
         None,
+        alias="roundId",
         description="Calendar round (e.g. March vs April). Only contestants for this round are listed.",
     ),
     current_user: Optional[Any] = Depends(get_current_active_user_optional),
@@ -584,15 +587,18 @@ def read_contest(
             detail="Concours non trouvé"
         )
     
+    merged_country = filter_country if filter_country is not None else country
+    merged_continent = filter_continent if filter_continent is not None else continent_q
+
     # Utiliser la méthode simplifiée qui utilise directement les champs du Contestant
     current_user_id = current_user.id if current_user else None
     enriched_contest = contest.get_contest_with_enriched_contestants(
         db=db, 
         contest_id=contest_id, 
         current_user_id=current_user_id,
-        filter_country=filter_country,
+        filter_country=merged_country,
         filter_region=filter_region,
-        filter_continent=filter_continent,
+        filter_continent=merged_continent,
         entry_type=entry_type,
         round_id=round_id,
     )

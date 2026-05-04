@@ -78,6 +78,62 @@ def east_africa_regional_sql_predicate():
     return regional_voting_pools_sql_predicate()
 
 
+def _nomination_dashboard_level_for_round(db: Session, round_obj: Any, contest_obj: Contest) -> str:
+    """
+    Match rounds._contest_card_level_for_round: nomination contests show the highest migrated
+    level among REGIONAL → CONTINENT → GLOBAL only when its active link passes calendar gates;
+    otherwise \"country\". Keeps dashboard cards and contest detail roster on the same phase.
+    """
+    if _normalize_contest_mode(getattr(contest_obj, "contest_mode", None)) != "nomination":
+        return "city"
+    from app.models.contests import ContestSeason, ContestSeasonLink, SeasonLevel
+    from app.services.season_migration import SeasonMigrationService
+
+    today = date.today()
+    for level in (SeasonLevel.GLOBAL, SeasonLevel.CONTINENT, SeasonLevel.REGIONAL):
+        min_start = SeasonMigrationService._nomination_min_start_for_level(round_obj, level)
+        if min_start and today < min_start:
+            continue
+        active_link = (
+            db.query(ContestSeasonLink.id)
+            .join(ContestSeason, ContestSeason.id == ContestSeasonLink.season_id)
+            .filter(
+                ContestSeasonLink.contest_id == contest_obj.id,
+                ContestSeasonLink.is_active == True,
+                ContestSeason.round_id == round_obj.id,
+                ContestSeason.level == level,
+                ContestSeason.is_deleted == False,
+            )
+            .first()
+        )
+        if active_link:
+            return level.value if hasattr(level, "value") else str(level).lower()
+    return "country"
+
+
+def _pair_matches_nomination_dashboard_level(seas: Any, ui_level_raw: str) -> bool:
+    """Map ContestSeason.level to the dashboard migration phase string."""
+    if seas is None or not hasattr(seas, "level"):
+        return False
+    lvl = seas.level.value if hasattr(seas.level, "value") else str(seas.level)
+    lvl_lc = lvl.lower().strip()
+    ui = ui_level_raw.lower().strip()
+
+    # Align aliases with UI / DB variance
+    if ui in ("continent", "continental"):
+        return lvl_lc in ("continent", "continental")
+    if ui in ("regional", "region"):
+        return lvl_lc in ("regional", "region")
+    if ui == "global":
+        return lvl_lc == "global"
+    if ui == "country":
+        # Nomination may still store CITY season rows alongside country-scope UX.
+        return lvl_lc in ("country", "city")
+    if ui == "city":
+        return lvl_lc == "city"
+    return lvl_lc == ui
+
+
 def resolve_nomination_display_season_for_contest_round(
     db: Session,
     contest_obj: Contest,
@@ -149,22 +205,36 @@ def resolve_nomination_display_season_for_contest_round(
     if not pairs:
         return None, None
 
+    round_obj_sel = pairs[0][1].round if pairs else None
+    dashboard_level = "country"
+    if round_obj_sel is not None:
+        dashboard_level = _nomination_dashboard_level_for_round(db, round_obj_sel, contest_obj)
+
+    matched = [(sl, seas) for sl, seas in pairs if _pair_matches_nomination_dashboard_level(seas, dashboard_level)]
+
     level_rank = {
         "city": 1,
         "country": 2,
         "regional": 3,
+        "region": 3,
         "continent": 4,
+        "continental": 4,
         "global": 5,
     }
+
+    selection_pool = matched if matched else list(pairs)
     season_link, season = max(
-        pairs,
-        key=lambda pr: level_rank.get(
-            (
-                pr[1].level.value
-                if hasattr(pr[1].level, "value")
-                else str(pr[1].level)
-            ).lower(),
-            0,
+        selection_pool,
+        key=lambda pr: (
+            level_rank.get(
+                (
+                    pr[1].level.value
+                    if hasattr(pr[1].level, "value")
+                    else str(pr[1].level)
+                ).lower(),
+                0,
+            ),
+            pr[1].id or 0,
         ),
     )
     return season_link, season
