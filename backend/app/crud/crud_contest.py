@@ -1462,13 +1462,12 @@ class CRUDContest:
         effective_continent = None
         effective_region = None
         
-        # Check for explicit "ALL" intention
-        # If user explicitly requests "all", we should NOT fallback to their location
-        # Treat empty string, None, or "all" as explicit "show all" (no location-based filtering)
-        filter_country_str = str(filter_country).lower().strip() if filter_country else ""
-        filter_continent_str = str(filter_continent).lower().strip() if filter_continent else ""
-        is_explicit_all_country = not filter_country_str or filter_country_str == "all"
-        is_explicit_all_continent = not filter_continent_str or filter_continent_str == "all"
+        # Check for explicit "ALL" intention.
+        # Empty / missing filters should still allow fallback to user location.
+        filter_country_str = str(filter_country).lower().strip() if filter_country is not None else ""
+        filter_continent_str = str(filter_continent).lower().strip() if filter_continent is not None else ""
+        is_explicit_all_country = filter_country is not None and filter_country_str == "all"
+        is_explicit_all_continent = filter_continent is not None and filter_continent_str == "all"
         
         if is_explicit_all_country:
             # User wants ALL countries
