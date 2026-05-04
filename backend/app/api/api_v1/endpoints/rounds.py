@@ -1,7 +1,6 @@
 from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import or_, func
+from sqlalchemy.orm import Session
 from datetime import date, datetime
 import logging
 import traceback
@@ -12,7 +11,6 @@ from app.schemas import round as round_schema
 from app.api import deps
 from app.models.round import Round, RoundStatus
 from app.scripts.generate_monthly_rounds import generate_monthly_round
-from app.crud.crud_contest import _get_country_match_patterns
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -321,28 +319,66 @@ def _enrich_round_data(
             
             contests_count = len(valid_contests)
 
-            # Pre-sort contests by participant count (desc) BEFORE pagination
-            # OPTIMIZED: Single batch query instead of N individual queries
-            from app.models.contests import Contestant as ContestantModel
+            # Pre-sort contests by participant count (desc) BEFORE pagination.
+            # Use the same CRUD path as contest detail to keep card counts stable
+            # across refresh and aligned with opened contest pages.
             contest_participant_counts = {}
+            valid_contests_by_id = {vc.id: vc for vc in valid_contests}
+            valid_contest_ids = set(valid_contests_by_id.keys())
+
             if valid_contests:
-                valid_contests_by_id = {vc.id: vc for vc in valid_contests}
-                valid_ids = [vc.id for vc in valid_contests]
-                valid_contest_ids = set(valid_ids)
-                mode_map = {
-                    vc.id: _normalize_contest_mode(getattr(vc, "contest_mode", "participation"))
-                    for vc in valid_contests
-                }
-
-                def _entry_type_for_contest(cid: int) -> str:
-                    return "nomination" if mode_map.get(cid) == "nomination" else "participation"
-
-                # One ContestSeason per contest (for resolve). Shared linked season rows
-                # must not be bucketed to a single contest for counts or edit flags.
-                season_by_contest_id: dict = {}
                 try:
-                    from app.models.contests import ContestSeason, ContestSeasonLink
+                    current_user_obj = None
+                    if user_id:
+                        current_user_obj = (
+                            db.query(models.User)
+                            .filter(models.User.id == user_id)
+                            .first()
+                        )
 
+                    for vc in valid_contests:
+                        c_mode = _normalize_contest_mode(getattr(vc, "contest_mode", "participation"))
+                        entry_type = "nomination" if c_mode == "nomination" else "participation"
+                        stats = crud.contest.enrich_contest_with_stats(
+                            db,
+                            vc,
+                            current_user=current_user_obj,
+                            filter_country=filter_country,
+                            filter_region=filter_region,
+                            filter_continent=filter_continent,
+                            include_top_contestants=False,
+                            entry_type=entry_type,
+                            round_id=round_id,
+                        )
+                        contest_participant_counts[vc.id] = int(
+                            stats.get("participants_count", stats.get("entries_count", 0))
+                        )
+                except Exception as e:
+                    logger.warning(f"Participant count build failed: {e}")
+                    contest_participant_counts = {vc.id: 0 for vc in valid_contests}
+
+            valid_contests.sort(key=lambda c: contest_participant_counts.get(c.id, 0), reverse=True)
+
+            # Apply pagination AFTER sorting
+            paginated_contests = valid_contests[contest_skip:contest_skip + contest_limit]
+            
+            # Batch query: find all contests where current user has participated in this round
+            # IMPORTANT: "Edit" must be shown only for the exact contest/category where
+            # the user already has a nomination/participation, not every contest sharing voting_type.
+            user_contested_contest_ids: set = set()
+            if user_id:
+                try:
+                    from app.models.contests import Contestant, ContestSeason, ContestSeasonLink
+                    from app.api.api_v1.endpoints import contestant as contestant_ep
+
+                    def _entry_type_for_contest(cid: int) -> str:
+                        c = valid_contests_by_id.get(cid)
+                        if not c:
+                            return "participation"
+                        cm = _normalize_contest_mode(getattr(c, "contest_mode", "participation"))
+                        return "nomination" if cm == "nomination" else "participation"
+
+                    season_by_contest_id: dict = {}
                     if valid_contest_ids:
                         rows = (
                             db.query(ContestSeasonLink.contest_id, ContestSeason)
@@ -357,180 +393,32 @@ def _enrich_round_data(
                             .all()
                         )
                         for cid, s in rows:
-                            if (
-                                cid is not None
-                                and s is not None
-                                and cid not in season_by_contest_id
-                            ):
+                            if cid is not None and s is not None and cid not in season_by_contest_id:
                                 season_by_contest_id[cid] = s
                         for cid in valid_contest_ids:
                             season_by_contest_id.setdefault(cid, None)
-                except Exception:
-                    season_by_contest_id = {
-                        c: None for c in valid_contest_ids
-                    } if valid_contest_ids else {}
 
-                from app.api.api_v1.endpoints import contestant as contestant_ep
+                    unique_seasons: dict = {}
+                    for _cid, _se in season_by_contest_id.items():
+                        if _se is not None and _se.id not in unique_seasons:
+                            unique_seasons[_se.id] = _se
 
-                unique_seasons: dict = {}
-                for _cid, _se in season_by_contest_id.items():
-                    if _se is not None and _se.id not in unique_seasons:
-                        unique_seasons[_se.id] = _se
-
-                try:
-                    contest_participant_counts = {cid: 0 for cid in valid_ids}
-                    uq = db.query(ContestantModel).filter(
-                        ContestantModel.round_id == round_id,
-                        ContestantModel.is_deleted == False,
-                    )
-                    if filter_country and filter_country != "all":
-                        patterns = _get_country_match_patterns(filter_country)
-                        country_conds = []
-                        for pat in patterns:
-                            country_conds.append(ContestantModel.country.ilike(pat))
-                        if country_conds:
-                            uq = uq.filter(or_(*country_conds))
-                    if filter_continent and filter_continent != "all":
-                        uq = uq.filter(
-                            ContestantModel.continent.ilike(
-                                f"%{str(filter_continent).strip()}%"
-                            )
-                        )
-                    if filter_region and str(filter_region).strip().lower() not in ("", "all"):
-                        from app.services.season_migration import SeasonMigrationService
-
-                        pool_id = SeasonMigrationService.regional_pool_id_for_region_label(
-                            filter_region
-                        )
-                        region_conds = [
-                            ContestantModel.region.ilike(
-                                f"%{str(filter_region).strip()}%"
-                            )
-                        ]
-                        if pool_id and pool_id in SeasonMigrationService.REGIONAL_VOTING_POOLS:
-                            pool_keys = tuple(
-                                SeasonMigrationService.REGIONAL_VOTING_POOLS[pool_id]
-                            )
-                            country_key = func.lower(
-                                func.trim(
-                                    func.coalesce(
-                                        ContestantModel.country,
-                                        ContestantModel.nominator_country,
-                                        "",
-                                    )
-                                )
-                            )
-                            region_conds.append(country_key.in_(pool_keys))
-                        uq = uq.filter(or_(*region_conds))
-                    all_ucs_in_round = uq.all()
-
-                    for uc in all_ucs_in_round:
-                        target: Optional[int] = None
-                        cid_direct = getattr(uc, "season_id", None)
-                        if (
-                            cid_direct in valid_contest_ids
-                            and getattr(uc, "entry_type", "participation")
-                            == _entry_type_for_contest(cid_direct)
-                        ):
-                            target = cid_direct
-                        if target is None:
-                            for _s in unique_seasons.values():
-                                resolved = contestant_ep._resolve_contest_for_contestant_vote(
-                                    db, uc, _s
-                                )
-                                if (
-                                    not resolved
-                                    or resolved.id not in valid_contest_ids
-                                ):
-                                    continue
-                                if getattr(uc, "entry_type", "participation") != _entry_type_for_contest(
-                                    resolved.id
-                                ):
-                                    continue
-                                target = resolved.id
-                                break
-                        if target is not None:
-                            c_o = valid_contests_by_id.get(target)
-                            if c_o is not None and round_obj is not None:
-                                from app.services.season_migration import SeasonMigrationService
-
-                                card_level = _contest_card_level_for_round(
-                                    db,
-                                    round_obj,
-                                    c_o,
-                                    _normalize_contest_mode(getattr(c_o, "contest_mode", "participation")),
-                                )
-                                cm = _normalize_contest_mode(getattr(c_o, "contest_mode", "participation"))
-                                if card_level == "regional" and cm == "nomination":
-                                    if not SeasonMigrationService.nominee_in_regional_voting_pool(uc):
-                                        continue
-                                    if (
-                                        filter_region
-                                        and str(filter_region).strip().lower() not in ("", "all")
-                                    ):
-                                        pool_filter = (
-                                            SeasonMigrationService.regional_pool_id_for_region_label(
-                                                filter_region
-                                            )
-                                        )
-                                        if (
-                                            pool_filter
-                                            and SeasonMigrationService.nominee_regional_pool_id(uc)
-                                            != pool_filter
-                                        ):
-                                            continue
-                            contest_participant_counts[target] = (
-                                contest_participant_counts.get(target, 0) + 1
-                            )
-                except Exception as e:
-                    logger.warning(f"Batch count failed: {e}")
-                    try:
-                        contest_participant_counts = {
-                            cid: 0
-                            for cid in [vc.id for vc in valid_contests]
-                        }
-                    except Exception:
-                        pass
-
-            valid_contests.sort(key=lambda c: contest_participant_counts.get(c.id, 0), reverse=True)
-
-            # Apply pagination AFTER sorting
-            paginated_contests = valid_contests[contest_skip:contest_skip + contest_limit]
-            
-            # Batch query: find all contests where current user has participated in this round
-            # IMPORTANT: "Edit" must be shown only for the exact contest/category where
-            # the user already has a nomination/participation, not every contest sharing voting_type.
-            user_contested_contest_ids: set = set()
-            if user_id:
-                try:
-                    from app.models.contests import Contestant
-                    
-                    # Get all user contestants once, then restrict to this round
                     all_user_contestants = db.query(Contestant).filter(
                         Contestant.user_id == user_id,
-                        Contestant.is_deleted == False
+                        Contestant.is_deleted == False,
                     ).all()
-                    
-                    # Now check for this specific round, filtered by entry_type
+
                     if valid_contests:
-                        # Get user contestants for THIS round only
                         user_contestants = [uc for uc in all_user_contestants if uc.round_id == round_id]
-                        # Déterminer le entry_type attendu pour ce tab
-                        expected_type = 'nomination' if contest_mode == 'nomination' else 'participation'
-                        # Reuse same ContestSeason + resolve() scope as card participant counts
-                        # (season_by_contest_id, unique_seasons, valid_contest_ids, contestant_ep).
+                        expected_type = "nomination" if contest_mode == "nomination" else "participation"
                         contested_ids: set = set()
                         for uc in user_contestants:
-                            if (
-                                getattr(uc, "entry_type", "participation")
-                                != expected_type
-                            ):
+                            if getattr(uc, "entry_type", "participation") != expected_type:
                                 continue
                             cid_direct = getattr(uc, "season_id", None)
                             if (
                                 cid_direct in valid_contest_ids
-                                and getattr(uc, "entry_type", "participation")
-                                == _entry_type_for_contest(cid_direct)
+                                and _entry_type_for_contest(cid_direct) == expected_type
                             ):
                                 contested_ids.add(cid_direct)
                                 continue
@@ -541,8 +429,10 @@ def _enrich_round_data(
                                 if (
                                     resolved
                                     and resolved.id in valid_contest_ids
+                                    and _entry_type_for_contest(resolved.id) == expected_type
                                 ):
                                     contested_ids.add(resolved.id)
+                                    break
                         user_contested_contest_ids = contested_ids
                 except Exception as e:
                     logger.warning(f"Error batch-checking user participation for round {round_id}: {str(e)}")

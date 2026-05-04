@@ -1246,6 +1246,8 @@ class CRUDContest:
             "created_at": contest.created_at,
             "updated_at": contest.updated_at,
             "entries_count": total_entries_count,  # Always show total (not geo-filtered) for header display
+            # Geo-filter-aware roster count (matches list cards when filters apply)
+            "participants_count": entries_count,
             "total_votes": total_votes,
             "total_points": total_points_contest,
             # Season dates
