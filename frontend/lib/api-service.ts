@@ -120,9 +120,16 @@ export const ApiService = {
     }) => {
         const response = await api.get<Contest>(`/contests/${id}`, {
             params: {
-                filter_country: params?.filterCountry,
-                filter_region: params?.filterRegion,
-                filter_continent: params?.filterContinent,
+                // Canonical query keys used by backend endpoint aliases
+                filterCountry: params?.filterCountry,
+                filterRegion: params?.filterRegion,
+                filterContinent: params?.filterContinent,
+                entryType: params?.entryType,
+                roundId: params?.roundId,
+                // Keep legacy keys for backward-compatible backends/routes
+                country: params?.filterCountry,
+                region: params?.filterRegion,
+                continent: params?.filterContinent,
                 entry_type: params?.entryType,
                 round_id: params?.roundId,
                 ...(params?._t != null ? { _t: params._t } : {}),
