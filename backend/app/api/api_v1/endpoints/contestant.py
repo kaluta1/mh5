@@ -2767,39 +2767,11 @@ def vote_for_contestant(
         season_level = "country"
 
     def _season_voting_window_status() -> tuple[Optional[bool], str]:
-        """Use stage-specific round dates for migrated levels before legacy round voting dates."""
-        from datetime import datetime, time as time_type
-
+        """Align with ContestStatusService.season_stage_voting_status (April submissions vs May vote)."""
         round_obj = getattr(season, "round", None)
-        if not round_obj:
-            return None, ""
-
         lvl = (season_level or "").lower()
-        window_fields = {
-            "city": ("city_season_start_date", "city_season_end_date"),
-            "country": ("country_season_start_date", "country_season_end_date"),
-            "regional": ("regional_start_date", "regional_end_date"),
-            "region": ("regional_start_date", "regional_end_date"),
-            "continent": ("continental_start_date", "continental_end_date"),
-            "global": ("global_start_date", "global_end_date"),
-        }
-        fields = window_fields.get(lvl)
-        if not fields:
-            return None, ""
-
-        start_date = getattr(round_obj, fields[0], None)
-        end_date = getattr(round_obj, fields[1], None)
-        if not start_date or not end_date:
-            return None, ""
-
         now_vote = contest_status_service._utc_now()
-        start_dt = datetime.combine(start_date, time_type.min)
-        end_dt = datetime.combine(end_date, time_type(23, 59, 59))
-        if now_vote < start_dt:
-            return False, f"Voting for {round_obj.name} {lvl} level starts on {start_date}."
-        if now_vote > end_dt:
-            return False, f"Voting for {round_obj.name} {lvl} level ended on {end_date}."
-        return True, ""
+        return contest_status_service.season_stage_voting_status(round_obj, lvl, now_vote)
 
     season_window_open, season_window_message = _season_voting_window_status()
     contest_mode_norm = _normalize_contest_mode(getattr(contest, "contest_mode", None))
@@ -3285,36 +3257,10 @@ def replace_fifth_vote(
         season_level = "country"
 
     def _season_voting_window_status_replace() -> tuple[Optional[bool], str]:
-        from datetime import datetime, time as time_type
-
         round_obj = getattr(season, "round", None)
-        if not round_obj:
-            return None, ""
         lvl = (season_level or "").lower()
-        window_fields = {
-            "city": ("city_season_start_date", "city_season_end_date"),
-            "country": ("country_season_start_date", "country_season_end_date"),
-            "regional": ("regional_start_date", "regional_end_date"),
-            "region": ("regional_start_date", "regional_end_date"),
-            "continent": ("continental_start_date", "continental_end_date"),
-            "global": ("global_start_date", "global_end_date"),
-        }
-        fields = window_fields.get(lvl)
-        if not fields:
-            return None, ""
-        start_date = getattr(round_obj, fields[0], None)
-        end_date = getattr(round_obj, fields[1], None)
-        if not start_date or not end_date:
-            return None, ""
-
         now_vote = contest_status_service._utc_now()
-        start_dt = datetime.combine(start_date, time_type.min)
-        end_dt = datetime.combine(end_date, time_type(23, 59, 59))
-        if now_vote < start_dt:
-            return False, f"Voting for {round_obj.name} {lvl} level starts on {start_date}."
-        if now_vote > end_dt:
-            return False, f"Voting for {round_obj.name} {lvl} level ended on {end_date}."
-        return True, ""
+        return contest_status_service.season_stage_voting_status(round_obj, lvl, now_vote)
 
     season_window_open, season_window_message = _season_voting_window_status_replace()
     contest_mode_norm = _normalize_contest_mode(getattr(contest, "contest_mode", None))

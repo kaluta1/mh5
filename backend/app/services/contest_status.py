@@ -4,7 +4,7 @@ Service pour gérer l'état des contests (submission/voting open/closed)
 import asyncio
 import logging
 from datetime import date, datetime, time, timedelta
-from typing import Optional
+from typing import Any, Optional, Tuple
 from sqlalchemy.orm import Session
 from app.db.session import SessionLocal
 from app.models.contest import Contest
@@ -110,6 +110,65 @@ class ContestStatusService:
         if nom_close > ve:
             return True
         return when >= nom_close
+
+    @staticmethod
+    def season_stage_voting_status(
+        round_obj: Any,
+        season_level_lower: str,
+        when: datetime,
+    ) -> Tuple[Optional[bool], str]:
+        """
+        Stage fields on Round (e.g. country_season_start_date / country_season_end_date) describe
+        one calendar slice; country voting for an April round often starts the next month
+        (voting_start_date / voting_end_date). If the stage window says closed or not started
+        but round_voting_open_at is True, treat voting as open. If stage dates are missing,
+        fall back to the round voting calendar when present.
+        """
+        if not round_obj:
+            return None, ""
+
+        lvl = (season_level_lower or "").lower()
+        window_fields = {
+            "city": ("city_season_start_date", "city_season_end_date"),
+            "country": ("country_season_start_date", "country_season_end_date"),
+            "regional": ("regional_start_date", "regional_end_date"),
+            "region": ("regional_start_date", "regional_end_date"),
+            "continent": ("continental_start_date", "continental_end_date"),
+            "global": ("global_start_date", "global_end_date"),
+        }
+        fields = window_fields.get(lvl)
+
+        rv_open: Optional[bool] = None
+        if getattr(round_obj, "voting_start_date", None) and getattr(
+            round_obj, "voting_end_date", None
+        ):
+            rv_open = ContestStatusService.round_voting_open_at(round_obj, when)
+
+        if not fields:
+            if rv_open:
+                return True, ""
+            return None, ""
+
+        start_date = getattr(round_obj, fields[0], None)
+        end_date = getattr(round_obj, fields[1], None)
+        if not start_date or not end_date:
+            if rv_open:
+                return True, ""
+            return None, ""
+
+        start_dt = datetime.combine(start_date, time.min)
+        end_dt = datetime.combine(end_date, time(23, 59, 59))
+        rname = getattr(round_obj, "name", None) or "This round"
+
+        if when < start_dt:
+            if rv_open:
+                return True, ""
+            return False, f"Voting for {rname} {lvl} level starts on {start_date}."
+        if when > end_dt:
+            if rv_open:
+                return True, ""
+            return False, f"Voting for {rname} {lvl} level ended on {end_date}."
+        return True, ""
 
     @staticmethod
     def update_contest_statuses(db: Session) -> dict:

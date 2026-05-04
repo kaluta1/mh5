@@ -44,12 +44,11 @@ def _to_date_value(value: Any) -> Optional[date]:
 
 def _effective_is_voting_open(r_data: dict, round_obj: Optional[Round]) -> bool:
     """
-    Voting is only considered open for API/UI when the DB flag is true and the
-    round is not completed and (when dates exist) today is within the voting window.
-    Prevents stale is_voting_open from showing for past months (e.g. Jan/Feb after March opens).
+    Voting is open when the round is not completed and the voting calendar says so
+    (voting_start_date / voting_end_date + grace rules). The DB is_voting_open flag
+    is still honored when true, but must not block voting when automation lags
+    (e.g. April country vote opens 01 May while is_voting_open is still false).
     """
-    if not r_data.get("is_voting_open"):
-        return False
     if round_obj is not None:
         st = round_obj.status
         st_val = st.value if hasattr(st, "value") else str(st)
@@ -59,6 +58,19 @@ def _effective_is_voting_open(r_data: dict, round_obj: Optional[Round]) -> bool:
         st_raw = r_data.get("status")
         if st_raw and str(st_raw).lower() == "completed":
             return False
+
+    from app.services.contest_status import contest_status_service
+
+    now = contest_status_service._utc_now()
+    ro = round_obj
+    if ro is not None and getattr(ro, "voting_start_date", None) and getattr(
+        ro, "voting_end_date", None
+    ):
+        if contest_status_service.round_voting_open_at(ro, now):
+            return True
+
+    if not r_data.get("is_voting_open"):
+        return False
     today = date.today()
     ve = _to_date_value(r_data.get("voting_end_date"))
     if ve is not None and today > ve:

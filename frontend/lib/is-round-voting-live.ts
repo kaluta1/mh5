@@ -12,20 +12,9 @@ type RoundVotingFields = {
  * - When `allRounds` is provided, only the latest round (max id) among those flagged open stays eligible,
  *   so stale is_voting_open on past months (Jan/Feb) does not show the label once a newer month is live.
  */
-export function isRoundVotingLive(round: RoundVotingFields, allRounds?: RoundVotingFields[]): boolean {
-  if (!round.is_voting_open) return false
-  if (round.status === 'completed') return false
-
-  if (allRounds && allRounds.length > 0) {
-    const candidates = allRounds.filter((r) => r.is_voting_open && r.status !== 'completed')
-    if (candidates.length === 0) return false
-    const maxId = Math.max(...candidates.map((r) => r.id))
-    if (round.id !== maxId) return false
-  }
-
+function _calendarVotingWindowOpen(round: RoundVotingFields): boolean {
   const today = new Date()
   const todayMid = new Date(today.getFullYear(), today.getMonth(), today.getDate())
-
   const endRaw = round.voting_end_date
   if (endRaw) {
     const end = new Date(endRaw)
@@ -34,7 +23,6 @@ export function isRoundVotingLive(round: RoundVotingFields, allRounds?: RoundVot
       if (todayMid > endDay) return false
     }
   }
-
   const startRaw = round.voting_start_date
   if (startRaw) {
     const start = new Date(startRaw)
@@ -43,6 +31,25 @@ export function isRoundVotingLive(round: RoundVotingFields, allRounds?: RoundVot
       if (todayMid < startDay) return false
     }
   }
-
   return true
+}
+
+export function isRoundVotingLive(round: RoundVotingFields, allRounds?: RoundVotingFields[]): boolean {
+  const calendarOpen =
+    !!(round.voting_start_date && round.voting_end_date) && _calendarVotingWindowOpen(round)
+  if (!round.is_voting_open && !calendarOpen) return false
+  if (round.status === 'completed') return false
+
+  if (allRounds && allRounds.length > 0) {
+    const candidates = allRounds.filter((r) => {
+      const cal =
+        !!(r.voting_start_date && r.voting_end_date) && _calendarVotingWindowOpen(r)
+      return (Boolean(r.is_voting_open) || cal) && r.status !== 'completed'
+    })
+    if (candidates.length === 0) return false
+    const maxId = Math.max(...candidates.map((r) => r.id))
+    if (round.id !== maxId) return false
+  }
+
+  return _calendarVotingWindowOpen(round)
 }

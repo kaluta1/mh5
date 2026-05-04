@@ -2067,6 +2067,15 @@ class CRUDContest:
 
         # Helper : vote ouvert pour le round (même logique que round_voting_open_at : grâce nomination, etc.)
         def _is_voting_open_for_round(c):
+            now_vote = contest_status_service._utc_now()
+            # Prefer primary voting calendar on the season's round (e.g. May vote for April pool)
+            # before narrow country_season_* slices that can end before voting_start_date.
+            ro_season = getattr(season, "round", None) if season else None
+            if ro_season and getattr(ro_season, "voting_start_date", None) and getattr(
+                ro_season, "voting_end_date", None
+            ):
+                if contest_status_service.round_voting_open_at(ro_season, now_vote):
+                    return True
             if _is_voting_open_for_active_season():
                 return True
             if not c.round_id:
@@ -2076,7 +2085,6 @@ class CRUDContest:
             r = db.query(RoundModel).filter(RoundModel.id == c.round_id).first()
             if not r or not r.voting_start_date or not r.voting_end_date:
                 return True
-            now_vote = contest_status_service._utc_now()
             return contest_status_service.round_voting_open_at(r, now_vote)
 
         # Construire la liste des contestants enrichis
