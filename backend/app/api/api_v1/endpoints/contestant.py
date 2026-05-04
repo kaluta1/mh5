@@ -2809,9 +2809,11 @@ def vote_for_contestant(
             detail=season_window_message,
         )
     elif season_window_open is None:
-        # For nomination, do not fallback to generic contest voting flags:
-        # stage windows must be explicit to avoid opening votes on submission months.
-        if contest_mode_norm == "nomination":
+        # For nomination COUNTRY/CITY phase, do not fallback to generic contest voting flags:
+        # this avoids opening votes on submission months (e.g. May country nominations).
+        # For migrated phases (regional/continent/global), keep legacy fallback so
+        # March regional voting shown in April can proceed when stage dates are missing.
+        if contest_mode_norm == "nomination" and (season_level or "").lower() in ("country", "city"):
             level_lbl = season_level or "this"
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -3319,7 +3321,7 @@ def replace_fifth_vote(
     if season_window_open is False:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=season_window_message)
     elif season_window_open is None:
-        if contest_mode_norm == "nomination":
+        if contest_mode_norm == "nomination" and (season_level or "").lower() in ("country", "city"):
             level_lbl = season_level or "this"
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
