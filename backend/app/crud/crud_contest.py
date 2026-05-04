@@ -881,7 +881,7 @@ class CRUDContest:
                         conds.append(User.country.ilike(pat))
                     entries_query = entries_query.join(User).filter(or_(*conds))
             if filter_region:
-                region_conds = [func.lower(Contestant.region) == func.lower(filter_region)]
+                region_conds: list = []
                 if allow_explicit_region_filter:
                     try:
                         from app.services.season_migration import SeasonMigrationService
@@ -898,11 +898,13 @@ class CRUDContest:
                                     )
                                 )
                             )
-                            region_conds.append(country_key.in_(pool_keys))
+                            region_conds = [country_key.in_(pool_keys)]
                     except Exception as exc:
                         logger.warning(
                             f"Could not build regional count filter for {filter_region}: {exc}"
                         )
+                if not region_conds:
+                    region_conds = [func.lower(Contestant.region) == func.lower(filter_region)]
                 entries_query = entries_query.filter(or_(*region_conds))
             if filter_continent:
                 if not skip_explicit_geo_filters:
@@ -1622,10 +1624,7 @@ class CRUDContest:
                 location_conditions.append(or_(*conds))
             if effective_region:
                 logger.info(f"[get_contest_with_enriched_contestants] Filtering by region: '{effective_region}'")
-                region_conditions = [
-                    Contestant.region.ilike(f"%{effective_region}%"),
-                    User.region.ilike(f"%{effective_region}%")
-                ]
+                region_conditions: list = []
                 if season_level_for_filter in ("regional", "region"):
                     try:
                         from app.services.season_migration import SeasonMigrationService
@@ -1643,12 +1642,17 @@ class CRUDContest:
                                     )
                                 )
                             )
-                            region_conditions.append(country_key.in_(pool_keys))
+                            region_conditions = [country_key.in_(pool_keys)]
                     except Exception as exc:
                         logger.warning(
                             "[get_contest_with_enriched_contestants] "
                             f"Could not build regional pool filter for {effective_region}: {exc}"
                         )
+                if not region_conditions:
+                    region_conditions = [
+                        Contestant.region.ilike(f"%{effective_region}%"),
+                        User.region.ilike(f"%{effective_region}%"),
+                    ]
                 location_conditions.append(or_(*region_conditions))
             elif effective_continent:
                 logger.info(f"[get_contest_with_enriched_contestants] Filtering by continent: '{effective_continent}'")

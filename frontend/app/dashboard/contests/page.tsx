@@ -558,12 +558,16 @@ function ContestsPageContent() {
   // or the detail API filters to Tanzania-only while the card count shows full East Africa pool.
   const shouldPassCountryNavParam = React.useCallback(
     (contestStatus: unknown) => {
-      if (!filterCountry || filterCountry === 'all') return false
       const s = String(contestStatus ?? '').toLowerCase()
       if (['regional', 'continent', 'continental', 'global'].includes(s)) return false
-      return true
+      if (categoryTab === 'nomination') {
+        const explicit =
+          !!(filterCountry && filterCountry !== 'all' && filterCountry !== '')
+        return explicit || !!user?.country
+      }
+      return !!(filterCountry && filterCountry !== 'all' && filterCountry !== '')
     },
-    [filterCountry]
+    [filterCountry, user?.country, categoryTab]
   )
 
   // Raw Contests List (Before filtering by type) - Now uses allContests for infinite scroll
@@ -883,28 +887,44 @@ function ContestsPageContent() {
                   }
                   onViewContestants={() => {
                     const params = new URLSearchParams()
-                    params.set('roundId', roundIdNav || '')
+                    if (roundIdNav) params.set('roundId', String(roundIdNav))
                     if (normalizeContestLevel(contest.status) === 'regional') {
                       const region = filterRegion || regionalPoolForCountry(filterCountry) || regionalPoolForCountry(user?.country)
                       if (region) params.set('region', region)
                     } else if (shouldPassCountryNavParam(contest.status)) {
-                      params.set('country', filterCountry)
+                      const cv =
+                        categoryTab === 'nomination'
+                          ? (filterCountry && filterCountry !== 'all' && filterCountry !== ''
+                              ? filterCountry
+                              : (user?.country || ''))
+                          : (filterCountry || '')
+                      if (cv && cv !== 'all') params.set('country', cv)
                     }
-                    params.set('continent', filterContinent !== 'all' ? filterContinent : 'all')
+                    if (filterContinent && filterContinent !== 'all') {
+                      params.set('continent', filterContinent)
+                    }
                     params.set('entryType', categoryTab === 'nomination' ? 'nomination' : 'participation')
                     const q = params.toString()
                     router.push(`/dashboard/contests/${contest.id}${q ? `?${q}` : ''}`)
                   }}
                   onOpenDetails={() => {
                     const params = new URLSearchParams()
-                    params.set('roundId', roundIdNav || '')
+                    if (roundIdNav) params.set('roundId', String(roundIdNav))
                     if (normalizeContestLevel(contest.status) === 'regional') {
                       const region = filterRegion || regionalPoolForCountry(filterCountry) || regionalPoolForCountry(user?.country)
                       if (region) params.set('region', region)
                     } else if (shouldPassCountryNavParam(contest.status)) {
-                      params.set('country', filterCountry)
+                      const cv =
+                        categoryTab === 'nomination'
+                          ? (filterCountry && filterCountry !== 'all' && filterCountry !== ''
+                              ? filterCountry
+                              : (user?.country || ''))
+                          : (filterCountry || '')
+                      if (cv && cv !== 'all') params.set('country', cv)
                     }
-                    params.set('continent', filterContinent !== 'all' ? filterContinent : 'all')
+                    if (filterContinent && filterContinent !== 'all') {
+                      params.set('continent', filterContinent)
+                    }
                     params.set('entryType', categoryTab === 'nomination' ? 'nomination' : 'participation')
                     const q = params.toString()
                     router.push(`/dashboard/contests/${contest.id}${q ? `?${q}` : ''}`)

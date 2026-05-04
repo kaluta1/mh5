@@ -161,13 +161,15 @@ export default function ContestDetailPage() {
     setFilterContinent(urlContinent)
   }, [searchParams])
 
-  // Default to 'all' when no URL params (don't auto-filter by user country)
+  // Default to 'all' when no meaningful geo in URL (treat continent=all as absent so ?continent=all alone does not block defaults)
   React.useEffect(() => {
     const urlCountry = searchParams.get('country')
     const urlRegion = searchParams.get('region')
     const urlContinent = searchParams.get('continent')
-    if (urlCountry || urlRegion || urlContinent) return
-    // No auto-filter by user country: show all contestants by default
+    const meaningfulCountry = urlCountry && urlCountry.toLowerCase() !== 'all'
+    const meaningfulRegion = urlRegion && urlRegion.toLowerCase() !== 'all'
+    const meaningfulContinent = urlContinent && urlContinent.toLowerCase() !== 'all'
+    if (meaningfulCountry || meaningfulRegion || meaningfulContinent) return
     setFilterCountry('all')
     setFilterRegion('all')
     setFilterContinent('all')
