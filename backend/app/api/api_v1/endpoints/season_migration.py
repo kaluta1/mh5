@@ -311,8 +311,7 @@ def get_top_high5_by_country(
                             per_location_groups.append((selected_country, filtered))
 
                 else:
-                    # city / regional / continent: group by location_field, then keep
-                    # only groups whose contestants are in the selected country.
+                    # city / regional / continent
                     grouped = season_migration_service.get_top_contestants_by_location(
                         db,
                         season.id,
@@ -327,18 +326,25 @@ def get_top_high5_by_country(
                     for key, members in grouped.items():
                         if not key:
                             continue
+                        if season.level == SeasonLevel.REGIONAL:
+                            # Regional winners must be ranked on the whole voting pool
+                            # (East/West/Southern/...) rather than only one country.
+                            pool_members = [
+                                c for c in members
+                                if SeasonMigrationService.same_regional_voting_pool(
+                                    selected_country,
+                                    (c.country or c.nominator_country),
+                                ) is True
+                            ]
+                            if pool_members:
+                                per_location_groups.append((key, pool_members))
+                            continue
+
+                        # city / continent keep country-scoped view as before
                         country_matching_members = [
                             c for c in members
                             if any(v in variants for v in _normalized_country_candidates(c))
                         ]
-                        if (
-                            season.level == SeasonLevel.REGIONAL
-                            and country_matching_members
-                        ):
-                            country_matching_members = [
-                                c for c in country_matching_members
-                                if SeasonMigrationService.nominee_in_regional_voting_pool(c)
-                            ]
                         if country_matching_members:
                             per_location_groups.append((key, country_matching_members))
 
@@ -354,6 +360,7 @@ def get_top_high5_by_country(
                     ranking_scope = (
                         "global" if season.level == SeasonLevel.GLOBAL else
                         "country_group" if season.level == SeasonLevel.COUNTRY else
+                        "regional_pool" if season.level == SeasonLevel.REGIONAL else
                         f"{location_field}_in_country"
                     )
                     contests_out.append(
