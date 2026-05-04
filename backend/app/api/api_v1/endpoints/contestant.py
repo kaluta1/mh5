@@ -1311,10 +1311,10 @@ def get_contest_contestants(
     contest_id: int,
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=100),
-    filter_country: str = Query(None, description="Filtrer par pays"),
-    filter_region: str = Query(None, description="Filtrer par région"),
-    filter_continent: str = Query(None, description="Filtrer par continent"),
-    filter_city: str = Query(None, description="Filtrer par ville"),
+    filter_country: str = Query(None, alias="filterCountry", description="Filtrer par pays"),
+    filter_region: str = Query(None, alias="filterRegion", description="Filtrer par région"),
+    filter_continent: str = Query(None, alias="filterContinent", description="Filtrer par continent"),
+    filter_city: str = Query(None, alias="filterCity", description="Filtrer par ville"),
     user_id: Optional[int] = Query(None, description="Filtrer par user_id"),
     current_user: Optional[User] = Depends(deps.get_current_active_user_optional)
 ) -> List[ContestantWithAuthorAndStats]:
