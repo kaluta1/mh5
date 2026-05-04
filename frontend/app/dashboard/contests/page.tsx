@@ -195,6 +195,10 @@ function ContestsPageContent() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [totalContests, setTotalContests] = useState(0)
   const loaderRef = useRef<HTMLDivElement>(null)
+  const voteNowRoundId = useMemo(() => {
+    const voteRound = rounds.find((r: any) => isRoundVotingLive(r, rounds))
+    return voteRound ? String(voteRound.id) : null
+  }, [rounds])
 
   // 1. Fetch Rounds for Selector (allow unauthenticated users) - Optimized for speed
   useEffect(() => {
@@ -283,6 +287,15 @@ function ContestsPageContent() {
       setFilterCountry('')
     }
   }, [categoryTab, nominationMigrationLevel, filterCountry, filterRegion, user?.country, (user as any)?.region])
+
+  // Regional nomination voting must stay on the current "VOTE NOW" round.
+  useEffect(() => {
+    if (categoryTab !== 'nomination') return
+    if (!['regional', 'continental', 'global'].includes(nominationMigrationLevel)) return
+    if (!voteNowRoundId) return
+    if (activeRoundId === voteNowRoundId) return
+    setActiveRoundId(voteNowRoundId)
+  }, [categoryTab, nominationMigrationLevel, voteNowRoundId, activeRoundId])
 
   // Set default filters based on category tab and user location (only when no filter is set yet)
   useEffect(() => {
