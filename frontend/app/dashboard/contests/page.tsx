@@ -66,6 +66,83 @@ function normalizeContestLevel(level?: string): Exclude<NominationMigrationLevel
   return null
 }
 
+const REGIONAL_POOL_BY_COUNTRY: Record<string, string> = {
+  tanzania: 'East Africa',
+  tz: 'East Africa',
+  kenya: 'East Africa',
+  ke: 'East Africa',
+  uganda: 'East Africa',
+  ug: 'East Africa',
+  rwanda: 'East Africa',
+  rw: 'East Africa',
+  burundi: 'East Africa',
+  bi: 'East Africa',
+  ethiopia: 'East Africa',
+  et: 'East Africa',
+  somalia: 'East Africa',
+  so: 'East Africa',
+  eritrea: 'East Africa',
+  er: 'East Africa',
+  djibouti: 'East Africa',
+  dj: 'East Africa',
+  'south sudan': 'East Africa',
+  ss: 'East Africa',
+  sudan: 'East Africa',
+  sd: 'East Africa',
+  nigeria: 'West Africa',
+  ng: 'West Africa',
+  ghana: 'West Africa',
+  gh: 'West Africa',
+  senegal: 'West Africa',
+  sn: 'West Africa',
+  'ivory coast': 'West Africa',
+  "cote d'ivoire": 'West Africa',
+  "côte d'ivoire": 'West Africa',
+  ci: 'West Africa',
+  'south africa': 'Southern Africa',
+  za: 'Southern Africa',
+  zimbabwe: 'Southern Africa',
+  zw: 'Southern Africa',
+  zambia: 'Southern Africa',
+  zm: 'Southern Africa',
+  botswana: 'Southern Africa',
+  bw: 'Southern Africa',
+  namibia: 'Southern Africa',
+  na: 'Southern Africa',
+  mozambique: 'Southern Africa',
+  mz: 'Southern Africa',
+  malawi: 'Southern Africa',
+  mw: 'Southern Africa',
+  angola: 'Southern Africa',
+  ao: 'Southern Africa',
+  egypt: 'North Africa',
+  eg: 'North Africa',
+  morocco: 'North Africa',
+  ma: 'North Africa',
+  algeria: 'North Africa',
+  dz: 'North Africa',
+  tunisia: 'North Africa',
+  tn: 'North Africa',
+  libya: 'North Africa',
+  ly: 'North Africa',
+  cameroon: 'Central Africa',
+  cm: 'Central Africa',
+  'democratic republic of the congo': 'Central Africa',
+  drc: 'Central Africa',
+  cd: 'Central Africa',
+  'republic of the congo': 'Central Africa',
+  cg: 'Central Africa',
+  gabon: 'Central Africa',
+  ga: 'Central Africa',
+  chad: 'Central Africa',
+  td: 'Central Africa',
+}
+
+function regionalPoolForCountry(country?: string | null): string | undefined {
+  const key = country?.trim().toLowerCase()
+  return key ? REGIONAL_POOL_BY_COUNTRY[key] : undefined
+}
+
 function ContestsPageContent() {
   const { t } = useLanguage()
   const { user, isAuthenticated, isLoading } = useAuth()
@@ -97,6 +174,10 @@ function ContestsPageContent() {
   const [filterCountry, setFilterCountry] = useState<string>(() => {
     const urlCountry = searchParams.get('country')
     return urlCountry || ''
+  })
+  const [filterRegion, setFilterRegion] = useState<string>(() => {
+    const urlRegion = searchParams.get('region')
+    return urlRegion || ''
   })
   const [filterLevel, setFilterLevel] = useState<string>('all') // Level filter for participations: 'city', 'country', 'all'
   const [nominationMigrationLevel, setNominationMigrationLevel] = useState<NominationMigrationLevel>('all')
@@ -172,7 +253,13 @@ function ContestsPageContent() {
   // Sync filters to URL for persistence on refresh
   useEffect(() => {
     const params = new URLSearchParams(searchParams.toString())
-    if (filterCountry && filterCountry !== 'all') {
+    if (filterRegion && nominationMigrationLevel === 'regional') {
+      params.set('region', filterRegion)
+      params.delete('country')
+    } else {
+      params.delete('region')
+    }
+    if (filterCountry && filterCountry !== 'all' && nominationMigrationLevel !== 'regional') {
       params.set('country', filterCountry)
     } else {
       params.delete('country')
@@ -184,7 +271,18 @@ function ContestsPageContent() {
     }
     const newUrl = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname
     window.history.replaceState(null, '', newUrl)
-  }, [filterCountry, filterContinent, searchParams])
+  }, [filterCountry, filterRegion, filterContinent, nominationMigrationLevel, searchParams])
+
+  useEffect(() => {
+    if (categoryTab !== 'nomination' || nominationMigrationLevel !== 'regional') return
+    const nextRegion = regionalPoolForCountry(filterCountry) || (user as any)?.region || regionalPoolForCountry(user?.country)
+    if (nextRegion && filterRegion !== nextRegion) {
+      setFilterRegion(nextRegion)
+    }
+    if (filterCountry) {
+      setFilterCountry('')
+    }
+  }, [categoryTab, nominationMigrationLevel, filterCountry, filterRegion, user?.country, (user as any)?.region])
 
   // Set default filters based on category tab and user location (only when no filter is set yet)
   useEffect(() => {
@@ -192,7 +290,7 @@ function ContestsPageContent() {
 
     if (categoryTab === 'nomination') {
       // Set user's country for nominations only if no country already set (from URL or manual selection)
-      if (user.country && !filterCountry) {
+      if (user.country && !filterCountry && !filterRegion) {
         setFilterCountry(user.country)
       }
       if (filterLevel !== 'all') {
@@ -207,7 +305,7 @@ function ContestsPageContent() {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categoryTab, user?.country])
+  }, [categoryTab, user?.country, filterRegion])
 
   // Handle Search Execution
   const handleSearch = () => {
@@ -219,7 +317,7 @@ function ContestsPageContent() {
     setAllContests([])
     setHasMore(true)
     setInitialLoadComplete(false)
-  }, [activeRoundId, categoryTab, filterCountry, filterContinent, committedSearch])
+  }, [activeRoundId, categoryTab, filterCountry, filterRegion, filterContinent, committedSearch])
 
   // 2. Fetch Contests for Selected Round (Initial load) - allow unauthenticated users
   // Use a ref to track current user id without triggering re-fetches
@@ -238,12 +336,13 @@ function ContestsPageContent() {
       setContestsLoading(true)
       const contestMode = categoryTab === 'nomination' ? 'nomination' : categoryTab === 'participations' ? 'participation' : undefined
       const activeCountry = (filterCountry && filterCountry !== 'all') ? filterCountry : undefined
+      const activeRegion = (filterRegion && nominationMigrationLevel === 'regional') ? filterRegion : undefined
       const activeContinent = (filterContinent && filterContinent !== 'all') ? filterContinent : undefined
       const activeSearch = committedSearch || undefined
 
       // Check cache first
       const authKey = userIdRef.current || 'anon'
-      const cacheKey = getCacheKey(activeRoundId, categoryTab, activeCountry || 'all', activeContinent || 'all', activeSearch || '', 0, authKey)
+      const cacheKey = getCacheKey(activeRoundId, categoryTab, activeCountry || activeRegion || 'all', activeContinent || 'all', activeSearch || '', 0, authKey)
       const cached = getFromCache(cacheKey)
       if (cached) {
         setContestsData(cached)
@@ -259,7 +358,8 @@ function ContestsPageContent() {
         const data = await ApiService.getRounds({
           roundId: parseInt(activeRoundId),
           contestMode,
-          filterCountry: activeCountry,
+          filterCountry: activeRegion ? undefined : activeCountry,
+          filterRegion: activeRegion,
           filterContinent: activeContinent,
           searchTerm: activeSearch,
           contestLimit: INITIAL_CONTESTS
@@ -299,7 +399,8 @@ function ContestsPageContent() {
             const retryData = await ApiService.getRounds({
               roundId: parseInt(activeRoundId),
               contestMode,
-              filterCountry: activeCountry,
+              filterCountry: activeRegion ? undefined : activeCountry,
+              filterRegion: activeRegion,
               filterContinent: activeContinent,
               searchTerm: activeSearch,
               contestLimit: INITIAL_CONTESTS
@@ -345,7 +446,7 @@ function ContestsPageContent() {
     }
     // isAuthenticated/user removed: prevents race condition where auth resolve
     // aborts in-flight request. userIdRef handles cache key without re-triggering.
-  }, [activeRoundId, categoryTab, filterCountry, filterContinent, committedSearch])
+  }, [activeRoundId, categoryTab, filterCountry, filterRegion, filterContinent, nominationMigrationLevel, committedSearch])
 
   // Load more contests function
   const loadMoreContests = useCallback(async () => {
@@ -354,6 +455,7 @@ function ContestsPageContent() {
     setLoadingMore(true)
     const contestMode = categoryTab === 'nomination' ? 'nomination' : categoryTab === 'participations' ? 'participation' : undefined
     const activeCountry = (filterCountry && filterCountry !== 'all') ? filterCountry : undefined
+    const activeRegion = (filterRegion && nominationMigrationLevel === 'regional') ? filterRegion : undefined
     const activeContinent = filterContinent !== 'all' ? filterContinent : undefined
     const activeSearch = committedSearch || undefined
 
@@ -361,7 +463,8 @@ function ContestsPageContent() {
       const data = await ApiService.getRounds({
         roundId: parseInt(activeRoundId),
         contestMode,
-        filterCountry: activeCountry,
+        filterCountry: activeRegion ? undefined : activeCountry,
+        filterRegion: activeRegion,
         filterContinent: activeContinent,
         searchTerm: activeSearch,
         contestLimit: CONTESTS_PER_PAGE,
@@ -397,7 +500,7 @@ function ContestsPageContent() {
     } finally {
       setLoadingMore(false)
     }
-  }, [loadingMore, hasMore, activeRoundId, categoryTab, filterCountry, filterContinent, committedSearch, allContests.length])
+  }, [loadingMore, hasMore, activeRoundId, categoryTab, filterCountry, filterRegion, filterContinent, nominationMigrationLevel, committedSearch, allContests.length])
 
   // Intersection Observer for infinite scroll
   useEffect(() => {
@@ -744,7 +847,12 @@ function ContestsPageContent() {
                   onViewContestants={() => {
                     const params = new URLSearchParams()
                     params.set('roundId', activeRoundId)
-                    if (shouldPassCountryNavParam(contest.status)) params.set('country', filterCountry)
+                    if (normalizeContestLevel(contest.status) === 'regional') {
+                      const region = filterRegion || regionalPoolForCountry(filterCountry) || regionalPoolForCountry(user?.country)
+                      if (region) params.set('region', region)
+                    } else if (shouldPassCountryNavParam(contest.status)) {
+                      params.set('country', filterCountry)
+                    }
                     params.set('continent', filterContinent !== 'all' ? filterContinent : 'all')
                     params.set('entryType', categoryTab === 'nomination' ? 'nomination' : 'participation')
                     const q = params.toString()
@@ -753,7 +861,12 @@ function ContestsPageContent() {
                   onOpenDetails={() => {
                     const params = new URLSearchParams()
                     params.set('roundId', activeRoundId)
-                    if (shouldPassCountryNavParam(contest.status)) params.set('country', filterCountry)
+                    if (normalizeContestLevel(contest.status) === 'regional') {
+                      const region = filterRegion || regionalPoolForCountry(filterCountry) || regionalPoolForCountry(user?.country)
+                      if (region) params.set('region', region)
+                    } else if (shouldPassCountryNavParam(contest.status)) {
+                      params.set('country', filterCountry)
+                    }
                     params.set('continent', filterContinent !== 'all' ? filterContinent : 'all')
                     params.set('entryType', categoryTab === 'nomination' ? 'nomination' : 'participation')
                     const q = params.toString()

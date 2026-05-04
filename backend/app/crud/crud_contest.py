@@ -780,13 +780,17 @@ class CRUDContest:
         skip_explicit_geo_filters = (
             season_level_lc in pooled_geo_levels or contest_level_lc in pooled_geo_levels
         )
+        allow_explicit_region_filter = bool(
+            filter_region
+            and (season_level_lc in ("regional", "region") or contest_level_lc in ("regional", "region"))
+        )
 
         # Appliquer les filtres géographiques
         # Priorité: filtres explicites > localisation de l'utilisateur
         # For REGIONAL pooled rosters never apply country/filter from listing navigation.
         has_location_filter = bool(
             filter_country or filter_region or filter_continent
-        ) and not skip_explicit_geo_filters
+        ) and (not skip_explicit_geo_filters or allow_explicit_region_filter)
         
         applied_location_filter = False
         if has_location_filter:
@@ -794,20 +798,42 @@ class CRUDContest:
             applied_location_filter = True
             if filter_country:
                 # Use patterns for consistency with get_contest_with_enriched_contestants
-                patterns = _get_country_match_patterns(filter_country)
-                conds = []
-                for pat in patterns:
-                    conds.append(Contestant.country.ilike(pat))
-                    conds.append(User.country.ilike(pat))
-                entries_query = entries_query.join(User).filter(or_(*conds))
+                if not skip_explicit_geo_filters:
+                    patterns = _get_country_match_patterns(filter_country)
+                    conds = []
+                    for pat in patterns:
+                        conds.append(Contestant.country.ilike(pat))
+                        conds.append(User.country.ilike(pat))
+                    entries_query = entries_query.join(User).filter(or_(*conds))
             if filter_region:
-                entries_query = entries_query.filter(
-                    func.lower(Contestant.region) == func.lower(filter_region)
-                )
+                region_conds = [func.lower(Contestant.region) == func.lower(filter_region)]
+                if allow_explicit_region_filter:
+                    try:
+                        from app.services.season_migration import SeasonMigrationService
+
+                        pool_id = SeasonMigrationService.regional_pool_id_for_region_label(filter_region)
+                        if pool_id:
+                            pool_keys = tuple(SeasonMigrationService.REGIONAL_VOTING_POOLS[pool_id])
+                            country_key = func.lower(
+                                func.trim(
+                                    func.coalesce(
+                                        Contestant.country,
+                                        Contestant.nominator_country,
+                                        "",
+                                    )
+                                )
+                            )
+                            region_conds.append(country_key.in_(pool_keys))
+                    except Exception as exc:
+                        logger.warning(
+                            f"Could not build regional count filter for {filter_region}: {exc}"
+                        )
+                entries_query = entries_query.filter(or_(*region_conds))
             if filter_continent:
-                entries_query = entries_query.filter(
-                    func.lower(Contestant.continent) == func.lower(filter_continent)
-                )
+                if not skip_explicit_geo_filters:
+                    entries_query = entries_query.filter(
+                        func.lower(Contestant.continent) == func.lower(filter_continent)
+                    )
         elif current_user and season_level:
             # Filtrer par localisation selon le niveau de la saison et l'utilisateur connecté
             season_level_lower = season_level.lower()
@@ -1470,12 +1496,16 @@ class CRUDContest:
             "continental",
             "global",
         )
+        explicit_region_filter = effective_region
+
         # Pooled phases: listing often passes filter_country=Tanzania from the grid UI; applying it
         # here would hide other countries' qualifiers (Uganda/Kenya/…) in REGIONAL roster.
         if suppress_user_country_fallback:
             effective_country = None
-            effective_region = None
             effective_continent = None
+            # Keep an explicit regional bloc filter (for example "East Africa").
+            # Only implicit/user fallback regions are suppressed.
+            effective_region = explicit_region_filter
 
         if current_user and not is_explicit_all_country and not is_explicit_all_continent:
             # Pas de filtre explicite (ni spécifique ni "all") -> utiliser la localisation de l'utilisateur
@@ -1508,10 +1538,34 @@ class CRUDContest:
                 location_conditions.append(or_(*conds))
             if effective_region:
                 logger.info(f"[get_contest_with_enriched_contestants] Filtering by region: '{effective_region}'")
-                location_conditions.append(or_(
+                region_conditions = [
                     Contestant.region.ilike(f"%{effective_region}%"),
                     User.region.ilike(f"%{effective_region}%")
-                ))
+                ]
+                if season_level_for_filter in ("regional", "region"):
+                    try:
+                        from app.services.season_migration import SeasonMigrationService
+
+                        pool_id = SeasonMigrationService.regional_pool_id_for_region_label(effective_region)
+                        if pool_id:
+                            pool_keys = tuple(SeasonMigrationService.REGIONAL_VOTING_POOLS[pool_id])
+                            country_key = func.lower(
+                                func.trim(
+                                    func.coalesce(
+                                        Contestant.country,
+                                        Contestant.nominator_country,
+                                        User.country,
+                                        "",
+                                    )
+                                )
+                            )
+                            region_conditions.append(country_key.in_(pool_keys))
+                    except Exception as exc:
+                        logger.warning(
+                            "[get_contest_with_enriched_contestants] "
+                            f"Could not build regional pool filter for {effective_region}: {exc}"
+                        )
+                location_conditions.append(or_(*region_conditions))
             elif effective_continent:
                 logger.info(f"[get_contest_with_enriched_contestants] Filtering by continent: '{effective_continent}'")
                 # Filtrer par continent si pas de pays

@@ -1,7 +1,7 @@
 from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import or_
+from sqlalchemy import or_, func
 from datetime import date, datetime
 import logging
 import traceback
@@ -135,6 +135,7 @@ def read_rounds(
     current_user: Optional[models.User] = Depends(deps.get_current_active_user_optional),
     contest_mode: Optional[str] = Query(None, alias="contestMode", description="Filtrer par mode: nomination ou participation"),
     filter_country: Optional[str] = Query(None, alias="filterCountry", description="Filtrer les participants par pays"),
+    filter_region: Optional[str] = Query(None, alias="filterRegion", description="Filtrer les participants par région"),
     filter_continent: Optional[str] = Query(None, alias="filterContinent", description="Filtrer les participants par continent"),
     contest_limit: int = Query(12, alias="contestLimit", description="Nombre maximum de contests par round"),
     contest_skip: int = Query(0, alias="contestSkip", description="Nombre de contests à sauter pour la pagination"),
@@ -159,8 +160,8 @@ def read_rounds(
                 # Convert to RoundWithStats format
                 result = []
                 for r_data in rounds_data:
-                    round_obj = _enrich_round_data(db, r_data, user_id, contest_mode, filter_country, 
-                                                  filter_continent, search_term, contest_limit, contest_skip)
+                    round_obj = _enrich_round_data(db, r_data, user_id, contest_mode, filter_country,
+                                                  filter_region, filter_continent, search_term, contest_limit, contest_skip)
                     if round_obj:
                         result.append(round_obj)
                 _dedupe_voting_open_to_latest_round(result)
@@ -196,7 +197,7 @@ def read_rounds(
                             "updated_at": getattr(r, 'updated_at', datetime.now()),
                         }
                         round_obj = _enrich_round_data(db, r_data, user_id, contest_mode, filter_country,
-                                                      filter_continent, search_term, contest_limit, contest_skip)
+                                                      filter_region, filter_continent, search_term, contest_limit, contest_skip)
                         if round_obj:
                             result.append(round_obj)
                     except Exception as round_error:
@@ -240,6 +241,7 @@ def _enrich_round_data(
     user_id: Optional[int],
     contest_mode: Optional[str],
     filter_country: Optional[str],
+    filter_region: Optional[str],
     filter_continent: Optional[str],
     search_term: Optional[str],
     contest_limit: int,
@@ -394,6 +396,32 @@ def _enrich_round_data(
                                 f"%{str(filter_continent).strip()}%"
                             )
                         )
+                    if filter_region and str(filter_region).strip().lower() not in ("", "all"):
+                        from app.services.season_migration import SeasonMigrationService
+
+                        pool_id = SeasonMigrationService.regional_pool_id_for_region_label(
+                            filter_region
+                        )
+                        region_conds = [
+                            ContestantModel.region.ilike(
+                                f"%{str(filter_region).strip()}%"
+                            )
+                        ]
+                        if pool_id and pool_id in SeasonMigrationService.REGIONAL_VOTING_POOLS:
+                            pool_keys = tuple(
+                                SeasonMigrationService.REGIONAL_VOTING_POOLS[pool_id]
+                            )
+                            country_key = func.lower(
+                                func.trim(
+                                    func.coalesce(
+                                        ContestantModel.country,
+                                        ContestantModel.nominator_country,
+                                        "",
+                                    )
+                                )
+                            )
+                            region_conds.append(country_key.in_(pool_keys))
+                        uq = uq.filter(or_(*region_conds))
                     all_ucs_in_round = uq.all()
 
                     for uc in all_ucs_in_round:
@@ -436,6 +464,21 @@ def _enrich_round_data(
                                 if card_level == "regional" and cm == "nomination":
                                     if not SeasonMigrationService.nominee_in_regional_voting_pool(uc):
                                         continue
+                                    if (
+                                        filter_region
+                                        and str(filter_region).strip().lower() not in ("", "all")
+                                    ):
+                                        pool_filter = (
+                                            SeasonMigrationService.regional_pool_id_for_region_label(
+                                                filter_region
+                                            )
+                                        )
+                                        if (
+                                            pool_filter
+                                            and SeasonMigrationService.nominee_regional_pool_id(uc)
+                                            != pool_filter
+                                        ):
+                                            continue
                             contest_participant_counts[target] = (
                                 contest_participant_counts.get(target, 0) + 1
                             )
@@ -610,10 +653,11 @@ def read_round(
         user_id=None,
         contest_mode=None,
         filter_country=None,
+        filter_region=None,
         filter_continent=None,
         search_term=None,
         contest_limit=50,
-        contest_skip=0
+        contest_skip=0,
     )
 
 

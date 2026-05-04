@@ -215,6 +215,36 @@ class SeasonMigrationService:
     )
 
     EAST_AFRICA_COUNTRY_KEYS: ClassVar[FrozenSet[str]] = REGIONAL_VOTING_POOLS["east_africa"]
+    REGIONAL_VOTING_POOL_LABELS: ClassVar[Dict[str, str]] = {
+        "east_africa": "East Africa",
+        "west_africa": "West Africa",
+        "southern_africa": "Southern Africa",
+        "north_africa": "North Africa",
+        "central_africa": "Central Africa",
+    }
+
+    @staticmethod
+    def _region_key(raw_region: Optional[str]) -> Optional[str]:
+        """Normalize UI/profile region labels to configured regional bloc ids."""
+        if not raw_region:
+            return None
+        value = raw_region.strip().lower()
+        if not value:
+            return None
+        normalized = value.replace("-", " ").replace("_", " ")
+        aliases = {
+            "east africa": "east_africa",
+            "eastern africa": "east_africa",
+            "west africa": "west_africa",
+            "western africa": "west_africa",
+            "south africa": "southern_africa",
+            "southern africa": "southern_africa",
+            "north africa": "north_africa",
+            "northern africa": "north_africa",
+            "central africa": "central_africa",
+            "middle africa": "central_africa",
+        }
+        return aliases.get(normalized)
 
     @staticmethod
     def _country_key(raw_country: Optional[str]) -> Optional[str]:
@@ -235,6 +265,23 @@ class SeasonMigrationService:
             if k in keys:
                 return pid
         return None
+
+    @staticmethod
+    def regional_pool_id_for_region_label(raw_region: Optional[str]) -> Optional[str]:
+        """Configured regional bloc id for a UI/profile region label."""
+        return SeasonMigrationService._region_key(raw_region)
+
+    @staticmethod
+    def regional_pool_label_for_id(pool_id: Optional[str]) -> Optional[str]:
+        if not pool_id:
+            return None
+        return SeasonMigrationService.REGIONAL_VOTING_POOL_LABELS.get(pool_id)
+
+    @staticmethod
+    def regional_pool_label_for_raw_country(raw_country: Optional[str]) -> Optional[str]:
+        return SeasonMigrationService.regional_pool_label_for_id(
+            SeasonMigrationService.regional_pool_id_for_raw_country(raw_country)
+        )
 
     @staticmethod
     def nominee_regional_pool_id(contestant: Contestant) -> Optional[str]:
@@ -920,7 +967,12 @@ class SeasonMigrationService:
                     contestant.country or contestant.nominator_country
                 )
             elif location_field == 'region':
-                location_value = contestant.region
+                location_value = (
+                    SeasonMigrationService.regional_pool_label_for_raw_country(
+                        contestant.country or contestant.nominator_country
+                    )
+                    or contestant.region
+                )
             elif location_field == 'continent':
                 location_value = contestant.continent
             
@@ -1460,9 +1512,23 @@ class SeasonMigrationService:
             for location, contestants in grouped_contestants.items():
                 logger.info(f"    - {location}: {len(contestants)} contestants")
             
-            # Flatten la liste
-            for location_contestants in grouped_contestants.values():
-                selected_contestants.extend(location_contestants)
+            # Flatten la liste. COUNTRY -> REGIONAL nomination is grouped by
+            # country; stamp the canonical regional bloc from country so stale
+            # profile regions cannot mix East/West/Southern Africa rosters.
+            if from_level == SeasonLevel.COUNTRY and to_level == SeasonLevel.REGIONAL:
+                for country, location_contestants in grouped_contestants.items():
+                    pool_label = SeasonMigrationService.regional_pool_label_for_raw_country(country)
+                    if not pool_label:
+                        logger.warning(
+                            f"    - Skipping {country}: no configured regional voting pool"
+                        )
+                        continue
+                    for contestant in location_contestants:
+                        contestant.region = pool_label
+                        selected_contestants.append(contestant)
+            else:
+                for location_contestants in grouped_contestants.values():
+                    selected_contestants.extend(location_contestants)
         
         logger.info(f"  - Total contestants selected: {len(selected_contestants)}")
         print(f"[Migration]   Contestants selected: {len(selected_contestants)}")
