@@ -199,6 +199,24 @@ function ContestsPageContent() {
     const voteRound = rounds.find((r: any) => isRoundVotingLive(r, rounds))
     return voteRound ? String(voteRound.id) : null
   }, [rounds])
+  const effectiveRoundIdForFetch = useMemo(() => {
+    if (!activeRoundId) return null
+    if (categoryTab !== 'nomination') return activeRoundId
+    const offsetByStage: Partial<Record<NominationMigrationLevel, number>> = {
+      regional: 1,
+      continental: 2,
+      global: 3,
+    }
+    const offset = offsetByStage[nominationMigrationLevel]
+    if (!offset) return activeRoundId
+    const idx = rounds.findIndex((r: any) => String(r.id) === activeRoundId)
+    if (idx < 0) return activeRoundId
+    const target = rounds[idx + offset]
+    return target ? String(target.id) : activeRoundId
+  }, [activeRoundId, categoryTab, nominationMigrationLevel, rounds])
+
+  /** Round id sent to contest detail / apply (must match API round scoped to migration data). */
+  const roundIdNav = effectiveRoundIdForFetch ?? activeRoundId
 
   // 1. Fetch Rounds for Selector (allow unauthenticated users) - Optimized for speed
   useEffect(() => {
@@ -330,7 +348,7 @@ function ContestsPageContent() {
     setAllContests([])
     setHasMore(true)
     setInitialLoadComplete(false)
-  }, [activeRoundId, categoryTab, filterCountry, filterRegion, filterContinent, committedSearch])
+  }, [activeRoundId, effectiveRoundIdForFetch, categoryTab, filterCountry, filterRegion, filterContinent, nominationMigrationLevel, committedSearch])
 
   // 2. Fetch Contests for Selected Round (Initial load) - allow unauthenticated users
   // Use a ref to track current user id without triggering re-fetches
@@ -340,7 +358,7 @@ function ContestsPageContent() {
   }, [user?.id])
 
   useEffect(() => {
-    if (!activeRoundId) return
+    if (!activeRoundId || !effectiveRoundIdForFetch) return
 
     // AbortController for request cancellation
     const abortController = new AbortController()
@@ -355,7 +373,7 @@ function ContestsPageContent() {
 
       // Check cache first
       const authKey = userIdRef.current || 'anon'
-      const cacheKey = getCacheKey(activeRoundId, categoryTab, activeCountry || activeRegion || 'all', activeContinent || 'all', activeSearch || '', 0, authKey)
+      const cacheKey = getCacheKey(effectiveRoundIdForFetch, categoryTab, activeCountry || activeRegion || 'all', activeContinent || 'all', activeSearch || '', 0, authKey)
       const cached = getFromCache(cacheKey)
       if (cached) {
         setContestsData(cached)
@@ -369,7 +387,7 @@ function ContestsPageContent() {
 
       try {
         const data = await ApiService.getRounds({
-          roundId: parseInt(activeRoundId),
+          roundId: parseInt(effectiveRoundIdForFetch),
           contestMode,
           filterCountry: activeRegion ? undefined : activeCountry,
           filterRegion: activeRegion,
@@ -410,7 +428,7 @@ function ContestsPageContent() {
           logger.warn('Request timeout, retrying once...')
           try {
             const retryData = await ApiService.getRounds({
-              roundId: parseInt(activeRoundId),
+              roundId: parseInt(effectiveRoundIdForFetch),
               contestMode,
               filterCountry: activeRegion ? undefined : activeCountry,
               filterRegion: activeRegion,
@@ -459,11 +477,11 @@ function ContestsPageContent() {
     }
     // isAuthenticated/user removed: prevents race condition where auth resolve
     // aborts in-flight request. userIdRef handles cache key without re-triggering.
-  }, [activeRoundId, categoryTab, filterCountry, filterRegion, filterContinent, nominationMigrationLevel, committedSearch])
+  }, [activeRoundId, effectiveRoundIdForFetch, categoryTab, filterCountry, filterRegion, filterContinent, nominationMigrationLevel, committedSearch])
 
   // Load more contests function
   const loadMoreContests = useCallback(async () => {
-    if (loadingMore || !hasMore || !activeRoundId) return
+    if (loadingMore || !hasMore || !activeRoundId || !effectiveRoundIdForFetch) return
 
     setLoadingMore(true)
     const contestMode = categoryTab === 'nomination' ? 'nomination' : categoryTab === 'participations' ? 'participation' : undefined
@@ -474,7 +492,7 @@ function ContestsPageContent() {
 
     try {
       const data = await ApiService.getRounds({
-        roundId: parseInt(activeRoundId),
+        roundId: parseInt(effectiveRoundIdForFetch),
         contestMode,
         filterCountry: activeRegion ? undefined : activeCountry,
         filterRegion: activeRegion,
@@ -513,7 +531,7 @@ function ContestsPageContent() {
     } finally {
       setLoadingMore(false)
     }
-  }, [loadingMore, hasMore, activeRoundId, categoryTab, filterCountry, filterRegion, filterContinent, nominationMigrationLevel, committedSearch, allContests.length])
+  }, [loadingMore, hasMore, activeRoundId, effectiveRoundIdForFetch, categoryTab, filterCountry, filterRegion, filterContinent, nominationMigrationLevel, committedSearch, allContests.length])
 
   // Intersection Observer for infinite scroll
   useEffect(() => {
@@ -856,10 +874,16 @@ function ContestsPageContent() {
                   currentUserContesting={(categoryTab === 'nomination' ? contest.currentUserContesting : contest.currentUserParticipated) || false}
                   onToggleFavorite={() => { }}
                   isRoundClosed={isRoundClosed}
-                  onParticipate={() => handleParticipate(contest.id, (categoryTab === 'nomination' ? contest.currentUserContesting : contest.currentUserParticipated) || false, activeRoundId)}
+                  onParticipate={() =>
+                    handleParticipate(
+                      contest.id,
+                      (categoryTab === 'nomination' ? contest.currentUserContesting : contest.currentUserParticipated) || false,
+                      roundIdNav
+                    )
+                  }
                   onViewContestants={() => {
                     const params = new URLSearchParams()
-                    params.set('roundId', activeRoundId)
+                    params.set('roundId', roundIdNav || '')
                     if (normalizeContestLevel(contest.status) === 'regional') {
                       const region = filterRegion || regionalPoolForCountry(filterCountry) || regionalPoolForCountry(user?.country)
                       if (region) params.set('region', region)
@@ -873,7 +897,7 @@ function ContestsPageContent() {
                   }}
                   onOpenDetails={() => {
                     const params = new URLSearchParams()
-                    params.set('roundId', activeRoundId)
+                    params.set('roundId', roundIdNav || '')
                     if (normalizeContestLevel(contest.status) === 'regional') {
                       const region = filterRegion || regionalPoolForCountry(filterCountry) || regionalPoolForCountry(user?.country)
                       if (region) params.set('region', region)
