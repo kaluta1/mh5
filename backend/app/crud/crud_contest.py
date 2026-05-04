@@ -711,8 +711,6 @@ class CRUDContest:
                     Contestant.id.in_(active_member_ids),
                     Contestant.season_id == contest.id,
                 )
-            if display_round_for_scope is not None:
-                base_entries_query = base_entries_query.filter(Contestant.round_id == display_round_for_scope)
         elif conditions:
             base_entries_query = db.query(func.count(Contestant.id.distinct()))\
                 .filter(
@@ -740,8 +738,6 @@ class CRUDContest:
                     Contestant.id.in_(active_member_ids),
                     Contestant.season_id == contest.id,
                 )
-            if display_round_for_scope is not None:
-                entries_query = entries_query.filter(Contestant.round_id == display_round_for_scope)
         elif conditions:
             entries_query = db.query(func.count(Contestant.id.distinct()))\
                 .filter(
@@ -1399,11 +1395,6 @@ class CRUDContest:
         effective_entry_type = entry_type or ('nomination' if contest_mode == 'nomination' else 'participation')
         contestants_query = contestants_query.filter(Contestant.entry_type == effective_entry_type)
         logger.info(f"[get_contest_with_enriched_contestants] Querying by season_id={filter_season_id}, entry_type={effective_entry_type}")
-        if target_round_id is not None:
-            contestants_query = contestants_query.filter(Contestant.round_id == target_round_id)
-            logger.info(
-                f"[get_contest_with_enriched_contestants] Scoping to round_id={target_round_id}"
-            )
         
         # Appliquer le filtrage géographique selon le niveau de la saison et l'utilisateur connecté
         # Récupérer l'utilisateur courant pour le filtrage géographique
@@ -1424,10 +1415,19 @@ class CRUDContest:
         ):
             season_level = "country"
 
+        pooled_season_membership_scope = bool(
+            season and season_level in ("regional", "region", "continent", "global")
+        )
+        if target_round_id is not None and not pooled_season_membership_scope:
+            contestants_query = contestants_query.filter(Contestant.round_id == target_round_id)
+            logger.info(
+                f"[get_contest_with_enriched_contestants] Scoping to round_id={target_round_id}"
+            )
+
         # Once a contest migrates beyond its start level, the visible roster is
         # the active ContestantSeason membership for that level (e.g. March top
         # 5 winners in REGIONAL), not every original contestant from the round.
-        if season and season_level in ("regional", "region", "continent", "global"):
+        if pooled_season_membership_scope:
             active_season_member_ids = db.query(ContestantSeason.contestant_id).filter(
                 ContestantSeason.season_id == season.id,
                 ContestantSeason.is_active == True,
