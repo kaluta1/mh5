@@ -1438,15 +1438,34 @@ def get_contest_contestants(
             and str(getattr(contest, "level", None) or "").lower() in pooled_card_levels
         )
 
-        # Apply geographic filters (skip for pooled REGIONAL+/ continent stages — listing passes country TZ)
-        if filter_country and not suppress_geo_filters:
-            query = query.filter(func.lower(Contestant.country) == func.lower(filter_country))
-        if filter_region and not suppress_geo_filters:
-            query = query.filter(func.lower(Contestant.region) == func.lower(filter_region))
-        if filter_continent and not suppress_geo_filters:
-            query = query.filter(func.lower(Contestant.continent) == func.lower(filter_continent))
-        if filter_city and not suppress_geo_filters:
-            query = query.filter(func.lower(Contestant.city) == func.lower(filter_city))
+        # Normalize "all"/empty filters from frontend query params.
+        fc = (filter_country or "").strip()
+        fr = (filter_region or "").strip()
+        fco = (filter_continent or "").strip()
+        fci = (filter_city or "").strip()
+        fc_norm = fc.lower()
+        fr_norm = fr.lower()
+        fco_norm = fco.lower()
+        fci_norm = fci.lower()
+        has_country_filter = bool(fc and fc_norm != "all")
+        has_region_filter = bool(fr and fr_norm != "all")
+        has_continent_filter = bool(fco and fco_norm != "all")
+        has_city_filter = bool(fci and fci_norm != "all")
+
+        # If explicit country is provided, never suppress it (country-level pages must stay country-scoped).
+        # Suppress only for pooled phases when country is not explicitly requested.
+        if has_country_filter:
+            suppress_geo_filters = False
+
+        # Apply geographic filters
+        if has_country_filter and not suppress_geo_filters:
+            query = query.filter(func.lower(Contestant.country) == fc_norm)
+        if has_region_filter and not suppress_geo_filters:
+            query = query.filter(func.lower(Contestant.region) == fr_norm)
+        if has_continent_filter and not suppress_geo_filters:
+            query = query.filter(func.lower(Contestant.continent) == fco_norm)
+        if has_city_filter and not suppress_geo_filters:
+            query = query.filter(func.lower(Contestant.city) == fci_norm)
         if user_id:
             query = query.filter(Contestant.user_id == user_id)
         
@@ -1483,17 +1502,17 @@ def get_contest_contestants(
             
             # Apply geographic filters to fallback results if we found any
             if contestants and not suppress_geo_filters and (
-                filter_country or filter_region or filter_continent or filter_city
+                has_country_filter or has_region_filter or has_continent_filter or has_city_filter
             ):
                 original_count = len(contestants)
-                if filter_country:
-                    contestants = [c for c in contestants if c.country and func.lower(c.country) == func.lower(filter_country)]
-                if filter_region:
-                    contestants = [c for c in contestants if c.region and func.lower(c.region) == func.lower(filter_region)]
-                if filter_continent:
-                    contestants = [c for c in contestants if c.continent and func.lower(c.continent) == func.lower(filter_continent)]
-                if filter_city:
-                    contestants = [c for c in contestants if c.city and func.lower(c.city) == func.lower(filter_city)]
+                if has_country_filter:
+                    contestants = [c for c in contestants if c.country and c.country.lower() == fc_norm]
+                if has_region_filter:
+                    contestants = [c for c in contestants if c.region and c.region.lower() == fr_norm]
+                if has_continent_filter:
+                    contestants = [c for c in contestants if c.continent and c.continent.lower() == fco_norm]
+                if has_city_filter:
+                    contestants = [c for c in contestants if c.city and c.city.lower() == fci_norm]
                 logger.info(f"[get_contest_contestants] After geographic filters: {len(contestants)}/{original_count} contestants remain")
             
             # Apply user_id filter if specified
