@@ -843,8 +843,13 @@ class CRUDContest:
             str(getattr(contest, "level", None) or "").lower()
         )
 
+        explicit_country_filter = bool(
+            filter_country
+            and str(filter_country).strip().lower() not in ("", "all", "unknown", "none", "null")
+        )
         skip_explicit_geo_filters = (
-            season_level_lc in pooled_geo_levels or contest_level_lc in pooled_geo_levels
+            (season_level_lc in pooled_geo_levels or contest_level_lc in pooled_geo_levels)
+            and not explicit_country_filter
         )
         allow_explicit_region_filter = bool(
             filter_region
@@ -853,10 +858,14 @@ class CRUDContest:
 
         # Appliquer les filtres géographiques
         # Priorité: filtres explicites > localisation de l'utilisateur
-        # For REGIONAL pooled rosters never apply country/filter from listing navigation.
+        # Country-level requests must stay country-scoped. Regional requests use filterRegion.
         has_location_filter = bool(
             filter_country or filter_region or filter_continent
-        ) and (not skip_explicit_geo_filters or allow_explicit_region_filter)
+        ) and (
+            not skip_explicit_geo_filters
+            or allow_explicit_region_filter
+            or explicit_country_filter
+        )
         
         applied_location_filter = False
         if has_location_filter:
@@ -864,7 +873,7 @@ class CRUDContest:
             applied_location_filter = True
             if filter_country:
                 # Use patterns for consistency with get_contest_with_enriched_contestants
-                if not skip_explicit_geo_filters:
+                if not skip_explicit_geo_filters or explicit_country_filter:
                     patterns = _get_country_match_patterns(filter_country)
                     conds = []
                     for pat in patterns:
@@ -1572,7 +1581,11 @@ class CRUDContest:
         # Pooled phases: listing often passes filter_country=Tanzania from the grid UI; applying it
         # here would hide other countries' qualifiers (Uganda/Kenya/…) in REGIONAL roster.
         if suppress_user_country_fallback:
-            effective_country = None
+            # Only regional-pool requests should suppress country. If the URL explicitly
+            # asks for country=Tanzania, keep that country scope even if stale contest
+            # metadata says regional/continent.
+            if not (effective_country and not effective_region):
+                effective_country = None
             effective_continent = None
             # Keep an explicit regional bloc filter (for example "East Africa").
             # Only implicit/user fallback regions are suppressed.
