@@ -1315,6 +1315,10 @@ def get_contest_contestants(
     filter_region: str = Query(None, alias="filterRegion", description="Filtrer par région"),
     filter_continent: str = Query(None, alias="filterContinent", description="Filtrer par continent"),
     filter_city: str = Query(None, alias="filterCity", description="Filtrer par ville"),
+    country: str = Query(None, description="Filtrer par pays (legacy query key)"),
+    region: str = Query(None, description="Filtrer par région (legacy query key)"),
+    continent: str = Query(None, description="Filtrer par continent (legacy query key)"),
+    city: str = Query(None, description="Filtrer par ville (legacy query key)"),
     user_id: Optional[int] = Query(None, description="Filtrer par user_id"),
     current_user: Optional[User] = Depends(deps.get_current_active_user_optional)
 ) -> List[ContestantWithAuthorAndStats]:
@@ -1438,11 +1442,17 @@ def get_contest_contestants(
             and str(getattr(contest, "level", None) or "").lower() in pooled_card_levels
         )
 
-        # Normalize "all"/empty filters from frontend query params.
-        fc = (filter_country or "").strip()
-        fr = (filter_region or "").strip()
-        fco = (filter_continent or "").strip()
-        fci = (filter_city or "").strip()
+        # Normalize filters from both modern keys (filterCountry,...) and
+        # legacy keys (country,...) used by some detail page routes.
+        merged_country = filter_country if filter_country is not None else country
+        merged_region = filter_region if filter_region is not None else region
+        merged_continent = filter_continent if filter_continent is not None else continent
+        merged_city = filter_city if filter_city is not None else city
+
+        fc = (merged_country or "").strip()
+        fr = (merged_region or "").strip()
+        fco = (merged_continent or "").strip()
+        fci = (merged_city or "").strip()
         fc_norm = fc.lower()
         fr_norm = fr.lower()
         fco_norm = fco.lower()
