@@ -7,7 +7,8 @@ import { useAuth } from '@/hooks/use-auth'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/components/ui/toast'
 import { contestService } from '@/services/contest-service'
-import { Hand, Trophy, MapPin, Calendar, ExternalLink, Star, History, ChevronDown } from 'lucide-react'
+import { Hand, Trophy, MapPin, Calendar, ExternalLink, Star, History, ChevronDown, LayoutGrid } from 'lucide-react'
+import { GeographyLevelIcon, type GeographyLevelIconKey } from '@/components/dashboard/geography-level-icons'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -82,6 +83,15 @@ interface HistoryResponse {
 // Points attribués selon la position (1er = 5 points, 2ème = 4 points, etc.)
 const POINTS_BY_POSITION = [5, 4, 3, 2, 1]
 
+/** Nomination phases store CITY season rows but UX treats them as country scope. */
+function formatMyHigh5SeasonBadge(level: string | null | undefined): string {
+  if (!level) return ''
+  const s = String(level).toLowerCase().trim()
+  if (s === 'city') return 'Country'
+  if (s === 'region') return 'Regional'
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
 function subscribeCoarsePointer(cb: () => void) {
   if (typeof window === "undefined") return () => {}
   const mq = window.matchMedia("(pointer: coarse)")
@@ -151,12 +161,16 @@ export default function MyHigh5Page() {
     })
   }
 
-  const levelTabs = [
-    { value: 'all', label: 'All' },
-    { value: 'country', label: 'Country' },
-    { value: 'regional', label: 'Regional' },
-    { value: 'continent', label: 'Continent' },
-    { value: 'global', label: 'Global' },
+  const levelTabs: Array<{
+    value: string
+    label: string
+    icon: GeographyLevelIconKey | 'all'
+  }> = [
+    { value: 'all', label: 'All', icon: 'all' },
+    { value: 'country', label: 'Country', icon: 'country' },
+    { value: 'regional', label: 'Regional', icon: 'regional' },
+    { value: 'continent', label: 'Continent', icon: 'continent' },
+    { value: 'global', label: 'Global', icon: 'global' },
   ]
 
   // Redirection si non authentifié
@@ -615,11 +629,17 @@ export default function MyHigh5Page() {
                   setTouchReorderSource(null)
                 }}
                 className={cn(
+                  'flex flex-col items-center gap-0.5 h-auto py-2 min-w-[4.25rem] rounded-2xl',
                   activeLevel === item.value &&
                     'bg-gradient-to-r from-myhigh5-primary to-myhigh5-secondary text-white'
                 )}
               >
-                {item.label}
+                {item.icon === 'all' ? (
+                  <LayoutGrid className="w-6 h-6 opacity-90" />
+                ) : (
+                  <GeographyLevelIcon level={item.icon} size={28} />
+                )}
+                <span className="text-[10px] font-semibold leading-tight">{item.label}</span>
               </Button>
             ))}
           </div>
@@ -693,8 +713,8 @@ export default function MyHigh5Page() {
                     </h2>
                     <div className="flex flex-wrap items-center gap-2 mt-1">
                       {season.season_level && (
-                        <span className="inline-block px-2 py-1 text-xs font-medium bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full capitalize">
-                          {season.season_level}
+                        <span className="inline-block px-2 py-1 text-xs font-medium bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full">
+                          {formatMyHigh5SeasonBadge(season.season_level)}
                         </span>
                       )}
                       <span className="text-sm text-gray-500 dark:text-gray-400">
@@ -804,8 +824,8 @@ export default function MyHigh5Page() {
                         <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3">
                           <div className="flex items-center gap-3">
                             {season.season_level && (
-                              <span className="inline-block px-2 py-1 text-xs font-medium bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full capitalize">
-                                {season.season_level}
+                              <span className="inline-block px-2 py-1 text-xs font-medium bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full">
+                                {formatMyHigh5SeasonBadge(season.season_level)}
                               </span>
                             )}
                             <span className="text-sm text-gray-500 dark:text-gray-400">

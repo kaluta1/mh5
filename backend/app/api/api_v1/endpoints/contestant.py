@@ -4,13 +4,21 @@ import json
 import re
 from urllib.parse import parse_qs, unquote, urlparse
 
-from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_
+from sqlalchemy.orm import Session, aliased
+from sqlalchemy import and_, or_, exists
 
 from app.api import deps
 from app.crud import contestant as crud_contestant, report
 from app.models.user import User
-from app.models.contests import Contestant, ContestSubmission, ContestSeason, ContestStage, ContestantSeason, SeasonLevel
+from app.models.contests import (
+    Contestant,
+    ContestSubmission,
+    ContestSeason,
+    ContestSeasonLink,
+    ContestStage,
+    ContestantSeason,
+    SeasonLevel,
+)
 from app.models.voting import MyFavorites, Vote, ContestantReaction, ContestantShare, ReactionType, ContestantVoting, ContestLike, ContestComment, PageView
 from app.models.contest import Contest
 from app.schemas.comment import ContestantReportCreate, ReportResponse
@@ -727,7 +735,35 @@ def get_my_votes(
             "global": SeasonLevel.GLOBAL,
         }
         query = query.join(ContestSeason, ContestantVoting.season_id == ContestSeason.id)
-        query = query.filter(ContestSeason.level == level_map[level_norm])
+        # Regional MyHigh5: votes can be stored on COUNTRY/CITY season rows while the
+        # contest round also has an active REGIONAL phase (same round_id). Include those
+        # rows so the Regional tab matches POST /vote + "already voted" checks.
+        if level_norm == "regional":
+            CS_reg = aliased(ContestSeason)
+            CSL_reg = aliased(ContestSeasonLink)
+            regional_phase_exists = exists().where(
+                and_(
+                    CSL_reg.contest_id == ContestantVoting.contest_id,
+                    CSL_reg.is_active == True,
+                    CSL_reg.season_id == CS_reg.id,
+                    CS_reg.round_id == ContestSeason.round_id,
+                    CS_reg.is_deleted == False,
+                    CS_reg.level == SeasonLevel.REGIONAL,
+                )
+            )
+            query = query.join(Contest, Contest.id == ContestantVoting.contest_id)
+            query = query.filter(
+                or_(
+                    ContestSeason.level == SeasonLevel.REGIONAL,
+                    and_(
+                        ContestSeason.level.in_([SeasonLevel.COUNTRY, SeasonLevel.CITY]),
+                        Contest.contest_mode == "nomination",
+                        regional_phase_exists,
+                    ),
+                )
+            )
+        else:
+            query = query.filter(ContestSeason.level == level_map[level_norm])
 
     # Filtrer par contest_id : même bucket MyHigh5 que POST /vote (vote_bucket_key + legacy)
     if contest_id:

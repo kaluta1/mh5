@@ -11,30 +11,21 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import {
-  Trophy,
-  Search,
-  ArrowRightCircle,
-  Building2,
-  Flag,
-  Map as MapIcon,
-  Globe2,
-  Globe,
-  ExternalLink,
-} from "lucide-react"
+import { Trophy, Search, ArrowRightCircle, ExternalLink } from "lucide-react"
+import { GeographyLevelIcon, type GeographyLevelIconKey } from "@/components/dashboard/geography-level-icons"
 
 const LEVEL_OPTIONS: Array<{
   value: TopHigh5Level
   label: string
-  icon: React.ComponentType<{ className?: string }>
+  geographyIcon: GeographyLevelIconKey
   requiresCountry: boolean
   helper: string
 }> = [
-  { value: "city", label: "City", icon: Building2, requiresCountry: true, helper: "Top 5 per city (filtered by country)" },
-  { value: "country", label: "Country", icon: Flag, requiresCountry: true, helper: "Top 5 for the selected country" },
-  { value: "regional", label: "Regional", icon: MapIcon, requiresCountry: true, helper: "Top 5 per region (filtered by country)" },
-  { value: "continent", label: "Continent", icon: Globe2, requiresCountry: true, helper: "Top 5 per continent (filtered by country)" },
-  { value: "global", label: "Global", icon: Globe, requiresCountry: false, helper: "Top 5 worldwide - no country filter" },
+  { value: "city", label: "City", geographyIcon: "city", requiresCountry: true, helper: "Top 5 per city (filtered by country)" },
+  { value: "country", label: "Country", geographyIcon: "country", requiresCountry: true, helper: "Top 5 for the selected country" },
+  { value: "regional", label: "Regional", geographyIcon: "regional", requiresCountry: true, helper: "Top 5 per region (filtered by country)" },
+  { value: "continent", label: "Continent", geographyIcon: "continent", requiresCountry: true, helper: "Top 5 per continent (filtered by country)" },
+  { value: "global", label: "Global", geographyIcon: "global", requiresCountry: false, helper: "Top 5 worldwide - no country filter" },
 ]
 
 /** Anchor for deep links: `/dashboard/top-high5#th5-<contestId>-<contestantId>` scrolls to the row. */
@@ -330,15 +321,12 @@ export default function TopHigh5Page() {
           </div>
           <Tabs value={activeLevel} onValueChange={handleLevelChange}>
             <TabsList className="flex flex-wrap h-auto gap-1 bg-gray-100 dark:bg-gray-800 p-1">
-              {levelOptions.map((opt) => {
-                const Icon = opt.icon
-                return (
-                  <TabsTrigger key={opt.value} value={opt.value} className="gap-1.5">
-                    <Icon className="w-4 h-4" />
-                    {opt.label}
-                  </TabsTrigger>
-                )
-              })}
+              {levelOptions.map((opt) => (
+                <TabsTrigger key={opt.value} value={opt.value} className="gap-1.5">
+                  <GeographyLevelIcon level={opt.geographyIcon} size={22} className="hidden sm:block" />
+                  {opt.label}
+                </TabsTrigger>
+              ))}
             </TabsList>
           </Tabs>
           <p className="text-xs text-gray-500 dark:text-gray-400">{currentLevelMeta.helper}</p>

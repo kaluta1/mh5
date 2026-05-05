@@ -8,7 +8,8 @@ import { useAuth } from '@/hooks/use-auth'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useToast } from '@/components/ui/toast'
 import { ContestsSkeleton } from '@/components/ui/skeleton'
-import { Lightbulb, Loader2, MapPin, Lock } from 'lucide-react'
+import { Lightbulb, Loader2, MapPin, Lock, LayoutGrid } from 'lucide-react'
+import { GeographyLevelIcon, type GeographyLevelIconKey } from '@/components/dashboard/geography-level-icons'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { logger } from '@/lib/logger'
@@ -143,6 +144,31 @@ function regionalPoolForCountry(country?: string | null): string | undefined {
   return key ? REGIONAL_POOL_BY_COUNTRY[key] : undefined
 }
 
+/** Only the current nomination month + the live voting round (hide Jan/Feb/March clutter). */
+function computeDisplayRounds(rounds: Round[]): Array<{ round: Round; pill: string }> {
+  if (!rounds?.length) return []
+  const voteRound = rounds.find((r: any) => isRoundVotingLive(r, rounds))
+  const now = new Date()
+  const currentMonthStr = now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }).toLowerCase()
+  const nominationRound =
+    rounds.find((r: any) => String(r.name || '').toLowerCase().includes(currentMonthStr)) || rounds[0]
+  if (nominationRound && voteRound && Number((nominationRound as any).id) === Number((voteRound as any).id)) {
+    return [{ round: nominationRound, pill: 'Nominations & voting' }]
+  }
+  const out: Array<{ round: Round; pill: string }> = []
+  const seen = new Set<number>()
+  const push = (r: Round | undefined | null, pill: string) => {
+    if (!r) return
+    const id = Number((r as any).id)
+    if (Number.isNaN(id) || seen.has(id)) return
+    seen.add(id)
+    out.push({ round: r, pill })
+  }
+  push(nominationRound, 'Nominations')
+  push(voteRound as Round | undefined, 'Voting')
+  return out.length ? out : rounds.map((r) => ({ round: r, pill: '' }))
+}
+
 function ContestsPageContent() {
   const { t } = useLanguage()
   const { user, isAuthenticated, isLoading } = useAuth()
@@ -199,6 +225,48 @@ function ContestsPageContent() {
     const voteRound = rounds.find((r: any) => isRoundVotingLive(r, rounds))
     return voteRound ? String(voteRound.id) : null
   }, [rounds])
+  const displayRounds = useMemo(() => computeDisplayRounds(rounds), [rounds])
+  const isVoteFocusedRound = Boolean(voteNowRoundId && activeRoundId === voteNowRoundId)
+
+  const nominationStageOptions = useMemo(() => {
+    const allStages: Array<{
+      value: NominationMigrationLevel
+      label: string
+      icon: GeographyLevelIconKey | 'all' | null
+    }> = [
+      { value: 'all', label: t('dashboard.contests.all'), icon: 'all' },
+      { value: 'city', label: t('dashboard.contests.city'), icon: 'city' },
+      { value: 'country', label: t('dashboard.contests.country'), icon: 'country' },
+      { value: 'regional', label: t('dashboard.contests.regional'), icon: 'regional' },
+      { value: 'continental', label: t('dashboard.contests.continental'), icon: 'continent' },
+      { value: 'global', label: t('dashboard.contests.global'), icon: 'global' },
+    ]
+    if (isVoteFocusedRound) return allStages
+    return allStages.filter((s) => s.value === 'all' || s.value === 'city' || s.value === 'country')
+  }, [isVoteFocusedRound, t])
+
+  useEffect(() => {
+    if (!isVoteFocusedRound && ['regional', 'continental', 'global'].includes(nominationMigrationLevel)) {
+      setNominationMigrationLevel('all')
+    }
+  }, [isVoteFocusedRound, nominationMigrationLevel])
+
+  useEffect(() => {
+    if (!rounds.length) return
+    const dr = computeDisplayRounds(rounds)
+    const allowed = new Set(dr.map((d) => String(d.round.id)))
+    setActiveRoundId((prev) => {
+      if (prev && allowed.has(prev)) return prev
+      return String(dr[0].round.id)
+    })
+  }, [rounds])
+
+  useEffect(() => {
+    if (categoryTab === 'participations' && filterLevel === 'country') {
+      setFilterLevel('all')
+    }
+  }, [categoryTab, filterLevel])
+
   const effectiveRoundIdForFetch = useMemo(() => {
     if (!activeRoundId) return null
     if (categoryTab !== 'nomination') return activeRoundId
@@ -232,14 +300,6 @@ function ContestsPageContent() {
         if (abortController.signal.aborted) return
         
         setRounds(data)
-
-        // Set default to current month's round
-        if (data.length > 0 && !activeRoundId) {
-          const now = new Date()
-          const currentMonthName = now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-          const currentRound = data.find((r: any) => r.name?.includes(currentMonthName))
-          setActiveRoundId(String(currentRound ? currentRound.id : data[0].id))
-        }
       } catch (error: any) {
         if (error.name === 'AbortError' || abortController.signal.aborted) {
           return
@@ -711,7 +771,7 @@ function ContestsPageContent() {
         {/* Round Selector (Top Tabs) */}
         <div className="mb-6">
           <div className="flex space-x-2 overflow-x-auto pb-2 scrollbar-hide">
-            {rounds.map((round: any) => (
+            {displayRounds.map(({ round, pill }) => (
               <button
                 key={round.id}
                 onClick={() => setActiveRoundId(String(round.id))}
@@ -720,7 +780,15 @@ function ContestsPageContent() {
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-900 dark:bg-gray-800/80 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white hover:scale-[1.02]'
                   }`}
               >
-                {isRoundVotingLive(round, rounds) && (
+                {pill ? (
+                  <span
+                    className={`text-[10px] font-semibold uppercase tracking-wide leading-none ${
+                      activeRoundId === String(round.id) ? 'text-sky-200' : 'text-blue-600 dark:text-blue-400'
+                    }`}
+                  >
+                    {pill}
+                  </span>
+                ) : isRoundVotingLive(round, rounds) ? (
                   <span
                     className={`text-[10px] font-semibold leading-none ${
                       activeRoundId === String(round.id)
@@ -730,7 +798,7 @@ function ContestsPageContent() {
                   >
                     VOTE NOW
                   </span>
-                )}
+                ) : null}
                 <span className="inline-flex items-center">
                   {(() => {
                     const isPast = new Date(round.submission_end_date + 'T23:59:59') < new Date()
@@ -770,23 +838,29 @@ function ContestsPageContent() {
 
           {/* Level Filter for Participations */}
           {categoryTab === 'participations' && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <MapPin className="w-4 h-4 text-gray-400 dark:text-gray-500" />
               <span className="text-sm text-gray-500 mr-1">{t('dashboard.contests.filter_level') || 'Level'}:</span>
               {[
-                { value: 'city', label: t('dashboard.contests.level_city') || 'City' },
-                { value: 'country', label: t('dashboard.contests.level_country') || 'Country' },
-                { value: 'all', label: t('dashboard.contests.all_levels') || 'All' },
+                { value: 'all', label: t('dashboard.contests.all_levels') || 'All', icon: 'all' as const },
+                { value: 'city', label: t('dashboard.contests.level_city') || 'City', icon: 'city' as const },
+                { value: 'regional', label: t('dashboard.contests.regional') || 'Regional', icon: 'regional' as const },
               ].map((level) => (
                 <button
                   key={level.value}
+                  type="button"
                   onClick={() => setFilterLevel(level.value)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
                     filterLevel === level.value
                       ? 'bg-blue-600 text-white shadow-sm'
                       : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-900 dark:bg-gray-800/60 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-300'
                   }`}
                 >
+                  {level.icon === 'all' ? (
+                    <LayoutGrid className="w-4 h-4 opacity-90" />
+                  ) : (
+                    <GeographyLevelIcon level={level.icon} size={22} />
+                  )}
                   {level.label}
                 </button>
               ))}
@@ -797,24 +871,23 @@ function ContestsPageContent() {
             <div className="flex items-center gap-2 mt-3 flex-wrap">
               <MapPin className="w-4 h-4 text-gray-400 dark:text-gray-500" />
               <span className="text-sm text-gray-500 mr-1">{t('dashboard.contests.migration_stage')}:</span>
-              {[
-                { value: 'all', label: t('dashboard.contests.all') },
-                { value: 'city', label: t('dashboard.contests.city') },
-                { value: 'country', label: t('dashboard.contests.country') },
-                { value: 'regional', label: t('dashboard.contests.regional') },
-                { value: 'continental', label: t('dashboard.contests.continental') },
-                { value: 'global', label: t('dashboard.contests.global') },
-              ].map((stage) => (
+              {nominationStageOptions.map((stage) => (
                 <button
                   key={stage.value}
-                  onClick={() => setNominationMigrationLevel(stage.value as NominationMigrationLevel)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                  type="button"
+                  onClick={() => setNominationMigrationLevel(stage.value)}
+                  className={`inline-flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-2xl text-[11px] font-semibold transition-all min-w-[3.25rem] ${
                     nominationMigrationLevel === stage.value
-                      ? 'bg-blue-600 text-white shadow-sm'
+                      ? 'bg-blue-600 text-white shadow-sm ring-2 ring-blue-400/60 ring-offset-1 ring-offset-white dark:ring-offset-gray-900'
                       : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-900 dark:bg-gray-800/60 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-300'
                   }`}
                 >
-                  {stage.label}
+                  {stage.icon === 'all' ? (
+                    <LayoutGrid className="w-6 h-6 opacity-90" />
+                  ) : stage.icon ? (
+                    <GeographyLevelIcon level={stage.icon} size={28} />
+                  ) : null}
+                  <span className="leading-tight text-center max-w-[4.5rem]">{stage.label}</span>
                 </button>
               ))}
             </div>
