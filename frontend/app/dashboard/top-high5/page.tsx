@@ -82,6 +82,7 @@ export default function TopHigh5Page() {
   const [loading, setLoading] = useState(true)
   const [activeCountry, setActiveCountry] = useState("")
   const [activeRoundId, setActiveRoundId] = useState<number | undefined>(undefined)
+  const [activeRegionQuery, setActiveRegionQuery] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null)
   const [isAutoRefreshing, setIsAutoRefreshing] = useState(false)
@@ -146,6 +147,7 @@ export default function TopHigh5Page() {
     level: TopHigh5Level
     roundId?: number
     silent?: boolean
+    regionQuery?: string
   }) => {
     try {
       if (!opts.silent) {
@@ -161,9 +163,20 @@ export default function TopHigh5Page() {
         roundId: opts.roundId,
         level: opts.level,
       })
-      setData(response)
+      const normalizedRegionQuery = (opts.regionQuery || "").trim().toLowerCase()
+      const nextData =
+        opts.level === "regional" && normalizedRegionQuery
+          ? {
+              ...response,
+              contests: (response.contests || []).filter((contest) =>
+                (contest.country_group || "").toLowerCase().includes(normalizedRegionQuery),
+              ),
+            }
+          : response
+      setData(nextData)
       setActiveCountry(isGlobal ? "" : trimmedCountry)
       setActiveRoundId(opts.roundId)
+      setActiveRegionQuery(opts.level === "regional" ? normalizedRegionQuery : "")
       setLastUpdatedAt(new Date())
     } catch (e: any) {
       setError(e?.message || "Failed to load Top High5")
@@ -185,8 +198,27 @@ export default function TopHigh5Page() {
     fetchData({ country: countryInput, level: nextLevel, roundId: parsed })
   }
 
+  const isLikelyRegionalSearch = (value: string) => {
+    const text = value.trim().toLowerCase()
+    if (!text) return false
+    return /(west|east|north|south|central|africa|asia|europe|america|oceania|middle east|caribbean)/i.test(text)
+  }
+
   const handleSearch = () => {
     const parsed = roundIdInput && !Number.isNaN(Number(roundIdInput)) ? Number(roundIdInput) : undefined
+    if (activeLevel === "regional") {
+      const raw = countryInput.trim()
+      const fallbackCountry = (activeCountry || (user as any)?.country || (user as any)?.author_country || "").trim()
+      const useRegionQuery = isLikelyRegionalSearch(raw)
+      const countryForRequest = useRegionQuery ? fallbackCountry : raw
+      fetchData({
+        country: countryForRequest,
+        level: activeLevel,
+        roundId: parsed,
+        regionQuery: useRegionQuery ? raw : "",
+      })
+      return
+    }
     fetchData({ country: countryInput, level: activeLevel, roundId: parsed })
   }
 
@@ -227,6 +259,7 @@ export default function TopHigh5Page() {
         level: activeLevel,
         roundId: activeRoundId,
         silent: true,
+        regionQuery: activeRegionQuery,
       })
 
     const tick = () => {
@@ -254,7 +287,7 @@ export default function TopHigh5Page() {
       window.removeEventListener("vote-changed", onVoteChanged)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, activeCountry, activeRoundId, activeLevel])
+  }, [isAuthenticated, activeCountry, activeRoundId, activeLevel, activeRegionQuery])
 
   // Deep link: scroll to `#th5-<contestId>-<contestantId>` after rows render (category funnel).
   useEffect(() => {
@@ -320,7 +353,7 @@ export default function TopHigh5Page() {
               onKeyDown={(e) => {
                 if (e.key === "Enter") handleSearch()
               }}
-              placeholder={t("settings.country") || "Country"}
+              placeholder={activeLevel === "regional" ? "Search region or country" : (t("settings.country") || "Country")}
               disabled={!currentLevelMeta.requiresCountry}
               className="pl-9"
             />
