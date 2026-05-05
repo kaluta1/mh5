@@ -2881,6 +2881,27 @@ def vote_for_contestant(
                     msg += f" Yours: {voter.continent}. Theirs: {ac_continent}."
                 return msg
             if not compare_with_unknown(voter.country, ac_country):
+                # Regional-phase safety net:
+                # some nomination flows can still resolve to COUNTRY season while
+                # the regional voting window is active for the round. In that case,
+                # accept voters from the same regional pool (e.g. Tanzania <-> Kenya).
+                round_obj = getattr(season, "round", None)
+                now_vote = contest_status_service._utc_now()
+                regional_open, _ = contest_status_service.season_stage_voting_status(
+                    round_obj,
+                    "regional",
+                    now_vote,
+                )
+                if (
+                    contest_mode_norm == "nomination"
+                    and regional_open is True
+                    and SeasonMigrationService.same_regional_voting_pool(
+                        getattr(voter, "country", None),
+                        ac_country,
+                    )
+                    is True
+                ):
+                    return None
                 msg = (
                     "You cannot vote for this contestant because this season is limited to voters in the same country. "
                     "Your country on your profile does not match this contestant's country."
