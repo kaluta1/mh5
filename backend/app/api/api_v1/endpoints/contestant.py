@@ -745,7 +745,6 @@ def get_my_votes(
                 and_(
                     CSL_reg.contest_id == ContestantVoting.contest_id,
                     CSL_reg.season_id == CS_reg.id,
-                    CS_reg.round_id == ContestSeason.round_id,
                     CS_reg.is_deleted == False,
                     CS_reg.level == SeasonLevel.REGIONAL,
                 )
