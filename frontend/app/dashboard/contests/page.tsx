@@ -264,7 +264,7 @@ function ContestsPageContent() {
       { value: 'all', label: t('dashboard.contests.all'), icon: 'all' },
       { value: 'country', label: t('dashboard.contests.country'), icon: 'country' },
       { value: 'regional', label: t('dashboard.contests.regional'), icon: 'regional' },
-      { value: 'city', label: t('dashboard.contests.city'), icon: 'city' },
+      // City is omitted here: vote-round Nominate tab only (participations still has City).
       { value: 'continental', label: t('dashboard.contests.continental'), icon: 'continent' },
       { value: 'global', label: t('dashboard.contests.global'), icon: 'global' },
     ]
@@ -291,6 +291,12 @@ function ContestsPageContent() {
 
   useEffect(() => {
     if (!showVoteGeographyLevels && ['regional', 'continental', 'global'].includes(nominationMigrationLevel)) {
+      setNominationMigrationLevel('all')
+    }
+  }, [showVoteGeographyLevels, nominationMigrationLevel])
+
+  useEffect(() => {
+    if (showVoteGeographyLevels && nominationMigrationLevel === 'city') {
       setNominationMigrationLevel('all')
     }
   }, [showVoteGeographyLevels, nominationMigrationLevel])
