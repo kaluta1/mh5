@@ -24,6 +24,7 @@ interface Contestant {
   id: number
   user_id: number
   season_id: number
+  round_id?: number | null
   title?: string
   description?: string
   registration_date: string
@@ -32,6 +33,7 @@ interface Contestant {
   is_qualified: boolean
   author_name?: string
   author_avatar_url?: string
+  author_country?: string | null
   votes_count: number
   comments_count?: number
   images_count: number
@@ -44,6 +46,11 @@ interface Season {
   id: number
   title: string
   level: string
+}
+
+interface RoundOption {
+  id: number
+  name: string
 }
 
 interface User {
@@ -71,7 +78,12 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
   const [contestants, setContestants] = useState<Contestant[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('all')
+  const [countryFilter, setCountryFilter] = useState('all')
+  const [roundFilter, setRoundFilter] = useState('all')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
+  const [roundOptions, setRoundOptions] = useState<RoundOption[]>([])
   const [selectedContestant, setSelectedContestant] = useState<Contestant | null>(null)
   const [loadingComments, setLoadingComments] = useState(false)
   const [showDialog, setShowDialog] = useState(false)
@@ -104,13 +116,17 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
   useEffect(() => {
     fetchContestants()
     fetchUsers()
-  }, [filter, contestId])
+  }, [filter, countryFilter, roundFilter, dateFrom, dateTo, contestId])
 
   useEffect(() => {
     if (selectedLevel) {
       fetchSeasonsByLevel(selectedLevel)
     }
   }, [selectedLevel])
+
+  useEffect(() => {
+    fetchRounds()
+  }, [])
 
   useEffect(() => {
     if (editingContestant) {
@@ -178,16 +194,37 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
   const fetchContestants = async () => {
     try {
       setLoading(true)
-      const statusParam = filter !== 'all' ? `?status_filter=${filter}` : ''
+      const params = new URLSearchParams()
+      if (filter !== 'all') params.set('status_filter', filter)
+      if (countryFilter !== 'all') params.set('country_filter', countryFilter)
+      if (roundFilter !== 'all') params.set('round_id', roundFilter)
+      if (dateFrom) params.set('date_from', dateFrom)
+      if (dateTo) params.set('date_to', dateTo)
+      const query = params.toString() ? `?${params.toString()}` : ''
       const endpoint = contestId 
-        ? `/api/v1/admin/contests/${contestId}/contestants${statusParam}`
-        : `/api/v1/admin/contestants${statusParam}`
+        ? `/api/v1/admin/contests/${contestId}/contestants${query}`
+        : `/api/v1/admin/contestants${query}`
       const response = await api.get(endpoint)
       setContestants(response.data)
     } catch (error) {
       console.error('Erreur lors du chargement des candidats:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchRounds = async () => {
+    try {
+      const response = await api.get('/api/v1/rounds/')
+      const rounds = Array.isArray(response.data) ? response.data : []
+      setRoundOptions(
+        rounds
+          .map((r: any) => ({ id: Number(r.id), name: String(r.name || `Round ${r.id}`) }))
+          .filter((r: RoundOption) => !Number.isNaN(r.id))
+      )
+    } catch (error) {
+      console.error('Erreur lors du chargement des rounds:', error)
+      setRoundOptions([])
     }
   }
 
@@ -438,6 +475,13 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
     c.author_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     c.title?.toLowerCase().includes(searchTerm.toLowerCase())
   )
+  const countryOptions = Array.from(
+    new Set(
+      contestants
+        .map((c) => (c.author_country || '').trim())
+        .filter((v) => !!v)
+    )
+  ).sort((a, b) => a.localeCompare(b))
   const pendingFilteredContestants = filteredContestants.filter((c) => c.verification_status === 'pending')
   const allPendingFilteredSelected =
     pendingFilteredContestants.length > 0 &&
@@ -541,6 +585,62 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
               className="dark:bg-gray-700 dark:border-gray-600 dark:text-white border-gray-300 focus:border-myhigh5-primary focus:ring-myhigh5-primary"
             />
           </div>
+          {!contestId && (
+            <div className="flex gap-2 w-full md:w-auto">
+              <Select value={countryFilter} onValueChange={setCountryFilter}>
+                <SelectTrigger className="w-full md:w-52 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                  <SelectValue placeholder="Filter country" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All countries</SelectItem>
+                  {countryOptions.map((country) => (
+                    <SelectItem key={country} value={country}>
+                      {country}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={roundFilter} onValueChange={setRoundFilter}>
+                <SelectTrigger className="w-full md:w-52 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                  <SelectValue placeholder="Filter round" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All rounds</SelectItem>
+                  {roundOptions.map((round) => (
+                    <SelectItem key={round.id} value={String(round.id)}>
+                      {round.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="w-full md:w-44 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                placeholder="From"
+              />
+              <Input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="w-full md:w-44 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                placeholder="To"
+              />
+              {(dateFrom || dateTo) && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setDateFrom('')
+                    setDateTo('')
+                  }}
+                >
+                  Clear dates
+                </Button>
+              )}
+            </div>
+          )}
           <div className="flex gap-2 w-full md:w-auto">
             {!showForm && (
               <Button

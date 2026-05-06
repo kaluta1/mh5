@@ -610,6 +610,10 @@ async def get_contest(
 @router.get("/contestants")
 async def get_all_contestants(
     status_filter: Optional[str] = Query(None, alias="status_filter"),
+    country_filter: Optional[str] = Query(None, alias="country_filter"),
+    round_id: Optional[int] = Query(None, alias="round_id"),
+    date_from: Optional[date] = Query(None, alias="date_from"),
+    date_to: Optional[date] = Query(None, alias="date_to"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -629,6 +633,33 @@ async def get_all_contestants(
     # Apply status filter if provided
     if status_filter and status_filter != 'all':
         query = query.filter(Contestant.verification_status == status_filter)
+
+    # Apply round filter if provided
+    if round_id:
+        query = query.filter(Contestant.round_id == round_id)
+
+    # Apply registration date range filter if provided
+    if date_from:
+        query = query.filter(cast(Contestant.created_at, Date) >= date_from)
+    if date_to:
+        query = query.filter(cast(Contestant.created_at, Date) <= date_to)
+
+    # Apply country filter if provided (contestant snapshot country -> nominator_country -> user country)
+    if country_filter and country_filter.strip():
+        from sqlalchemy import func
+
+        normalized_country = country_filter.strip().lower()
+        country_expr = func.lower(
+            func.trim(
+                func.coalesce(
+                    Contestant.country,
+                    Contestant.nominator_country,
+                    User.country,
+                    '',
+                )
+            )
+        )
+        query = query.join(User, Contestant.user_id == User.id).filter(country_expr == normalized_country)
     
     contestants = query.all()
     
@@ -734,6 +765,7 @@ async def get_all_contestants(
             'id': c.id,
             'user_id': c.user_id,
             'season_id': c.season_id,
+            'round_id': c.round_id,
             'title': c.title,
             'description': c.description,
             'registration_date': c.created_at,
@@ -742,6 +774,7 @@ async def get_all_contestants(
             'is_qualified': c.is_qualified,
             'author_name': c.user.full_name if c.user else None,
             'author_avatar_url': c.user.avatar_url if c.user else None,
+            'author_country': c.country or c.nominator_country or (c.user.country if c.user else None),
             'votes_count': votes_count,
             'comments_count': comments_count,
             'images_count': images_count,
