@@ -674,9 +674,7 @@ function ContestantDetailContent() {
           }
         }}
         onSharesClick={() => {
-          if (sharesList.length > 0) {
-            setHoveredElement({ type: 'shares', data: sharesList })
-          }
+          void handleShare()
         }}
       />
 
