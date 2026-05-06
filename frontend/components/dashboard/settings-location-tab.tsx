@@ -9,7 +9,7 @@ import { MapPin, AlertCircle } from 'lucide-react'
 import { countries } from '@/lib/countries'
 import { getCitiesByCountry } from '@/lib/geography'
 import geographyData from '@/lib/geography-data-complete.json'
-import { API_URL } from '@/lib/config'
+import { getEffectiveApiUrl } from '@/lib/config'
 
 interface SettingsLocationTabProps {
   user: any
@@ -121,7 +121,7 @@ export function SettingsLocationTab({ user, onUpdate }: SettingsLocationTabProps
         return
       }
 
-      const response = await fetch(`${API_URL}/api/v1/contestants/user/my-entries`, {
+      const response = await fetch(`${getEffectiveApiUrl()}/api/v1/contestants/user/my-entries`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -178,7 +178,7 @@ export function SettingsLocationTab({ user, onUpdate }: SettingsLocationTabProps
         return
       }
 
-      const response = await fetch(`${API_URL}/api/v1/users/me`, {
+      const response = await fetch(`${getEffectiveApiUrl()}/api/v1/users/me`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

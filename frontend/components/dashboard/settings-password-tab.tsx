@@ -5,7 +5,7 @@ import { useLanguage } from '@/contexts/language-context'
 import { useToast } from '@/components/ui/toast'
 import { Button } from '@/components/ui/button'
 import { Eye, EyeOff, Lock, Shield, CheckCircle2 } from 'lucide-react'
-import { API_URL } from '@/lib/config'
+import { getEffectiveApiUrl } from '@/lib/config'
 
 interface SettingsPasswordTabProps {
   user: any
@@ -116,7 +116,7 @@ export function SettingsPasswordTab({ user }: SettingsPasswordTabProps) {
         return
       }
 
-      const response = await fetch(`${API_URL}/api/v1/auth/change-password`, {
+      const response = await fetch(`${getEffectiveApiUrl()}/api/v1/auth/change-password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

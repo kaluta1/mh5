@@ -6,7 +6,7 @@ import { useToast } from '@/components/ui/toast'
 import { Button } from '@/components/ui/button'
 import { UploadButton } from '@/components/ui/upload-button'
 import { User, FileText, Image as ImageIcon, MapPin } from 'lucide-react'
-import { API_URL } from '@/lib/config'
+import { getEffectiveApiUrl } from '@/lib/config'
 import geographyData from '@/lib/geography-data-complete.json'
 import { getCitiesByCountry } from '@/lib/geography'
 
@@ -131,7 +131,7 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
         return
       }
 
-      const response = await fetch(`${API_URL}/api/v1/users/me`, {
+      const response = await fetch(`${getEffectiveApiUrl()}/api/v1/users/me`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -196,7 +196,7 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
           return
         }
 
-        const response = await fetch(`${API_URL}/api/v1/users/me`, {
+        const response = await fetch(`${getEffectiveApiUrl()}/api/v1/users/me`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
