@@ -734,7 +734,7 @@ def get_my_votes(
             "continent": SeasonLevel.CONTINENT,
             "global": SeasonLevel.GLOBAL,
         }
-        query = query.join(ContestSeason, ContestantVoting.season_id == ContestSeason.id)
+        query = query.outerjoin(ContestSeason, ContestantVoting.season_id == ContestSeason.id)
         # Regional MyHigh5: votes can be stored on COUNTRY/CITY season rows while the
         # contest round also has an active REGIONAL phase (same round_id). Include those
         # rows so the Regional tab matches POST /vote + "already voted" checks.
@@ -756,6 +756,11 @@ def get_my_votes(
                     ContestSeason.level == SeasonLevel.REGIONAL,
                     and_(
                         ContestSeason.level.in_([SeasonLevel.COUNTRY, SeasonLevel.CITY]),
+                        Contest.contest_mode == "nomination",
+                        regional_phase_exists,
+                    ),
+                    and_(
+                        ContestSeason.id.is_(None),
                         Contest.contest_mode == "nomination",
                         regional_phase_exists,
                     ),
