@@ -235,11 +235,25 @@ function ContestsPageContent() {
     return voteRound ? String(voteRound.id) : null
   }, [rounds])
   const displayRounds = useMemo(() => computeDisplayRounds(rounds), [rounds])
-  /** Use the selected top pill (Vote / Nominate & Vote), not only API "live vote" id equality — avoids missing levels when those disagree. */
+  /**
+   * Show Country / Regional / … chips when the user is in a voting-round context.
+   * Use several signals — frontend pill `kind`, API live-vote id, and `isRoundVotingLive` on the active row —
+   * so levels still appear if one of them drifts out of sync.
+   */
   const showVoteGeographyLevels = useMemo(() => {
-    const entry = displayRounds.find((d) => String(d.round.id) === activeRoundId)
-    return entry?.kind === 'vote' || entry?.kind === 'combined'
-  }, [displayRounds, activeRoundId])
+    if (!activeRoundId || !rounds.length) return false
+    const entryIdx = displayRounds.findIndex((d) => String(d.round.id) === activeRoundId)
+    const entry = entryIdx >= 0 ? displayRounds[entryIdx] : undefined
+    if (entry?.kind === 'vote' || entry?.kind === 'combined') return true
+    // Two top pills are always [current nomination month, live vote round]; index > 0 is the Vote round.
+    if (displayRounds.length >= 2 && entryIdx > 0) return true
+    if (voteNowRoundId && activeRoundId === voteNowRoundId) return true
+    // Never infer "voting context" from dates alone when this row is the Nominate-month pill.
+    if (entry?.kind === 'nominate') return false
+    const activeRound = rounds.find((r: any) => String(r.id) === activeRoundId)
+    if (activeRound && isRoundVotingLive(activeRound as any, rounds)) return true
+    return false
+  }, [displayRounds, activeRoundId, rounds, voteNowRoundId])
 
   const nominationStageOptions = useMemo(() => {
     const allStages: Array<{
