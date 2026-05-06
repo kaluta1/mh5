@@ -1020,6 +1020,46 @@ def get_my_votes(
         )
     )
 
+    # Regional tab UX: avoid mixed COUNTRY/REGIONAL duplicates for same category bucket.
+    # Keep one block per bucket, prefer the true REGIONAL row when present, and label it
+    # consistently as regional.
+    if level_filter_mode == "regional":
+        by_bucket: Dict[str, List[dict]] = {}
+        for s in result["seasons"]:
+            bucket = str(s.get("vote_bucket_key") or "")
+            by_bucket.setdefault(bucket, []).append(s)
+
+        collapsed: List[dict] = []
+        for bucket_key, items in by_bucket.items():
+            preferred = next(
+                (it for it in items if str(it.get("season_level") or "").lower() in ("regional", "region")),
+                items[0],
+            )
+            merged_votes: List[dict] = []
+            seen_contestants: set[int] = set()
+            # Merge votes across duplicated season blocks of same category; keep unique contestants.
+            for it in items:
+                for v in (it.get("votes") or []):
+                    cid = int(v.get("contestant_id"))
+                    if cid in seen_contestants:
+                        continue
+                    seen_contestants.add(cid)
+                    merged_votes.append(v)
+            merged_votes = merged_votes[:5]
+            preferred["votes"] = merged_votes
+            preferred["votes_count"] = len(merged_votes)
+            preferred["remaining_slots"] = max(0, 5 - len(merged_votes))
+            preferred["season_level"] = "regional"
+            collapsed.append(preferred)
+
+        collapsed.sort(
+            key=lambda s: (
+                -int(s.get("votes_count") or 0),
+                (s.get("category_name") or s.get("contest_name") or "").lower(),
+            )
+        )
+        result["seasons"] = collapsed
+
     return result
 
 
