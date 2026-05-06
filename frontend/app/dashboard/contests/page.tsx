@@ -235,7 +235,11 @@ function ContestsPageContent() {
     return voteRound ? String(voteRound.id) : null
   }, [rounds])
   const displayRounds = useMemo(() => computeDisplayRounds(rounds), [rounds])
-  const isVoteFocusedRound = Boolean(voteNowRoundId && activeRoundId === voteNowRoundId)
+  /** Use the selected top pill (Vote / Nominate & Vote), not only API "live vote" id equality — avoids missing levels when those disagree. */
+  const showVoteGeographyLevels = useMemo(() => {
+    const entry = displayRounds.find((d) => String(d.round.id) === activeRoundId)
+    return entry?.kind === 'vote' || entry?.kind === 'combined'
+  }, [displayRounds, activeRoundId])
 
   const nominationStageOptions = useMemo(() => {
     const allStages: Array<{
@@ -244,9 +248,9 @@ function ContestsPageContent() {
       icon: GeographyLevelIconKey | 'all' | null
     }> = [
       { value: 'all', label: t('dashboard.contests.all'), icon: 'all' },
-      { value: 'city', label: t('dashboard.contests.city'), icon: 'city' },
       { value: 'country', label: t('dashboard.contests.country'), icon: 'country' },
       { value: 'regional', label: t('dashboard.contests.regional'), icon: 'regional' },
+      { value: 'city', label: t('dashboard.contests.city'), icon: 'city' },
       { value: 'continental', label: t('dashboard.contests.continental'), icon: 'continent' },
       { value: 'global', label: t('dashboard.contests.global'), icon: 'global' },
     ]
@@ -257,32 +261,32 @@ function ContestsPageContent() {
     type Opt = { value: string; label: string; icon: GeographyLevelIconKey | 'all' }
     const full: Opt[] = [
       { value: 'all', label: t('dashboard.contests.all_levels') || 'All', icon: 'all' },
-      { value: 'city', label: t('dashboard.contests.level_city') || 'City', icon: 'city' },
       { value: 'country', label: t('dashboard.contests.country') || 'Country', icon: 'country' },
       { value: 'regional', label: t('dashboard.contests.regional') || 'Regional', icon: 'regional' },
+      { value: 'city', label: t('dashboard.contests.level_city') || 'City', icon: 'city' },
       { value: 'continental', label: t('dashboard.contests.continental') || 'Continental', icon: 'continent' },
       { value: 'global', label: t('dashboard.contests.global') || 'Global', icon: 'global' },
     ]
     const slim: Opt[] = [
       { value: 'all', label: t('dashboard.contests.all_levels') || 'All', icon: 'all' },
-      { value: 'city', label: t('dashboard.contests.level_city') || 'City', icon: 'city' },
+      { value: 'country', label: t('dashboard.contests.country') || 'Country', icon: 'country' },
       { value: 'regional', label: t('dashboard.contests.regional') || 'Regional', icon: 'regional' },
     ]
-    return isVoteFocusedRound ? full : slim
-  }, [isVoteFocusedRound, t])
+    return showVoteGeographyLevels ? full : slim
+  }, [showVoteGeographyLevels, t])
 
   useEffect(() => {
-    if (!isVoteFocusedRound && ['regional', 'continental', 'global'].includes(nominationMigrationLevel)) {
+    if (!showVoteGeographyLevels && ['regional', 'continental', 'global'].includes(nominationMigrationLevel)) {
       setNominationMigrationLevel('all')
     }
-  }, [isVoteFocusedRound, nominationMigrationLevel])
+  }, [showVoteGeographyLevels, nominationMigrationLevel])
 
   useEffect(() => {
-    if (categoryTab !== 'participations' || isVoteFocusedRound) return
+    if (categoryTab !== 'participations' || showVoteGeographyLevels) return
     if (['country', 'continental', 'global'].includes(filterLevel)) {
       setFilterLevel('all')
     }
-  }, [categoryTab, filterLevel, isVoteFocusedRound])
+  }, [categoryTab, filterLevel, showVoteGeographyLevels])
 
   useEffect(() => {
     if (!rounds.length) return
@@ -867,59 +871,6 @@ function ContestsPageContent() {
             showCountryFilter={true}
             className="mb-4"
           />
-
-          {/* Level filter: full geography set when Vote round is selected */}
-          {categoryTab === 'participations' && (
-            <div className="flex items-center gap-2 flex-wrap">
-              <MapPin className="w-4 h-4 text-gray-400 dark:text-gray-500" />
-              <span className="text-sm text-gray-500 mr-1">{t('dashboard.contests.filter_level') || 'Level'}:</span>
-              {participationLevelOptions.map((level) => (
-                <button
-                  key={level.value}
-                  type="button"
-                  onClick={() => setFilterLevel(level.value)}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                    filterLevel === level.value
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-900 dark:bg-gray-800/60 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-300'
-                  }`}
-                >
-                  {level.icon === 'all' ? (
-                    <LayoutGrid className="w-4 h-4 opacity-90" />
-                  ) : (
-                    <GeographyLevelIcon level={level.icon} size={22} />
-                  )}
-                  {level.label}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {categoryTab === 'nomination' && isVoteFocusedRound && (
-            <div className="flex items-center gap-2 mt-3 flex-wrap">
-              <MapPin className="w-4 h-4 text-gray-400 dark:text-gray-500" />
-              <span className="text-sm text-gray-500 mr-1">{t('dashboard.contests.migration_stage')}:</span>
-              {nominationStageOptions.map((stage) => (
-                <button
-                  key={stage.value}
-                  type="button"
-                  onClick={() => setNominationMigrationLevel(stage.value)}
-                  className={`inline-flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-2xl text-[11px] font-semibold transition-all min-w-[3.25rem] ${
-                    nominationMigrationLevel === stage.value
-                      ? 'bg-blue-600 text-white shadow-sm ring-2 ring-blue-400/60 ring-offset-1 ring-offset-white dark:ring-offset-gray-900'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-900 dark:bg-gray-800/60 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-300'
-                  }`}
-                >
-                  {stage.icon === 'all' ? (
-                    <LayoutGrid className="w-6 h-6 opacity-90" />
-                  ) : stage.icon ? (
-                    <GeographyLevelIcon level={stage.icon} size={28} />
-                  ) : null}
-                  <span className="leading-tight text-center max-w-[4.5rem]">{stage.label}</span>
-                </button>
-              ))}
-            </div>
-          )}
         </div>
 
         {/* Main Category Tabs (Nomination / Participations) */}
@@ -974,6 +925,59 @@ function ContestsPageContent() {
             </button>
           </div>
         </div>
+
+        {/* Level filters directly under tabs: Vote / Nominate & Vote rounds show Country, Regional, … on Nominate; Participations uses same when voting round selected */}
+        {categoryTab === 'participations' && (
+          <div className="mb-6 flex items-center gap-2 flex-wrap">
+            <MapPin className="w-4 h-4 text-gray-400 dark:text-gray-500" />
+            <span className="text-sm text-gray-500 mr-1">{t('dashboard.contests.filter_level') || 'Level'}:</span>
+            {participationLevelOptions.map((level) => (
+              <button
+                key={level.value}
+                type="button"
+                onClick={() => setFilterLevel(level.value)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                  filterLevel === level.value
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-900 dark:bg-gray-800/60 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-300'
+                }`}
+              >
+                {level.icon === 'all' ? (
+                  <LayoutGrid className="w-4 h-4 opacity-90" />
+                ) : (
+                  <GeographyLevelIcon level={level.icon} size={22} />
+                )}
+                {level.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {categoryTab === 'nomination' && showVoteGeographyLevels && (
+          <div className="mb-6 flex items-center gap-2 flex-wrap">
+            <MapPin className="w-4 h-4 text-gray-400 dark:text-gray-500" />
+            <span className="text-sm text-gray-500 mr-1">{t('dashboard.contests.filter_level') || 'Level'}:</span>
+            {nominationStageOptions.map((stage) => (
+              <button
+                key={stage.value}
+                type="button"
+                onClick={() => setNominationMigrationLevel(stage.value)}
+                className={`inline-flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-2xl text-[11px] font-semibold transition-all min-w-[3.25rem] ${
+                  nominationMigrationLevel === stage.value
+                    ? 'bg-blue-600 text-white shadow-sm ring-2 ring-blue-400/60 ring-offset-1 ring-offset-white dark:ring-offset-gray-900'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-900 dark:bg-gray-800/60 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-300'
+                }`}
+              >
+                {stage.icon === 'all' ? (
+                  <LayoutGrid className="w-6 h-6 opacity-90" />
+                ) : stage.icon ? (
+                  <GeographyLevelIcon level={stage.icon} size={28} />
+                ) : null}
+                <span className="leading-tight text-center max-w-[4.5rem]">{stage.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Contests Grid */}
         {contestsLoading && !contestsData ? (
