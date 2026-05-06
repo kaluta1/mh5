@@ -9,7 +9,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useToast } from '@/components/ui/toast'
 import { ContestsSkeleton } from '@/components/ui/skeleton'
-import { Lightbulb, Loader2, MapPin, Lock, LayoutGrid } from 'lucide-react'
+import { Lightbulb, Loader2, MapPin, Lock } from 'lucide-react'
 import { GeographyLevelIcon, type GeographyLevelIconKey } from '@/components/dashboard/geography-level-icons'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -257,14 +257,13 @@ function ContestsPageContent() {
 
   const nominationStageOptions = useMemo(() => {
     const allStages: Array<{
-      value: NominationMigrationLevel
+      value: Exclude<NominationMigrationLevel, 'all'>
       label: string
-      icon: GeographyLevelIconKey | 'all' | null
+      icon: GeographyLevelIconKey
     }> = [
-      { value: 'all', label: t('dashboard.contests.all'), icon: 'all' },
       { value: 'country', label: t('dashboard.contests.country'), icon: 'country' },
       { value: 'regional', label: t('dashboard.contests.regional'), icon: 'regional' },
-      // City is omitted here: vote-round Nominate tab only (participations still has City).
+      // City omitted: vote-round Nominate tab only (participations still has City).
       { value: 'continental', label: t('dashboard.contests.continental'), icon: 'continent' },
       { value: 'global', label: t('dashboard.contests.global'), icon: 'global' },
     ]
@@ -272,9 +271,8 @@ function ContestsPageContent() {
   }, [t])
 
   const participationLevelOptions = useMemo(() => {
-    type Opt = { value: string; label: string; icon: GeographyLevelIconKey | 'all' }
+    type Opt = { value: string; label: string; icon: GeographyLevelIconKey }
     const full: Opt[] = [
-      { value: 'all', label: t('dashboard.contests.all_levels') || 'All', icon: 'all' },
       { value: 'country', label: t('dashboard.contests.country') || 'Country', icon: 'country' },
       { value: 'regional', label: t('dashboard.contests.regional') || 'Regional', icon: 'regional' },
       { value: 'city', label: t('dashboard.contests.level_city') || 'City', icon: 'city' },
@@ -282,7 +280,6 @@ function ContestsPageContent() {
       { value: 'global', label: t('dashboard.contests.global') || 'Global', icon: 'global' },
     ]
     const slim: Opt[] = [
-      { value: 'all', label: t('dashboard.contests.all_levels') || 'All', icon: 'all' },
       { value: 'country', label: t('dashboard.contests.country') || 'Country', icon: 'country' },
       { value: 'regional', label: t('dashboard.contests.regional') || 'Regional', icon: 'regional' },
     ]
@@ -962,11 +959,7 @@ function ContestsPageContent() {
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-900 dark:bg-gray-800/60 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-300'
                 }`}
               >
-                {level.icon === 'all' ? (
-                  <LayoutGrid className="w-4 h-4 opacity-90" />
-                ) : (
-                  <GeographyLevelIcon level={level.icon} size={22} />
-                )}
+                <GeographyLevelIcon level={level.icon} size={22} />
                 {level.label}
               </button>
             ))}
@@ -988,11 +981,7 @@ function ContestsPageContent() {
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-900 dark:bg-gray-800/60 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-300'
                 }`}
               >
-                {stage.icon === 'all' ? (
-                  <LayoutGrid className="w-6 h-6 opacity-90" />
-                ) : stage.icon ? (
-                  <GeographyLevelIcon level={stage.icon} size={28} />
-                ) : null}
+                <GeographyLevelIcon level={stage.icon} size={28} />
                 <span className="leading-tight text-center max-w-[4.5rem]">{stage.label}</span>
               </button>
             ))}
