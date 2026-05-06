@@ -393,6 +393,28 @@ def get_top_high5_by_country(
             points_by_id: dict[int, int] = {}
             engagement_by_id: dict[int, dict] = {}
             if contestant_ids:
+                points_season_ids = [season.id]
+                if getattr(season, "level", None) == SeasonLevel.REGIONAL:
+                    # Regional votes may be stored on country/city season rows during
+                    # migration transitions; include same-round nomination season rows
+                    # so TopHigh5 stars reflect what users voted in MyHigh5.
+                    sibling_rows = (
+                        db.query(ContestSeason.id)
+                        .join(ContestSeasonLink, ContestSeasonLink.season_id == ContestSeason.id)
+                        .filter(ContestSeason.round_id == season.round_id)
+                        .filter(ContestSeason.is_deleted == False)
+                        .filter(ContestSeasonLink.contest_id == contest.id)
+                        .filter(
+                            ContestSeason.level.in_(
+                                [SeasonLevel.CITY, SeasonLevel.COUNTRY, SeasonLevel.REGIONAL]
+                            )
+                        )
+                        .distinct()
+                        .all()
+                    )
+                    sibling_ids = [r[0] for r in sibling_rows if r and r[0] is not None]
+                    if sibling_ids:
+                        points_season_ids = list({*points_season_ids, *sibling_ids})
                 points_rows = (
                     db.query(
                         ContestantVoting.contestant_id,
@@ -400,7 +422,7 @@ def get_top_high5_by_country(
                     )
                     .filter(
                         and_(
-                            ContestantVoting.season_id == season.id,
+                            ContestantVoting.season_id.in_(points_season_ids),
                             ContestantVoting.contest_id == contest.id,
                             ContestantVoting.contestant_id.in_(contestant_ids),
                         )

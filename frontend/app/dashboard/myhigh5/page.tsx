@@ -7,7 +7,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/components/ui/toast'
 import { contestService } from '@/services/contest-service'
-import { Hand, Trophy, MapPin, Calendar, ExternalLink, Star, History, ChevronDown, LayoutGrid } from 'lucide-react'
+import { Hand, Trophy, MapPin, Calendar, ExternalLink, Star, History, ChevronDown } from 'lucide-react'
 import { GeographyLevelIcon, type GeographyLevelIconKey } from '@/components/dashboard/geography-level-icons'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -138,7 +138,7 @@ export default function MyHigh5Page() {
   const [pageLoading, setPageLoading] = useState(true)
   const [historyLoading, setHistoryLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('active')
-  const [activeLevel, setActiveLevel] = useState('all')
+  const [activeLevel, setActiveLevel] = useState('country')
   const [draggedItem, setDraggedItem] = useState<{ seasonIndex: number; voteIndex: number } | null>(null)
   /** Touch / coarse pointer: first tap selects row, second tap on another row moves there (same as drag-drop). */
   const [touchReorderSource, setTouchReorderSource] = useState<{
@@ -164,9 +164,8 @@ export default function MyHigh5Page() {
   const levelTabs: Array<{
     value: string
     label: string
-    icon: GeographyLevelIconKey | 'all'
+    icon: GeographyLevelIconKey
   }> = [
-    { value: 'all', label: 'All', icon: 'all' },
     { value: 'country', label: 'Country', icon: 'country' },
     { value: 'regional', label: 'Regional', icon: 'regional' },
     { value: 'continent', label: 'Continent', icon: 'continent' },
@@ -634,11 +633,7 @@ export default function MyHigh5Page() {
                     'bg-gradient-to-r from-myhigh5-primary to-myhigh5-secondary text-white'
                 )}
               >
-                {item.icon === 'all' ? (
-                  <LayoutGrid className="w-6 h-6 opacity-90" />
-                ) : (
-                  <GeographyLevelIcon level={item.icon} size={28} />
-                )}
+                <GeographyLevelIcon level={item.icon} size={28} />
                 <span className="text-[10px] font-semibold leading-tight">{item.label}</span>
               </Button>
             ))}
