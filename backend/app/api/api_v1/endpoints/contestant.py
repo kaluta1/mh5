@@ -717,6 +717,7 @@ def get_my_votes(
     # Filtrer par season_id si fourni
     if season_id:
         query = query.filter(ContestantVoting.season_id == season_id)
+    level_filter_mode: Optional[str] = None
     if level:
         level_norm = level.strip().lower()
         allowed_levels = {"city", "country", "regional", "region", "continent", "global"}
@@ -734,38 +735,12 @@ def get_my_votes(
             "continent": SeasonLevel.CONTINENT,
             "global": SeasonLevel.GLOBAL,
         }
-        query = query.outerjoin(ContestSeason, ContestantVoting.season_id == ContestSeason.id)
-        # Regional MyHigh5: votes can be stored on COUNTRY/CITY season rows while the
-        # contest round also has an active REGIONAL phase (same round_id). Include those
-        # rows so the Regional tab matches POST /vote + "already voted" checks.
         if level_norm == "regional":
-            CS_reg = aliased(ContestSeason)
-            CSL_reg = aliased(ContestSeasonLink)
-            regional_phase_exists = exists().where(
-                and_(
-                    CSL_reg.contest_id == ContestantVoting.contest_id,
-                    CSL_reg.season_id == CS_reg.id,
-                    CS_reg.is_deleted == False,
-                    CS_reg.level == SeasonLevel.REGIONAL,
-                )
-            )
-            query = query.join(Contest, Contest.id == ContestantVoting.contest_id)
-            query = query.filter(
-                or_(
-                    ContestSeason.level == SeasonLevel.REGIONAL,
-                    and_(
-                        ContestSeason.level.in_([SeasonLevel.COUNTRY, SeasonLevel.CITY]),
-                        Contest.contest_mode == "nomination",
-                        regional_phase_exists,
-                    ),
-                    and_(
-                        ContestSeason.id.is_(None),
-                        Contest.contest_mode == "nomination",
-                        regional_phase_exists,
-                    ),
-                )
-            )
+            # Robust regional filtering is applied post-query (Python), so we avoid
+            # brittle SQL joins/correlations that caused 500 for some legacy rows.
+            level_filter_mode = "regional"
         else:
+            query = query.outerjoin(ContestSeason, ContestantVoting.season_id == ContestSeason.id)
             query = query.filter(ContestSeason.level == level_map[level_norm])
 
     # Filtrer par contest_id : même bucket MyHigh5 que POST /vote (vote_bucket_key + legacy)
@@ -809,6 +784,50 @@ def get_my_votes(
         ),
         ContestantVoting.vote_date.asc()
     ).all()
+
+    if level_filter_mode == "regional" and all_votes:
+        contest_ids = list({v.contest_id for v in all_votes if v.contest_id is not None})
+        contest_mode_by_id: Dict[int, str] = {}
+        regional_contest_ids: set[int] = set()
+
+        if contest_ids:
+            contest_rows = db.query(Contest.id, Contest.contest_mode).filter(Contest.id.in_(contest_ids)).all()
+            for cid, cm in contest_rows:
+                contest_mode_by_id[cid] = str(cm.value if hasattr(cm, "value") else cm or "").strip().lower()
+
+            regional_contest_ids = {
+                row[0]
+                for row in (
+                    db.query(ContestSeasonLink.contest_id)
+                    .join(ContestSeason, ContestSeason.id == ContestSeasonLink.season_id)
+                    .filter(ContestSeason.is_deleted == False)
+                    .filter(ContestSeason.level == SeasonLevel.REGIONAL)
+                    .filter(ContestSeasonLink.contest_id.in_(contest_ids))
+                    .distinct()
+                    .all()
+                )
+                if row and row[0] is not None
+            }
+
+        filtered_votes: List[ContestantVoting] = []
+        for vote in all_votes:
+            season_obj = vote.season
+            contest_id_val = vote.contest_id
+            season_level = None
+            if season_obj is not None and getattr(season_obj, "level", None) is not None:
+                season_level = season_obj.level.value if hasattr(season_obj.level, "value") else str(season_obj.level)
+                season_level = str(season_level).lower()
+
+            if season_level in ("regional", "region"):
+                filtered_votes.append(vote)
+                continue
+
+            if season_level in ("country", "city"):
+                is_nomination = contest_mode_by_id.get(contest_id_val or -1, "") == "nomination"
+                if is_nomination and (contest_id_val in regional_contest_ids):
+                    filtered_votes.append(vote)
+
+        all_votes = filtered_votes
     
     # Grouper par saison + vote_bucket_key (une ligne MyHigh5 par catégorie réelle)
     votes_by_group: dict = {}
