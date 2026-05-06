@@ -267,6 +267,8 @@ def get_top_high5_by_country(
                 elif season.level == SeasonLevel.COUNTRY:
                     # Canonical grouping by country. Match the user-selected country
                     # against the group keys (case / alias insensitive).
+                    ivc_variants = {"côte d'ivoire", "cote d'ivoire", "ivory coast", "ivory cost", "ci"}
+                    strict_round_scope_for_country = any(v in ivc_variants for v in variants)
                     grouped = season_migration_service.get_top_contestants_by_location(
                         db,
                         season.id,
@@ -284,7 +286,11 @@ def get_top_high5_by_country(
                             matched_key = key
                             break
                     if matched_key is not None:
-                        per_location_groups.append((matched_key, grouped.get(matched_key, [])))
+                        members = grouped.get(matched_key, [])
+                        if strict_round_scope_for_country:
+                            members = [c for c in members if getattr(c, "round_id", None) == rnd.id]
+                        if members:
+                            per_location_groups.append((matched_key, members))
                     else:
                         # Fallback: rebuild snapshot from active season contestants
                         # whose country matches the search (handles seasons where no
@@ -307,6 +313,8 @@ def get_top_high5_by_country(
                             c for c in season_contestants
                             if any(v in variants for v in _normalized_country_candidates(c))
                         ]
+                        if strict_round_scope_for_country:
+                            filtered = [c for c in filtered if getattr(c, "round_id", None) == rnd.id]
                         if filtered:
                             per_location_groups.append((selected_country, filtered))
 
