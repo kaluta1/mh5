@@ -3,13 +3,14 @@
 import * as React from "react"
 import { useState, useEffect, useMemo, Suspense, useRef, useCallback } from "react"
 import dynamic from 'next/dynamic'
+import Image from 'next/image'
 import { useLanguage } from '@/contexts/language-context'
 import { useAuth } from '@/hooks/use-auth'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useToast } from '@/components/ui/toast'
 import { ContestsSkeleton } from '@/components/ui/skeleton'
 import { Lightbulb, Loader2, MapPin, Lock, LayoutGrid } from 'lucide-react'
-import { GeographyLevelIcon, type GeographyLevelIconKey } from '@/components/dashboard/geography-level-icons'
+import { GeographyLevelIcon } from '@/components/dashboard/geography-level-icons'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { logger } from '@/lib/logger'
@@ -144,8 +145,10 @@ function regionalPoolForCountry(country?: string | null): string | undefined {
   return key ? REGIONAL_POOL_BY_COUNTRY[key] : undefined
 }
 
+type RoundTabKind = 'nominate' | 'vote' | 'combined'
+
 /** Only the current nomination month + the live voting round (hide Jan/Feb/March clutter). */
-function computeDisplayRounds(rounds: Round[]): Array<{ round: Round; pill: string }> {
+function computeDisplayRounds(rounds: Round[]): Array<{ round: Round; pill: string; kind: RoundTabKind }> {
   if (!rounds?.length) return []
   const voteRound = rounds.find((r: any) => isRoundVotingLive(r, rounds))
   const now = new Date()
@@ -153,20 +156,26 @@ function computeDisplayRounds(rounds: Round[]): Array<{ round: Round; pill: stri
   const nominationRound =
     rounds.find((r: any) => String(r.name || '').toLowerCase().includes(currentMonthStr)) || rounds[0]
   if (nominationRound && voteRound && Number((nominationRound as any).id) === Number((voteRound as any).id)) {
-    return [{ round: nominationRound, pill: 'Nominations & voting' }]
+    return [{ round: nominationRound, pill: 'Nominate & Vote', kind: 'combined' }]
   }
-  const out: Array<{ round: Round; pill: string }> = []
+  const out: Array<{ round: Round; pill: string; kind: RoundTabKind }> = []
   const seen = new Set<number>()
-  const push = (r: Round | undefined | null, pill: string) => {
+  const push = (r: Round | undefined | null, pill: string, kind: RoundTabKind) => {
     if (!r) return
     const id = Number((r as any).id)
     if (Number.isNaN(id) || seen.has(id)) return
     seen.add(id)
-    out.push({ round: r, pill })
+    out.push({ round: r, pill, kind })
   }
-  push(nominationRound, 'Nominations')
-  push(voteRound as Round | undefined, 'Voting')
-  return out.length ? out : rounds.map((r) => ({ round: r, pill: '' }))
+  push(nominationRound, 'Nominate', 'nominate')
+  push(voteRound as Round | undefined, 'Vote', 'vote')
+  return out.length
+    ? out
+    : rounds.map((r) => ({
+        round: r,
+        pill: isRoundVotingLive(r, rounds) ? 'Vote' : 'Nominate',
+        kind: (isRoundVotingLive(r, rounds) ? 'vote' : 'nominate') as RoundTabKind,
+      }))
 }
 
 function ContestsPageContent() {
@@ -227,23 +236,6 @@ function ContestsPageContent() {
   }, [rounds])
   const displayRounds = useMemo(() => computeDisplayRounds(rounds), [rounds])
   const isVoteFocusedRound = Boolean(voteNowRoundId && activeRoundId === voteNowRoundId)
-
-  const nominationStageOptions = useMemo(() => {
-    const allStages: Array<{
-      value: NominationMigrationLevel
-      label: string
-      icon: GeographyLevelIconKey | 'all' | null
-    }> = [
-      { value: 'all', label: t('dashboard.contests.all'), icon: 'all' },
-      { value: 'city', label: t('dashboard.contests.city'), icon: 'city' },
-      { value: 'country', label: t('dashboard.contests.country'), icon: 'country' },
-      { value: 'regional', label: t('dashboard.contests.regional'), icon: 'regional' },
-      { value: 'continental', label: t('dashboard.contests.continental'), icon: 'continent' },
-      { value: 'global', label: t('dashboard.contests.global'), icon: 'global' },
-    ]
-    if (isVoteFocusedRound) return allStages
-    return allStages.filter((s) => s.value === 'all' || s.value === 'city' || s.value === 'country')
-  }, [isVoteFocusedRound, t])
 
   useEffect(() => {
     if (!isVoteFocusedRound && ['regional', 'continental', 'global'].includes(nominationMigrationLevel)) {
@@ -771,50 +763,54 @@ function ContestsPageContent() {
         {/* Round Selector (Top Tabs) */}
         <div className="mb-6">
           <div className="flex space-x-2 overflow-x-auto pb-2 scrollbar-hide">
-            {displayRounds.map(({ round, pill }) => (
-              <button
-                key={round.id}
-                onClick={() => setActiveRoundId(String(round.id))}
-                className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 whitespace-nowrap flex flex-col items-center justify-center gap-0.5 min-h-[3rem] ${activeRoundId === String(round.id)
-                  ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-500/30 scale-105'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-900 dark:bg-gray-800/80 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white hover:scale-[1.02]'
-                  }`}
-              >
-                {pill ? (
-                  <span
-                    className={`text-[10px] font-semibold uppercase tracking-wide leading-none ${
-                      activeRoundId === String(round.id) ? 'text-sky-200' : 'text-blue-600 dark:text-blue-400'
+            {displayRounds.map(({ round, pill, kind }) => {
+              const isPast = new Date(round.submission_end_date + 'T23:59:59') < new Date()
+              const showLock = isPast && kind === 'vote'
+              const iconNominate = (
+                <Image
+                  src="/contests/nominate-participate-icon.png"
+                  alt=""
+                  width={28}
+                  height={28}
+                  className="h-7 w-7 object-contain flex-shrink-0 rounded-md"
+                />
+              )
+              const iconVote = (
+                <Image
+                  src="/contests/vote-tab-icon.png"
+                  alt=""
+                  width={28}
+                  height={28}
+                  className="h-7 w-7 object-contain flex-shrink-0 rounded-md"
+                />
+              )
+              return (
+                <button
+                  key={round.id}
+                  onClick={() => setActiveRoundId(String(round.id))}
+                  className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 whitespace-nowrap flex flex-row items-center justify-center gap-2 min-h-[3rem] ${activeRoundId === String(round.id)
+                    ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-500/30 scale-105'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-900 dark:bg-gray-800/80 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white hover:scale-[1.02]'
                     }`}
-                  >
-                    {pill}
+                >
+                  {showLock && <Lock className="w-4 h-4 opacity-80 flex-shrink-0" aria-hidden />}
+                  {kind === 'combined' ? (
+                    <span className="inline-flex items-center gap-1">
+                      {iconNominate}
+                      {iconVote}
+                    </span>
+                  ) : kind === 'vote' ? (
+                    iconVote
+                  ) : (
+                    iconNominate
+                  )}
+                  <span className="font-semibold leading-tight">
+                    {pill ||
+                      (isRoundVotingLive(round, rounds) ? (t('dashboard.contests.vote_now_short') || 'Vote') : '')}
                   </span>
-                ) : isRoundVotingLive(round, rounds) ? (
-                  <span
-                    className={`text-[10px] font-semibold leading-none ${
-                      activeRoundId === String(round.id)
-                        ? 'text-sky-200'
-                        : 'text-blue-600 dark:text-blue-400'
-                    }`}
-                  >
-                    VOTE NOW
-                  </span>
-                ) : null}
-                <span className="inline-flex items-center">
-                  {(() => {
-                    const isPast = new Date(round.submission_end_date + 'T23:59:59') < new Date()
-                    return (
-                      <>
-                        {isPast && <Lock className="w-3 h-3 mr-1 inline opacity-60 flex-shrink-0" />}
-                        {round.name}{' '}
-                        <span className="ml-1 opacity-70">
-                          ({round.contests_count !== undefined ? round.contests_count : (round.contests?.length || 0)})
-                        </span>
-                      </>
-                    )
-                  })()}
-                </span>
-              </button>
-            ))}
+                </button>
+              )
+            })}
           </div>
         </div>
 
@@ -866,32 +862,6 @@ function ContestsPageContent() {
               ))}
             </div>
           )}
-
-          {categoryTab === 'nomination' && (
-            <div className="flex items-center gap-2 mt-3 flex-wrap">
-              <MapPin className="w-4 h-4 text-gray-400 dark:text-gray-500" />
-              <span className="text-sm text-gray-500 mr-1">{t('dashboard.contests.migration_stage')}:</span>
-              {nominationStageOptions.map((stage) => (
-                <button
-                  key={stage.value}
-                  type="button"
-                  onClick={() => setNominationMigrationLevel(stage.value)}
-                  className={`inline-flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-2xl text-[11px] font-semibold transition-all min-w-[3.25rem] ${
-                    nominationMigrationLevel === stage.value
-                      ? 'bg-blue-600 text-white shadow-sm ring-2 ring-blue-400/60 ring-offset-1 ring-offset-white dark:ring-offset-gray-900'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-900 dark:bg-gray-800/60 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-300'
-                  }`}
-                >
-                  {stage.icon === 'all' ? (
-                    <LayoutGrid className="w-6 h-6 opacity-90" />
-                  ) : stage.icon ? (
-                    <GeographyLevelIcon level={stage.icon} size={28} />
-                  ) : null}
-                  <span className="leading-tight text-center max-w-[4.5rem]">{stage.label}</span>
-                </button>
-              ))}
-            </div>
-          )}
         </div>
 
         {/* Main Category Tabs (Nomination / Participations) */}
@@ -912,9 +882,16 @@ function ContestsPageContent() {
                 setFilterLevel('all'); // Reset level filter
                 setNominationMigrationLevel('all');
               }}
-              className={`px-6 py-3 text-base font-semibold transition-colors border-b-2 ${categoryTab === 'nomination' ? 'border-blue-500 text-blue-600 dark:text-blue-400 bg-blue-500/5' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}`}
+              className={`inline-flex items-center gap-2 px-6 py-3 text-base font-semibold transition-colors border-b-2 ${categoryTab === 'nomination' ? 'border-blue-500 text-blue-600 dark:text-blue-400 bg-blue-500/5' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}`}
             >
-              {t('dashboard.contests.nomination') || 'Nomination'}
+              <Image
+                src="/contests/nominate-participate-icon.png"
+                alt=""
+                width={22}
+                height={22}
+                className="h-[22px] w-[22px] object-contain"
+              />
+              {t('dashboard.contests.nominate_tab') || 'Nominate'}
             </button>
             <button
               onClick={() => {
@@ -926,8 +903,15 @@ function ContestsPageContent() {
                 setFilterLevel('all'); // Default to all levels for participations
                 setNominationMigrationLevel('all');
               }}
-              className={`px-6 py-3 text-base font-semibold transition-colors border-b-2 ${categoryTab === 'participations' ? 'border-blue-500 text-blue-600 dark:text-blue-400 bg-blue-500/5' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}`}
+              className={`inline-flex items-center gap-2 px-6 py-3 text-base font-semibold transition-colors border-b-2 ${categoryTab === 'participations' ? 'border-blue-500 text-blue-600 dark:text-blue-400 bg-blue-500/5' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}`}
             >
+              <Image
+                src="/contests/nominate-participate-icon.png"
+                alt=""
+                width={22}
+                height={22}
+                className="h-[22px] w-[22px] object-contain"
+              />
               {t('dashboard.contests.participations') || 'Participations'}
             </button>
           </div>
