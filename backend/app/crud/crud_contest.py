@@ -23,7 +23,7 @@ _COUNTRY_CODE_TO_NAMES: Dict[str, List[str]] = {
     "ug": ["%ug%", "%uganda%"],
     "et": ["%et%", "%ethiopia%"],
     "sn": ["%sn%", "%senegal%"],
-    "ci": ["%ci%", "%ivory coast%", "%cote d'ivoire%", "%côte d'ivoire%"],
+    "ci": ["%ci%", "%ivory coast%", "%ivory cost%", "%cote d'ivoire%", "%côte d'ivoire%", "%ivoire%"],
     "cm": ["%cm%", "%cameroon%"],
     "us": ["%us%", "%usa%", "%united states%", "%united states of america%"],
     "gb": ["%gb%", "%uk%", "%united kingdom%", "%great britain%"],
@@ -39,10 +39,35 @@ def _get_country_match_patterns(country: str) -> List[str]:
     norm = str(country).lower().strip()
     # Direct pattern for the input
     patterns = [f"%{norm}%"]
-    # Add known aliases when input is a 2-letter code
+
+    # Build reverse alias index so full names like "côte d'ivoire" resolve to "ci"
+    # and inherit all known aliases/patterns.
+    alias_to_code: Dict[str, str] = {}
+    for code, pats in _COUNTRY_CODE_TO_NAMES.items():
+        alias_to_code[code] = code
+        for p in pats:
+            token = str(p).replace("%", "").strip().lower()
+            if token:
+                alias_to_code[token] = code
+
+    matched_code = None
     if len(norm) == 2 and norm in _COUNTRY_CODE_TO_NAMES:
-        patterns = _COUNTRY_CODE_TO_NAMES[norm]
-    return patterns
+        matched_code = norm
+    elif norm in alias_to_code:
+        matched_code = alias_to_code[norm]
+
+    if matched_code and matched_code in _COUNTRY_CODE_TO_NAMES:
+        patterns.extend(_COUNTRY_CODE_TO_NAMES[matched_code])
+
+    # Keep insertion order while removing duplicates.
+    deduped: List[str] = []
+    seen = set()
+    for p in patterns:
+        if p in seen:
+            continue
+        seen.add(p)
+        deduped.append(p)
+    return deduped
 
 
 def _normalize_contest_mode(mode: Any) -> str:
