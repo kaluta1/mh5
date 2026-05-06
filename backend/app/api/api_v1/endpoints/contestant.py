@@ -744,7 +744,6 @@ def get_my_votes(
             regional_phase_exists = exists().where(
                 and_(
                     CSL_reg.contest_id == ContestantVoting.contest_id,
-                    CSL_reg.is_active == True,
                     CSL_reg.season_id == CS_reg.id,
                     CS_reg.round_id == ContestSeason.round_id,
                     CS_reg.is_deleted == False,
