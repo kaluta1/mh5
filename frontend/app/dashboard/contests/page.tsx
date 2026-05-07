@@ -913,7 +913,7 @@ function ContestsPageContent() {
               className={`inline-flex items-center gap-2 px-6 py-3 text-base font-semibold transition-colors border-b-2 ${categoryTab === 'nomination' ? 'border-blue-500 text-blue-600 dark:text-blue-400 bg-blue-500/5' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}`}
             >
               <Image
-                src="/contests/nominate-participate-icon.png"
+                src="/contests/submit-tab-icon.png?v=2"
                 alt=""
                 width={22}
                 height={22}
@@ -934,7 +934,7 @@ function ContestsPageContent() {
               className={`inline-flex items-center gap-2 px-6 py-3 text-base font-semibold transition-colors border-b-2 ${categoryTab === 'participations' ? 'border-blue-500 text-blue-600 dark:text-blue-400 bg-blue-500/5' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}`}
             >
               <Image
-                src="/contests/nominate-participate-icon.png"
+                src="/contests/submit-tab-icon.png?v=2"
                 alt=""
                 width={22}
                 height={22}
