@@ -1524,12 +1524,9 @@ class CRUDContest:
         pooled_season_membership_scope = bool(
             season and season_level in ("regional", "region", "continent", "global")
         )
-        nomination_country_membership_scope = bool(
-            season
-            and contest_mode == "nomination"
-            and season_level in ("country", "city")
-            and target_round_id is not None
-        )
+        # Keep contest detail roster aligned with round card counts:
+        # country/city nomination views should stay round-scoped when roundId is provided.
+        nomination_country_membership_scope = False
         if target_round_id is not None and not pooled_season_membership_scope and not nomination_country_membership_scope:
             contestants_query = contestants_query.filter(Contestant.round_id == target_round_id)
             logger.info(
@@ -1555,18 +1552,8 @@ class CRUDContest:
             ):
                 contestants_query = contestants_query.filter(regional_voting_pools_sql_predicate())
         elif nomination_country_membership_scope:
-            # Country nomination voting can happen in a later month while nominees keep
-            # their original registration round_id (e.g. March). Use active season
-            # membership for the selected country season instead of strict round_id.
-            active_season_member_ids = db.query(ContestantSeason.contestant_id).filter(
-                ContestantSeason.season_id == season.id,
-                ContestantSeason.is_active == True,
-            )
-            contestants_query = contestants_query.filter(Contestant.id.in_(active_season_member_ids))
-            logger.info(
-                f"[get_contest_with_enriched_contestants] Country nomination scope via "
-                f"active ContestantSeason links for season_id={season.id} (round_id={target_round_id})"
-            )
+            # Disabled intentionally (see note above).
+            pass
         
         # =====================================================
         # FILTRAGE GÉOGRAPHIQUE
