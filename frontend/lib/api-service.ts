@@ -84,6 +84,8 @@ export interface TopContestant {
 export const ApiService = {
     // Rounds
     getRounds: async (params?: {
+        skip?: number;
+        limit?: number;
         roundId?: number;
         contestMode?: string;
         filterCountry?: string;

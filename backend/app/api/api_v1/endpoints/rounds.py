@@ -139,7 +139,7 @@ def _contest_card_level_for_round(db: Session, round_obj: Round, contest: Any, m
 def read_rounds(
     db: Session = Depends(deps.get_db),
     skip: int = 0,
-    limit: int = 100,
+    limit: int = 24,
     contest_id: Optional[int] = Query(None, description="ID du contest pour récupérer ses rounds"),
     round_id: Optional[int] = Query(None, alias="roundId", description="ID du round spécifique"),
     current_user: Optional[models.User] = Depends(deps.get_current_active_user_optional),

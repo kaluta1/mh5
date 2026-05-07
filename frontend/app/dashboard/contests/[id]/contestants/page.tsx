@@ -97,7 +97,7 @@ export default function ContestantsListPage() {
   useEffect(() => {
     const loadRounds = async () => {
       try {
-        const rd = await ApiService.getRounds() as any
+        const rd = await ApiService.getRounds({ contestLimit: 1, limit: 24 }) as any
         if (Array.isArray(rd)) {
           setRounds(
             rd.map((r: any, i: number) => ({

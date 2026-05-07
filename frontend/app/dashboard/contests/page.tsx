@@ -343,7 +343,7 @@ function ContestsPageContent() {
       try {
         setRoundsLoading(true)
         // Fetch rounds with minimal data for faster response
-        const data = await ApiService.getRounds({ contestLimit: 1 }) // Minimal data for round selector
+        const data = await ApiService.getRounds({ contestLimit: 1, limit: 12 }) // Minimal data for round selector
         
         // Check if aborted
         if (abortController.signal.aborted) return
