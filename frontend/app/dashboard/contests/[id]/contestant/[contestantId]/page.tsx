@@ -585,8 +585,7 @@ function ContestantDetailContent() {
     contestMode === 'nomination' ||
     !!contestant.nominator_country ||
     !!contestant.nominator_city
-  const hasRoundContext = !!(roundIdFromUrl && !Number.isNaN(parseInt(roundIdFromUrl, 10)))
-  const canVoteInContext = Boolean(contestant.can_vote) && (!isNomination || hasRoundContext)
+  const canVoteInContext = Boolean(contestant.can_vote)
   // "Nominated for" should reflect the current contest title.
   // Prefer fresh contest endpoint title, then fallback to contestant payload.
   const nominationLabel = contestDisplayTitle || contestant.contest_title || contestant.contest_category

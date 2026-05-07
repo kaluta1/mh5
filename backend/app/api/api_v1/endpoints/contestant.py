@@ -2902,15 +2902,6 @@ def vote_for_contestant(
     # Strict rule requested by product:
     # nomination contests can be submitted during submission phase, but voting is allowed
     # only when the round is in its voting window.
-    if contest_mode_norm == "nomination":
-        round_obj = getattr(season, "round", None)
-        now_vote = contest_status_service._utc_now()
-        if not round_obj or not contest_status_service.round_voting_open_at(round_obj, now_vote):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Vote in this stage is no longer available.",
-            )
-
     season_window_open, season_window_message = _season_voting_window_status()
     if season_window_open is False:
         raise HTTPException(
@@ -3449,15 +3440,6 @@ def replace_fifth_vote(
 
     contest_mode_norm = _normalize_contest_mode(getattr(contest, "contest_mode", None))
     # Keep replace-vote aligned with the strict nomination vote-round rule.
-    if contest_mode_norm == "nomination":
-        round_obj = getattr(season, "round", None)
-        now_vote = contest_status_service._utc_now()
-        if not round_obj or not contest_status_service.round_voting_open_at(round_obj, now_vote):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Vote in this stage is no longer available.",
-            )
-
     season_window_open, season_window_message = _season_voting_window_status_replace()
     if season_window_open is False:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=season_window_message)
