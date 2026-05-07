@@ -138,7 +138,7 @@ export default function MyHigh5Page() {
   const [pageLoading, setPageLoading] = useState(true)
   const [historyLoading, setHistoryLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('active')
-  const [activeLevel, setActiveLevel] = useState('country')
+  const [activeLevel, setActiveLevel] = useState('city')
   const [draggedItem, setDraggedItem] = useState<{ seasonIndex: number; voteIndex: number } | null>(null)
   /** Touch / coarse pointer: first tap selects row, second tap on another row moves there (same as drag-drop). */
   const [touchReorderSource, setTouchReorderSource] = useState<{
@@ -166,6 +166,7 @@ export default function MyHigh5Page() {
     label: string
     icon: GeographyLevelIconKey
   }> = [
+    { value: 'city', label: t('dashboard.contests.level_city') || 'City', icon: 'city' },
     { value: 'country', label: 'Country', icon: 'country' },
     { value: 'regional', label: 'Regional', icon: 'regional' },
     { value: 'continent', label: 'Continent', icon: 'continent' },

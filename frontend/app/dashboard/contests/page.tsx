@@ -261,9 +261,9 @@ function ContestsPageContent() {
       label: string
       icon: GeographyLevelIconKey
     }> = [
+      { value: 'city', label: t('dashboard.contests.level_city') || 'City', icon: 'city' },
       { value: 'country', label: t('dashboard.contests.country'), icon: 'country' },
       { value: 'regional', label: t('dashboard.contests.regional'), icon: 'regional' },
-      // City omitted: vote-round Nominate tab only (participations still has City).
       { value: 'continental', label: t('dashboard.contests.continental'), icon: 'continent' },
       { value: 'global', label: t('dashboard.contests.global'), icon: 'global' },
     ]
@@ -273,13 +273,14 @@ function ContestsPageContent() {
   const participationLevelOptions = useMemo(() => {
     type Opt = { value: string; label: string; icon: GeographyLevelIconKey }
     const full: Opt[] = [
+      { value: 'city', label: t('dashboard.contests.level_city') || 'City', icon: 'city' },
       { value: 'country', label: t('dashboard.contests.country') || 'Country', icon: 'country' },
       { value: 'regional', label: t('dashboard.contests.regional') || 'Regional', icon: 'regional' },
-      { value: 'city', label: t('dashboard.contests.level_city') || 'City', icon: 'city' },
       { value: 'continental', label: t('dashboard.contests.continental') || 'Continental', icon: 'continent' },
       { value: 'global', label: t('dashboard.contests.global') || 'Global', icon: 'global' },
     ]
     const slim: Opt[] = [
+      { value: 'city', label: t('dashboard.contests.level_city') || 'City', icon: 'city' },
       { value: 'country', label: t('dashboard.contests.country') || 'Country', icon: 'country' },
       { value: 'regional', label: t('dashboard.contests.regional') || 'Regional', icon: 'regional' },
     ]
@@ -288,12 +289,6 @@ function ContestsPageContent() {
 
   useEffect(() => {
     if (!showVoteGeographyLevels && ['regional', 'continental', 'global'].includes(nominationMigrationLevel)) {
-      setNominationMigrationLevel('all')
-    }
-  }, [showVoteGeographyLevels, nominationMigrationLevel])
-
-  useEffect(() => {
-    if (showVoteGeographyLevels && nominationMigrationLevel === 'city') {
       setNominationMigrationLevel('all')
     }
   }, [showVoteGeographyLevels, nominationMigrationLevel])
@@ -678,6 +673,34 @@ function ContestsPageContent() {
     [filterCountry, user?.country, categoryTab]
   )
 
+  // Keep contest detail filters aligned with current list filters
+  // so card participants_count and detail list show the same population.
+  const buildContestNavParams = React.useCallback(
+    (contestStatus: unknown) => {
+      const params = new URLSearchParams()
+      if (roundIdNav) params.set('roundId', String(roundIdNav))
+
+      const level = normalizeContestLevel(String(contestStatus ?? ''))
+      const region = filterRegion || regionalPoolForCountry(filterCountry) || regionalPoolForCountry(user?.country)
+      if (level === 'regional') {
+        if (region) params.set('region', region)
+      } else if (shouldPassCountryNavParam(contestStatus)) {
+        const countryValue =
+          categoryTab === 'nomination'
+            ? (filterCountry && filterCountry !== 'all' && filterCountry !== '' ? filterCountry : (user?.country || ''))
+            : (filterCountry || '')
+        if (countryValue && countryValue !== 'all') params.set('country', countryValue)
+      }
+
+      if (filterContinent && filterContinent !== 'all') {
+        params.set('continent', filterContinent)
+      }
+      params.set('entryType', categoryTab === 'nomination' ? 'nomination' : 'participation')
+      return params
+    },
+    [roundIdNav, filterRegion, filterCountry, user?.country, shouldPassCountryNavParam, filterContinent, categoryTab]
+  )
+
   // Raw Contests List (Before filtering by type) - Now uses allContests for infinite scroll
   const rawContests = useMemo(() => {
     if (!allContests || allContests.length === 0) return []
@@ -703,7 +726,7 @@ function ContestsPageContent() {
         startDate: new Date(),
         status: c.level || 'country',
         received: Number(c.votes_count) || 0,
-        contestants: Number(c.participants_count) || Number(c.entries_count) || 0,
+        contestants: Number(c.participants_count ?? c.entries_count ?? 0),
         isOpen: contestsData?.is_submission_open || contestsData?.is_voting_open || false,
         contestType: c.contest_type,
         isSubmissionOpen: contestsData?.is_submission_open,
@@ -1016,46 +1039,12 @@ function ContestsPageContent() {
                     )
                   }
                   onViewContestants={() => {
-                    const params = new URLSearchParams()
-                    if (roundIdNav) params.set('roundId', String(roundIdNav))
-                    if (normalizeContestLevel(contest.status) === 'regional') {
-                      const region = filterRegion || regionalPoolForCountry(filterCountry) || regionalPoolForCountry(user?.country)
-                      if (region) params.set('region', region)
-                    } else if (shouldPassCountryNavParam(contest.status)) {
-                      const cv =
-                        categoryTab === 'nomination'
-                          ? (filterCountry && filterCountry !== 'all' && filterCountry !== ''
-                              ? filterCountry
-                              : (user?.country || ''))
-                          : (filterCountry || '')
-                      if (cv && cv !== 'all') params.set('country', cv)
-                    }
-                    if (filterContinent && filterContinent !== 'all') {
-                      params.set('continent', filterContinent)
-                    }
-                    params.set('entryType', categoryTab === 'nomination' ? 'nomination' : 'participation')
+                    const params = buildContestNavParams(contest.status)
                     const q = params.toString()
                     router.push(`/dashboard/contests/${contest.id}${q ? `?${q}` : ''}`)
                   }}
                   onOpenDetails={() => {
-                    const params = new URLSearchParams()
-                    if (roundIdNav) params.set('roundId', String(roundIdNav))
-                    if (normalizeContestLevel(contest.status) === 'regional') {
-                      const region = filterRegion || regionalPoolForCountry(filterCountry) || regionalPoolForCountry(user?.country)
-                      if (region) params.set('region', region)
-                    } else if (shouldPassCountryNavParam(contest.status)) {
-                      const cv =
-                        categoryTab === 'nomination'
-                          ? (filterCountry && filterCountry !== 'all' && filterCountry !== ''
-                              ? filterCountry
-                              : (user?.country || ''))
-                          : (filterCountry || '')
-                      if (cv && cv !== 'all') params.set('country', cv)
-                    }
-                    if (filterContinent && filterContinent !== 'all') {
-                      params.set('continent', filterContinent)
-                    }
-                    params.set('entryType', categoryTab === 'nomination' ? 'nomination' : 'participation')
+                    const params = buildContestNavParams(contest.status)
                     const q = params.toString()
                     router.push(`/dashboard/contests/${contest.id}${q ? `?${q}` : ''}`)
                   }}
