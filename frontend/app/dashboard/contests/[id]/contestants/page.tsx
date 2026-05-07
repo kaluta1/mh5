@@ -70,6 +70,7 @@ export default function ContestantsListPage() {
   }, [])
 
   const roundIdParam = searchParams.get('roundId')
+  const viewOnly = searchParams.get('viewOnly') === 'true'
 
   const loadData = useCallback(async () => {
     try {
@@ -83,7 +84,7 @@ export default function ContestantsListPage() {
       setContestMode(String(data.contest_mode || '').split('.').pop()?.trim().toLowerCase() || 'participation')
       setActiveRoundId(data.display_round_id ?? data.active_round_id ?? null)
       const cts = data.contestants || []
-      setAllContestants(cts)
+      setAllContestants(viewOnly ? cts.map((c: ContestantData) => ({ ...c, can_vote: false })) : cts)
       const countries = new Set<string>()
       cts.forEach((c: ContestantData) => { if (c.author_country) countries.add(c.author_country) })
       setAvailableCountries(Array.from(countries).sort())
@@ -92,7 +93,7 @@ export default function ContestantsListPage() {
       setFavoriteIds(favs)
     } catch (error) { console.error('Error:', error) }
     finally { setLoading(false) }
-  }, [contestId, roundIdParam])
+  }, [contestId, roundIdParam, viewOnly])
 
   useEffect(() => {
     const loadRounds = async () => {
@@ -346,6 +347,7 @@ export default function ContestantsListPage() {
                         if (roundIdParam) params.set('roundId', roundIdParam)
                         if (contestMode === 'nomination') params.set('entryType', 'nomination')
                         if (selectedCountry && selectedCountry !== 'all') params.set('country', selectedCountry)
+                        if (viewOnly) params.set('viewOnly', 'true')
                         const qs = params.toString()
                         router.push(`/dashboard/contests/${contestId}/contestant/${contestant.id}${qs ? `?${qs}` : ''}`)
                       }}
@@ -403,6 +405,7 @@ export default function ContestantsListPage() {
                           if (roundIdParam) params.set('roundId', roundIdParam)
                           if (contestMode === 'nomination') params.set('entryType', 'nomination')
                           if (selectedCountry && selectedCountry !== 'all') params.set('country', selectedCountry)
+                          if (viewOnly) params.set('viewOnly', 'true')
                           const qs = params.toString()
                           router.push(`/dashboard/contests/${contestId}/contestant/${contestant.id}${qs ? `?${qs}` : ''}`)
                         }}

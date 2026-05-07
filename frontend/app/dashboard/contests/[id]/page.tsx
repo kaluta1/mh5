@@ -151,6 +151,7 @@ export default function ContestDetailPage() {
   })
   const entryType = searchParams.get('entryType') || undefined
   const roundIdFromUrl = searchParams.get('roundId')
+  const viewOnly = searchParams.get('viewOnly') === 'true'
 
   // Sync state from URL when params change (e.g. navigation from list with country=Uganda)
   React.useEffect(() => {
@@ -195,10 +196,13 @@ export default function ContestDetailPage() {
     if (roundIdFromUrl) {
       params.set('roundId', roundIdFromUrl)
     }
+    if (viewOnly) {
+      params.set('viewOnly', 'true')
+    }
     const queryString = params.toString()
     const newUrl = `/dashboard/contests/${contestId}${queryString ? `?${queryString}` : ''}`
     router.replace(newUrl, { scroll: false })
-  }, [router, contestId, entryType, roundIdFromUrl])
+  }, [router, contestId, entryType, roundIdFromUrl, viewOnly])
 
   // REST Data Fetching - Optimized for speed
   // silent: do not show full-page skeleton (avoids remounting contestant cards and losing "Voted" UI after vote)
@@ -259,12 +263,13 @@ export default function ContestDetailPage() {
           description: ct.description ?? '',
           votes: ct.votes_count ?? 0,
           totalPoints: ct.total_points ?? 0,
-          isVotingOpenForRound: ct.is_voting_open_for_round !== false,
+          isVotingOpenForRound: !viewOnly && ct.is_voting_open_for_round !== false,
           rank: ct.rank,
           imagesCount: ct.images_count ?? images.length,
           videosCount: ct.videos_count ?? videos.length,
-          canVote: ct.can_vote ?? false,
+          canVote: viewOnly ? false : ct.can_vote ?? false,
           hasVoted: ct.has_voted ?? false,
+          voteRestrictionReason: viewOnly ? 'voting_not_open' : ct.vote_restriction_reason,
           media: [...images, ...videos],
           comments: ct.comments_count ?? 0,
           reactions: ct.reactions_count ?? 0,
@@ -307,7 +312,7 @@ export default function ContestDetailPage() {
         setPageLoading(false)
       }
     }
-  }, [contestId, filterCountry, filterRegion, filterContinent, entryType, roundIdFromUrl, t])
+  }, [contestId, filterCountry, filterRegion, filterContinent, entryType, roundIdFromUrl, viewOnly, t])
 
   // Decide if the current user already submitted (so the CTA should show "Edit").
   // This is needed because `current_user_contesting` from the API can be inaccurate for nominations.
@@ -690,6 +695,7 @@ export default function ContestDetailPage() {
                     if (roundIdFromUrl) params.set('roundId', roundIdFromUrl)
                     if (filterCountry) params.set('country', filterCountry)
                     if (filterContinent && filterContinent !== 'all') params.set('continent', filterContinent)
+                    if (viewOnly) params.set('viewOnly', 'true')
                     const qs = params.toString()
                     router.push(`/dashboard/contests/${contestId}/contestants${qs ? '?' + qs : ''}`)
                   }}
@@ -968,6 +974,7 @@ export default function ContestDetailPage() {
                     if (filterCountry && filterCountry !== 'all') params.set('country', filterCountry)
                     if (filterContinent && filterContinent !== 'all') params.set('continent', filterContinent)
                     if (filterRegion && filterRegion !== 'all') params.set('region', filterRegion)
+                    if (viewOnly) params.set('viewOnly', 'true')
                     const qs = params.toString()
                     router.push(`/dashboard/contests/${contestId}/contestant/${contestantId}${qs ? `?${qs}` : ''}`)
                   }}

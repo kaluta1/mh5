@@ -90,6 +90,7 @@ function ContestantDetailContent() {
   const contestantId = params.contestantId as string
   const contestId = params.id as string
   const roundIdFromUrl = searchParams.get('roundId')
+  const viewOnly = searchParams.get('viewOnly') === 'true'
 
   const [contestant, setContestant] = useState<ContestantDetail | null>(null)
   const [contestMode, setContestMode] = useState<string | null>(null)
@@ -585,7 +586,7 @@ function ContestantDetailContent() {
     contestMode === 'nomination' ||
     !!contestant.nominator_country ||
     !!contestant.nominator_city
-  const canVoteInContext = Boolean(contestant.can_vote)
+  const canVoteInContext = !viewOnly && Boolean(contestant.can_vote)
   // "Nominated for" should reflect the current contest title.
   // Prefer fresh contest endpoint title, then fallback to contestant payload.
   const nominationLabel = contestDisplayTitle || contestant.contest_title || contestant.contest_category
@@ -720,7 +721,7 @@ function ContestantDetailContent() {
                 canVote={canVoteInContext}
                 isVoting={isVoting}
                 onVote={handleVote}
-                voteRestrictionReason={contestant.vote_restriction_reason}
+        voteRestrictionReason={viewOnly ? 'voting_not_open' : contestant.vote_restriction_reason}
                 showActions={!!contestant.user_id}
                 isSelf={user?.id === contestant.user_id}
                 isFollowing={isFollowing}

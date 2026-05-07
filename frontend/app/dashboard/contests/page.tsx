@@ -685,6 +685,10 @@ function ContestsPageContent() {
     (contestStatus: unknown) => {
       const params = new URLSearchParams()
       if (roundIdNav) params.set('roundId', String(roundIdNav))
+      const activeRoundEntry = displayRounds.find((d) => String(d.round.id) === activeRoundId)
+      if (categoryTab === 'nomination' && activeRoundEntry?.kind === 'nominate') {
+        params.set('viewOnly', 'true')
+      }
 
       const level = normalizeContestLevel(String(contestStatus ?? ''))
       const region = filterRegion || regionalPoolForCountry(filterCountry) || regionalPoolForCountry(user?.country)
@@ -704,7 +708,7 @@ function ContestsPageContent() {
       params.set('entryType', categoryTab === 'nomination' ? 'nomination' : 'participation')
       return params
     },
-    [roundIdNav, filterRegion, filterCountry, user?.country, shouldPassCountryNavParam, filterContinent, categoryTab]
+    [roundIdNav, displayRounds, activeRoundId, filterRegion, filterCountry, user?.country, shouldPassCountryNavParam, filterContinent, categoryTab]
   )
 
   // Raw Contests List (Before filtering by type) - Now uses allContests for infinite scroll
