@@ -135,9 +135,11 @@ function ContestantDetailContent() {
 
         setContestant(data)
 
-        // Fetch contest mode to reliably detect nomination vs participation
+        // Fetch contest mode/title from the route contest first.
+        // This guarantees "Nominated for" matches the category/link user clicked.
         try {
-          const contestRes = await api.get(`/api/v1/contests/${data.contest_id || contestId}`)
+          const resolvedContestId = contestId || data.contest_id
+          const contestRes = await api.get(`/api/v1/contests/${resolvedContestId}`)
           setContestMode(contestRes.data?.contest_mode || contestRes.data?.entry_type || null)
           setContestDisplayTitle(
             contestRes.data?.title ||
