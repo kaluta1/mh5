@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { AxiosError } from 'axios'
 import { authService } from '@/lib/api'
-import { API_URL } from '@/lib/config'
+import { API_URL, getEffectiveApiUrl } from '@/lib/config'
 import { cacheService } from '@/lib/cache-service'
 import { logger } from '@/lib/logger'
 import type { User, UserRole } from '@/types/user'
@@ -64,7 +64,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      const baseUrl = API_URL.replace(/\/+$/, '')
+      // Use runtime-resolved API host in browser to avoid localhost leakage on production domains.
+      const resolvedBase =
+        typeof window !== 'undefined' ? getEffectiveApiUrl() : API_URL
+      const baseUrl = resolvedBase
+        .replace(/\/+$/, '')
+        .replace(/\/api\/v1$/i, '')
 
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 5000)

@@ -9,6 +9,7 @@ import { isRoundVotingLive } from '@/lib/is-round-voting-live'
 import { contestService } from '@/services/contest-service'
 import { followService } from '@/services/follow-service'
 import { Button } from '@/components/ui/button'
+import { getEffectiveApiUrl } from '@/lib/config'
 import {
   ArrowLeft, Search, Heart, MessageCircle, UserPlus, UserCheck,
   Trophy, ThumbsUp, MapPin, ChevronDown, X, Globe, Play
@@ -179,7 +180,7 @@ export default function ContestantsListPage() {
         if (Array.isArray(parsed) && parsed.length > 0) {
           const url = parsed[0]
           if (url.startsWith('http')) return url
-          const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+          const base = getEffectiveApiUrl()
           return url.startsWith('/') ? `${base}${url}` : `${base}/${url}`
         }
       }

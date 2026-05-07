@@ -19,6 +19,7 @@ import MyVotesPanel from '@/components/dashboard/my-votes-panel'
 import { HoverInfoDialog } from '@/components/dashboard/hover-info-dialog'
 import { ReportContestantDialog } from '@/components/dashboard/report-contestant-dialog'
 import { LocationFilterBar } from '@/components/dashboard/location-filter-bar'
+import { getEffectiveApiUrl } from '@/lib/config'
 
 interface Media {
   id: string
@@ -230,7 +231,7 @@ export default function ContestDetailPage() {
         try {
           const parsed = typeof mediaIds === 'string' ? JSON.parse(mediaIds) : mediaIds
           if (!Array.isArray(parsed)) return []
-          const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+          const API_BASE_URL = getEffectiveApiUrl()
           return parsed.filter((url: string) => url && url.trim() !== '').map((url: string, index: number) => {
             // Nettoyer les URLs double-encodées JSON
             let fullUrl = cleanVideoUrl(url) || url

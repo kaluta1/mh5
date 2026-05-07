@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { logger } from '@/lib/logger'
 import { LocationFilterBar } from '@/components/dashboard/location-filter-bar'
+import { getEffectiveApiUrl } from '@/lib/config'
 
 // GraphQL
 // REST API
@@ -660,7 +661,7 @@ function ContestsPageContent() {
   }, [hasMore, loadingMore, loadMoreContests])
 
   // Cache API_BASE_URL to avoid repeated lookups
-  const API_BASE_URL = useMemo(() => process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000', [])
+  const API_BASE_URL = useMemo(() => getEffectiveApiUrl(), [])
 
   // Canonical: opening a pooled REGIONAL/+ contest must not attach ?country= from the grid,
   // or the detail API filters to Tanzania-only while the card count shows full East Africa pool.
