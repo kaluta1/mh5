@@ -48,8 +48,27 @@ class CRUDContestant:
         
         # Récupérer la saison active du contestant via ContestantSeason
         from app.models.contests import ContestSeasonLink, ContestantSeason
+        from app.models.round import round_contests
         season = None
         contest_id = None
+
+        # 1) Prefer direct Contest resolution when season_id stores Contest.id (legacy mode).
+        # If round_id exists, ensure that contest belongs to that round to avoid cross-contest mismatches.
+        if contestant.season_id is not None:
+            direct_contest = db.query(Contest).filter(
+                Contest.id == contestant.season_id,
+                Contest.is_deleted == False
+            ).first()
+            if direct_contest:
+                if contestant.round_id:
+                    in_round = db.query(round_contests).filter(
+                        round_contests.c.round_id == contestant.round_id,
+                        round_contests.c.contest_id == direct_contest.id,
+                    ).first()
+                    if in_round:
+                        contest_id = direct_contest.id
+                else:
+                    contest_id = direct_contest.id
         
         # Récupérer la saison active via ContestantSeason
         contestant_season_link = db.query(ContestantSeason).filter(
@@ -66,10 +85,21 @@ class CRUDContestant:
             
             if season:
                 # Récupérer le contest_id depuis la saison via ContestSeasonLink
-                contest_link = db.query(ContestSeasonLink).filter(
+                contest_link_query = db.query(ContestSeasonLink).filter(
                     ContestSeasonLink.season_id == season.id,
                     ContestSeasonLink.is_active == True
-                ).first()
+                )
+                if contestant.round_id:
+                    round_contest_ids = [
+                        cid for (cid,) in db.query(round_contests.c.contest_id).filter(
+                            round_contests.c.round_id == contestant.round_id
+                        ).all()
+                    ]
+                    if round_contest_ids:
+                        contest_link_query = contest_link_query.filter(
+                            ContestSeasonLink.contest_id.in_(round_contest_ids)
+                        )
+                contest_link = contest_link_query.first()
                 if contest_link:
                     contest_id = contest_link.contest_id
         
@@ -91,16 +121,6 @@ class CRUDContestant:
                     if season:
                         contest_id = contest_link.contest_id
 
-        # Dernier fallback: dans le mode legacy, season_id peut être directement le Contest.id
-        # même si un ContestSeason portant le même ID existe aussi.
-        if contest_id is None and contestant.season_id is not None:
-            direct_contest = db.query(Contest).filter(
-                Contest.id == contestant.season_id,
-                Contest.is_deleted == False
-            ).first()
-            if direct_contest:
-                contest_id = direct_contest.id
-        
         # Déterminer le niveau de la saison
         season_level: Optional[str] = None
         if season and hasattr(season, "level") and season.level is not None:
@@ -450,10 +470,21 @@ class CRUDContestant:
         if season and not contest_title:
             # Essayer d'abord de récupérer le titre du contest lié via ContestSeasonLink
             from app.models.contests import ContestSeasonLink
-            contest_link = db.query(ContestSeasonLink).filter(
+            contest_link_query = db.query(ContestSeasonLink).filter(
                 ContestSeasonLink.season_id == season.id,
                 ContestSeasonLink.is_active == True
-            ).first()
+            )
+            if contestant.round_id:
+                round_contest_ids = [
+                    cid for (cid,) in db.query(round_contests.c.contest_id).filter(
+                        round_contests.c.round_id == contestant.round_id
+                    ).all()
+                ]
+                if round_contest_ids:
+                    contest_link_query = contest_link_query.filter(
+                        ContestSeasonLink.contest_id.in_(round_contest_ids)
+                    )
+            contest_link = contest_link_query.first()
             
             if contest_link:
                 from app.models.contest import Contest as MyfavContest
