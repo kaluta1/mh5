@@ -414,6 +414,7 @@ class CRUDContestant:
                     if can_vote:
                         from app.services.contest_status import contest_status_service
                         from app.models.round import Round as RoundForVote
+                        from app.models.contest import Contest as ContestForVoteGate
 
                         if contestant.round_id:
                             cr = (
@@ -434,6 +435,31 @@ class CRUDContestant:
                                 db, contest_id
                             )
                             if not allowed_vote:
+                                can_vote = False
+                                vote_restriction_reason = "voting_not_open"
+
+                    # Product rule: for nomination contests, voting is allowed only during
+                    # the actual voting window of the associated round.
+                    if can_vote and contest_id:
+                        contest_for_gate = (
+                            db.query(ContestForVoteGate)
+                            .filter(
+                                ContestForVoteGate.id == contest_id,
+                                ContestForVoteGate.is_deleted == False,
+                            )
+                            .first()
+                        )
+                        contest_mode = (
+                            (getattr(contest_for_gate, "contest_mode", None) or "")
+                            .strip()
+                            .lower()
+                            if contest_for_gate
+                            else ""
+                        )
+                        if contest_mode == "nomination":
+                            round_obj = getattr(season, "round", None)
+                            now_vote = contest_status_service._utc_now()
+                            if not round_obj or not contest_status_service.round_voting_open_at(round_obj, now_vote):
                                 can_vote = False
                                 vote_restriction_reason = "voting_not_open"
                     

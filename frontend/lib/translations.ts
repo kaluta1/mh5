@@ -8019,7 +8019,8 @@ const translationsBase = {
         champion: "Champion",
         no_data: "No sponsors found",
         info_title: "How does the leaderboard work?",
-        info_description: "The leaderboard is based on the number of direct referrals (level 1) who are MFMs. The more direct referred MFMs you have, the higher your position in the leaderboard.."
+        info_description: "The leaderboard is based on the number of direct referrals (Level 1) who are verified referrals. The more direct verified referrals you have, the higher your position on the leaderboard.
+ "
       }
     },
     kyc: {
