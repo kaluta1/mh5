@@ -2903,6 +2903,11 @@ def vote_for_contestant(
     # nomination contests can be submitted during submission phase, but voting is allowed
     # only when the round is in its voting window.
     if contest_mode_norm == "nomination":
+        if round_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Round context is required for nomination voting. Please open this entry from the voting round.",
+            )
         round_obj = getattr(season, "round", None)
         now_vote = contest_status_service._utc_now()
         if not round_obj or not contest_status_service.round_voting_open_at(round_obj, now_vote):
@@ -3450,6 +3455,11 @@ def replace_fifth_vote(
     contest_mode_norm = _normalize_contest_mode(getattr(contest, "contest_mode", None))
     # Keep replace-vote aligned with the strict nomination vote-round rule.
     if contest_mode_norm == "nomination":
+        if round_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Round context is required for nomination voting. Please open this entry from the voting round.",
+            )
         round_obj = getattr(season, "round", None)
         now_vote = contest_status_service._utc_now()
         if not round_obj or not contest_status_service.round_voting_open_at(round_obj, now_vote):

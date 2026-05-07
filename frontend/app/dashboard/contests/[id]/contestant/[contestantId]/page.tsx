@@ -403,7 +403,7 @@ function ContestantDetailContent() {
   }
 
   const handleVote = async () => {
-    if (!contestant?.can_vote || isVoting || contestant?.has_voted) return
+    if (!canVoteInContext || isVoting || contestant?.has_voted) return
 
     setIsVoting(true)
     try {
@@ -585,6 +585,8 @@ function ContestantDetailContent() {
     contestMode === 'nomination' ||
     !!contestant.nominator_country ||
     !!contestant.nominator_city
+  const hasRoundContext = !!(roundIdFromUrl && !Number.isNaN(parseInt(roundIdFromUrl, 10)))
+  const canVoteInContext = Boolean(contestant.can_vote) && (!isNomination || hasRoundContext)
   // "Nominated for" should reflect the current contest title.
   // Prefer fresh contest endpoint title, then fallback to contestant payload.
   const nominationLabel = contestDisplayTitle || contestant.contest_title || contestant.contest_category
@@ -684,7 +686,7 @@ function ContestantDetailContent() {
       <ContestantMobileActions
         commentsCount={comments.length}
         hasVoted={contestant.has_voted || false}
-        canVote={contestant.can_vote || false}
+        canVote={canVoteInContext}
         isVoting={isVoting}
         onCommentsClick={() => setShowCommentsDialog(true)}
         onVote={handleVote}
@@ -716,7 +718,7 @@ function ContestantDetailContent() {
                 reactionDetails={reactionDetails}
                 voters={voters}
                 hasVoted={contestant.has_voted || false}
-                canVote={contestant.can_vote || false}
+                canVote={canVoteInContext}
                 isVoting={isVoting}
                 onVote={handleVote}
                 voteRestrictionReason={contestant.vote_restriction_reason}
