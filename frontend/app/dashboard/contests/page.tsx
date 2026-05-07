@@ -156,7 +156,7 @@ function computeDisplayRounds(rounds: Round[]): Array<{ round: Round; pill: stri
   const nominationRound =
     rounds.find((r: any) => String(r.name || '').toLowerCase().includes(currentMonthStr)) || rounds[0]
   if (nominationRound && voteRound && Number((nominationRound as any).id) === Number((voteRound as any).id)) {
-    return [{ round: nominationRound, pill: 'Nominate & Vote', kind: 'combined' }]
+    return [{ round: nominationRound, pill: 'Submit & Vote', kind: 'combined' }]
   }
   const out: Array<{ round: Round; pill: string; kind: RoundTabKind }> = []
   const seen = new Set<number>()
@@ -167,13 +167,13 @@ function computeDisplayRounds(rounds: Round[]): Array<{ round: Round; pill: stri
     seen.add(id)
     out.push({ round: r, pill, kind })
   }
-  push(nominationRound, 'Nominate', 'nominate')
+  push(nominationRound, 'Submit', 'nominate')
   push(voteRound as Round | undefined, 'Vote', 'vote')
   return out.length
     ? out
     : rounds.map((r) => ({
         round: r,
-        pill: isRoundVotingLive(r, rounds) ? 'Vote' : 'Nominate',
+        pill: isRoundVotingLive(r, rounds) ? 'Vote' : 'Submit',
         kind: (isRoundVotingLive(r, rounds) ? 'vote' : 'nominate') as RoundTabKind,
       }))
 }
@@ -823,18 +823,20 @@ function ContestsPageContent() {
             {displayRounds.map(({ round, pill, kind }) => {
               const isPast = new Date(round.submission_end_date + 'T23:59:59') < new Date()
               const showLock = isPast && kind === 'vote'
-              const iconNominate = (
+              const iconVote = (
                 <Image
-                  src="/contests/nominate-participate-icon.png"
+                  src="/contests/vote-tab-icon.png"
                   alt=""
                   width={28}
                   height={28}
                   className="h-7 w-7 object-contain flex-shrink-0 rounded-md"
                 />
               )
-              const iconVote = (
+
+              // Submit tab icon (provided by you).
+              const iconNominateForSubmit = (
                 <Image
-                  src="/contests/vote-tab-icon.png"
+                  src="/contests/submit-tab-icon.png"
                   alt=""
                   width={28}
                   height={28}
@@ -853,13 +855,13 @@ function ContestsPageContent() {
                   {showLock && <Lock className="w-4 h-4 opacity-80 flex-shrink-0" aria-hidden />}
                   {kind === 'combined' ? (
                     <span className="inline-flex items-center gap-1">
-                      {iconNominate}
+                      {iconNominateForSubmit}
                       {iconVote}
                     </span>
                   ) : kind === 'vote' ? (
                     iconVote
                   ) : (
-                    iconNominate
+                    iconNominateForSubmit
                   )}
                   <span className="font-semibold leading-tight">
                     {pill ||
