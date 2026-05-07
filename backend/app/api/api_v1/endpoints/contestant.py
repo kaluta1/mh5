@@ -2738,6 +2738,10 @@ def vote_for_contestant(
         None,
         description="Contest page the user is voting from (required when multiple contests share the same season/round).",
     ),
+    round_id: Optional[int] = Query(
+        None,
+        description="Round context from the page. If provided, voting is allowed only when this round voting window is open.",
+    ),
 ) -> dict:
     """Vote pour un contestant"""
     from app.services.contest_status import contest_status_service
@@ -2842,6 +2846,29 @@ def vote_for_contestant(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No active contest found for this season. Open the contest from the list and vote again, or pass contest_id.",
         )
+
+    if round_id is not None:
+        from app.models.round import Round, round_contests
+        requested_round = db.query(Round).filter(Round.id == round_id).first()
+        if not requested_round:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Round not found",
+            )
+        linked_to_contest = db.query(round_contests).filter(
+            round_contests.c.round_id == round_id,
+            round_contests.c.contest_id == contest.id,
+        ).first()
+        if not linked_to_contest:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Round does not belong to the selected contest.",
+            )
+        if not contest_status_service.round_voting_open_at(requested_round, contest_status_service._utc_now()):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Voting is disabled on submit round. Please vote from the voting round.",
+            )
     
     # Règles de vote basées sur la localisation et le niveau de la saison
     # (Les concours en mode "nomination" utilisent toujours le niveau country, jamais city — même si la saison est city.)
@@ -3285,6 +3312,10 @@ def replace_fifth_vote(
         None,
         description="Contest page context (same as /vote).",
     ),
+    round_id: Optional[int] = Query(
+        None,
+        description="Round context from the page. If provided, replacement is allowed only when this round voting window is open.",
+    ),
 ) -> dict:
     """
     Remplace le 5e vote de l'utilisateur par un nouveau contestant.
@@ -3373,6 +3404,29 @@ def replace_fifth_vote(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Contest not found. Pass contest_id if multiple contests share this season.",
         )
+
+    if round_id is not None:
+        from app.models.round import Round, round_contests
+        requested_round = db.query(Round).filter(Round.id == round_id).first()
+        if not requested_round:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Round not found",
+            )
+        linked_to_contest = db.query(round_contests).filter(
+            round_contests.c.round_id == round_id,
+            round_contests.c.contest_id == contest.id,
+        ).first()
+        if not linked_to_contest:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Round does not belong to the selected contest.",
+            )
+        if not contest_status_service.round_voting_open_at(requested_round, contest_status_service._utc_now()):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Voting is disabled on submit round. Please vote from the voting round.",
+            )
 
     # Keep replace-vote gate aligned with POST /vote stage windows.
     season_level = None

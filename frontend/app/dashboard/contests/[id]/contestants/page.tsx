@@ -341,7 +341,14 @@ export default function ContestantsListPage() {
                     {/* Photo / Avatar area */}
                     <div
                       className="relative aspect-square bg-gray-100 dark:bg-gray-700 cursor-pointer overflow-hidden"
-                      onClick={() => router.push(`/dashboard/contests/${contestId}/contestant/${contestant.id}`)}
+                      onClick={() => {
+                        const params = new URLSearchParams()
+                        if (roundIdParam) params.set('roundId', roundIdParam)
+                        if (contestMode === 'nomination') params.set('entryType', 'nomination')
+                        if (selectedCountry && selectedCountry !== 'all') params.set('country', selectedCountry)
+                        const qs = params.toString()
+                        router.push(`/dashboard/contests/${contestId}/contestant/${contestant.id}${qs ? `?${qs}` : ''}`)
+                      }}
                     >
                       {mediaUrl ? (
                         <img src={mediaUrl} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
@@ -391,7 +398,14 @@ export default function ContestantsListPage() {
                     <div className="p-3">
                       <h3
                         className="text-sm font-semibold text-gray-900 dark:text-white truncate cursor-pointer hover:underline"
-                        onClick={() => router.push(`/dashboard/contests/${contestId}/contestant/${contestant.id}`)}
+                        onClick={() => {
+                          const params = new URLSearchParams()
+                          if (roundIdParam) params.set('roundId', roundIdParam)
+                          if (contestMode === 'nomination') params.set('entryType', 'nomination')
+                          if (selectedCountry && selectedCountry !== 'all') params.set('country', selectedCountry)
+                          const qs = params.toString()
+                          router.push(`/dashboard/contests/${contestId}/contestant/${contestant.id}${qs ? `?${qs}` : ''}`)
+                        }}
                       >
                         {contestant.author_name || 'Anonyme'}
                       </h3>

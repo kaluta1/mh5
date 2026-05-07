@@ -961,7 +961,16 @@ export default function ContestDetailPage() {
                   favorites={favorites}
                   searchQuery={searchQuery}
                   onToggleFavorite={handleToggleFavorite}
-                  onViewDetails={(contestantId) => router.push(`/dashboard/contests/${contestId}/contestant/${contestantId}`)}
+                  onViewDetails={(contestantId) => {
+                    const params = new URLSearchParams()
+                    if (roundIdFromUrl) params.set('roundId', roundIdFromUrl)
+                    if (entryType) params.set('entryType', entryType)
+                    if (filterCountry && filterCountry !== 'all') params.set('country', filterCountry)
+                    if (filterContinent && filterContinent !== 'all') params.set('continent', filterContinent)
+                    if (filterRegion && filterRegion !== 'all') params.set('region', filterRegion)
+                    const qs = params.toString()
+                    router.push(`/dashboard/contests/${contestId}/contestant/${contestantId}${qs ? `?${qs}` : ''}`)
+                  }}
                   onVote={(contestantId) => {
                     markContestantVotedInState(contestantId)
                     window.dispatchEvent(new Event('vote-changed'))

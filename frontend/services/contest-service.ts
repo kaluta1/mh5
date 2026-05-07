@@ -982,7 +982,7 @@ class ContestService {
    */
   async voteForContestant(
     contestantId: number,
-    opts?: { contestId?: number }
+    opts?: { contestId?: number; roundId?: number }
   ): Promise<{
     success: boolean;
     data?: any;
@@ -1014,8 +1014,11 @@ class ContestService {
     try {
       const response = await api.post(`/api/v1/contestants/${contestantId}/vote`, {}, {
         params:
-          opts?.contestId != null && opts.contestId > 0
-            ? { contest_id: opts.contestId }
+          (opts?.contestId != null && opts.contestId > 0) || (opts?.roundId != null && opts.roundId > 0)
+            ? {
+                ...(opts?.contestId != null && opts.contestId > 0 ? { contest_id: opts.contestId } : {}),
+                ...(opts?.roundId != null && opts.roundId > 0 ? { round_id: opts.roundId } : {}),
+              }
             : undefined,
       });
       // axios uses validateStatus: status < 500 — 409 does NOT throw, so we must branch here
@@ -1045,9 +1048,15 @@ class ContestService {
   /**
    * Replace the 5th vote with a new contestant (after user confirmation)
    */
-  async replaceVote(contestantId: number, contestId?: number): Promise<any> {
+  async replaceVote(contestantId: number, contestId?: number, roundId?: number): Promise<any> {
     const response = await api.post(`/api/v1/contestants/${contestantId}/vote/replace`, {}, {
-      params: contestId != null && contestId > 0 ? { contest_id: contestId } : undefined,
+      params:
+        (contestId != null && contestId > 0) || (roundId != null && roundId > 0)
+          ? {
+              ...(contestId != null && contestId > 0 ? { contest_id: contestId } : {}),
+              ...(roundId != null && roundId > 0 ? { round_id: roundId } : {}),
+            }
+          : undefined,
     });
     if (response.status >= 400) {
       const detail = response.data?.detail;

@@ -89,6 +89,7 @@ function ContestantDetailContent() {
   const searchParams = useSearchParams()
   const contestantId = params.contestantId as string
   const contestId = params.id as string
+  const roundIdFromUrl = searchParams.get('roundId')
 
   const [contestant, setContestant] = useState<ContestantDetail | null>(null)
   const [contestMode, setContestMode] = useState<string | null>(null)
@@ -407,8 +408,10 @@ function ContestantDetailContent() {
     setIsVoting(true)
     try {
       const cIdNum = parseInt(contestId, 10)
+      const roundIdNum = roundIdFromUrl ? parseInt(roundIdFromUrl, 10) : NaN
       const result = await contestService.voteForContestant(Number(contestant.id), {
         contestId: Number.isNaN(cIdNum) ? undefined : cIdNum,
+        roundId: Number.isNaN(roundIdNum) ? undefined : roundIdNum,
       })
 
       if (result.success) {
@@ -424,7 +427,8 @@ function ContestantDetailContent() {
       } else if (result.code === 'max_votes_reached') {
         await contestService.replaceVote(
           Number(contestant.id),
-          Number.isNaN(cIdNum) ? undefined : cIdNum
+          Number.isNaN(cIdNum) ? undefined : cIdNum,
+          Number.isNaN(roundIdNum) ? undefined : roundIdNum
         )
         await reloadContestantAfterVote()
         setContestant((prev) =>
