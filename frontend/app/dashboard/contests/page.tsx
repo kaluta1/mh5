@@ -825,7 +825,7 @@ function ContestsPageContent() {
               const showLock = isPast && kind === 'vote'
               const iconVote = (
                 <Image
-                  src="/contests/vote-tab-icon.png"
+                  src="/contests/vote-tab-icon.png?v=2"
                   alt=""
                   width={28}
                   height={28}
@@ -836,7 +836,7 @@ function ContestsPageContent() {
               // Submit tab icon (provided by you).
               const iconNominateForSubmit = (
                 <Image
-                  src="/contests/submit-tab-icon.png"
+                  src="/contests/submit-tab-icon.png?v=2"
                   alt=""
                   width={28}
                   height={28}
