@@ -522,6 +522,22 @@ function ContestantDetailContent() {
     router.push(`/dashboard/messages?user=${contestant.user_id}`)
   }
 
+  const handleBack = () => {
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      router.back()
+      return
+    }
+
+    const backParams = new URLSearchParams()
+    const entryType = searchParams.get('entryType')
+    if (entryType) backParams.set('entryType', entryType)
+    if (roundIdFromUrl) backParams.set('roundId', roundIdFromUrl)
+    if (viewOnly) backParams.set('viewOnly', 'true')
+
+    const query = backParams.toString()
+    router.push(`/dashboard/contests/${contestId}${query ? `?${query}` : ''}`)
+  }
+
   const handleShare = async () => {
     const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
     const refCode = (user as any)?.personal_referral_code || ''
@@ -617,7 +633,7 @@ function ContestantDetailContent() {
         titlePrefix={isNomination ? (t('contestant_detail.nominator_label') || 'Nominator') : (t('contestant_detail.contestant_label') || 'Contestant')}
         isFavorite={isFavorite}
         coverImage={images.length > 0 ? images[0].url : undefined}
-        onBack={() => router.back()}
+        onBack={handleBack}
         onFavoriteToggle={async () => {
           try {
             if (isFavorite) {
