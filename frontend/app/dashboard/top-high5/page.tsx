@@ -7,6 +7,8 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@/hooks/use-auth"
 import { useLanguage } from "@/contexts/language-context"
 import { contestService, TopHigh5Contest, TopHigh5Level, TopHigh5Response } from "@/services/contest-service"
+import ApiService, { Round } from "@/lib/api-service"
+import { isRoundVotingLive } from "@/lib/is-round-voting-live"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -113,22 +115,37 @@ export default function TopHigh5Page() {
   useEffect(() => {
     if (didSeedCountry) return
     if (!isLoading && isAuthenticated) {
-      const fallbackCountry =
-        (user as any)?.country || (user as any)?.author_country || "Tanzania"
-      const urlRoundIdRaw = searchParams?.get("round_id") || ""
-      const urlLevelRaw = (searchParams?.get("level") || "").toLowerCase() as TopHigh5Level
-      const urlCountryRaw = searchParams?.get("country") || ""
-      const parsedRoundId = urlRoundIdRaw && !Number.isNaN(Number(urlRoundIdRaw)) ? Number(urlRoundIdRaw) : undefined
-      const initialLevel: TopHigh5Level = LEVEL_OPTIONS.some((o) => o.value === urlLevelRaw)
-        ? urlLevelRaw
-        : "country"
-      const initialCountry = urlCountryRaw || fallbackCountry
+      const seed = async () => {
+        const fallbackCountry =
+          (user as any)?.country || (user as any)?.author_country || "Tanzania"
+        const urlRoundIdRaw = searchParams?.get("round_id") || searchParams?.get("roundId") || ""
+        const urlLevelRaw = (searchParams?.get("level") || "").toLowerCase() as TopHigh5Level
+        const urlCountryRaw = searchParams?.get("country") || ""
+        let parsedRoundId = urlRoundIdRaw && !Number.isNaN(Number(urlRoundIdRaw)) ? Number(urlRoundIdRaw) : undefined
+        const initialLevel: TopHigh5Level = LEVEL_OPTIONS.some((o) => o.value === urlLevelRaw)
+          ? urlLevelRaw
+          : "country"
+        const initialCountry = urlCountryRaw || fallbackCountry
 
-      setCountryInput(initialCountry)
-      setRoundIdInput(urlRoundIdRaw)
-      setActiveLevel(initialLevel)
-      setDidSeedCountry(true)
-      fetchData({ country: initialCountry, roundId: parsedRoundId, level: initialLevel })
+        if (!parsedRoundId) {
+          try {
+            const rounds = await ApiService.getRounds({ contestLimit: 1, limit: 24 }) as Round[]
+            const liveRound = rounds.find((round) => isRoundVotingLive(round, rounds))
+            if (liveRound?.id) {
+              parsedRoundId = liveRound.id
+            }
+          } catch {
+            // Backend can still choose a fallback if rounds cannot be loaded here.
+          }
+        }
+
+        setCountryInput(initialCountry)
+        setRoundIdInput(parsedRoundId ? String(parsedRoundId) : urlRoundIdRaw)
+        setActiveLevel(initialLevel)
+        setDidSeedCountry(true)
+        fetchData({ country: initialCountry, roundId: parsedRoundId, level: initialLevel })
+      }
+      void seed()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoading, isAuthenticated, user?.id, didSeedCountry])
