@@ -1975,6 +1975,42 @@ class CRUDContest:
             votes_list = votes_by_contestant.get(contestant_id, [])
             votes_count_by_contestant[contestant_id] = len(votes_list)
             points_by_contestant[contestant_id] = sum(v.get("points", 0) for v in votes_list)
+
+        # Nomination: one roster row per nominator. Migration can leave multiple active
+        # contestant rows for the same user_id; keep the best-scoring row for display/ranks.
+        if contest_mode == "nomination" and contestants:
+            best_by_uid: Dict[int, Contestant] = {}
+            for c in contestants:
+                uid = getattr(c, "user_id", None)
+                if uid is None:
+                    continue
+                iu = int(uid)
+                prev = best_by_uid.get(iu)
+                if prev is None:
+                    best_by_uid[iu] = c
+                    continue
+                prev_t = (
+                    points_by_contestant.get(prev.id, 0),
+                    votes_count_by_contestant.get(prev.id, 0),
+                    prev.id or 0,
+                )
+                cur_t = (
+                    points_by_contestant.get(c.id, 0),
+                    votes_count_by_contestant.get(c.id, 0),
+                    c.id or 0,
+                )
+                if cur_t > prev_t:
+                    best_by_uid[iu] = c
+            without_uid = [c for c in contestants if getattr(c, "user_id", None) is None]
+            merged = without_uid + list(best_by_uid.values())
+            merged.sort(
+                key=lambda c: (
+                    -points_by_contestant.get(c.id, 0),
+                    -votes_count_by_contestant.get(c.id, 0),
+                    -(c.id or 0),
+                )
+            )
+            contestants = merged
         
         ranks: Dict[int, int] = {}
         # Calculer les rangs (on ignore les rangs éventuellement stockés en base

@@ -247,7 +247,37 @@ export default function ContestDetailPage() {
         } catch (e) { return [] }
       }
 
-      const mappedContestants: Contestant[] = (c.contestants || []).map((ct: any, index: number) => {
+      const rawContestants = (c.contestants || []) as any[]
+      const contestModeForDedupe = String(
+        c.contest_mode ?? c?.contest?.contest_mode ?? ''
+      )
+        .split('.')
+        .pop()
+        ?.trim()
+        .toLowerCase() || ''
+      let listForMap = rawContestants
+      if (contestModeForDedupe === 'nomination') {
+        const seenUid = new Set<number>()
+        listForMap = rawContestants
+          .slice()
+          .sort((a: any, b: any) => {
+            const dv = (Number(b.votes_count) || 0) - (Number(a.votes_count) || 0)
+            if (dv !== 0) return dv
+            const dp = (Number(b.total_points) || 0) - (Number(a.total_points) || 0)
+            if (dp !== 0) return dp
+            return (Number(b.id) || 0) - (Number(a.id) || 0)
+          })
+          .filter((ct: any) => {
+            const uid = ct.user_id
+            if (uid == null || Number.isNaN(Number(uid))) return true
+            const n = Number(uid)
+            if (seenUid.has(n)) return false
+            seenUid.add(n)
+            return true
+          })
+      }
+
+      const mappedContestants: Contestant[] = listForMap.map((ct: any, index: number) => {
         const images = parseMediaIds(ct.image_media_ids, 'image') // snake_case from python
         const videos = parseMediaIds(ct.video_media_ids, 'video')
         return {
