@@ -226,7 +226,8 @@ export default function MyHigh5Page() {
     const loadVotes = async () => {
       try {
         setPageLoading(true)
-        const response = await contestService.getMyHigh5Votes(activeLevel) as MyHigh5Response
+        const seasonId = activeLevel === 'country' ? 4 : undefined
+        const response = await contestService.getMyHigh5Votes(activeLevel, seasonId) as MyHigh5Response
         setSeasonsData(response.seasons || [])
       } catch (error) {
         console.error('Erreur lors du chargement des votes:', error)
@@ -245,7 +246,8 @@ export default function MyHigh5Page() {
   useEffect(() => {
     const handler = async () => {
       try {
-        const response = await contestService.getMyHigh5Votes(activeLevel) as MyHigh5Response
+        const seasonId = activeLevel === 'country' ? 4 : undefined
+        const response = await contestService.getMyHigh5Votes(activeLevel, seasonId) as MyHigh5Response
         setSeasonsData(response.seasons || [])
       } catch (error) {
         console.error('Erreur lors du rafraîchissement des votes:', error)
@@ -327,7 +329,8 @@ export default function MyHigh5Page() {
     } catch (error) {
       console.error('Erreur lors de la sauvegarde de l\'ordre:', error)
       addToast(t('dashboard.myhigh5.order_error') || 'Erreur lors de la sauvegarde', 'error')
-      const response = await contestService.getMyHigh5Votes(activeLevel) as MyHigh5Response
+      const seasonId = activeLevel === 'country' ? 4 : undefined
+      const response = await contestService.getMyHigh5Votes(activeLevel, seasonId) as MyHigh5Response
       setSeasonsData(response.seasons || [])
     } finally {
       setIsSaving(false)

@@ -792,7 +792,7 @@ class ContestService {
   /**
    * Get user's high 5 votes
    */
-  async getMyHigh5Votes(level?: string): Promise<{
+  async getMyHigh5Votes(level?: string, seasonId?: number): Promise<{
     seasons: Array<{
       season_id: number;
       season_level: string | null;
@@ -855,7 +855,11 @@ class ContestService {
           remaining_slots: number;
         }>
       }>('/api/v1/contestants/user/my-votes', {
-        params: { _t: Date.now(), ...(level && level !== 'all' ? { level } : {}) },
+        params: {
+          _t: Date.now(),
+          ...(level && level !== 'all' ? { level } : {}),
+          ...(typeof seasonId === 'number' ? { season_id: seasonId } : {}),
+        },
         headers: { 'Cache-Control': 'no-cache' },
       });
       return response.data;
