@@ -430,6 +430,44 @@ def get_top_high5_by_country(
                     .all()
                 )
                 points_by_id = {r.contestant_id: int(r.total_points or 0) for r in points_rows}
+                if getattr(season, "level", None) == SeasonLevel.REGIONAL:
+                    ranked_user_ids = [
+                        getattr(c, "user_id", None)
+                        for c in ranked
+                        if getattr(c, "user_id", None) is not None
+                    ]
+                    if ranked_user_ids:
+                        user_points_rows = (
+                            db.query(
+                                Contestant.user_id,
+                                func.coalesce(func.sum(ContestantVoting.points), 0).label("total_points"),
+                            )
+                            .join(Contestant, Contestant.id == ContestantVoting.contestant_id)
+                            .filter(
+                                and_(
+                                    ContestantVoting.season_id.in_(points_season_ids),
+                                    or_(
+                                        ContestantVoting.vote_bucket_key == bucket_key,
+                                        ContestantVoting.contest_id == contest.id,
+                                    ),
+                                    Contestant.user_id.in_(ranked_user_ids),
+                                )
+                            )
+                            .group_by(Contestant.user_id)
+                            .all()
+                        )
+                        points_by_user_id = {
+                            row.user_id: int(row.total_points or 0)
+                            for row in user_points_rows
+                            if row.user_id is not None
+                        }
+                        for candidate in ranked:
+                            candidate_user_id = getattr(candidate, "user_id", None)
+                            if candidate_user_id in points_by_user_id:
+                                points_by_id[candidate.id] = max(
+                                    points_by_id.get(candidate.id, 0),
+                                    points_by_user_id[candidate_user_id],
+                                )
                 engagement_by_id = season_migration_service._engagement_by_contestant(db, contestant_ids)
 
             # Canonical winner order: stars desc -> shares -> likes -> comments ->
