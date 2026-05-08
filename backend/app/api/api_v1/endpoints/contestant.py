@@ -792,26 +792,17 @@ def get_my_votes(
         value = str(value).strip().lower()
         return "regional" if value == "region" else value
 
-    def _stage_level_for_vote_date(season: Optional[ContestSeason], vote_date: Any) -> Optional[str]:
-        round_obj = getattr(season, "round", None) if season is not None else None
-        if round_obj is None or vote_date is None:
+    def _normalize_display_level(value: Any) -> Optional[str]:
+        if value is None:
             return None
-        try:
-            voted_on = vote_date.date()
-        except AttributeError:
-            return None
-        stage_fields = [
-            ("global", "global_start_date", "global_end_date"),
-            ("continent", "continental_start_date", "continental_end_date"),
-            ("regional", "regional_start_date", "regional_end_date"),
-            ("country", "country_season_start_date", "country_season_end_date"),
-            ("city", "city_season_start_date", "city_season_end_date"),
-        ]
-        for stage_level, start_attr, end_attr in stage_fields:
-            start_date = getattr(round_obj, start_attr, None)
-            end_date = getattr(round_obj, end_attr, None)
-            if start_date and end_date and start_date <= voted_on <= end_date:
-                return stage_level
+        level = str(value.value if hasattr(value, "value") else value).split(".")[-1].strip().lower()
+        aliases = {
+            "region": "regional",
+            "continental": "continent",
+        }
+        level = aliases.get(level, level)
+        if level in {"city", "country", "regional", "continent", "global"}:
+            return level
         return None
 
     effective_level_by_vote_id: Dict[int, str] = {}
@@ -829,9 +820,12 @@ def get_my_votes(
 
         effective_level = season_level
         if contest_mode == "nomination":
-            dated_stage_level = _stage_level_for_vote_date(vote.season, vote.vote_date)
-            if dated_stage_level:
-                effective_level = dated_stage_level
+            contest_level = _normalize_display_level(getattr(contest_for_vote, "level", None))
+            if contest_level:
+                # The contest level is the user's chosen voting context (Country, Regional, ...).
+                # Date windows can overlap or be reused, so they must not move a country vote
+                # into the regional MyHigh5 tab.
+                effective_level = contest_level
             elif season_level == "city":
                 # Nomination city rows are country-level UX.
                 effective_level = "country"
