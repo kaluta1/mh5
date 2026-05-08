@@ -695,7 +695,7 @@ export function ContestantCard({
         </div>
 
         {/* Vote Status Banner */}
-        {!hideVoteAction && !effectiveCanVote && effectiveVoteRestrictionReason && currentUserId && currentUserId !== userId && (
+        {!hideVoteAction && !effectiveCanVote && effectiveVoteRestrictionReason && effectiveVoteRestrictionReason !== 'already_voted' && currentUserId && currentUserId !== userId && (
           <div className={`mx-4 mb-2 rounded-xl px-3.5 py-2.5 flex items-start gap-2.5 text-sm ${
             voteRestrictionReason === 'voting_not_open'
               ? 'bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/50'
