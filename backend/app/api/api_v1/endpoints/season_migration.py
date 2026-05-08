@@ -327,7 +327,11 @@ def get_top_high5_by_country(
                         strict_season_scope=True,
                     )
                     regional_vote_backed_members: list[Contestant] = []
+                    selected_regional_pool_id = None
                     if season.level == SeasonLevel.REGIONAL:
+                        selected_regional_pool_id = SeasonMigrationService.regional_pool_id_for_raw_country(
+                            selected_country
+                        )
                         bucket_key = _top_high5_bucket_key_for_contest(contest)
                         round_season_rows = (
                             db.query(ContestSeason.id)
@@ -362,6 +366,12 @@ def get_top_high5_by_country(
                         if not key:
                             continue
                         if season.level == SeasonLevel.REGIONAL:
+                            key_pool_id = SeasonMigrationService.regional_pool_id_for_region_label(key)
+                            # Only render the exact regional pool for the selected country.
+                            # This prevents unrelated pools (e.g. West Africa for Uganda)
+                            # from appearing in the same Regional Top High5 response.
+                            if selected_regional_pool_id and key_pool_id != selected_regional_pool_id:
+                                continue
                             # Regional winners must be ranked on the whole voting pool
                             # (East/West/Southern/...) rather than only one country.
                             pool_members = [
