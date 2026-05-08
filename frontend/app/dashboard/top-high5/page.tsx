@@ -131,8 +131,11 @@ export default function TopHigh5Page() {
           try {
             const rounds = await ApiService.getRounds({ contestLimit: 1, limit: 24 }) as Round[]
             const liveRound = rounds.find((round) => isRoundVotingLive(round, rounds))
+            const regionalRound = initialLevel === "regional"
+              ? rounds.find((round) => liveRound?.id && Number(round.id) === Number(liveRound.id) - 1)
+              : undefined
             if (liveRound?.id) {
-              parsedRoundId = liveRound.id
+              parsedRoundId = regionalRound?.id || liveRound.id
             }
           } catch {
             // Backend can still choose a fallback if rounds cannot be loaded here.
