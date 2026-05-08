@@ -128,6 +128,7 @@ interface ContestantCardProps {
   videosCount?: number
   canVote?: boolean
   hasVoted?: boolean
+  hideVoteAction?: boolean
   hasReported?: boolean
   voteRestrictionReason?: string | null
   isFavorite: boolean
@@ -140,6 +141,7 @@ interface ContestantCardProps {
   reactionsList?: { [key: string]: Array<any> }
   favoritesList?: Array<any>
   contestId?: string
+  roundId?: string
   onToggleFavorite: () => void
   onViewDetails: () => void
   onVote: () => void
@@ -176,6 +178,7 @@ export function ContestantCard({
   videosCount = 0,
   canVote = false,
   hasVoted = false,
+  hideVoteAction = false,
   hasReported = false,
   voteRestrictionReason,
   isFavorite,
@@ -188,6 +191,7 @@ export function ContestantCard({
   reactionsList = {},
   favoritesList = [],
   contestId,
+  roundId,
   onToggleFavorite,
   onViewDetails,
   onVote,
@@ -304,8 +308,13 @@ export function ContestantCard({
         contestId != null && contestId !== ''
           ? parseInt(String(contestId), 10)
           : undefined
+      const rid =
+        roundId != null && roundId !== ''
+          ? parseInt(String(roundId), 10)
+          : undefined
       const result = await contestService.voteForContestant(Number(id), {
         contestId: cid && !Number.isNaN(cid) ? cid : undefined,
+        roundId: rid && !Number.isNaN(rid) ? rid : undefined,
       })
 
       if (result.success) {
@@ -315,7 +324,11 @@ export function ContestantCard({
         onVote()
       } else if (result.code === 'max_votes_reached') {
         // Replace 5th vote automatically (no confirmation)
-        await contestService.replaceVote(Number(id), cid && !Number.isNaN(cid) ? cid : undefined)
+        await contestService.replaceVote(
+          Number(id),
+          cid && !Number.isNaN(cid) ? cid : undefined,
+          rid && !Number.isNaN(rid) ? rid : undefined
+        )
         setIsLiked(true)
         setCurrentVotes(prev => prev + 1)
         addToast(t('dashboard.contests.vote_replaced') || 'Vote enregistré (remplace le 5e choix).', 'success')
@@ -682,7 +695,7 @@ export function ContestantCard({
         </div>
 
         {/* Vote Status Banner */}
-        {!effectiveCanVote && effectiveVoteRestrictionReason && currentUserId && currentUserId !== userId && (
+        {!hideVoteAction && !effectiveCanVote && effectiveVoteRestrictionReason && currentUserId && currentUserId !== userId && (
           <div className={`mx-4 mb-2 rounded-xl px-3.5 py-2.5 flex items-start gap-2.5 text-sm ${
             voteRestrictionReason === 'voting_not_open'
               ? 'bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/50'
@@ -736,22 +749,24 @@ export function ContestantCard({
 
         {/* Action Buttons - Facebook Style with Counts */}
         <div className="px-1 border-t border-gray-100 dark:border-gray-700/30">
-          <div className="grid grid-cols-4">
-            <div
-              onMouseEnter={currentUserId === userId ? onHoverVotes : undefined}
-              onMouseLeave={currentUserId === userId ? onHoverEnd : undefined}
-            >
-              <VoteButton
-                contestantId={Number(id)}
-                canVote={voteButtonCanVote}
-                hasVoted={userHasVotedThisContestant}
-                isVoting={isVoting}
-                onVote={handleVote}
-                isAuthor={currentUserId === userId}
-                votesCount={currentVotes}
-                voteRestrictionReason={effectiveVoteRestrictionReason}
-              />
-            </div>
+          <div className={hideVoteAction ? 'grid grid-cols-3' : 'grid grid-cols-4'}>
+            {!hideVoteAction && (
+              <div
+                onMouseEnter={currentUserId === userId ? onHoverVotes : undefined}
+                onMouseLeave={currentUserId === userId ? onHoverEnd : undefined}
+              >
+                <VoteButton
+                  contestantId={Number(id)}
+                  canVote={voteButtonCanVote}
+                  hasVoted={userHasVotedThisContestant}
+                  isVoting={isVoting}
+                  onVote={handleVote}
+                  isAuthor={currentUserId === userId}
+                  votesCount={currentVotes}
+                  voteRestrictionReason={effectiveVoteRestrictionReason}
+                />
+              </div>
+            )}
             <CommentsButton
               onClick={handleOpenComments}
               commentsCount={currentComments}
@@ -802,8 +817,8 @@ export function ContestantCard({
           isVoting={isVoting}
           isAuthor={currentUserId === userId}
           votesCount={currentVotes}
-          onVote={handleVote}
-          voteRestrictionReason={effectiveVoteRestrictionReason}
+          onVote={hideVoteAction ? undefined : handleVote}
+          voteRestrictionReason={hideVoteAction ? undefined : effectiveVoteRestrictionReason}
           authorName={name}
           authorAvatar={avatar}
           rank={rank}

@@ -7,7 +7,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/components/ui/toast'
 import { contestService } from '@/services/contest-service'
-import { Hand, Trophy, MapPin, Calendar, ExternalLink, Star, History, ChevronDown } from 'lucide-react'
+import { Hand, Trophy, MapPin, Calendar, ExternalLink, Star, History, ChevronDown, Search } from 'lucide-react'
 import { GeographyLevelIcon, type GeographyLevelIconKey } from '@/components/dashboard/geography-level-icons'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -138,7 +138,8 @@ export default function MyHigh5Page() {
   const [pageLoading, setPageLoading] = useState(true)
   const [historyLoading, setHistoryLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('active')
-  const [activeLevel, setActiveLevel] = useState('city')
+  const [activeLevel, setActiveLevel] = useState('country')
+  const [categorySearch, setCategorySearch] = useState('')
   const [draggedItem, setDraggedItem] = useState<{ seasonIndex: number; voteIndex: number } | null>(null)
   /** Touch / coarse pointer: first tap selects row, second tap on another row moves there (same as drag-drop). */
   const [touchReorderSource, setTouchReorderSource] = useState<{
@@ -160,6 +161,46 @@ export default function MyHigh5Page() {
       return next
     })
   }
+
+  const matchesCategorySearch = React.useCallback((value: string | null | undefined) => {
+    const q = categorySearch.trim().toLowerCase()
+    if (!q) return true
+    return String(value || '').toLowerCase().includes(q)
+  }, [categorySearch])
+
+  const filteredSeasonsData = React.useMemo(() => {
+    const q = categorySearch.trim().toLowerCase()
+    if (!q) return seasonsData
+    return seasonsData.filter((season) => {
+      if (
+        matchesCategorySearch(season.category_name) ||
+        matchesCategorySearch(season.contest_name) ||
+        matchesCategorySearch(season.contest_type)
+      ) {
+        return true
+      }
+      return season.votes.some((vote) =>
+        [vote.voted_contest_name, vote.contestant_title, vote.author_name]
+          .some((value) => String(value || '').toLowerCase().includes(q))
+      )
+    })
+  }, [categorySearch, matchesCategorySearch, seasonsData])
+
+  const filteredHistoryData = React.useMemo(() => {
+    const q = categorySearch.trim().toLowerCase()
+    if (!q) return historyData
+    return historyData.filter((contest) => {
+      if (matchesCategorySearch(contest.category_name) || matchesCategorySearch(contest.contest_name)) {
+        return true
+      }
+      return contest.seasons.some((season) =>
+        season.votes.some((vote) =>
+          [vote.voted_contest_name, vote.contestant_title, vote.author_name]
+            .some((value) => String(value || '').toLowerCase().includes(q))
+        )
+      )
+    })
+  }, [categorySearch, historyData, matchesCategorySearch])
 
   const levelTabs: Array<{
     value: string
@@ -614,6 +655,17 @@ export default function MyHigh5Page() {
           </TabsTrigger>
         </TabsList>
 
+        <div className="relative max-w-xl">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <input
+            type="search"
+            value={categorySearch}
+            onChange={(e) => setCategorySearch(e.target.value)}
+            placeholder={t('dashboard.myhigh5.search_categories') || 'Search categories, contests, or nominees...'}
+            className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm text-gray-900 placeholder:text-gray-400 focus:border-myhigh5-primary focus:outline-none focus:ring-2 focus:ring-myhigh5-primary/20 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+          />
+        </div>
+
         {/* Active Votes Tab */}
         <TabsContent value="active" className="space-y-6">
           <div className="flex flex-wrap gap-2">
@@ -657,7 +709,7 @@ export default function MyHigh5Page() {
                 {(t('dashboard.myhigh5.tap_reorder_second') ||
                   'Tap another nominator’s photo to move {name} to that position.').replace(
                   '{name}',
-                  seasonsData[touchReorderSource.seasonIndex]?.votes[touchReorderSource.voteIndex]?.author_name ||
+                  filteredSeasonsData[touchReorderSource.seasonIndex]?.votes[touchReorderSource.voteIndex]?.author_name ||
                     '…'
                 )}
               </p>
@@ -665,26 +717,32 @@ export default function MyHigh5Page() {
           </div>
 
           {/* Votes by Season */}
-          {seasonsData.length === 0 ? (
+          {filteredSeasonsData.length === 0 ? (
         <div className="text-center py-16 bg-gray-50 dark:bg-gray-800/50 rounded-2xl">
           <Hand className="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-4" />
           <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">
-            {t('dashboard.myhigh5.no_votes') || 'Aucun vote'}
+            {categorySearch.trim()
+              ? (t('dashboard.myhigh5.no_search_results') || 'No matching categories')
+              : (t('dashboard.myhigh5.no_votes') || 'Aucun vote')}
           </h3>
           <p className="text-gray-500 dark:text-gray-400 mb-6">
-            {t('dashboard.myhigh5.no_votes_description') || "You haven’t voted for any nominators yet. Explore the nominations to vote!"}
+            {categorySearch.trim()
+              ? (t('dashboard.myhigh5.no_search_results_description') || 'Try another category, contest, or nominee name.')
+              : (t('dashboard.myhigh5.no_votes_description') || "You haven’t voted for any nominators yet. Explore the nominations to vote!")}
           </p>
-          <Button
-            onClick={() => router.push('/dashboard/contests')}
-            className="bg-gradient-to-r from-myhigh5-primary to-myhigh5-secondary hover:opacity-90 text-white"
-          >
-            <Trophy className="w-4 h-4 mr-2" />
-            {t('dashboard.myhigh5.explore_contests') || 'Explorer les concours'}
-          </Button>
+          {!categorySearch.trim() && (
+            <Button
+              onClick={() => router.push('/dashboard/contests')}
+              className="bg-gradient-to-r from-myhigh5-primary to-myhigh5-secondary hover:opacity-90 text-white"
+            >
+              <Trophy className="w-4 h-4 mr-2" />
+              {t('dashboard.myhigh5.explore_contests') || 'Explorer les concours'}
+            </Button>
+          )}
         </div>
       ) : (
         <div className="space-y-3">
-          {seasonsData.map((season, seasonIndex) => {
+          {filteredSeasonsData.map((season, seasonIndex) => {
             const sk = sectionKey(season)
             const isOpen = openSections.has(sk)
             return (
@@ -753,7 +811,7 @@ export default function MyHigh5Page() {
       )}
 
           {/* Points Legend — only when at least one category has votes */}
-          {seasonsData.some((s) => s.votes_count > 0) && (
+          {filteredSeasonsData.some((s) => s.votes_count > 0) && (
             <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4">
               <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
                 {t('dashboard.myhigh5.points_legend') || 'Système de points'}
@@ -784,19 +842,23 @@ export default function MyHigh5Page() {
         <TabsContent value="history" className="space-y-6">
           {historyLoading ? (
             <MyHigh5Skeleton />
-          ) : historyData.length === 0 ? (
+          ) : filteredHistoryData.length === 0 ? (
             <div className="text-center py-16 bg-gray-50 dark:bg-gray-800/50 rounded-2xl">
               <History className="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-4" />
               <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                {t('dashboard.myhigh5.no_history') || 'Aucun historique'}
+                {categorySearch.trim()
+                  ? (t('dashboard.myhigh5.no_search_results') || 'No matching categories')
+                  : (t('dashboard.myhigh5.no_history') || 'Aucun historique')}
               </h3>
               <p className="text-gray-500 dark:text-gray-400">
-                {t('dashboard.myhigh5.no_history_description') || "Vous n'avez pas encore d'historique de votes."}
+                {categorySearch.trim()
+                  ? (t('dashboard.myhigh5.no_search_results_description') || 'Try another category, contest, or nominee name.')
+                  : (t('dashboard.myhigh5.no_history_description') || "Vous n'avez pas encore d'historique de votes.")}
               </p>
             </div>
           ) : (
             <div className="space-y-8">
-              {historyData.map((contest) => (
+              {filteredHistoryData.map((contest) => (
                 <div key={contest.contest_id} className="space-y-4">
                   {/* Contest Header */}
                   <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4">

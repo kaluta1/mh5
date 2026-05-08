@@ -14,6 +14,7 @@ interface ContestantMobileActionsProps {
   onShare?: () => void
   isAuthor: boolean
   voteRestrictionReason?: string | null
+  hideVoteAction?: boolean
   showActions?: boolean
   isSelf?: boolean
   isFollowing?: boolean
@@ -32,6 +33,7 @@ export function ContestantMobileActions({
   onShare,
   isAuthor,
   voteRestrictionReason,
+  hideVoteAction = false,
   showActions = false,
   isSelf = false,
   isFollowing = false,
@@ -147,19 +149,21 @@ export function ContestantMobileActions({
           <MessageCircle className="w-5 h-5 mr-2" />
           {t('contestant_detail.comments')} ({commentsCount})
         </Button>
-        <Button
-          onClick={onVote}
-          disabled={!canVote || isVoting || hasVoted}
-          title={getVoteButtonTitle()}
-          className={`flex-1 font-semibold py-3 text-base rounded-xl transition-all duration-300 ${hasVoted
-            ? 'bg-gray-400 dark:bg-gray-700 text-white cursor-not-allowed'
-            : canVote
-              ? 'bg-gradient-to-r from-myhigh5-primary via-myhigh5-primary-dark to-indigo-600 text-white hover:shadow-lg active:scale-95'
-              : 'bg-gray-400 dark:bg-gray-700 text-white cursor-not-allowed'
-            }`}
-        >
-          {getVoteButtonText()}
-        </Button>
+        {!hideVoteAction && (
+          <Button
+            onClick={onVote}
+            disabled={!canVote || isVoting || hasVoted}
+            title={getVoteButtonTitle()}
+            className={`flex-1 font-semibold py-3 text-base rounded-xl transition-all duration-300 ${hasVoted
+              ? 'bg-gray-400 dark:bg-gray-700 text-white cursor-not-allowed'
+              : canVote
+                ? 'bg-gradient-to-r from-myhigh5-primary via-myhigh5-primary-dark to-indigo-600 text-white hover:shadow-lg active:scale-95'
+                : 'bg-gray-400 dark:bg-gray-700 text-white cursor-not-allowed'
+              }`}
+          >
+            {getVoteButtonText()}
+          </Button>
+        )}
       </div>
     </div>
   )

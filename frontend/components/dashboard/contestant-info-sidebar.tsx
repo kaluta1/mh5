@@ -22,6 +22,7 @@ interface ContestantInfoSidebarProps {
   isVoting: boolean
   onVote: () => void
   voteRestrictionReason?: string | null
+  hideVoteAction?: boolean
   onShare?: () => void
   showActions?: boolean
   isSelf?: boolean
@@ -46,6 +47,7 @@ export function ContestantInfoSidebar({
   isVoting,
   onVote,
   voteRestrictionReason,
+  hideVoteAction = false,
   onShare,
   showActions = false,
   isSelf = false,
@@ -324,16 +326,18 @@ export function ContestantInfoSidebar({
       <div className="border-t border-gray-200/50 dark:border-gray-700/50"></div>
 
       {/* Desktop Vote Button */}
-      <Button
-        onClick={onVote}
-        disabled={!canVote || isVoting || hasVoted}
-        className={`w-full hidden md:block font-semibold py-3 text-sm rounded-xl hover:shadow-xl transition-all duration-300 ${hasVoted
-          ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-          : 'bg-gradient-to-r from-myhigh5-primary via-myhigh5-primary-dark to-indigo-600 text-white hover:scale-[1.02] active:scale-[0.98]'
-          }`}
-      >
-        {getVoteButtonText()}
-      </Button>
+      {!hideVoteAction && (
+        <Button
+          onClick={onVote}
+          disabled={!canVote || isVoting || hasVoted}
+          className={`w-full hidden md:block font-semibold py-3 text-sm rounded-xl hover:shadow-xl transition-all duration-300 ${hasVoted
+            ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+            : 'bg-gradient-to-r from-myhigh5-primary via-myhigh5-primary-dark to-indigo-600 text-white hover:scale-[1.02] active:scale-[0.98]'
+            }`}
+        >
+          {getVoteButtonText()}
+        </Button>
+      )}
 
       {/* Desktop Share Button */}
       <Button

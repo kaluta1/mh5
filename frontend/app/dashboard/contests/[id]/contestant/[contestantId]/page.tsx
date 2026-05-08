@@ -693,6 +693,7 @@ function ContestantDetailContent() {
         onShare={handleShare}
         isAuthor={user?.id === contestant.user_id}
         voteRestrictionReason={contestant.vote_restriction_reason}
+        hideVoteAction={viewOnly}
         showActions={!!contestant.user_id}
         isSelf={user?.id === contestant.user_id}
         isFollowing={isFollowing}
@@ -721,7 +722,8 @@ function ContestantDetailContent() {
                 canVote={canVoteInContext}
                 isVoting={isVoting}
                 onVote={handleVote}
-        voteRestrictionReason={viewOnly ? 'voting_not_open' : contestant.vote_restriction_reason}
+                voteRestrictionReason={viewOnly ? 'voting_not_open' : contestant.vote_restriction_reason}
+                hideVoteAction={viewOnly}
                 showActions={!!contestant.user_id}
                 isSelf={user?.id === contestant.user_id}
                 isFollowing={isFollowing}

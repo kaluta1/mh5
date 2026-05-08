@@ -31,6 +31,7 @@ interface Contestant {
   videosCount: number
   canVote: boolean
   hasVoted: boolean
+  hideVoteAction?: boolean
   hasReported?: boolean
   isVotingOpenForRound?: boolean
   voteRestrictionReason?: string | null
@@ -100,9 +101,11 @@ interface Contestant {
 interface ContestantsListProps {
   contestants: Contestant[]
   contestId: string
+  roundId?: string
   currentUserId?: number
   favorites: string[]
   searchQuery?: string
+  hideVoteAction?: boolean
   onToggleFavorite: (contestantId: string) => void
   onViewDetails: (contestantId: string) => void
   onVote: (contestantId: string) => void
@@ -122,9 +125,11 @@ interface ContestantsListProps {
 export function ContestantsList({
   contestants,
   contestId,
+  roundId,
   currentUserId,
   favorites,
   searchQuery = '',
+  hideVoteAction = false,
   onToggleFavorite,
   onViewDetails,
   onVote,
@@ -194,6 +199,7 @@ export function ContestantsList({
             userId={contestant.userId}
             currentUserId={currentUserId}
             contestId={contestId}
+            roundId={roundId}
             name={contestant.name}
             country={contestant.country}
             city={contestant.city}
@@ -205,6 +211,7 @@ export function ContestantsList({
             videosCount={contestant.videosCount}
             canVote={contestant.canVote}
             hasVoted={contestant.hasVoted}
+            hideVoteAction={hideVoteAction || contestant.hideVoteAction}
             hasReported={contestant.hasReported}
             isVotingOpenForRound={contestant.isVotingOpenForRound}
             voteRestrictionReason={contestant.voteRestrictionReason}

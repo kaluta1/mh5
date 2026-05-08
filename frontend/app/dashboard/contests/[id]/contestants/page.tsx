@@ -146,14 +146,20 @@ export default function ContestantsListPage() {
     try {
       setVotingMap(p => new Map(p).set(cid, true))
       const cIdNum = parseInt(contestId, 10)
+      const roundIdNum = roundIdParam ? parseInt(roundIdParam, 10) : NaN
       const result = await contestService.voteForContestant(cid, {
         contestId: Number.isNaN(cIdNum) ? undefined : cIdNum,
+        roundId: Number.isNaN(roundIdNum) ? undefined : roundIdNum,
       })
       if (result.success) {
         await loadData()
         window.dispatchEvent(new Event('vote-changed'))
       } else if (result.code === 'max_votes_reached') {
-        await contestService.replaceVote(cid, Number.isNaN(cIdNum) ? undefined : cIdNum)
+        await contestService.replaceVote(
+          cid,
+          Number.isNaN(cIdNum) ? undefined : cIdNum,
+          Number.isNaN(roundIdNum) ? undefined : roundIdNum
+        )
         await loadData()
         window.dispatchEvent(new Event('vote-changed'))
       }

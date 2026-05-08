@@ -963,9 +963,11 @@ export default function ContestDetailPage() {
                 <ContestantsList
                   contestants={filteredContestants}
                   contestId={contestId}
+                  roundId={roundIdFromUrl || undefined}
                   currentUserId={user?.id}
                   favorites={favorites}
                   searchQuery={searchQuery}
+                  hideVoteAction={viewOnly}
                   onToggleFavorite={handleToggleFavorite}
                   onViewDetails={(contestantId) => {
                     const params = new URLSearchParams()

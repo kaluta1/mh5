@@ -414,12 +414,14 @@ def _hydrate_vote_season_for_contest_round(
     contestant: Contestant,
     page_contest: Optional[Contest],
     initial_season: ContestSeason,
+    requested_round_id: Optional[int] = None,
 ) -> ContestSeason:
     """
     Use the same ContestSeason / phase as contest detail and Top High5 for this round.
     Falls back to ``initial_season`` when the contestant is not active on the UI phase row.
     """
-    if page_contest is None or not getattr(contestant, "round_id", None):
+    round_context_id = requested_round_id or getattr(contestant, "round_id", None)
+    if page_contest is None or not round_context_id:
         return initial_season
     from app.crud import crud_round
     from app.crud.crud_contest import resolve_nomination_display_season_for_contest_round
@@ -427,7 +429,7 @@ def _hydrate_vote_season_for_contest_round(
     dr = crud_round.round.resolve_display_round_id_for_contest(
         db,
         page_contest.id,
-        contestant.round_id,
+        round_context_id,
     )
     _, ui_season = resolve_nomination_display_season_for_contest_round(db, page_contest, dr)
     if ui_season is None:
@@ -717,7 +719,7 @@ def get_my_votes(
     # Filtrer par season_id si fourni
     if season_id:
         query = query.filter(ContestantVoting.season_id == season_id)
-    level_filter_mode: Optional[str] = None
+    requested_level_norm: Optional[str] = None
     if level:
         level_norm = level.strip().lower()
         allowed_levels = {"city", "country", "regional", "region", "continent", "global"}
@@ -728,20 +730,7 @@ def get_my_votes(
             )
         if level_norm == "region":
             level_norm = "regional"
-        level_map = {
-            "city": SeasonLevel.CITY,
-            "country": SeasonLevel.COUNTRY,
-            "regional": SeasonLevel.REGIONAL,
-            "continent": SeasonLevel.CONTINENT,
-            "global": SeasonLevel.GLOBAL,
-        }
-        if level_norm == "regional":
-            # Robust regional filtering is applied post-query (Python), so we avoid
-            # brittle SQL joins/correlations that caused 500 for some legacy rows.
-            level_filter_mode = "regional"
-        else:
-            query = query.outerjoin(ContestSeason, ContestantVoting.season_id == ContestSeason.id)
-            query = query.filter(ContestSeason.level == level_map[level_norm])
+        requested_level_norm = level_norm
 
     # Filtrer par contest_id : même bucket MyHigh5 que POST /vote (vote_bucket_key + legacy)
     if contest_id:
@@ -785,49 +774,73 @@ def get_my_votes(
         ContestantVoting.vote_date.asc()
     ).all()
 
-    if level_filter_mode == "regional" and all_votes:
-        contest_ids = list({v.contest_id for v in all_votes if v.contest_id is not None})
-        contest_mode_by_id: Dict[int, str] = {}
-        regional_contest_ids: set[int] = set()
+    contest_cache: Dict[int, Contest] = {}
 
-        if contest_ids:
-            contest_rows = db.query(Contest.id, Contest.contest_mode).filter(Contest.id.in_(contest_ids)).all()
-            for cid, cm in contest_rows:
-                contest_mode_by_id[cid] = str(cm.value if hasattr(cm, "value") else cm or "").strip().lower()
+    def _contest_for_vote(vote: ContestantVoting) -> Optional[Contest]:
+        if vote.contest is not None:
+            return vote.contest
+        if not vote.contest_id:
+            return None
+        if vote.contest_id not in contest_cache:
+            contest_cache[vote.contest_id] = db.query(Contest).filter(Contest.id == vote.contest_id).first()
+        return contest_cache.get(vote.contest_id)
 
-            regional_contest_ids = {
-                row[0]
-                for row in (
-                    db.query(ContestSeasonLink.contest_id)
-                    .join(ContestSeason, ContestSeason.id == ContestSeasonLink.season_id)
-                    .filter(ContestSeason.is_deleted == False)
-                    .filter(ContestSeason.level == SeasonLevel.REGIONAL)
-                    .filter(ContestSeasonLink.contest_id.in_(contest_ids))
-                    .distinct()
-                    .all()
-                )
-                if row and row[0] is not None
-            }
+    def _level_value(season: Optional[ContestSeason]) -> Optional[str]:
+        if season is None or getattr(season, "level", None) is None:
+            return None
+        value = season.level.value if hasattr(season.level, "value") else str(season.level)
+        value = str(value).strip().lower()
+        return "regional" if value == "region" else value
 
-        filtered_votes: List[ContestantVoting] = []
-        for vote in all_votes:
-            season_obj = vote.season
-            contest_id_val = vote.contest_id
-            season_level = None
-            if season_obj is not None and getattr(season_obj, "level", None) is not None:
-                season_level = season_obj.level.value if hasattr(season_obj.level, "value") else str(season_obj.level)
-                season_level = str(season_level).lower()
+    def _stage_level_for_vote_date(season: Optional[ContestSeason], vote_date: Any) -> Optional[str]:
+        round_obj = getattr(season, "round", None) if season is not None else None
+        if round_obj is None or vote_date is None:
+            return None
+        try:
+            voted_on = vote_date.date()
+        except AttributeError:
+            return None
+        stage_fields = [
+            ("global", "global_start_date", "global_end_date"),
+            ("continent", "continental_start_date", "continental_end_date"),
+            ("regional", "regional_start_date", "regional_end_date"),
+            ("country", "country_season_start_date", "country_season_end_date"),
+            ("city", "city_season_start_date", "city_season_end_date"),
+        ]
+        for stage_level, start_attr, end_attr in stage_fields:
+            start_date = getattr(round_obj, start_attr, None)
+            end_date = getattr(round_obj, end_attr, None)
+            if start_date and end_date and start_date <= voted_on <= end_date:
+                return stage_level
+        return None
 
-            if season_level in ("regional", "region"):
-                filtered_votes.append(vote)
-                continue
+    effective_level_by_vote_id: Dict[int, str] = {}
 
-            if season_level in ("country", "city"):
-                is_nomination = contest_mode_by_id.get(contest_id_val or -1, "") == "nomination"
-                if is_nomination and (contest_id_val in regional_contest_ids):
-                    filtered_votes.append(vote)
+    def _effective_vote_level(vote: ContestantVoting) -> str:
+        key = getattr(vote, "id", id(vote))
+        if key in effective_level_by_vote_id:
+            return effective_level_by_vote_id[key]
 
-        all_votes = filtered_votes
+        season_level = _level_value(vote.season) or ""
+        contest_for_vote = _contest_for_vote(vote)
+        contest_mode = str(
+            getattr(contest_for_vote, "contest_mode", "") or ""
+        ).split(".")[-1].strip().lower()
+
+        effective_level = season_level
+        if contest_mode == "nomination":
+            dated_stage_level = _stage_level_for_vote_date(vote.season, vote.vote_date)
+            if dated_stage_level:
+                effective_level = dated_stage_level
+            elif season_level == "city":
+                # Nomination city rows are country-level UX.
+                effective_level = "country"
+
+        effective_level_by_vote_id[key] = effective_level
+        return effective_level
+
+    if requested_level_norm and all_votes:
+        all_votes = [vote for vote in all_votes if _effective_vote_level(vote) == requested_level_norm]
     
     # Grouper par saison + vote_bucket_key (une ligne MyHigh5 par catégorie réelle)
     votes_by_group: dict = {}
@@ -946,6 +959,7 @@ def get_my_votes(
         # Infos saison + libellés depuis le bucket (pas seulement le contest du 1er vote)
         first_vote = season_votes[0]
         season = first_vote.season
+        effective_group_level = _effective_vote_level(first_vote)
         bucket_key = group_key[1]
         contest = contests_by_id.get(first_vote.contest_id) or db.query(Contest).filter(
             Contest.id == first_vote.contest_id
@@ -994,13 +1008,13 @@ def get_my_votes(
                 "contest_id": vote.contest_id,
                 "voted_contest_name": c_for_row.name if c_for_row else None,
                 "vote_bucket_key": vote.vote_bucket_key if getattr(vote, "vote_bucket_key", None) else bucket_key,
-                "season_level": season.level if season else None
+                "season_level": _effective_vote_level(vote)
             })
         
         season_id_key = group_key[0]
         result["seasons"].append({
             "season_id": season_id_key,
-            "season_level": season.level if season else None,
+            "season_level": effective_group_level,
             "contest_id": first_vote.contest_id,
             "contest_name": category_name_out or rep_contest_name or (contest.name if contest else None),
             "category_id": category_id_out,
@@ -1023,7 +1037,7 @@ def get_my_votes(
     # Regional tab UX: avoid mixed COUNTRY/REGIONAL duplicates for same category bucket.
     # Keep one block per bucket, prefer the true REGIONAL row when present, and label it
     # consistently as regional.
-    if level_filter_mode == "regional":
+    if requested_level_norm == "regional":
         by_bucket: Dict[str, List[dict]] = {}
         for s in result["seasons"]:
             bucket = str(s.get("vote_bucket_key") or "")
@@ -2822,7 +2836,7 @@ def vote_for_contestant(
         )
 
     # Match Top High5 / contest detail: use the ContestSeason shown for this contest round.
-    season = _hydrate_vote_season_for_contest_round(db, contestant, page_contest, season)
+    season = _hydrate_vote_season_for_contest_round(db, contestant, page_contest, season, round_id)
     
     # Contest associé : préférer le contest_id de la page (évite mélange Bongo Fleva vs Tennis Club).
     contest: Optional[Contest] = None
@@ -3372,7 +3386,7 @@ def replace_fifth_vote(
     if not season:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Season not found")
 
-    season = _hydrate_vote_season_for_contest_round(db, contestant, page_contest, season)
+    season = _hydrate_vote_season_for_contest_round(db, contestant, page_contest, season, round_id)
 
     contest: Optional[Contest] = None
     if contest_id is not None:
