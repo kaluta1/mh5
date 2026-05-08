@@ -80,6 +80,8 @@ export default function TopHigh5Page() {
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null)
   const [isAutoRefreshing, setIsAutoRefreshing] = useState(false)
   const [showDiagnostics, setShowDiagnostics] = useState(false)
+  const [defaultCountryRoundId, setDefaultCountryRoundId] = useState<number | undefined>(undefined)
+  const [defaultRegionalRoundId, setDefaultRegionalRoundId] = useState<number | undefined>(undefined)
   // Flag so we only seed the country input from the signed-in user once, never
   // overwriting whatever the user has typed afterwards.
   const [didSeedCountry, setDidSeedCountry] = useState(false)
@@ -124,22 +126,28 @@ export default function TopHigh5Page() {
         let parsedRoundId = urlRoundIdRaw && !Number.isNaN(Number(urlRoundIdRaw)) ? Number(urlRoundIdRaw) : undefined
         const initialLevel: TopHigh5Level = LEVEL_OPTIONS.some((o) => o.value === urlLevelRaw)
           ? urlLevelRaw
-          : "regional"
+          : "country"
         const initialCountry = urlCountryRaw || fallbackCountry
 
-        if (!parsedRoundId) {
-          try {
-            const rounds = await ApiService.getRounds({ contestLimit: 1, limit: 24 }) as Round[]
-            const liveRound = rounds.find((round) => isRoundVotingLive(round, rounds))
-            const regionalRound = initialLevel === "regional"
-              ? rounds.find((round) => liveRound?.id && Number(round.id) === Number(liveRound.id) - 1)
-              : undefined
-            if (liveRound?.id) {
-              parsedRoundId = regionalRound?.id || liveRound.id
-            }
-          } catch {
-            // Backend can still choose a fallback if rounds cannot be loaded here.
+        try {
+          const rounds = await ApiService.getRounds({ contestLimit: 1, limit: 24 }) as Round[]
+          const liveRound = rounds.find((round) => isRoundVotingLive(round, rounds))
+          const regionalRound = rounds.find(
+            (round) => liveRound?.id && Number(round.id) === Number(liveRound.id) - 1,
+          )
+          if (liveRound?.id) {
+            setDefaultCountryRoundId(Number(liveRound.id))
           }
+          if (regionalRound?.id) {
+            setDefaultRegionalRoundId(Number(regionalRound.id))
+          }
+          if (!parsedRoundId && liveRound?.id) {
+            parsedRoundId = initialLevel === "regional"
+              ? (regionalRound?.id || liveRound.id)
+              : liveRound.id
+          }
+        } catch {
+          // Backend can still choose a fallback if rounds cannot be loaded here.
         }
 
         setCountryInput(initialCountry)
@@ -201,22 +209,17 @@ export default function TopHigh5Page() {
     }
   }
 
-  const handleLevelChange = async (next: string) => {
+  const handleLevelChange = (next: string) => {
     const nextLevel = next as TopHigh5Level
     if (nextLevel === activeLevel) return
     setActiveLevel(nextLevel)
     let parsed = roundIdInput && !Number.isNaN(Number(roundIdInput)) ? Number(roundIdInput) : undefined
-    if (nextLevel === "country") {
-      try {
-        const rounds = await ApiService.getRounds({ contestLimit: 1, limit: 24 }) as Round[]
-        const liveRound = rounds.find((round) => isRoundVotingLive(round, rounds))
-        if (liveRound?.id) {
-          parsed = liveRound.id
-          setRoundIdInput(String(liveRound.id))
-        }
-      } catch {
-        // Keep the current round value if the live round lookup fails.
-      }
+    if (nextLevel === "country" && defaultCountryRoundId) {
+      parsed = defaultCountryRoundId
+      setRoundIdInput(String(defaultCountryRoundId))
+    } else if (nextLevel === "regional" && defaultRegionalRoundId) {
+      parsed = defaultRegionalRoundId
+      setRoundIdInput(String(defaultRegionalRoundId))
     }
     fetchData({ country: countryInput, level: nextLevel, roundId: parsed })
   }
