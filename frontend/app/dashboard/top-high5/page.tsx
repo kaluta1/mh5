@@ -201,11 +201,23 @@ export default function TopHigh5Page() {
     }
   }
 
-  const handleLevelChange = (next: string) => {
+  const handleLevelChange = async (next: string) => {
     const nextLevel = next as TopHigh5Level
     if (nextLevel === activeLevel) return
     setActiveLevel(nextLevel)
-    const parsed = roundIdInput && !Number.isNaN(Number(roundIdInput)) ? Number(roundIdInput) : undefined
+    let parsed = roundIdInput && !Number.isNaN(Number(roundIdInput)) ? Number(roundIdInput) : undefined
+    if (nextLevel === "country") {
+      try {
+        const rounds = await ApiService.getRounds({ contestLimit: 1, limit: 24 }) as Round[]
+        const liveRound = rounds.find((round) => isRoundVotingLive(round, rounds))
+        if (liveRound?.id) {
+          parsed = liveRound.id
+          setRoundIdInput(String(liveRound.id))
+        }
+      } catch {
+        // Keep the current round value if the live round lookup fails.
+      }
+    }
     fetchData({ country: countryInput, level: nextLevel, roundId: parsed })
   }
 
