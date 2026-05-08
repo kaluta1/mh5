@@ -819,16 +819,11 @@ def get_my_votes(
         ).split(".")[-1].strip().lower()
 
         effective_level = season_level
-        if contest_mode == "nomination":
-            contest_level = _normalize_display_level(getattr(contest_for_vote, "level", None))
-            if contest_level:
-                # The contest level is the user's chosen voting context (Country, Regional, ...).
-                # Date windows can overlap or be reused, so they must not move a country vote
-                # into the regional MyHigh5 tab.
-                effective_level = "country" if contest_level == "city" else contest_level
-            elif season_level == "city":
-                # Nomination city rows are country-level UX.
-                effective_level = "country"
+        if contest_mode == "nomination" and season_level == "city":
+            # Nomination country votes can be stored on city rows internally; MyHigh5 UX
+            # treats those as Country. Do not let the contest/category level override the
+            # vote season, or country votes disappear into Regional/other tabs.
+            effective_level = "country"
 
         effective_level_by_vote_id[key] = effective_level
         return effective_level
