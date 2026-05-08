@@ -3,7 +3,7 @@ Endpoints pour gérer les migrations de saisons
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Response
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, or_, select
 from datetime import date
 
 from app.api import deps
@@ -66,6 +66,13 @@ def _normalized_country_candidates(contestant):
     if getattr(contestant, "user", None) and getattr(contestant.user, "country", None):
         values.append((contestant.user.country or "").strip().lower())
     return [v for v in values if v]
+
+
+def _top_high5_bucket_key_for_contest(contest: Contest) -> str:
+    """Keep Top High5 vote counting aligned with MyHigh5 category buckets."""
+    if contest.category_id is not None:
+        return f"cat:{contest.category_id}"
+    return f"ty:{contest.contest_type or ''}:{contest.contest_mode or ''}"
 
 
 _LEVEL_MAP = {
@@ -381,6 +388,7 @@ def get_top_high5_by_country(
             points_by_id: dict[int, int] = {}
             engagement_by_id: dict[int, dict] = {}
             if contestant_ids:
+                bucket_key = _top_high5_bucket_key_for_contest(contest)
                 points_season_ids = [season.id]
                 if getattr(season, "level", None) == SeasonLevel.REGIONAL:
                     # Regional votes may be stored on country/city season rows during
@@ -411,7 +419,10 @@ def get_top_high5_by_country(
                     .filter(
                         and_(
                             ContestantVoting.season_id.in_(points_season_ids),
-                            ContestantVoting.contest_id == contest.id,
+                            or_(
+                                ContestantVoting.vote_bucket_key == bucket_key,
+                                ContestantVoting.contest_id == contest.id,
+                            ),
                             ContestantVoting.contestant_id.in_(contestant_ids),
                         )
                     )
