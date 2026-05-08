@@ -825,7 +825,7 @@ def get_my_votes(
                 # The contest level is the user's chosen voting context (Country, Regional, ...).
                 # Date windows can overlap or be reused, so they must not move a country vote
                 # into the regional MyHigh5 tab.
-                effective_level = contest_level
+                effective_level = "country" if contest_level == "city" else contest_level
             elif season_level == "city":
                 # Nomination city rows are country-level UX.
                 effective_level = "country"
