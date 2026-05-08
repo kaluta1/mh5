@@ -1806,6 +1806,30 @@ def get_contest_contestants(
             -x["votes_count"],  # Votes first (descending - most votes first)
             x.get("rank", float('inf'))  # Then by rank (lower is better)
         ))
+
+        # Nomination contests: show exactly one card per nominator. Migration/legacy data
+        # can leave multiple active contestant rows for the same user in one contest.
+        contest_for_nomination = contest
+        if contest_for_nomination is None and real_contest_id:
+            contest_for_nomination = db.query(MyfavContest).filter(
+                MyfavContest.id == real_contest_id,
+                MyfavContest.is_deleted == False,
+            ).first()
+        if contest_for_nomination and _normalize_contest_mode(
+            getattr(contest_for_nomination, "contest_mode", None)
+        ) == "nomination":
+            seen_nominator_ids: set[int] = set()
+            deduped_rows: list = []
+            for row in contestants_data:
+                uid = row.get("user_id")
+                if uid is None:
+                    deduped_rows.append(row)
+                    continue
+                if uid in seen_nominator_ids:
+                    continue
+                seen_nominator_ids.add(int(uid))
+                deduped_rows.append(row)
+            contestants_data = deduped_rows[:limit]
         
         # Log pour vérifier les données
         if contestants_data and len(contestants_data) > 0:
