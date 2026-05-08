@@ -619,13 +619,29 @@ def get_top_high5_by_country(
         chosen_round = search_rounds[0] if search_rounds else candidate_rounds[0]
         chosen_contests = []
         fallback_applied = False
+        first_non_empty: tuple[int, Round, list] | None = None
         for idx, rnd in enumerate(search_rounds):
             contests_out = _build_for_round(rnd)
-            if contests_out:
+            if not contests_out:
+                continue
+            if first_non_empty is None:
+                first_non_empty = (idx, rnd, contests_out)
+            has_star_points = any(
+                int(row.get("stars_points") or 0) > 0
+                for contest_out in contests_out
+                for row in (contest_out.get("rows") or [])
+            )
+            if requested_level != SeasonLevel.REGIONAL or has_star_points:
                 chosen_round = rnd
                 chosen_contests = contests_out
                 fallback_applied = idx != 0
                 break
+
+        if not chosen_contests and first_non_empty is not None:
+            idx, rnd, contests_out = first_non_empty
+            chosen_round = rnd
+            chosen_contests = contests_out
+            fallback_applied = idx != 0
 
         # If no contests matched country filter, keep selected round aligned with the
         # prioritized search order (which already applies business month mapping).
