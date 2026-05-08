@@ -70,7 +70,7 @@ export default function TopHigh5Page() {
   const [countryInput, setCountryInput] = useState("")
   const [roundIdInput, setRoundIdInput] = useState("")
   const [categorySearch, setCategorySearch] = useState("")
-  const [activeLevel, setActiveLevel] = useState<TopHigh5Level>("country")
+  const [activeLevel, setActiveLevel] = useState<TopHigh5Level>("regional")
   const [data, setData] = useState<TopHigh5Response | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeCountry, setActiveCountry] = useState("")
@@ -124,7 +124,7 @@ export default function TopHigh5Page() {
         let parsedRoundId = urlRoundIdRaw && !Number.isNaN(Number(urlRoundIdRaw)) ? Number(urlRoundIdRaw) : undefined
         const initialLevel: TopHigh5Level = LEVEL_OPTIONS.some((o) => o.value === urlLevelRaw)
           ? urlLevelRaw
-          : "country"
+          : "regional"
         const initialCountry = urlCountryRaw || fallbackCountry
 
         if (!parsedRoundId) {
