@@ -326,6 +326,38 @@ def get_top_high5_by_country(
                         qualified_only=False,
                         strict_season_scope=True,
                     )
+                    regional_vote_backed_members: list[Contestant] = []
+                    if season.level == SeasonLevel.REGIONAL:
+                        bucket_key = _top_high5_bucket_key_for_contest(contest)
+                        round_season_rows = (
+                            db.query(ContestSeason.id)
+                            .filter(ContestSeason.round_id == rnd.id)
+                            .filter(ContestSeason.is_deleted == False)
+                            .filter(
+                                ContestSeason.level.in_(
+                                    [SeasonLevel.CITY, SeasonLevel.COUNTRY, SeasonLevel.REGIONAL]
+                                )
+                            )
+                            .distinct()
+                            .all()
+                        )
+                        round_season_ids = [row[0] for row in round_season_rows if row and row[0] is not None]
+                        if round_season_ids:
+                            regional_vote_backed_members = (
+                                db.query(Contestant)
+                                .join(ContestantVoting, ContestantVoting.contestant_id == Contestant.id)
+                                .filter(
+                                    ContestantVoting.season_id.in_(round_season_ids),
+                                    or_(
+                                        ContestantVoting.vote_bucket_key == bucket_key,
+                                        ContestantVoting.contest_id == contest.id,
+                                    ),
+                                    Contestant.is_active == True,
+                                    Contestant.is_deleted == False,
+                                )
+                                .distinct()
+                                .all()
+                            )
                     for key, members in grouped.items():
                         if not key:
                             continue
@@ -339,6 +371,14 @@ def get_top_high5_by_country(
                                     (c.country or c.nominator_country),
                                 ) is True
                             ]
+                            for voted_member in regional_vote_backed_members:
+                                if SeasonMigrationService.same_regional_voting_pool(
+                                    selected_country,
+                                    (voted_member.country or voted_member.nominator_country),
+                                ) is not True:
+                                    continue
+                                if all(existing.id != voted_member.id for existing in pool_members):
+                                    pool_members.append(voted_member)
                             if pool_members:
                                 per_location_groups.append((key, pool_members))
                             continue
@@ -396,10 +436,8 @@ def get_top_high5_by_country(
                     # so TopHigh5 stars reflect what users voted in MyHigh5.
                     sibling_rows = (
                         db.query(ContestSeason.id)
-                        .join(ContestSeasonLink, ContestSeasonLink.season_id == ContestSeason.id)
                         .filter(ContestSeason.round_id == season.round_id)
                         .filter(ContestSeason.is_deleted == False)
-                        .filter(ContestSeasonLink.contest_id == contest.id)
                         .filter(
                             ContestSeason.level.in_(
                                 [SeasonLevel.CITY, SeasonLevel.COUNTRY, SeasonLevel.REGIONAL]
