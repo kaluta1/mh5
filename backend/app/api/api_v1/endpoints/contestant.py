@@ -604,6 +604,37 @@ def _find_duplicate_video_submission(
     return None
 
 
+def _already_voted_for_nominator_in_bucket(
+    db: Session,
+    *,
+    voter_user_id: int,
+    season_id: int,
+    contest: Contest,
+    nominator_user_id: Optional[int],
+    exclude_contestant_id: Optional[int] = None,
+) -> bool:
+    """
+    Returns True when the voter already has a MyHigh5 vote in the same bucket/season
+    for another contestant owned by the same nominator.
+    """
+    if nominator_user_id is None:
+        return False
+
+    q = (
+        _myhigh5_scope_votes_query(
+            db,
+            user_id=voter_user_id,
+            season_id=season_id,
+            contest=contest,
+        )
+        .join(Contestant, Contestant.id == ContestantVoting.contestant_id)
+        .filter(Contestant.user_id == nominator_user_id)
+    )
+    if exclude_contestant_id is not None:
+        q = q.filter(ContestantVoting.contestant_id != exclude_contestant_id)
+    return q.first() is not None
+
+
 # DEBUG ENDPOINT: Test if contestants exist in database
 @router.get("/debug/all-contestants")
 def debug_get_all_contestants(
@@ -3176,6 +3207,24 @@ def vote_for_contestant(
         f"[VOTE CHECK] User {current_user.id} can vote in season {season.id} "
         f"(no existing vote found for this season)"
     )
+
+    # Prevent multiple votes for different contents from the same nominator
+    # inside one MyHigh5 category bucket for this season.
+    if _already_voted_for_nominator_in_bucket(
+        db,
+        voter_user_id=current_user.id,
+        season_id=season.id,
+        contest=contest,
+        nominator_user_id=contestant.user_id,
+        exclude_contestant_id=contestant_id,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "already_voted",
+                "message": "You have already voted for this nominator in this category.",
+            },
+        )
     
     # Compter les votes existants pour cette saison et cette catégorie MyHigh5 (5 slots par catégorie)
     from sqlalchemy import case
@@ -3497,6 +3546,23 @@ def replace_fifth_vote(
     # Supprimer le 5e vote (dernier dans le classement)
     vote_to_remove = existing_votes[4]
     removed_contestant_id = vote_to_remove.contestant_id
+
+    if _already_voted_for_nominator_in_bucket(
+        db,
+        voter_user_id=current_user.id,
+        season_id=season.id,
+        contest=contest,
+        nominator_user_id=contestant.user_id,
+        exclude_contestant_id=removed_contestant_id,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "already_voted",
+                "message": "You have already voted for this nominator in this category.",
+            },
+        )
+
     logger.info(
         f"[VOTE REPLACE] Removing 5th vote: ID={vote_to_remove.id}, "
         f"contestant_id={removed_contestant_id}, replacing with contestant_id={contestant_id}"

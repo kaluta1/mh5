@@ -533,21 +533,20 @@ def get_top_high5_by_country(
                 reverse=True,
             )
 
-            # Regional leaderboard: one slot per nominator (user). Stale migrations can
-            # leave two nominee rows for the same person in one category pool.
-            if getattr(season, "level", None) == SeasonLevel.REGIONAL:
-                seen_user_ids: set[int] = set()
-                deduped: list = []
-                for c in sorted_ranked:
-                    uid = getattr(c, "user_id", None)
-                    if uid is None:
-                        deduped.append(c)
-                        continue
-                    if uid in seen_user_ids:
-                        continue
-                    seen_user_ids.add(uid)
+            # User-facing Top High5 must show one row per nominator (user).
+            # Keep only the best-ranked entry when stale/migrated duplicates exist.
+            seen_user_ids: set[int] = set()
+            deduped: list = []
+            for c in sorted_ranked:
+                uid = getattr(c, "user_id", None)
+                if uid is None:
                     deduped.append(c)
-                sorted_ranked = deduped
+                    continue
+                if uid in seen_user_ids:
+                    continue
+                seen_user_ids.add(uid)
+                deduped.append(c)
+            sorted_ranked = deduped
 
             rows = []
             for idx, c in enumerate(sorted_ranked[:5], start=1):
