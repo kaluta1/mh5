@@ -282,6 +282,21 @@ def read_contests(
     
     for c in contests:
         try:
+            expected_entry_type = _entry_type_from_contest_mode(
+                _normalize_contest_mode(getattr(c, "contest_mode", "participation"))
+            )
+            stats_for_card = contest.enrich_contest_with_stats(
+                db=db,
+                contest=c,
+                current_user=current_user,
+                filter_country=filter_country,
+                filter_region=filter_region,
+                filter_continent=filter_continent,
+                include_top_contestants=False,
+                entry_type=expected_entry_type,
+            )
+            visible_participants_count = int(stats_for_card.get("participants_count") or 0)
+
             
             basic_contest = {
                 "id": c.id,
@@ -295,9 +310,10 @@ def read_contests(
                 "is_voting_open": c.is_voting_open,
                 "level": c.level,
                 "contest_mode": _normalize_contest_mode(getattr(c, 'contest_mode', 'participation')),
-                "entries_count": contestant_counts.get(c.id, 0),
-                "contestants": contestant_counts.get(c.id, 0),  # For compatibility
-                "participant_count": getattr(c, 'participant_count', 0),
+                # Keep card count aligned with opened contest roster filters.
+                "entries_count": visible_participants_count,
+                "contestants": visible_participants_count,  # For compatibility
+                "participant_count": visible_participants_count,
                 "total_votes": 0,  # Skip vote counting for list view
                 "current_user_contesting": bool(current_user_contesting_map.get(c.id, False)),  # Explicitly convert to bool, default False
             }
