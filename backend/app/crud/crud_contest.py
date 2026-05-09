@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Optional, Union, TYPE_CHECKING
 from datetime import datetime, date, timedelta
 
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func, or_, cast, String
+from sqlalchemy import func, or_, cast, String, case
 
 from app.models.contest import Contest, ContestEntry, ContestVote
 from app.models.contests import Contestant, ContestantRanking
@@ -1482,7 +1482,32 @@ class CRUDContest:
             if regional_pair:
                 season_link, season = regional_pair
             else:
-                regional_context_without_season = True
+                # No regional season in this exact round: fallback to the nearest
+                # available active regional season for this contest, so regional
+                # URLs never reuse country-level rosters.
+                nearest_regional_pair = (
+                    db.query(ContestSeasonLink, ContestSeason)
+                    .join(ContestSeason, ContestSeason.id == ContestSeasonLink.season_id)
+                    .filter(
+                        ContestSeasonLink.contest_id == contest_id,
+                        ContestSeasonLink.is_active == True,
+                        ContestSeason.level == SeasonLevel.REGIONAL,
+                        ContestSeason.is_deleted == False,
+                    )
+                    .order_by(
+                        case(
+                            (ContestSeason.round_id <= target_round_id, 0),
+                            else_=1,
+                        ),
+                        ContestSeason.round_id.desc(),
+                        ContestSeason.id.desc(),
+                    )
+                    .first()
+                )
+                if nearest_regional_pair:
+                    season_link, season = nearest_regional_pair
+                else:
+                    regional_context_without_season = True
         
         # FIXED: Query contestants by the ACTIVE SEASON ID (not contest_id)
         from app.models.round import Round, round_contests
