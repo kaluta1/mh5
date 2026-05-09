@@ -850,6 +850,35 @@ class CRUDContest:
         if ea_regional_nomination_count:
             base_entries_query = base_entries_query.filter(regional_voting_pools_sql_predicate())
             entries_query = entries_query.filter(regional_voting_pools_sql_predicate())
+
+        # Keep country nomination card counts aligned with opened roster:
+        # once a contestant is active in higher levels, they should no longer
+        # count in country-level visible participants for this contest.
+        country_filter_norm_for_count = str(filter_country or "").strip().lower()
+        singeli_tanzania_scope_for_count = (
+            contest.id == 17 and country_filter_norm_for_count in {"tanzania", "tz"}
+        )
+        if (
+            singeli_tanzania_scope_for_count
+            and contest_mode == "nomination"
+            and season_level_lower_for_count in ("country", "city")
+        ):
+            promoted_ids_for_count = (
+                db.query(ContestantSeason.contestant_id)
+                .join(ContestSeason, ContestSeason.id == ContestantSeason.season_id)
+                .join(ContestSeasonLink, ContestSeasonLink.season_id == ContestSeason.id)
+                .filter(
+                    ContestSeasonLink.contest_id == contest.id,
+                    ContestSeasonLink.is_active == True,
+                    ContestSeason.level.in_(
+                        [SeasonLevel.REGIONAL, SeasonLevel.CONTINENT, SeasonLevel.GLOBAL]
+                    ),
+                    ContestSeason.is_deleted == False,
+                    ContestantSeason.is_active == True,
+                )
+            )
+            base_entries_query = base_entries_query.filter(~Contestant.id.in_(promoted_ids_for_count))
+            entries_query = entries_query.filter(~Contestant.id.in_(promoted_ids_for_count))
         
         # Get total count without location filters (for display purposes)
         total_entries_count = base_entries_query.scalar() or 0
@@ -1455,6 +1484,10 @@ class CRUDContest:
         contest_mode = _normalize_contest_mode(getattr(contest_obj, 'contest_mode', 'participation'))
         requested_entry_type = str(entry_type or "").strip().lower()
         nomination_context = contest_mode == "nomination" or requested_entry_type == "nomination"
+        country_filter_norm = str(filter_country or "").strip().lower()
+        region_filter_norm = str(filter_region or "").strip().lower()
+        singeli_tanzania_scope = contest_id == 17 and country_filter_norm in {"tanzania", "tz"}
+        singeli_east_africa_scope = contest_id == 17 and region_filter_norm in {"east africa", "east_africa"}
         explicit_region_requested = bool(
             filter_region and str(filter_region).strip().lower() not in ("", "all")
         )
@@ -1463,7 +1496,8 @@ class CRUDContest:
         # fallback to country-season roster. Use a true regional season for this
         # round, otherwise return no contestants for this regional context.
         if (
-            nomination_context
+            singeli_east_africa_scope
+            and nomination_context
             and explicit_region_requested
             and target_round_id is not None
         ):
@@ -1558,7 +1592,7 @@ class CRUDContest:
         contestants_query = contestants_query.filter(Contestant.entry_type == effective_entry_type)
         logger.info(f"[get_contest_with_enriched_contestants] Querying by season_id={filter_season_id}, entry_type={effective_entry_type}")
 
-        if regional_context_without_season:
+        if singeli_east_africa_scope and regional_context_without_season:
             contestants_query = contestants_query.filter(Contestant.id == -1)
         
         # Appliquer le filtrage géographique selon le niveau de la saison et l'utilisateur connecté
@@ -1610,25 +1644,32 @@ class CRUDContest:
                 and season_level in ("regional", "region")
             ):
                 contestants_query = contestants_query.filter(regional_voting_pools_sql_predicate())
-                # Keep country and regional rosters separated for nomination flows:
-                # if a contestant is still active in country-season memberships for
-                # this contest, do not show that row in regional listing.
-                country_member_ids = (
-                    db.query(ContestantSeason.contestant_id)
-                    .join(ContestSeason, ContestSeason.id == ContestantSeason.season_id)
-                    .join(ContestSeasonLink, ContestSeasonLink.season_id == ContestSeason.id)
-                    .filter(
-                        ContestSeasonLink.contest_id == contest_id,
-                        ContestSeasonLink.is_active == True,
-                        ContestSeason.level == SeasonLevel.COUNTRY,
-                        ContestSeason.is_deleted == False,
-                        ContestantSeason.is_active == True,
-                    )
-                )
-                contestants_query = contestants_query.filter(~Contestant.id.in_(country_member_ids))
         elif nomination_country_membership_scope:
             # Disabled intentionally (see note above).
             pass
+
+        # Country nomination roster should only contain contestants that have not
+        # already advanced to higher active levels for this contest.
+        if (
+            singeli_tanzania_scope
+            and contest_mode == "nomination"
+            and str(season_level or "").lower() in ("country", "city")
+        ):
+            promoted_ids = (
+                db.query(ContestantSeason.contestant_id)
+                .join(ContestSeason, ContestSeason.id == ContestantSeason.season_id)
+                .join(ContestSeasonLink, ContestSeasonLink.season_id == ContestSeason.id)
+                .filter(
+                    ContestSeasonLink.contest_id == contest_id,
+                    ContestSeasonLink.is_active == True,
+                    ContestSeason.level.in_(
+                        [SeasonLevel.REGIONAL, SeasonLevel.CONTINENT, SeasonLevel.GLOBAL]
+                    ),
+                    ContestSeason.is_deleted == False,
+                    ContestantSeason.is_active == True,
+                )
+            )
+            contestants_query = contestants_query.filter(~Contestant.id.in_(promoted_ids))
         
         # =====================================================
         # FILTRAGE GÉOGRAPHIQUE
