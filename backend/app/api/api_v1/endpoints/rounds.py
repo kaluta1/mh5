@@ -454,6 +454,22 @@ def _enrich_round_data(
                 try:
                     # Use pre-calculated participant count (already computed for sorting)
                     participant_count = contest_participant_counts.get(contest.id, 0)
+                    if (
+                        contest.id == 17
+                        and str(filter_region or "").strip().lower() in {"east africa", "east_africa"}
+                        and _normalize_contest_mode(getattr(contest, "contest_mode", "participation")) == "nomination"
+                    ):
+                        opened_view_data = crud.contest.get_contest_with_enriched_contestants(
+                            db=db,
+                            contest_id=contest.id,
+                            current_user_id=user_id,
+                            filter_country=filter_country,
+                            filter_region=filter_region,
+                            filter_continent=filter_continent,
+                            entry_type="nomination",
+                            round_id=round_id,
+                        )
+                        participant_count = len((opened_view_data or {}).get("contestants") or [])
                     
                     # Strict per-contest check: only true when the user has already contested THIS contest.
                     is_contesting = contest.id in user_contested_contest_ids
