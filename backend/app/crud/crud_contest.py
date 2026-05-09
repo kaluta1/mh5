@@ -1453,6 +1453,8 @@ class CRUDContest:
         )
 
         contest_mode = _normalize_contest_mode(getattr(contest_obj, 'contest_mode', 'participation'))
+        requested_entry_type = str(entry_type or "").strip().lower()
+        nomination_context = contest_mode == "nomination" or requested_entry_type == "nomination"
         explicit_region_requested = bool(
             filter_region and str(filter_region).strip().lower() not in ("", "all")
         )
@@ -1461,7 +1463,7 @@ class CRUDContest:
         # fallback to country-season roster. Use a true regional season for this
         # round, otherwise return no contestants for this regional context.
         if (
-            contest_mode == "nomination"
+            nomination_context
             and explicit_region_requested
             and target_round_id is not None
         ):
