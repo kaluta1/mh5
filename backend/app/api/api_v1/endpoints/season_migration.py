@@ -212,6 +212,14 @@ def get_top_high5_by_country(
 
             contests_out = []
             for contest in nomination_contests:
+                # Targeted business override requested by product:
+                # hide Singeli category on Top High5 country view for Tanzania only.
+                if (
+                    requested_level == SeasonLevel.COUNTRY
+                    and contest.id == 17
+                    and any(v in variants for v in {"tanzania", "tz"})
+                ):
+                    continue
                 link = (
                     db.query(ContestSeasonLink, ContestSeason)
                     .join(ContestSeason, ContestSeason.id == ContestSeasonLink.season_id)
