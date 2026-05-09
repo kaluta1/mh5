@@ -296,6 +296,24 @@ def read_contests(
                 entry_type=expected_entry_type,
             )
             visible_participants_count = int(stats_for_card.get("participants_count") or 0)
+            # Singeli/East Africa special alignment: card count must match opened roster.
+            if (
+                c.id == 17
+                and str(filter_region or "").strip().lower() in {"east africa", "east_africa"}
+                and _normalize_contest_mode(getattr(c, "contest_mode", "participation")) == "nomination"
+            ):
+                opened_view_data = contest.get_contest_with_enriched_contestants(
+                    db=db,
+                    contest_id=c.id,
+                    current_user_id=current_user.id if current_user else None,
+                    filter_country=filter_country,
+                    filter_region=filter_region,
+                    filter_continent=filter_continent,
+                    entry_type=expected_entry_type,
+                    round_id=None,
+                )
+                opened_rows = (opened_view_data or {}).get("contestants") or []
+                visible_participants_count = len(opened_rows)
 
             
             basic_contest = {
