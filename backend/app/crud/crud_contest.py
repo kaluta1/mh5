@@ -1440,7 +1440,7 @@ class CRUDContest:
         )
         
         # Récupérer la saison active d'abord (alignée sur enrich pour ce round)
-        from app.models.contests import ContestantSeason
+        from app.models.contests import ContestantSeason, SeasonLevel
         from app.crud import crud_round
 
         target_round_id = crud_round.round.resolve_display_round_id_for_contest(
@@ -1451,6 +1451,36 @@ class CRUDContest:
             contest_obj,
             target_round_id,
         )
+
+        contest_mode = _normalize_contest_mode(getattr(contest_obj, 'contest_mode', 'participation'))
+        explicit_region_requested = bool(
+            filter_region and str(filter_region).strip().lower() not in ("", "all")
+        )
+        regional_context_without_season = False
+        # If user explicitly requests a regional bloc (e.g. East Africa), do not
+        # fallback to country-season roster. Use a true regional season for this
+        # round, otherwise return no contestants for this regional context.
+        if (
+            contest_mode == "nomination"
+            and explicit_region_requested
+            and target_round_id is not None
+        ):
+            regional_pair = (
+                db.query(ContestSeasonLink, ContestSeason)
+                .join(ContestSeason, ContestSeason.id == ContestSeasonLink.season_id)
+                .filter(
+                    ContestSeasonLink.contest_id == contest_id,
+                    ContestSeasonLink.is_active == True,
+                    ContestSeason.round_id == target_round_id,
+                    ContestSeason.level == SeasonLevel.REGIONAL,
+                    ContestSeason.is_deleted == False,
+                )
+                .first()
+            )
+            if regional_pair:
+                season_link, season = regional_pair
+            else:
+                regional_context_without_season = True
         
         # FIXED: Query contestants by the ACTIVE SEASON ID (not contest_id)
         from app.models.round import Round, round_contests
@@ -1497,10 +1527,12 @@ class CRUDContest:
                 contains_eager(Contestant.user)
             )
         # Filtrer par entry_type basé sur le contest_mode (données corrigées)
-        contest_mode = _normalize_contest_mode(getattr(contest_obj, 'contest_mode', 'participation'))
         effective_entry_type = entry_type or ('nomination' if contest_mode == 'nomination' else 'participation')
         contestants_query = contestants_query.filter(Contestant.entry_type == effective_entry_type)
         logger.info(f"[get_contest_with_enriched_contestants] Querying by season_id={filter_season_id}, entry_type={effective_entry_type}")
+
+        if regional_context_without_season:
+            contestants_query = contestants_query.filter(Contestant.id == -1)
         
         # Appliquer le filtrage géographique selon le niveau de la saison et l'utilisateur connecté
         # Récupérer l'utilisateur courant pour le filtrage géographique
