@@ -1610,6 +1610,22 @@ class CRUDContest:
                 and season_level in ("regional", "region")
             ):
                 contestants_query = contestants_query.filter(regional_voting_pools_sql_predicate())
+                # Keep country and regional rosters separated for nomination flows:
+                # if a contestant is still active in country-season memberships for
+                # this contest, do not show that row in regional listing.
+                country_member_ids = (
+                    db.query(ContestantSeason.contestant_id)
+                    .join(ContestSeason, ContestSeason.id == ContestantSeason.season_id)
+                    .join(ContestSeasonLink, ContestSeasonLink.season_id == ContestSeason.id)
+                    .filter(
+                        ContestSeasonLink.contest_id == contest_id,
+                        ContestSeasonLink.is_active == True,
+                        ContestSeason.level == SeasonLevel.COUNTRY,
+                        ContestSeason.is_deleted == False,
+                        ContestantSeason.is_active == True,
+                    )
+                )
+                contestants_query = contestants_query.filter(~Contestant.id.in_(country_member_ids))
         elif nomination_country_membership_scope:
             # Disabled intentionally (see note above).
             pass
