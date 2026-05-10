@@ -139,11 +139,6 @@ export default function RootLayout({
         {/* DNS prefetch for external resources */}
         <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
         <link rel="dns-prefetch" href="https://fonts.gstatic.com" />
-        <script
-          async
-          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5582556318526474"
-          crossOrigin="anonymous"
-        />
       </head>
       <body className={inter.className}>
         <script
@@ -203,6 +198,24 @@ export default function RootLayout({
                     }
                   });
                 });
+                // Load ads after the first page paint so third-party JS doesn't
+                // compete with route hydration and API requests.
+                function loadAds() {
+                  if (document.querySelector('script[data-myhigh5-ads]')) return;
+                  var s = document.createElement('script');
+                  s.async = true;
+                  s.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5582556318526474';
+                  s.crossOrigin = 'anonymous';
+                  s.setAttribute('data-myhigh5-ads', 'true');
+                  document.head.appendChild(s);
+                }
+                window.addEventListener('load', function() {
+                  if ('requestIdleCallback' in window) {
+                    window.requestIdleCallback(loadAds, { timeout: 3000 });
+                  } else {
+                    setTimeout(loadAds, 1500);
+                  }
+                }, { once: true });
               })();
             `,
           }}

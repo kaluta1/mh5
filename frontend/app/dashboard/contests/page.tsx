@@ -349,6 +349,12 @@ function ContestsPageContent() {
         if (abortController.signal.aborted) return
         
         setRounds(data)
+        const nextDisplayRounds = computeDisplayRounds(data)
+        const allowedRoundIds = new Set(nextDisplayRounds.map((d) => String(d.round.id)))
+        setActiveRoundId((prev) => {
+          if (prev && allowedRoundIds.has(prev)) return prev
+          return nextDisplayRounds[0] ? String(nextDisplayRounds[0].round.id) : prev
+        })
       } catch (error: any) {
         if (error.name === 'AbortError' || abortController.signal.aborted) {
           return
