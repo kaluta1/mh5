@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { useLanguage } from '@/contexts/language-context'
 import { Button } from '@/components/ui/button'
+import { getEffectiveApiUrl } from '@/lib/config'
 import { 
   History,
   ArrowLeft,
@@ -41,7 +42,7 @@ export default function TransactionsPage() {
     try {
       const token = localStorage.getItem('access_token')
       const headers = token ? { 'Authorization': `Bearer ${token}` } : {}
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      const apiUrl = getEffectiveApiUrl()
       
       const params = new URLSearchParams()
       params.append('limit', '100')

@@ -1,7 +1,7 @@
 /**
  * Payment Service - Smart Contract payments integration (BSC)
  */
-import { API_URL } from '@/lib/config'
+import { API_URL, getEffectiveApiUrl } from '@/lib/config'
 
 export interface PaymentRecipient {
   username_or_email: string
@@ -50,10 +50,9 @@ export interface VerifyPaymentResponse {
 }
 
 class PaymentService {
-  private baseUrl: string
-
-  constructor() {
-    this.baseUrl = `${API_URL}/api/v1/payments`
+  private getBaseUrl(): string {
+    const origin = typeof window === 'undefined' ? API_URL : getEffectiveApiUrl()
+    return `${origin.replace(/\/+$/, '')}/api/v1/payments`
   }
 
   private getHeaders(token: string): HeadersInit {
@@ -68,7 +67,7 @@ class PaymentService {
    */
   async verifyUser(token: string, usernameOrEmail: string): Promise<VerifiedUser> {
     const params = new URLSearchParams({ username_or_email: usernameOrEmail })
-    const response = await fetch(`${this.baseUrl}/verify-user?${params}`, {
+    const response = await fetch(`${this.getBaseUrl()}/verify-user?${params}`, {
       headers: this.getHeaders(token)
     })
 
@@ -86,7 +85,7 @@ class PaymentService {
    * Get available cryptocurrencies for payment
    */
   async getAvailableCurrencies(token: string): Promise<string[]> {
-    const response = await fetch(`${this.baseUrl}/currencies`, {
+    const response = await fetch(`${this.getBaseUrl()}/currencies`, {
       headers: this.getHeaders(token)
     })
 
@@ -106,7 +105,7 @@ class PaymentService {
     token: string,
     request: PaymentRequest
   ): Promise<PaymentResponse> {
-    const response = await fetch(`${this.baseUrl}/create`, {
+    const response = await fetch(`${this.getBaseUrl()}/create`, {
       method: 'POST',
       headers: this.getHeaders(token),
       body: JSON.stringify(request)
@@ -127,7 +126,7 @@ class PaymentService {
     token: string,
     request: VerifyPaymentRequest
   ): Promise<VerifyPaymentResponse> {
-    const response = await fetch(`${this.baseUrl}/verify`, {
+    const response = await fetch(`${this.getBaseUrl()}/verify`, {
       method: 'POST',
       headers: this.getHeaders(token),
       body: JSON.stringify(request)
@@ -151,7 +150,7 @@ class PaymentService {
     order_id?: string
     tx_hash?: string
   }> {
-    const response = await fetch(`${this.baseUrl}/check/${depositId}`, {
+    const response = await fetch(`${this.getBaseUrl()}/check/${depositId}`, {
       method: 'POST',
       headers: this.getHeaders(token)
     })
@@ -179,7 +178,7 @@ class PaymentService {
     token_address: string
     chain_id: number
   }> {
-    const response = await fetch(`${this.baseUrl}/check-status/${depositId}`, {
+    const response = await fetch(`${this.getBaseUrl()}/check-status/${depositId}`, {
       headers: this.getHeaders(token)
     })
 

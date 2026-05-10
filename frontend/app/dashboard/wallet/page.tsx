@@ -7,6 +7,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { useLanguage } from '@/contexts/language-context'
 import { useToast } from '@/components/ui/toast'
 import { Button } from '@/components/ui/button'
+import { getEffectiveApiUrl } from '@/lib/config'
 import { 
   Wallet, 
   TrendingUp,
@@ -74,7 +75,7 @@ export default function WalletPage() {
     try {
       const token = localStorage.getItem('access_token')
       const headers = token ? { 'Authorization': `Bearer ${token}` } : {}
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      const apiUrl = getEffectiveApiUrl()
       
       // Charger le solde du portefeuille
       const balanceResponse = await fetch(`${apiUrl}/api/v1/wallet/balance`, { headers })

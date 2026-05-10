@@ -20,6 +20,7 @@ import {
   Clock
 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
+import { getEffectiveApiUrl } from '@/lib/config'
 
 interface ResumePaymentDialogProps {
   open: boolean
@@ -90,7 +91,7 @@ export function ResumePaymentDialog({
 
     try {
       const token = localStorage.getItem('access_token')
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      const apiUrl = getEffectiveApiUrl()
       
       const response = await fetch(
         `${apiUrl}/api/v1/payments/check-status/${depositId}`,
@@ -133,7 +134,7 @@ export function ResumePaymentDialog({
     setIsCheckingPayment(true)
     try {
       const token = localStorage.getItem('access_token')
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      const apiUrl = getEffectiveApiUrl()
       
       const response = await fetch(
         `${apiUrl}/api/v1/payments/check-status/${depositId}`,

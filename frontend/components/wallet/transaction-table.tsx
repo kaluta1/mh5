@@ -17,6 +17,7 @@ import {
   ExternalLink
 } from 'lucide-react'
 import { ResumePaymentDialog } from '@/components/dialogs/resume-payment-dialog'
+import { getEffectiveApiUrl } from '@/lib/config'
 
 export interface Transaction {
   id: string
@@ -180,7 +181,7 @@ export function TransactionTable({
 
   const openInvoice = (transaction: Transaction) => {
     const token = localStorage.getItem('access_token')
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+    const apiUrl = getEffectiveApiUrl()
     
     // Extract deposit ID from transaction id (format: "dep_123")
     const depositId = transaction.deposit_id || transaction.id.replace('dep_', '')
