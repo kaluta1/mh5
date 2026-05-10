@@ -466,15 +466,46 @@ def _enrich_round_data(
             
             contests_count = len(valid_contests)
 
-            # Pre-sort contests before pagination without running full contest
-            # enrichment for every linked contest. Detail pages still compute
-            # exact scoped stats when opened.
+            # Keep initial unfiltered page loads fast, but preserve the original
+            # scoped counts for regional/country/continent views. Those counts
+            # must match the detail roster exactly.
+            use_scoped_counts = bool(filter_country or filter_region or filter_continent)
             contest_participant_counts = {
                 vc.id: int(getattr(vc, "participant_count", 0) or 0)
                 for vc in valid_contests
             }
             valid_contests_by_id = {vc.id: vc for vc in valid_contests}
             valid_contest_ids = set(valid_contests_by_id.keys())
+
+            if use_scoped_counts and valid_contests:
+                try:
+                    current_user_obj = None
+                    if user_id:
+                        current_user_obj = (
+                            db.query(models.User)
+                            .filter(models.User.id == user_id)
+                            .first()
+                        )
+
+                    for vc in valid_contests:
+                        c_mode = _normalize_contest_mode(getattr(vc, "contest_mode", "participation"))
+                        entry_type = "nomination" if c_mode == "nomination" else "participation"
+                        stats = crud.contest.enrich_contest_with_stats(
+                            db,
+                            vc,
+                            current_user=current_user_obj,
+                            filter_country=filter_country,
+                            filter_region=filter_region,
+                            filter_continent=filter_continent,
+                            include_top_contestants=False,
+                            entry_type=entry_type,
+                            round_id=round_id,
+                        )
+                        contest_participant_counts[vc.id] = int(
+                            stats.get("participants_count", stats.get("entries_count", 0))
+                        )
+                except Exception as e:
+                    logger.warning(f"Scoped participant count build failed: {e}")
 
             valid_contests.sort(key=lambda c: contest_participant_counts.get(c.id, 0), reverse=True)
 
@@ -561,23 +592,6 @@ def _enrich_round_data(
                 try:
                     # Use pre-calculated participant count (already computed for sorting)
                     participant_count = contest_participant_counts.get(contest.id, 0)
-                    if (
-                        contest.id == 17
-                        and str(filter_region or "").strip().lower() in {"east africa", "east_africa"}
-                        and _normalize_contest_mode(getattr(contest, "contest_mode", "participation")) == "nomination"
-                    ):
-                        opened_view_data = crud.contest.get_contest_with_enriched_contestants(
-                            db=db,
-                            contest_id=contest.id,
-                            current_user_id=user_id,
-                            filter_country=filter_country,
-                            filter_region=filter_region,
-                            filter_continent=filter_continent,
-                            entry_type="nomination",
-                            round_id=round_id,
-                        )
-                        participant_count = len((opened_view_data or {}).get("contestants") or [])
-                    
                     # Strict per-contest check: only true when the user has already contested THIS contest.
                     is_contesting = contest.id in user_contested_contest_ids
                     contest_mode_value = _normalize_contest_mode(getattr(contest, 'contest_mode', 'participation'))
