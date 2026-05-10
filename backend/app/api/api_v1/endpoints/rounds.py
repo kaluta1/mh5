@@ -135,6 +135,140 @@ def _contest_card_level_for_round(db: Session, round_obj: Round, contest: Any, m
     return "country"
 
 
+def _round_response_base(round_obj: Round) -> dict:
+    """Build the common RoundWithStats shape without loading related contests."""
+    return {
+        "id": round_obj.id,
+        "contest_id": getattr(round_obj, "contest_id", None),
+        "name": round_obj.name or f"Round {round_obj.id}",
+        "status": round_obj.status.value if hasattr(round_obj.status, "value") else str(round_obj.status),
+        "is_submission_open": getattr(round_obj, "is_submission_open", True),
+        "is_voting_open": getattr(round_obj, "is_voting_open", False),
+        "current_season_level": getattr(round_obj, "current_season_level", None),
+        "submission_start_date": getattr(round_obj, "submission_start_date", None),
+        "submission_end_date": getattr(round_obj, "submission_end_date", None),
+        "voting_start_date": getattr(round_obj, "voting_start_date", None),
+        "voting_end_date": getattr(round_obj, "voting_end_date", None),
+        "created_at": getattr(round_obj, "created_at", datetime.now()),
+        "updated_at": getattr(round_obj, "updated_at", datetime.now()),
+    }
+
+
+def _schema_value(value: Any) -> Any:
+    return value.value if hasattr(value, "value") else value
+
+
+def _lightweight_round_data(
+    db: Session,
+    round_obj: Round,
+    contest_mode: Optional[str],
+    search_term: Optional[str],
+    contest_limit: int,
+    contest_skip: int,
+) -> dict:
+    """
+    Fast path for the round selector/page-open request.
+    It avoids per-contest stat enrichment and uses denormalized contest counts.
+    """
+    r_data = _round_response_base(round_obj)
+    try:
+        is_completed = crud.round.is_round_completed(round_obj)
+    except Exception as e:
+        logger.warning(f"Error checking if round {round_obj.id} is completed: {str(e)}")
+        is_completed = False
+
+    contests_data = []
+    contests_count = 0
+    try:
+        from app.models.contest import Contest as ContestModel
+        from app.models.round import round_contests
+
+        query = db.query(ContestModel).join(
+            round_contests, ContestModel.id == round_contests.c.contest_id
+        ).filter(
+            round_contests.c.round_id == round_obj.id,
+            ContestModel.is_active == True,
+            ContestModel.is_deleted == False,
+        )
+
+        if contest_mode is not None:
+            query = query.filter(ContestModel.contest_mode == contest_mode)
+
+        if search_term:
+            search_like = f"%{search_term.lower().strip()}%"
+            query = query.filter(
+                (ContestModel.name.ilike(search_like)) |
+                (ContestModel.description.ilike(search_like))
+            )
+
+        contests_count = query.count()
+        contests = (
+            query.order_by(ContestModel.participant_count.desc(), ContestModel.id.desc())
+            .offset(contest_skip)
+            .limit(contest_limit)
+            .all()
+        )
+
+        for contest in contests:
+            contest_mode_value = _normalize_contest_mode(getattr(contest, "contest_mode", "participation"))
+            try:
+                display_level = _contest_card_level_for_round(db, round_obj, contest, contest_mode_value)
+            except Exception as e:
+                logger.warning(f"Error resolving lightweight contest level {contest.id}: {str(e)}")
+                display_level = getattr(contest, "level", None) or ("country" if contest_mode_value == "nomination" else "city")
+
+            participant_count = int(getattr(contest, "participant_count", 0) or 0)
+            contests_data.append({
+                "id": contest.id,
+                "name": contest.name,
+                "description": getattr(contest, "description", None),
+                "contest_type": getattr(contest, "contest_type", None),
+                "cover_image_url": getattr(contest, "cover_image_url", None),
+                "is_active": getattr(contest, "is_active", True),
+                "is_submission_open": getattr(contest, "is_submission_open", True),
+                "is_voting_open": getattr(contest, "is_voting_open", False),
+                "level": display_level,
+                "location_id": getattr(contest, "location_id", None),
+                "gender_restriction": getattr(contest, "gender_restriction", None),
+                "voting_restriction": _schema_value(getattr(contest, "voting_restriction", None)),
+                "max_entries_per_user": getattr(contest, "max_entries_per_user", 1),
+                "template_id": getattr(contest, "template_id", None),
+                "contest_mode": contest_mode_value,
+                "category_id": getattr(contest, "category_id", None),
+                "requires_kyc": getattr(contest, "requires_kyc", True),
+                "verification_type": _schema_value(getattr(contest, "verification_type", "none")),
+                "participant_type": _schema_value(getattr(contest, "participant_type", "individual")),
+                "requires_visual_verification": getattr(contest, "requires_visual_verification", False),
+                "requires_voice_verification": getattr(contest, "requires_voice_verification", False),
+                "requires_brand_verification": getattr(contest, "requires_brand_verification", False),
+                "requires_content_verification": getattr(contest, "requires_content_verification", False),
+                "min_age": getattr(contest, "min_age", None),
+                "max_age": getattr(contest, "max_age", None),
+                "image_url": getattr(contest, "image_url", None),
+                "created_at": getattr(contest, "created_at", None),
+                "updated_at": getattr(contest, "updated_at", None),
+                "entries_count": participant_count,
+                "participants_count": participant_count,
+                "votes_count": 0,
+                "current_user_contesting": False,
+            })
+    except Exception as e:
+        logger.warning(f"Error building lightweight contests for round {round_obj.id}: {str(e)}")
+
+    result = {
+        **r_data,
+        "participants_count": 0,
+        "contests_count": contests_count,
+        "votes_count": 0,
+        "current_user_participated": False,
+        "is_completed": is_completed,
+        "top_contestants": [],
+        "contests": contests_data,
+    }
+    result["is_voting_open"] = _effective_is_voting_open(result, round_obj)
+    return result
+
+
 @router.get("/", response_model=List[round_schema.RoundWithStats])
 def read_rounds(
     db: Session = Depends(deps.get_db),
@@ -186,26 +320,27 @@ def read_rounds(
                 
                 if not db_rounds:
                     return []
+
+                if not round_id and not contest_id and not filter_country and not filter_region and not filter_continent:
+                    result = [
+                        _lightweight_round_data(
+                            db,
+                            r,
+                            contest_mode,
+                            search_term,
+                            contest_limit,
+                            contest_skip,
+                        )
+                        for r in db_rounds
+                    ]
+                    _dedupe_voting_open_to_latest_round(result)
+                    return result
                 
                 # Convert ORM objects to dict format
                 result = []
                 for r in db_rounds:
                     try:
-                        r_data = {
-                            "id": r.id,
-                            "contest_id": getattr(r, 'contest_id', None),
-                            "name": r.name or f"Round {r.id}",
-                            "status": r.status.value if hasattr(r.status, 'value') else str(r.status),
-                            "is_submission_open": getattr(r, 'is_submission_open', True),
-                            "is_voting_open": getattr(r, 'is_voting_open', False),
-                            "current_season_level": getattr(r, 'current_season_level', None),
-                            "submission_start_date": getattr(r, 'submission_start_date', None),
-                            "submission_end_date": getattr(r, 'submission_end_date', None),
-                            "voting_start_date": getattr(r, 'voting_start_date', None),
-                            "voting_end_date": getattr(r, 'voting_end_date', None),
-                            "created_at": getattr(r, 'created_at', datetime.now()),
-                            "updated_at": getattr(r, 'updated_at', datetime.now()),
-                        }
+                        r_data = _round_response_base(r)
                         round_obj = _enrich_round_data(db, r_data, user_id, contest_mode, filter_country,
                                                       filter_region, filter_continent, search_term, contest_limit, contest_skip)
                         if round_obj:
@@ -331,43 +466,15 @@ def _enrich_round_data(
             
             contests_count = len(valid_contests)
 
-            # Pre-sort contests by participant count (desc) BEFORE pagination.
-            # Use the same CRUD path as contest detail to keep card counts stable
-            # across refresh and aligned with opened contest pages.
-            contest_participant_counts = {}
+            # Pre-sort contests before pagination without running full contest
+            # enrichment for every linked contest. Detail pages still compute
+            # exact scoped stats when opened.
+            contest_participant_counts = {
+                vc.id: int(getattr(vc, "participant_count", 0) or 0)
+                for vc in valid_contests
+            }
             valid_contests_by_id = {vc.id: vc for vc in valid_contests}
             valid_contest_ids = set(valid_contests_by_id.keys())
-
-            if valid_contests:
-                try:
-                    current_user_obj = None
-                    if user_id:
-                        current_user_obj = (
-                            db.query(models.User)
-                            .filter(models.User.id == user_id)
-                            .first()
-                        )
-
-                    for vc in valid_contests:
-                        c_mode = _normalize_contest_mode(getattr(vc, "contest_mode", "participation"))
-                        entry_type = "nomination" if c_mode == "nomination" else "participation"
-                        stats = crud.contest.enrich_contest_with_stats(
-                            db,
-                            vc,
-                            current_user=current_user_obj,
-                            filter_country=filter_country,
-                            filter_region=filter_region,
-                            filter_continent=filter_continent,
-                            include_top_contestants=False,
-                            entry_type=entry_type,
-                            round_id=round_id,
-                        )
-                        contest_participant_counts[vc.id] = int(
-                            stats.get("participants_count", stats.get("entries_count", 0))
-                        )
-                except Exception as e:
-                    logger.warning(f"Participant count build failed: {e}")
-                    contest_participant_counts = {vc.id: 0 for vc in valid_contests}
 
             valid_contests.sort(key=lambda c: contest_participant_counts.get(c.id, 0), reverse=True)
 

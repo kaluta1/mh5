@@ -3,7 +3,7 @@ import { cacheService } from './cache-service'
 import { logger } from './logger'
 import { API_URL, getEffectiveApiUrl } from './config'
 import { LANGUAGE_PREFERENCE_KEY } from './language-cookie'
-import { languages } from './translations'
+import { LANGUAGE_CODES } from './locale-registry'
 
 // Must match lib/config.ts (localhost in dev when NEXT_PUBLIC_API_URL is unset — not always myhigh5.com).
 const API_BASE_URL = API_URL.replace(/\/+$/, '')
@@ -45,8 +45,7 @@ const addCommonHeaders = (config: InternalAxiosRequestConfig) => {
     config.headers.Authorization = `Bearer ${token}`
   }
   const savedLanguage = localStorage.getItem(LANGUAGE_PREFERENCE_KEY)
-  const supported = Object.keys(languages)
-  if (savedLanguage && supported.includes(savedLanguage)) {
+  if (savedLanguage && (LANGUAGE_CODES as readonly string[]).includes(savedLanguage)) {
     config.headers['Accept-Language'] = savedLanguage
   }
   return config

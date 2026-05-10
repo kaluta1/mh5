@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense, useCallback, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import dynamic from 'next/dynamic'
 import { useLanguage } from '@/contexts/language-context'
 import { useAuth } from '@/hooks/use-auth'
 import { Button } from '@/components/ui/button'
@@ -9,7 +10,6 @@ import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { KYCSkeleton } from '@/components/ui/skeleton'
 import { kycService, KYCPaymentRequiredError } from '@/services/kyc-service'
-import { PaymentDialog } from '@/components/dialogs/payment-dialog-v2'
 import { logger } from '@/lib/logger'
 import { 
   CheckCircle, 
@@ -25,6 +25,11 @@ import {
   XCircle,
   CreditCard
 } from 'lucide-react'
+
+const PaymentDialog = dynamic(
+  () => import('@/components/dialogs/payment-dialog-v2').then((mod) => mod.PaymentDialog),
+  { ssr: false }
+)
 
 interface KYCStatusData {
   status: string | null

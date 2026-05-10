@@ -9,7 +9,7 @@ import React, {
   useMemo,
   useState,
 } from "react"
-import { Language, LANGUAGE_CODES, languages, translations } from "@/lib/translations"
+import { type Language, LANGUAGE_CODES, languages } from "@/lib/locale-registry"
 import { LANGUAGE_PREFERENCE_KEY, setLanguagePreferenceClient } from "@/lib/language-cookie"
 
 interface LanguageContextType {
@@ -22,9 +22,11 @@ interface LanguageContextType {
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined)
 
 const SUPPORTED_LANGUAGES = LANGUAGE_CODES as readonly Language[]
+type TranslationsMap = Record<string, any>
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const [language, setLanguageState] = useState<Language>("en")
+  const [translationsBundle, setTranslationsBundle] = useState<TranslationsMap | null>(null)
   const aiTranslationPending = false
 
   const setLanguage = useCallback(
@@ -46,6 +48,21 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   useEffect(() => {
+    let active = true
+    import("@/lib/translations")
+      .then((mod) => {
+        if (active) setTranslationsBundle(mod.translations)
+      })
+      .catch(() => {
+        if (active) setTranslationsBundle(null)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  useEffect(() => {
     localStorage.setItem(LANGUAGE_PREFERENCE_KEY, language)
     setLanguagePreferenceClient(language)
     if (typeof document !== "undefined") {
@@ -61,18 +78,19 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const t = useCallback(
     (key: string): string => {
       try {
+        if (!translationsBundle) return ""
         const keys = key.split(".")
-        let value: any = translations[language as keyof typeof translations]
+        let value: any = translationsBundle[language]
 
         if (!value || language === "en") {
-          value = translations.en
+          value = translationsBundle.en
         }
 
         for (const k of keys) {
           if (value && typeof value === "object" && k in value) {
             value = value[k]
           } else {
-            let fallback: any = translations.en
+            let fallback: any = translationsBundle.en
             for (const fk of keys) {
               if (fallback && typeof fallback === "object" && fk in fallback) {
                 fallback = fallback[fk]
@@ -92,7 +110,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
         return ""
       }
     },
-    [language],
+    [language, translationsBundle],
   )
 
   const value = React.useMemo(

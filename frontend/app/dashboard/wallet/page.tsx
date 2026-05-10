@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import dynamic from 'next/dynamic'
 import { useAuth } from '@/hooks/use-auth'
 import { useLanguage } from '@/contexts/language-context'
 import { useToast } from '@/components/ui/toast'
@@ -16,9 +17,12 @@ import {
   Clock
 } from 'lucide-react'
 import Link from 'next/link'
-import { PaymentDialog } from '@/components/dialogs/payment-dialog-v2'
 import { TransactionTable, Transaction } from '@/components/wallet/transaction-table'
 
+const PaymentDialog = dynamic(
+  () => import('@/components/dialogs/payment-dialog-v2').then((mod) => mod.PaymentDialog),
+  { ssr: false }
+)
 
 type PaymentProduct = 'kyc' | 'mfm_membership' | 'annual_membership'
 

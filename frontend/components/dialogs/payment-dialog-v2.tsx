@@ -54,6 +54,7 @@ import {
 import { paymentService, PaymentResponse, VerifiedUser, PaymentRecipient } from '@/services/payment-service'
 import { useWalletPayment } from '@/hooks/use-wallet-payment'
 import { CONTRACTS } from '@/lib/config'
+import { ReownAppKitProvider } from '@/components/reown-appkit-provider'
 
 interface PaymentMethod {
   id: string
@@ -105,7 +106,15 @@ interface PaymentDialogProps {
   onPaymentInitiated?: () => void | Promise<void>
 }
 
-export function PaymentDialog({
+export function PaymentDialog(props: PaymentDialogProps) {
+  return (
+    <ReownAppKitProvider>
+      <PaymentDialogInner {...props} />
+    </ReownAppKitProvider>
+  )
+}
+
+function PaymentDialogInner({
   open,
   onOpenChange,
   initialProductCode = 'kyc',

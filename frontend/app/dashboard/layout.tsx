@@ -17,6 +17,10 @@ interface DashboardLayoutProps {
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+  const [hasStoredToken] = useState(() => {
+    if (typeof window === "undefined") return false
+    return Boolean(localStorage.getItem("access_token"))
+  })
   const { isLoading, isAuthenticated } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
@@ -43,8 +47,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     setIsSidebarCollapsed(!isSidebarCollapsed)
   }
 
-  // Afficher un skeleton pendant le chargement de l'utilisateur
-  if (isLoading) {
+  // Only block unauthenticated first visits. Existing sessions can render while
+  // the auth provider refreshes user data in the background.
+  if (isLoading && !hasStoredToken) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex">
         {/* Sidebar Skeleton */}

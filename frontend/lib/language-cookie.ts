@@ -1,4 +1,4 @@
-import { LANGUAGE_CODES, type Language } from '@/lib/translations'
+import { LANGUAGE_CODES, type Language } from '@/lib/locale-registry'
 
 /** Same name as localStorage key — server reads this in `detectLanguageFromHeaders`. */
 export const LANGUAGE_PREFERENCE_KEY = 'myhigh5-language'
