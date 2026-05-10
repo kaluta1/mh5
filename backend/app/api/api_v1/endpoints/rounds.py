@@ -29,6 +29,22 @@ def _normalize_contest_mode(mode: Any) -> str:
     return "participation"
 
 
+def _normalize_contest_level(level: Any) -> Optional[str]:
+    if level is None:
+        return None
+    value = level.value if hasattr(level, "value") else level
+    token = str(value).strip().strip('"').strip("'").lower()
+    if not token or token == "all":
+        return None
+    if token in {"region", "regional"}:
+        return "regional"
+    if token in {"continent", "continental"}:
+        return "continental"
+    if token in {"city", "country", "global"}:
+        return token
+    return token
+
+
 def _to_date_value(value: Any) -> Optional[date]:
     """Normalize ORM/JSON dates to date for comparisons."""
     if value is None:
@@ -162,6 +178,7 @@ def _lightweight_round_data(
     db: Session,
     round_obj: Round,
     contest_mode: Optional[str],
+    contest_level: Optional[str],
     search_term: Optional[str],
     contest_limit: int,
     contest_skip: int,
@@ -201,13 +218,21 @@ def _lightweight_round_data(
                 (ContestModel.description.ilike(search_like))
             )
 
-        contests_count = query.count()
-        contests = (
-            query.order_by(ContestModel.participant_count.desc(), ContestModel.id.desc())
-            .offset(contest_skip)
-            .limit(contest_limit)
-            .all()
-        )
+        all_contests = query.order_by(ContestModel.participant_count.desc(), ContestModel.id.desc()).all()
+        wanted_level = _normalize_contest_level(contest_level)
+        if wanted_level:
+            all_contests = [
+                c for c in all_contests
+                if _normalize_contest_level(_contest_card_level_for_round(
+                    db,
+                    round_obj,
+                    c,
+                    _normalize_contest_mode(getattr(c, "contest_mode", "participation")),
+                )) == wanted_level
+            ]
+
+        contests_count = len(all_contests)
+        contests = all_contests[contest_skip:contest_skip + contest_limit]
 
         for contest in contests:
             contest_mode_value = _normalize_contest_mode(getattr(contest, "contest_mode", "participation"))
@@ -278,6 +303,7 @@ def read_rounds(
     round_id: Optional[int] = Query(None, alias="roundId", description="ID du round spécifique"),
     current_user: Optional[models.User] = Depends(deps.get_current_active_user_optional),
     contest_mode: Optional[str] = Query(None, alias="contestMode", description="Filtrer par mode: nomination ou participation"),
+    contest_level: Optional[str] = Query(None, alias="contestLevel", description="Filtrer par niveau affiché: country, regional, continental, global"),
     filter_country: Optional[str] = Query(None, alias="filterCountry", description="Filtrer les participants par pays"),
     filter_region: Optional[str] = Query(None, alias="filterRegion", description="Filtrer les participants par région"),
     filter_continent: Optional[str] = Query(None, alias="filterContinent", description="Filtrer les participants par continent"),
@@ -304,7 +330,7 @@ def read_rounds(
                 # Convert to RoundWithStats format
                 result = []
                 for r_data in rounds_data:
-                    round_obj = _enrich_round_data(db, r_data, user_id, contest_mode, filter_country,
+                    round_obj = _enrich_round_data(db, r_data, user_id, contest_mode, contest_level, filter_country,
                                                   filter_region, filter_continent, search_term, contest_limit, contest_skip)
                     if round_obj:
                         result.append(round_obj)
@@ -327,6 +353,7 @@ def read_rounds(
                             db,
                             r,
                             contest_mode,
+                            contest_level,
                             search_term,
                             contest_limit,
                             contest_skip,
@@ -341,7 +368,7 @@ def read_rounds(
                 for r in db_rounds:
                     try:
                         r_data = _round_response_base(r)
-                        round_obj = _enrich_round_data(db, r_data, user_id, contest_mode, filter_country,
+                        round_obj = _enrich_round_data(db, r_data, user_id, contest_mode, contest_level, filter_country,
                                                       filter_region, filter_continent, search_term, contest_limit, contest_skip)
                         if round_obj:
                             result.append(round_obj)
@@ -385,6 +412,7 @@ def _enrich_round_data(
     r_data: dict,
     user_id: Optional[int],
     contest_mode: Optional[str],
+    contest_level: Optional[str],
     filter_country: Optional[str],
     filter_region: Optional[str],
     filter_continent: Optional[str],
@@ -447,11 +475,18 @@ def _enrich_round_data(
             
             # Filter contests
             valid_contests = []
+            wanted_level = _normalize_contest_level(contest_level)
             for c in contests:
                 # Filter by contest_mode
                 if contest_mode is not None:
                     c_mode = _normalize_contest_mode(getattr(c, 'contest_mode', 'participation'))
                     if c_mode != contest_mode:
+                        continue
+
+                if wanted_level:
+                    c_mode_for_level = _normalize_contest_mode(getattr(c, 'contest_mode', 'participation'))
+                    display_level_for_filter = _contest_card_level_for_round(db, round_obj, c, c_mode_for_level)
+                    if _normalize_contest_level(display_level_for_filter) != wanted_level:
                         continue
                 
                 # Filter by search term
@@ -691,6 +726,7 @@ def read_round(
         db, round_dict,
         user_id=None,
         contest_mode=None,
+        contest_level=None,
         filter_country=None,
         filter_region=None,
         filter_continent=None,

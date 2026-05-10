@@ -91,6 +91,7 @@ export const ApiService = {
         filterCountry?: string;
         filterRegion?: string;
         filterContinent?: string;
+        contestLevel?: string;
         searchTerm?: string;
         contestLimit?: number;
         contestSkip?: number;

@@ -39,8 +39,8 @@ const CACHE_TTL = 5 * 1000 // 5 seconds cache, preventing stale states for parti
 // Simple in-memory cache for contests data
 const contestsCache = new Map<string, { data: any; timestamp: number }>()
 
-function getCacheKey(roundId: string, category: string, country: string, continent: string, search: string, skip: number, userId?: string | number) {
-  return `${roundId}-${category}-${country}-${continent}-${search}-${skip}-${userId || 'anon'}`
+function getCacheKey(roundId: string, category: string, level: string, country: string, continent: string, search: string, skip: number, userId?: string | number) {
+  return `${roundId}-${category}-${level}-${country}-${continent}-${search}-${skip}-${userId || 'anon'}`
 }
 
 function getFromCache(key: string) {
@@ -479,10 +479,13 @@ function ContestsPageContent() {
       const activeRegion = (filterRegion && nominationMigrationLevel === 'regional') ? filterRegion : undefined
       const activeContinent = (filterContinent && filterContinent !== 'all') ? filterContinent : undefined
       const activeSearch = committedSearch || undefined
+      const activeNominationLevel = categoryTab === 'nomination' && nominationMigrationLevel !== 'all'
+        ? nominationMigrationLevel
+        : undefined
 
       // Check cache first
       const authKey = userIdRef.current || 'anon'
-      const cacheKey = getCacheKey(effectiveRoundIdForFetch, categoryTab, activeCountry || activeRegion || 'all', activeContinent || 'all', activeSearch || '', 0, authKey)
+      const cacheKey = getCacheKey(effectiveRoundIdForFetch, categoryTab, activeNominationLevel || 'all', activeCountry || activeRegion || 'all', activeContinent || 'all', activeSearch || '', 0, authKey)
       const cached = getFromCache(cacheKey)
       if (cached) {
         setContestsData(cached)
@@ -501,6 +504,7 @@ function ContestsPageContent() {
           filterCountry: activeRegion ? undefined : activeCountry,
           filterRegion: activeRegion,
           filterContinent: activeContinent,
+          contestLevel: activeNominationLevel,
           searchTerm: activeSearch,
           contestLimit: INITIAL_CONTESTS
         })
@@ -542,6 +546,7 @@ function ContestsPageContent() {
               filterCountry: activeRegion ? undefined : activeCountry,
               filterRegion: activeRegion,
               filterContinent: activeContinent,
+              contestLevel: activeNominationLevel,
               searchTerm: activeSearch,
               contestLimit: INITIAL_CONTESTS
             })
@@ -598,6 +603,9 @@ function ContestsPageContent() {
     const activeRegion = (filterRegion && nominationMigrationLevel === 'regional') ? filterRegion : undefined
     const activeContinent = filterContinent !== 'all' ? filterContinent : undefined
     const activeSearch = committedSearch || undefined
+    const activeNominationLevel = categoryTab === 'nomination' && nominationMigrationLevel !== 'all'
+      ? nominationMigrationLevel
+      : undefined
 
     try {
       const data = await ApiService.getRounds({
@@ -606,6 +614,7 @@ function ContestsPageContent() {
         filterCountry: activeRegion ? undefined : activeCountry,
         filterRegion: activeRegion,
         filterContinent: activeContinent,
+        contestLevel: activeNominationLevel,
         searchTerm: activeSearch,
         contestLimit: CONTESTS_PER_PAGE,
         contestSkip: allContests.length  // Skip already loaded contests
