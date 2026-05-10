@@ -231,6 +231,7 @@ function ContestsPageContent() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [totalContests, setTotalContests] = useState(0)
   const loaderRef = useRef<HTMLDivElement>(null)
+  const lastDisplayedContestsRef = useRef<any[]>([])
   const voteNowRoundId = useMemo(() => {
     const voteRound = rounds.find((r: any) => isRoundVotingLive(r, rounds))
     return voteRound ? String(voteRound.id) : null
@@ -460,10 +461,11 @@ function ContestsPageContent() {
 
   // Reset pagination when filters change
   useEffect(() => {
-    setAllContests([])
-    setHasMore(true)
-    setInitialLoadComplete(false)
-  }, [activeRoundId, effectiveRoundIdForFetch, categoryTab, filterCountry, filterRegion, filterContinent, nominationMigrationLevel, committedSearch])
+    setHasMore(false)
+    if (!allContests.length) {
+      setInitialLoadComplete(false)
+    }
+  }, [activeRoundId, effectiveRoundIdForFetch, categoryTab, filterCountry, filterRegion, filterContinent, nominationMigrationLevel, committedSearch, allContests.length])
 
   // 2. Fetch Contests for Selected Round (Initial load) - allow unauthenticated users
   // Use a ref to track current user id without triggering re-fetches
@@ -829,6 +831,13 @@ function ContestsPageContent() {
     return filtered
   }, [rawContests, committedSearch, sortBy, categoryTab, filterLevel, nominationMigrationLevel])
 
+  if (displayedContests.length > 0) {
+    lastDisplayedContestsRef.current = displayedContests
+  }
+  const visibleContests = displayedContests.length > 0
+    ? displayedContests
+    : (contestsLoading ? lastDisplayedContestsRef.current : displayedContests)
+
   // Déterminer si le round actif est fermé (soumissions terminées)
   const activeRoundData = rounds.find((r: any) => String(r.id) === activeRoundId)
   const isRoundClosed = activeRoundData ? new Date(activeRoundData.submission_end_date + 'T23:59:59') < new Date() : false
@@ -1041,10 +1050,10 @@ function ContestsPageContent() {
         {/* Contests Grid */}
         {contestsLoading && !contestsData ? (
           <ContestsSkeleton />
-        ) : displayedContests.length > 0 ? (
+        ) : visibleContests.length > 0 ? (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6">
-              {displayedContests.map((contest: any) => (
+              {visibleContests.map((contest: any) => (
                 <ContestCard
                   key={contest.id}
                   {...contest}

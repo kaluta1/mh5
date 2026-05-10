@@ -51,6 +51,13 @@ function getTopHigh5EmptyMessage(level: TopHigh5Level, t: (key: string) => strin
   }
 }
 
+const topHigh5Cache = new Map<string, { data: TopHigh5Response; timestamp: number }>()
+const TOP_HIGH5_CACHE_TTL = 30 * 1000
+
+function topHigh5CacheKey(country: string, level: TopHigh5Level, roundId?: number, regionQuery?: string) {
+  return `${level}-${roundId || "auto"}-${country.trim().toLowerCase() || "global"}-${(regionQuery || "").trim().toLowerCase()}`
+}
+
 function TopHigh5Skeleton() {
   return (
     <div className="space-y-4">
@@ -128,6 +135,11 @@ export default function TopHigh5Page() {
           ? urlLevelRaw
           : "country"
         const initialCountry = urlCountryRaw || fallbackCountry
+        setCountryInput(initialCountry)
+        setRoundIdInput(parsedRoundId ? String(parsedRoundId) : urlRoundIdRaw)
+        setActiveLevel(initialLevel)
+        setDidSeedCountry(true)
+        void fetchData({ country: initialCountry, roundId: parsedRoundId, level: initialLevel })
 
         try {
           const rounds = await ApiService.getRounds({ contestLimit: 1, limit: 24 }) as Round[]
@@ -146,15 +158,13 @@ export default function TopHigh5Page() {
               ? (regionalRound?.id || liveRound.id)
               : liveRound.id
           }
+          if (parsedRoundId) {
+            setRoundIdInput(String(parsedRoundId))
+            void fetchData({ country: initialCountry, roundId: parsedRoundId, level: initialLevel, silent: true })
+          }
         } catch {
           // Backend can still choose a fallback if rounds cannot be loaded here.
         }
-
-        setCountryInput(initialCountry)
-        setRoundIdInput(parsedRoundId ? String(parsedRoundId) : urlRoundIdRaw)
-        setActiveLevel(initialLevel)
-        setDidSeedCountry(true)
-        fetchData({ country: initialCountry, roundId: parsedRoundId, level: initialLevel })
       }
       void seed()
     }
@@ -177,6 +187,16 @@ export default function TopHigh5Page() {
       setError(null)
       const isGlobal = opts.level === "global"
       const trimmedCountry = opts.country.trim()
+      const cacheKey = topHigh5CacheKey(isGlobal ? "" : trimmedCountry, opts.level, opts.roundId, opts.regionQuery)
+      const cached = topHigh5Cache.get(cacheKey)
+      if (!opts.silent && cached && Date.now() - cached.timestamp < TOP_HIGH5_CACHE_TTL) {
+        setData(cached.data)
+        setActiveCountry(isGlobal ? "" : trimmedCountry)
+        setActiveRoundId(opts.roundId)
+        setActiveRegionQuery(opts.level === "regional" ? (opts.regionQuery || "").trim().toLowerCase() : "")
+        setLastUpdatedAt(new Date(cached.timestamp))
+        setLoading(false)
+      }
       const response = await contestService.getTopHigh5ByCountry({
         country: isGlobal ? undefined : trimmedCountry,
         roundId: opts.roundId,
@@ -193,6 +213,7 @@ export default function TopHigh5Page() {
             }
           : response
       setData(nextData)
+      topHigh5Cache.set(cacheKey, { data: nextData, timestamp: Date.now() })
       setActiveCountry(isGlobal ? "" : trimmedCountry)
       setActiveRoundId(opts.roundId)
       setActiveRegionQuery(opts.level === "regional" ? normalizedRegionQuery : "")
@@ -327,7 +348,7 @@ export default function TopHigh5Page() {
     })
   }, [loading, filteredContests, contestsByCategory])
 
-  if (isLoading || loading) {
+  if (isLoading) {
     return <TopHigh5Skeleton />
   }
   if (!isAuthenticated) return null
@@ -446,7 +467,9 @@ export default function TopHigh5Page() {
       {!filteredContests.length ? (
         <div className="rounded-xl border border-dashed border-gray-300 dark:border-gray-700 p-5">
           <div className="text-center text-gray-500 py-6">
-            {getTopHigh5EmptyMessage(activeLevel, t)}
+            {loading
+              ? (t("common.loading") || "Preparing Top High5...")
+              : getTopHigh5EmptyMessage(activeLevel, t)}
           </div>
           {data?.diagnostics && (
             <div className="mt-2">
