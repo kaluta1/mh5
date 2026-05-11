@@ -9,13 +9,14 @@ import { useAuth } from '@/hooks/use-auth'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useToast } from '@/components/ui/toast'
 import { ContestsSkeleton } from '@/components/ui/skeleton'
-import { Lightbulb, Loader2, MapPin, Lock } from 'lucide-react'
+import { Lightbulb, Loader2, MapPin, Lock, CalendarClock } from 'lucide-react'
 import { GeographyLevelIcon, type GeographyLevelIconKey } from '@/components/dashboard/geography-level-icons'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { logger } from '@/lib/logger'
 import { LocationFilterBar } from '@/components/dashboard/location-filter-bar'
 import { getEffectiveApiUrl } from '@/lib/config'
+import { regionalPoolForCountry } from '@/lib/regional-pool'
 
 // GraphQL
 // REST API
@@ -31,6 +32,11 @@ const ContestCard = dynamic(() => import('@/components/dashboard/contest-card').
 const SuggestContestDialog = dynamic(() => import('@/components/dashboard/suggest-contest-dialog').then(mod => ({ default: mod.SuggestContestDialog })), {
   ssr: false
 })
+
+const PastContestsArchiveDialog = dynamic(
+  () => import('@/components/dashboard/past-contests-archive-dialog').then((mod) => ({ default: mod.PastContestsArchiveDialog })),
+  { ssr: false },
+)
 
 const CONTESTS_PER_PAGE = 9 // Reduced from 12 for faster initial load
 const INITIAL_CONTESTS = 9 // 8 contests per load
@@ -67,83 +73,6 @@ function normalizeContestLevel(level?: string): Exclude<NominationMigrationLevel
   if (raw === 'continental' || raw === 'continent') return 'continental'
   if (raw === 'global') return 'global'
   return null
-}
-
-const REGIONAL_POOL_BY_COUNTRY: Record<string, string> = {
-  tanzania: 'East Africa',
-  tz: 'East Africa',
-  kenya: 'East Africa',
-  ke: 'East Africa',
-  uganda: 'East Africa',
-  ug: 'East Africa',
-  rwanda: 'East Africa',
-  rw: 'East Africa',
-  burundi: 'East Africa',
-  bi: 'East Africa',
-  ethiopia: 'East Africa',
-  et: 'East Africa',
-  somalia: 'East Africa',
-  so: 'East Africa',
-  eritrea: 'East Africa',
-  er: 'East Africa',
-  djibouti: 'East Africa',
-  dj: 'East Africa',
-  'south sudan': 'East Africa',
-  ss: 'East Africa',
-  sudan: 'East Africa',
-  sd: 'East Africa',
-  nigeria: 'West Africa',
-  ng: 'West Africa',
-  ghana: 'West Africa',
-  gh: 'West Africa',
-  senegal: 'West Africa',
-  sn: 'West Africa',
-  'ivory coast': 'West Africa',
-  "cote d'ivoire": 'West Africa',
-  "côte d'ivoire": 'West Africa',
-  ci: 'West Africa',
-  'south africa': 'Southern Africa',
-  za: 'Southern Africa',
-  zimbabwe: 'Southern Africa',
-  zw: 'Southern Africa',
-  zambia: 'Southern Africa',
-  zm: 'Southern Africa',
-  botswana: 'Southern Africa',
-  bw: 'Southern Africa',
-  namibia: 'Southern Africa',
-  na: 'Southern Africa',
-  mozambique: 'Southern Africa',
-  mz: 'Southern Africa',
-  malawi: 'Southern Africa',
-  mw: 'Southern Africa',
-  angola: 'Southern Africa',
-  ao: 'Southern Africa',
-  egypt: 'North Africa',
-  eg: 'North Africa',
-  morocco: 'North Africa',
-  ma: 'North Africa',
-  algeria: 'North Africa',
-  dz: 'North Africa',
-  tunisia: 'North Africa',
-  tn: 'North Africa',
-  libya: 'North Africa',
-  ly: 'North Africa',
-  cameroon: 'Central Africa',
-  cm: 'Central Africa',
-  'democratic republic of the congo': 'Central Africa',
-  drc: 'Central Africa',
-  cd: 'Central Africa',
-  'republic of the congo': 'Central Africa',
-  cg: 'Central Africa',
-  gabon: 'Central Africa',
-  ga: 'Central Africa',
-  chad: 'Central Africa',
-  td: 'Central Africa',
-}
-
-function regionalPoolForCountry(country?: string | null): string | undefined {
-  const key = country?.trim().toLowerCase()
-  return key ? REGIONAL_POOL_BY_COUNTRY[key] : undefined
 }
 
 type RoundTabKind = 'nominate' | 'vote' | 'combined'
@@ -198,6 +127,7 @@ function ContestsPageContent() {
     return 'nomination'
   })
   const [showSuggestDialog, setShowSuggestDialog] = useState(false)
+  const [showPastArchiveOpen, setShowPastArchiveOpen] = useState(false)
 
   // Filter States
   const [searchTerm, setSearchTerm] = useState('')
@@ -877,7 +807,7 @@ function ContestsPageContent() {
         {/* Round Selector (Top Tabs) */}
         <div className="mb-6">
           <div className="flex space-x-2 overflow-x-auto pb-2 scrollbar-hide">
-            {displayRounds.map(({ round, pill, kind }) => {
+            {displayRounds.map(({ round, pill, kind }, index) => {
               const isPast = new Date(round.submission_end_date + 'T23:59:59') < new Date()
               const showLock = isPast && kind === 'vote'
               const iconVote = (
@@ -900,31 +830,44 @@ function ContestsPageContent() {
                   className="h-7 w-7 object-contain flex-shrink-0 rounded-md"
                 />
               )
+              const archiveLabel = t('dashboard.contests.past_contests_short') || 'Past'
               return (
-                <button
-                  key={round.id}
-                  onClick={() => setActiveRoundId(String(round.id))}
-                  className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 whitespace-nowrap flex flex-row items-center justify-center gap-2 min-h-[3rem] ${activeRoundId === String(round.id)
-                    ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-500/30 scale-105'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-900 dark:bg-gray-800/80 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white hover:scale-[1.02]'
-                    }`}
-                >
-                  {showLock && <Lock className="w-4 h-4 opacity-80 flex-shrink-0" aria-hidden />}
-                  {kind === 'combined' ? (
-                    <span className="inline-flex items-center gap-1">
-                      {iconNominateForSubmit}
-                      {iconVote}
+                <React.Fragment key={round.id}>
+                  <button
+                    onClick={() => setActiveRoundId(String(round.id))}
+                    className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 whitespace-nowrap flex flex-row items-center justify-center gap-2 min-h-[3rem] ${activeRoundId === String(round.id)
+                      ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-500/30 scale-105'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-900 dark:bg-gray-800/80 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white hover:scale-[1.02]'
+                      }`}
+                  >
+                    {showLock && <Lock className="w-4 h-4 opacity-80 flex-shrink-0" aria-hidden />}
+                    {kind === 'combined' ? (
+                      <span className="inline-flex items-center gap-1">
+                        {iconNominateForSubmit}
+                        {iconVote}
+                      </span>
+                    ) : kind === 'vote' ? (
+                      iconVote
+                    ) : (
+                      iconNominateForSubmit
+                    )}
+                    <span className="font-semibold leading-tight">
+                      {pill ||
+                        (isRoundVotingLive(round, rounds) ? (t('dashboard.contests.vote_now_short') || 'Vote') : '')}
                     </span>
-                  ) : kind === 'vote' ? (
-                    iconVote
-                  ) : (
-                    iconNominateForSubmit
+                  </button>
+                  {index === 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowPastArchiveOpen(true)}
+                      className="px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 whitespace-nowrap flex flex-row items-center justify-center gap-2 min-h-[3rem] border border-dashed border-gray-300 bg-white text-gray-700 shadow-sm hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:hover:bg-gray-800"
+                      aria-label={t('dashboard.contests.past_contests_archive') || 'Past contests and Top High5'}
+                    >
+                      <CalendarClock className="w-5 h-5 flex-shrink-0 text-blue-600 dark:text-blue-400" aria-hidden />
+                      <span className="font-semibold leading-tight">{archiveLabel}</span>
+                    </button>
                   )}
-                  <span className="font-semibold leading-tight">
-                    {pill ||
-                      (isRoundVotingLive(round, rounds) ? (t('dashboard.contests.vote_now_short') || 'Vote') : '')}
-                  </span>
-                </button>
+                </React.Fragment>
               )
             })}
           </div>
@@ -1127,6 +1070,11 @@ function ContestsPageContent() {
         )}
 
         <SuggestContestDialog open={showSuggestDialog} onOpenChange={setShowSuggestDialog} />
+        <PastContestsArchiveDialog
+          open={showPastArchiveOpen}
+          onOpenChange={setShowPastArchiveOpen}
+          countryFallback={user?.country || 'Tanzania'}
+        />
       </div>
     </div>
   )
