@@ -32,6 +32,7 @@ import {
 import Link from 'next/link'
 import { InviteDialog } from '@/components/dashboard/invite-dialog'
 import { cacheService } from '@/lib/cache-service'
+import api from '@/lib/api'
 
 interface Affiliate {
   id: string
@@ -148,15 +149,12 @@ export default function AffiliatesPage() {
     try {
       const token = localStorage.getItem('access_token')
       if (!token) return
-      
-      const headers = { 'Authorization': `Bearer ${token}` }
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-      
+
       // Récupérer les statistiques d'affiliation (avec cache)
       const statsEndpoint = '/api/v1/affiliates/stats'
       const statsCacheKey = statsEndpoint
       const cachedStats = cacheService.get<any>(statsCacheKey)
-      
+
       if (cachedStats) {
         const stats = cachedStats
         const code = stats.referral_code || ''
@@ -167,53 +165,53 @@ export default function AffiliatesPage() {
         setTotalCommissions(stats.total_commissions || 0)
         setConversionRate(stats.conversion_rate || 0)
       } else {
-        const statsResponse = await fetch(`${baseUrl}${statsEndpoint}`, { headers })
-        
-        if (statsResponse.ok) {
-          const stats = await statsResponse.json()
-          const code = stats.referral_code || ''
+        const statsResponse = await api.get(statsEndpoint)
+
+        if (statsResponse.status === 200 && statsResponse.data) {
+          const stats = statsResponse.data as Record<string, unknown>
+          const code = (stats.referral_code as string) || ''
           setReferralCode(code)
           setReferralLinks(generateReferralLinks(code))
-          setTotalAffiliates(stats.total_affiliates || 0)
-          setDirectAffiliates(stats.direct_referrals || 0)
-          setTotalCommissions(stats.total_commissions || 0)
-          setConversionRate(stats.conversion_rate || 0)
-          // Mettre en cache
+          setTotalAffiliates((stats.total_affiliates as number) || 0)
+          setDirectAffiliates((stats.direct_referrals as number) || 0)
+          setTotalCommissions((stats.total_commissions as number) || 0)
+          setConversionRate((stats.conversion_rate as number) || 0)
           cacheService.set(statsCacheKey, stats)
         } else {
-          // Utiliser le code de l'utilisateur depuis /me si stats non disponible
           const code = user?.personal_referral_code || ''
           setReferralCode(code)
           setReferralLinks(generateReferralLinks(code))
         }
       }
-      
+
       // Récupérer les parrainages directs (filleuls) avec les commissions (avec cache)
       const referralsEndpoint = '/api/v1/affiliates/referrals/detailed'
       const referralsParams = { limit: 10 }
       const referralsCacheKey = referralsEndpoint
       const cachedReferrals = cacheService.get<any[]>(referralsCacheKey, referralsParams)
-      
+
       if (cachedReferrals) {
-        setAffiliates(cachedReferrals.map((r: any) => ({
-          id: r.id?.toString() || '',
-          name: [r.first_name, r.last_name].filter(Boolean).join(' ') || r.full_name || r.username || 'N/A',
-          avatar: r.avatar_url,
-          joinedAt: r.created_at || new Date().toISOString(),
-          level: 1,
-          totalEarnings: r.commissions_generated || 0,
-          status: 'active',
-          country: r.country,
-          city: r.city,
-          identity_verified: r.identity_verified,
-          has_paid_kyc: r.has_paid_kyc,
-          commissions_generated: r.commissions_generated || 0
-        })))
+        setAffiliates(
+          cachedReferrals.map((r: any) => ({
+            id: r.id?.toString() || '',
+            name: [r.first_name, r.last_name].filter(Boolean).join(' ') || r.full_name || r.username || 'N/A',
+            avatar: r.avatar_url,
+            joinedAt: r.created_at || new Date().toISOString(),
+            level: 1,
+            totalEarnings: r.commissions_generated || 0,
+            status: 'active',
+            country: r.country,
+            city: r.city,
+            identity_verified: r.identity_verified,
+            has_paid_kyc: r.has_paid_kyc,
+            commissions_generated: r.commissions_generated || 0,
+          })),
+        )
       } else {
-        const referralsResponse = await fetch(`${baseUrl}${referralsEndpoint}?limit=10`, { headers })
-        
-        if (referralsResponse.ok) {
-          const referralsData = await referralsResponse.json()
+        const referralsResponse = await api.get(referralsEndpoint, { params: referralsParams })
+
+        if (referralsResponse.status === 200 && Array.isArray(referralsResponse.data)) {
+          const referralsData = referralsResponse.data as any[]
           const mappedData = referralsData.map((r: any) => ({
             id: r.id?.toString() || '',
             name: [r.first_name, r.last_name].filter(Boolean).join(' ') || r.full_name || r.username || 'N/A',
@@ -226,10 +224,9 @@ export default function AffiliatesPage() {
             city: r.city,
             identity_verified: r.identity_verified,
             has_paid_kyc: r.has_paid_kyc,
-            commissions_generated: r.commissions_generated || 0
+            commissions_generated: r.commissions_generated || 0,
           }))
           setAffiliates(mappedData)
-          // Mettre en cache les données brutes (avant mapping)
           cacheService.set(referralsCacheKey, referralsData, referralsParams)
         }
       }
@@ -238,37 +235,26 @@ export default function AffiliatesPage() {
       const sponsorEndpoint = '/api/v1/affiliates/sponsor'
       const sponsorCacheKey = sponsorEndpoint
       const cachedSponsor = cacheService.get<any>(sponsorCacheKey)
-      
+
       if (cachedSponsor) {
         setSponsorInfo(cachedSponsor)
       } else {
-        const sponsorResponse = await fetch(`${baseUrl}${sponsorEndpoint}`, { headers })
-        if (sponsorResponse.ok) {
-          const sponsorData = await sponsorResponse.json()
-          if (sponsorData) {
-            setSponsorInfo(sponsorData)
-            // Mettre en cache
-            cacheService.set(sponsorCacheKey, sponsorData)
-          }
+        const sponsorResponse = await api.get(sponsorEndpoint)
+        if (sponsorResponse.status === 200 && sponsorResponse.data) {
+          const sponsorData = sponsorResponse.data as Record<string, unknown>
+          setSponsorInfo(sponsorData)
+          cacheService.set(sponsorCacheKey, sponsorData)
         }
       }
 
-      // Récupérer les invitations en attente
-      const invitationsResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/affiliates/invitations/pending`, {
-        headers
-      })
-      if (invitationsResponse.ok) {
-        const invitationsData = await invitationsResponse.json()
-        setPendingInvitations(invitationsData)
+      const invitationsResponse = await api.get('/api/v1/affiliates/invitations/pending')
+      if (invitationsResponse.status === 200 && Array.isArray(invitationsResponse.data)) {
+        setPendingInvitations(invitationsResponse.data as Invitation[])
       }
 
-      // Récupérer les stats d'invitation
-      const invStatsResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/affiliates/invitations/stats`, {
-        headers
-      })
-      if (invStatsResponse.ok) {
-        const invStatsData = await invStatsResponse.json()
-        setInvitationStats(invStatsData)
+      const invStatsResponse = await api.get('/api/v1/affiliates/invitations/stats')
+      if (invStatsResponse.status === 200 && invStatsResponse.data) {
+        setInvitationStats(invStatsResponse.data as typeof invitationStats)
       }
     } catch (error) {
       console.error('Error loading affiliates data:', error)
@@ -307,22 +293,13 @@ export default function AffiliatesPage() {
 
   const cancelInvitation = async (invitationId: number) => {
     try {
-      const token = localStorage.getItem('access_token')
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/affiliates/invitations/${invitationId}`,
-        {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        }
-      )
-      
-      if (response.ok) {
-        setPendingInvitations(prev => prev.filter(inv => inv.id !== invitationId))
-        setInvitationStats(prev => ({
+      const response = await api.delete(`/api/v1/affiliates/invitations/${invitationId}`)
+
+      if (response.status === 200 || response.status === 204) {
+        setPendingInvitations((prev) => prev.filter((inv) => inv.id !== invitationId))
+        setInvitationStats((prev) => ({
           ...prev,
-          pending: prev.pending - 1
+          pending: prev.pending - 1,
         }))
         addToast(t('dashboard.affiliates.invitation_cancelled') || 'Invitation annulée', 'success')
       } else {

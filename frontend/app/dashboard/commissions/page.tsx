@@ -24,6 +24,8 @@ import {
   Video
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import api from '@/lib/api'
+import type { AxiosError } from 'axios'
 
 interface Commission {
   id: string
@@ -76,6 +78,109 @@ export default function CommissionsPage() {
   const [sortBy, setSortBy] = useState<'date' | 'amount' | 'type'>('date')
   const [pageLoading, setPageLoading] = useState(true)
   const [listLoading, setListLoading] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
+
+  const mapCommissionRow = (c: Record<string, unknown>): Commission => ({
+    id: String(c.id ?? ''),
+    amount: typeof c.amount === 'number' ? c.amount : Number(c.amount) || 0,
+    baseAmount: typeof c.base_amount === 'number' ? c.base_amount : c.base_amount != null ? Number(c.base_amount) : undefined,
+    type: (typeof c.level === 'number' ? c.level : Number(c.level) || 1) === 1 ? 'direct' : 'indirect',
+    level: typeof c.level === 'number' ? c.level : Number(c.level) || 1,
+    status: (c.status as Commission['status']) || 'pending',
+    commissionType: (c.commission_type as string) || 'SHOP_PURCHASE',
+    productTypeCode: c.product_type_code as string | undefined,
+    productTypeName: c.product_type_name as string | undefined,
+    sourceUser: {
+      name: (c.source_user_name as string) || 'User',
+      avatar: c.source_user_avatar as string | undefined,
+    },
+    description: (c.description as string) || '',
+    createdAt: (c.created_at as string) || new Date().toISOString(),
+    paidAt: c.paid_at as string | undefined,
+  })
+
+  const loadCommissionsData = async (isFilterChange = false) => {
+    if (isFilterChange) {
+      setListLoading(true)
+    }
+    setLoadError(null)
+    try {
+      const token = localStorage.getItem('access_token')
+      if (!token) {
+        setLoadError(
+          t('dashboard.commissions.login_required') ||
+            'Sign in to view your commissions.',
+        )
+        setCommissions([])
+        return
+      }
+
+      const listParams: Record<string, string | number> = {
+        sort_by: sortBy,
+        limit: 200,
+        skip: 0,
+      }
+      if (typeFilter !== 'all') {
+        listParams.product_type = typeFilter
+      }
+      if (filter !== 'all') {
+        listParams.status = filter
+      }
+
+      const statsResponse = await api.get<Record<string, number>>('/api/v1/affiliates/commissions/stats')
+      if (statsResponse.status === 200 && statsResponse.data) {
+        const statsData = statsResponse.data
+        setStats({
+          totalEarned: statsData.total_earned || 0,
+          pendingAmount: statsData.pending_amount || 0,
+          paidAmount: statsData.paid_amount || 0,
+          thisMonth: statsData.this_month || 0,
+          lastMonth: statsData.last_month || 0,
+          growthRate: statsData.growth_rate || 0,
+        })
+      }
+
+      const commissionsResponse = await api.get<Record<string, unknown>[]>(
+        '/api/v1/affiliates/commissions',
+        { params: listParams },
+      )
+
+      if (commissionsResponse.status !== 200) {
+        const body = commissionsResponse.data as unknown
+        let detail = commissionsResponse.statusText
+        if (body && typeof body === 'object' && 'detail' in body) {
+          const d = (body as { detail?: unknown }).detail
+          detail = typeof d === 'string' ? d : JSON.stringify(d)
+        }
+        setCommissions([])
+        setLoadError(
+          `${t('dashboard.commissions.load_failed') || 'Could not load commissions'} (${commissionsResponse.status}): ${detail}`.slice(0, 400),
+        )
+        return
+      }
+
+      const raw = commissionsResponse.data
+      const rows = Array.isArray(raw) ? raw : []
+      setCommissions(rows.map((c) => mapCommissionRow(c as Record<string, unknown>)))
+    } catch (error) {
+      console.error('Error loading commissions data:', error)
+      setCommissions([])
+      const ax = error as AxiosError<{ detail?: string }>
+      const fromServer =
+        ax.response?.data &&
+        typeof ax.response.data.detail === 'string' &&
+        ax.response.data.detail
+      setLoadError(
+        fromServer ||
+          ax.message ||
+          t('dashboard.commissions.network_error') ||
+          'Network error. Please try again.',
+      )
+    } finally {
+      setPageLoading(false)
+      setListLoading(false)
+    }
+  }
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -91,75 +196,6 @@ export default function CommissionsPage() {
       loadCommissionsData(true)
     }
   }, [sortBy, typeFilter, filter])
-
-  const loadCommissionsData = async (isFilterChange = false) => {
-    if (isFilterChange) {
-      setListLoading(true)
-    }
-    try {
-      const token = localStorage.getItem('access_token')
-      const headers = token ? { 'Authorization': `Bearer ${token}` } : {}
-      
-      // Charger les statistiques de commission
-      const statsResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/affiliates/commissions/stats`, {
-        headers
-      })
-      
-      if (statsResponse.ok) {
-        const statsData = await statsResponse.json()
-        setStats({
-          totalEarned: statsData.total_earned || 0,
-          pendingAmount: statsData.pending_amount || 0,
-          paidAmount: statsData.paid_amount || 0,
-          thisMonth: statsData.this_month || 0,
-          lastMonth: statsData.last_month || 0,
-          growthRate: statsData.growth_rate || 0
-        })
-      }
-      
-      // Construire les paramètres de requête
-      const params = new URLSearchParams()
-      params.append('sort_by', sortBy)
-      if (typeFilter !== 'all') {
-        params.append('product_type', typeFilter)
-      }
-      if (filter !== 'all') {
-        params.append('status', filter)
-      }
-      
-      // Charger la liste des commissions
-      const commissionsResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/affiliates/commissions?${params.toString()}`, {
-        headers
-      })
-      
-      if (commissionsResponse.ok) {
-        const commissionsData = await commissionsResponse.json()
-        setCommissions(commissionsData.map((c: any) => ({
-          id: c.id?.toString() || '',
-          amount: c.amount || 0,
-          baseAmount: c.base_amount,
-          type: c.level === 1 ? 'direct' : 'indirect',
-          level: c.level || 1,
-          status: c.status || 'pending',
-          commissionType: c.commission_type || 'SHOP_PURCHASE',
-          productTypeCode: c.product_type_code,
-          productTypeName: c.product_type_name,
-          sourceUser: {
-            name: c.source_user_name || 'Utilisateur',
-            avatar: c.source_user_avatar
-          },
-          description: c.description || '',
-          createdAt: c.created_at || new Date().toISOString(),
-          paidAt: c.paid_at
-        })))
-      }
-    } catch (error) {
-      console.error('Error loading commissions data:', error)
-    } finally {
-      setPageLoading(false)
-      setListLoading(false)
-    }
-  }
 
   // Configuration des types de commission
   const getCommissionTypeConfig = (type: string, productCode?: string) => {
@@ -375,6 +411,22 @@ export default function CommissionsPage() {
         </div>
       </div>
 
+      {loadError && (
+        <div
+          className="rounded-xl border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/40 px-4 py-3 text-sm text-red-800 dark:text-red-200"
+          role="alert"
+        >
+          <p>{loadError}</p>
+          <button
+            type="button"
+            onClick={() => loadCommissionsData()}
+            className="mt-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
+          >
+            {t('dashboard.leaderboard.refresh') || 'Refresh'}
+          </button>
+        </div>
+      )}
+
       {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* Total Earned */}
@@ -511,7 +563,7 @@ export default function CommissionsPage() {
           </div>
         </div>
         
-        <div className={`divide-y divide-gray-100 dark:divide-gray-700 ${listLoading ? 'opacity-50 pointer-events-none' : ''}`}>
+        <div className={`relative divide-y divide-gray-100 dark:divide-gray-700 ${listLoading ? 'opacity-50 pointer-events-none' : ''}`}>
           {listLoading && (
             <div className="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-gray-800/50 z-10">
               <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />

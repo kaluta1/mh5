@@ -24,6 +24,7 @@ import {
   GitBranch
 } from 'lucide-react'
 import Link from 'next/link'
+import api from '@/lib/api'
 
 type KYCStatusType = 'none' | 'pending' | 'in_progress' | 'approved' | 'rejected' | 'expired' | 'requires_review'
 
@@ -114,26 +115,21 @@ export default function AffiliatesListPage() {
         return
       }
 
-      // Build query params
-      const params = new URLSearchParams()
-      params.append('limit', '10') // Get more to have full list for client-side pagination
-      if (levelFilter !== null) params.append('level', levelFilter.toString())
-      if (statusFilter) params.append('status', statusFilter)
-      if (kycStatusFilter) params.append('kyc_status', kycStatusFilter)
-      if (searchQuery) params.append('search', searchQuery)
+      const apiParams: Record<string, string | number> = { limit: 10 }
+      if (levelFilter !== null) apiParams.level = levelFilter
+      if (statusFilter) apiParams.status = statusFilter
+      if (kycStatusFilter) apiParams.kyc_status = kycStatusFilter
+      if (searchQuery) apiParams.search = searchQuery
 
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/affiliates/referrals/all?${params.toString()}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
+      const response = await api.get('/api/v1/affiliates/referrals/all', { params: apiParams })
+
+      if (response.status === 200 && response.data) {
+        const data = response.data as {
+          level_stats?: Record<string, { count?: number }>
+          referrals: any[]
+          total_all_levels?: number
+          kyc_stats?: Record<string, unknown> | null
         }
-      )
-
-      if (response.ok) {
-        const data = await response.json()
         const countsByLevel: Record<number, number> = Object.entries(data.level_stats || {}).reduce(
           (acc, [level, stat]: [string, any]) => {
             acc[Number(level)] = Number(stat?.count || 0)
@@ -143,7 +139,7 @@ export default function AffiliatesListPage() {
         )
 
         // Transform API data to match Affiliate interface
-        const transformedAffiliates: Affiliate[] = data.referrals.map((r: any) => ({
+        const transformedAffiliates: Affiliate[] = (data.referrals || []).map((r: any) => ({
           id: r.id?.toString() || '',
           name: (r.level || 1) === 1
             ? (r.username || 'N/A')
