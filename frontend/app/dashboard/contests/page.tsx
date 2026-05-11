@@ -17,6 +17,7 @@ import { logger } from '@/lib/logger'
 import { LocationFilterBar } from '@/components/dashboard/location-filter-bar'
 import { getEffectiveApiUrl } from '@/lib/config'
 import { regionalPoolForCountry } from '@/lib/regional-pool'
+import { computeDisplayRounds } from '@/lib/contest-round-tabs'
 
 // GraphQL
 // REST API
@@ -73,39 +74,6 @@ function normalizeContestLevel(level?: string): Exclude<NominationMigrationLevel
   if (raw === 'continental' || raw === 'continent') return 'continental'
   if (raw === 'global') return 'global'
   return null
-}
-
-type RoundTabKind = 'nominate' | 'vote' | 'combined'
-
-/** Only the current nomination month + the live voting round (hide Jan/Feb/March clutter). */
-function computeDisplayRounds(rounds: Round[]): Array<{ round: Round; pill: string; kind: RoundTabKind }> {
-  if (!rounds?.length) return []
-  const voteRound = rounds.find((r: any) => isRoundVotingLive(r, rounds))
-  const now = new Date()
-  const currentMonthStr = now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }).toLowerCase()
-  const nominationRound =
-    rounds.find((r: any) => String(r.name || '').toLowerCase().includes(currentMonthStr)) || rounds[0]
-  if (nominationRound && voteRound && Number((nominationRound as any).id) === Number((voteRound as any).id)) {
-    return [{ round: nominationRound, pill: 'Submit & Vote', kind: 'combined' }]
-  }
-  const out: Array<{ round: Round; pill: string; kind: RoundTabKind }> = []
-  const seen = new Set<number>()
-  const push = (r: Round | undefined | null, pill: string, kind: RoundTabKind) => {
-    if (!r) return
-    const id = Number((r as any).id)
-    if (Number.isNaN(id) || seen.has(id)) return
-    seen.add(id)
-    out.push({ round: r, pill, kind })
-  }
-  push(nominationRound, 'Submit', 'nominate')
-  push(voteRound as Round | undefined, 'Vote', 'vote')
-  return out.length
-    ? out
-    : rounds.map((r) => ({
-        round: r,
-        pill: isRoundVotingLive(r, rounds) ? 'Vote' : 'Submit',
-        kind: (isRoundVotingLive(r, rounds) ? 'vote' : 'nominate') as RoundTabKind,
-      }))
 }
 
 function ContestsPageContent() {
