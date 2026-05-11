@@ -52,13 +52,36 @@ function roundTitleStartsWithCurrentMonthYear(name: string | undefined, currentM
   return n.startsWith(target)
 }
 
+function parseDay(s?: string): Date | null {
+  if (!s) return null
+  const d = new Date(s.includes("T") ? s : `${s}T12:00:00`)
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
+/** Min/max calendar span from round date fields (same idea as Past archive dialog). */
+function roundScheduleBounds(r: Round): { start: Date; end: Date } | null {
+  const keys = ["submission_start_date", "submission_end_date", "voting_start_date", "voting_end_date"] as const
+  const dates: Date[] = []
+  for (const k of keys) {
+    const d = parseDay(r[k])
+    if (d) dates.push(d)
+  }
+  if (!dates.length) return null
+  return {
+    start: new Date(Math.min(...dates.map((x) => x.getTime()))),
+    end: new Date(Math.max(...dates.map((x) => x.getTime()))),
+  }
+}
+
 /**
  * Rounds to hide from the **Past** archive dialog only.
  *
  * - Always exclude the **live vote** round (`isRoundVotingLive`).
- * - Exclude the **current Submit** round only when its title **starts with** the current
- *   month+year (e.g. `May 2026`). Do not use substring match: names like `April – May 2026`
- *   were matching `may 2026` and hiding April from the Past list.
+ * - Exclude the **current Submit** round when its title **starts with** the current
+ *   month+year (e.g. `May 2026`), not substring match (avoids hiding `April – May 2026`).
+ * - Exclude seasons that **start in the current calendar month** and are **still ongoing**
+ *   (end ≥ today). That removes e.g. "May 2026" (May–Oct) from Past while keeping
+ *   "March 2026" (Mar–May) which starts in March, not May.
  */
 export function getPastArchiveExcludedRoundIds(rounds: Round[]): Set<number> {
   const ids = new Set<number>()
@@ -78,6 +101,21 @@ export function getPastArchiveExcludedRoundIds(rounds: Round[]): Set<number> {
   if (nominationByName) {
     const id = Number(nominationByName.id)
     if (!Number.isNaN(id)) ids.add(id)
+  }
+
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const tm = today.getMonth()
+  const ty = today.getFullYear()
+
+  for (const r of rounds) {
+    const b = roundScheduleBounds(r)
+    if (!b) continue
+    const endDay = new Date(b.end.getFullYear(), b.end.getMonth(), b.end.getDate())
+    if (endDay < today) continue
+    if (b.start.getMonth() === tm && b.start.getFullYear() === ty) {
+      const id = Number(r.id)
+      if (!Number.isNaN(id)) ids.add(id)
+    }
   }
 
   return ids
