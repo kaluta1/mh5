@@ -38,12 +38,27 @@ export function computeDisplayRounds(rounds: Round[]): Array<{ round: Round; pil
 }
 
 /**
+ * True if the round's title is **primarily** the current calendar month+ year (en-US),
+ * e.g. "May 2026…" — not a range like "April – May 2026" (would wrongly contain "may 2026").
+ */
+function roundTitleStartsWithCurrentMonthYear(name: string | undefined, currentMonthYearLower: string): boolean {
+  if (!name?.trim() || !currentMonthYearLower.trim()) return false
+  const target = currentMonthYearLower.toLowerCase().trim()
+  const n = name
+    .toLowerCase()
+    .trim()
+    .replace(/^\s*(round|season)\s*#?\d*\s*[:-–—]?\s*/i, "")
+    .trim()
+  return n.startsWith(target)
+}
+
+/**
  * Rounds to hide from the **Past** archive dialog only.
  *
- * - Always exclude the **live vote** round (`isRoundVotingLive`), same as the Vote tab.
- * - Exclude **Submit** only when the round **name** matches the current calendar month/year
- *   (no `rounds[0]` fallback): using the dashboard fallback could wrongly exclude the previous
- *   month (e.g. April) when the current month’s round title does not match `en-US` month text.
+ * - Always exclude the **live vote** round (`isRoundVotingLive`).
+ * - Exclude the **current Submit** round only when its title **starts with** the current
+ *   month+year (e.g. `May 2026`). Do not use substring match: names like `April – May 2026`
+ *   were matching `may 2026` and hiding April from the Past list.
  */
 export function getPastArchiveExcludedRoundIds(rounds: Round[]): Set<number> {
   const ids = new Set<number>()
@@ -58,9 +73,7 @@ export function getPastArchiveExcludedRoundIds(rounds: Round[]): Set<number> {
   const now = new Date()
   const currentMonthStr = now.toLocaleDateString("en-US", { month: "long", year: "numeric" }).toLowerCase()
   const nominationByName = rounds.find((r: Round) =>
-    String(r.name || "")
-      .toLowerCase()
-      .includes(currentMonthStr),
+    roundTitleStartsWithCurrentMonthYear(r.name, currentMonthStr),
   )
   if (nominationByName) {
     const id = Number(nominationByName.id)
