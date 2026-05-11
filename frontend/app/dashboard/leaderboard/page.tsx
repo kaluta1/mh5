@@ -5,6 +5,8 @@ import { useAuth } from '@/hooks/use-auth'
 import { useLanguage } from '@/contexts/language-context'
 import { Award, Trophy, Medal, User, MapPin, Calendar, Coins, Circle } from 'lucide-react'
 import { cacheService } from '@/lib/cache-service'
+import api from '@/lib/api'
+import type { AxiosError } from 'axios'
 
 interface TopSponsor {
   id: number
@@ -88,21 +90,14 @@ export default function LeaderboardPage() {
         return
       }
 
-      const baseUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').replace(/\/$/, '')
-      const response = await fetch(`${baseUrl}${endpoint}?limit=10`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      })
+      const response = await api.get<TopSponsor[]>(endpoint, { params: { limit: 10 } })
 
-      if (!response.ok) {
-        let detail = ''
-        try {
-          const errBody = await response.json()
-          detail = typeof errBody?.detail === 'string' ? errBody.detail : JSON.stringify(errBody)
-        } catch {
-          detail = (await response.text()) || response.statusText
+      if (response.status !== 200) {
+        const body = response.data as unknown
+        let detail = response.statusText
+        if (body && typeof body === 'object' && 'detail' in body) {
+          const d = (body as { detail?: unknown }).detail
+          detail = typeof d === 'string' ? d : JSON.stringify(d)
         }
         setTopSponsors([])
         setLoadError(
@@ -114,7 +109,7 @@ export default function LeaderboardPage() {
         return
       }
 
-      const data = await response.json()
+      const data = response.data
       const list = Array.isArray(data) ? data : []
       if (!Array.isArray(data)) {
         setLoadError(
@@ -129,8 +124,14 @@ export default function LeaderboardPage() {
     } catch (error) {
       console.error('Error loading leaderboard:', error)
       setTopSponsors([])
+      const ax = error as AxiosError<{ detail?: string }>
+      const fromServer =
+        ax.response?.data &&
+        typeof ax.response.data.detail === 'string' &&
+        ax.response.data.detail
       setLoadError(
-        (error as Error)?.message ||
+        fromServer ||
+          ax.message ||
           t('dashboard.leaderboard.network_error') ||
           'Network error. Check NEXT_PUBLIC_API_URL and that the API is reachable.',
       )
