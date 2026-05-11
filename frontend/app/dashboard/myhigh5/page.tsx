@@ -96,50 +96,36 @@ function bucketKeyForSeason(s: SeasonVotes): string {
   ].join('|')
 }
 
-function pickBetterVote(v: MyHigh5Vote, w: MyHigh5Vote): MyHigh5Vote {
-  const pv = v.position ?? 99
-  const pw = w.position ?? 99
-  if (pv !== pw) return pv < pw ? v : w
-  const tv = new Date(v.vote_date).getTime()
-  const tw = new Date(w.vote_date).getTime()
-  return tv >= tw ? v : w
+/** Match backend `get_my_votes` sort: most votes first, then category/contest name. */
+function sortActiveSeasonsLikeApi(seasons: SeasonVotes[]): SeasonVotes[] {
+  return [...seasons].sort((a, b) => {
+    const vc = (b.votes_count || 0) - (a.votes_count || 0)
+    if (vc !== 0) return vc
+    const na = (a.category_name || a.contest_name || '').toLowerCase()
+    const nb = (b.category_name || b.contest_name || '').toLowerCase()
+    return na.localeCompare(nb)
+  })
 }
 
-function mergeTwoSeasonRows(a: SeasonVotes, b: SeasonVotes): SeasonVotes {
-  const byContestant = new Map<number, MyHigh5Vote>()
-  for (const v of [...a.votes, ...b.votes]) {
-    const prev = byContestant.get(v.contestant_id)
-    if (!prev) byContestant.set(v.contestant_id, { ...v })
-    else byContestant.set(v.contestant_id, pickBetterVote(prev, v))
-  }
-  let merged = Array.from(byContestant.values()).sort(
-    (x, y) => (x.position ?? 99) - (y.position ?? 99)
-  )
-  merged = merged.map((v, i) => ({
-    ...v,
-    position: i + 1,
-    points: POINTS_BY_POSITION[i] ?? 1,
-  }))
-  return {
-    ...a,
-    season_id: Math.max(a.season_id, b.season_id),
-    votes: merged,
-    votes_count: merged.length,
-    remaining_slots: Math.max(0, 5 - merged.length),
-    vote_bucket_key: a.vote_bucket_key ?? b.vote_bucket_key,
-  }
-}
-
-/** Collapse duplicate API rows (same MyHigh5 bucket) into one card; merges vote lists. */
-function normalizeMyHigh5Seasons(seasons: SeasonVotes[]): SeasonVotes[] {
-  const m = new Map<string, SeasonVotes>()
+/**
+ * Same category can return multiple API rows (different season_ids). Active tab should show
+ * only the current bucket — we take the newest `season_id` per bucket and leave older seasons
+ * to the Historique API (Past), not merged into one list.
+ */
+function currentSeasonOnlyPerMyHigh5Bucket(seasons: SeasonVotes[]): SeasonVotes[] {
+  const byBucket = new Map<string, SeasonVotes[]>()
   for (const s of seasons) {
     const k = bucketKeyForSeason(s)
-    const p = m.get(k)
-    if (!p) m.set(k, s)
-    else m.set(k, mergeTwoSeasonRows(p, s))
+    const list = byBucket.get(k) ?? []
+    list.push(s)
+    byBucket.set(k, list)
   }
-  return Array.from(m.values())
+  const winners: SeasonVotes[] = []
+  for (const rows of byBucket.values()) {
+    const best = rows.reduce((a, b) => (a.season_id >= b.season_id ? a : b))
+    winners.push(best)
+  }
+  return sortActiveSeasonsLikeApi(winners)
 }
 
 /** Nomination phases store CITY season rows but UX treats them as country scope. */
@@ -307,7 +293,7 @@ export default function MyHigh5Page() {
           undefined,
           archiveRoundId,
         )) as MyHigh5Response
-        setSeasonsData(normalizeMyHigh5Seasons(response.seasons || []))
+        setSeasonsData(currentSeasonOnlyPerMyHigh5Bucket(response.seasons || []))
       } catch (error) {
         console.error('Erreur lors du chargement des votes:', error)
         setSeasonsData([])
@@ -331,7 +317,7 @@ export default function MyHigh5Page() {
           undefined,
           archiveRoundId,
         )) as MyHigh5Response
-        setSeasonsData(normalizeMyHigh5Seasons(response.seasons || []))
+        setSeasonsData(currentSeasonOnlyPerMyHigh5Bucket(response.seasons || []))
       } catch (error) {
         console.error('Erreur lors du rafraîchissement des votes:', error)
       }
@@ -434,7 +420,7 @@ export default function MyHigh5Page() {
         undefined,
         archiveRoundId,
       )) as MyHigh5Response
-      setSeasonsData(normalizeMyHigh5Seasons(response.seasons || []))
+      setSeasonsData(currentSeasonOnlyPerMyHigh5Bucket(response.seasons || []))
     } finally {
       setIsSaving(false)
     }
