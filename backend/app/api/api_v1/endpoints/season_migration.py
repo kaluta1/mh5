@@ -184,7 +184,7 @@ def get_top_high5_by_country(
                 "requested_level": requested_level.value,
             }
 
-        def _build_for_round(rnd: Round):
+        def _build_for_round(rnd: Round, *, allow_inactive_links: bool = False):
             # Business rule: City Top High5 is reserved for participation flow.
             # Nomination Top High5 should not expose city-level contestants for now.
             if requested_level == SeasonLevel.CITY:
@@ -220,23 +220,66 @@ def get_top_high5_by_country(
                     and any(v in variants for v in {"tanzania", "tz"})
                 ):
                     continue
-                link = (
-                    db.query(ContestSeasonLink, ContestSeason)
-                    .join(ContestSeason, ContestSeason.id == ContestSeasonLink.season_id)
-                    .filter(
-                        ContestSeasonLink.contest_id == contest.id,
-                        ContestSeasonLink.is_active == True,
-                        ContestSeason.round_id == rnd.id,
-                        ContestSeason.level == requested_level,
+                def _pick_link(level: SeasonLevel, link_active: bool):
+                    return (
+                        db.query(ContestSeasonLink, ContestSeason)
+                        .join(ContestSeason, ContestSeason.id == ContestSeasonLink.season_id)
+                        .filter(
+                            ContestSeasonLink.contest_id == contest.id,
+                            ContestSeasonLink.is_active == link_active,
+                            ContestSeason.round_id == rnd.id,
+                            ContestSeason.level == level,
+                            ContestSeason.is_deleted == False,
+                        )
+                        .order_by(ContestSeason.id.desc())
+                        .first()
                     )
-                    .first()
-                )
-                if not link:
-                    continue
-                _, season = link
 
-                # Only show contests whose active season matches the requested level.
-                if season.level != requested_level:
+                country_fallback_from_regional = False
+                csl = None
+                season = None
+                relax_contestant_season_active = False
+
+                if requested_level == SeasonLevel.COUNTRY:
+                    picked = _pick_link(SeasonLevel.COUNTRY, True)
+                    if picked:
+                        csl, season = picked
+                    if not picked:
+                        picked = _pick_link(SeasonLevel.REGIONAL, True)
+                        if picked:
+                            csl, season = picked
+                            country_fallback_from_regional = True
+                    if not picked and allow_inactive_links:
+                        picked = _pick_link(SeasonLevel.REGIONAL, False)
+                        if picked:
+                            csl, season = picked
+                            country_fallback_from_regional = True
+                            relax_contestant_season_active = True
+                    if not picked and allow_inactive_links:
+                        picked = _pick_link(SeasonLevel.COUNTRY, False)
+                        if picked:
+                            csl, season = picked
+                            relax_contestant_season_active = True
+                else:
+                    picked = _pick_link(requested_level, True)
+                    if picked:
+                        csl, season = picked
+                    if not picked and allow_inactive_links:
+                        picked = _pick_link(requested_level, False)
+                        if picked:
+                            csl, season = picked
+                            relax_contestant_season_active = True
+
+                if not csl or season is None:
+                    continue
+
+                # Only show contests whose active season matches the requested level, unless we
+                # resolve country Top High5 from an active or historical regional season (migration / past).
+                if season.level != requested_level and not (
+                    requested_level == SeasonLevel.COUNTRY
+                    and country_fallback_from_regional
+                    and season.level == SeasonLevel.REGIONAL
+                ):
                     continue
 
                 nxt = _next_level(season.level)
@@ -246,6 +289,8 @@ def get_top_high5_by_country(
                 # a single leaderboard; for city/regional/continent we emit one per
                 # distinct location value within the selected country.
                 per_location_groups: list[tuple[str | None, list]] = []
+                # Past archive: inactive links mean inactive ContestantSeason rows — still show snapshot.
+                al = not relax_contestant_season_active
 
                 if season.level == SeasonLevel.GLOBAL:
                     # Global: no country filter, no grouping. Take all qualified contestants
@@ -256,7 +301,11 @@ def get_top_high5_by_country(
                         .filter(
                             and_(
                                 ContestantSeason.season_id == season.id,
-                                ContestantSeason.is_active == True,
+                                *(
+                                    (ContestantSeason.is_active == True,)
+                                    if al
+                                    else ()
+                                ),
                                 Contestant.is_active == True,
                                 Contestant.is_deleted == False,
                                 Contestant.season_id == contest.id,
@@ -267,7 +316,11 @@ def get_top_high5_by_country(
                     if all_contestants:
                         per_location_groups.append(("Global", all_contestants))
 
-                elif season.level == SeasonLevel.COUNTRY:
+                elif season.level == SeasonLevel.COUNTRY or (
+                    country_fallback_from_regional
+                    and season.level == SeasonLevel.REGIONAL
+                    and requested_level == SeasonLevel.COUNTRY
+                ):
                     # Canonical grouping by country. Match the user-selected country
                     # against the group keys (case / alias insensitive).
                     ivc_variants = {"côte d'ivoire", "cote d'ivoire", "ivory coast", "ivory cost", "ci"}
@@ -282,6 +335,7 @@ def get_top_high5_by_country(
                         diagnostics=False,
                         qualified_only=False,
                         strict_season_scope=True,
+                        active_links_only=al,
                     )
                     matched_key = None
                     for key in grouped.keys():
@@ -304,7 +358,11 @@ def get_top_high5_by_country(
                             .filter(
                                 and_(
                                     ContestantSeason.season_id == season.id,
-                                    ContestantSeason.is_active == True,
+                                    *(
+                                        (ContestantSeason.is_active == True,)
+                                        if al
+                                        else ()
+                                    ),
                                     Contestant.is_active == True,
                                     Contestant.is_deleted == False,
                                     Contestant.season_id == contest.id,
@@ -333,6 +391,7 @@ def get_top_high5_by_country(
                         diagnostics=False,
                         qualified_only=False,
                         strict_season_scope=True,
+                        active_links_only=al,
                     )
                     regional_vote_backed_members: list[Contestant] = []
                     selected_regional_pool_id = None
@@ -420,7 +479,13 @@ def get_top_high5_by_country(
                     rows = _build_rows_for_group(db, contest, season, ranked)
                     ranking_scope = (
                         "global" if season.level == SeasonLevel.GLOBAL else
-                        "country_group" if season.level == SeasonLevel.COUNTRY else
+                        "country_group" if (
+                            season.level == SeasonLevel.COUNTRY
+                            or (
+                                country_fallback_from_regional
+                                and requested_level == SeasonLevel.COUNTRY
+                            )
+                        ) else
                         "regional_pool" if season.level == SeasonLevel.REGIONAL else
                         f"{location_field}_in_country"
                     )
@@ -589,7 +654,7 @@ def get_top_high5_by_country(
             rnd = db.query(Round).filter(Round.id == round_id).first()
             if not rnd:
                 raise HTTPException(status_code=404, detail=f"Round id={round_id} not found")
-            contests_out = _build_for_round(rnd)
+            contests_out = _build_for_round(rnd, allow_inactive_links=True)
             return {
                 "round_id": rnd.id,
                 "round_name": rnd.name,
