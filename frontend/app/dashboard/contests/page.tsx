@@ -856,7 +856,8 @@ function ContestsPageContent() {
                         (isRoundVotingLive(round, rounds) ? (t('dashboard.contests.vote_now_short') || 'Vote') : '')}
                     </span>
                   </button>
-                  {index === 0 && (
+                  {((displayRounds.length >= 2 && index === 1) ||
+                    (displayRounds.length === 1 && index === 0)) && (
                     <button
                       type="button"
                       onClick={() => setShowPastArchiveOpen(true)}
