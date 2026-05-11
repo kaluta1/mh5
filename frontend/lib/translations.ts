@@ -1388,6 +1388,12 @@ export interface TranslationKeys {
         info_description_general?: string
         info_description_mfm?: string
         info_rewards_verification_note?: string
+        login_required?: string
+        load_failed?: string
+        network_error?: string
+        unexpected_response?: string
+        empty_hint_general?: string
+        empty_hint_mfm?: string
       }
       stats: {
         contests: string
@@ -3645,7 +3651,15 @@ const translationsBase = {
           "Le classement affiche les 10 membres ayant gagné le plus de commissions MyHigh5 Founding Member (MFM) sur les frais d'adhésion payés par leurs filleuls directs. Ces membres recevront des Digital Shopping Points (DSP) du Digital Shopping Mall, comme indiqué sur le classement.",
         info_rewards_verification_note:
           "L'éligibilité aux récompenses repose sur des filleuls ayant payé les frais de vérification du compte. Une validation KYC complète n'est pas exigée pour figurer au classement.",
-        info_description: "Le classement est basé sur le nombre de référents directs (niveau 1) de chaque sponsor. Plus vous avez de référents directs, plus votre position dans le classement est élevée."
+        info_description: "Le classement est basé sur le nombre de référents directs (niveau 1) de chaque sponsor. Plus vous avez de référents directs, plus votre position dans le classement est élevée.",
+        login_required: "Connectez-vous pour charger le classement.",
+        load_failed: "Impossible de charger le classement.",
+        network_error: "Erreur réseau. Vérifiez NEXT_PUBLIC_API_URL et que l'API est joignable.",
+        unexpected_response: "Réponse serveur inattendue (un tableau JSON était attendu).",
+        empty_hint_general:
+          "La liste est vide tant qu'aucun parrain n'a au moins un filleul direct avec un paiement validé pour le type de produit « kyc ». Si votre produit de vérification utilise un autre code, la requête ne renverra aucune ligne.",
+        empty_hint_mfm:
+          "La liste est vide tant qu'aucun parrain n'a au moins un filleul direct avec un paiement validé pour le type de produit « mfm_membership ».",
       }
     },
     hero: {
@@ -8051,6 +8065,14 @@ const translationsBase = {
           "Rewards are based on referrals who have paid the account verification fee. Full KYC approval is not required for leaderboard reward eligibility.",
         info_description:
           "The leaderboard is based on the number of direct referrals (Level 1) who are verified referrals. The more direct verified referrals you have, the higher your position on the leaderboard.",
+        login_required: "Sign in to load the leaderboard.",
+        load_failed: "Could not load the leaderboard.",
+        network_error: "Network error. Check NEXT_PUBLIC_API_URL and that the API is reachable.",
+        unexpected_response: "The server returned an unexpected format (expected a JSON array).",
+        empty_hint_general:
+          "The list is empty when no sponsor has at least one direct referral with a validated payment for product type \"kyc\" in the database. If your verification product uses another code, this query returns no rows.",
+        empty_hint_mfm:
+          "The list is empty when no sponsor has at least one direct referral with a validated payment for product type \"mfm_membership\".",
       }
     },
     kyc: {
@@ -10446,7 +10468,15 @@ const translationsBase = {
           "La clasificación muestra los 10 miembros que más comisiones MyHigh5 Founding Member (MFM) hayan ganado por las cuotas de afiliación pagadas por sus referidos directos. Estos miembros recibirán Digital Shopping Points (DSP) de Digital Shopping Mall, como se indica en la clasificación.",
         info_rewards_verification_note:
           "Las recompensas se basan en referidos que hayan pagado la cuota de verificación de la cuenta. No se exige la aprobación completa de KYC para optar a las recompensas de la clasificación.",
-        info_description: "La clasificación se basa en el número de referidos directos (nivel 1) que tiene cada patrocinador. Cuantos más referidos directos tengas, mayor será tu posición en la clasificación."
+        info_description: "La clasificación se basa en el número de referidos directos (nivel 1) que tiene cada patrocinador. Cuantos más referidos directos tengas, mayor será tu posición en la clasificación.",
+        login_required: "Inicia sesión para cargar la clasificación.",
+        load_failed: "No se pudo cargar la clasificación.",
+        network_error: "Error de red. Comprueba NEXT_PUBLIC_API_URL y que la API sea accesible.",
+        unexpected_response: "Respuesta inesperada del servidor (se esperaba un array JSON).",
+        empty_hint_general:
+          "La lista está vacía mientras ningún patrocinador tenga al menos un referido directo con un pago validado para el tipo de producto «kyc». Si el producto de verificación usa otro código, la consulta no devuelve filas.",
+        empty_hint_mfm:
+          "La lista está vacía mientras ningún patrocinador tenga al menos un referido directo con un pago validado para el tipo de producto «mfm_membership».",
       }
     },
     contestant_detail: {
@@ -12903,7 +12933,15 @@ const translationsBase = {
           "Die Rangliste zeigt die 10 Mitglieder mit den höchsten MyHigh5 Founding Member (MFM)-Provisionen aus Mitgliedsbeiträgen ihrer direkten Empfehlungen. Diese Mitglieder erhalten Digital Shopping Points (DSP) vom Digital Shopping Mall, wie in der Rangliste angezeigt.",
         info_rewards_verification_note:
           "Die Prämien richten sich nach Empfehlungen, die die Kontoverifizierungsgebühr bezahlt haben. Eine vollständige KYC-Freigabe ist für die Prämienberechtigung nicht erforderlich.",
-        info_description: "Die Rangliste basiert auf der Anzahl der direkten Empfehlungen (Stufe 1), die jeder Sponsor hat. Je mehr direkte Empfehlungen Sie haben, desto höher ist Ihre Position in der Rangliste."
+        info_description: "Die Rangliste basiert auf der Anzahl der direkten Empfehlungen (Stufe 1), die jeder Sponsor hat. Je mehr direkte Empfehlungen Sie haben, desto höher ist Ihre Position in der Rangliste.",
+        login_required: "Bitte anmelden, um die Rangliste zu laden.",
+        load_failed: "Rangliste konnte nicht geladen werden.",
+        network_error: "Netzwerkfehler. Prüfen Sie NEXT_PUBLIC_API_URL und die Erreichbarkeit der API.",
+        unexpected_response: "Unerwartete Serverantwort (es wurde ein JSON-Array erwartet).",
+        empty_hint_general:
+          "Die Liste ist leer, solange kein Sponsor mindestens eine direkte Empfehlung mit validierter Zahlung für den Produkttyp «kyc» hat. Verwendet Ihr Verifizierungsprodukt einen anderen Code, liefert die Abfrage keine Zeilen.",
+        empty_hint_mfm:
+          "Die Liste ist leer, solange kein Sponsor mindestens eine direkte Empfehlung mit validierter Zahlung für den Produkttyp «mfm_membership» hat.",
       }
     },
     contestant_detail: {

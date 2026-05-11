@@ -43,6 +43,7 @@ export default function LeaderboardPage() {
   const [pageLoading, setPageLoading] = useState(true)
   const [leaderboardType, setLeaderboardType] = useState<LeaderboardType>('regular')
   const [showDspInfo, setShowDspInfo] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   
   // Mapping des langues vers les locales
   const localeMap: Record<string, string> = {
@@ -59,45 +60,80 @@ export default function LeaderboardPage() {
   }, [isLoading, isAuthenticated, leaderboardType])
 
   const loadLeaderboard = async () => {
+    setLoadError(null)
     try {
       const token = localStorage.getItem('access_token')
-      if (!token) return
-
-      setPageLoading(true)
-      const endpoint = leaderboardType === 'mfm' 
-        ? '/api/v1/affiliates/leaderboard/mfm'
-        : '/api/v1/affiliates/leaderboard'
-      
-      const params = { limit: 10 }
-      const cacheKey = `${endpoint}:${leaderboardType}`
-
-      // Vérifier le cache
-      const cached = cacheService.get<TopSponsor[]>(cacheKey, params)
-      if (cached) {
-        setTopSponsors(cached)
+      if (!token) {
+        setTopSponsors([])
+        setLoadError(
+          t('dashboard.leaderboard.login_required') ||
+            'You need to be signed in to load the leaderboard.',
+        )
         setPageLoading(false)
         return
       }
 
-      // Si pas en cache, faire la requête
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}${endpoint}?limit=10`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      )
+      setPageLoading(true)
+      const endpoint =
+        leaderboardType === 'mfm'
+          ? '/api/v1/affiliates/leaderboard/mfm'
+          : '/api/v1/affiliates/leaderboard'
 
-      if (response.ok) {
-        const data = await response.json()
-        setTopSponsors(data)
-        // Mettre en cache
-        cacheService.set(cacheKey, data, params)
+      const params = { limit: 10 }
+      const cacheKey = `${endpoint}:${leaderboardType}`
+
+      const cached = cacheService.get<TopSponsor[]>(cacheKey, params)
+      if (cached && Array.isArray(cached) && cached.length > 0) {
+        setTopSponsors(cached)
+        return
+      }
+
+      const baseUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').replace(/\/$/, '')
+      const response = await fetch(`${baseUrl}${endpoint}?limit=10`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        let detail = ''
+        try {
+          const errBody = await response.json()
+          detail = typeof errBody?.detail === 'string' ? errBody.detail : JSON.stringify(errBody)
+        } catch {
+          detail = (await response.text()) || response.statusText
+        }
+        setTopSponsors([])
+        setLoadError(
+          `${t('dashboard.leaderboard.load_failed') || 'Could not load leaderboard'} (${response.status}): ${detail}`.slice(
+            0,
+            400,
+          ),
+        )
+        return
+      }
+
+      const data = await response.json()
+      const list = Array.isArray(data) ? data : []
+      if (!Array.isArray(data)) {
+        setLoadError(
+          t('dashboard.leaderboard.unexpected_response') ||
+            'The server returned an unexpected format. Expected a JSON array.',
+        )
+      }
+      setTopSponsors(list)
+      if (list.length > 0) {
+        cacheService.set(cacheKey, list, params)
       }
     } catch (error) {
       console.error('Error loading leaderboard:', error)
+      setTopSponsors([])
+      setLoadError(
+        (error as Error)?.message ||
+          t('dashboard.leaderboard.network_error') ||
+          'Network error. Check NEXT_PUBLIC_API_URL and that the API is reachable.',
+      )
     } finally {
       setPageLoading(false)
     }
@@ -191,11 +227,36 @@ export default function LeaderboardPage() {
         {/* Leaderboard */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
           {topSponsors.length === 0 ? (
-            <div className="p-12 text-center">
-              <Award className="w-16 h-16 text-gray-400 dark:text-gray-600 mx-auto mb-4" />
-              <p className="text-gray-600 dark:text-gray-400 text-lg">
-                {t('dashboard.leaderboard.no_data') || 'Aucun sponsor trouvé'}
-              </p>
+            <div className="p-12 text-center space-y-4">
+              <Award className="w-16 h-16 text-gray-400 dark:text-gray-600 mx-auto" />
+              {loadError ? (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-left text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200">
+                  <p className="font-semibold mb-1">
+                    {t('dashboard.leaderboard.load_failed') || 'Could not load leaderboard'}
+                  </p>
+                  <p className="break-words">{loadError}</p>
+                  <button
+                    type="button"
+                    onClick={() => void loadLeaderboard()}
+                    className="mt-3 text-sm font-medium text-red-700 underline hover:no-underline dark:text-red-300"
+                  >
+                    {t('common.refresh') || 'Try again'}
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <p className="text-gray-600 dark:text-gray-400 text-lg">
+                    {t('dashboard.leaderboard.no_data') || 'Aucun sponsor trouvé'}
+                  </p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 max-w-xl mx-auto">
+                    {leaderboardType === 'mfm'
+                      ? t('dashboard.leaderboard.empty_hint_mfm') ||
+                        'The list stays empty until the database has sponsors whose direct referrals each have a validated deposit for product type "mfm_membership".'
+                      : t('dashboard.leaderboard.empty_hint_general') ||
+                        'The list stays empty until the database has sponsors whose direct referrals each have a validated deposit for product type "kyc" (verification fee). If payments use another product code, the query will return no rows.'}
+                  </p>
+                </>
+              )}
             </div>
           ) : (
             <div className="divide-y divide-gray-200 dark:divide-gray-700">
