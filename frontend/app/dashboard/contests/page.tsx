@@ -857,6 +857,7 @@ function ContestsPageContent() {
             sortBy={sortBy}
             onSortChange={setSortBy}
             showCountryFilter={true}
+            showContinentFilter={false}
             className="mb-4"
           />
         </div>

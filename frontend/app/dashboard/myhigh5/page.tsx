@@ -83,6 +83,65 @@ interface HistoryResponse {
 // Points attribués selon la position (1er = 5 points, 2ème = 4 points, etc.)
 const POINTS_BY_POSITION = [5, 4, 3, 2, 1]
 
+/** Stable bucket id: backend duplicate season rows for the same category share this. */
+function bucketKeyForSeason(s: SeasonVotes): string {
+  const trimmed = s.vote_bucket_key && String(s.vote_bucket_key).trim()
+  if (trimmed) return trimmed
+  return [
+    s.contest_id,
+    s.category_id ?? '',
+    (s.contest_name || '').toLowerCase().trim(),
+    (s.category_name || '').toLowerCase().trim(),
+    (s.contest_type || '').toLowerCase().trim(),
+  ].join('|')
+}
+
+function pickBetterVote(v: MyHigh5Vote, w: MyHigh5Vote): MyHigh5Vote {
+  const pv = v.position ?? 99
+  const pw = w.position ?? 99
+  if (pv !== pw) return pv < pw ? v : w
+  const tv = new Date(v.vote_date).getTime()
+  const tw = new Date(w.vote_date).getTime()
+  return tv >= tw ? v : w
+}
+
+function mergeTwoSeasonRows(a: SeasonVotes, b: SeasonVotes): SeasonVotes {
+  const byContestant = new Map<number, MyHigh5Vote>()
+  for (const v of [...a.votes, ...b.votes]) {
+    const prev = byContestant.get(v.contestant_id)
+    if (!prev) byContestant.set(v.contestant_id, { ...v })
+    else byContestant.set(v.contestant_id, pickBetterVote(prev, v))
+  }
+  let merged = Array.from(byContestant.values()).sort(
+    (x, y) => (x.position ?? 99) - (y.position ?? 99)
+  )
+  merged = merged.map((v, i) => ({
+    ...v,
+    position: i + 1,
+    points: POINTS_BY_POSITION[i] ?? 1,
+  }))
+  return {
+    ...a,
+    season_id: Math.max(a.season_id, b.season_id),
+    votes: merged,
+    votes_count: merged.length,
+    remaining_slots: Math.max(0, 5 - merged.length),
+    vote_bucket_key: a.vote_bucket_key ?? b.vote_bucket_key,
+  }
+}
+
+/** Collapse duplicate API rows (same MyHigh5 bucket) into one card; merges vote lists. */
+function normalizeMyHigh5Seasons(seasons: SeasonVotes[]): SeasonVotes[] {
+  const m = new Map<string, SeasonVotes>()
+  for (const s of seasons) {
+    const k = bucketKeyForSeason(s)
+    const p = m.get(k)
+    if (!p) m.set(k, s)
+    else m.set(k, mergeTwoSeasonRows(p, s))
+  }
+  return Array.from(m.values())
+}
+
 /** Nomination phases store CITY season rows but UX treats them as country scope. */
 function formatMyHigh5SeasonBadge(level: string | null | undefined): string {
   if (!level) return ''
@@ -149,18 +208,17 @@ export default function MyHigh5Page() {
   const [activeTab, setActiveTab] = useState('active')
   const [activeLevel, setActiveLevel] = useState('country')
   const [categorySearch, setCategorySearch] = useState('')
-  const [draggedItem, setDraggedItem] = useState<{ seasonIndex: number; voteIndex: number } | null>(null)
+  const [draggedItem, setDraggedItem] = useState<{ sectionKey: string; voteIndex: number } | null>(null)
   /** Touch / coarse pointer: first tap selects row, second tap on another row moves there (same as drag-drop). */
   const [touchReorderSource, setTouchReorderSource] = useState<{
-    seasonIndex: number
+    sectionKey: string
     voteIndex: number
   } | null>(null)
   const isCoarsePointer = useCoarsePointer()
   const [isSaving, setIsSaving] = useState(false)
   const [openSections, setOpenSections] = useState<Set<string>>(new Set())
 
-  const sectionKey = (season: SeasonVotes) =>
-    `${season.season_id}-${season.vote_bucket_key ?? `c${season.contest_id}`}`
+  const sectionKey = (season: SeasonVotes) => bucketKeyForSeason(season)
 
   const toggleSection = (key: string) => {
     setOpenSections((prev) => {
@@ -223,6 +281,15 @@ export default function MyHigh5Page() {
     { value: 'global', label: 'Global', icon: 'global' },
   ]
 
+  const visibleLevelTabs = React.useMemo(
+    () => levelTabs.filter((item) => item.value !== 'continent'),
+    [levelTabs],
+  )
+
+  useEffect(() => {
+    if (activeLevel === 'continent') setActiveLevel('country')
+  }, [activeLevel])
+
   // Redirection si non authentifié
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -240,7 +307,7 @@ export default function MyHigh5Page() {
           undefined,
           archiveRoundId,
         )) as MyHigh5Response
-        setSeasonsData(response.seasons || [])
+        setSeasonsData(normalizeMyHigh5Seasons(response.seasons || []))
       } catch (error) {
         console.error('Erreur lors du chargement des votes:', error)
         setSeasonsData([])
@@ -264,7 +331,7 @@ export default function MyHigh5Page() {
           undefined,
           archiveRoundId,
         )) as MyHigh5Response
-        setSeasonsData(response.seasons || [])
+        setSeasonsData(normalizeMyHigh5Seasons(response.seasons || []))
       } catch (error) {
         console.error('Erreur lors du rafraîchissement des votes:', error)
       }
@@ -326,9 +393,12 @@ export default function MyHigh5Page() {
   }
 
   // Drag and drop handlers
-  const applyReorder = async (seasonIndex: number, fromIndex: number, toIndex: number) => {
+  const applyReorder = async (sectionKeyStr: string, fromIndex: number, toIndex: number) => {
     if (isReadOnly) return
     if (fromIndex === toIndex) return
+
+    const seasonIndex = seasonsData.findIndex((s) => sectionKey(s) === sectionKeyStr)
+    if (seasonIndex < 0) return
 
     const newSeasonsData = [...seasonsData]
     const season = newSeasonsData[seasonIndex]
@@ -364,14 +434,14 @@ export default function MyHigh5Page() {
         undefined,
         archiveRoundId,
       )) as MyHigh5Response
-      setSeasonsData(response.seasons || [])
+      setSeasonsData(normalizeMyHigh5Seasons(response.seasons || []))
     } finally {
       setIsSaving(false)
     }
   }
 
-  const handleDragStart = (e: React.DragEvent, seasonIndex: number, voteIndex: number) => {
-    setDraggedItem({ seasonIndex, voteIndex })
+  const handleDragStart = (e: React.DragEvent, sectionKeyStr: string, voteIndex: number) => {
+    setDraggedItem({ sectionKey: sectionKeyStr, voteIndex })
     e.dataTransfer.effectAllowed = 'move'
   }
 
@@ -380,9 +450,9 @@ export default function MyHigh5Page() {
     e.dataTransfer.dropEffect = 'move'
   }
 
-  const handleDrop = async (e: React.DragEvent, seasonIndex: number, dropIndex: number) => {
+  const handleDrop = async (e: React.DragEvent, sectionKeyStr: string, dropIndex: number) => {
     e.preventDefault()
-    if (!draggedItem || draggedItem.seasonIndex !== seasonIndex) {
+    if (!draggedItem || draggedItem.sectionKey !== sectionKeyStr) {
       setDraggedItem(null)
       return
     }
@@ -394,7 +464,7 @@ export default function MyHigh5Page() {
 
     const from = draggedItem.voteIndex
     setDraggedItem(null)
-    await applyReorder(seasonIndex, from, dropIndex)
+    await applyReorder(sectionKeyStr, from, dropIndex)
   }
 
   const handleDragEnd = () => {
@@ -403,7 +473,7 @@ export default function MyHigh5Page() {
 
   const handleAvatarTapReorder = (
     e: React.MouseEvent,
-    seasonIndex: number,
+    sectionKeyStr: string,
     voteIndex: number
   ) => {
     e.preventDefault()
@@ -411,11 +481,11 @@ export default function MyHigh5Page() {
     if (isReadOnly || isSaving) return
 
     if (!touchReorderSource) {
-      setTouchReorderSource({ seasonIndex, voteIndex })
+      setTouchReorderSource({ sectionKey: sectionKeyStr, voteIndex })
       return
     }
-    if (touchReorderSource.seasonIndex !== seasonIndex) {
-      setTouchReorderSource({ seasonIndex, voteIndex })
+    if (touchReorderSource.sectionKey !== sectionKeyStr) {
+      setTouchReorderSource({ sectionKey: sectionKeyStr, voteIndex })
       return
     }
     if (touchReorderSource.voteIndex === voteIndex) {
@@ -425,7 +495,7 @@ export default function MyHigh5Page() {
 
     const from = touchReorderSource.voteIndex
     setTouchReorderSource(null)
-    void applyReorder(seasonIndex, from, voteIndex)
+    void applyReorder(sectionKeyStr, from, voteIndex)
   }
 
   if (isLoading || pageLoading) {
@@ -439,7 +509,7 @@ export default function MyHigh5Page() {
   // Fonction helper pour rendre un tableau de votes
   const renderVotesTable = (
     votes: MyHigh5Vote[],
-    seasonIndex: number,
+    sectionKeyStr: string,
     enableDragDrop: boolean = true
   ) => {
     const dragEnabled = enableDragDrop && !isCoarsePointer
@@ -475,13 +545,13 @@ export default function MyHigh5Page() {
           <TableRow
             key={vote.contestant_id}
             onDragOver={dragEnabled ? handleDragOver : undefined}
-            onDrop={dragEnabled ? (e) => handleDrop(e, seasonIndex, voteIndex) : undefined}
+            onDrop={dragEnabled ? (e) => handleDrop(e, sectionKeyStr, voteIndex) : undefined}
             className={cn(
               'transition-all',
-              draggedItem?.seasonIndex === seasonIndex && draggedItem?.voteIndex === voteIndex
+              draggedItem?.sectionKey === sectionKeyStr && draggedItem?.voteIndex === voteIndex
                 ? 'opacity-50 bg-blue-50 dark:bg-blue-900/20'
                 : 'hover:bg-gray-50 dark:hover:bg-gray-700/50',
-              touchReorderSource?.seasonIndex === seasonIndex &&
+              touchReorderSource?.sectionKey === sectionKeyStr &&
                 touchReorderSource?.voteIndex === voteIndex &&
                 'bg-myhigh5-primary/10 ring-2 ring-inset ring-myhigh5-primary/50 dark:bg-myhigh5-primary/20',
               isSaving && 'pointer-events-none opacity-70'
@@ -523,7 +593,7 @@ export default function MyHigh5Page() {
                       ? (e) => {
                           if (e.key === 'Enter' || e.key === ' ') {
                             e.preventDefault()
-                            handleAvatarTapReorder(e as unknown as React.MouseEvent, seasonIndex, voteIndex)
+                            handleAvatarTapReorder(e as unknown as React.MouseEvent, sectionKeyStr, voteIndex)
                           }
                         }
                       : undefined
@@ -538,14 +608,14 @@ export default function MyHigh5Page() {
                   onDragStart={
                     dragEnabled
                       ? (e) => {
-                          handleDragStart(e, seasonIndex, voteIndex)
+                          handleDragStart(e, sectionKeyStr, voteIndex)
                         }
                       : undefined
                   }
                   onDragEnd={dragEnabled ? handleDragEnd : undefined}
                   onClick={
                     touchReorderEnabled
-                      ? (e) => handleAvatarTapReorder(e, seasonIndex, voteIndex)
+                      ? (e) => handleAvatarTapReorder(e, sectionKeyStr, voteIndex)
                       : undefined
                   }
                   title={
@@ -719,7 +789,7 @@ export default function MyHigh5Page() {
         {/* Active Votes Tab */}
         <TabsContent value="active" className="space-y-6">
           <div className="flex flex-wrap gap-2">
-            {levelTabs.map((item) => (
+            {visibleLevelTabs.map((item) => (
               <Button
                 key={item.value}
                 type="button"
@@ -760,7 +830,8 @@ export default function MyHigh5Page() {
                 {(t('dashboard.myhigh5.tap_reorder_second') ||
                   'Tap another nominator’s photo to move {name} to that position.').replace(
                   '{name}',
-                  filteredSeasonsData[touchReorderSource.seasonIndex]?.votes[touchReorderSource.voteIndex]?.author_name ||
+                  filteredSeasonsData.find((s) => sectionKey(s) === touchReorderSource.sectionKey)
+                    ?.votes[touchReorderSource.voteIndex]?.author_name ||
                     '…'
                 )}
               </p>
@@ -794,7 +865,7 @@ export default function MyHigh5Page() {
         </div>
       ) : (
         <div className="space-y-3">
-          {filteredSeasonsData.map((season, seasonIndex) => {
+          {filteredSeasonsData.map((season) => {
             const sk = sectionKey(season)
             const isOpen = openSections.has(sk)
             return (
@@ -851,7 +922,7 @@ export default function MyHigh5Page() {
                       </p>
                     ) : (
                       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden border border-gray-200 dark:border-gray-700">
-                        {renderVotesTable(season.votes, seasonIndex, !isReadOnly)}
+                        {renderVotesTable(season.votes, sk, !isReadOnly)}
                       </div>
                     )}
                   </div>
@@ -925,9 +996,7 @@ export default function MyHigh5Page() {
                   </div>
 
                   {/* Seasons for this contest */}
-                  {contest.seasons.map((season, seasonIndex) => {
-                    // Créer un index unique pour cette season dans l'historique
-                    const uniqueIndex = contest.contest_id * 1000 + season.season_id
+                  {contest.seasons.map((season) => {
                     return (
                       <div key={`${contest.contest_id}-${season.season_id}`} className="space-y-3">
                         {/* Season Header */}
@@ -952,7 +1021,11 @@ export default function MyHigh5Page() {
                         {/* Votes Table */}
                         {season.votes.length > 0 && (
                           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden border border-gray-200 dark:border-gray-700">
-                            {renderVotesTable(season.votes, uniqueIndex, false)}
+                            {renderVotesTable(
+                              season.votes,
+                              `history-${contest.contest_id}-${season.season_id}`,
+                              false,
+                            )}
                           </div>
                         )}
                       </div>
