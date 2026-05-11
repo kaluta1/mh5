@@ -1384,7 +1384,10 @@ export interface TranslationKeys {
         champion: string
         no_data: string
         info_title: string
-        info_description: string
+        info_description?: string
+        info_description_general?: string
+        info_description_mfm?: string
+        info_rewards_verification_note?: string
       }
       stats: {
         contests: string
@@ -1694,6 +1697,9 @@ export interface TranslationKeys {
           success_edit: string
           already_participating: string
           edit_participation: string
+          delete_submission?: string
+          delete_submission_confirm?: string
+          delete_success?: string
           click_add_images: string
           preparing: string
           checking_files: string
@@ -3545,6 +3551,10 @@ const translationsBase = {
           success_edit: "Votre candidature a été mise à jour avec succès.",
           already_participating: "ℹ️ Vous avez déjà une candidature pour ce concours. Vous ne pouvez soumettre qu'une seule candidature par concours.",
           edit_participation: "Modifier ma candidature",
+          delete_submission: "Supprimer la soumission",
+          delete_submission_confirm:
+            "Cela supprime définitivement votre contenu soumis pour ce concours. Vous pourrez soumettre à nouveau tant que les inscriptions sont ouvertes.",
+          delete_success: "Votre soumission a été supprimée.",
           click_add_images: "Cliquez pour ajouter des images",
           preparing: "Préparation...",
           checking_files: "Vérification des fichiers...",
@@ -3620,8 +3630,8 @@ const translationsBase = {
       },
       leaderboard: {
         title: "Classement des Sponsors",
-        subtitle: "Les 10 meilleurs sponsors avec le plus de référents directs",
-        mfm_subtitle: "Les 10 meilleurs sponsors MFM avec le plus de référents directs ayant acheté MFM",
+        subtitle: "Les 10 premiers membres ayant gagné le plus de commissions sur les frais de vérification (filleuls directs)",
+        mfm_subtitle: "Les 10 premiers membres ayant gagné le plus de commissions MFM sur les frais d'adhésion MFM (filleuls directs)",
         regular_tab: "Classement Général",
         mfm_tab: "Classement MFM",
         referrals: "Référents",
@@ -3629,6 +3639,12 @@ const translationsBase = {
         champion: "Champion",
         no_data: "Aucun sponsor trouvé",
         info_title: "Comment fonctionne le classement ?",
+        info_description_general:
+          "Le classement affiche les 10 membres ayant gagné le plus de commissions sur les frais de vérification de leurs filleuls directs. Ces membres recevront des Digital Shopping Points (DSP) du Digital Shopping Mall, comme indiqué sur le classement.",
+        info_description_mfm:
+          "Le classement affiche les 10 membres ayant gagné le plus de commissions MyHigh5 Founding Member (MFM) sur les frais d'adhésion payés par leurs filleuls directs. Ces membres recevront des Digital Shopping Points (DSP) du Digital Shopping Mall, comme indiqué sur le classement.",
+        info_rewards_verification_note:
+          "L'éligibilité aux récompenses repose sur des filleuls ayant payé les frais de vérification du compte. Une validation KYC complète n'est pas exigée pour figurer au classement.",
         info_description: "Le classement est basé sur le nombre de référents directs (niveau 1) de chaque sponsor. Plus vous avez de référents directs, plus votre position dans le classement est élevée."
       }
     },
@@ -4984,6 +5000,10 @@ const translationsBase = {
           success_edit: "Votre candidature a été mise à jour avec succès.",
           already_participating: "ℹ️ Vous avez déjà une candidature pour ce concours. Vous ne pouvez soumettre qu'une seule candidature par concours.",
           edit_participation: "Modifier ma candidature",
+          delete_submission: "Supprimer la soumission",
+          delete_submission_confirm:
+            "Cela supprime définitivement votre contenu soumis pour ce concours. Vous pourrez soumettre à nouveau tant que les inscriptions sont ouvertes.",
+          delete_success: "Votre soumission a été supprimée.",
           click_add_images: "Cliquez pour ajouter des images",
           preparing: "Préparation...",
           checking_files: "Vérification des fichiers...",
@@ -7882,6 +7902,10 @@ const translationsBase = {
           success_edit: "Your application has been updated successfully.",
           already_participating: "ℹ️ You already have an application for this contest. You can only submit one application per contest.",
           edit_participation: "Edit my application",
+          delete_submission: "Delete submission",
+          delete_submission_confirm:
+            "This permanently removes your submitted content for this contest. You can submit again later if submissions are still open.",
+          delete_success: "Your submission was removed.",
           click_add_images: "Click to add images",
           preparing: "Preparing...",
           checking_files: "Checking files...",
@@ -8010,8 +8034,8 @@ const translationsBase = {
       },
       leaderboard: {
         title: "Sponsors Leaderboard",
-        subtitle: "Top 10 sponsors with the most verified direct referrals",
-        mfm_subtitle: "Top 10 MFM sponsors with the most direct referrals who are MFM",
+        subtitle: "Top 10 by verification fee commission from direct referrals",
+        mfm_subtitle: "Top 10 by MFM commission from direct referrals who paid joining fees",
         regular_tab: "General Leaderboard",
         mfm_tab: "MFM Leaderboard",
         referrals: "Referrals",
@@ -8019,7 +8043,14 @@ const translationsBase = {
         champion: "Champion",
         no_data: "No sponsors found",
         info_title: "How does the leaderboard work?",
-        info_description: "The leaderboard is based on the number of direct referrals (Level 1) who are verified referrals. The more direct verified referrals you have, the higher your position on the leaderboard."
+        info_description_general:
+          "The leaderboard displays the top 10 members who have earned the highest verification fee commissions from their direct referrals. These members will be rewarded with Digital Shopping Mall's Digital Shopping Points (DSPs), as shown on the leaderboard.",
+        info_description_mfm:
+          "The leaderboard displays the top 10 members who have earned the highest MyHigh5 Founding Member (MFM) commissions from membership joining fees paid by their direct referrals. These members will be rewarded with Digital Shopping Mall's Digital Shopping Points (DSPs), as shown on the leaderboard.",
+        info_rewards_verification_note:
+          "Rewards are based on referrals who have paid the account verification fee. Full KYC approval is not required for leaderboard reward eligibility.",
+        info_description:
+          "The leaderboard is based on the number of direct referrals (Level 1) who are verified referrals. The more direct verified referrals you have, the higher your position on the leaderboard.",
       }
     },
     kyc: {
@@ -10336,6 +10367,10 @@ const translationsBase = {
           success_edit: "Tu candidatura ha sido actualizada exitosamente.",
           already_participating: "ℹ️ Ya tienes una solicitud para este concurso. Solo puedes enviar una solicitud por concurso.",
           edit_participation: "Editar mi solicitud",
+          delete_submission: "Eliminar envío",
+          delete_submission_confirm:
+            "Esto elimina permanentemente tu contenido enviado para este concurso. Podrás enviar de nuevo si las inscripciones siguen abiertas.",
+          delete_success: "Tu envío fue eliminado.",
           click_add_images: "Haz clic para agregar imágenes",
           preparing: "Preparando...",
           checking_files: "Verificando archivos...",
@@ -10396,8 +10431,8 @@ const translationsBase = {
       },
       leaderboard: {
         title: "Clasificación de Patrocinadores",
-        subtitle: "Los 10 mejores patrocinadores con más referidos directos",
-        mfm_subtitle: "Los 10 mejores patrocinadores MFM con más referidos directos que compraron MFM",
+        subtitle: "Los 10 miembros con más comisiones por cuota de verificación (referidos directos)",
+        mfm_subtitle: "Los 10 miembros con más comisiones MFM por cuotas de afiliación (referidos directos)",
         regular_tab: "Clasificación General",
         mfm_tab: "Clasificación MFM",
         referrals: "Referidos",
@@ -10405,6 +10440,12 @@ const translationsBase = {
         champion: "Campeón",
         no_data: "No se encontraron patrocinadores",
         info_title: "¿Cómo funciona la clasificación?",
+        info_description_general:
+          "La clasificación muestra los 10 miembros que más comisiones por cuota de verificación hayan ganado de sus referidos directos. Estos miembros recibirán Digital Shopping Points (DSP) de Digital Shopping Mall, como se indica en la clasificación.",
+        info_description_mfm:
+          "La clasificación muestra los 10 miembros que más comisiones MyHigh5 Founding Member (MFM) hayan ganado por las cuotas de afiliación pagadas por sus referidos directos. Estos miembros recibirán Digital Shopping Points (DSP) de Digital Shopping Mall, como se indica en la clasificación.",
+        info_rewards_verification_note:
+          "Las recompensas se basan en referidos que hayan pagado la cuota de verificación de la cuenta. No se exige la aprobación completa de KYC para optar a las recompensas de la clasificación.",
         info_description: "La clasificación se basa en el número de referidos directos (nivel 1) que tiene cada patrocinador. Cuantos más referidos directos tengas, mayor será tu posición en la clasificación."
       }
     },
@@ -12783,6 +12824,10 @@ const translationsBase = {
           success_edit: "Ihre Bewerbung wurde erfolgreich aktualisiert.",
           already_participating: "ℹ️ Sie haben bereits eine Bewerbung für diesen Wettbewerb eingereicht. Sie können nur eine Bewerbung pro Wettbewerb einreichen.",
           edit_participation: "Meine Bewerbung bearbeiten",
+          delete_submission: "Einreichung löschen",
+          delete_submission_confirm:
+            "Dadurch wird deine eingereichte Inhalte für diesen Wettbewerb dauerhaft entfernt. Du kannst später erneut einreichen, solange die Frist offen ist.",
+          delete_success: "Deine Einreichung wurde entfernt.",
           click_add_images: "Klicken Sie, um Bilder hinzuzufügen",
           preparing: "Vorbereitung...",
           checking_files: "Dateien werden überprüft...",
@@ -12843,8 +12888,8 @@ const translationsBase = {
       },
       leaderboard: {
         title: "Sponsor-Rangliste",
-        subtitle: "Die 10 besten Sponsoren mit den meisten direkten Empfehlungen",
-        mfm_subtitle: "Die 10 besten MFM-Sponsoren mit den meisten direkten Empfehlungen, die MFM gekauft haben",
+        subtitle: "Die 10 Mitglieder mit den höchsten Provisionen aus Verifizierungsgebühren (direkte Empfehlungen)",
+        mfm_subtitle: "Die 10 Mitglieder mit den höchsten MFM-Provisionen aus Mitgliedsbeiträgen (direkte Empfehlungen)",
         regular_tab: "Allgemeine Rangliste",
         mfm_tab: "MFM-Rangliste",
         referrals: "Empfehlungen",
@@ -12852,6 +12897,12 @@ const translationsBase = {
         champion: "Champion",
         no_data: "Keine Sponsoren gefunden",
         info_title: "Wie funktioniert die Rangliste?",
+        info_description_general:
+          "Die Rangliste zeigt die 10 Mitglieder mit den höchsten Provisionen aus Verifizierungsgebühren ihrer direkten Empfehlungen. Diese Mitglieder erhalten Digital Shopping Points (DSP) vom Digital Shopping Mall, wie in der Rangliste angezeigt.",
+        info_description_mfm:
+          "Die Rangliste zeigt die 10 Mitglieder mit den höchsten MyHigh5 Founding Member (MFM)-Provisionen aus Mitgliedsbeiträgen ihrer direkten Empfehlungen. Diese Mitglieder erhalten Digital Shopping Points (DSP) vom Digital Shopping Mall, wie in der Rangliste angezeigt.",
+        info_rewards_verification_note:
+          "Die Prämien richten sich nach Empfehlungen, die die Kontoverifizierungsgebühr bezahlt haben. Eine vollständige KYC-Freigabe ist für die Prämienberechtigung nicht erforderlich.",
         info_description: "Die Rangliste basiert auf der Anzahl der direkten Empfehlungen (Stufe 1), die jeder Sponsor hat. Je mehr direkte Empfehlungen Sie haben, desto höher ist Ihre Position in der Rangliste."
       }
     },

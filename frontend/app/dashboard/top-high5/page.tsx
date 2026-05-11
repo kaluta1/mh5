@@ -568,6 +568,8 @@ export default function TopHigh5Page() {
                                 <td className="px-3 py-2">
                                   <Link
                                     href={`/dashboard/contests/${contest.contest_id}/contestant/${row.contestant_id}?entryType=nomination`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
                                     className="inline-flex items-center gap-1 text-gray-900 dark:text-white font-medium hover:text-myhigh5-primary transition-colors"
                                     title={t("dashboard.myhigh5.open_top_entry") || "Watch this entry"}
                                     aria-label={t("dashboard.myhigh5.open_top_entry") || "Watch this entry"}

@@ -172,11 +172,11 @@ function ContestsPageContent() {
 
   const participationLevelOptions = useMemo(() => {
     type Opt = { value: string; label: string; icon: GeographyLevelIconKey }
+    // City first per product UX; continental hidden from UI (filter still defaults to "all continents" elsewhere).
     const full: Opt[] = [
+      { value: 'city', label: t('dashboard.contests.level_city') || 'City', icon: 'city' },
       { value: 'country', label: t('dashboard.contests.country') || 'Country', icon: 'country' },
       { value: 'regional', label: t('dashboard.contests.regional') || 'Regional', icon: 'regional' },
-      { value: 'city', label: t('dashboard.contests.level_city') || 'City', icon: 'city' },
-      { value: 'continental', label: t('dashboard.contests.continental') || 'Continental', icon: 'continent' },
       { value: 'global', label: t('dashboard.contests.global') || 'Global', icon: 'global' },
     ]
     const slim: Opt[] = [
@@ -199,8 +199,12 @@ function ContestsPageContent() {
   }, [showVoteGeographyLevels, nominationMigrationLevel])
 
   useEffect(() => {
-    if (categoryTab !== 'participations' || showVoteGeographyLevels) return
-    if (['country', 'continental', 'global'].includes(filterLevel)) {
+    if (categoryTab !== 'participations') return
+    if (!showVoteGeographyLevels && ['country', 'continental', 'global'].includes(filterLevel)) {
+      setFilterLevel('all')
+      return
+    }
+    if (showVoteGeographyLevels && filterLevel === 'continental') {
       setFilterLevel('all')
     }
   }, [categoryTab, filterLevel, showVoteGeographyLevels])

@@ -362,7 +362,12 @@ export default function MyHigh5Page() {
       q.set('roundId', String(archiveRoundId))
     }
     const qs = q.toString()
-    router.push(`/dashboard/contests/${contestId}/contestant/${contestantId}${qs ? `?${qs}` : ''}`)
+    const path = `/dashboard/contests/${contestId}/contestant/${contestantId}${qs ? `?${qs}` : ''}`
+    if (typeof window !== 'undefined') {
+      window.open(`${window.location.origin}${path}`, '_blank', 'noopener,noreferrer')
+    } else {
+      router.push(path)
+    }
   }
 
   const formatDate = (dateString: string) => {

@@ -69,7 +69,7 @@ export default function LeaderboardPage() {
         : '/api/v1/affiliates/leaderboard'
       
       const params = { limit: 10 }
-      const cacheKey = endpoint
+      const cacheKey = `${endpoint}:${leaderboardType}`
 
       // Vérifier le cache
       const cached = cacheService.get<TopSponsor[]>(cacheKey, params)
@@ -154,8 +154,8 @@ export default function LeaderboardPage() {
               </h1>
               <p className="text-gray-600 dark:text-gray-400 mt-1">
                 {leaderboardType === 'mfm'
-                  ? (t('dashboard.leaderboard.mfm_subtitle') || 'Les 10 meilleurs sponsors MFM avec le plus de référents directs ayant acheté MFM')
-                  : (t('dashboard.leaderboard.subtitle') || 'Les 10 meilleurs sponsors avec le plus de référents directs')
+                  ? (t('dashboard.leaderboard.mfm_subtitle') || 'Top 10 by MFM commission from direct referrals')
+                  : (t('dashboard.leaderboard.subtitle') || 'Top 10 by verification fee commission from direct referrals')
                 }
               </p>
             </div>
@@ -314,8 +314,15 @@ export default function LeaderboardPage() {
               <h3 className="font-semibold text-blue-900 dark:text-blue-300 mb-1">
                 {t('dashboard.leaderboard.info_title') || 'Comment fonctionne le classement ?'}
               </h3>
-              <p className="text-sm text-blue-800 dark:text-blue-200/80">
-                {t('dashboard.leaderboard.info_description') || 'Le classement est basé sur le nombre de référents directs (niveau 1) de chaque sponsor. Plus vous avez de référents directs, plus votre position dans le classement est élevée.'}
+              <p className="text-sm text-blue-800 dark:text-blue-200/80 space-y-2">
+                <span className="block">
+                  {leaderboardType === 'mfm'
+                    ? t('dashboard.leaderboard.info_description_mfm')
+                    : t('dashboard.leaderboard.info_description_general')}
+                </span>
+                <span className="block pt-2 border-t border-blue-200/60 dark:border-blue-700/40 text-blue-900/90 dark:text-blue-100/90">
+                  {t('dashboard.leaderboard.info_rewards_verification_note')}
+                </span>
               </p>
             </div>
           </div>

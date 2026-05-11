@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Trash2 } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { useLanguage } from '@/contexts/language-context'
 import { useToast } from '@/components/ui/toast'
@@ -20,6 +20,7 @@ import {
   ContentVerificationDialog,
   BrandVerificationDialog
 } from '@/components/verification'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 
 export default function ApplyToContestPage() {
   const { t } = useLanguage()
@@ -45,6 +46,8 @@ export default function ApplyToContestPage() {
   const [isEditingParticipation, setIsEditingParticipation] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitSuccess, setSubmitSuccess] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [isDeletingSubmission, setIsDeletingSubmission] = useState(false)
   const [timeRemaining, setTimeRemaining] = useState<string>('')
   const [timeValues, setTimeValues] = useState<{ days: number; hours: number; minutes: number; seconds: number; isClosed: boolean; isNA: boolean } | null>(null)
   const [existingParticipationData, setExistingParticipationData] = useState<any>(null)
@@ -471,6 +474,30 @@ export default function ApplyToContestPage() {
     }
   }
 
+  const handleConfirmDeleteSubmission = async () => {
+    if (!participantId) return
+    setIsDeletingSubmission(true)
+    try {
+      await contestService.deleteContestant(participantId)
+      addToast(
+        t('dashboard.contests.participation_form.delete_success') || 'Your submission was removed.',
+        'success',
+      )
+      window.dispatchEvent(new Event('vote-changed'))
+      router.push('/dashboard/contests')
+    } catch (err: unknown) {
+      const detail =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+        (err as Error)?.message ||
+        t('common.delete_error') ||
+        'Could not delete submission.'
+      addToast(String(detail), 'error')
+    } finally {
+      setIsDeletingSubmission(false)
+      setShowDeleteConfirm(false)
+    }
+  }
+
   const handleParticipationSubmit = async (
     title: string,
     description: string,
@@ -710,14 +737,26 @@ export default function ApplyToContestPage() {
           {/* Header */}
           {(!userAlreadyParticipating || isEditingParticipation) && !submitSuccess && (
             <>
-              <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-1 sm:mb-2">
-                {isEditingParticipation
-                  ? (t('dashboard.contests.participation_form.edit_title') || 'Edit a Contestant')
-                  : isNomination
-                    ? (t('dashboard.contests.participation_form.nominate_title') || 'Nominate a Contestant')
-                    : (t('dashboard.contests.participation_form.title') || 'Participate in Contest')
-                }
-              </h2>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4 mb-1 sm:mb-2">
+                <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
+                  {isEditingParticipation
+                    ? (t('dashboard.contests.participation_form.edit_title') || 'Edit a Contestant')
+                    : isNomination
+                      ? (t('dashboard.contests.participation_form.nominate_title') || 'Nominate a Contestant')
+                      : (t('dashboard.contests.participation_form.title') || 'Participate in Contest')
+                  }
+                </h2>
+                {isEditingParticipation && participantId ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 transition hover:bg-red-100 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200 dark:hover:bg-red-900/50"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    {t('dashboard.contests.participation_form.delete_submission') || 'Delete submission'}
+                  </button>
+                ) : null}
+              </div>
               <p className="text-gray-500 dark:text-gray-400 mb-3 sm:mb-4 text-xs sm:text-sm">
                 {isEditingParticipation
                   ? (t('dashboard.contests.participation_form.edit_description') || 'Update your submission details')
@@ -848,6 +887,20 @@ export default function ApplyToContestPage() {
       </div>
 
       {/* Verification Dialogs (participation only) */}
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        onOpenChange={setShowDeleteConfirm}
+        title={t('dashboard.contests.participation_form.delete_submission') || 'Delete submission'}
+        message={
+          t('dashboard.contests.participation_form.delete_submission_confirm') ||
+          'This permanently removes your submitted content for this contest. You can submit again later if submissions are still open.'
+        }
+        confirmText={t('dashboard.contests.delete') || 'Delete'}
+        cancelText={t('common.cancel') || 'Cancel'}
+        onConfirm={handleConfirmDeleteSubmission}
+        isLoading={isDeletingSubmission}
+        isDangerous
+      />
       {contest && !isNomination && (
         <>
           <VerificationRequirementsDialog
