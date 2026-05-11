@@ -721,6 +721,11 @@ def get_my_votes(
     current_user: User = Depends(deps.get_current_active_user),
     season_id: Optional[int] = Query(None, description="Filter by season_id"),
     contest_id: Optional[int] = Query(None, description="Filter by contest_id"),
+    round_id: Optional[int] = Query(
+        None,
+        alias="roundId",
+        description="Only votes whose season belongs to this calendar round (e.g. historical MyHigh5)",
+    ),
     level: Optional[str] = Query(None, description="Filter by season level: country, regional, continent, global"),
     include_empty_buckets: bool = Query(
         False,
@@ -792,7 +797,12 @@ def get_my_votes(
             )
         else:
             query = query.filter(ContestantVoting.contest_id == contest_id)
-    
+
+    if round_id is not None:
+        query = query.join(ContestSeason, ContestantVoting.season_id == ContestSeason.id).filter(
+            ContestSeason.round_id == round_id
+        )
+
     # Récupérer tous les votes
     all_votes = query.order_by(
         ContestantVoting.season_id,
@@ -877,6 +887,7 @@ def get_my_votes(
         and season_id is None
         and contest_id is None
         and level is None
+        and round_id is None
     )
     if inject_empty:
         link_rows = (
@@ -1102,7 +1113,12 @@ def get_my_votes_history(
     *,
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
-    contest_id: Optional[int] = Query(None, description="Filter by contest_id")
+    contest_id: Optional[int] = Query(None, description="Filter by contest_id"),
+    round_id: Optional[int] = Query(
+        None,
+        alias="roundId",
+        description="Only votes whose season belongs to this calendar round",
+    ),
 ) -> dict:
     """
     Récupère l'historique complet des votes de l'utilisateur connecté (MyHigh5).
@@ -1151,7 +1167,12 @@ def get_my_votes_history(
             )
         else:
             query = query.filter(ContestantVoting.contest_id == contest_id)
-    
+
+    if round_id is not None:
+        query = query.join(ContestSeason, ContestantVoting.season_id == ContestSeason.id).filter(
+            ContestSeason.round_id == round_id
+        )
+
     # Récupérer tous les votes, triés par bucket, season, position/date
     all_votes = query.order_by(
         ContestantVoting.vote_bucket_key,

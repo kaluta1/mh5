@@ -792,7 +792,7 @@ class ContestService {
   /**
    * Get user's high 5 votes
    */
-  async getMyHigh5Votes(level?: string, seasonId?: number): Promise<{
+  async getMyHigh5Votes(level?: string, seasonId?: number, roundId?: number): Promise<{
     seasons: Array<{
       season_id: number;
       season_level: string | null;
@@ -859,6 +859,7 @@ class ContestService {
           _t: Date.now(),
           ...(level && level !== 'all' ? { level } : {}),
           ...(typeof seasonId === 'number' ? { season_id: seasonId } : {}),
+          ...(typeof roundId === 'number' && roundId > 0 ? { roundId } : {}),
         },
         headers: { 'Cache-Control': 'no-cache' },
       });
@@ -872,7 +873,7 @@ class ContestService {
   /**
    * Get user's high 5 votes history (all votes including inactive seasons)
    */
-  async getMyHigh5VotesHistory(contestId?: number): Promise<{
+  async getMyHigh5VotesHistory(contestId?: number, roundId?: number): Promise<{
     history: Array<{
       contest_id: number;
       contest_name: string | null;
@@ -933,7 +934,10 @@ class ContestService {
           }>;
         }>
       }>('/api/v1/contestants/user/my-votes/history', {
-        params: contestId != null ? { contest_id: contestId } : undefined
+        params: {
+          ...(contestId != null ? { contest_id: contestId } : {}),
+          ...(typeof roundId === 'number' && roundId > 0 ? { roundId } : {}),
+        },
       });
       return response.data;
     } catch (error) {

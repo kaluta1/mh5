@@ -4,7 +4,7 @@ import * as React from "react"
 import { useState, useEffect, useSyncExternalStore } from "react"
 import { useLanguage } from '@/contexts/language-context'
 import { useAuth } from '@/hooks/use-auth'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useToast } from '@/components/ui/toast'
 import { contestService } from '@/services/contest-service'
 import { Hand, Trophy, MapPin, Calendar, ExternalLink, Star, History, ChevronDown, Search } from 'lucide-react'
@@ -131,6 +131,15 @@ export default function MyHigh5Page() {
   const { t } = useLanguage()
   const { user, isAuthenticated, isLoading } = useAuth()
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const archiveRoundId = React.useMemo(() => {
+    const raw = searchParams.get('round_id') ?? searchParams.get('roundId')
+    const n = raw != null && raw !== '' ? Number(raw) : NaN
+    return Number.isFinite(n) && n > 0 ? n : undefined
+  }, [searchParams])
+  /** Historical MyHigh5 from Past contests dialog: URL includes roundId (read-only, no reorder). */
+  const isReadOnly = archiveRoundId != null
+
   const { addToast } = useToast()
   
   const [seasonsData, setSeasonsData] = useState<SeasonVotes[]>([])
@@ -226,7 +235,11 @@ export default function MyHigh5Page() {
     const loadVotes = async () => {
       try {
         setPageLoading(true)
-        const response = await contestService.getMyHigh5Votes(activeLevel) as MyHigh5Response
+        const response = (await contestService.getMyHigh5Votes(
+          activeLevel,
+          undefined,
+          archiveRoundId,
+        )) as MyHigh5Response
         setSeasonsData(response.seasons || [])
       } catch (error) {
         console.error('Erreur lors du chargement des votes:', error)
@@ -239,13 +252,18 @@ export default function MyHigh5Page() {
     if (!isLoading && isAuthenticated && user) {
       loadVotes()
     }
-  }, [isLoading, isAuthenticated, user, activeLevel])
+  }, [isLoading, isAuthenticated, user, activeLevel, archiveRoundId])
 
   // Rafraîchir la liste quand un vote / remplacement est fait ailleurs (même flux que My votes)
   useEffect(() => {
     const handler = async () => {
+      if (archiveRoundId) return
       try {
-        const response = await contestService.getMyHigh5Votes(activeLevel) as MyHigh5Response
+        const response = (await contestService.getMyHigh5Votes(
+          activeLevel,
+          undefined,
+          archiveRoundId,
+        )) as MyHigh5Response
         setSeasonsData(response.seasons || [])
       } catch (error) {
         console.error('Erreur lors du rafraîchissement des votes:', error)
@@ -253,32 +271,45 @@ export default function MyHigh5Page() {
     }
     window.addEventListener('vote-changed', handler)
     return () => window.removeEventListener('vote-changed', handler)
-  }, [activeLevel])
+  }, [activeLevel, archiveRoundId])
 
-  // Charger l'historique quand on change d'onglet
+  // Charger l'historique quand on change d'onglet ou de round archive
   useEffect(() => {
     const loadHistory = async () => {
-      if (activeTab === 'history' && historyData.length === 0 && !historyLoading) {
-        try {
-          setHistoryLoading(true)
-          const response = await contestService.getMyHigh5VotesHistory() as HistoryResponse
-          setHistoryData(response.history || [])
-        } catch (error) {
-          console.error('Erreur lors du chargement de l\'historique:', error)
-          setHistoryData([])
-        } finally {
-          setHistoryLoading(false)
-        }
+      if (activeTab !== 'history') return
+      try {
+        setHistoryLoading(true)
+        const response = (await contestService.getMyHigh5VotesHistory(
+          undefined,
+          archiveRoundId,
+        )) as HistoryResponse
+        setHistoryData(response.history || [])
+      } catch (error) {
+        console.error('Erreur lors du chargement de l\'historique:', error)
+        setHistoryData([])
+      } finally {
+        setHistoryLoading(false)
       }
     }
 
     if (!isLoading && isAuthenticated && user) {
-      loadHistory()
+      void loadHistory()
     }
-  }, [activeTab, isLoading, isAuthenticated, user])
+  }, [activeTab, isLoading, isAuthenticated, user, archiveRoundId])
+
+  useEffect(() => {
+    setHistoryData([])
+  }, [archiveRoundId])
 
   const openNominatedEntry = (contestId: number, contestantId: number) => {
-    router.push(`/dashboard/contests/${contestId}/contestant/${contestantId}?entryType=nomination`)
+    const q = new URLSearchParams()
+    q.set('entryType', 'nomination')
+    if (archiveRoundId) {
+      q.set('viewOnly', 'true')
+      q.set('roundId', String(archiveRoundId))
+    }
+    const qs = q.toString()
+    router.push(`/dashboard/contests/${contestId}/contestant/${contestantId}${qs ? `?${qs}` : ''}`)
   }
 
   const formatDate = (dateString: string) => {
@@ -296,6 +327,7 @@ export default function MyHigh5Page() {
 
   // Drag and drop handlers
   const applyReorder = async (seasonIndex: number, fromIndex: number, toIndex: number) => {
+    if (isReadOnly) return
     if (fromIndex === toIndex) return
 
     const newSeasonsData = [...seasonsData]
@@ -327,7 +359,11 @@ export default function MyHigh5Page() {
     } catch (error) {
       console.error('Erreur lors de la sauvegarde de l\'ordre:', error)
       addToast(t('dashboard.myhigh5.order_error') || 'Erreur lors de la sauvegarde', 'error')
-      const response = await contestService.getMyHigh5Votes(activeLevel) as MyHigh5Response
+      const response = (await contestService.getMyHigh5Votes(
+        activeLevel,
+        undefined,
+        archiveRoundId,
+      )) as MyHigh5Response
       setSeasonsData(response.seasons || [])
     } finally {
       setIsSaving(false)
@@ -372,7 +408,7 @@ export default function MyHigh5Page() {
   ) => {
     e.preventDefault()
     e.stopPropagation()
-    if (isSaving) return
+    if (isReadOnly || isSaving) return
 
     if (!touchReorderSource) {
       setTouchReorderSource({ seasonIndex, voteIndex })
@@ -637,10 +673,24 @@ export default function MyHigh5Page() {
             {t('dashboard.myhigh5.title') || 'MyHigh5'}
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
-            {t('dashboard.myhigh5.description') || 'Vos 5 votes par concours et par saison — chaque catégorie apparaît dans sa propre section.'}
+            {isReadOnly
+              ? (t('dashboard.myhigh5.archive_description') ||
+                'Your MyHigh5 votes for this contest period (read only).')
+              : (t('dashboard.myhigh5.description') ||
+                'Vos 5 votes par concours et par saison — chaque catégorie apparaît dans sa propre section.')}
           </p>
         </div>
       </div>
+
+      {isReadOnly && (
+        <div
+          role="status"
+          className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-100"
+        >
+          {t('dashboard.myhigh5.archive_readonly_banner') ||
+            'You are viewing a past contest period. This page is read-only; reordering is disabled.'}
+        </div>
+      )}
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -693,6 +743,7 @@ export default function MyHigh5Page() {
           </div>
 
           {/* Hint explicatif */}
+          {!isReadOnly ? (
           <div className="px-4 py-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/50 rounded-lg space-y-1">
             <p className="text-sm text-blue-700 dark:text-blue-300">
               {t('dashboard.myhigh5.hint_categories') || 'Only categories where you have cast at least one vote are listed. Click a section to expand your votes.'}
@@ -715,6 +766,7 @@ export default function MyHigh5Page() {
               </p>
             )}
           </div>
+          ) : null}
 
           {/* Votes by Season */}
           {filteredSeasonsData.length === 0 ? (
@@ -730,7 +782,7 @@ export default function MyHigh5Page() {
               ? (t('dashboard.myhigh5.no_search_results_description') || 'Try another category, contest, or nominee name.')
               : (t('dashboard.myhigh5.no_votes_description') || "You haven’t voted for any nominators yet. Explore the nominations to vote!")}
           </p>
-          {!categorySearch.trim() && (
+          {!categorySearch.trim() && !isReadOnly && (
             <Button
               onClick={() => router.push('/dashboard/contests')}
               className="bg-gradient-to-r from-myhigh5-primary to-myhigh5-secondary hover:opacity-90 text-white"
@@ -799,7 +851,7 @@ export default function MyHigh5Page() {
                       </p>
                     ) : (
                       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden border border-gray-200 dark:border-gray-700">
-                        {renderVotesTable(season.votes, seasonIndex, true)}
+                        {renderVotesTable(season.votes, seasonIndex, !isReadOnly)}
                       </div>
                     )}
                   </div>

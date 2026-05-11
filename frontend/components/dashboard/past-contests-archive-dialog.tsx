@@ -253,6 +253,15 @@ export function PastContestsArchiveDialog({ open, onOpenChange, countryFallback 
                         </div>
                         <div className="flex flex-wrap gap-2">
                           <Button type="button" variant="secondary" size="sm" asChild>
+                            <Link
+                              href={`/dashboard/myhigh5?roundId=${r.id}`}
+                              onClick={() => onOpenChange(false)}
+                            >
+                              {t("dashboard.contests.past_myhigh5") || "MyHigh5"}
+                              <ExternalLink className="ml-1 h-3.5 w-3.5 opacity-70" />
+                            </Link>
+                          </Button>
+                          <Button type="button" variant="secondary" size="sm" asChild>
                             <Link href={thCountry} onClick={() => onOpenChange(false)}>
                               {t("dashboard.contests.past_top_high5_country") || "Top High5 · Country"}
                               <ExternalLink className="ml-1 h-3.5 w-3.5 opacity-70" />
