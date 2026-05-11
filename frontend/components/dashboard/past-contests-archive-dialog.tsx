@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button"
 import ApiService, { type Contest, type Round } from "@/lib/api-service"
 import { useLanguage } from "@/contexts/language-context"
 import { regionalPoolForCountry } from "@/lib/regional-pool"
-import { getActiveDashboardRoundIds } from "@/lib/contest-round-tabs"
+import { getPastArchiveExcludedRoundIds } from "@/lib/contest-round-tabs"
 
 type Props = {
   open: boolean
@@ -114,7 +114,7 @@ export function PastContestsArchiveDialog({ open, onOpenChange, countryFallback 
     }
   }, [])
 
-  const activeDashboardRoundIds = React.useMemo(() => getActiveDashboardRoundIds(catalog), [catalog])
+  const excludedFromPastIds = React.useMemo(() => getPastArchiveExcludedRoundIds(catalog), [catalog])
 
   React.useEffect(() => {
     if (!open) return
@@ -131,7 +131,7 @@ export function PastContestsArchiveDialog({ open, onOpenChange, countryFallback 
 
     const out: Round[] = []
     for (const r of catalog) {
-      if (activeDashboardRoundIds.has(Number(r.id))) continue
+      if (excludedFromPastIds.has(Number(r.id))) continue
       const b = roundDateBounds(r)
       if (!b) continue
       if (rangesOverlap(b.start, b.end, rangeStart, rangeEnd)) {
@@ -140,7 +140,7 @@ export function PastContestsArchiveDialog({ open, onOpenChange, countryFallback 
     }
     out.sort((a, b) => Number(b.id) - Number(a.id))
     return out
-  }, [catalog, dateFrom, dateTo, activeDashboardRoundIds])
+  }, [catalog, dateFrom, dateTo, excludedFromPastIds])
 
   const applyPresetDays = (days: number) => {
     const end = new Date()

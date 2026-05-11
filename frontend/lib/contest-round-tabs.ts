@@ -37,12 +37,35 @@ export function computeDisplayRounds(rounds: Round[]): Array<{ round: Round; pil
       }))
 }
 
-/** Round IDs shown as Submit / Vote on the dashboard — not "past" archive. */
-export function getActiveDashboardRoundIds(rounds: Round[]): Set<number> {
+/**
+ * Rounds to hide from the **Past** archive dialog only.
+ *
+ * - Always exclude the **live vote** round (`isRoundVotingLive`), same as the Vote tab.
+ * - Exclude **Submit** only when the round **name** matches the current calendar month/year
+ *   (no `rounds[0]` fallback): using the dashboard fallback could wrongly exclude the previous
+ *   month (e.g. April) when the current month’s round title does not match `en-US` month text.
+ */
+export function getPastArchiveExcludedRoundIds(rounds: Round[]): Set<number> {
   const ids = new Set<number>()
-  for (const { round } of computeDisplayRounds(rounds)) {
-    const id = Number(round.id)
+  if (!rounds?.length) return ids
+
+  const voteRound = rounds.find((r: Round) => isRoundVotingLive(r, rounds))
+  if (voteRound) {
+    const id = Number(voteRound.id)
     if (!Number.isNaN(id)) ids.add(id)
   }
+
+  const now = new Date()
+  const currentMonthStr = now.toLocaleDateString("en-US", { month: "long", year: "numeric" }).toLowerCase()
+  const nominationByName = rounds.find((r: Round) =>
+    String(r.name || "")
+      .toLowerCase()
+      .includes(currentMonthStr),
+  )
+  if (nominationByName) {
+    const id = Number(nominationByName.id)
+    if (!Number.isNaN(id)) ids.add(id)
+  }
+
   return ids
 }
