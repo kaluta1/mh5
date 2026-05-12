@@ -362,13 +362,11 @@ function ContestsPageContent() {
     setCommittedSearch(searchTerm)
   }
 
-  // Reset pagination when filters change
+  // Pessimistic hasMore when list params change. Do NOT depend on allContests.length — that fires
+  // after the first (and every) page load and would overwrite setHasMore from the fetch with false.
   useEffect(() => {
     setHasMore(false)
-    if (!allContests.length) {
-      setInitialLoadComplete(false)
-    }
-  }, [activeRoundId, effectiveRoundIdForFetch, categoryTab, filterCountry, filterRegion, filterContinent, nominationMigrationLevel, committedSearch, allContests.length])
+  }, [activeRoundId, effectiveRoundIdForFetch, categoryTab, filterCountry, filterRegion, filterContinent, nominationMigrationLevel, committedSearch])
 
   // 2. Fetch Contests for Selected Round (Initial load) - allow unauthenticated users
   // Use a ref to track current user id without triggering re-fetches
