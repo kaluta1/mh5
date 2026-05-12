@@ -45,6 +45,35 @@ function LoginPageContent() {
     }
   }, [searchParams])
 
+  // Email verification redirect (GET /api/v1/auth/verify-email or /share/u/verify-email)
+  useEffect(() => {
+    const verified = searchParams.get('email_verified')
+    const verifyErr = searchParams.get('email_verify_error')
+    if (verified !== '1' && !verifyErr) return
+
+    const next = new URLSearchParams(searchParams.toString())
+    next.delete('email_verified')
+    next.delete('email_verify_error')
+    const tail = next.toString()
+
+    if (verified === '1') {
+      addToast(
+        t('auth.verify_email.success_toast') || 'Your email has been verified. You can sign in.',
+        'success',
+        8000,
+      )
+    } else if (verifyErr) {
+      const msg =
+        verifyErr === 'invalid_token'
+          ? t('auth.verify_email.error_invalid') || 'This verification link is invalid or has expired.'
+          : verifyErr === 'user_not_found'
+            ? t('auth.verify_email.error_user') || 'No account was found for this link.'
+            : t('auth.verify_email.error_generic') || 'Email verification failed.'
+      addToast(msg, 'error', 10000)
+    }
+    router.replace(tail ? `/login?${tail}` : '/login', { scroll: false })
+  }, [searchParams, addToast, router, t])
+
   // Rediriger si déjà connecté
   useEffect(() => {
     if (isAuthenticated) {

@@ -208,9 +208,6 @@ def _lightweight_round_data(
             ContestModel.is_deleted == False,
         )
 
-        if contest_mode is not None:
-            query = query.filter(ContestModel.contest_mode == contest_mode)
-
         if search_term:
             search_like = f"%{search_term.lower().strip()}%"
             query = query.filter(
@@ -219,6 +216,13 @@ def _lightweight_round_data(
             )
 
         all_contests = query.order_by(ContestModel.participant_count.desc(), ContestModel.id.desc()).all()
+        if contest_mode is not None:
+            # Apply normalized filtering in Python to support enum/string drift
+            # like "ContestMode.PARTICIPATION" across environments.
+            all_contests = [
+                c for c in all_contests
+                if _normalize_contest_mode(getattr(c, "contest_mode", "participation")) == contest_mode
+            ]
         wanted_level = _normalize_contest_level(contest_level)
         if wanted_level:
             all_contests = [

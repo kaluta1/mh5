@@ -316,7 +316,20 @@ export const authService = {
 
   // Vérifier l'email avec un token
   async verifyEmail(token: string): Promise<{ message: string; email: string }> {
-    const response = await api.post(`/api/v1/auth/verify-email?token=${encodeURIComponent(token)}`)
+    const response = await api.post(
+      `/api/v1/auth/verify-email?token=${encodeURIComponent(token)}`,
+    )
+    if (response.status >= 400) {
+      const detail =
+        (response.data as { detail?: string })?.detail ||
+        (response.data as { message?: string })?.message ||
+        'Verification failed'
+      const error: Error & { response?: typeof response } = new Error(
+        typeof detail === 'string' ? detail : 'Verification failed',
+      ) as Error & { response?: typeof response }
+      error.response = response
+      throw error
+    }
     return response.data
   },
 

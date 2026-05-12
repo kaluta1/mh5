@@ -127,17 +127,21 @@ export default function CommissionsPage() {
         listParams.status = filter
       }
 
-      const statsResponse = await api.get<Record<string, number>>('/api/v1/affiliates/commissions/stats')
-      if (statsResponse.status === 200 && statsResponse.data) {
-        const statsData = statsResponse.data
-        setStats({
-          totalEarned: statsData.total_earned || 0,
-          pendingAmount: statsData.pending_amount || 0,
-          paidAmount: statsData.paid_amount || 0,
-          thisMonth: statsData.this_month || 0,
-          lastMonth: statsData.last_month || 0,
-          growthRate: statsData.growth_rate || 0,
-        })
+      try {
+        const statsResponse = await api.get<Record<string, number>>('/api/v1/affiliates/commissions/stats')
+        if (statsResponse.status === 200 && statsResponse.data) {
+          const statsData = statsResponse.data
+          setStats({
+            totalEarned: statsData.total_earned || 0,
+            pendingAmount: statsData.pending_amount || 0,
+            paidAmount: statsData.paid_amount || 0,
+            thisMonth: statsData.this_month || 0,
+            lastMonth: statsData.last_month || 0,
+            growthRate: statsData.growth_rate || 0,
+          })
+        }
+      } catch (statsError) {
+        console.warn('Commissions stats unavailable, continuing with list data', statsError)
       }
 
       const commissionsResponse = await api.get<Record<string, unknown>[]>(

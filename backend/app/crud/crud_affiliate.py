@@ -2,7 +2,7 @@ from typing import Any, Dict, Optional, List
 from datetime import datetime
 
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_
+from sqlalchemy import func, and_, cast, String
 
 from app.models.affiliate import (
     AffiliateTree, AffiliateCommission, CommissionRate,
@@ -400,29 +400,35 @@ class CRUDAffiliateCommission:
         # Début du mois dernier
         last_month = (first_day_this_month - timedelta(days=1)).replace(day=1)
         
+        # Use textual status matching to avoid runtime failures when DB enum labels
+        # drift from Python enum symbols across environments.
+        status_text = func.lower(cast(AffiliateCommission.status, String))
+        earned_statuses = ["approved", "paid"]
+        month_statuses = ["approved", "paid", "pending"]
+
         # Total gagné (toutes commissions approuvées/payées)
         total_earned = db.query(func.sum(AffiliateCommission.commission_amount)).filter(
             AffiliateCommission.user_id == user_id,
-            AffiliateCommission.status.in_([CommissionStatus.APPROVED, CommissionStatus.PAID])
+            status_text.in_(earned_statuses)
         ).scalar() or 0.0
         
         # Montant en attente
         pending_amount = db.query(func.sum(AffiliateCommission.commission_amount)).filter(
             AffiliateCommission.user_id == user_id,
-            AffiliateCommission.status == CommissionStatus.PENDING
+            status_text == "pending"
         ).scalar() or 0.0
         
         # Montant payé
         paid_amount = db.query(func.sum(AffiliateCommission.commission_amount)).filter(
             AffiliateCommission.user_id == user_id,
-            AffiliateCommission.status == CommissionStatus.PAID
+            status_text == "paid"
         ).scalar() or 0.0
         
         # Ce mois
         this_month = db.query(func.sum(AffiliateCommission.commission_amount)).filter(
             AffiliateCommission.user_id == user_id,
             AffiliateCommission.transaction_date >= first_day_this_month,
-            AffiliateCommission.status.in_([CommissionStatus.APPROVED, CommissionStatus.PAID, CommissionStatus.PENDING])
+            status_text.in_(month_statuses)
         ).scalar() or 0.0
         
         # Mois dernier
@@ -430,7 +436,7 @@ class CRUDAffiliateCommission:
             AffiliateCommission.user_id == user_id,
             AffiliateCommission.transaction_date >= last_month,
             AffiliateCommission.transaction_date < first_day_this_month,
-            AffiliateCommission.status.in_([CommissionStatus.APPROVED, CommissionStatus.PAID, CommissionStatus.PENDING])
+            status_text.in_(month_statuses)
         ).scalar() or 0.0
         
         # Taux de croissance

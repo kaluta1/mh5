@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session, joinedload
 from fastapi import Depends
@@ -14,6 +14,22 @@ from app.models.user import User
 from app.models.post import Post, PostVisibility
 
 router = APIRouter()
+
+
+@router.get("/u/verify-email")
+def share_short_verify_email(
+    token: str = Query(..., description="Email verification JWT from welcome mail"),
+    db: Session = Depends(deps.get_db),
+):
+    """
+    Short-link collision fix: some deployments rewrite `/s/u/verify-email?token=...`
+    to `/api/v1/share/u/verify-email`, which would otherwise match `/u/{username}`.
+
+    Performs the same verification as GET /api/v1/auth/verify-email and redirects to the app.
+    """
+    from app.services.email_verification import build_email_verify_redirect
+
+    return build_email_verify_redirect(db, token)
 
 
 def _get_latest_user_contestant(db: Session, user_id: int) -> Optional[Contestant]:

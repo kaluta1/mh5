@@ -2,6 +2,7 @@ from datetime import timedelta
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks, Request
+from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
@@ -16,7 +17,6 @@ from app.core.security import (
     create_password_reset_token,
     verify_password_reset_token,
     create_email_verification_token,
-    verify_email_verification_token,
     validate_access_token,
     get_user_id_from_token
 )
@@ -25,6 +25,7 @@ from app.db.session import get_db
 from app.crud import user as crud_user
 from app.api.deps import get_current_active_user
 from app.services.email import email_service
+from app.services.email_verification import verify_user_email_from_token, build_email_verify_redirect
 from app.crud.crud_login_log import crud_login_log
 from app.services.device_location import extract_login_info, get_location_info
 import logging
@@ -110,6 +111,19 @@ def register_user(
     
     return user
 
+
+@router.get("/verify-email")
+def verify_email_get(
+    *,
+    db: Session = Depends(get_db),
+    token: str = Query(..., description="Token de vérification d'email"),
+) -> RedirectResponse:
+    """
+    Same verification as POST, but via GET + redirect for email links and crawlers.
+    """
+    return build_email_verify_redirect(db, token)
+
+
 @router.post("/verify-email")
 def verify_email(
     *,
@@ -119,27 +133,18 @@ def verify_email(
     """
     Vérifier l'adresse email d'un utilisateur avec le token reçu par email.
     """
-    # Vérifier le token
-    email = verify_email_verification_token(token)
-    if not email:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Token invalide ou expiré"
-        )
-    
-    # Récupérer l'utilisateur
-    user = crud_user.get_by_email(db, email=email)
-    if not user:
+    ok, err, email = verify_user_email_from_token(db, token)
+    if not ok:
+        if err == "invalid_token":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Token invalide ou expiré",
+            )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Utilisateur non trouvé"
+            detail="Utilisateur non trouvé",
         )
-    
-    # Marquer l'email comme vérifié
-    user.email_verified = True
-    db.commit()
-    db.refresh(user)
-    
+
     return {"message": "Email vérifié avec succès", "email": email}
 
 def log_login_attempt(
