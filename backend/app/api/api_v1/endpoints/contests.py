@@ -21,9 +21,18 @@ def _normalize_contest_mode(mode: Any) -> str:
     text = str(value).strip().strip('"').strip("'")
     if not text:
         return "participation"
+    low = text.lower()
+    if low in ("nomination", "nominate"):
+        return "nomination"
+    if low in ("participation", "participant", "participate"):
+        return "participation"
     token = text.split(".")[-1].strip().lower()
-    if token in {"nomination", "participation"}:
-        return token
+    if token in {"nomination", "nominate"}:
+        return "nomination"
+    if token in {"participation", "participant", "participate"}:
+        return "participation"
+    if "nomination" in low and "participation" not in low:
+        return "nomination"
     return "participation"
 
 

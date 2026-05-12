@@ -18,6 +18,7 @@ import { LocationFilterBar } from '@/components/dashboard/location-filter-bar'
 import { getEffectiveApiUrl } from '@/lib/config'
 import { regionalPoolForCountry } from '@/lib/regional-pool'
 import { computeDisplayRounds } from '@/lib/contest-round-tabs'
+import { normalizeContestMode } from '@/lib/contest-mode'
 
 // GraphQL
 // REST API
@@ -601,11 +602,12 @@ function ContestsPageContent() {
   // Keep contest detail filters aligned with current list filters
   // so card participants_count and detail list show the same population.
   const buildContestNavParams = React.useCallback(
-    (contestStatus: unknown) => {
+    (contestStatus: unknown, contestModeFromRow?: unknown) => {
       const params = new URLSearchParams()
       if (roundIdNav) params.set('roundId', String(roundIdNav))
       const activeRoundEntry = displayRounds.find((d) => String(d.round.id) === activeRoundId)
-      if (categoryTab === 'nomination' && activeRoundEntry?.kind === 'nominate') {
+      const rowMode = normalizeContestMode(contestModeFromRow)
+      if (rowMode === 'nomination' && activeRoundEntry?.kind === 'nominate') {
         params.set('viewOnly', 'true')
       }
 
@@ -624,7 +626,7 @@ function ContestsPageContent() {
       if (filterContinent && filterContinent !== 'all') {
         params.set('continent', filterContinent)
       }
-      params.set('entryType', categoryTab === 'nomination' ? 'nomination' : 'participation')
+      params.set('entryType', rowMode)
       return params
     },
     [roundIdNav, displayRounds, activeRoundId, filterRegion, filterCountry, user?.country, shouldPassCountryNavParam, filterContinent, categoryTab]
@@ -669,7 +671,8 @@ function ContestsPageContent() {
         // to avoid showing Edit on contests/categories where user has no submission.
         currentUserParticipated: Boolean(c.currentUserParticipated === true || c.current_user_participated === true),
         currentUserContesting: Boolean(c.currentUserContesting === true || c.current_user_contesting === true),
-        topContestants: [] // Not fetching top contestants per contest in new query yet
+        topContestants: [], // Not fetching top contestants per contest in new query yet
+        contest_mode: c.contest_mode ?? null,
       }
     })
 
@@ -684,6 +687,13 @@ function ContestsPageContent() {
     if (committedSearch) {
       const lower = committedSearch.toLowerCase()
       filtered = filtered.filter(c => c.title.toLowerCase().includes(lower))
+    }
+
+    // 1b. Tab vs contest_mode: never show participation contests on Nominate or vice versa
+    if (categoryTab === 'nomination') {
+      filtered = filtered.filter((c) => normalizeContestMode((c as { contest_mode?: unknown }).contest_mode) === 'nomination')
+    } else if (categoryTab === 'participations') {
+      filtered = filtered.filter((c) => normalizeContestMode((c as { contest_mode?: unknown }).contest_mode) === 'participation')
     }
 
     // 2. Filter by Level (for participations tab)
@@ -744,12 +754,16 @@ function ContestsPageContent() {
   const activeRoundData = rounds.find((r: any) => String(r.id) === activeRoundId)
   const isRoundClosed = activeRoundData ? new Date(activeRoundData.submission_end_date + 'T23:59:59') < new Date() : false
 
-  const handleParticipate = (id: string, isEditing: boolean, roundId: string | null) => {
+  const handleParticipate = (
+    id: string,
+    isEditing: boolean,
+    roundId: string | null,
+    contestModeFromRow?: unknown,
+  ) => {
     const params = new URLSearchParams()
     if (isEditing) params.set('edit', 'true')
     if (roundId) params.set('roundId', roundId)
-    // Passer le type d'entrée selon l'onglet actif
-    const entryType = categoryTab === 'nomination' ? 'nomination' : 'participation'
+    const entryType = normalizeContestMode(contestModeFromRow) === 'nomination' ? 'nomination' : 'participation'
     params.set('entryType', entryType)
     const q = params.toString()
     router.push(`/dashboard/contests/${id}/apply${q ? `?${q}` : ''}`)
@@ -970,37 +984,41 @@ function ContestsPageContent() {
         ) : visibleContests.length > 0 ? (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6">
-              {visibleContests.map((contest: any) => (
+              {visibleContests.map((contest: any) => {
+                const rowMode = normalizeContestMode(contest.contest_mode)
+                const isNominationCard = rowMode === 'nomination'
+                return (
                 <ContestCard
                   key={contest.id}
                   {...contest}
                   canParticipate={!filterCountry || filterCountry === 'all' || filterCountry === '' || (!!user?.country && filterCountry.toLowerCase() === user.country.toLowerCase())}
                   isKycVerified={!!user?.identity_verified}
                   isFavorite={false}
-                  isNomination={categoryTab === 'nomination'}
+                  isNomination={isNominationCard}
                   contest_mode={contest.contest_mode}
-                  currentUserContesting={(categoryTab === 'nomination' ? contest.currentUserContesting : contest.currentUserParticipated) || false}
+                  currentUserContesting={(isNominationCard ? contest.currentUserContesting : contest.currentUserParticipated) || false}
                   onToggleFavorite={() => { }}
                   isRoundClosed={isRoundClosed}
                   onParticipate={() =>
                     handleParticipate(
                       contest.id,
-                      (categoryTab === 'nomination' ? contest.currentUserContesting : contest.currentUserParticipated) || false,
-                      roundIdNav
+                      (isNominationCard ? contest.currentUserContesting : contest.currentUserParticipated) || false,
+                      roundIdNav,
+                      contest.contest_mode,
                     )
                   }
                   onViewContestants={() => {
-                    const params = buildContestNavParams(contest.status)
+                    const params = buildContestNavParams(contest.status, contest.contest_mode)
                     const q = params.toString()
                     router.push(`/dashboard/contests/${contest.id}${q ? `?${q}` : ''}`)
                   }}
                   onOpenDetails={() => {
-                    const params = buildContestNavParams(contest.status)
+                    const params = buildContestNavParams(contest.status, contest.contest_mode)
                     const q = params.toString()
                     router.push(`/dashboard/contests/${contest.id}${q ? `?${q}` : ''}`)
                   }}
                 />
-              ))}
+              )})}
             </div>
 
             {/* Infinite scroll loader */}
