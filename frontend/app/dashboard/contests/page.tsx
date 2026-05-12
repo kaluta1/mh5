@@ -40,8 +40,8 @@ const PastContestsArchiveDialog = dynamic(
   { ssr: false },
 )
 
-const CONTESTS_PER_PAGE = 9 // Reduced from 12 for faster initial load
-const INITIAL_CONTESTS = 9 // 8 contests per load
+const CONTESTS_PER_PAGE = 12
+const INITIAL_CONTESTS = 12
 const CACHE_TTL = 5 * 1000 // 5 seconds cache, preventing stale states for participants
 
 // Simple in-memory cache for contests data
@@ -562,23 +562,8 @@ function ContestsPageContent() {
     }
   }, [loadingMore, hasMore, activeRoundId, effectiveRoundIdForFetch, categoryTab, filterCountry, filterRegion, filterContinent, nominationMigrationLevel, committedSearch, allContests.length])
 
-  // Intersection Observer for infinite scroll
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && hasMore && !loadingMore) {
-          loadMoreContests()
-        }
-      },
-      { threshold: 0.1 }
-    )
-
-    if (loaderRef.current) {
-      observer.observe(loaderRef.current)
-    }
-
-    return () => observer.disconnect()
-  }, [hasMore, loadingMore, loadMoreContests])
+  const loadMoreContestsRef = useRef(loadMoreContests)
+  loadMoreContestsRef.current = loadMoreContests
 
   // Cache API_BASE_URL to avoid repeated lookups
   const API_BASE_URL = useMemo(() => getEffectiveApiUrl(), [])
@@ -749,6 +734,70 @@ function ContestsPageContent() {
   const visibleContests = displayedContests.length > 0
     ? displayedContests
     : (contestsLoading ? lastDisplayedContestsRef.current : displayedContests)
+
+  // Infinite scroll: IO alone is unreliable on mobile (late ref, iOS). Add scroll/resize + rootMargin.
+  useEffect(() => {
+    const el = loaderRef.current
+    if (!el || !initialLoadComplete) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && hasMore && !loadingMore && !contestsLoading) {
+          loadMoreContestsRef.current()
+        }
+      },
+      { root: null, rootMargin: '0px 0px 35% 0px', threshold: 0 },
+    )
+
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [hasMore, loadingMore, contestsLoading, initialLoadComplete, allContests.length, visibleContests.length])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    let raf = 0
+    const check = () => {
+      if (!hasMore || loadingMore || contestsLoading) return
+      const el = loaderRef.current
+      if (!el) return
+      const rect = el.getBoundingClientRect()
+      const vh = window.innerHeight || document.documentElement?.clientHeight || 0
+      if (rect.top <= vh + 280) {
+        loadMoreContestsRef.current()
+      }
+    }
+
+    const onScrollOrResize = () => {
+      if (raf) cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(check)
+    }
+
+    window.addEventListener('scroll', onScrollOrResize, { passive: true })
+    window.addEventListener('resize', onScrollOrResize, { passive: true })
+    const t = window.setTimeout(check, 200)
+
+    return () => {
+      window.removeEventListener('scroll', onScrollOrResize)
+      window.removeEventListener('resize', onScrollOrResize)
+      if (raf) cancelAnimationFrame(raf)
+      clearTimeout(t)
+    }
+  }, [hasMore, loadingMore, contestsLoading, initialLoadComplete, allContests.length, visibleContests.length])
+
+  useEffect(() => {
+    if (!initialLoadComplete || !hasMore || loadingMore || contestsLoading) return
+    const id = window.setTimeout(() => {
+      const el = loaderRef.current
+      if (!el) return
+      const rect = el.getBoundingClientRect()
+      const vh = window.innerHeight || 0
+      if (rect.top <= vh + 320) {
+        loadMoreContestsRef.current()
+      }
+    }, 150)
+    return () => clearTimeout(id)
+  }, [initialLoadComplete, hasMore, loadingMore, contestsLoading, allContests.length, visibleContests.length])
 
   // Déterminer si le round actif est fermé (soumissions terminées)
   const activeRoundData = rounds.find((r: any) => String(r.id) === activeRoundId)
@@ -1021,8 +1070,8 @@ function ContestsPageContent() {
               )})}
             </div>
 
-            {/* Infinite scroll loader */}
-            <div ref={loaderRef} className="flex justify-center py-8">
+            {/* Infinite scroll loader — min height helps IntersectionObserver on mobile */}
+            <div ref={loaderRef} className="flex min-h-[100px] justify-center py-8" aria-hidden={!hasMore}>
               {loadingMore && (
                 <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
                   <Loader2 className="w-5 h-5 animate-spin" />
