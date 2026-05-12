@@ -1387,7 +1387,6 @@ export interface TranslationKeys {
         info_description?: string
         info_description_general?: string
         info_description_mfm?: string
-        info_rewards_verification_note?: string
         login_required?: string
         load_failed?: string
         network_error?: string
@@ -3649,8 +3648,6 @@ const translationsBase = {
           "Le classement affiche les 10 membres ayant gagné le plus de commissions sur les frais de vérification de leurs filleuls directs. Ces membres recevront des Digital Shopping Points (DSP) du Digital Shopping Mall, comme indiqué sur le classement.",
         info_description_mfm:
           "Le classement affiche les 10 membres ayant gagné le plus de commissions MyHigh5 Founding Member (MFM) sur les frais d'adhésion payés par leurs filleuls directs. Ces membres recevront des Digital Shopping Points (DSP) du Digital Shopping Mall, comme indiqué sur le classement.",
-        info_rewards_verification_note:
-          "L'éligibilité aux récompenses repose sur des filleuls ayant payé les frais de vérification du compte. Une validation KYC complète n'est pas exigée pour figurer au classement.",
         info_description: "Le classement est basé sur le nombre de référents directs (niveau 1) de chaque sponsor. Plus vous avez de référents directs, plus votre position dans le classement est élevée.",
         login_required: "Connectez-vous pour charger le classement.",
         load_failed: "Impossible de charger le classement.",
@@ -8061,8 +8058,6 @@ const translationsBase = {
           "The leaderboard displays the top 10 members who have earned the highest verification fee commissions from their direct referrals. These members will be rewarded with Digital Shopping Mall's Digital Shopping Points (DSPs), as shown on the leaderboard.",
         info_description_mfm:
           "The leaderboard displays the top 10 members who have earned the highest MyHigh5 Founding Member (MFM) commissions from membership joining fees paid by their direct referrals. These members will be rewarded with Digital Shopping Mall's Digital Shopping Points (DSPs), as shown on the leaderboard.",
-        info_rewards_verification_note:
-          "Rewards are based on referrals who have paid the account verification fee. Full KYC approval is not required for leaderboard reward eligibility.",
         info_description:
           "The leaderboard is based on the number of direct referrals (Level 1) who are verified referrals. The more direct verified referrals you have, the higher your position on the leaderboard.",
         login_required: "Sign in to load the leaderboard.",
@@ -10466,8 +10461,6 @@ const translationsBase = {
           "La clasificación muestra los 10 miembros que más comisiones por cuota de verificación hayan ganado de sus referidos directos. Estos miembros recibirán Digital Shopping Points (DSP) de Digital Shopping Mall, como se indica en la clasificación.",
         info_description_mfm:
           "La clasificación muestra los 10 miembros que más comisiones MyHigh5 Founding Member (MFM) hayan ganado por las cuotas de afiliación pagadas por sus referidos directos. Estos miembros recibirán Digital Shopping Points (DSP) de Digital Shopping Mall, como se indica en la clasificación.",
-        info_rewards_verification_note:
-          "Las recompensas se basan en referidos que hayan pagado la cuota de verificación de la cuenta. No se exige la aprobación completa de KYC para optar a las recompensas de la clasificación.",
         info_description: "La clasificación se basa en el número de referidos directos (nivel 1) que tiene cada patrocinador. Cuantos más referidos directos tengas, mayor será tu posición en la clasificación.",
         login_required: "Inicia sesión para cargar la clasificación.",
         load_failed: "No se pudo cargar la clasificación.",
@@ -12931,8 +12924,6 @@ const translationsBase = {
           "Die Rangliste zeigt die 10 Mitglieder mit den höchsten Provisionen aus Verifizierungsgebühren ihrer direkten Empfehlungen. Diese Mitglieder erhalten Digital Shopping Points (DSP) vom Digital Shopping Mall, wie in der Rangliste angezeigt.",
         info_description_mfm:
           "Die Rangliste zeigt die 10 Mitglieder mit den höchsten MyHigh5 Founding Member (MFM)-Provisionen aus Mitgliedsbeiträgen ihrer direkten Empfehlungen. Diese Mitglieder erhalten Digital Shopping Points (DSP) vom Digital Shopping Mall, wie in der Rangliste angezeigt.",
-        info_rewards_verification_note:
-          "Die Prämien richten sich nach Empfehlungen, die die Kontoverifizierungsgebühr bezahlt haben. Eine vollständige KYC-Freigabe ist für die Prämienberechtigung nicht erforderlich.",
         info_description: "Die Rangliste basiert auf der Anzahl der direkten Empfehlungen (Stufe 1), die jeder Sponsor hat. Je mehr direkte Empfehlungen Sie haben, desto höher ist Ihre Position in der Rangliste.",
         login_required: "Bitte anmelden, um die Rangliste zu laden.",
         load_failed: "Rangliste konnte nicht geladen werden.",

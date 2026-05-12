@@ -38,6 +38,30 @@ const BENEFITS = {
 
 type LeaderboardType = 'regular' | 'mfm'
 
+const DSM_LINK_TEXT = "Digital Shopping Mall's"
+const DSM_LINK_HREF = 'https://digitalshoppingmall.net'
+
+function LeaderboardHowItWorksBody({ text }: { text: string }) {
+  const idx = text.indexOf(DSM_LINK_TEXT)
+  if (idx === -1) {
+    return <>{text}</>
+  }
+  return (
+    <>
+      {text.slice(0, idx)}
+      <a
+        href={DSM_LINK_HREF}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="font-medium text-blue-900 underline decoration-blue-700/80 underline-offset-2 hover:text-blue-950 dark:text-blue-100 dark:decoration-blue-400/80 dark:hover:text-white"
+      >
+        {DSM_LINK_TEXT}
+      </a>
+      {text.slice(idx + DSM_LINK_TEXT.length)}
+    </>
+  )
+}
+
 export default function LeaderboardPage() {
   const { t, language } = useLanguage()
   const { isAuthenticated, isLoading } = useAuth()
@@ -376,15 +400,14 @@ export default function LeaderboardPage() {
               <h3 className="font-semibold text-blue-900 dark:text-blue-300 mb-1">
                 {t('dashboard.leaderboard.info_title') || 'Comment fonctionne le classement ?'}
               </h3>
-              <p className="text-sm text-blue-800 dark:text-blue-200/80 space-y-2">
-                <span className="block">
-                  {leaderboardType === 'mfm'
-                    ? t('dashboard.leaderboard.info_description_mfm')
-                    : t('dashboard.leaderboard.info_description_general')}
-                </span>
-                <span className="block pt-2 border-t border-blue-200/60 dark:border-blue-700/40 text-blue-900/90 dark:text-blue-100/90">
-                  {t('dashboard.leaderboard.info_rewards_verification_note')}
-                </span>
+              <p className="text-sm text-blue-800 dark:text-blue-200/80">
+                <LeaderboardHowItWorksBody
+                  text={
+                    leaderboardType === 'mfm'
+                      ? t('dashboard.leaderboard.info_description_mfm')
+                      : t('dashboard.leaderboard.info_description_general')
+                  }
+                />
               </p>
             </div>
           </div>
