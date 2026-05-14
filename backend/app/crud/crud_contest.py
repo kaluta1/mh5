@@ -786,10 +786,12 @@ class CRUDContest:
         season_link = None
         season = None
         season_level = None
+        _nomination_contest = _normalize_contest_mode(getattr(contest, "contest_mode", None)) == "nomination"
         display_round_for_scope = crud_round.round.resolve_display_round_id_for_contest(
             db,
             contest.id,
             round_id,
+            prefer_nomination_submit_round=_nomination_contest,
         )
         season_link, season = resolve_nomination_display_season_for_contest_round(
             db,
@@ -1559,8 +1561,12 @@ class CRUDContest:
         from app.models.contests import ContestantSeason, SeasonLevel
         from app.crud import crud_round
 
+        contest_mode_early = _normalize_contest_mode(getattr(contest_obj, "contest_mode", "participation"))
         target_round_id = crud_round.round.resolve_display_round_id_for_contest(
-            db, contest_id, round_id
+            db,
+            contest_id,
+            round_id,
+            prefer_nomination_submit_round=(contest_mode_early == "nomination"),
         )
         season_link, season = resolve_nomination_display_season_for_contest_round(
             db,
@@ -1568,7 +1574,7 @@ class CRUDContest:
             target_round_id,
         )
 
-        contest_mode = _normalize_contest_mode(getattr(contest_obj, 'contest_mode', 'participation'))
+        contest_mode = contest_mode_early
         requested_entry_type = str(entry_type or "").strip().lower()
         nomination_context = contest_mode == "nomination" or requested_entry_type == "nomination"
         country_filter_norm = str(filter_country or "").strip().lower()

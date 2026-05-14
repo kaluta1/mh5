@@ -196,17 +196,23 @@ class CRUDRound:
         return legacy is not None
 
     def resolve_display_round_id_for_contest(
-        self, db: Session, contest_id: int, round_id: Optional[int]
+        self,
+        db: Session,
+        contest_id: int,
+        round_id: Optional[int],
+        *,
+        prefer_nomination_submit_round: bool = False,
     ) -> Optional[int]:
         """
         Which calendar round to use when listing contestants for a contest.
 
         - If the client passes an explicit ``round_id`` (e.g. deep link from the grid), always
-          honor it for roster/count scoping. Rows are still restricted by ``Contestant.season_id``
-          (contest id), so a wrong id only yields an empty list — whereas ignoring the URL and
-          substituting another round hid nominations stored on the requested round when
-          ``round_contests`` was stale or missing a link.
-        - If ``round_id`` is omitted, pick the best default: voting window > submission window >
+          honor it for roster/count scoping.
+        - If ``round_id`` is omitted and ``prefer_nomination_submit_round`` is True (nomination
+          contests), prefer the current **submission** month round (``get_preferred_nomination_round_for_contest``)
+          so the API does not default to an older **voting** round that still overlaps today — that
+          mismatch hid May nominators while showing a single March-era row (wrong round).
+        - Otherwise (participation or no submit round): voting window > submission window >
           most recent started.
         """
         if round_id is not None:
@@ -220,6 +226,11 @@ class CRUDRound:
                     contest_id,
                 )
             return round_id
+
+        if prefer_nomination_submit_round:
+            pref = self.get_preferred_nomination_round_for_contest(db, contest_id)
+            if pref is not None:
+                return pref.id
 
         rounds = self.get_rounds_for_contest(db, contest_id)
         if not rounds:
