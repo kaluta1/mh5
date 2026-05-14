@@ -860,6 +860,10 @@ class CRUDContest:
             round_id,
             prefer_nomination_submit_round=_nomination_contest,
         )
+        if display_round_for_scope is None and _nomination_contest:
+            pref_r = crud_round.round.get_preferred_nomination_round_for_contest(db, contest.id)
+            if pref_r is not None:
+                display_round_for_scope = pref_r.id
         season_link, season = resolve_nomination_display_season_for_contest_round(
             db,
             contest,
@@ -1585,6 +1589,48 @@ class CRUDContest:
         
         return result
 
+    @staticmethod
+    def explicit_geo_filters_for_nomination_card(
+        filter_country: Optional[str],
+        filter_region: Optional[str],
+        filter_continent: Optional[str],
+    ) -> bool:
+        """True when list/card requests a scoped geography (must match GET contest roster)."""
+        fc = (filter_country or "").strip().lower()
+        if fc and fc not in ("", "all", "unknown", "none", "null"):
+            return True
+        fr = (filter_region or "").strip().lower()
+        if fr and fr not in ("", "all"):
+            return True
+        fco = (filter_continent or "").strip().lower()
+        if fco and fco not in ("", "all", "unknown", "none", "null"):
+            return True
+        return False
+
+    def count_nomination_roster_for_card(
+        self,
+        db: Session,
+        *,
+        contest_id: int,
+        current_user_id: Optional[int] = None,
+        filter_country: Optional[str] = None,
+        filter_continent: Optional[str] = None,
+        filter_region: Optional[str] = None,
+        entry_type: Optional[str] = None,
+        round_id: Optional[int] = None,
+    ) -> int:
+        """Dashboard card count for nominations under geo filters — same query as opened contest."""
+        data = self.get_contest_with_enriched_contestants(
+            db,
+            contest_id=contest_id,
+            current_user_id=current_user_id,
+            filter_country=filter_country,
+            filter_continent=filter_continent,
+            filter_region=filter_region,
+            entry_type=entry_type,
+            round_id=round_id,
+        )
+        return len((data or {}).get("contestants") or [])
 
     def get_contest_with_enriched_contestants(
         self, db: Session, contest_id: int, current_user_id: Optional[int] = None,
@@ -1650,6 +1696,10 @@ class CRUDContest:
             round_id,
             prefer_nomination_submit_round=(contest_mode_early == "nomination"),
         )
+        if target_round_id is None and contest_mode_early == "nomination":
+            pref_tr = crud_round.round.get_preferred_nomination_round_for_contest(db, contest_id)
+            if pref_tr is not None:
+                target_round_id = pref_tr.id
         season_link, season = resolve_nomination_display_season_for_contest_round(
             db,
             contest_obj,
@@ -2079,6 +2129,7 @@ class CRUDContest:
                 and not applied_location_filter
                 and not applied_entry_type_filter
                 and target_round_id is None
+                and contest_mode != "nomination"
             ):
                 logger.warning(f"[get_contest_with_enriched_contestants] No contestants found. Trying fallbacks...")
                 

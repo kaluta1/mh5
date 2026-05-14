@@ -1711,17 +1711,19 @@ def get_contest_contestants(
         if not contestants:
             logger.warning(f"[get_contest_contestants] No contestants found with filters. Trying fallback queries...")
             
-            # Fallback 1: Try by season_id only (no geographic filters)
-            try:
-                fallback1 = db.query(Contestant).filter(
-                    Contestant.is_deleted == False,
-                    Contestant.season_id == real_contest_id
-                ).limit(limit).all()
-                logger.info(f"[get_contest_contestants] Fallback 1 (season_id only): Found {len(fallback1)} contestants")
-                if fallback1:
-                    contestants = fallback1
-            except Exception as e:
-                logger.error(f"Error in fallback 1: {e}")
+            # Fallback 1: season_id only — never when a calendar round is requested, or nominations
+            # would temporarily load every round then filter in Python (wrong-round bleed).
+            if round_id is None and not _is_nomination_contest_round:
+                try:
+                    fallback1 = db.query(Contestant).filter(
+                        Contestant.is_deleted == False,
+                        Contestant.season_id == real_contest_id
+                    ).limit(limit).all()
+                    logger.info(f"[get_contest_contestants] Fallback 1 (season_id only): Found {len(fallback1)} contestants")
+                    if fallback1:
+                        contestants = fallback1
+                except Exception as e:
+                    logger.error(f"Error in fallback 1: {e}")
             
 
             

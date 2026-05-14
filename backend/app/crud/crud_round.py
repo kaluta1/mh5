@@ -263,7 +263,10 @@ class CRUDRound:
                         )
                         .scalar()
                     ) or 0
-                    if (ne == 0 and nc > 0) or (ne <= 1 and nc > ne):
+                    # Only jump to canonical when the requested round has *no* nominations.
+                    # (ne <= 1 and nc > ne) replaced URL rounds that still had real rows — users saw
+                    # another month's roster while ?roundId= pointed at the previous period.)
+                    if ne == 0 and nc > 0:
                         return canonical
             return round_id
 

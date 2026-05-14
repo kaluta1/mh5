@@ -325,6 +325,22 @@ def read_contests(
                 )
                 opened_rows = (opened_view_data or {}).get("contestants") or []
                 visible_participants_count = len(opened_rows)
+            elif (
+                _normalize_contest_mode(getattr(c, "contest_mode", "participation")) == "nomination"
+                and contest.explicit_geo_filters_for_nomination_card(
+                    filter_country, filter_region, filter_continent
+                )
+            ):
+                visible_participants_count = contest.count_nomination_roster_for_card(
+                    db,
+                    contest_id=c.id,
+                    current_user_id=current_user.id if current_user else None,
+                    filter_country=filter_country,
+                    filter_region=filter_region,
+                    filter_continent=filter_continent,
+                    entry_type=expected_entry_type,
+                    round_id=round_id,
+                )
 
             
             basic_contest = {

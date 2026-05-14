@@ -540,6 +540,20 @@ def _enrich_round_data(
                     for vc in valid_contests:
                         c_mode = _normalize_contest_mode(getattr(vc, "contest_mode", "participation"))
                         entry_type = "nomination" if c_mode == "nomination" else "participation"
+                        if c_mode == "nomination" and crud.contest.explicit_geo_filters_for_nomination_card(
+                            filter_country, filter_region, filter_continent
+                        ):
+                            contest_participant_counts[vc.id] = crud.contest.count_nomination_roster_for_card(
+                                db,
+                                contest_id=vc.id,
+                                current_user_id=user_id,
+                                filter_country=filter_country,
+                                filter_region=filter_region,
+                                filter_continent=filter_continent,
+                                entry_type=entry_type,
+                                round_id=round_id,
+                            )
+                            continue
                         stats = crud.contest.enrich_contest_with_stats(
                             db,
                             vc,
