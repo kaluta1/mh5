@@ -1652,18 +1652,15 @@ def get_contest_contestants(
         if has_country_filter:
             suppress_geo_filters = False
 
-        cm = (
-            str(getattr(contest, "contest_mode", "") or "").split(".")[-1].strip().lower()
-            if contest
-            else ""
+        from app.crud.crud_contest import _get_country_match_patterns, _normalize_contest_mode as _norm_cm
+
+        is_nomination_contest = bool(
+            contest and _norm_cm(getattr(contest, "contest_mode", None)) == "nomination"
         )
-        is_nomination_contest = cm == "nomination"
 
         # Apply geographic filters (nominations: match nominator_country when contestant.country is empty).
         # Always include the signed-in user's own nomination rows so list APIs match contest detail.
         if has_country_filter and not suppress_geo_filters:
-            from app.crud.crud_contest import _get_country_match_patterns
-
             pats = _get_country_match_patterns(fc) or [f"%{fc_norm}%"]
             conds = []
             for pat in pats:

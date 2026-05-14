@@ -946,6 +946,7 @@ class CRUDContest:
                     conds = []
                     for pat in patterns:
                         conds.append(Contestant.country.ilike(pat))
+                        conds.append(Contestant.nominator_country.ilike(pat))
                         conds.append(User.country.ilike(pat))
                     entries_query = entries_query.join(User).filter(or_(*conds))
             if filter_region:
@@ -998,6 +999,7 @@ class CRUDContest:
                     conds = []
                     for pat in patterns:
                         conds.append(Contestant.country.ilike(pat))
+                        conds.append(Contestant.nominator_country.ilike(pat))
                         conds.append(User.country.ilike(pat))
                     # Ensure join(User) is called before filtering on User.country
                     # But we already did a join(User) if filter_country was handled above.
@@ -2132,9 +2134,10 @@ class CRUDContest:
             votes_count_by_contestant[contestant_id] = len(votes_list)
             points_by_contestant[contestant_id] = sum(v.get("points", 0) for v in votes_list)
 
-        # Nomination: one roster row per nominator. Migration can leave multiple active
-        # contestant rows for the same user_id; keep the best-scoring row for display/ranks.
-        if contest_mode == "nomination" and contestants:
+        # Participation: collapse duplicate rows per user_id (migration artifacts), keep best score.
+        # Nominations: user_id is the nominator — they may submit many different nominees; never
+        # collapse by user_id here (that showed a single card / count of 1 for multi-nominations).
+        if contest_mode != "nomination" and contestants:
             best_by_uid: Dict[int, Contestant] = {}
             for c in contestants:
                 uid = getattr(c, "user_id", None)
@@ -2167,6 +2170,15 @@ class CRUDContest:
                 )
             )
             contestants = merged
+        elif contestants:
+            contestants = sorted(
+                contestants,
+                key=lambda c: (
+                    -points_by_contestant.get(c.id, 0),
+                    -votes_count_by_contestant.get(c.id, 0),
+                    -(c.id or 0),
+                ),
+            )
         
         ranks: Dict[int, int] = {}
         # Calculer les rangs (on ignore les rangs éventuellement stockés en base

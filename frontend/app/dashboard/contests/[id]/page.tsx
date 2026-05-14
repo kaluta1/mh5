@@ -20,6 +20,7 @@ import { HoverInfoDialog } from '@/components/dashboard/hover-info-dialog'
 import { ReportContestantDialog } from '@/components/dashboard/report-contestant-dialog'
 import { LocationFilterBar } from '@/components/dashboard/location-filter-bar'
 import { getEffectiveApiUrl } from '@/lib/config'
+import { normalizeContestMode } from '@/lib/contest-mode'
 
 interface Media {
   id: string
@@ -327,12 +328,10 @@ export default function ContestDetailPage() {
         return
       }
 
-      const contestModeRaw = contest?.contest?.contest_mode as any
-      const contestMode =
-        typeof contestModeRaw === 'string'
-          ? contestModeRaw.trim().toLowerCase()
-          : String(contestModeRaw ?? '').trim().toLowerCase()
-      const desiredEntryType = contestMode === 'nomination' ? 'nomination' : 'participation'
+      const desiredEntryType =
+        normalizeContestMode(contest?.contest?.contest_mode) === 'nomination'
+          ? 'nomination'
+          : 'participation'
       const displayRoundId =
         contest?.contest?.display_round_id ??
         contest?.contest?.active_round_id ??
@@ -363,7 +362,14 @@ export default function ContestDetailPage() {
     }
 
     computeUserEntry()
-  }, [user?.id, contestId, contest?.contest?.contest_mode, contest?.contest?.active_round_id, contest?.contest?.display_round_id])
+  }, [
+    user?.id,
+    contestId,
+    contest?.contest?.contest_mode,
+    contest?.contest?.active_round_id,
+    contest?.contest?.display_round_id,
+    contest?.active_round_id,
+  ])
 
   useEffect(() => {
     fetchContestDetails()
@@ -578,7 +584,7 @@ export default function ContestDetailPage() {
   })
 
   // Déterminer si c'est une nomination
-  const isNomination = String(contest.contest.contest_mode ?? '').split('.').pop()?.trim().toLowerCase() === 'nomination'
+  const isNomination = normalizeContestMode(contest.contest.contest_mode) === 'nomination'
   const hasNoContestants = filteredContestants.length === 0
 
   // Déterminer si l'utilisateur peut participer (pays sélectionné = son pays ou aucun filtre)

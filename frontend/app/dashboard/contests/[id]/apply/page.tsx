@@ -22,6 +22,7 @@ import {
   BrandVerificationDialog
 } from '@/components/verification'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { normalizeContestMode } from '@/lib/contest-mode'
 
 export default function ApplyToContestPage() {
   const { t } = useLanguage()
@@ -117,7 +118,7 @@ export default function ApplyToContestPage() {
 
       // Determine effective entry type based on query param (if present) or contest mode.
       // If the URL param is missing and we don't find a match, we'll retry the "other" entry type.
-      const normalizedContestMode = String(c.contest_mode ?? '').split('.').pop()?.trim().toLowerCase()
+      const normalizedContestMode = normalizeContestMode(c.contest_mode)
       let expectedEntryType = entryTypeParam || (normalizedContestMode === 'nomination' ? 'nomination' : 'participation')
       setIsNomination(expectedEntryType === 'nomination')
       // KYC hint should only be shown for participation flows.
