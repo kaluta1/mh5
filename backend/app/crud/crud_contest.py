@@ -1545,7 +1545,7 @@ class CRUDContest:
         
         # FIXED: Query contestants by the ACTIVE SEASON ID (not contest_id)
         from app.models.round import Round, round_contests
-        from sqlalchemy import or_
+        from sqlalchemy import or_, and_
         
         # Find round IDs linked to this contest
         round_ids = []
@@ -1619,12 +1619,27 @@ class CRUDContest:
         )
         # Keep contest detail roster aligned with round card counts:
         # country/city nomination views should stay round-scoped when roundId is provided.
+        # Always include the signed-in user's own nomination rows even if round_id drifted
+        # (stale URLs, migration, legacy NULL) so "Edit" and "View" stay consistent.
         nomination_country_membership_scope = False
         if target_round_id is not None and not pooled_season_membership_scope and not nomination_country_membership_scope:
-            contestants_query = contestants_query.filter(Contestant.round_id == target_round_id)
-            logger.info(
-                f"[get_contest_with_enriched_contestants] Scoping to round_id={target_round_id}"
-            )
+            if nomination_context and current_user_id:
+                my_nomination = and_(
+                    Contestant.user_id == current_user_id,
+                    Contestant.entry_type == effective_entry_type,
+                )
+                contestants_query = contestants_query.filter(
+                    or_(Contestant.round_id == target_round_id, my_nomination)
+                )
+                logger.info(
+                    f"[get_contest_with_enriched_contestants] Scoping to round_id={target_round_id} "
+                    f"or current user's nomination (user_id={current_user_id})"
+                )
+            else:
+                contestants_query = contestants_query.filter(Contestant.round_id == target_round_id)
+                logger.info(
+                    f"[get_contest_with_enriched_contestants] Scoping to round_id={target_round_id}"
+                )
 
         # Once a contest migrates beyond its start level, the visible roster is
         # the active ContestantSeason membership for that level (e.g. March top
@@ -1675,8 +1690,6 @@ class CRUDContest:
         # FILTRAGE GÉOGRAPHIQUE
         # Priorité: 1) Filtres explicites, 2) Localisation utilisateur, 3) Pas de filtre
         # =====================================================
-        from sqlalchemy import and_
-        
         def is_valid_location(value: Optional[str]) -> bool:
             if not value:
                 return False
@@ -1814,7 +1827,15 @@ class CRUDContest:
                 ))
             
             if location_conditions:
-                contestants_query = contestants_query.filter(and_(*location_conditions))
+                geo_clause = and_(*location_conditions)
+                if nomination_context and current_user_id:
+                    my_nomination = and_(
+                        Contestant.user_id == current_user_id,
+                        Contestant.entry_type == effective_entry_type,
+                    )
+                    contestants_query = contestants_query.filter(or_(geo_clause, my_nomination))
+                else:
+                    contestants_query = contestants_query.filter(geo_clause)
         
         # Exécuter la requête
         import logging
