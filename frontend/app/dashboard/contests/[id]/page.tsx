@@ -332,24 +332,27 @@ export default function ContestDetailPage() {
         normalizeContestMode(contest?.contest?.contest_mode) === 'nomination'
           ? 'nomination'
           : 'participation'
-      const displayRoundId =
-        contest?.contest?.display_round_id ??
-        contest?.contest?.active_round_id ??
-        contest?.active_round_id ??
-        null
+      const parsedUrlRound = roundIdFromUrl ? parseInt(roundIdFromUrl, 10) : NaN
+      const effectiveRoundId = Number.isFinite(parsedUrlRound)
+        ? parsedUrlRound
+        : (contest?.contest?.display_round_id ??
+            contest?.contest?.active_round_id ??
+            contest?.active_round_id ??
+            null)
 
       try {
         const userEntries = await contestService.getContestantsByContest(contestId, {
           user_id: user.id,
           skip: 0,
-          limit: 50
+          limit: 50,
+          roundId: effectiveRoundId ?? undefined,
         })
 
         const hasMatch = userEntries.some((e: any) => {
           const entryType = e?.entry_type
           const typeMatch = !entryType || entryType === desiredEntryType
           if (!typeMatch) return false
-          if (displayRoundId != null && e?.round_id != null && e.round_id !== displayRoundId) {
+          if (effectiveRoundId != null && e?.round_id != null && e.round_id !== effectiveRoundId) {
             return false
           }
           return true
@@ -365,6 +368,7 @@ export default function ContestDetailPage() {
   }, [
     user?.id,
     contestId,
+    roundIdFromUrl,
     contest?.contest?.contest_mode,
     contest?.contest?.active_round_id,
     contest?.contest?.display_round_id,

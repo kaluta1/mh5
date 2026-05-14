@@ -1505,6 +1505,11 @@ def get_contest_contestants(
     continent: str = Query(None, description="Filtrer par continent (legacy query key)"),
     city: str = Query(None, description="Filtrer par ville (legacy query key)"),
     user_id: Optional[int] = Query(None, description="Filtrer par user_id"),
+    round_id: Optional[int] = Query(
+        None,
+        alias="roundId",
+        description="When set, only contestants for this calendar round (plus legacy NULL round_id rows for the same user_id filter).",
+    ),
     current_user: Optional[User] = Depends(deps.get_current_active_user_optional)
 ) -> List[ContestantWithAuthorAndStats]:
     """
@@ -1618,6 +1623,17 @@ def get_contest_contestants(
         
         # Filter by season_id only (round_id is shared between ALL contests)
         query = query.filter(Contestant.season_id == real_contest_id)
+
+        if round_id is not None:
+            if user_id is not None:
+                query = query.filter(
+                    or_(
+                        Contestant.round_id == round_id,
+                        and_(Contestant.user_id == user_id, Contestant.round_id.is_(None)),
+                    )
+                )
+            else:
+                query = query.filter(Contestant.round_id == round_id)
 
         pooled_card_levels = frozenset(
             {"regional", "region", "continent", "continental", "global"}
@@ -1752,6 +1768,17 @@ def get_contest_contestants(
             # Apply user_id filter if specified
             if contestants and user_id:
                 contestants = [c for c in contestants if c.user_id == user_id]
+
+            if contestants and round_id is not None:
+
+                def _fallback_round_ok(c: Contestant) -> bool:
+                    if getattr(c, "round_id", None) == round_id:
+                        return True
+                    if user_id is not None and getattr(c, "user_id", None) == user_id and getattr(c, "round_id", None) is None:
+                        return True
+                    return False
+
+                contestants = [c for c in contestants if _fallback_round_ok(c)]
             
             # Load user relations for fallback results
             if contestants:

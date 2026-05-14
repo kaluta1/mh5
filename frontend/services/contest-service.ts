@@ -1210,7 +1210,15 @@ class ContestService {
    */
   async getContestantsByContest(
     contestId: string | number,
-    options?: { skip?: number; limit?: number; filterCountry?: string; filterRegion?: string; user_id?: number }
+    options?: {
+      skip?: number
+      limit?: number
+      filterCountry?: string
+      filterRegion?: string
+      user_id?: number
+      /** Calendar round; aligns list with contest detail when roundId is in the URL */
+      roundId?: number
+    }
   ): Promise<ContestantWithAuthorAndStats[]> {
     try {
       const skip = options?.skip || 0
@@ -1218,8 +1226,9 @@ class ContestService {
       const filterCountry = options?.filterCountry
       const filterRegion = options?.filterRegion
       const user_id = options?.user_id
+      const roundId = options?.roundId
 
-      const cacheKey = `/api/v1/contestants/contest/${contestId}?skip=${skip}&limit=${limit}${filterCountry ? `&filter_country=${filterCountry}` : ''}${filterRegion ? `&filter_region=${filterRegion}` : ''}${user_id ? `&user_id=${user_id}` : ''}`
+      const cacheKey = `/api/v1/contestants/contest/${contestId}?skip=${skip}&limit=${limit}${filterCountry ? `&filter_country=${filterCountry}` : ''}${filterRegion ? `&filter_region=${filterRegion}` : ''}${user_id ? `&user_id=${user_id}` : ''}${roundId != null ? `&roundId=${roundId}` : ''}`
 
       // Vérifier le cache
       const cached = cacheService.get<ContestantWithAuthorAndStats[]>(cacheKey)
@@ -1232,6 +1241,7 @@ class ContestService {
       if (filterCountry) params.filter_country = filterCountry
       if (filterRegion) params.filter_region = filterRegion
       if (user_id) params.user_id = user_id
+      if (roundId != null) params.roundId = roundId
 
       const response = await api.get<ContestantWithAuthorAndStats[]>(`/api/v1/contestants/contest/${contestId}`, { params })
 
