@@ -1682,33 +1682,24 @@ def get_contest_contestants(
             contest and _norm_cm(getattr(contest, "contest_mode", None)) == "nomination"
         )
 
-        # Apply geographic filters (nominations: match nominator_country when contestant.country is empty).
-        # Always include the signed-in user's own nomination rows so list APIs match contest detail.
-        if has_country_filter and not suppress_geo_filters:
-            pats = _get_country_match_patterns(fc) or [f"%{fc_norm}%"]
-            conds = []
-            for pat in pats:
-                conds.append(Contestant.country.ilike(pat))
-                conds.append(Contestant.nominator_country.ilike(pat))
-                conds.append(User.country.ilike(pat))
-            country_or = or_(*conds)
-            if is_nomination_contest and current_user:
-                my_nom = and_(
-                    Contestant.user_id == current_user.id,
-                    or_(
-                        Contestant.entry_type == "nomination",
-                        Contestant.entry_type.is_(None),
-                    ),
-                )
-                query = query.outerjoin(User, Contestant.user_id == User.id).filter(or_(country_or, my_nom))
-            else:
+        # Apply geographic filters. For nomination contests at country/city phase, skip geo so the
+        # roster lists everyone (otherwise only the viewer's rows matched via my_nom OR).
+        if not is_nomination_contest:
+            if has_country_filter and not suppress_geo_filters:
+                pats = _get_country_match_patterns(fc) or [f"%{fc_norm}%"]
+                conds = []
+                for pat in pats:
+                    conds.append(Contestant.country.ilike(pat))
+                    conds.append(Contestant.nominator_country.ilike(pat))
+                    conds.append(User.country.ilike(pat))
+                country_or = or_(*conds)
                 query = query.outerjoin(User, Contestant.user_id == User.id).filter(country_or)
-        if has_region_filter and not suppress_geo_filters:
-            query = query.filter(func.lower(Contestant.region) == fr_norm)
-        if has_continent_filter and not suppress_geo_filters:
-            query = query.filter(func.lower(Contestant.continent) == fco_norm)
-        if has_city_filter and not suppress_geo_filters:
-            query = query.filter(func.lower(Contestant.city) == fci_norm)
+            if has_region_filter and not suppress_geo_filters:
+                query = query.filter(func.lower(Contestant.region) == fr_norm)
+            if has_continent_filter and not suppress_geo_filters:
+                query = query.filter(func.lower(Contestant.continent) == fco_norm)
+            if has_city_filter and not suppress_geo_filters:
+                query = query.filter(func.lower(Contestant.city) == fci_norm)
         if user_id:
             query = query.filter(Contestant.user_id == user_id)
         
@@ -1744,8 +1735,13 @@ def get_contest_contestants(
 
             
             # Apply geographic filters to fallback results if we found any
-            if contestants and not suppress_geo_filters and (
-                has_country_filter or has_region_filter or has_continent_filter or has_city_filter
+            if (
+                contestants
+                and not suppress_geo_filters
+                and not is_nomination_contest
+                and (
+                    has_country_filter or has_region_filter or has_continent_filter or has_city_filter
+                )
             ):
                 original_count = len(contestants)
                 if has_country_filter:
