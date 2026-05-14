@@ -1705,6 +1705,9 @@ class CRUDContest:
         pooled_season_membership_scope = bool(
             season and season_level in ("regional", "region", "continent", "global")
         )
+        # Must be defined before widen_nomination_multi_round (that flag reads it).
+        # Intentionally False: country membership branch is disabled below.
+        nomination_country_membership_scope = False
         preview_country = _preview_country_for_nomination_multi_round(
             filter_country, filter_continent, filter_region, current_user, season_level
         )
@@ -1721,7 +1724,6 @@ class CRUDContest:
         # country/city nomination views should stay round-scoped when roundId is provided.
         # Always include the signed-in user's own nomination rows even if round_id drifted
         # (stale URLs, migration, legacy NULL) so "Edit" and "View" stay consistent.
-        nomination_country_membership_scope = False
         if target_round_id is not None and not pooled_season_membership_scope and not nomination_country_membership_scope:
             if widen_nomination_multi_round:
                 round_scope = Contestant.round_id.in_(round_ids)
