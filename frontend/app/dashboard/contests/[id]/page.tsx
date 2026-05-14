@@ -348,12 +348,17 @@ export default function ContestDetailPage() {
           roundId: effectiveRoundId ?? undefined,
         })
 
+        const isNominationContest = desiredEntryType === 'nomination'
         const hasMatch = userEntries.some((e: any) => {
           const entryType = e?.entry_type
           const typeMatch = !entryType || entryType === desiredEntryType
           if (!typeMatch) return false
-          if (effectiveRoundId != null && e?.round_id != null && e.round_id !== effectiveRoundId) {
-            return false
+          if (effectiveRoundId != null) {
+            if (isNominationContest) {
+              if (e?.round_id !== effectiveRoundId) return false
+            } else if (e?.round_id != null && e.round_id !== effectiveRoundId) {
+              return false
+            }
           }
           return true
         })

@@ -1732,9 +1732,21 @@ class CRUDContest:
             )
         # Filtrer par entry_type basé sur le contest_mode (données corrigées)
         effective_entry_type = entry_type or ('nomination' if contest_mode == 'nomination' else 'participation')
-        contestants_query = contestants_query.filter(
-            _nomination_row_entry_type_clause(effective_entry_type, contest_mode)
-        )
+        if contest_mode == "nomination":
+            # Nominator rows must remain visible even if entry_type was mis-set in legacy data.
+            if current_user_id:
+                contestants_query = contestants_query.filter(
+                    or_(
+                        _nomination_row_entry_type_clause(effective_entry_type, contest_mode),
+                        Contestant.user_id == current_user_id,
+                    )
+                )
+            else:
+                contestants_query = contestants_query.filter(
+                    _nomination_row_entry_type_clause(effective_entry_type, contest_mode)
+                )
+        else:
+            contestants_query = contestants_query.filter(Contestant.entry_type == effective_entry_type)
         logger.info(f"[get_contest_with_enriched_contestants] Querying by season_id={filter_season_id}, entry_type={effective_entry_type}")
 
         if singeli_east_africa_scope and regional_context_without_season:
@@ -1765,11 +1777,17 @@ class CRUDContest:
         # Intentionally False: country membership branch is disabled below.
         nomination_country_membership_scope = False
 
-        # Nomination rosters: one calendar round at a time (no merging all linked rounds).
-        # Include legacy rows with NULL round_id for the signed-in user only (migration).
+        # Nomination rosters (country/city): strict calendar round only — do not mix legacy
+        # NULL-round rows into a new month/round (users saw previous-round entries on new round).
+        # Participation contests keep NULL-round OR for the filtered user_id (migration).
         if target_round_id is not None and not pooled_season_membership_scope and not nomination_country_membership_scope:
             round_scope = Contestant.round_id == target_round_id
-            if nomination_context and current_user_id:
+            if contest_mode == "nomination":
+                contestants_query = contestants_query.filter(round_scope)
+                logger.info(
+                    f"[get_contest_with_enriched_contestants] Nomination roster strict round_id={target_round_id}"
+                )
+            elif nomination_context and current_user_id:
                 my_legacy_null_round = and_(
                     Contestant.user_id == current_user_id,
                     _nomination_row_entry_type_clause(effective_entry_type, contest_mode),
@@ -1778,7 +1796,7 @@ class CRUDContest:
                 contestants_query = contestants_query.filter(or_(round_scope, my_legacy_null_round))
                 logger.info(
                     f"[get_contest_with_enriched_contestants] Scoping to round_id={target_round_id} "
-                    f"or current user's legacy NULL-round nomination (user_id={current_user_id})"
+                    f"or current user's legacy NULL-round row (user_id={current_user_id})"
                 )
             else:
                 contestants_query = contestants_query.filter(round_scope)
@@ -1808,12 +1826,15 @@ class CRUDContest:
                     )
                 )
                 if target_round_id is not None:
-                    mine_q = mine_q.filter(
-                        or_(
-                            Contestant.round_id == target_round_id,
-                            and_(Contestant.user_id == current_user_id, Contestant.round_id.is_(None)),
+                    if contest_mode == "nomination":
+                        mine_q = mine_q.filter(Contestant.round_id == target_round_id)
+                    else:
+                        mine_q = mine_q.filter(
+                            or_(
+                                Contestant.round_id == target_round_id,
+                                and_(Contestant.user_id == current_user_id, Contestant.round_id.is_(None)),
+                            )
                         )
-                    )
                 my_nom_ids = [row[0] for row in mine_q.all()]
                 if my_nom_ids:
                     contestants_query = contestants_query.filter(
@@ -1834,7 +1855,13 @@ class CRUDContest:
                 contest_mode == "nomination"
                 and season_level in ("regional", "region")
             ):
-                contestants_query = contestants_query.filter(regional_voting_pools_sql_predicate())
+                pool_pred = regional_voting_pools_sql_predicate()
+                if current_user_id:
+                    contestants_query = contestants_query.filter(
+                        or_(pool_pred, Contestant.user_id == current_user_id)
+                    )
+                else:
+                    contestants_query = contestants_query.filter(pool_pred)
         elif nomination_country_membership_scope:
             # Disabled intentionally (see note above).
             pass
@@ -2005,10 +2032,13 @@ class CRUDContest:
             if location_conditions:
                 geo_clause = and_(*location_conditions)
                 if nomination_context and current_user_id:
-                    my_nomination = and_(
-                        Contestant.user_id == current_user_id,
-                        _nomination_row_entry_type_clause(effective_entry_type, contest_mode),
-                    )
+                    if contest_mode == "nomination":
+                        my_nomination = Contestant.user_id == current_user_id
+                    else:
+                        my_nomination = and_(
+                            Contestant.user_id == current_user_id,
+                            _nomination_row_entry_type_clause(effective_entry_type, contest_mode),
+                        )
                     contestants_query = contestants_query.filter(or_(geo_clause, my_nomination))
                 else:
                     contestants_query = contestants_query.filter(geo_clause)

@@ -1561,6 +1561,7 @@ def get_contest_contestants(
     from app.models.contests import Contestant
     from sqlalchemy import or_, func, and_
     from sqlalchemy.orm import joinedload
+    from app.crud.crud_contest import _normalize_contest_mode as _norm_cm_round
     import logging
     
     logger = logging.getLogger(__name__)
@@ -1624,14 +1625,21 @@ def get_contest_contestants(
         # Filter by season_id only (round_id is shared between ALL contests)
         query = query.filter(Contestant.season_id == real_contest_id)
 
+        _is_nomination_contest_round = bool(
+            contest and _norm_cm_round(getattr(contest, "contest_mode", None)) == "nomination"
+        )
         if round_id is not None:
             if user_id is not None:
-                query = query.filter(
-                    or_(
-                        Contestant.round_id == round_id,
-                        and_(Contestant.user_id == user_id, Contestant.round_id.is_(None)),
+                # Country nominations: strict calendar round (no NULL-round bleed into a new round).
+                if _is_nomination_contest_round:
+                    query = query.filter(Contestant.round_id == round_id)
+                else:
+                    query = query.filter(
+                        or_(
+                            Contestant.round_id == round_id,
+                            and_(Contestant.user_id == user_id, Contestant.round_id.is_(None)),
+                        )
                     )
-                )
             else:
                 query = query.filter(Contestant.round_id == round_id)
 
@@ -1687,7 +1695,10 @@ def get_contest_contestants(
             if is_nomination_contest and current_user:
                 my_nom = and_(
                     Contestant.user_id == current_user.id,
-                    Contestant.entry_type == "nomination",
+                    or_(
+                        Contestant.entry_type == "nomination",
+                        Contestant.entry_type.is_(None),
+                    ),
                 )
                 query = query.outerjoin(User, Contestant.user_id == User.id).filter(or_(country_or, my_nom))
             else:
@@ -1774,6 +1785,8 @@ def get_contest_contestants(
                 def _fallback_round_ok(c: Contestant) -> bool:
                     if getattr(c, "round_id", None) == round_id:
                         return True
+                    if _is_nomination_contest_round:
+                        return False
                     if user_id is not None and getattr(c, "user_id", None) == user_id and getattr(c, "round_id", None) is None:
                         return True
                     return False

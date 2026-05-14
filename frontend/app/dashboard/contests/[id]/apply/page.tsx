@@ -147,8 +147,13 @@ export default function ApplyToContestPage() {
 
         // Match by round, contest AND entry_type (strict round when roundId is in URL)
         const roundIdNum = roundIdParam ? parseInt(roundIdParam, 10) : NaN
-        const roundMatch =
-          !roundIdParam || (!Number.isNaN(roundIdNum) && pRoundId === roundIdNum)
+        const strictNomRound =
+          normalizedContestMode === 'nomination' &&
+          Boolean(roundIdParam) &&
+          Number.isFinite(roundIdNum)
+        const roundMatch = strictNomRound
+          ? pRoundId === roundIdNum
+          : !roundIdParam || (!Number.isNaN(roundIdNum) && pRoundId === roundIdNum)
         const contestMatch = !pSeasonId || pSeasonId === parseInt(contestId)
         const typeMatch = !pEntryType || pEntryType === expectedEntryType
 
@@ -178,15 +183,17 @@ export default function ApplyToContestPage() {
             // Find contestants matching round_id, contest AND entry_type; prefer newest row (re-nominations / duplicates).
             const findMatchingEntryForType = (desiredEntryType: string) => {
               const rid = roundIdParam ? parseInt(roundIdParam, 10) : NaN
+              const strictNomRound =
+                normalizedContestMode === 'nomination' &&
+                Boolean(roundIdParam) &&
+                Number.isFinite(rid)
               const matches = userContestants.filter((uc: any) => {
                 const ucRoundId = uc.round_id
                 const ucSeasonId = uc.season_id
                 const ucEntryType = uc.entry_type
-                const roundMatch =
-                  !roundIdParam ||
-                  Number.isNaN(rid) ||
-                  ucRoundId === rid ||
-                  ucRoundId == null
+                const roundMatch = strictNomRound
+                  ? ucRoundId === rid
+                  : !roundIdParam || Number.isNaN(rid) || ucRoundId === rid || ucRoundId == null
                 const contestMatch = !ucSeasonId || ucSeasonId === parseInt(contestId)
                 const typeMatch = !ucEntryType || ucEntryType === desiredEntryType
                 return roundMatch && contestMatch && typeMatch
@@ -722,13 +729,14 @@ export default function ApplyToContestPage() {
           const userContestants = await contestService.getContestantsByContest(contestId, { user_id: user.id, skip: 0, limit: 50 })
           const targetRoundId = roundIdParam ? parseInt(roundIdParam, 10) : undefined
           const expectedType = isNomination ? 'nomination' : 'participation'
+          const strictNomRoundRecovery =
+            isNomination && targetRoundId != null && Number.isFinite(targetRoundId)
           const candidates = userContestants.filter((uc: any) => {
             const typeMatch = !uc?.entry_type || uc.entry_type === expectedType
             const contestMatch = !uc?.season_id || uc.season_id === parseInt(contestId)
-            const roundMatch =
-              !targetRoundId ||
-              uc?.round_id === targetRoundId ||
-              uc?.round_id == null
+            const roundMatch = strictNomRoundRecovery
+              ? uc?.round_id === targetRoundId
+              : !targetRoundId || uc?.round_id === targetRoundId || uc?.round_id == null
             return typeMatch && contestMatch && roundMatch
           })
           const matched = candidates.reduce((best: any, uc: any) => {
