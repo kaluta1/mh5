@@ -248,36 +248,10 @@ export default function ContestDetailPage() {
       }
 
       const rawContestants = (c.contestants || []) as any[]
-      const contestModeForDedupe = String(
-        c.contest_mode ?? c?.contest?.contest_mode ?? ''
-      )
-        .split('.')
-        .pop()
-        ?.trim()
-        .toLowerCase() || ''
-      let listForMap = rawContestants
-      if (contestModeForDedupe === 'nomination') {
-        const seenUid = new Set<number>()
-        listForMap = rawContestants
-          .slice()
-          .sort((a: any, b: any) => {
-            const dv = (Number(b.votes_count) || 0) - (Number(a.votes_count) || 0)
-            if (dv !== 0) return dv
-            const dp = (Number(b.total_points) || 0) - (Number(a.total_points) || 0)
-            if (dp !== 0) return dp
-            return (Number(b.id) || 0) - (Number(a.id) || 0)
-          })
-          .filter((ct: any) => {
-            const uid = ct.user_id
-            if (uid == null || Number.isNaN(Number(uid))) return true
-            const n = Number(uid)
-            if (seenUid.has(n)) return false
-            seenUid.add(n)
-            return true
-          })
-      }
+      // Do not dedupe nominations by user_id: for nominations, user_id is the nominator, so every
+      // row from the same person would collapse to a single card and counts would stay at 1.
 
-      const mappedContestants: Contestant[] = listForMap.map((ct: any, index: number) => {
+      const mappedContestants: Contestant[] = rawContestants.map((ct: any, index: number) => {
         const images = parseMediaIds(ct.image_media_ids, 'image') // snake_case from python
         const videos = parseMediaIds(ct.video_media_ids, 'video')
         return {
@@ -364,7 +338,6 @@ export default function ContestDetailPage() {
         contest?.contest?.active_round_id ??
         contest?.active_round_id ??
         null
-      const seasonId = parseInt(contestId)
 
       try {
         const userEntries = await contestService.getContestantsByContest(contestId, {
@@ -375,15 +348,12 @@ export default function ContestDetailPage() {
 
         const hasMatch = userEntries.some((e: any) => {
           const entryType = e?.entry_type
-          // If the backend doesn't provide entry_type, fall back to "any entry matches".
           const typeMatch = !entryType || entryType === desiredEntryType
           if (!typeMatch) return false
-
-          const seasonMatch = e?.season_id ? e.season_id === seasonId : true
-          if (!seasonMatch) return false
-
-          const roundMatch = displayRoundId != null ? e?.round_id === displayRoundId : true
-          return roundMatch
+          if (displayRoundId != null && e?.round_id != null && e.round_id !== displayRoundId) {
+            return false
+          }
+          return true
         })
 
         setUserHasEntry(hasMatch)
@@ -405,8 +375,15 @@ export default function ContestDetailPage() {
     const onVoteChanged = () => {
       void fetchContestDetails({ silent: true })
     }
+    const onContestantSubmitted = () => {
+      void fetchContestDetails({ silent: true })
+    }
     window.addEventListener('vote-changed', onVoteChanged)
-    return () => window.removeEventListener('vote-changed', onVoteChanged)
+    window.addEventListener('contestant-submitted', onContestantSubmitted)
+    return () => {
+      window.removeEventListener('vote-changed', onVoteChanged)
+      window.removeEventListener('contestant-submitted', onContestantSubmitted)
+    }
   }, [fetchContestDetails])
 
   const markContestantVotedInState = React.useCallback((contestantId: string) => {

@@ -83,28 +83,7 @@ export default function ContestantsListPage() {
       setContestName(data.name || '')
       setContestMode(String(data.contest_mode || '').split('.').pop()?.trim().toLowerCase() || 'participation')
       setActiveRoundId(data.display_round_id ?? data.active_round_id ?? null)
-      const mode = String(data.contest_mode || '').split('.').pop()?.trim().toLowerCase() || ''
-      let cts: ContestantData[] = data.contestants || []
-      if (mode === 'nomination' && Array.isArray(cts) && cts.length > 0) {
-        const seen = new Set<number>()
-        cts = cts
-          .slice()
-          .sort((a, b) => {
-            const dv = (Number(b.votes_count) || 0) - (Number(a.votes_count) || 0)
-            if (dv !== 0) return dv
-            const dp = (Number(b.total_points) || 0) - (Number(a.total_points) || 0)
-            if (dp !== 0) return dp
-            return (Number(b.id) || 0) - (Number(a.id) || 0)
-          })
-          .filter((c) => {
-            const uid = c.user_id
-            if (uid == null || Number.isNaN(Number(uid))) return true
-            const n = Number(uid)
-            if (seen.has(n)) return false
-            seen.add(n)
-            return true
-          })
-      }
+      const cts: ContestantData[] = data.contestants || []
       setAllContestants(viewOnly ? cts.map((c) => ({ ...c, can_vote: false })) : cts)
       const countries = new Set<string>()
       cts.forEach((c: ContestantData) => { if (c.author_country) countries.add(c.author_country) })

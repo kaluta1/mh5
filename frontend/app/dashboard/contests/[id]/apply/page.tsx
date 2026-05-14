@@ -9,6 +9,7 @@ import { useToast } from '@/components/ui/toast'
 
 import { ParticipationForm } from '@/components/dashboard/participation-form'
 import { contestService } from '@/services/contest-service'
+import { cacheService } from '@/lib/cache-service'
 // REST API
 import ApiService from '@/lib/api-service'
 import { getRoundNominationDeadlineMs } from '@/lib/nomination-deadline'
@@ -558,6 +559,14 @@ export default function ApplyToContestPage() {
 
       setSubmitSuccess(true)
       setUserAlreadyParticipating(true)
+
+      // Bust client cache so contest detail / lists refetch fresh nominee counts and rows.
+      try {
+        cacheService.invalidate(undefined, `contestants/contest/${contestId}`)
+      } catch {
+        /* ignore */
+      }
+      window.dispatchEvent(new Event('contestant-submitted'))
 
       // Mettre à jour les données existantes avec les nouvelles valeurs
       if (isEditingParticipation) {

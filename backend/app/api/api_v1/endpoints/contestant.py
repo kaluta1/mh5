@@ -85,7 +85,11 @@ def _clean_video_url(value: str) -> str:
 
 
 def _normalize_contest_mode(mode: Any) -> str:
-    """Normalize contest_mode from enum/string variants to nomination/participation."""
+    """Normalize contest_mode from enum/string variants to nomination/participation.
+
+    Keep in sync with contests.py so MyHigh5 tab filters match contest cards (nominate vs
+    nomination strings, enum reprs, etc.).
+    """
     if mode is None:
         return "participation"
 
@@ -94,12 +98,40 @@ def _normalize_contest_mode(mode: Any) -> str:
     if not text:
         return "participation"
 
-    # Handle values like "ContestMode.NOMINATION"
+    low = text.lower()
+    if low in ("nomination", "nominate"):
+        return "nomination"
+    if low in ("participation", "participant", "participate"):
+        return "participation"
+
     token = text.split(".")[-1].strip().lower()
-    if token in {"nomination", "participation"}:
-        return token
+    if token in {"nomination", "nominate"}:
+        return "nomination"
+    if token in {"participation", "participant", "participate"}:
+        return "participation"
+    if "nomination" in low and "participation" not in low:
+        return "nomination"
 
     return "participation"
+
+
+def _normalize_video_media_ids_for_dedup(blob: Any) -> str:
+    """Stable string for comparing nomination video payloads (idempotent double-submit)."""
+    if blob is None:
+        return ""
+    raw = blob if isinstance(blob, str) else str(blob)
+    raw = raw.strip()
+    if not raw:
+        return ""
+    try:
+        data = json.loads(raw)
+        if isinstance(data, list):
+            return json.dumps(sorted(str(x).strip() for x in data if x is not None))
+        if isinstance(data, dict):
+            return json.dumps(data, sort_keys=True)
+        return raw.lower()
+    except json.JSONDecodeError:
+        return raw.lower()
 
 
 def _canonicalize_social_media_url(url: str) -> Optional[str]:
@@ -855,12 +887,12 @@ def get_my_votes(
 
         season_level = _level_value(vote.season) or ""
         contest_for_vote = _contest_for_vote(vote)
-        contest_mode = str(
-            getattr(contest_for_vote, "contest_mode", "") or ""
-        ).split(".")[-1].strip().lower()
+        contest_mode_norm = _normalize_contest_mode(
+            getattr(contest_for_vote, "contest_mode", None) if contest_for_vote else None
+        )
 
         effective_level = season_level
-        if contest_mode == "nomination" and season_level == "city":
+        if contest_mode_norm == "nomination" and season_level == "city":
             # Nomination country votes can be stored on city rows internally; MyHigh5 UX
             # treats those as Country. Do not let the contest/category level override the
             # vote season, or country votes disappear into Regional/other tabs.
@@ -2096,24 +2128,69 @@ def create_contestant(
         contest_mode_value = _normalize_contest_mode(contest_for_mode.contest_mode)
     submission_entry_type = "nomination" if contest_mode_value == "nomination" else "participation"
     
-    # Vérifier que l'utilisateur n'a pas déjà une candidature POUR CE ROUND ET CE CONTEST
-    # Un seul entry par contest par round (peu importe le type nomination/participation)
-    existing = crud_contestant.get_by_round_and_user(
-        db, target_round_id, current_user.id, season_id=season_id
-    )
-    if existing:
-        # Idempotent behavior: if submission already exists for this round/contest,
-        # return it as success so frontend can open/edit instead of hard-failing with 400.
-        return ContestantSubmissionResponse(
-            id=existing.id,
-            season_id=existing.season_id,
-            round_id=existing.round_id,
-            user_id=existing.user_id,
-            title=existing.title,
-            description=existing.description,
-            registration_date=existing.registration_date,
-            message="Submission already exists for this round. Returning existing submission."
+    # Participation: one submission per user per round + contest (season_id stores contest.id).
+    # Nominations: user_id is the nominator — they may nominate multiple different people in the
+    # same round/contest. Only short-circuit true double-submit (same video URLs or same title
+    # when no video), not "any prior nomination".
+    if submission_entry_type == "nomination":
+        vid_norm = _normalize_video_media_ids_for_dedup(getattr(contestant_data, "video_media_ids", None))
+        nomination_base = (
+            db.query(Contestant)
+            .filter(
+                Contestant.round_id == target_round_id,
+                Contestant.user_id == current_user.id,
+                Contestant.season_id == season_id,
+                Contestant.is_deleted == False,
+                Contestant.entry_type == "nomination",
+            )
         )
+        if vid_norm:
+            for row in nomination_base.all():
+                if _normalize_video_media_ids_for_dedup(row.video_media_ids) == vid_norm:
+                    return ContestantSubmissionResponse(
+                        id=row.id,
+                        season_id=row.season_id,
+                        round_id=row.round_id,
+                        user_id=row.user_id,
+                        title=row.title,
+                        description=row.description,
+                        registration_date=row.registration_date,
+                        message="Submission already exists for this round. Returning existing submission.",
+                    )
+        else:
+            title_key = (getattr(contestant_data, "title", None) or "").strip().lower()
+            if title_key:
+                for row in nomination_base.all():
+                    if (row.title or "").strip().lower() == title_key:
+                        return ContestantSubmissionResponse(
+                            id=row.id,
+                            season_id=row.season_id,
+                            round_id=row.round_id,
+                            user_id=row.user_id,
+                            title=row.title,
+                            description=row.description,
+                            registration_date=row.registration_date,
+                            message="Submission already exists for this round. Returning existing submission.",
+                        )
+    else:
+        existing = crud_contestant.get_by_round_and_user(
+            db,
+            target_round_id,
+            current_user.id,
+            entry_type=submission_entry_type,
+            season_id=season_id,
+        )
+        if existing:
+            return ContestantSubmissionResponse(
+                id=existing.id,
+                season_id=existing.season_id,
+                round_id=existing.round_id,
+                user_id=existing.user_id,
+                title=existing.title,
+                description=existing.description,
+                registration_date=existing.registration_date,
+                message="Submission already exists for this round. Returning existing submission.",
+            )
 
     from app.services.contest_entry_eligibility import raise_if_user_missing_contest_entry_requirements
     from app.models.contest import Contest as ContestModelForEligibility
