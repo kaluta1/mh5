@@ -1,7 +1,7 @@
 from typing import List, Optional, Union, Dict, Any
 import re
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from datetime import date, datetime, timedelta
 import calendar
 
@@ -238,12 +238,17 @@ class CRUDRound:
                 if canonical is not None and canonical != round_id:
                     from app.models.contests import Contestant
 
+                    # Align with roster counts: legacy rows may have entry_type NULL for nominations.
+                    _nom_row = or_(
+                        Contestant.entry_type == "nomination",
+                        Contestant.entry_type.is_(None),
+                    )
                     ne = (
                         db.query(func.count(Contestant.id))
                         .filter(
                             Contestant.season_id == contest_id,
                             Contestant.is_deleted == False,
-                            Contestant.entry_type == "nomination",
+                            _nom_row,
                             Contestant.round_id == round_id,
                         )
                         .scalar()
@@ -253,7 +258,7 @@ class CRUDRound:
                         .filter(
                             Contestant.season_id == contest_id,
                             Contestant.is_deleted == False,
-                            Contestant.entry_type == "nomination",
+                            _nom_row,
                             Contestant.round_id == canonical,
                         )
                         .scalar()

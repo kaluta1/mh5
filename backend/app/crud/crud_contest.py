@@ -1095,7 +1095,10 @@ class CRUDContest:
                         conds.append(Contestant.country.ilike(pat))
                         conds.append(Contestant.nominator_country.ilike(pat))
                         conds.append(User.country.ilike(pat))
-                    entries_query = entries_query.join(User).filter(or_(*conds))
+                    # outerjoin: roster uses outerjoin(User); inner join understated card counts.
+                    entries_query = entries_query.outerjoin(
+                        User, Contestant.user_id == User.id
+                    ).filter(or_(*conds))
             if filter_region:
                 region_conds: list = []
                 if allow_explicit_region_filter:
@@ -1148,11 +1151,11 @@ class CRUDContest:
                         conds.append(Contestant.country.ilike(pat))
                         conds.append(Contestant.nominator_country.ilike(pat))
                         conds.append(User.country.ilike(pat))
-                    # Ensure join(User) is called before filtering on User.country
-                    # But we already did a join(User) if filter_country was handled above.
-                    # Actually, we should check if we already joined. 
-                    # Simpler is to use join(User) here too.
-                    entries_query = entries_query.join(User).filter(or_(*conds))
+                    # outerjoin(User) matches get_contest_with_enriched_contestants so counts
+                    # stay aligned when a contestant row has no matching users row.
+                    entries_query = entries_query.outerjoin(
+                        User, Contestant.user_id == User.id
+                    ).filter(or_(*conds))
                     applied_location_filter = True
             elif season_level_lower in ("regional", "region"):
                 # Regional pool already respects the regional ContestantSeason membership;
