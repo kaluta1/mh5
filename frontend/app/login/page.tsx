@@ -12,6 +12,7 @@ import { useLanguage } from '@/contexts/language-context'
 import { useAuth } from '@/hooks/use-auth'
 import { useToast } from '@/components/ui/toast'
 import { logger } from '@/lib/logger'
+import { resolveAuthLoginErrorMessage } from '@/lib/auth-login-error-message'
 
 function LoginPageContent() {
   const { t } = useLanguage()
@@ -121,55 +122,7 @@ function LoginPageContent() {
     } catch (err: any) {
       clearTimeout(loadingTimeoutId)
       logger.error('Login error', { message: err.message, status: err.response?.status, url: err.config?.baseURL + err.config?.url, detail: err.response?.data })
-      
-      // Fonction pour mapper les erreurs backend aux traductions
-      const mapErrorToTranslation = (message: string): string => {
-        const lowerMessage = message.toLowerCase()
-        
-        // Détecter les erreurs d'identifiants invalides dans différentes langues
-        if (lowerMessage.includes('incorrect') || 
-            lowerMessage.includes('invalid') || 
-            lowerMessage.includes('invalide') ||
-            lowerMessage.includes('inválido') ||
-            lowerMessage.includes('ungültig') ||
-            lowerMessage.includes('email') && (lowerMessage.includes('password') || lowerMessage.includes('mot de passe') || lowerMessage.includes('contraseña') || lowerMessage.includes('passwort')) ||
-            lowerMessage.includes('username') && (lowerMessage.includes('password') || lowerMessage.includes('mot de passe') || lowerMessage.includes('contraseña') || lowerMessage.includes('passwort')) ||
-            lowerMessage.includes('nom d\'utilisateur') && (lowerMessage.includes('mot de passe')) ||
-            lowerMessage.includes('nombre de usuario') && (lowerMessage.includes('contraseña')) ||
-            lowerMessage.includes('benutzername') && (lowerMessage.includes('passwort'))) {
-          return t('auth.login.errors.invalid_credentials')
-        }
-        
-        return message
-      }
-      
-      let errorMessage = t('auth.login.errors.invalid_credentials')
-      
-      if (err.response?.data) {
-        const errorData = err.response.data
-        if (typeof errorData === 'string') {
-          errorMessage = mapErrorToTranslation(errorData)
-        } else if (errorData.detail) {
-          if (typeof errorData.detail === 'string') {
-            errorMessage = mapErrorToTranslation(errorData.detail)
-          } else if (Array.isArray(errorData.detail)) {
-            const messages = errorData.detail.map(e => e.msg || e).join(', ')
-            errorMessage = mapErrorToTranslation(messages)
-          } else {
-            errorMessage = t('auth.login.errors.invalid_credentials')
-          }
-        } else if (errorData.message) {
-          errorMessage = mapErrorToTranslation(errorData.message)
-        }
-      } else if (err.message) {
-        errorMessage = mapErrorToTranslation(err.message)
-      }
-      if (err.response?.status === 503) {
-        errorMessage = t('auth.login.errors.service_unavailable') || 'The service is starting up. Please wait a moment and try again.'
-      } else if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
-        errorMessage = t('auth.login.errors.timeout')
-      }
-      addToast(errorMessage, 'error', 6000)
+      addToast(resolveAuthLoginErrorMessage(err, t), 'error', 6000)
     } finally {
       clearTimeout(loadingTimeoutId)
       setIsLoading(false)

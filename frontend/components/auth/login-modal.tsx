@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import { AxiosError } from "axios"
 import { logger } from "@/lib/logger"
 import type { User } from "@/types/user"
 import { useState, useEffect } from "react"
@@ -21,6 +20,7 @@ import { Eye, EyeOff, Loader2, Mail, Lock } from "lucide-react"
 import { useLanguage } from "@/contexts/language-context"
 import { useAuth } from "@/hooks/use-auth"
 import { SuccessPage } from "./success-page"
+import { resolveAuthLoginErrorMessage } from "@/lib/auth-login-error-message"
 
 interface LoginModalProps {
   open: boolean
@@ -104,64 +104,7 @@ export function LoginModal({ open, onOpenChange, onSwitchToRegister, onLoginSucc
       }, 1500)
     } catch (err: unknown) {
       logger.error('Login error', err)
-      
-      // Fonction pour mapper les erreurs backend aux traductions
-      const mapErrorToTranslation = (message: string): string => {
-        const lowerMessage = message.toLowerCase()
-        
-        // Détecter les erreurs d'identifiants invalides dans différentes langues
-        if (lowerMessage.includes('incorrect') || 
-            lowerMessage.includes('invalid') || 
-            lowerMessage.includes('invalide') ||
-            lowerMessage.includes('inválido') ||
-            lowerMessage.includes('ungültig') ||
-            lowerMessage.includes('email') && (lowerMessage.includes('password') || lowerMessage.includes('mot de passe') || lowerMessage.includes('contraseña') || lowerMessage.includes('passwort')) ||
-            lowerMessage.includes('username') && (lowerMessage.includes('password') || lowerMessage.includes('mot de passe') || lowerMessage.includes('contraseña') || lowerMessage.includes('passwort')) ||
-            lowerMessage.includes('nom d\'utilisateur') && (lowerMessage.includes('mot de passe')) ||
-            lowerMessage.includes('nombre de usuario') && (lowerMessage.includes('contraseña')) ||
-            lowerMessage.includes('benutzername') && (lowerMessage.includes('passwort'))) {
-          return t('auth.login.errors.invalid_credentials')
-        }
-        
-        return message
-      }
-      
-      let errorMessage = t('auth.login.errors.invalid_credentials')
-      
-      // Gérer les erreurs de timeout et 503 (service indisponible / cold start)
-      const axiosError = err as AxiosError
-      const status = axiosError.response?.status
-      if (status === 503) {
-        errorMessage = t('auth.login.errors.service_unavailable') || 'The service is starting up. Please wait a moment and try again.'
-      } else if (axiosError.code === 'ECONNABORTED' || 
-          axiosError.message?.includes('timeout') || 
-          (err instanceof Error && err.message?.includes('timeout'))) {
-        errorMessage = t('auth.login.errors.timeout') || 'Request timed out. Please try again.'
-      } else if (axiosError.response?.data) {
-        const errorData = axiosError.response.data as { detail?: string | { msg: string }[] | string; message?: string } | string
-        if (typeof errorData === 'string') {
-          errorMessage = mapErrorToTranslation(errorData)
-        } else if (errorData && typeof errorData === 'object' && 'detail' in errorData) {
-          if (typeof errorData.detail === 'string') {
-            errorMessage = mapErrorToTranslation(errorData.detail)
-          } else if (Array.isArray(errorData.detail)) {
-            const messages = errorData.detail.map(e => (typeof e === 'object' && 'msg' in e ? e.msg : String(e))).join(', ')
-            errorMessage = mapErrorToTranslation(messages)
-          } else {
-            errorMessage = t('auth.login.errors.invalid_credentials')
-          }
-        } else if (errorData && typeof errorData === 'object' && 'message' in errorData && errorData.message) {
-          errorMessage = mapErrorToTranslation(errorData.message)
-        }
-      } else if (axiosError.message) {
-        errorMessage = mapErrorToTranslation(axiosError.message)
-      } else if (!axiosError.response && axiosError.request) {
-        // Pas de réponse du serveur (réseau ou serveur down)
-        errorMessage = t('auth.login.errors.network_error')
-      }
-      
-      // Afficher l'erreur en haut du formulaire
-      setError(errorMessage)
+      setError(resolveAuthLoginErrorMessage(err, t))
     } finally {
       clearTimeout(loadingTimeoutId)
       setIsLoading(false)
