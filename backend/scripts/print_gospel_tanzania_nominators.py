@@ -13,7 +13,8 @@ Run from the backend folder with PYTHONPATH including the app root:
 Options:
 
   python scripts/print_gospel_tanzania_nominators.py --contest-name Gospel --country Tanzania
-  python scripts/print_gospel_tanzania_nominators.py --contest-id 42 --round-id 5
+  python scripts/print_gospel_tanzania_nominators.py --contest-id 188
+  python scripts/print_gospel_tanzania_nominators.py --no-auto-pick   # require --contest-id if ambiguous
   python scripts/print_gospel_tanzania_nominators.py --csv gospel_tz_nominators.csv
 """
 
@@ -36,10 +37,17 @@ from sqlalchemy.orm import joinedload
 from app.crud.crud_contest import _get_country_match_patterns
 from app.db.session import SessionLocal
 from app.models.contest import Contest
+from app.models.contests import Contestant
 from app.models.user import User
 
 
-def _resolve_contest(db, contest_id: Optional[int], contest_name: str) -> Contest:
+def _resolve_contest(
+    db,
+    contest_id: Optional[int],
+    contest_name: str,
+    *,
+    no_auto_pick: bool,
+) -> Contest:
     q = db.query(Contest).filter(Contest.is_deleted == False)
     if contest_id is not None:
         c = q.filter(Contest.id == contest_id).first()
@@ -56,12 +64,40 @@ def _resolve_contest(db, contest_id: Optional[int], contest_name: str) -> Contes
     )
     if not rows:
         raise SystemExit(f"No contest whose name contains {contest_name!r}")
-    if len(rows) > 1:
-        print("Multiple contests matched; use --contest-id to pick one:\n", file=sys.stderr)
-        for r in rows:
-            print(f"  id={r.id} name={r.name!r} mode={getattr(r, 'contest_mode', None)}", file=sys.stderr)
-        raise SystemExit("Aborting (ambiguous). Pass --contest-id …")
-    return rows[0]
+    if len(rows) == 1:
+        return rows[0]
+
+    # Disambiguate common duplicates (e.g. "Gospel Music" vs "Gospel Music Contest").
+    exact = [r for r in rows if (r.name or "").strip().lower() == needle]
+    if len(exact) == 1:
+        print(f"Using exact name match: id={exact[0].id} name={exact[0].name!r}", file=sys.stderr)
+        return exact[0]
+
+    active = [r for r in rows if getattr(r, "is_active", True)]
+    if len(active) == 1 and len(rows) > 1:
+        print(
+            f"Using only active contest among matches: id={active[0].id} name={active[0].name!r}",
+            file=sys.stderr,
+        )
+        return active[0]
+
+    # Prefer shortest title among substring matches (card title before a duplicate "… Contest" row).
+    if not no_auto_pick:
+        shortest = min(rows, key=lambda r: len((r.name or "").strip()))
+        print(
+            f"Multiple contests matched {contest_name!r}; auto-picked shortest name: "
+            f"id={shortest.id} name={shortest.name!r} (use --contest-id or --no-auto-pick to override)",
+            file=sys.stderr,
+        )
+        return shortest
+
+    print("Multiple contests matched; use --contest-id to pick one:\n", file=sys.stderr)
+    for r in rows:
+        print(
+            f"  id={r.id} name={r.name!r} active={getattr(r, 'is_active', None)} mode={getattr(r, 'contest_mode', None)}",
+            file=sys.stderr,
+        )
+    raise SystemExit("Aborting (ambiguous). Pass --contest-id … or omit --no-auto-pick for auto-pick.")
 
 
 def _country_clause(country: str, contestant: Any, user: Any):
@@ -81,11 +117,16 @@ def main() -> None:
     ap.add_argument("--country", default="Tanzania", help="Country filter (default: Tanzania)")
     ap.add_argument("--round-id", type=int, default=None, help="Optional calendar round id filter")
     ap.add_argument("--csv", metavar="PATH", help="Also write CSV to this path")
+    ap.add_argument(
+        "--no-auto-pick",
+        action="store_true",
+        help="If several contests match the name, abort instead of auto-picking (shortest name / exact / only-active).",
+    )
     args = ap.parse_args()
 
     db = SessionLocal()
     try:
-        contest = _resolve_contest(db, args.contest_id, args.contest_name)
+        contest = _resolve_contest(db, args.contest_id, args.contest_name, no_auto_pick=args.no_auto_pick)
         mode = getattr(contest.contest_mode, "value", contest.contest_mode) or ""
         if str(mode).lower() not in ("nomination", "contestmode.nomination"):
             print(
