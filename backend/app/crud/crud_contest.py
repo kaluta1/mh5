@@ -934,6 +934,10 @@ class CRUDContest:
         # Utiliser entry_type explicite si fourni, sinon déduire du contest_mode
         contest_mode = _normalize_contest_mode(getattr(contest, 'contest_mode', 'participation'))
         contest_entry_type = entry_type if entry_type else ('nomination' if contest_mode == 'nomination' else 'participation')
+        if contest_mode == "nomination":
+            _entries_entry_type_clause = _nomination_row_entry_type_clause(contest_entry_type, contest_mode)
+        else:
+            _entries_entry_type_clause = Contestant.entry_type == contest_entry_type
         season_level_lower_for_count = str(season_level or "").lower()
         count_by_active_season_members = (
             season_link is not None
@@ -952,7 +956,7 @@ class CRUDContest:
             base_entries_query = db.query(func.count(Contestant.id.distinct()))\
                 .filter(
                     Contestant.is_deleted == False,
-                    Contestant.entry_type == contest_entry_type,
+                    _entries_entry_type_clause,
                     Contestant.id.in_(active_member_ids),
                     Contestant.season_id == contest.id,
                 )
@@ -960,7 +964,7 @@ class CRUDContest:
             base_entries_query = db.query(func.count(Contestant.id.distinct()))\
                 .filter(
                     Contestant.is_deleted == False,
-                    Contestant.entry_type == contest_entry_type,
+                    _entries_entry_type_clause,
                     or_(*conditions) if len(conditions) > 1 else conditions[0]
                 )
             if display_round_for_scope is not None:
@@ -981,7 +985,7 @@ class CRUDContest:
             entries_query = db.query(func.count(Contestant.id.distinct()))\
                 .filter(
                     Contestant.is_deleted == False,
-                    Contestant.entry_type == contest_entry_type,
+                    _entries_entry_type_clause,
                     Contestant.id.in_(active_member_ids),
                     Contestant.season_id == contest.id,
                 )
@@ -989,7 +993,7 @@ class CRUDContest:
             entries_query = db.query(func.count(Contestant.id.distinct()))\
                 .filter(
                     Contestant.is_deleted == False,
-                    Contestant.entry_type == contest_entry_type,
+                    _entries_entry_type_clause,
                     or_(*conditions) if len(conditions) > 1 else conditions[0]
                 )
             if display_round_for_scope is not None:
@@ -1076,10 +1080,7 @@ class CRUDContest:
         )
         
         applied_location_filter = False
-        skip_geo_for_nomination_country_roster = bool(
-            contest_mode == "nomination" and not count_by_active_season_members
-        )
-        if has_location_filter and not skip_geo_for_nomination_country_roster:
+        if has_location_filter:
             # Utiliser les filtres fournis par l'utilisateur
             applied_location_filter = True
             if filter_country:
@@ -1123,7 +1124,7 @@ class CRUDContest:
                     entries_query = entries_query.filter(
                         func.lower(Contestant.continent) == func.lower(filter_continent)
                     )
-        elif current_user and season_level and not skip_geo_for_nomination_country_roster:
+        elif current_user and season_level:
             # Filtrer par localisation selon le niveau de la saison et l'utilisateur connecté
             season_level_lower = season_level.lower()
             
@@ -1736,18 +1737,9 @@ class CRUDContest:
         # Filtrer par entry_type basé sur le contest_mode (données corrigées)
         effective_entry_type = entry_type or ('nomination' if contest_mode == 'nomination' else 'participation')
         if contest_mode == "nomination":
-            # Nominator rows must remain visible even if entry_type was mis-set in legacy data.
-            if current_user_id:
-                contestants_query = contestants_query.filter(
-                    or_(
-                        _nomination_row_entry_type_clause(effective_entry_type, contest_mode),
-                        Contestant.user_id == current_user_id,
-                    )
-                )
-            else:
-                contestants_query = contestants_query.filter(
-                    _nomination_row_entry_type_clause(effective_entry_type, contest_mode)
-                )
+            contestants_query = contestants_query.filter(
+                _nomination_row_entry_type_clause(effective_entry_type, contest_mode)
+            )
         else:
             contestants_query = contestants_query.filter(Contestant.entry_type == effective_entry_type)
         logger.info(f"[get_contest_with_enriched_contestants] Querying by season_id={filter_season_id}, entry_type={effective_entry_type}")
@@ -1974,83 +1966,66 @@ class CRUDContest:
         # Appliquer les filtres à la requête
         if contestants_query:
             location_conditions = []
-            # Country/city nomination contests: list the full community for this round (no geo slice).
-            # Country geo + OR(my row) previously showed only the signed-in user's nominations.
-            skip_geo_for_nomination_country_roster = bool(
-                contest_mode == "nomination" and not pooled_season_membership_scope
-            )
-
             # User is already joined in base query via .join(User)
             # This allows us to filter on User attributes directly without extra joins
             # contestants_query = contestants_query.join(User)
 
-            if not skip_geo_for_nomination_country_roster:
-                if effective_country:
-                    logger.info(f"[get_contest_with_enriched_contestants] Filtering by country: '{effective_country}'")
-                    # Build patterns: include code (TZ) and common names (Tanzania) so both match.
-                    # Nominations: nominee geo may be empty; scope is often on nominator_country — include it
-                    # so country-scoped views match the same rows as regional pool coalesce logic.
-                    country_patterns = _get_country_match_patterns(effective_country)
-                    conds = []
-                    for pat in country_patterns:
-                        conds.append(Contestant.country.ilike(pat))
-                        conds.append(Contestant.nominator_country.ilike(pat))
-                        conds.append(User.country.ilike(pat))
-                    location_conditions.append(or_(*conds))
-                if effective_region:
-                    logger.info(f"[get_contest_with_enriched_contestants] Filtering by region: '{effective_region}'")
-                    region_conditions: list = []
-                    if season_level_for_filter in ("regional", "region"):
-                        try:
-                            from app.services.season_migration import SeasonMigrationService
+            if effective_country:
+                logger.info(f"[get_contest_with_enriched_contestants] Filtering by country: '{effective_country}'")
+                # Build patterns: include code (TZ) and common names (Tanzania) so both match.
+                # Nominations: nominee geo may be empty; scope is often on nominator_country — include it
+                # so country-scoped views match the same rows as regional pool coalesce logic.
+                country_patterns = _get_country_match_patterns(effective_country)
+                conds = []
+                for pat in country_patterns:
+                    conds.append(Contestant.country.ilike(pat))
+                    conds.append(Contestant.nominator_country.ilike(pat))
+                    conds.append(User.country.ilike(pat))
+                location_conditions.append(or_(*conds))
+            if effective_region:
+                logger.info(f"[get_contest_with_enriched_contestants] Filtering by region: '{effective_region}'")
+                region_conditions: list = []
+                if season_level_for_filter in ("regional", "region"):
+                    try:
+                        from app.services.season_migration import SeasonMigrationService
 
-                            pool_id = SeasonMigrationService.regional_pool_id_for_region_label(effective_region)
-                            if pool_id:
-                                pool_keys = tuple(SeasonMigrationService.REGIONAL_VOTING_POOLS[pool_id])
-                                country_key = func.lower(
-                                    func.trim(
-                                        func.coalesce(
-                                            Contestant.country,
-                                            Contestant.nominator_country,
-                                            User.country,
-                                            "",
-                                        )
+                        pool_id = SeasonMigrationService.regional_pool_id_for_region_label(effective_region)
+                        if pool_id:
+                            pool_keys = tuple(SeasonMigrationService.REGIONAL_VOTING_POOLS[pool_id])
+                            country_key = func.lower(
+                                func.trim(
+                                    func.coalesce(
+                                        Contestant.country,
+                                        Contestant.nominator_country,
+                                        User.country,
+                                        "",
                                     )
                                 )
-                                region_conditions = [country_key.in_(pool_keys)]
-                        except Exception as exc:
-                            logger.warning(
-                                "[get_contest_with_enriched_contestants] "
-                                f"Could not build regional pool filter for {effective_region}: {exc}"
                             )
-                    if not region_conditions:
-                        region_conditions = [
-                            Contestant.region.ilike(f"%{effective_region}%"),
-                            User.region.ilike(f"%{effective_region}%"),
-                        ]
-                    location_conditions.append(or_(*region_conditions))
-                elif effective_continent:
-                    logger.info(f"[get_contest_with_enriched_contestants] Filtering by continent: '{effective_continent}'")
-                    # Filtrer par continent si pas de pays
-                    # Check BOTH Contestant.continent AND User.continent
-                    location_conditions.append(or_(
-                        Contestant.continent.ilike(f"%{effective_continent}%"),
-                        User.continent.ilike(f"%{effective_continent}%")
-                    ))
+                            region_conditions = [country_key.in_(pool_keys)]
+                    except Exception as exc:
+                        logger.warning(
+                            "[get_contest_with_enriched_contestants] "
+                            f"Could not build regional pool filter for {effective_region}: {exc}"
+                        )
+                if not region_conditions:
+                    region_conditions = [
+                        Contestant.region.ilike(f"%{effective_region}%"),
+                        User.region.ilike(f"%{effective_region}%"),
+                    ]
+                location_conditions.append(or_(*region_conditions))
+            elif effective_continent:
+                logger.info(f"[get_contest_with_enriched_contestants] Filtering by continent: '{effective_continent}'")
+                # Filtrer par continent si pas de pays
+                # Check BOTH Contestant.continent AND User.continent
+                location_conditions.append(or_(
+                    Contestant.continent.ilike(f"%{effective_continent}%"),
+                    User.continent.ilike(f"%{effective_continent}%")
+                ))
             
             if location_conditions:
                 geo_clause = and_(*location_conditions)
-                if nomination_context and current_user_id:
-                    if contest_mode == "nomination":
-                        my_nomination = Contestant.user_id == current_user_id
-                    else:
-                        my_nomination = and_(
-                            Contestant.user_id == current_user_id,
-                            _nomination_row_entry_type_clause(effective_entry_type, contest_mode),
-                        )
-                    contestants_query = contestants_query.filter(or_(geo_clause, my_nomination))
-                else:
-                    contestants_query = contestants_query.filter(geo_clause)
+                contestants_query = contestants_query.filter(geo_clause)
         
         # Exécuter la requête
         import logging
