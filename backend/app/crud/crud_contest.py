@@ -97,6 +97,33 @@ def _normalize_contest_mode(mode: Any) -> str:
     return "participation"
 
 
+def _normalize_entry_type_query(value: Optional[str]) -> Optional[str]:
+    """Map query-string entryType values to DB contestant.entry_type.
+
+    Plural or informal values (e.g. ``nominations``) must not be passed through
+    verbatim or ``Contestant.entry_type == value`` matches zero rows.
+    Unknown values return None so callers fall back to contest_mode.
+    """
+    if value is None:
+        return None
+    s = str(value).strip().lower()
+    if not s or s == "all":
+        return None
+    if s in ("nominations", "nomination", "nominate"):
+        return "nomination"
+    if s in ("participations", "participation", "participant", "participate"):
+        return "participation"
+    return None
+
+
+def _nomination_row_entry_type_clause(effective_entry_type: str, contest_mode: str):
+    """SQLAlchemy filter: rows that count as nominations for this contest."""
+    from sqlalchemy import or_
+    if contest_mode == "nomination" and effective_entry_type == "nomination":
+        return or_(Contestant.entry_type == "nomination", Contestant.entry_type.is_(None))
+    return Contestant.entry_type == effective_entry_type
+
+
 def _preview_country_for_nomination_multi_round(
     filter_country: Optional[str],
     filter_continent: Optional[str],
@@ -816,6 +843,7 @@ class CRUDContest:
         """
         import logging
         logger = logging.getLogger(__name__)
+        entry_type = _normalize_entry_type_query(entry_type)
 
         from app.models.contests import ContestSeasonLink, ContestSeason, ContestantSeason, SeasonLevel
         from app.models.user import User
@@ -1581,6 +1609,8 @@ class CRUDContest:
         contest_obj = self.get(db, id=contest_id)
         if not contest_obj:
             return None
+
+        entry_type = _normalize_entry_type_query(entry_type)
         
         # Récupérer l'utilisateur si current_user_id est fourni
         current_user = None
@@ -1702,7 +1732,9 @@ class CRUDContest:
             )
         # Filtrer par entry_type basé sur le contest_mode (données corrigées)
         effective_entry_type = entry_type or ('nomination' if contest_mode == 'nomination' else 'participation')
-        contestants_query = contestants_query.filter(Contestant.entry_type == effective_entry_type)
+        contestants_query = contestants_query.filter(
+            _nomination_row_entry_type_clause(effective_entry_type, contest_mode)
+        )
         logger.info(f"[get_contest_with_enriched_contestants] Querying by season_id={filter_season_id}, entry_type={effective_entry_type}")
 
         if singeli_east_africa_scope and regional_context_without_season:
@@ -1740,7 +1772,7 @@ class CRUDContest:
             if nomination_context and current_user_id:
                 my_legacy_null_round = and_(
                     Contestant.user_id == current_user_id,
-                    Contestant.entry_type == effective_entry_type,
+                    _nomination_row_entry_type_clause(effective_entry_type, contest_mode),
                     Contestant.round_id.is_(None),
                 )
                 contestants_query = contestants_query.filter(or_(round_scope, my_legacy_null_round))
@@ -1762,7 +1794,38 @@ class CRUDContest:
                 ContestantSeason.season_id == season.id,
                 ContestantSeason.is_active == True,
             )
-            contestants_query = contestants_query.filter(Contestant.id.in_(active_season_member_ids))
+            if contest_mode == "nomination" and current_user_id:
+                mine_q = (
+                    db.query(Contestant.id)
+                    .filter(
+                        Contestant.is_deleted == False,
+                        Contestant.season_id == filter_season_id,
+                        Contestant.user_id == current_user_id,
+                        or_(
+                            Contestant.entry_type == "nomination",
+                            Contestant.entry_type.is_(None),
+                        ),
+                    )
+                )
+                if target_round_id is not None:
+                    mine_q = mine_q.filter(
+                        or_(
+                            Contestant.round_id == target_round_id,
+                            and_(Contestant.user_id == current_user_id, Contestant.round_id.is_(None)),
+                        )
+                    )
+                my_nom_ids = [row[0] for row in mine_q.all()]
+                if my_nom_ids:
+                    contestants_query = contestants_query.filter(
+                        or_(
+                            Contestant.id.in_(active_season_member_ids),
+                            Contestant.id.in_(my_nom_ids),
+                        )
+                    )
+                else:
+                    contestants_query = contestants_query.filter(Contestant.id.in_(active_season_member_ids))
+            else:
+                contestants_query = contestants_query.filter(Contestant.id.in_(active_season_member_ids))
             logger.info(
                 f"[get_contest_with_enriched_contestants] Scoping visible roster to active "
                 f"ContestantSeason links for {season_level} season_id={season.id}"
@@ -1944,7 +2007,7 @@ class CRUDContest:
                 if nomination_context and current_user_id:
                     my_nomination = and_(
                         Contestant.user_id == current_user_id,
-                        Contestant.entry_type == effective_entry_type,
+                        _nomination_row_entry_type_clause(effective_entry_type, contest_mode),
                     )
                     contestants_query = contestants_query.filter(or_(geo_clause, my_nomination))
                 else:

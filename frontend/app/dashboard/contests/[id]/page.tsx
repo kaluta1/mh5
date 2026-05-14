@@ -20,7 +20,7 @@ import { HoverInfoDialog } from '@/components/dashboard/hover-info-dialog'
 import { ReportContestantDialog } from '@/components/dashboard/report-contestant-dialog'
 import { LocationFilterBar } from '@/components/dashboard/location-filter-bar'
 import { getEffectiveApiUrl } from '@/lib/config'
-import { normalizeContestMode } from '@/lib/contest-mode'
+import { normalizeContestMode, normalizeEntryTypeQueryParam } from '@/lib/contest-mode'
 
 interface Media {
   id: string
@@ -150,7 +150,7 @@ export default function ContestDetailPage() {
   const [filterContinent, setFilterContinent] = React.useState<string>(() => {
     return searchParams.get('continent') || 'all'
   })
-  const entryType = searchParams.get('entryType') || undefined
+  const entryType = normalizeEntryTypeQueryParam(searchParams.get('entryType'))
   const roundIdFromUrl = searchParams.get('roundId')
   const viewOnly = searchParams.get('viewOnly') === 'true'
 

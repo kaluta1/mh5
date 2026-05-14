@@ -15,3 +15,20 @@ export function normalizeContestMode(mode: unknown): ContestModeTab {
   if (low.includes('nomination') && !low.includes('participation')) return 'nomination'
   return 'participation'
 }
+
+/** Align with backend `_normalize_entry_type_query` for ?entryType= URL params. */
+export function normalizeEntryTypeQueryParam(raw: string | null | undefined): string | undefined {
+  if (raw == null || raw === '') return undefined
+  const s = String(raw).trim().toLowerCase()
+  if (!s || s === 'all') return undefined
+  if (s === 'nominations' || s === 'nomination' || s === 'nominate') return 'nomination'
+  if (
+    s === 'participations' ||
+    s === 'participation' ||
+    s === 'participate' ||
+    s === 'participant'
+  ) {
+    return 'participation'
+  }
+  return undefined
+}

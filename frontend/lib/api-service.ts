@@ -1,6 +1,7 @@
 
 import axios from 'axios';
 import { API_URL as CONFIG_API_ORIGIN, getEffectiveApiUrl } from './config';
+import { normalizeEntryTypeQueryParam } from './contest-mode';
 
 /** Single source of truth: config.ts (handles comma-separated broken env + fallbacks). */
 const getApiV1Base = () => {
@@ -127,13 +128,13 @@ export const ApiService = {
                 filterCountry: params?.filterCountry,
                 filterRegion: params?.filterRegion,
                 filterContinent: params?.filterContinent,
-                entryType: params?.entryType,
+                entryType: normalizeEntryTypeQueryParam(params?.entryType),
                 roundId: params?.roundId,
                 // Keep legacy keys for backward-compatible backends/routes
                 country: params?.filterCountry,
                 region: params?.filterRegion,
                 continent: params?.filterContinent,
-                entry_type: params?.entryType,
+                entry_type: normalizeEntryTypeQueryParam(params?.entryType),
                 round_id: params?.roundId,
                 ...(params?._t != null ? { _t: params._t } : {}),
             }
