@@ -1828,10 +1828,10 @@ class CRUDContest:
         # Intentionally False: country membership branch is disabled below.
         nomination_country_membership_scope = False
 
-        # Nomination rosters (country/city): strict calendar round only — do not mix legacy
-        # NULL-round rows into a new month/round (users saw previous-round entries on new round).
-        # Participation contests keep NULL-round OR for the filtered user_id (migration).
-        if target_round_id is not None and not pooled_season_membership_scope and not nomination_country_membership_scope:
+        # Calendar round scope must never be skipped for "pooled" seasons: when the active
+        # ContestSeason row is REGIONAL+/etc., we still must filter by target_round_id or
+        # country nomination grids (e.g. ?roundId=May) incorrectly include last month's rows.
+        if target_round_id is not None and not nomination_country_membership_scope:
             round_scope = Contestant.round_id == target_round_id
             if contest_mode == "nomination":
                 contestants_query = contestants_query.filter(round_scope)
