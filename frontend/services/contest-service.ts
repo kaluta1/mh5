@@ -763,7 +763,16 @@ class ContestService {
   async deleteContestant(contestantId: number): Promise<void> {
     try {
       await api.delete(`/api/v1/contestants/${contestantId}`);
-    } catch (error) {
+    } catch (error: any) {
+      const status = error?.response?.status;
+      // Soft-deleted rows used to yield 404 (get() excluded is_deleted). Treat as removed
+      // so UI can refetch without surfacing a red error for stale cards / double-submit.
+      if (status === 404) {
+        console.warn(
+          `deleteContestant: 404 for id ${contestantId}; treating as already removed`
+        );
+        return;
+      }
       console.error('Error deleting contestant:', error);
       throw error;
     }

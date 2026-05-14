@@ -2892,37 +2892,34 @@ def delete_contestant(
     contestant_id: int
 ) -> dict:
     """Supprime une candidature (l'utilisateur peut supprimer sa propre candidature)"""
-    contestant = crud_contestant.get(db, contestant_id)
+    # Include soft-deleted rows so repeat DELETE or stale UI does not 404 after first delete.
+    contestant = db.query(Contestant).filter(Contestant.id == contestant_id).first()
     if not contestant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Submission not found"
         )
-    
-    # Vérifier que la candidature n'est pas déjà supprimée
-    if contestant.is_deleted:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Submission already deleted"
-        )
-    
+
     # Vérifier que c'est le propriétaire ou un admin
     if contestant.user_id != current_user.id and not current_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You can only delete your own submission"
         )
-    
-    # Vérifier que les soumissions sont encore ouvertes (optionnel, mais recommandé)
-    # On peut permettre la suppression même si les soumissions sont fermées
-    
+
+    if contestant.is_deleted:
+        return {
+            "message": "Submission already removed",
+            "already_deleted": True,
+        }
+
     success = crud_contestant.delete(db, id=contestant_id)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error deleting submission"
         )
-    
+
     return {"message": "Submission deleted successfully"}
 
 
