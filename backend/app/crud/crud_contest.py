@@ -798,6 +798,11 @@ class CRUDContest:
         # Utiliser entry_type explicite si fourni, sinon déduire du contest_mode
         contest_mode = _normalize_contest_mode(getattr(contest, 'contest_mode', 'participation'))
         contest_entry_type = entry_type if entry_type else ('nomination' if contest_mode == 'nomination' else 'participation')
+        explicit_country_nomination_multi_round = bool(
+            contest_mode == "nomination"
+            and filter_country
+            and str(filter_country).strip().lower() not in ("", "all", "unknown", "none", "null")
+        )
         season_level_lower_for_count = str(season_level or "").lower()
         count_by_active_season_members = (
             season_link is not None
@@ -828,7 +833,10 @@ class CRUDContest:
                     or_(*conditions) if len(conditions) > 1 else conditions[0]
                 )
             if display_round_for_scope is not None:
-                base_entries_query = base_entries_query.filter(Contestant.round_id == display_round_for_scope)
+                if explicit_country_nomination_multi_round and round_ids:
+                    base_entries_query = base_entries_query.filter(Contestant.round_id.in_(round_ids))
+                else:
+                    base_entries_query = base_entries_query.filter(Contestant.round_id == display_round_for_scope)
         else:
             # No conditions - return 0 (contest has no rounds or seasons linked yet)
             base_entries_query = db.query(func.count(Contestant.id.distinct()))\
@@ -855,7 +863,10 @@ class CRUDContest:
                     or_(*conditions) if len(conditions) > 1 else conditions[0]
                 )
             if display_round_for_scope is not None:
-                entries_query = entries_query.filter(Contestant.round_id == display_round_for_scope)
+                if explicit_country_nomination_multi_round and round_ids:
+                    entries_query = entries_query.filter(Contestant.round_id.in_(round_ids))
+                else:
+                    entries_query = entries_query.filter(Contestant.round_id == display_round_for_scope)
         else:
             # No conditions - return 0
             entries_query = db.query(func.count(Contestant.id.distinct()))\
@@ -1633,28 +1644,38 @@ class CRUDContest:
         pooled_season_membership_scope = bool(
             season and season_level in ("regional", "region", "continent", "global")
         )
+        explicit_country_scope = bool(
+            nomination_context
+            and country_filter_norm
+            and country_filter_norm not in ("", "all", "unknown", "none", "null")
+        )
+
         # Keep contest detail roster aligned with round card counts:
         # country/city nomination views should stay round-scoped when roundId is provided.
         # Always include the signed-in user's own nomination rows even if round_id drifted
         # (stale URLs, migration, legacy NULL) so "Edit" and "View" stay consistent.
         nomination_country_membership_scope = False
         if target_round_id is not None and not pooled_season_membership_scope and not nomination_country_membership_scope:
+            if explicit_country_scope and round_ids:
+                round_scope = Contestant.round_id.in_(round_ids)
+            else:
+                round_scope = Contestant.round_id == target_round_id
             if nomination_context and current_user_id:
                 my_nomination = and_(
                     Contestant.user_id == current_user_id,
                     Contestant.entry_type == effective_entry_type,
                 )
-                contestants_query = contestants_query.filter(
-                    or_(Contestant.round_id == target_round_id, my_nomination)
-                )
+                contestants_query = contestants_query.filter(or_(round_scope, my_nomination))
                 logger.info(
-                    f"[get_contest_with_enriched_contestants] Scoping to round_id={target_round_id} "
+                    f"[get_contest_with_enriched_contestants] Scoping to "
+                    f"{'all contest rounds' if explicit_country_scope and round_ids else f'round_id={target_round_id}'} "
                     f"or current user's nomination (user_id={current_user_id})"
                 )
             else:
-                contestants_query = contestants_query.filter(Contestant.round_id == target_round_id)
+                contestants_query = contestants_query.filter(round_scope)
                 logger.info(
-                    f"[get_contest_with_enriched_contestants] Scoping to round_id={target_round_id}"
+                    f"[get_contest_with_enriched_contestants] Scoping to "
+                    f"{'all linked rounds for explicit country nomination view' if explicit_country_scope and round_ids else f'round_id={target_round_id}'}"
                 )
 
         # Once a contest migrates beyond its start level, the visible roster is
