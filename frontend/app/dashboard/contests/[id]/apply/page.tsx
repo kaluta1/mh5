@@ -165,19 +165,33 @@ export default function ApplyToContestPage() {
             roundId: roundForApi,
           })
           if (userContestants && userContestants.length > 0) {
-            // Find a contestant matching round_id, contest AND entry_type
+            const pickLatestContestant = (matches: any[]) => {
+              if (!matches?.length) return undefined
+              return matches.reduce((best: any, uc: any) => {
+                const bt = best?.registration_date ? new Date(best.registration_date).getTime() : 0
+                const ct = uc?.registration_date ? new Date(uc.registration_date).getTime() : 0
+                if (ct > bt) return uc
+                if (ct === bt && (uc?.id ?? 0) > (best?.id ?? 0)) return uc
+                return best
+              })
+            }
+            // Find contestants matching round_id, contest AND entry_type; prefer newest row (re-nominations / duplicates).
             const findMatchingEntryForType = (desiredEntryType: string) => {
-              return userContestants.find((uc: any) => {
+              const rid = roundIdParam ? parseInt(roundIdParam, 10) : NaN
+              const matches = userContestants.filter((uc: any) => {
                 const ucRoundId = uc.round_id
                 const ucSeasonId = uc.season_id
                 const ucEntryType = uc.entry_type
-                const rid = roundIdParam ? parseInt(roundIdParam, 10) : NaN
                 const roundMatch =
-                  !roundIdParam || (!Number.isNaN(rid) && ucRoundId === rid)
+                  !roundIdParam ||
+                  Number.isNaN(rid) ||
+                  ucRoundId === rid ||
+                  ucRoundId == null
                 const contestMatch = !ucSeasonId || ucSeasonId === parseInt(contestId)
                 const typeMatch = !ucEntryType || ucEntryType === desiredEntryType
                 return roundMatch && contestMatch && typeMatch
               })
+              return pickLatestContestant(matches)
             }
 
             // First attempt with expectedEntryType
@@ -708,12 +722,23 @@ export default function ApplyToContestPage() {
           const userContestants = await contestService.getContestantsByContest(contestId, { user_id: user.id, skip: 0, limit: 50 })
           const targetRoundId = roundIdParam ? parseInt(roundIdParam, 10) : undefined
           const expectedType = isNomination ? 'nomination' : 'participation'
-          const matched = userContestants.find((uc: any) => {
+          const candidates = userContestants.filter((uc: any) => {
             const typeMatch = !uc?.entry_type || uc.entry_type === expectedType
             const contestMatch = !uc?.season_id || uc.season_id === parseInt(contestId)
-            const roundMatch = !targetRoundId || !uc?.round_id || uc.round_id === targetRoundId
+            const roundMatch =
+              !targetRoundId ||
+              uc?.round_id === targetRoundId ||
+              uc?.round_id == null
             return typeMatch && contestMatch && roundMatch
           })
+          const matched = candidates.reduce((best: any, uc: any) => {
+            if (!best) return uc
+            const bt = best?.registration_date ? new Date(best.registration_date).getTime() : 0
+            const ct = uc?.registration_date ? new Date(uc.registration_date).getTime() : 0
+            if (ct > bt) return uc
+            if (ct === bt && (uc?.id ?? 0) > (best?.id ?? 0)) return uc
+            return best
+          }, undefined as any)
           if (matched?.id) {
             setParticipantId(matched.id)
             setUserAlreadyParticipating(true)

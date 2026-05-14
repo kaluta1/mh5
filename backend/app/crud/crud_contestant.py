@@ -611,10 +611,13 @@ class CRUDContestant:
         ]
         if entry_type:
             filters.append(Contestant.entry_type == entry_type)
-        return db.query(Contestant)\
-            .filter(and_(*filters))\
+        return (
+            db.query(Contestant)
+            .filter(and_(*filters))
+            .order_by(Contestant.registration_date.desc(), Contestant.id.desc())
             .first()
-            
+        )
+
     def get_by_round_and_user(
         self, db: Session, round_id: int, user_id: int, entry_type: str = None, season_id: int = None
     ) -> Optional[Contestant]:
@@ -628,9 +631,12 @@ class CRUDContestant:
             filters.append(Contestant.entry_type == entry_type)
         if season_id is not None:
             filters.append(Contestant.season_id == season_id)
-        return db.query(Contestant)\
-            .filter(and_(*filters))\
+        return (
+            db.query(Contestant)
+            .filter(and_(*filters))
+            .order_by(Contestant.registration_date.desc(), Contestant.id.desc())
             .first()
+        )
     
     def get_multi_by_season(
         self, db: Session, season_id: int, *, skip: int = 0, limit: int = 10

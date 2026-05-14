@@ -1180,7 +1180,10 @@ class CRUDContest:
                         season_id = contest.id
                     
                     existing = crud_contestant.get_by_season_and_user(
-                        db, season_id, current_user.id
+                        db,
+                        season_id,
+                        current_user.id,
+                        entry_type=expected_entry_type,
                     )
                 
                 current_user_contesting = existing is not None
