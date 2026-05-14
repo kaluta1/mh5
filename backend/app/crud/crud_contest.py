@@ -325,14 +325,22 @@ def resolve_nomination_display_season_for_contest_round(
 
     selection_pool = matched if matched else list(pairs)
     is_nomination = _normalize_contest_mode(getattr(contest_obj, "contest_mode", None)) == "nomination"
-    # When the dashboard is still country/city but no ContestSeason row matches that level
-    # (only higher-tier rows exist for this round), taking max(level) used to pick REGIONAL
-    # and activate ContestantSeason pooling — hiding most country nominations. Prefer the
-    # lowest linked tier instead so counts/rosters match DB rows for that phase.
+    # When the dashboard is still country/city but no ContestSeason row matches that level:
+    # - If some linked rows are city/country, use the lowest tier among them.
+    # - If ONLY REGIONAL+ rows exist for this round, min(pairs) still picked REGIONAL and
+    #   turned on ContestantSeason pooling (UI showed 1 nomination while DB had many).
+    #   In that case ignore those rows for display season so roster/count use plain
+    #   contestant rows for this round (season=None → contest.level drives geo, no pool).
     if matched:
         season_link, season = max(selection_pool, key=_season_level_rank)
     elif is_nomination and dashboard_level in ("country", "city") and selection_pool:
-        season_link, season = min(selection_pool, key=_season_level_rank)
+        low_tier_pairs = [
+            pr for pr in selection_pool if _season_level_rank(pr)[0] <= level_rank["country"]
+        ]
+        if low_tier_pairs:
+            season_link, season = min(low_tier_pairs, key=_season_level_rank)
+        else:
+            season_link, season = None, None
     else:
         season_link, season = max(selection_pool, key=_season_level_rank)
     return season_link, season
