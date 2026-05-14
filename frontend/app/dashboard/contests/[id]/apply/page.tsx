@@ -138,8 +138,10 @@ export default function ApplyToContestPage() {
         const pSeasonId = p.season_id
         const pEntryType = p.entry_type
 
-        // Match by round, contest AND entry_type
-        const roundMatch = !roundIdParam || !pRoundId || pRoundId === parseInt(roundIdParam)
+        // Match by round, contest AND entry_type (strict round when roundId is in URL)
+        const roundIdNum = roundIdParam ? parseInt(roundIdParam, 10) : NaN
+        const roundMatch =
+          !roundIdParam || (!Number.isNaN(roundIdNum) && pRoundId === roundIdNum)
         const contestMatch = !pSeasonId || pSeasonId === parseInt(contestId)
         const typeMatch = !pEntryType || pEntryType === expectedEntryType
 
@@ -159,7 +161,9 @@ export default function ApplyToContestPage() {
                 const ucRoundId = uc.round_id
                 const ucSeasonId = uc.season_id
                 const ucEntryType = uc.entry_type
-                const roundMatch = !roundIdParam || !ucRoundId || ucRoundId === parseInt(roundIdParam)
+                const rid = roundIdParam ? parseInt(roundIdParam, 10) : NaN
+                const roundMatch =
+                  !roundIdParam || (!Number.isNaN(rid) && ucRoundId === rid)
                 const contestMatch = !ucSeasonId || ucSeasonId === parseInt(contestId)
                 const typeMatch = !ucEntryType || ucEntryType === desiredEntryType
                 return roundMatch && contestMatch && typeMatch

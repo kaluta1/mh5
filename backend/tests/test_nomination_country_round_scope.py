@@ -1,4 +1,4 @@
-"""Regression: nomination country tabs must widen SQL round scope consistently (see _preview_country_for_nomination_multi_round)."""
+"""Regression: _preview_country_for_nomination_multi_round drives country preview for nomination geo (see crud_contest)."""
 import pytest
 
 from app.crud.crud_contest import _preview_country_for_nomination_multi_round

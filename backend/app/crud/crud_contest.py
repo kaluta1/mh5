@@ -856,14 +856,6 @@ class CRUDContest:
         # Utiliser entry_type explicite si fourni, sinon déduire du contest_mode
         contest_mode = _normalize_contest_mode(getattr(contest, 'contest_mode', 'participation'))
         contest_entry_type = entry_type if entry_type else ('nomination' if contest_mode == 'nomination' else 'participation')
-        preview_country_for_count = _preview_country_for_nomination_multi_round(
-            filter_country, filter_continent, filter_region, current_user, season_level
-        )
-        explicit_country_nomination_multi_round = bool(
-            contest_mode == "nomination"
-            and preview_country_for_count is not None
-            and round_ids
-        )
         season_level_lower_for_count = str(season_level or "").lower()
         count_by_active_season_members = (
             season_link is not None
@@ -894,10 +886,9 @@ class CRUDContest:
                     or_(*conditions) if len(conditions) > 1 else conditions[0]
                 )
             if display_round_for_scope is not None:
-                if explicit_country_nomination_multi_round and round_ids:
-                    base_entries_query = base_entries_query.filter(Contestant.round_id.in_(round_ids))
-                else:
-                    base_entries_query = base_entries_query.filter(Contestant.round_id == display_round_for_scope)
+                base_entries_query = base_entries_query.filter(
+                    Contestant.round_id == display_round_for_scope
+                )
         else:
             # No conditions - return 0 (contest has no rounds or seasons linked yet)
             base_entries_query = db.query(func.count(Contestant.id.distinct()))\
@@ -924,10 +915,9 @@ class CRUDContest:
                     or_(*conditions) if len(conditions) > 1 else conditions[0]
                 )
             if display_round_for_scope is not None:
-                if explicit_country_nomination_multi_round and round_ids:
-                    entries_query = entries_query.filter(Contestant.round_id.in_(round_ids))
-                else:
-                    entries_query = entries_query.filter(Contestant.round_id == display_round_for_scope)
+                entries_query = entries_query.filter(
+                    Contestant.round_id == display_round_for_scope
+                )
         else:
             # No conditions - return 0
             entries_query = db.query(func.count(Contestant.id.distinct()))\
@@ -1632,29 +1622,7 @@ class CRUDContest:
                     regional_context_without_season = True
         
         # FIXED: Query contestants by the ACTIVE SEASON ID (not contest_id)
-        from app.models.round import Round, round_contests
         from sqlalchemy import or_, and_
-        
-        # Find round IDs linked to this contest
-        round_ids = []
-        try:
-            round_ids_via_table = db.query(round_contests.c.round_id).filter(
-                round_contests.c.contest_id == contest_id
-            ).all()
-            if round_ids_via_table:
-                round_ids.extend([r[0] for r in round_ids_via_table])
-        except Exception:
-            pass
-        
-        try:
-            legacy_rounds = db.query(Round.id).filter(Round.contest_id == contest_id).all()
-            if legacy_rounds:
-                round_ids.extend([r[0] for r in legacy_rounds])
-        except Exception:
-            pass
-        
-        round_ids = list(set(round_ids))
-        
         # IMPORTANT: Contestant.season_id = contest_id (legacy naming)
         # ContestSeason is for migration tracking, NOT for filtering contestants
         # Always use contest_id to find contestants
@@ -1705,46 +1673,29 @@ class CRUDContest:
         pooled_season_membership_scope = bool(
             season and season_level in ("regional", "region", "continent", "global")
         )
-        # Must be defined before widen_nomination_multi_round (that flag reads it).
         # Intentionally False: country membership branch is disabled below.
         nomination_country_membership_scope = False
-        preview_country = _preview_country_for_nomination_multi_round(
-            filter_country, filter_continent, filter_region, current_user, season_level
-        )
-        widen_nomination_multi_round = bool(
-            nomination_context
-            and preview_country is not None
-            and target_round_id is not None
-            and round_ids
-            and not pooled_season_membership_scope
-            and not nomination_country_membership_scope
-        )
 
-        # Keep contest detail roster aligned with round card counts:
-        # country/city nomination views should stay round-scoped when roundId is provided.
-        # Always include the signed-in user's own nomination rows even if round_id drifted
-        # (stale URLs, migration, legacy NULL) so "Edit" and "View" stay consistent.
+        # Nomination rosters: one calendar round at a time (no merging all linked rounds).
+        # Include legacy rows with NULL round_id for the signed-in user only (migration),
+        # never nominations from a different explicit round.
         if target_round_id is not None and not pooled_season_membership_scope and not nomination_country_membership_scope:
-            if widen_nomination_multi_round:
-                round_scope = Contestant.round_id.in_(round_ids)
-            else:
-                round_scope = Contestant.round_id == target_round_id
+            round_scope = Contestant.round_id == target_round_id
             if nomination_context and current_user_id:
-                my_nomination = and_(
+                my_legacy_null_round = and_(
                     Contestant.user_id == current_user_id,
                     Contestant.entry_type == effective_entry_type,
+                    Contestant.round_id.is_(None),
                 )
-                contestants_query = contestants_query.filter(or_(round_scope, my_nomination))
+                contestants_query = contestants_query.filter(or_(round_scope, my_legacy_null_round))
                 logger.info(
-                    f"[get_contest_with_enriched_contestants] Scoping to "
-                    f"{'all contest rounds (country-scoped nomination)' if widen_nomination_multi_round else f'round_id={target_round_id}'} "
-                    f"or current user's nomination (user_id={current_user_id})"
+                    f"[get_contest_with_enriched_contestants] Scoping to round_id={target_round_id} "
+                    f"or current user's legacy NULL-round nomination (user_id={current_user_id})"
                 )
             else:
                 contestants_query = contestants_query.filter(round_scope)
                 logger.info(
-                    f"[get_contest_with_enriched_contestants] Scoping to "
-                    f"{'all linked rounds for country-scoped nomination view' if widen_nomination_multi_round else f'round_id={target_round_id}'}"
+                    f"[get_contest_with_enriched_contestants] Scoping to round_id={target_round_id}"
                 )
 
         # Once a contest migrates beyond its start level, the visible roster is
