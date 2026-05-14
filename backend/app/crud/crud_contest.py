@@ -71,16 +71,29 @@ def _get_country_match_patterns(country: str) -> List[str]:
 
 
 def _normalize_contest_mode(mode: Any) -> str:
-    """Normalize enum/string contest_mode to a comparable lowercase string."""
+    """Normalize enum/string contest_mode to a comparable lowercase string.
+
+    Keep logic aligned with app.api.api_v1.endpoints.contests / rounds / contestant
+    so roster counts and create_contestant agree on nomination vs participation.
+    """
     if mode is None:
         return "participation"
     value = mode.value if hasattr(mode, "value") else mode
     text = str(value).strip().strip('"').strip("'")
     if not text:
         return "participation"
+    low = text.lower()
+    if low in ("nomination", "nominate"):
+        return "nomination"
+    if low in ("participation", "participant", "participate"):
+        return "participation"
     token = text.split(".")[-1].strip().lower()
-    if token in {"nomination", "participation"}:
-        return token
+    if token in {"nomination", "nominate"}:
+        return "nomination"
+    if token in {"participation", "participant", "participate"}:
+        return "participation"
+    if "nomination" in low and "participation" not in low:
+        return "nomination"
     return "participation"
 
 
@@ -169,7 +182,8 @@ def resolve_nomination_display_season_for_contest_round(
     Mirrors get_contest_with_enriched_contestants so participant_count matches the opened list.
 
     Uses the first arbitrary active ContestSeasonLink only when round-scoped seasons are absent.
-    Clears selection when nomination calendar rejects all round-linked phases (prior behavior).
+    When nomination calendar gates remove every round-linked phase, fall back to that same
+    naive link so detail rosters and counts stay consistent (same as having no round links).
     """
     from app.models.contests import ContestSeasonLink, ContestSeason
 
@@ -228,7 +242,7 @@ def resolve_nomination_display_season_for_contest_round(
         pairs = allowed_pairs
 
     if not pairs:
-        return None, None
+        return naive_sl, naive_season
 
     round_obj_sel = pairs[0][1].round if pairs else None
     dashboard_level = "country"
@@ -728,7 +742,7 @@ class CRUDContest:
 
         # Nomination contests: country-level geo filter (not city), aligned with vote API
         if season_level and str(season_level).lower() == "city":
-            if (getattr(contest, "contest_mode", "") or "").strip().lower() == "nomination":
+            if _normalize_contest_mode(getattr(contest, "contest_mode", None)) == "nomination":
                 season_level = "country"
 
         # FIXED: Query contestants by both round_id and season_id
@@ -2105,7 +2119,9 @@ class CRUDContest:
                 season_level = season_level.lower()
 
         # Nomination contests: country-level geography (not city), aligned with POST /vote
-        if season_level == "city" and contest_obj and (getattr(contest_obj, "contest_mode", "") or "").strip().lower() == "nomination":
+        if season_level == "city" and contest_obj and _normalize_contest_mode(
+            getattr(contest_obj, "contest_mode", None)
+        ) == "nomination":
             season_level = "country"
 
         # Compter les votes et sommer les points pour chaque contestant
