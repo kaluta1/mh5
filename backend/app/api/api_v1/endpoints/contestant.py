@@ -1554,7 +1554,7 @@ def get_contest_contestants(
     from app.models.round import Round
     from app.models.round import round_contests
     from app.models.contests import Contestant
-    from sqlalchemy import or_, func
+    from sqlalchemy import or_, func, and_
     from sqlalchemy.orm import joinedload
     import logging
     
@@ -1652,9 +1652,27 @@ def get_contest_contestants(
         if has_country_filter:
             suppress_geo_filters = False
 
-        # Apply geographic filters
+        # Apply geographic filters (nominations: match nominator_country when contestant.country is empty)
         if has_country_filter and not suppress_geo_filters:
-            query = query.filter(func.lower(Contestant.country) == fc_norm)
+            query = query.outerjoin(User, Contestant.user_id == User.id).filter(
+                or_(
+                    and_(
+                        Contestant.country.isnot(None),
+                        func.length(func.trim(Contestant.country)) > 0,
+                        func.lower(func.trim(Contestant.country)) == fc_norm,
+                    ),
+                    and_(
+                        Contestant.nominator_country.isnot(None),
+                        func.length(func.trim(Contestant.nominator_country)) > 0,
+                        func.lower(func.trim(Contestant.nominator_country)) == fc_norm,
+                    ),
+                    and_(
+                        User.country.isnot(None),
+                        func.length(func.trim(User.country)) > 0,
+                        func.lower(func.trim(User.country)) == fc_norm,
+                    ),
+                )
+            )
         if has_region_filter and not suppress_geo_filters:
             query = query.filter(func.lower(Contestant.region) == fr_norm)
         if has_continent_filter and not suppress_geo_filters:
@@ -1701,7 +1719,13 @@ def get_contest_contestants(
             ):
                 original_count = len(contestants)
                 if has_country_filter:
-                    contestants = [c for c in contestants if c.country and c.country.lower() == fc_norm]
+                    def _row_matches_country(c: Contestant) -> bool:
+                        nc = (getattr(c, "nominator_country", None) or "").strip().lower()
+                        cc = (getattr(c, "country", None) or "").strip().lower()
+                        uc = (getattr(c.user, "country", None) or "").strip().lower() if getattr(c, "user", None) else ""
+                        return cc == fc_norm or nc == fc_norm or uc == fc_norm
+
+                    contestants = [c for c in contestants if _row_matches_country(c)]
                 if has_region_filter:
                     contestants = [c for c in contestants if c.region and c.region.lower() == fr_norm]
                 if has_continent_filter:

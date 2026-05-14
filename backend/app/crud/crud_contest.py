@@ -1762,11 +1762,14 @@ class CRUDContest:
             
             if effective_country:
                 logger.info(f"[get_contest_with_enriched_contestants] Filtering by country: '{effective_country}'")
-                # Build patterns: include code (TZ) and common names (Tanzania) so both match
+                # Build patterns: include code (TZ) and common names (Tanzania) so both match.
+                # Nominations: nominee geo may be empty; scope is often on nominator_country — include it
+                # so country-scoped views match the same rows as regional pool coalesce logic.
                 country_patterns = _get_country_match_patterns(effective_country)
                 conds = []
                 for pat in country_patterns:
                     conds.append(Contestant.country.ilike(pat))
+                    conds.append(Contestant.nominator_country.ilike(pat))
                     conds.append(User.country.ilike(pat))
                 location_conditions.append(or_(*conds))
             if effective_region:
