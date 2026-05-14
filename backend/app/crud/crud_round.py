@@ -206,14 +206,17 @@ class CRUDRound:
         """
         Which calendar round to use when listing contestants for a contest.
 
-        - If the client passes an explicit ``round_id`` (e.g. deep link from the grid), always
-          honor it for roster/count scoping.
-        - If ``round_id`` is omitted and ``prefer_nomination_submit_round`` is True (nomination
-          contests), prefer the current **submission** month round (``get_preferred_nomination_round_for_contest``)
-          so the API does not default to an older **voting** round that still overlaps today — that
-          mismatch hid May nominators while showing a single March-era row (wrong round).
-        - Otherwise (participation or no submit round): voting window > submission window >
-          most recent started.
+        - If the client passes an explicit ``round_id``, it is honored by default.
+        - For **nomination** contests (``prefer_nomination_submit_round``), if the URL round is
+          a stale voting-era scope (e.g. almost no nomination rows) while the canonical nomination
+          round has more activity, the explicit ``round_id`` is replaced so redeploys and old
+          ``?roundId=`` links still show the right roster.
+        - If ``round_id`` is omitted and ``prefer_nomination_submit_round`` is True, prefer the
+          current submission month (``get_preferred_nomination_round_for_contest``), then any
+          submission window open today, then the latest ``round_id`` among nomination rows, before
+          falling back to voting/submission date heuristics — so the API does not stick to an older
+          **voting** round when May nominations live in another calendar round.
+        - Otherwise (participation): voting window > submission window > most recent started.
         """
         if round_id is not None:
             if not self.is_round_linked_to_contest(db, contest_id, round_id):
@@ -225,12 +228,61 @@ class CRUDRound:
                     round_id,
                     contest_id,
                 )
+            if prefer_nomination_submit_round:
+                canonical = self.resolve_display_round_id_for_contest(
+                    db,
+                    contest_id,
+                    None,
+                    prefer_nomination_submit_round=True,
+                )
+                if canonical is not None and canonical != round_id:
+                    from app.models.contests import Contestant
+
+                    ne = (
+                        db.query(func.count(Contestant.id))
+                        .filter(
+                            Contestant.season_id == contest_id,
+                            Contestant.is_deleted == False,
+                            Contestant.entry_type == "nomination",
+                            Contestant.round_id == round_id,
+                        )
+                        .scalar()
+                    ) or 0
+                    nc = (
+                        db.query(func.count(Contestant.id))
+                        .filter(
+                            Contestant.season_id == contest_id,
+                            Contestant.is_deleted == False,
+                            Contestant.entry_type == "nomination",
+                            Contestant.round_id == canonical,
+                        )
+                        .scalar()
+                    ) or 0
+                    if (ne == 0 and nc > 0) or (ne <= 1 and nc > ne):
+                        return canonical
             return round_id
 
         if prefer_nomination_submit_round:
             pref = self.get_preferred_nomination_round_for_contest(db, contest_id)
             if pref is not None:
                 return pref.id
+            active_sub = self.get_active_round_for_contest(db, contest_id)
+            if active_sub is not None:
+                return active_sub.id
+            from app.models.contests import Contestant
+
+            max_rid = (
+                db.query(func.max(Contestant.round_id))
+                .filter(
+                    Contestant.season_id == contest_id,
+                    Contestant.is_deleted == False,
+                    Contestant.entry_type == "nomination",
+                    Contestant.round_id.isnot(None),
+                )
+                .scalar()
+            )
+            if max_rid is not None:
+                return int(max_rid)
 
         rounds = self.get_rounds_for_contest(db, contest_id)
         if not rounds:

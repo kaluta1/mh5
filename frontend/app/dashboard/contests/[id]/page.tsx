@@ -380,6 +380,28 @@ export default function ContestDetailPage() {
     // Cleanup handled in fetchContestDetails via abortController
   }, [fetchContestDetails])
 
+  // Nomination contests: keep ?roundId= in sync with the API roster (fixes stale grid links).
+  React.useEffect(() => {
+    if (pageLoading || !contest?.contest) return
+    const mode = normalizeContestMode(contest.contest.contest_mode)
+    if (mode !== 'nomination') return
+    const dr = contest.contest.display_round_id
+    if (dr == null) return
+    const urlNum = roundIdFromUrl ? parseInt(roundIdFromUrl, 10) : NaN
+    if (Number.isFinite(urlNum) && urlNum === dr) return
+    const p = new URLSearchParams(searchParams.toString())
+    p.set('roundId', String(dr))
+    router.replace(`/dashboard/contests/${contestId}?${p.toString()}`, { scroll: false })
+  }, [
+    pageLoading,
+    contest?.contest?.contest_mode,
+    contest?.contest?.display_round_id,
+    contestId,
+    roundIdFromUrl,
+    router,
+    searchParams,
+  ])
+
   // After vote / replace: silent refresh so we do not unmount the grid (skeleton reset "Vote" button state)
   useEffect(() => {
     const onVoteChanged = () => {
