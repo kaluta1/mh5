@@ -939,8 +939,11 @@ class CRUDContest:
         else:
             _entries_entry_type_clause = Contestant.entry_type == contest_entry_type
         season_level_lower_for_count = str(season_level or "").lower()
+        # Nominations are always counted from Contestant rows (by round + geo), not
+        # ContestantSeason membership — otherwise cards/rosters show only pool + self.
         count_by_active_season_members = (
-            season_link is not None
+            contest_mode != "nomination"
+            and season_link is not None
             and season_level_lower_for_count in ("regional", "region", "continent", "global")
         )
         ea_regional_nomination_count = (
@@ -1802,7 +1805,9 @@ class CRUDContest:
         # Once a contest migrates beyond its start level, the visible roster is
         # the active ContestantSeason membership for that level (e.g. March top
         # 5 winners in REGIONAL), not every original contestant from the round.
-        if pooled_season_membership_scope:
+        # Nominations stay on Contestant rows until promotion; pooling hid everyone
+        # except ContestantSeason members + the signed-in user's own nominations.
+        if pooled_season_membership_scope and contest_mode != "nomination":
             active_season_member_ids = db.query(ContestantSeason.contestant_id).filter(
                 ContestantSeason.season_id == season.id,
                 ContestantSeason.is_active == True,
