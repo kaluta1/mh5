@@ -280,15 +280,22 @@ class CRUDRound:
         
         return rounds
 
-    def count_participants_for_round(self, db: Session, round_id: int) -> int:
+    def count_participants_for_round(
+        self, db: Session, round_id: int, contest_id: Optional[int] = None
+    ) -> int:
         """
-        Compte le nombre de contestants dans un round spécifique
+        Count contestants for a calendar round. When ``contest_id`` is set, only rows
+        with ``Contestant.season_id == contest_id`` are counted (contest rows use season_id
+        as contest id). Shared rounds must not mix nominations across contests.
         """
         from app.models.contests import Contestant
-        return db.query(func.count(Contestant.id)).filter(
+        q = db.query(func.count(Contestant.id)).filter(
             Contestant.round_id == round_id,
-            Contestant.is_deleted == False
-        ).scalar() or 0
+            Contestant.is_deleted == False,
+        )
+        if contest_id is not None:
+            q = q.filter(Contestant.season_id == contest_id)
+        return q.scalar() or 0
 
     def user_participated_in_round(self, db: Session, round_id: int, user_id: int) -> bool:
         """
@@ -372,7 +379,7 @@ class CRUDRound:
         result = []
         
         for r in rounds:
-            participants_count = self.count_participants_for_round(db, r.id)
+            participants_count = self.count_participants_for_round(db, r.id, contest_id=contest_id)
             current_user_participated = False
             if user_id:
                 current_user_participated = self.user_participated_in_round(db, r.id, user_id)

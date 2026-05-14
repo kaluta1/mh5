@@ -319,21 +319,22 @@ def resolve_nomination_display_season_for_contest_round(
         "global": 5,
     }
 
+    def _season_level_rank(pr: tuple) -> tuple:
+        lvl = pr[1].level.value if hasattr(pr[1].level, "value") else str(pr[1].level)
+        return (level_rank.get(str(lvl).lower(), 0), pr[1].id or 0)
+
     selection_pool = matched if matched else list(pairs)
-    season_link, season = max(
-        selection_pool,
-        key=lambda pr: (
-            level_rank.get(
-                (
-                    pr[1].level.value
-                    if hasattr(pr[1].level, "value")
-                    else str(pr[1].level)
-                ).lower(),
-                0,
-            ),
-            pr[1].id or 0,
-        ),
-    )
+    is_nomination = _normalize_contest_mode(getattr(contest_obj, "contest_mode", None)) == "nomination"
+    # When the dashboard is still country/city but no ContestSeason row matches that level
+    # (only higher-tier rows exist for this round), taking max(level) used to pick REGIONAL
+    # and activate ContestantSeason pooling — hiding most country nominations. Prefer the
+    # lowest linked tier instead so counts/rosters match DB rows for that phase.
+    if matched:
+        season_link, season = max(selection_pool, key=_season_level_rank)
+    elif is_nomination and dashboard_level in ("country", "city") and selection_pool:
+        season_link, season = min(selection_pool, key=_season_level_rank)
+    else:
+        season_link, season = max(selection_pool, key=_season_level_rank)
     return season_link, season
 
 
