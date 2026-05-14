@@ -666,8 +666,11 @@ def read_contest(
         ).first()
 
         from app import crud
+        # Prefer the URL/query round so participation matches the same roster as GET contest body.
         display_rid = enriched_contest.get("display_round_id") if isinstance(enriched_contest, dict) else None
-        if display_rid:
+        if round_id is not None:
+            target_round_id = round_id
+        elif display_rid:
             target_round_id = display_rid
         else:
             active_round = crud.round.get_active_round_for_contest(db, contest_id)

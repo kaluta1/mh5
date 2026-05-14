@@ -1648,7 +1648,7 @@ class CRUDContest:
                 Contestant.is_deleted == False,
                 Contestant.season_id == filter_season_id
             )\
-            .join(User) \
+            .outerjoin(User, Contestant.user_id == User.id) \
             .options(
                 contains_eager(Contestant.user)
             )

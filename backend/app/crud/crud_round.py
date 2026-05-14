@@ -200,10 +200,24 @@ class CRUDRound:
         """
         Which calendar round to use when listing contestants for a contest.
 
-        - If ``round_id`` is set and linked to this contest, use it.
-        - Otherwise pick the best default: voting window > submission window > most recent started.
+        - If the client passes an explicit ``round_id`` (e.g. deep link from the grid), always
+          honor it for roster/count scoping. Rows are still restricted by ``Contestant.season_id``
+          (contest id), so a wrong id only yields an empty list — whereas ignoring the URL and
+          substituting another round hid nominations stored on the requested round when
+          ``round_contests`` was stale or missing a link.
+        - If ``round_id`` is omitted, pick the best default: voting window > submission window >
+          most recent started.
         """
-        if round_id is not None and self.is_round_linked_to_contest(db, contest_id, round_id):
+        if round_id is not None:
+            if not self.is_round_linked_to_contest(db, contest_id, round_id):
+                import logging
+
+                logging.getLogger(__name__).warning(
+                    "round_id=%s is not linked to contest_id=%s in round_contests; "
+                    "using requested round anyway for contestant scope (URL roundId).",
+                    round_id,
+                    contest_id,
+                )
             return round_id
 
         rounds = self.get_rounds_for_contest(db, contest_id)
