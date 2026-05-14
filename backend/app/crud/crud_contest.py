@@ -97,6 +97,64 @@ def _normalize_contest_mode(mode: Any) -> str:
     return "participation"
 
 
+def _preview_country_for_nomination_multi_round(
+    filter_country: Optional[str],
+    filter_continent: Optional[str],
+    filter_region: Optional[str],
+    current_user: Any,
+    season_level: Optional[str],
+) -> Optional[str]:
+    """
+    Mirror the country-resolution prefix of get_contest_with_enriched_contestants geo logic
+    so nomination round-widening (all linked calendar rounds for one contest) only runs when
+    the roster will actually be filtered by a single country (explicit URL, or user default),
+    not for country=all, continent-only, or pooled regional/global phases.
+    """
+
+    def is_valid_location(value: Optional[str]) -> bool:
+        if not value:
+            return False
+        val_lower = str(value).lower().strip()
+        return val_lower not in ("unknown", "none", "", "null", "all")
+
+    effective_country = None
+    effective_region = None
+
+    filter_country_str = str(filter_country).lower().strip() if filter_country is not None else ""
+    filter_continent_str = str(filter_continent).lower().strip() if filter_continent is not None else ""
+    is_explicit_all_country = filter_country is not None and filter_country_str == "all"
+    is_explicit_all_continent = filter_continent is not None and filter_continent_str == "all"
+
+    if is_explicit_all_country:
+        effective_country = None
+    elif filter_country and is_valid_location(filter_country):
+        effective_country = filter_country
+
+    if filter_region and is_valid_location(filter_region):
+        effective_region = filter_region
+
+    season_level_for_filter = str(season_level or "").lower()
+    suppress_user_country_fallback = season_level_for_filter in (
+        "regional",
+        "region",
+        "continent",
+        "continental",
+        "global",
+    )
+    explicit_region_filter = effective_region
+
+    if suppress_user_country_fallback:
+        if not (effective_country and not effective_region):
+            effective_country = None
+        effective_region = explicit_region_filter
+
+    if current_user and not is_explicit_all_country and not is_explicit_all_continent:
+        if not effective_country and is_valid_location(current_user.country) and not suppress_user_country_fallback:
+            effective_country = current_user.country
+
+    return effective_country
+
+
 def regional_voting_pools_sql_predicate():
     """
     Regional nomination roster: nominee country/nominator must map to one configured bloc
@@ -798,10 +856,13 @@ class CRUDContest:
         # Utiliser entry_type explicite si fourni, sinon déduire du contest_mode
         contest_mode = _normalize_contest_mode(getattr(contest, 'contest_mode', 'participation'))
         contest_entry_type = entry_type if entry_type else ('nomination' if contest_mode == 'nomination' else 'participation')
+        preview_country_for_count = _preview_country_for_nomination_multi_round(
+            filter_country, filter_continent, filter_region, current_user, season_level
+        )
         explicit_country_nomination_multi_round = bool(
             contest_mode == "nomination"
-            and filter_country
-            and str(filter_country).strip().lower() not in ("", "all", "unknown", "none", "null")
+            and preview_country_for_count is not None
+            and round_ids
         )
         season_level_lower_for_count = str(season_level or "").lower()
         count_by_active_season_members = (
@@ -1644,10 +1705,16 @@ class CRUDContest:
         pooled_season_membership_scope = bool(
             season and season_level in ("regional", "region", "continent", "global")
         )
-        explicit_country_scope = bool(
+        preview_country = _preview_country_for_nomination_multi_round(
+            filter_country, filter_continent, filter_region, current_user, season_level
+        )
+        widen_nomination_multi_round = bool(
             nomination_context
-            and country_filter_norm
-            and country_filter_norm not in ("", "all", "unknown", "none", "null")
+            and preview_country is not None
+            and target_round_id is not None
+            and round_ids
+            and not pooled_season_membership_scope
+            and not nomination_country_membership_scope
         )
 
         # Keep contest detail roster aligned with round card counts:
@@ -1656,7 +1723,7 @@ class CRUDContest:
         # (stale URLs, migration, legacy NULL) so "Edit" and "View" stay consistent.
         nomination_country_membership_scope = False
         if target_round_id is not None and not pooled_season_membership_scope and not nomination_country_membership_scope:
-            if explicit_country_scope and round_ids:
+            if widen_nomination_multi_round:
                 round_scope = Contestant.round_id.in_(round_ids)
             else:
                 round_scope = Contestant.round_id == target_round_id
@@ -1668,14 +1735,14 @@ class CRUDContest:
                 contestants_query = contestants_query.filter(or_(round_scope, my_nomination))
                 logger.info(
                     f"[get_contest_with_enriched_contestants] Scoping to "
-                    f"{'all contest rounds' if explicit_country_scope and round_ids else f'round_id={target_round_id}'} "
+                    f"{'all contest rounds (country-scoped nomination)' if widen_nomination_multi_round else f'round_id={target_round_id}'} "
                     f"or current user's nomination (user_id={current_user_id})"
                 )
             else:
                 contestants_query = contestants_query.filter(round_scope)
                 logger.info(
                     f"[get_contest_with_enriched_contestants] Scoping to "
-                    f"{'all linked rounds for explicit country nomination view' if explicit_country_scope and round_ids else f'round_id={target_round_id}'}"
+                    f"{'all linked rounds for country-scoped nomination view' if widen_nomination_multi_round else f'round_id={target_round_id}'}"
                 )
 
         # Once a contest migrates beyond its start level, the visible roster is
