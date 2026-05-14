@@ -1,4 +1,5 @@
 from typing import List, Optional, Union, Dict, Any
+import re
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from datetime import date, datetime, timedelta
@@ -245,7 +246,8 @@ class CRUDRound:
         from app.models.round import round_contests
         now = date.today()
         
-        # Query via N:N relationship
+        # Query via N:N relationship — prefer the **latest** submission window that still
+        # includes today so May wins over April when both are open (matches dashboard pills).
         round_obj = db.query(Round).join(
             round_contests, Round.id == round_contests.c.round_id
         ).filter(
@@ -253,7 +255,7 @@ class CRUDRound:
             Round.submission_start_date <= now,
             Round.submission_end_date >= now,
             Round.status != RoundStatus.CANCELLED
-        ).first()
+        ).order_by(Round.submission_start_date.desc()).first()
         
         # Fallback to legacy contest_id field
         if not round_obj:
@@ -262,9 +264,46 @@ class CRUDRound:
                 Round.submission_start_date <= now,
                 Round.submission_end_date >= now,
                 Round.status != RoundStatus.CANCELLED
-            ).first()
+            ).order_by(Round.submission_start_date.desc()).first()
         
         return round_obj
+
+    def get_preferred_nomination_round_for_contest(self, db: Session, contest_id: int) -> Optional[Round]:
+        """
+        Among rounds linked to this contest with submission open today, prefer the one whose
+        title starts with the current English month + year (same idea as the dashboard
+        ``computeDisplayRounds`` nomination pill). Otherwise use the latest submission_start.
+        """
+        rounds = self.get_rounds_for_contest(db, contest_id)
+        if not rounds:
+            return None
+        today = date.today()
+        open_submit: List[Round] = []
+        for r in rounds:
+            if r.status == RoundStatus.CANCELLED:
+                continue
+            if not r.submission_start_date or not r.submission_end_date:
+                continue
+            if r.submission_start_date <= today <= r.submission_end_date:
+                open_submit.append(r)
+        if not open_submit:
+            return None
+        label = f"{calendar.month_name[today.month]} {today.year}".lower()
+
+        def title_starts_current_month(name: Optional[str]) -> bool:
+            if not name or not name.strip():
+                return False
+            n = (
+                name.lower()
+                .strip()
+            )
+            n = re.sub(r"^\s*(round|season)\s*#?\d*\s*[:-–—]?\s*", "", n, flags=re.I).strip()
+            return n.startswith(label)
+
+        for r in sorted(open_submit, key=lambda x: x.submission_start_date or today, reverse=True):
+            if title_starts_current_month(r.name):
+                return r
+        return max(open_submit, key=lambda x: x.submission_start_date or date.min)
 
     def get_rounds_for_contest(self, db: Session, contest_id: int) -> List[Round]:
         """

@@ -848,7 +848,7 @@ class CRUDContest:
             logger.debug(f"Contest {contest.id} has no linked rounds")
         
         # Build query with OR conditions for round_id and season_id
-        from sqlalchemy import or_, and_
+        from sqlalchemy import or_
         conditions = []
         
         # Always include season_id condition (legacy support)
@@ -895,20 +895,9 @@ class CRUDContest:
                     or_(*conditions) if len(conditions) > 1 else conditions[0]
                 )
             if display_round_for_scope is not None:
-                if contest_mode == "nomination" and current_user and getattr(current_user, "id", None):
-                    base_entries_query = base_entries_query.filter(
-                        or_(
-                            Contestant.round_id == display_round_for_scope,
-                            and_(
-                                Contestant.user_id == current_user.id,
-                                Contestant.entry_type == contest_entry_type,
-                            ),
-                        )
-                    )
-                else:
-                    base_entries_query = base_entries_query.filter(
-                        Contestant.round_id == display_round_for_scope
-                    )
+                base_entries_query = base_entries_query.filter(
+                    Contestant.round_id == display_round_for_scope
+                )
         else:
             # No conditions - return 0 (contest has no rounds or seasons linked yet)
             base_entries_query = db.query(func.count(Contestant.id.distinct()))\
@@ -935,20 +924,9 @@ class CRUDContest:
                     or_(*conditions) if len(conditions) > 1 else conditions[0]
                 )
             if display_round_for_scope is not None:
-                if contest_mode == "nomination" and current_user and getattr(current_user, "id", None):
-                    entries_query = entries_query.filter(
-                        or_(
-                            Contestant.round_id == display_round_for_scope,
-                            and_(
-                                Contestant.user_id == current_user.id,
-                                Contestant.entry_type == contest_entry_type,
-                            ),
-                        )
-                    )
-                else:
-                    entries_query = entries_query.filter(
-                        Contestant.round_id == display_round_for_scope
-                    )
+                entries_query = entries_query.filter(
+                    Contestant.round_id == display_round_for_scope
+                )
         else:
             # No conditions - return 0
             entries_query = db.query(func.count(Contestant.id.distinct()))\
@@ -1708,22 +1686,19 @@ class CRUDContest:
         nomination_country_membership_scope = False
 
         # Nomination rosters: one calendar round at a time (no merging all linked rounds).
-        # Always surface the signed-in user's own nomination for this contest, even when
-        # round_id on the row predates a calendar shift, migration, or URL round drift —
-        # otherwise the grid shows "no nominators" while the card still shows Edit.
+        # Include legacy rows with NULL round_id for the signed-in user only (migration).
         if target_round_id is not None and not pooled_season_membership_scope and not nomination_country_membership_scope:
             round_scope = Contestant.round_id == target_round_id
             if nomination_context and current_user_id:
-                my_nomination_same_contest = and_(
+                my_legacy_null_round = and_(
                     Contestant.user_id == current_user_id,
                     Contestant.entry_type == effective_entry_type,
+                    Contestant.round_id.is_(None),
                 )
-                contestants_query = contestants_query.filter(
-                    or_(round_scope, my_nomination_same_contest)
-                )
+                contestants_query = contestants_query.filter(or_(round_scope, my_legacy_null_round))
                 logger.info(
                     f"[get_contest_with_enriched_contestants] Scoping to round_id={target_round_id} "
-                    f"or current user's nomination rows (user_id={current_user_id})"
+                    f"or current user's legacy NULL-round nomination (user_id={current_user_id})"
                 )
             else:
                 contestants_query = contestants_query.filter(round_scope)

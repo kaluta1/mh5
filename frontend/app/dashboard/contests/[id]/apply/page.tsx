@@ -78,8 +78,15 @@ export default function ApplyToContestPage() {
     const abortController = new AbortController()
 
     try {
-      // Fetch contest details only, as roundId is passed via URL if specific round is targeted
-      const c = await ApiService.getContest(parseInt(contestId)) as any
+      const parsedRoundFromUrl = roundIdParam ? parseInt(roundIdParam, 10) : NaN
+      const roundForApi = Number.isFinite(parsedRoundFromUrl) ? parsedRoundFromUrl : undefined
+
+      // Same calendar round + entry type as the grid/detail URL so May nominations are not
+      // evaluated against a different default round from the backend.
+      const c = await ApiService.getContest(parseInt(contestId), {
+        roundId: roundForApi,
+        entryType: entryTypeParam || undefined,
+      }) as any
 
       setHasActiveSubmissionRound(true) // Always allow submissions regardless of rounds status (only deadline matters)
 
@@ -153,7 +160,10 @@ export default function ApplyToContestPage() {
       // If not found via backend, try fetching all user contestants and filter properly
       if (!participationToUse && user?.id) {
         try {
-          const userContestants = await contestService.getContestantsByContest(contestId, { user_id: user.id })
+          const userContestants = await contestService.getContestantsByContest(contestId, {
+            user_id: user.id,
+            roundId: roundForApi,
+          })
           if (userContestants && userContestants.length > 0) {
             // Find a contestant matching round_id, contest AND entry_type
             const findMatchingEntryForType = (desiredEntryType: string) => {
@@ -255,7 +265,7 @@ export default function ApplyToContestPage() {
       addToast(t('dashboard.contests.load_error') || "Failed to load contest", 'error')
       setPageLoading(false)
     }
-  }, [contestId, user?.id, isEditMode, contestantIdParam, addToast, t])
+  }, [contestId, roundIdParam, entryTypeParam, user?.id, isEditMode, contestantIdParam, addToast, t])
 
   useEffect(() => {
     // Reset error state when contestId changes
@@ -265,7 +275,7 @@ export default function ApplyToContestPage() {
       fetchContestDetails()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [contestId]) // Only depend on contestId to prevent infinite loops
+  }, [contestId, roundIdParam, entryTypeParam])
 
   // Load real verification status from backend API (reset when user changes)
   useEffect(() => {
@@ -546,8 +556,14 @@ export default function ApplyToContestPage() {
         )
       } else {
         // Créer une nouvelle candidature
-        // Provide the active round ID given via URL query params
-        const roundId = roundIdParam ? parseInt(roundIdParam, 10) : undefined;
+        // Calendar round: URL wins, then contest payload from GET (aligns with dashboard pill).
+        const urlRound = roundIdParam ? parseInt(roundIdParam, 10) : NaN
+        const displayR = contest?.display_round_id != null ? Number(contest.display_round_id) : NaN
+        const activeR = contest?.active_round_id != null ? Number(contest.active_round_id) : NaN
+        let roundId: number | undefined
+        if (Number.isFinite(urlRound)) roundId = urlRound
+        else if (Number.isFinite(displayR)) roundId = displayR
+        else if (Number.isFinite(activeR)) roundId = activeR
 
         response = await contestService.submitContestant(
           contestId,

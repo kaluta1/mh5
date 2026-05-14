@@ -2165,12 +2165,28 @@ def create_contestant(
                         detail=f"Requested round does not belong to this contest"
                     )
     else:
-        # Trouver le round actif
+        # Trouver le round actif (submission ouvert aujourd'hui)
         if real_contest_id:
             from app import crud
-            active_round = crud.round.get_active_round_for_contest(db, real_contest_id)
-            if active_round:
-                target_round_id = active_round.id
+            from app.api.api_v1.endpoints.contests import _normalize_contest_mode as _norm_contest_mode_for_round
+
+            contest_for_nom = contest
+            if contest_for_nom is None and real_contest_id:
+                from app.models.contest import Contest as _ContestModelPick
+                contest_for_nom = db.query(_ContestModelPick).filter(
+                    _ContestModelPick.id == real_contest_id,
+                    _ContestModelPick.is_deleted == False,
+                ).first()
+
+            if contest_for_nom and _norm_contest_mode_for_round(getattr(contest_for_nom, "contest_mode", None)) == "nomination":
+                pref = crud.round.get_preferred_nomination_round_for_contest(db, real_contest_id)
+                if pref:
+                    target_round_id = pref.id
+
+            if not target_round_id:
+                active_round = crud.round.get_active_round_for_contest(db, real_contest_id)
+                if active_round:
+                    target_round_id = active_round.id
                 
     if not target_round_id:
         raise HTTPException(

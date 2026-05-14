@@ -611,27 +611,7 @@ def _enrich_round_data(
                     ).all()
 
                     if valid_contests:
-                        # Nominations: calendar round on the card can differ from the row's round_id
-                        # (month rollover, migration). Include the user's nomination rows for any
-                        # round so "Edit" matches GET /contests/{id} roster logic. Participations stay
-                        # strictly scoped to this calendar round.
-                        if (contest_mode or "").strip().lower() == "nomination":
-                            user_contestants = []
-                            for uc in all_user_contestants:
-                                et_raw = getattr(uc, "entry_type", None)
-                                et_val = (
-                                    et_raw.value
-                                    if hasattr(et_raw, "value")
-                                    else str(et_raw or "participation")
-                                ).strip().lower()
-                                if uc.round_id == round_id or uc.round_id is None:
-                                    user_contestants.append(uc)
-                                elif et_val == "nomination" and uc.user_id == user_id:
-                                    user_contestants.append(uc)
-                        else:
-                            user_contestants = [
-                                uc for uc in all_user_contestants if uc.round_id == round_id
-                            ]
+                        user_contestants = [uc for uc in all_user_contestants if uc.round_id == round_id]
                         expected_type = "nomination" if contest_mode == "nomination" else "participation"
                         contested_ids: set = set()
                         for uc in user_contestants:

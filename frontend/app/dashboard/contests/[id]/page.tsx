@@ -806,6 +806,8 @@ export default function ContestDetailPage() {
                         const queryParams = new URLSearchParams()
                         if (hasNominated) queryParams.set('edit', 'true')
                         if (roundForApply) queryParams.set('roundId', String(roundForApply))
+                        const mode = normalizeContestMode(contest?.contest?.contest_mode)
+                        queryParams.set('entryType', mode === 'nomination' ? 'nomination' : 'participation')
 
                         const queryString = queryParams.toString()
                         router.push(`/dashboard/contests/${contestId}/apply${queryString ? `?${queryString}` : ''}`)
@@ -1004,7 +1006,28 @@ export default function ContestDetailPage() {
                   onComment={() => { }}
                   onShare={() => { }}
                   onReport={handleReportClick}
-                  onEdit={(contestantId) => router.push(`/dashboard/contests/${contestId}/apply?edit=true&contestantId=${contestantId}`)}
+                  onEdit={(contestantId) => {
+                    const p = new URLSearchParams()
+                    p.set('edit', 'true')
+                    p.set('contestantId', String(contestantId))
+                    const r =
+                      roundIdFromUrl ||
+                      (contest?.contest?.display_round_id != null
+                        ? String(contest.contest.display_round_id)
+                        : '') ||
+                      (contest?.contest?.active_round_id != null
+                        ? String(contest.contest.active_round_id)
+                        : '') ||
+                      (contest?.active_round_id != null ? String(contest.active_round_id) : '')
+                    if (r) p.set('roundId', r)
+                    const et =
+                      entryType ||
+                      (normalizeContestMode(contest?.contest?.contest_mode) === 'nomination'
+                        ? 'nomination'
+                        : 'participation')
+                    p.set('entryType', et)
+                    router.push(`/dashboard/contests/${contestId}/apply?${p.toString()}`)
+                  }}
                   onDelete={handleDeleteContestant}
                   onHoverAuthor={(contestantId, data) => handleHoverStart('author', contestantId, data)}
                   onHoverEnd={handleHoverEnd}
