@@ -516,10 +516,10 @@ def _enrich_round_data(
             
             contests_count = len(valid_contests)
 
-            # Keep initial unfiltered page loads fast, but preserve the original
-            # scoped counts for regional/country/continent views. Those counts
-            # must match the detail roster exactly.
-            use_scoped_counts = bool(filter_country or filter_region or filter_continent)
+            # Always derive card counts from enrich_contest_with_stats for this calendar
+            # round_id. Previously counts used Contest.participant_count unless geo filters
+            # were set — that column is often stale, so gospel (and others) showed 1 while
+            # the DB/detail API had many nominations for the active round.
             contest_participant_counts = {
                 vc.id: int(getattr(vc, "participant_count", 0) or 0)
                 for vc in valid_contests
@@ -527,7 +527,7 @@ def _enrich_round_data(
             valid_contests_by_id = {vc.id: vc for vc in valid_contests}
             valid_contest_ids = set(valid_contests_by_id.keys())
 
-            if use_scoped_counts and valid_contests:
+            if valid_contests:
                 try:
                     current_user_obj = None
                     if user_id:
@@ -555,7 +555,9 @@ def _enrich_round_data(
                             stats.get("participants_count", stats.get("entries_count", 0))
                         )
                 except Exception as e:
-                    logger.warning(f"Scoped participant count build failed: {e}")
+                    logger.warning(
+                        f"Per-contest enrich stats for round {round_id} failed, using DB columns: {e}"
+                    )
 
             valid_contests.sort(key=lambda c: contest_participant_counts.get(c.id, 0), reverse=True)
 

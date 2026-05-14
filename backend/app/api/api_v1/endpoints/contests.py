@@ -98,6 +98,7 @@ def read_contests(
     filter_country: str = Query(None, description="Filtrer par pays (pour compter les contestants de ce pays)"),
     filter_region: str = Query(None, description="Filtrer par région (pour compter les contestants de cette région)"),
     filter_continent: str = Query(None, description="Filtrer par continent (pour compter les contestants de ce continent)"),
+    round_id: Optional[int] = Query(None, alias="roundId", description="Calendar round id so participant counts match that round"),
     sort_by: str = Query(None, description="Trier par un champ (ex: participant_count)"),
     sort_order: str = Query("desc", description="Ordre de tri (asc ou desc)"),
     current_user: Optional[Any] = Depends(get_current_active_user_optional),
@@ -303,6 +304,7 @@ def read_contests(
                 filter_continent=filter_continent,
                 include_top_contestants=False,
                 entry_type=expected_entry_type,
+                round_id=round_id,
             )
             visible_participants_count = int(stats_for_card.get("participants_count") or 0)
             # Singeli/East Africa special alignment: card count must match opened roster.
