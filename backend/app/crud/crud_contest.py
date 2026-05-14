@@ -230,6 +230,37 @@ def _pair_matches_nomination_dashboard_level(seas: Any, ui_level_raw: str) -> bo
     return lvl_lc == ui
 
 
+def _contest_season_link_for_round_relaxed(
+    db: Session, contest_id: int, target_round_id: int
+) -> tuple[Any, Any]:
+    """
+    ContestSeason for this contest + calendar round, preferring active links but accepting inactive.
+
+    When every ``is_active`` link for the target round is missing or turned off, the old code fell
+    back to ``.first()`` active link for the contest — often another round's season (wrong title,
+    wrong ContestantSeason pool). That produced rosters like one Gospel row under a Tennis season.
+    """
+    from app.models.contests import ContestSeasonLink, ContestSeason
+
+    row = (
+        db.query(ContestSeasonLink, ContestSeason)
+        .join(ContestSeason, ContestSeason.id == ContestSeasonLink.season_id)
+        .filter(
+            ContestSeasonLink.contest_id == contest_id,
+            ContestSeason.round_id == target_round_id,
+            ContestSeason.is_deleted == False,
+        )
+        .order_by(
+            ContestSeasonLink.is_active.desc(),
+            ContestSeasonLink.linked_at.desc(),
+        )
+        .first()
+    )
+    if not row:
+        return None, None
+    return row[0], row[1]
+
+
 def resolve_nomination_display_season_for_contest_round(
     db: Session,
     contest_obj: Contest,
@@ -239,9 +270,9 @@ def resolve_nomination_display_season_for_contest_round(
     Pick the ContestSeason (+ link) driving visible roster/counts/timeline for one contest round.
     Mirrors get_contest_with_enriched_contestants so participant_count matches the opened list.
 
-    Uses the first arbitrary active ContestSeasonLink only when round-scoped seasons are absent.
-    When nomination calendar gates remove every round-linked phase, fall back to that same
-    naive link so detail rosters and counts stay consistent (same as having no round links).
+    Uses the first arbitrary active ContestSeasonLink only when no season exists for this contest
+    and calendar round (even inactive links). Avoids picking another contest phase's season when
+    the correct round link is only inactive or missing the active flag.
     """
     from app.models.contests import ContestSeasonLink, ContestSeason
 
@@ -281,7 +312,11 @@ def resolve_nomination_display_season_for_contest_round(
         .all()
     )
     if not pairs:
-        return naive_sl, naive_season
+        sl_r, ss_r = _contest_season_link_for_round_relaxed(db, contest_id, target_round_id)
+        if sl_r is not None:
+            pairs = [(sl_r, ss_r)]
+        else:
+            return naive_sl, naive_season
 
     if _normalize_contest_mode(getattr(contest_obj, "contest_mode", "participation")) == "nomination":
         from app.services.season_migration import SeasonMigrationService
@@ -300,7 +335,11 @@ def resolve_nomination_display_season_for_contest_round(
         pairs = allowed_pairs
 
     if not pairs:
-        return naive_sl, naive_season
+        sl_r, ss_r = _contest_season_link_for_round_relaxed(db, contest_id, target_round_id)
+        if sl_r is not None:
+            pairs = [(sl_r, ss_r)]
+        else:
+            return naive_sl, naive_season
 
     round_obj_sel = pairs[0][1].round if pairs else None
     dashboard_level = "country"
