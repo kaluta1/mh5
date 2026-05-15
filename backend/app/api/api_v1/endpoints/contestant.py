@@ -115,6 +115,53 @@ def _normalize_contest_mode(mode: Any) -> str:
     return "participation"
 
 
+def _contest_level_norm(contest: Optional[Contest]) -> str:
+    if not contest:
+        return ""
+    lv = getattr(contest, "level", None)
+    return str(lv or "").strip().lower()
+
+
+def _season_level_norm(season: Optional[ContestSeason]) -> str:
+    if season is None or getattr(season, "level", None) is None:
+        return ""
+    value = season.level.value if hasattr(season.level, "value") else str(season.level)
+    value = str(value).strip().lower()
+    if value == "region":
+        return "regional"
+    if value == "continental":
+        return "continent"
+    return value
+
+
+def _effective_myhigh5_vote_level(
+    *,
+    season_level: str,
+    contest_mode_norm: str,
+    contest_level_norm: str,
+) -> str:
+    """Map ContestSeason.level to MyHigh5 tab geography (city / country / regional / …).
+
+    Nominations often store votes on CITY-labeled seasons while UX is country-scoped.
+    The same can happen for **participation** contests whose ``Contest.level`` is ``country``:
+    without this, country-phase votes incorrectly appear only under the City tab.
+    """
+    sl = (season_level or "").strip().lower()
+    if sl == "region":
+        sl = "regional"
+    if sl == "continental":
+        sl = "continent"
+    if sl == "city" and contest_mode_norm == "nomination":
+        return "country"
+    if (
+        sl == "city"
+        and contest_mode_norm == "participation"
+        and contest_level_norm == "country"
+    ):
+        return "country"
+    return sl
+
+
 def _normalize_video_media_ids_for_dedup(blob: Any) -> str:
     """Stable string for comparing nomination video payloads (idempotent double-submit)."""
     if blob is None:
@@ -858,13 +905,6 @@ def get_my_votes(
             contest_cache[vote.contest_id] = db.query(Contest).filter(Contest.id == vote.contest_id).first()
         return contest_cache.get(vote.contest_id)
 
-    def _level_value(season: Optional[ContestSeason]) -> Optional[str]:
-        if season is None or getattr(season, "level", None) is None:
-            return None
-        value = season.level.value if hasattr(season.level, "value") else str(season.level)
-        value = str(value).strip().lower()
-        return "regional" if value == "region" else value
-
     def _normalize_display_level(value: Any) -> Optional[str]:
         if value is None:
             return None
@@ -885,18 +925,18 @@ def get_my_votes(
         if key in effective_level_by_vote_id:
             return effective_level_by_vote_id[key]
 
-        season_level = _level_value(vote.season) or ""
+        season_level = _season_level_norm(vote.season)
         contest_for_vote = _contest_for_vote(vote)
         contest_mode_norm = _normalize_contest_mode(
             getattr(contest_for_vote, "contest_mode", None) if contest_for_vote else None
         )
+        contest_level_norm = _contest_level_norm(contest_for_vote)
 
-        effective_level = season_level
-        if contest_mode_norm == "nomination" and season_level == "city":
-            # Nomination country votes can be stored on city rows internally; MyHigh5 UX
-            # treats those as Country. Do not let the contest/category level override the
-            # vote season, or country votes disappear into Regional/other tabs.
-            effective_level = "country"
+        effective_level = _effective_myhigh5_vote_level(
+            season_level=season_level,
+            contest_mode_norm=contest_mode_norm,
+            contest_level_norm=contest_level_norm,
+        )
 
         effective_level_by_vote_id[key] = effective_level
         return effective_level
@@ -993,9 +1033,14 @@ def get_my_votes(
             category_id_out, category_name_out, contest_type_out, rep_contest_name = _labels_for_myhigh5_bucket(
                 db, bucket_key, contest
             )
+            sl_disp = _effective_myhigh5_vote_level(
+                season_level=_season_level_norm(season),
+                contest_mode_norm=_normalize_contest_mode(getattr(contest, "contest_mode", None)),
+                contest_level_norm=_contest_level_norm(contest),
+            )
             result["seasons"].append({
                 "season_id": group_key[0],
-                "season_level": season.level if season else None,
+                "season_level": sl_disp or None,
                 "contest_id": contest.id,
                 "contest_name": category_name_out or rep_contest_name or (contest.name if contest else None),
                 "category_id": category_id_out,
@@ -1259,7 +1304,18 @@ def get_my_votes_history(
             "contest_type": ctype_out or (contest.contest_type if contest else None),
             "seasons": []
         }
-        
+
+        cm_hist = _normalize_contest_mode(getattr(contest, "contest_mode", None))
+        cl_hist = _contest_level_norm(contest)
+
+        def _hist_vote_level(v: ContestantVoting) -> Optional[str]:
+            out = _effective_myhigh5_vote_level(
+                season_level=_season_level_norm(v.season),
+                contest_mode_norm=cm_hist,
+                contest_level_norm=cl_hist,
+            )
+            return out or None
+
         for season_id_key, votes in seasons.items():
             # Limiter à 5 votes par season pour l'affichage
             season_votes = votes[:5]
@@ -1277,7 +1333,7 @@ def get_my_votes_history(
                 ContestSeasonLink.season_id == season_id_key
             ).first()
             is_active = season_link.is_active if season_link else False
-            
+
             season_votes_list = []
             for idx, vote in enumerate(season_votes, 1):
                 contestant = vote.contestant
@@ -1311,12 +1367,12 @@ def get_my_votes_history(
                     "vote_date": vote.vote_date.isoformat() if vote.vote_date else None,
                     "season_id": vote.season_id,
                     "contest_id": vote.contest_id,
-                    "season_level": season.level if season else None
+                    "season_level": _hist_vote_level(vote),
                 })
             
             contest_data["seasons"].append({
                 "season_id": season_id_key,
-                "season_level": season.level if season else None,
+                "season_level": _hist_vote_level(first_vote),
                 "is_active": is_active,
                 "votes": season_votes_list,
                 "votes_count": len(season_votes_list)
