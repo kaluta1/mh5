@@ -128,13 +128,29 @@ function currentSeasonOnlyPerMyHigh5Bucket(seasons: SeasonVotes[]): SeasonVotes[
   return sortActiveSeasonsLikeApi(winners)
 }
 
-/** Nomination phases store CITY season rows but UX treats them as country scope. */
+/** Badge label for API `season_level` (backend sends tab-aligned effective level). */
 function formatMyHigh5SeasonBadge(level: string | null | undefined): string {
   if (!level) return ''
   const s = String(level).toLowerCase().trim()
-  if (s === 'city') return 'Country'
   if (s === 'region') return 'Regional'
+  if (s === 'continental') return 'Continent'
   return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
+/** Normalize level strings for comparing API rows to the selected geography tab. */
+function myHigh5TabLevel(level: string | null | undefined): string {
+  const s = String(level || '')
+    .toLowerCase()
+    .trim()
+    .split('.')
+    .pop() || ''
+  if (s === 'region') return 'regional'
+  if (s === 'continental') return 'continent'
+  return s
+}
+
+function filterSeasonsByGeographyTab(seasons: SeasonVotes[], tab: string): SeasonVotes[] {
+  return seasons.filter((s) => myHigh5TabLevel(s.season_level) === tab)
 }
 
 function subscribeCoarsePointer(cb: () => void) {
@@ -293,7 +309,11 @@ export default function MyHigh5Page() {
           undefined,
           archiveRoundId,
         )) as MyHigh5Response
-        setSeasonsData(currentSeasonOnlyPerMyHigh5Bucket(response.seasons || []))
+        setSeasonsData(
+          currentSeasonOnlyPerMyHigh5Bucket(
+            filterSeasonsByGeographyTab(response.seasons || [], activeLevel),
+          ),
+        )
       } catch (error) {
         console.error('Erreur lors du chargement des votes:', error)
         setSeasonsData([])
@@ -317,7 +337,11 @@ export default function MyHigh5Page() {
           undefined,
           archiveRoundId,
         )) as MyHigh5Response
-        setSeasonsData(currentSeasonOnlyPerMyHigh5Bucket(response.seasons || []))
+        setSeasonsData(
+          currentSeasonOnlyPerMyHigh5Bucket(
+            filterSeasonsByGeographyTab(response.seasons || [], activeLevel),
+          ),
+        )
       } catch (error) {
         console.error('Erreur lors du rafraîchissement des votes:', error)
       }
@@ -425,7 +449,11 @@ export default function MyHigh5Page() {
         undefined,
         archiveRoundId,
       )) as MyHigh5Response
-      setSeasonsData(currentSeasonOnlyPerMyHigh5Bucket(response.seasons || []))
+      setSeasonsData(
+        currentSeasonOnlyPerMyHigh5Bucket(
+          filterSeasonsByGeographyTab(response.seasons || [], activeLevel),
+        ),
+      )
     } finally {
       setIsSaving(false)
     }

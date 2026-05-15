@@ -119,7 +119,12 @@ def _contest_level_norm(contest: Optional[Contest]) -> str:
     if not contest:
         return ""
     lv = getattr(contest, "level", None)
-    return str(lv or "").strip().lower()
+    raw = str(lv or "").strip().lower()
+    if raw == "region":
+        return "regional"
+    if raw == "continental":
+        return "continent"
+    return raw
 
 
 def _season_level_norm(season: Optional[ContestSeason]) -> str:
@@ -143,8 +148,9 @@ def _effective_myhigh5_vote_level(
     """Map ContestSeason.level to MyHigh5 tab geography (city / country / regional / …).
 
     Nominations often store votes on CITY-labeled seasons while UX is country-scoped.
-    The same can happen for **participation** contests whose ``Contest.level`` is ``country``:
-    without this, country-phase votes incorrectly appear only under the City tab.
+    The same can happen for **participation** when the season row is still ``city`` but the
+    contest has moved to country / regional / … geography: without this, those votes only
+    match the City tab.
     """
     sl = (season_level or "").strip().lower()
     if sl == "region":
@@ -156,9 +162,10 @@ def _effective_myhigh5_vote_level(
     if (
         sl == "city"
         and contest_mode_norm == "participation"
-        and contest_level_norm == "country"
+        and contest_level_norm
+        and contest_level_norm != "city"
     ):
-        return "country"
+        return contest_level_norm
     return sl
 
 
