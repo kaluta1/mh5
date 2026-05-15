@@ -136,13 +136,13 @@ class ContentRelevanceService:
         contest_text = f"{contest_title} {contest_description or ''}".lower()
         
         # 1. Vérifier la longueur minimale
-        if len(contestant_title.strip()) < 5:
+        if len(contestant_title.strip()) < 4:
             suggestions.append("Le titre est trop court. Ajoutez plus de détails.")
             score -= 0.1
         else:
             score += 0.1
             
-        if len(contestant_description.strip()) < 20:
+        if len(contestant_description.strip()) < 4:
             suggestions.append("La description est trop courte. Expliquez davantage votre candidature.")
             score -= 0.1
         else:

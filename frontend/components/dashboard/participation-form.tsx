@@ -17,6 +17,11 @@ import { getCitiesByCountry } from '@/lib/geography'
 import { contestService } from '@/services/contest-service'
 import { getRoundNominationDeadlineMs } from '@/lib/nomination-deadline'
 
+const MIN_CONTENT_TITLE_LENGTH = 4
+const MIN_CONTENT_DESCRIPTION_LENGTH = 4
+const MAX_CONTENT_TITLE_LENGTH = 100
+const MAX_CONTENT_DESCRIPTION_LENGTH = 500
+
 type ReactQuillModule = typeof import('react-quill')
 type ReactQuillComponent = ReactQuillModule['default']
 
@@ -426,10 +431,10 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
     if (e) e.preventDefault()
 
     if (!title.trim()) { addToast(t('participation.errors.content_title_required') || 'Le titre est requis', 'error'); return }
-    if (title.trim().length < 5) { addToast(t('participation.errors.content_title_min_length') || 'Le titre doit contenir au moins 5 caractères', 'error'); return }
-    if (title.trim().length > 100) { addToast(t('participation.errors.content_title_max_length') || 'Le titre ne doit pas dépasser 100 caractères', 'error'); return }
-    if (plainDescriptionLength < 20) { addToast(t('participation.errors.content_description_min_length') || 'La description doit contenir au moins 20 caractères', 'error'); return }
-    if (plainDescriptionLength > 500) { addToast(t('participation.errors.content_description_max_length') || 'La description ne doit pas dépasser 500 caractères', 'error'); return }
+    if (title.trim().length < MIN_CONTENT_TITLE_LENGTH) { addToast(t('participation.errors.content_title_min_length') || `Le titre doit contenir au moins ${MIN_CONTENT_TITLE_LENGTH} caractères`, 'error'); return }
+    if (title.trim().length > MAX_CONTENT_TITLE_LENGTH) { addToast(t('participation.errors.content_title_max_length') || `Le titre ne doit pas dépasser ${MAX_CONTENT_TITLE_LENGTH} caractères`, 'error'); return }
+    if (plainDescriptionLength < MIN_CONTENT_DESCRIPTION_LENGTH) { addToast(t('participation.errors.content_description_min_length') || `La description doit contenir au moins ${MIN_CONTENT_DESCRIPTION_LENGTH} caractères`, 'error'); return }
+    if (plainDescriptionLength > MAX_CONTENT_DESCRIPTION_LENGTH) { addToast(t('participation.errors.content_description_max_length') || `La description ne doit pas dépasser ${MAX_CONTENT_DESCRIPTION_LENGTH} caractères`, 'error'); return }
     if (!isNomination && imageUrls.length === 0) { addToast(t('participation.errors.content_image_required') || 'Au moins une image est requise', 'error'); return }
     if (videoDuplicateError) { addToast(videoDuplicateError, 'error'); return }
     if (requiresVideo && !videoUrl) { addToast(t('participation.errors.content_video_required') || 'Une vidéo est requise', 'error'); return }
@@ -460,13 +465,13 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
   }
 
   // Validation par étape
-  const hasTitleError = title.trim().length > 0 && (title.trim().length < 5 || title.trim().length > 100)
-  const hasDescriptionError = plainDescriptionLength > 0 && (plainDescriptionLength < 20 || plainDescriptionLength > 500)
+  const hasTitleError = title.trim().length > 0 && (title.trim().length < MIN_CONTENT_TITLE_LENGTH || title.trim().length > MAX_CONTENT_TITLE_LENGTH)
+  const hasDescriptionError = plainDescriptionLength > 0 && (plainDescriptionLength < MIN_CONTENT_DESCRIPTION_LENGTH || plainDescriptionLength > MAX_CONTENT_DESCRIPTION_LENGTH)
   const hasImageError = !isNomination && imageUrls.length === 0
   const hasVideoError = (requiresVideo && !videoUrl) || !!videoDuplicateError
   const hasNominatorCountryError = isNomination && !nominatorCountry
 
-  const isStep1Valid = title.trim().length >= 5 && title.trim().length <= 100 && plainDescriptionLength >= 20 && plainDescriptionLength <= 500
+  const isStep1Valid = title.trim().length >= MIN_CONTENT_TITLE_LENGTH && title.trim().length <= MAX_CONTENT_TITLE_LENGTH && plainDescriptionLength >= MIN_CONTENT_DESCRIPTION_LENGTH && plainDescriptionLength <= MAX_CONTENT_DESCRIPTION_LENGTH
   const isStep2Valid = isNomination
     ? (!!nominatorCountry && !videoDuplicateError && (requiresVideo ? !!videoUrl : true))
     : (imageUrls.length >= minImages && !videoDuplicateError && (requiresVideo ? !!videoUrl : true))
@@ -616,8 +621,8 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder={t('participation.content_title_placeholder') || 'Entrez le titre (5-100 caractères)'}
-              maxLength={100}
+              placeholder={t('participation.content_title_placeholder') || `Entrez le titre (${MIN_CONTENT_TITLE_LENGTH}-${MAX_CONTENT_TITLE_LENGTH} caractères)`}
+              maxLength={MAX_CONTENT_TITLE_LENGTH}
               className={`w-full px-4 py-3 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-400 focus:outline-none focus:ring-2 ${
                 hasTitleError ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 dark:border-gray-600 focus:ring-blue-500'
               }`}
@@ -625,9 +630,9 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
             />
             <div className="flex items-center justify-between mt-2">
               <p className={`text-xs ${hasTitleError ? 'text-red-500 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>
-                {title.length}/100 {title.length < 5 && title.length > 0 ? `(min. 5)` : ''}
+                {title.length}/{MAX_CONTENT_TITLE_LENGTH} {title.length < MIN_CONTENT_TITLE_LENGTH && title.length > 0 ? `(min. ${MIN_CONTENT_TITLE_LENGTH})` : ''}
               </p>
-              {title.trim().length >= 5 && title.trim().length <= 100 && (
+              {title.trim().length >= MIN_CONTENT_TITLE_LENGTH && title.trim().length <= MAX_CONTENT_TITLE_LENGTH && (
                 <CheckCircle className="w-4 h-4 text-green-500" />
               )}
             </div>
@@ -646,14 +651,14 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
                 onChange={setDescription}
                 modules={QUILL_MODULES}
                 formats={QUILL_FORMATS}
-                placeholder={t('participation.content_description_placeholder') || 'Décrivez votre candidature (20-500 caractères)'}
+                placeholder={t('participation.content_description_placeholder') || `Décrivez votre candidature (${MIN_CONTENT_DESCRIPTION_LENGTH}-${MAX_CONTENT_DESCRIPTION_LENGTH} caractères)`}
                 readOnly={isSubmitting}
               />
             ) : (
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder={t('participation.content_description_placeholder') || 'Décrivez votre candidature (20-500 caractères)'}
+                placeholder={t('participation.content_description_placeholder') || `Décrivez votre candidature (${MIN_CONTENT_DESCRIPTION_LENGTH}-${MAX_CONTENT_DESCRIPTION_LENGTH} caractères)`}
                 disabled={isSubmitting}
                 rows={6}
                 className="w-full px-4 py-3 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-400 focus:outline-none focus:ring-2 border-gray-300 dark:border-gray-600 focus:ring-blue-500"
@@ -661,9 +666,9 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
             )}
             <div className="flex items-center justify-between mt-2">
               <p className={`text-xs ${hasDescriptionError ? 'text-red-500 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>
-                {plainDescriptionLength}/500 {plainDescriptionLength < 20 && plainDescriptionLength > 0 ? `(min. 20)` : ''}
+                {plainDescriptionLength}/{MAX_CONTENT_DESCRIPTION_LENGTH} {plainDescriptionLength < MIN_CONTENT_DESCRIPTION_LENGTH && plainDescriptionLength > 0 ? `(min. ${MIN_CONTENT_DESCRIPTION_LENGTH})` : ''}
               </p>
-              {plainDescriptionLength >= 20 && plainDescriptionLength <= 500 && (
+              {plainDescriptionLength >= MIN_CONTENT_DESCRIPTION_LENGTH && plainDescriptionLength <= MAX_CONTENT_DESCRIPTION_LENGTH && (
                 <CheckCircle className="w-4 h-4 text-green-500" />
               )}
             </div>
