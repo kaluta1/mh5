@@ -124,13 +124,6 @@ def _normalize_post_visibility(post: Post) -> str:
     return text
 
 
-def _post_is_share_previewable(post: Optional[Post]) -> bool:
-    """Public and followers posts can show OG previews when someone shares /s/f/{id}."""
-    if not post:
-        return False
-    return _normalize_post_visibility(post) in ("public", "followers")
-
-
 def _generic_post_preview() -> dict:
     return {
         "title": "Post on MyHigh5",
@@ -187,24 +180,8 @@ def _post_preview_payload(db: Session, post_id: int, include_debug: bool = False
             payload["_debug"] = {"reason": "not_found", "post_id": post_id}
         return payload
 
-    if not _post_is_share_previewable(post):
-        vis = _normalize_post_visibility(post)
-        author_name = (
-            (post.author.full_name or post.author.username) if post.author else None
-        )
-        if author_name:
-            payload = {
-                "title": f"{author_name} on MyHigh5",
-                "description": "View this post on MyHigh5.",
-                "image_url": _absolutize_url(post.author.avatar_url if post.author else None)
-                or _DEFAULT_OG_IMAGE,
-            }
-        else:
-            payload = _generic_post_preview()
-        if include_debug:
-            payload["_debug"] = {"reason": "visibility_restricted", "visibility": vis}
-        return payload
-
+    # Share links (/s/f/{id}) always expose full OG metadata for non-deleted posts,
+    # regardless of feed visibility (private/followers/public).
     payload = _build_post_preview_from_row(post)
     if include_debug:
         payload["_debug"] = {
@@ -397,19 +374,6 @@ async def share_feed_post(
         title = html.escape("Post on MyHigh5")
         description = html.escape("See this post on MyHigh5.")
         image_url = _DEFAULT_OG_IMAGE
-    elif not _post_is_share_previewable(post):
-        author_name = "MyHigh5 user"
-        if post.author:
-            author_name = html.escape(
-                post.author.full_name
-                or post.author.username
-                or "MyHigh5 user"
-            )
-        title = html.escape(f"{author_name} on MyHigh5")
-        description = html.escape("View this post on MyHigh5.")
-        image_url = _DEFAULT_OG_IMAGE
-        if post.author and post.author.avatar_url:
-            image_url = _absolutize_url(post.author.avatar_url) or _DEFAULT_OG_IMAGE
     else:
         preview = _build_post_preview_from_row(post)
         title = html.escape(preview["title"])
