@@ -147,25 +147,18 @@ def _effective_myhigh5_vote_level(
 ) -> str:
     """Map ContestSeason.level to MyHigh5 tab geography (city / country / regional / …).
 
-    Nominations often store votes on CITY-labeled seasons while UX is country-scoped.
-    The same can happen for **participation** when the season row is still ``city`` but the
-    contest has moved to country / regional / … geography: without this, those votes only
-    match the City tab.
+    Nominations and participation often store votes on CITY-labeled seasons while voting
+    is country-scoped. ``Contest.level`` may already be ``regional`` after migration even
+    though the voter's MyHigh5 slot is still country — never promote city-season votes to
+    regional/continent/global via contest.level alone.
     """
     sl = (season_level or "").strip().lower()
     if sl == "region":
         sl = "regional"
     if sl == "continental":
         sl = "continent"
-    if sl == "city" and contest_mode_norm == "nomination":
+    if sl == "city":
         return "country"
-    if (
-        sl == "city"
-        and contest_mode_norm == "participation"
-        and contest_level_norm
-        and contest_level_norm != "city"
-    ):
-        return contest_level_norm
     return sl
 
 
