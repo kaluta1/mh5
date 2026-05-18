@@ -544,7 +544,7 @@ export default function TopHigh5Page() {
                           <tr>
                             <th className="px-3 py-2 text-left">{t("dashboard.myhigh5.rank") || "Rank"}</th>
                             <th className="px-3 py-2 text-left">{t("dashboard.myhigh5.content") || "Content"}</th>
-                            <th className="px-3 py-2 text-left">{t("dashboard.myhigh5.stars") || "Stars"}</th>
+                            <th className="px-3 py-2 text-left">{t("dashboard.myhigh5.points") || "Points"}</th>
                             <th className="px-3 py-2 text-left">{t("dashboard.myhigh5.shares") || "Shares"}</th>
                             <th className="px-3 py-2 text-left">{t("dashboard.myhigh5.likes") || "Likes"}</th>
                             <th className="px-3 py-2 text-left">{t("dashboard.myhigh5.comments") || "Comments"}</th>

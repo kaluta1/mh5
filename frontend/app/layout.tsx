@@ -15,6 +15,7 @@ import { ErrorBoundary } from "@/components/error-boundary"
 import { getMetadataTranslations, detectLanguageFromHeaders, getKeywords } from "@/lib/metadata-translations"
 import { LANGUAGE_PREFERENCE_KEY, SUPPORTED_LANGUAGE_CODES } from "@/lib/language-cookie"
 import { API_ORIGIN } from "@/lib/config"
+import { AnnualAdsPartnerRotator } from "@/components/annualads-partner-rotator"
 import { headers } from "next/headers"
 
 
@@ -232,6 +233,7 @@ export default function RootLayout({
                 <AuthProvider>
                   {children}
                   <CookieConsent />
+                  <AnnualAdsPartnerRotator />
                 </AuthProvider>
               </LanguageProvider>
             </ToastProvider>

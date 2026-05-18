@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { OurFileRouter } from '@/app/api/uploadthing/core'
 import { useLanguage } from '@/contexts/language-context'
 import { Upload, Loader2 } from 'lucide-react'
-import { API_URL } from '@/lib/config'
+import { getEffectiveApiUrl } from '@/lib/config'
 
 interface UploadButtonProps {
   endpoint: keyof OurFileRouter
@@ -138,7 +138,7 @@ export function UploadButton({
         formData.append('file', file)
         formData.append('title', file.name)
 
-        const response = await fetch(`${API_URL}/api/v1/media/upload`, {
+        const response = await fetch(`${getEffectiveApiUrl()}/api/v1/media/upload`, {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${token}`,

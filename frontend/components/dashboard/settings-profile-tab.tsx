@@ -182,6 +182,10 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
     }
   }
 
+  const avatarRequirementsText =
+    t('profile_setup.avatar_requirements') ||
+    'Max file size: 2 MB. Accepted formats: JPG, PNG, GIF, WebP. Square images work best.'
+
   const handleAvatarChange = async (url: string) => {
     setAvatarUrl(url)
     if (errors.avatarUrl) {
@@ -278,6 +282,9 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
             </div>
           )}
         </div>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mt-3 text-center max-w-sm mx-auto">
+          {avatarRequirementsText}
+        </p>
         {errors.avatarUrl && (
           <p className="text-sm text-red-600 dark:text-red-400 mt-2 text-center">
             {errors.avatarUrl}

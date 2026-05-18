@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { X, ImagePlus, Loader2 } from 'lucide-react'
 import { useLanguage } from '@/contexts/language-context'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { API_URL } from '@/lib/config'
+import { getEffectiveApiUrl } from '@/lib/config'
 
 interface ContestDialogProps {
     isOpen: boolean
@@ -90,7 +90,7 @@ export function ContestDialog({
             formData.append('file', file)
             formData.append('title', file.name)
 
-            const response = await fetch(`${API_URL}/api/v1/media/upload`, {
+            const response = await fetch(`${getEffectiveApiUrl()}/api/v1/media/upload`, {
                 method: 'POST',
                 headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
                 body: formData,

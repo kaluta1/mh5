@@ -373,6 +373,7 @@ export interface TranslationKeys {
     uploading: string
     images: string
     upload_error: string
+    avatar_requirements: string
   }
   participation: {
     location: string
@@ -3914,7 +3915,8 @@ const translationsBase = {
       checking_files: "Vérification des fichiers...",
       uploading: "Upload en cours...",
       images: "Images",
-      upload_error: "Erreur d'upload"
+      upload_error: "Erreur d'upload",
+      avatar_requirements: "Taille max. : 2 Mo. Formats acceptés : JPG, PNG, GIF, WebP. Une image carrée est recommandée."
     },
     settings: {
       title: "Paramètres",
@@ -6601,7 +6603,8 @@ const translationsBase = {
       checking_files: "Checking files...",
       uploading: "Uploading...",
       images: "Images",
-      upload_error: "Upload error"
+      upload_error: "Upload error",
+      avatar_requirements: "Max file size: 2 MB. Accepted formats: JPG, PNG, GIF, WebP. Square images work best."
     },
     settings: {
       title: "Settings",
@@ -9365,7 +9368,8 @@ const translationsBase = {
       checking_files: "Verificando archivos...",
       uploading: "Subiendo...",
       images: "Imágenes",
-      upload_error: "Error de carga"
+      upload_error: "Error de carga",
+      avatar_requirements: "Tamaño máximo: 2 MB. Formatos aceptados: JPG, PNG, GIF, WebP. Se recomienda una imagen cuadrada."
     },
     settings: {
       title: "Configuración",
@@ -11832,7 +11836,8 @@ const translationsBase = {
       checking_files: "Dateien werden überprüft...",
       uploading: "Wird hochgeladen...",
       images: "Bilder",
-      upload_error: "Upload-Fehler"
+      upload_error: "Upload-Fehler",
+      avatar_requirements: "Maximale Dateigröße: 2 MB. Erlaubte Formate: JPG, PNG, GIF, WebP. Quadratische Bilder funktionieren am besten."
     },
     settings: {
       title: "Einstellungen",

@@ -130,6 +130,25 @@ export const ANNUALADS_SSO_TARGET_ORIGIN = stripEnvQuotes(
   process.env.NEXT_PUBLIC_ANNUALADS_SSO_TARGET_ORIGIN || 'https://www.annualads.com'
 )
 
+/** Partner id for Annual Ads rotator.js (`data-partner-id`). */
+const annualAdsPartnerIdFromEmbedBase = (() => {
+  if (!annualAdsEmbedBase) return ''
+  try {
+    const segments = new URL(annualAdsEmbedBase).pathname.split('/').filter(Boolean)
+    return segments[segments.length - 1] || ''
+  } catch {
+    return ''
+  }
+})()
+
+export const ANNUALADS_PARTNER_ID =
+  stripEnvQuotes(process.env.NEXT_PUBLIC_ANNUALADS_PARTNER_ID || '') ||
+  annualAdsPartnerIdFromEmbedBase
+
+export const ANNUALADS_ROTATOR_SCRIPT_URL = stripEnvQuotes(
+  process.env.NEXT_PUBLIC_ANNUALADS_ROTATOR_SCRIPT_URL || 'https://www.annualads.com/rotator.js'
+)
+
 /** Origin only (for preconnect / dns-prefetch); works when API_URL includes /api/v1. */
 export const API_ORIGIN = (() => {
   try {
