@@ -111,23 +111,35 @@ def _contestant_og_image(db: Session, contestant: Contestant) -> str:
     return _DEFAULT_OG_IMAGE
 
 
-def _post_preview_payload(db: Session, post_id: int) -> dict:
-    post = (
-        db.query(Post)
-        .options(
-            joinedload(Post.author),
-            joinedload(Post.media).joinedload(PostMedia.media),
-        )
-        .filter(Post.id == post_id, Post.is_deleted.is_(False))
-        .first()
-    )
-    if not post or post.visibility != PostVisibility.PUBLIC:
-        return {
-            "title": "Post on MyHigh5",
-            "description": "See this post on MyHigh5.",
-            "image_url": _DEFAULT_OG_IMAGE,
-        }
+def _normalize_post_visibility(post: Post) -> str:
+    """DB may return enum or plain string depending on driver/migrations."""
+    raw = post.visibility
+    if raw is None:
+        return ""
+    if isinstance(raw, PostVisibility):
+        return raw.value.lower()
+    text = str(raw).strip().lower()
+    if "." in text:
+        text = text.split(".")[-1]
+    return text
 
+
+def _post_is_share_previewable(post: Optional[Post]) -> bool:
+    """Public and followers posts can show OG previews when someone shares /s/f/{id}."""
+    if not post:
+        return False
+    return _normalize_post_visibility(post) in ("public", "followers")
+
+
+def _generic_post_preview() -> dict:
+    return {
+        "title": "Post on MyHigh5",
+        "description": "See this post on MyHigh5.",
+        "image_url": _DEFAULT_OG_IMAGE,
+    }
+
+
+def _build_post_preview_from_row(post: Post) -> dict:
     author_name = "MyHigh5 user"
     if post.author:
         author_name = (
@@ -158,6 +170,50 @@ def _post_preview_payload(db: Session, post_id: int) -> dict:
     return {"title": title, "description": description, "image_url": image_url}
 
 
+def _post_preview_payload(db: Session, post_id: int, include_debug: bool = False) -> dict:
+    post = (
+        db.query(Post)
+        .options(
+            joinedload(Post.author),
+            joinedload(Post.media).joinedload(PostMedia.media),
+        )
+        .filter(Post.id == post_id, Post.is_deleted.is_(False))
+        .first()
+    )
+
+    if not post:
+        payload = _generic_post_preview()
+        if include_debug:
+            payload["_debug"] = {"reason": "not_found", "post_id": post_id}
+        return payload
+
+    if not _post_is_share_previewable(post):
+        vis = _normalize_post_visibility(post)
+        author_name = (
+            (post.author.full_name or post.author.username) if post.author else None
+        )
+        if author_name:
+            payload = {
+                "title": f"{author_name} on MyHigh5",
+                "description": "View this post on MyHigh5.",
+                "image_url": _absolutize_url(post.author.avatar_url if post.author else None)
+                or _DEFAULT_OG_IMAGE,
+            }
+        else:
+            payload = _generic_post_preview()
+        if include_debug:
+            payload["_debug"] = {"reason": "visibility_restricted", "visibility": vis}
+        return payload
+
+    payload = _build_post_preview_from_row(post)
+    if include_debug:
+        payload["_debug"] = {
+            "reason": "ok",
+            "visibility": _normalize_post_visibility(post),
+        }
+    return payload
+
+
 def _contestant_preview_payload(db: Session, contestant_id: int) -> dict:
     contestant = crud_contestant.get(db, id=contestant_id)
     if not contestant:
@@ -185,9 +241,13 @@ def _contestant_preview_payload(db: Session, contestant_id: int) -> dict:
 
 
 @router.get("/preview/post/{post_id}")
-async def preview_post_json(post_id: int, db: Session = Depends(deps.get_db)):
+async def preview_post_json(
+    post_id: int,
+    debug: bool = False,
+    db: Session = Depends(deps.get_db),
+):
     """Public JSON metadata for social crawlers / Next.js generateMetadata."""
-    return _post_preview_payload(db, post_id)
+    return _post_preview_payload(db, post_id, include_debug=debug)
 
 
 @router.get("/preview/contestant/{contestant_id}")
@@ -333,11 +393,11 @@ async def share_feed_post(
     if referral_code:
         redirect_url += f"?{urlencode({'ref': referral_code})}"
 
-    if not post or post.visibility != PostVisibility.PUBLIC:
+    if not post:
         title = html.escape("Post on MyHigh5")
         description = html.escape("See this post on MyHigh5.")
         image_url = _DEFAULT_OG_IMAGE
-    else:
+    elif not _post_is_share_previewable(post):
         author_name = "MyHigh5 user"
         if post.author:
             author_name = html.escape(
@@ -345,28 +405,16 @@ async def share_feed_post(
                 or post.author.username
                 or "MyHigh5 user"
             )
-
-        content_text = (post.content or "").strip()
-        title = html.escape(
-            f"{content_text[:80]} — {author_name}" if content_text else f"{author_name} on MyHigh5"
-        )
-        description = html.escape(content_text[:200] or "See this post on MyHigh5.")
-
+        title = html.escape(f"{author_name} on MyHigh5")
+        description = html.escape("View this post on MyHigh5.")
         image_url = _DEFAULT_OG_IMAGE
-        for post_media in post.media or []:
-            media = getattr(post_media, "media", None)
-            media_url = getattr(media, "url", None)
-            media_type = (getattr(media, "media_type", "") or "").lower()
-            if media_url and (not media_type or media_type == "image"):
-                image_url = _absolutize_url(media_url) or _DEFAULT_OG_IMAGE
-                break
-            if media_url and media_type == "video":
-                thumb = _youtube_thumbnail(media_url)
-                if thumb:
-                    image_url = thumb
-                    break
-        if image_url == _DEFAULT_OG_IMAGE and post.author and post.author.avatar_url:
+        if post.author and post.author.avatar_url:
             image_url = _absolutize_url(post.author.avatar_url) or _DEFAULT_OG_IMAGE
+    else:
+        preview = _build_post_preview_from_row(post)
+        title = html.escape(preview["title"])
+        description = html.escape(preview["description"])
+        image_url = preview["image_url"]
 
     html_content = f"""<!DOCTYPE html>
 <html lang="en" prefix="og: https://ogp.me/ns#">
