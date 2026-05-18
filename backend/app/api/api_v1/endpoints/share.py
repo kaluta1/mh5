@@ -20,7 +20,7 @@ from app.core.config import settings
 router = APIRouter()
 
 _SITE_BASE = (settings.FRONTEND_URL or "https://myhigh5.com").rstrip("/")
-_DEFAULT_OG_IMAGE = f"{_SITE_BASE}/logo.png"
+_DEFAULT_OG_IMAGE = f"{_SITE_BASE}/opengraph-image"
 
 
 def _absolutize_url(url: Optional[str]) -> Optional[str]:
@@ -109,6 +109,91 @@ def _contestant_og_image(db: Session, contestant: Contestant) -> str:
             return resolved
 
     return _DEFAULT_OG_IMAGE
+
+
+def _post_preview_payload(db: Session, post_id: int) -> dict:
+    post = (
+        db.query(Post)
+        .options(
+            joinedload(Post.author),
+            joinedload(Post.media).joinedload(PostMedia.media),
+        )
+        .filter(Post.id == post_id, Post.is_deleted.is_(False))
+        .first()
+    )
+    if not post or post.visibility != PostVisibility.PUBLIC:
+        return {
+            "title": "Post on MyHigh5",
+            "description": "See this post on MyHigh5.",
+            "image_url": _DEFAULT_OG_IMAGE,
+        }
+
+    author_name = "MyHigh5 user"
+    if post.author:
+        author_name = (
+            post.author.full_name
+            or post.author.username
+            or "MyHigh5 user"
+        )
+    content_text = (post.content or "").strip()
+    title = f"{content_text[:80]} — {author_name}" if content_text else f"{author_name} on MyHigh5"
+    description = content_text[:200] or f"Discover what {author_name} shared on MyHigh5."
+
+    image_url = _DEFAULT_OG_IMAGE
+    for post_media in post.media or []:
+        media = getattr(post_media, "media", None)
+        media_url = getattr(media, "url", None)
+        media_type = (getattr(media, "media_type", "") or "").lower()
+        if media_url and (not media_type or media_type == "image"):
+            image_url = _absolutize_url(media_url) or _DEFAULT_OG_IMAGE
+            break
+        if media_url and media_type == "video":
+            thumb = _youtube_thumbnail(media_url)
+            if thumb:
+                image_url = thumb
+                break
+    if image_url == _DEFAULT_OG_IMAGE and post.author and post.author.avatar_url:
+        image_url = _absolutize_url(post.author.avatar_url) or _DEFAULT_OG_IMAGE
+
+    return {"title": title, "description": description, "image_url": image_url}
+
+
+def _contestant_preview_payload(db: Session, contestant_id: int) -> dict:
+    contestant = crud_contestant.get(db, id=contestant_id)
+    if not contestant:
+        return {
+            "title": "Contestant on MyHigh5",
+            "description": "Vote and support on MyHigh5.",
+            "image_url": _DEFAULT_OG_IMAGE,
+        }
+
+    author_name = "Contestant"
+    if contestant.user:
+        author_name = (
+            contestant.user.full_name
+            or contestant.user.username
+            or "Contestant"
+        )
+    entry_title = (contestant.title or "").strip()
+    title = f"{entry_title} — {author_name}" if entry_title else f"{author_name} on MyHigh5"
+    description = (
+        (contestant.description or "").strip()[:200]
+        or f"Vote for {author_name} on MyHigh5."
+    )
+    image_url = _contestant_og_image(db, contestant)
+    return {"title": title, "description": description, "image_url": image_url}
+
+
+@router.get("/preview/post/{post_id}")
+async def preview_post_json(post_id: int, db: Session = Depends(deps.get_db)):
+    """Public JSON metadata for social crawlers / Next.js generateMetadata."""
+    return _post_preview_payload(db, post_id)
+
+
+@router.get("/preview/contestant/{contestant_id}")
+async def preview_contestant_json(contestant_id: int, db: Session = Depends(deps.get_db)):
+    """Public JSON metadata for social crawlers / Next.js generateMetadata."""
+    return _contestant_preview_payload(db, contestant_id)
 
 
 @router.get("/u/verify-email")

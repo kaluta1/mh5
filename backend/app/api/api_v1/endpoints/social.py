@@ -5,7 +5,7 @@ from sqlalchemy import and_, or_
 import asyncio
 
 from app.db.session import get_db
-from app.api.deps import get_current_active_user
+from app.api.deps import get_current_active_user, get_current_active_user_optional
 from app.models.user import User
 from app.schemas.social import (
     PostCreate, PostUpdate, PostResponse, PostListResponse,
@@ -149,7 +149,7 @@ def get_post(
     *,
     db: Session = Depends(get_db),
     post_id: int,
-    current_user: Optional[User] = Depends(get_current_active_user)
+    current_user: Optional[User] = Depends(get_current_active_user_optional)
 ) -> Any:
     """Récupérer un post par son ID"""
     user_id = current_user.id if current_user else None
