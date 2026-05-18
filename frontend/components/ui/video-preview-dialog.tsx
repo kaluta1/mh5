@@ -91,6 +91,25 @@ export function VideoPreviewDialog({
   const commentsEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
+  const isEntryAuthor =
+    isAuthor === true
+
+  const getVoteButtonLabel = () => {
+    if (isVoting) {
+      return t('dashboard.contests.voting') || 'Voting...'
+    }
+    if (isEntryAuthor) {
+      return t('dashboard.contests.own_cannot_vote') || 'Cannot vote (your entry)'
+    }
+    if (hasVoted) {
+      return t('dashboard.contests.already_voted') || 'Already voted'
+    }
+    if (!canVote && voteRestrictionReason) {
+      return t('dashboard.contests.cannot_vote') || 'Cannot vote'
+    }
+    return t('contestant_detail.vote') || t('dashboard.contests.vote') || 'Vote'
+  }
+
   // Charger les commentaires
   useEffect(() => {
     if (showComments && contestantId) {
@@ -258,11 +277,11 @@ export function VideoPreviewDialog({
               <button
                 onClick={(e) => {
                   e.stopPropagation()
-                  if (!isAuthor && canVote && !isVoting && !hasVoted) onVote()
+                  if (!isEntryAuthor && canVote && !isVoting && !hasVoted) onVote()
                 }}
-                disabled={isAuthor || !canVote || isVoting || hasVoted}
+                disabled={isEntryAuthor || !canVote || isVoting || hasVoted}
                 className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer ${
-                  isAuthor
+                  isEntryAuthor
                     ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed'
                     : hasVoted
                     ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 border border-green-200 dark:border-green-700'
@@ -271,16 +290,8 @@ export function VideoPreviewDialog({
                     : 'bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed'
                 }`}
               >
-                <ThumbsUp className={`w-4 h-4 ${hasVoted ? 'fill-current' : ''}`} />
-                {isVoting
-                  ? (t('dashboard.contests.voting') || 'Vote...')
-                  : isAuthor
-                  ? 'Auteur'
-                  : hasVoted
-                  ? (t('dashboard.contests.already_voted') || 'Voté')
-                  : !canVote && voteRestrictionReason
-                  ? (t('dashboard.contests.restricted') || 'Restreint')
-                  : (t('dashboard.contests.vote') || 'Voter')}
+                <ThumbsUp className={`w-4 h-4 shrink-0 ${hasVoted ? 'fill-current' : ''}`} />
+                <span className="whitespace-nowrap">{getVoteButtonLabel()}</span>
               </button>
             )}
 

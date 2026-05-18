@@ -2,8 +2,10 @@ from fastapi import APIRouter, HTTPException, status, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session, joinedload
 from fastapi import Depends
-from typing import Optional
+from typing import Optional, Any
 import html
+import json
+import re
 from urllib.parse import urlencode
 
 from app.api import deps
@@ -12,8 +14,101 @@ from app.crud import user as crud_user
 from app.models.contests import Contestant
 from app.models.user import User
 from app.models.post import Post, PostVisibility
+from app.models.media import Media
+from app.core.config import settings
 
 router = APIRouter()
+
+_SITE_BASE = (settings.FRONTEND_URL or "https://myhigh5.com").rstrip("/")
+_DEFAULT_OG_IMAGE = f"{_SITE_BASE}/logo.png"
+
+
+def _absolutize_url(url: Optional[str]) -> Optional[str]:
+    """Ensure crawlers (Facebook, etc.) receive an absolute https URL."""
+    if not url:
+        return None
+    cleaned = str(url).strip()
+    if not cleaned:
+        return None
+    if cleaned.startswith(("http://", "https://")):
+        return cleaned.replace("http://", "https://", 1)
+    api_base = (settings.BACKEND_PUBLIC_URL or settings.FRONTEND_URL or _SITE_BASE).rstrip("/")
+    if cleaned.startswith("/"):
+        return f"{api_base}{cleaned}"
+    return cleaned
+
+
+def _resolve_media_ref(db: Session, media_ref: Any) -> Optional[str]:
+    if isinstance(media_ref, str):
+        cleaned = media_ref.strip()
+        if not cleaned:
+            return None
+        if cleaned.startswith(("http://", "https://")):
+            return cleaned
+        try:
+            media_id = int(cleaned)
+        except ValueError:
+            return None
+        media = db.query(Media).filter(Media.id == media_id).first()
+        return media.url if media else None
+    if isinstance(media_ref, int):
+        media = db.query(Media).filter(Media.id == media_ref).first()
+        return media.url if media else None
+    return None
+
+
+def _youtube_thumbnail(url: str) -> Optional[str]:
+    patterns = (
+        r"(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/embed/|youtube\.com/shorts/)([a-zA-Z0-9_-]{11})",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            return f"https://img.youtube.com/vi/{match.group(1)}/hqdefault.jpg"
+    return None
+
+
+def _contestant_og_image(db: Session, contestant: Contestant) -> str:
+    for submission in contestant.submissions or []:
+        media_type = (submission.media_type or "").lower()
+        if media_type == "image":
+            resolved = _absolutize_url(submission.file_url or submission.external_url)
+            if resolved:
+                return resolved
+        if media_type in ("video", "youtube", "vimeo") and submission.external_url:
+            thumb = _youtube_thumbnail(submission.external_url)
+            if thumb:
+                return thumb
+            resolved = _absolutize_url(submission.external_url)
+            if resolved and resolved.lower().endswith((".jpg", ".jpeg", ".png", ".webp", ".gif")):
+                return resolved
+
+    if contestant.image_media_ids:
+        try:
+            for ref in json.loads(contestant.image_media_ids):
+                resolved = _absolutize_url(_resolve_media_ref(db, ref))
+                if resolved:
+                    return resolved
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    if contestant.video_media_ids:
+        try:
+            for ref in json.loads(contestant.video_media_ids):
+                resolved = _absolutize_url(_resolve_media_ref(db, ref))
+                if resolved:
+                    thumb = _youtube_thumbnail(resolved)
+                    if thumb:
+                        return thumb
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    if contestant.user and contestant.user.avatar_url:
+        resolved = _absolutize_url(contestant.user.avatar_url)
+        if resolved:
+            return resolved
+
+    return _DEFAULT_OG_IMAGE
 
 
 @router.get("/u/verify-email")
@@ -163,13 +258,13 @@ async def share_feed_post(
     title = html.escape(f"{author_name} shared a post on MyHigh5")
     description = html.escape(content_text[:200] or "See this post on MyHigh5.")
 
-    image_url = "https://myhigh5.com/icons/Icon-512.png"
+    image_url = _DEFAULT_OG_IMAGE
     for post_media in post.media or []:
         media = getattr(post_media, "media", None)
         media_url = getattr(media, "url", None)
         media_type = (getattr(media, "media_type", "") or "").lower()
         if media_url and media_type == "image":
-            image_url = media_url
+            image_url = _absolutize_url(media_url) or _DEFAULT_OG_IMAGE
             break
 
     html_content = f"""<!DOCTYPE html>
@@ -227,7 +322,7 @@ async def share_register(
     # Titre et description
     title = "Rejoignez MyHighFive"
     description = "Participez à des concours, gagnez des prix et rejoignez une communauté passionnée !"
-    image_url = "https://myhigh5.com/icons/Icon-512.png"
+    image_url = _DEFAULT_OG_IMAGE
     
     # Générer le HTML avec métadonnées Open Graph
     html_content = f"""<!DOCTYPE html>
@@ -377,16 +472,7 @@ async def share_contestant(
                 name_parts.append(contestant.user.last_name)
             author_name = html.escape(" ".join(name_parts))
     
-    # Récupérer la première image ou utiliser une image par défaut
-    image_url = "https://myhigh5.com/icons/Icon-512.png"
-    if contestant.image_media_ids:
-        try:
-            import json
-            images = json.loads(contestant.image_media_ids)
-            if images and len(images) > 0:
-                image_url = images[0]
-        except:
-            pass
+    image_url = _contestant_og_image(db, contestant)
     
     # Générer le HTML avec métadonnées Open Graph et Twitter Cards
     html_content = f"""<!DOCTYPE html>
@@ -526,7 +612,7 @@ async def share_profile(
     username_safe = html.escape(username)
     
     # Image de profil ou image par défaut
-    avatar_url = user.avatar_url or "https://myhigh5.com/icons/Icon-512.png"
+    avatar_url = _absolutize_url(user.avatar_url) or _DEFAULT_OG_IMAGE
     
     # Générer le HTML avec métadonnées
     html_content = f"""<!DOCTYPE html>

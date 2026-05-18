@@ -28,7 +28,7 @@ const inter = Inter({
 })
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myhigh5.com"
-const defaultImage = `${appUrl}/thumbnails.png` // Image par défaut pour le partage
+const defaultImage = `${appUrl}/logo.png` // Default OG image for social sharing
 
 // Générer les métadonnées selon la langue détectée
 export async function generateMetadata(): Promise<Metadata> {

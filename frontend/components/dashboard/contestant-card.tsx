@@ -263,7 +263,11 @@ export function ContestantCard({
     loadReactionStats()
   }, [id])
 
-  const isAuthor = userId && currentUserId && userId === currentUserId
+  const isAuthor = Boolean(
+    currentUserId != null &&
+    userId != null &&
+    Number(currentUserId) === Number(userId)
+  )
 
   const images = media.filter(m => m.type === 'image')
   const videos = media.filter(m => m.type === 'video')
@@ -761,7 +765,11 @@ export function ContestantCard({
                   hasVoted={userHasVotedThisContestant}
                   isVoting={isVoting}
                   onVote={handleVote}
-                  isAuthor={currentUserId === userId}
+                  isAuthor={Boolean(
+            currentUserId != null &&
+            userId != null &&
+            Number(currentUserId) === Number(userId)
+          )}
                   votesCount={currentVotes}
                   voteRestrictionReason={effectiveVoteRestrictionReason}
                 />
@@ -779,7 +787,11 @@ export function ContestantCard({
                 contestantId={Number(id)}
                 selectedReaction={selectedReaction}
                 onReactionSelect={handleReaction}
-                isAuthor={currentUserId === userId}
+                isAuthor={Boolean(
+            currentUserId != null &&
+            userId != null &&
+            Number(currentUserId) === Number(userId)
+          )}
                 reactionsCount={reactionsCount}
                 onReactionSuccess={() => {
                   // Les stats sont déjà rechargées dans handleReaction
@@ -794,7 +806,11 @@ export function ContestantCard({
                 contestantId={Number(id)}
                 isFavorite={isFavorite}
                 onToggle={onToggleFavorite}
-                isAuthor={currentUserId === userId}
+                isAuthor={Boolean(
+            currentUserId != null &&
+            userId != null &&
+            Number(currentUserId) === Number(userId)
+          )}
                 favoritesCount={favoritesCount}
               />
             </div>
@@ -815,7 +831,11 @@ export function ContestantCard({
           canVote={voteButtonCanVote}
           hasVoted={userHasVotedThisContestant}
           isVoting={isVoting}
-          isAuthor={currentUserId === userId}
+          isAuthor={Boolean(
+            currentUserId != null &&
+            userId != null &&
+            Number(currentUserId) === Number(userId)
+          )}
           votesCount={currentVotes}
           onVote={hideVoteAction ? undefined : handleVote}
           voteRestrictionReason={hideVoteAction ? undefined : effectiveVoteRestrictionReason}
