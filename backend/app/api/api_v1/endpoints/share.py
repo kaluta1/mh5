@@ -13,7 +13,7 @@ from app.crud import contestant as crud_contestant
 from app.crud import user as crud_user
 from app.models.contests import Contestant
 from app.models.user import User
-from app.models.post import Post, PostVisibility
+from app.models.post import Post, PostVisibility, PostMedia
 from app.models.media import Media
 from app.core.config import settings
 
@@ -225,80 +225,90 @@ async def share_feed_post(
     """
     post = (
         db.query(Post)
-        .options(joinedload(Post.author), joinedload(Post.media))
+        .options(
+            joinedload(Post.author),
+            joinedload(Post.media).joinedload(PostMedia.media),
+        )
         .filter(
             Post.id == post_id,
             Post.is_deleted.is_(False),
-            Post.visibility == PostVisibility.PUBLIC,
         )
         .first()
     )
 
-    if not post:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Post not found"
-        )
+    share_page_url = f"{_SITE_BASE}/s/f/{post_id}"
+    if ref:
+        share_page_url += f"?{urlencode({'ref': ref})}"
 
-    referral_code = ref or (post.author.personal_referral_code if post.author else None)
+    referral_code = ref
+    if post and post.author:
+        referral_code = referral_code or post.author.personal_referral_code
 
-    flutter_url = f"https://myhigh5.com/dashboard/feed/{post_id}"
+    redirect_url = f"{_SITE_BASE}/dashboard/feed/{post_id}"
     if referral_code:
-        flutter_url += f"?{urlencode({'ref': referral_code})}"
+        redirect_url += f"?{urlencode({'ref': referral_code})}"
 
-    author_name = "MyHigh5 user"
-    if post.author:
-        author_name = html.escape(
-            post.author.full_name
-            or post.author.username
-            or "MyHigh5 user"
+    if not post or post.visibility != PostVisibility.PUBLIC:
+        title = html.escape("Post on MyHigh5")
+        description = html.escape("See this post on MyHigh5.")
+        image_url = _DEFAULT_OG_IMAGE
+    else:
+        author_name = "MyHigh5 user"
+        if post.author:
+            author_name = html.escape(
+                post.author.full_name
+                or post.author.username
+                or "MyHigh5 user"
+            )
+
+        content_text = (post.content or "").strip()
+        title = html.escape(
+            f"{content_text[:80]} — {author_name}" if content_text else f"{author_name} on MyHigh5"
         )
+        description = html.escape(content_text[:200] or "See this post on MyHigh5.")
 
-    content_text = (post.content or "").strip()
-    title = html.escape(f"{author_name} shared a post on MyHigh5")
-    description = html.escape(content_text[:200] or "See this post on MyHigh5.")
-
-    image_url = _DEFAULT_OG_IMAGE
-    for post_media in post.media or []:
-        media = getattr(post_media, "media", None)
-        media_url = getattr(media, "url", None)
-        media_type = (getattr(media, "media_type", "") or "").lower()
-        if media_url and media_type == "image":
-            image_url = _absolutize_url(media_url) or _DEFAULT_OG_IMAGE
-            break
+        image_url = _DEFAULT_OG_IMAGE
+        for post_media in post.media or []:
+            media = getattr(post_media, "media", None)
+            media_url = getattr(media, "url", None)
+            media_type = (getattr(media, "media_type", "") or "").lower()
+            if media_url and (not media_type or media_type == "image"):
+                image_url = _absolutize_url(media_url) or _DEFAULT_OG_IMAGE
+                break
+            if media_url and media_type == "video":
+                thumb = _youtube_thumbnail(media_url)
+                if thumb:
+                    image_url = thumb
+                    break
+        if image_url == _DEFAULT_OG_IMAGE and post.author and post.author.avatar_url:
+            image_url = _absolutize_url(post.author.avatar_url) or _DEFAULT_OG_IMAGE
 
     html_content = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
+    <title>{title}</title>
+    <meta name="description" content="{description}">
     <meta property="og:type" content="article">
-    <meta property="og:url" content="{flutter_url}">
+    <meta property="og:site_name" content="MyHigh5">
+    <meta property="og:url" content="{share_page_url}">
     <meta property="og:title" content="{title}">
     <meta property="og:description" content="{description}">
     <meta property="og:image" content="{image_url}">
+    <meta property="og:image:secure_url" content="{image_url}">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
-    <meta property="og:site_name" content="MyHigh5">
-
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:url" content="{flutter_url}">
+    <meta name="twitter:url" content="{share_page_url}">
     <meta name="twitter:title" content="{title}">
     <meta name="twitter:description" content="{description}">
     <meta name="twitter:image" content="{image_url}">
-
-    <title>{title}</title>
-    <meta http-equiv="refresh" content="0.5; url={flutter_url}">
-
-    <script>
-        setTimeout(function() {{
-            window.location.href = "{flutter_url}";
-        }}, 500);
-    </script>
+    <link rel="canonical" href="{share_page_url}">
+    <meta http-equiv="refresh" content="1;url={redirect_url}">
 </head>
 <body>
-    <p>Redirecting to MyHigh5 post...</p>
+    <p><a href="{redirect_url}">Continue to MyHigh5</a></p>
 </body>
 </html>"""
 
@@ -448,10 +458,13 @@ async def share_contestant(
             detail="Contestant non trouvé"
         )
     
-    # URL de redirection vers l'app Flutter
-    flutter_url = f"https://myhigh5.com/contestants/{contestant_id}"
+    share_page_url = f"{_SITE_BASE}/s/c/{contestant_id}"
     if ref:
-        flutter_url += f"/{ref}"
+        share_page_url += f"?{urlencode({'ref': ref})}"
+
+    flutter_url = f"{_SITE_BASE}/contestants/{contestant_id}"
+    if ref:
+        flutter_url += f"?{urlencode({'ref': ref})}"
     
     # Échapper les caractères HTML pour éviter les injections
     title = html.escape(contestant.title or "MyHighFive")
@@ -483,17 +496,18 @@ async def share_contestant(
     
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="article">
-    <meta property="og:url" content="{flutter_url}">
+    <meta property="og:url" content="{share_page_url}">
     <meta property="og:title" content="{title} - {author_name}">
     <meta property="og:description" content="{description}">
     <meta property="og:image" content="{image_url}">
+    <meta property="og:image:secure_url" content="{image_url}">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
-    <meta property="og:site_name" content="MyHighFive">
+    <meta property="og:site_name" content="MyHigh5">
     
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:url" content="{flutter_url}">
+    <meta name="twitter:url" content="{share_page_url}">
     <meta name="twitter:title" content="{title} - {author_name}">
     <meta name="twitter:description" content="{description}">
     <meta name="twitter:image" content="{image_url}">

@@ -68,7 +68,8 @@ def _serialize_post(
                 "id": pm.id,
                 "media_id": pm.media_id,
                 "order": pm.order,
-                "url": pm.media.url if pm.media else None
+                "url": pm.media.url if pm.media else None,
+                "media_type": pm.media.media_type if pm.media else None,
             } for pm in post.media
         ],
         "user_reaction": None

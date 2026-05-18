@@ -114,10 +114,7 @@ const nextConfig = {
         source: '/ut/:path*',
         destination: '/api/uploadthing/:path*',
       },
-      {
-        source: '/s/c/:id',
-        destination: `${backendUrl}/api/v1/share/c/:id`,
-      },
+      // /s/c/:id and /s/f/:id are served by App Router (app/s/c, app/s/f) with OG HTML for Facebook.
       {
         source: '/s/p/:username',
         destination: `${backendUrl}/api/v1/share/p/:username`,
@@ -125,10 +122,6 @@ const nextConfig = {
       {
         source: '/s/u/:username',
         destination: `${backendUrl}/api/v1/share/u/:username`,
-      },
-      {
-        source: '/s/f/:id',
-        destination: `${backendUrl}/api/v1/share/f/:id`,
       },
       {
         source: '/s/r/:code',
