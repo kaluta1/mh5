@@ -102,7 +102,7 @@ const nextConfig = {
   },
   async rewrites() {
     // Share link rewrites: backend URL from env or default (see lib/config.ts)
-    const backendUrl = (process.env.NEXT_PUBLIC_API_URL || 'https://mh5-hbjp.onrender.com').replace(/\/+$/, '')
+    const backendUrl = (process.env.NEXT_PUBLIC_API_URL || 'https://myhigh5.com').replace(/\/+$/, '')
 
     return [
       // Legacy UploadThing client URL — forward to App Router handler
@@ -114,7 +114,7 @@ const nextConfig = {
         source: '/ut/:path*',
         destination: '/api/uploadthing/:path*',
       },
-      // /s/c/:id and /s/f/:id are served by App Router (app/s/c, app/s/f) with OG HTML for Facebook.
+      // /s/f and /s/c → app/s/f/[id]/route.ts and app/s/c/[id]/route.ts (raw OG HTML, no layout).
       {
         source: '/s/p/:username',
         destination: `${backendUrl}/api/v1/share/p/:username`,

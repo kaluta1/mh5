@@ -369,19 +369,21 @@ async def share_feed_post(
             image_url = _absolutize_url(post.author.avatar_url) or _DEFAULT_OG_IMAGE
 
     html_content = f"""<!DOCTYPE html>
-<html lang="en">
+<html lang="en" prefix="og: https://ogp.me/ns#">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{title}</title>
     <meta name="description" content="{description}">
     <meta property="og:type" content="article">
+    <meta property="og:locale" content="en_US">
     <meta property="og:site_name" content="MyHigh5">
     <meta property="og:url" content="{share_page_url}">
     <meta property="og:title" content="{title}">
     <meta property="og:description" content="{description}">
     <meta property="og:image" content="{image_url}">
     <meta property="og:image:secure_url" content="{image_url}">
+    <meta property="og:image:type" content="image/png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
     <meta name="twitter:card" content="summary_large_image">
@@ -390,10 +392,14 @@ async def share_feed_post(
     <meta name="twitter:description" content="{description}">
     <meta name="twitter:image" content="{image_url}">
     <link rel="canonical" href="{share_page_url}">
-    <meta http-equiv="refresh" content="1;url={redirect_url}">
+    <meta http-equiv="refresh" content="2;url={redirect_url}">
 </head>
 <body>
-    <p><a href="{redirect_url}">Continue to MyHigh5</a></p>
+    <article>
+        <h1>{title}</h1>
+        <p>{description}</p>
+        <p><a href="{redirect_url}">Continue to MyHigh5</a></p>
+    </article>
 </body>
 </html>"""
 

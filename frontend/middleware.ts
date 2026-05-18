@@ -1,17 +1,20 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-export function middleware(_request: NextRequest) {
-    return NextResponse.next()
+/**
+ * Share links (/s/f, /s/c) are handled by route.ts handlers that return raw OG HTML.
+ * Do not redirect crawlers away from these paths.
+ */
+export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl
+  if (pathname.startsWith('/s/f/') || pathname.startsWith('/s/c/')) {
+    const response = NextResponse.next()
+    response.headers.set('x-myhigh5-share-route', '1')
+    return response
+  }
+  return NextResponse.next()
 }
 
 export const config = {
-    matcher: [
-        /*
-         * Match all request paths except for the ones starting with:
-         * - _next/static (static files)
-         * - _next/image (image optimization files)
-         */
-        '/((?!_next/static|_next/image).*)',
-    ],
+  matcher: ['/s/f/:path*', '/s/c/:path*'],
 }
