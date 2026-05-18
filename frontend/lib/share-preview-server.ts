@@ -19,9 +19,14 @@ export type ShareContestantPreview = {
   imageUrl: string
 }
 
-function serverApiBase(): string {
+export function getServerApiBase(): string {
   const internal = (process.env.INTERNAL_API_URL || '').trim().replace(/\/+$/, '')
   if (internal) return internal
+  // VPS: Next and uvicorn on same machine — prefer loopback (faster, no nginx SSL hop)
+  if (process.env.NODE_ENV === 'production') {
+    const port = (process.env.API_PORT || process.env.BACKEND_PORT || '8000').trim()
+    return `http://127.0.0.1:${port}`
+  }
   const configured = API_URL.replace(/\/+$/, '')
   if (configured && !/(localhost|127\.0\.0\.1)/i.test(configured)) {
     return configured
@@ -44,7 +49,7 @@ export async function fetchBackendShareHtml(
   id: string,
   ref?: string | null
 ): Promise<string | null> {
-  const apiBase = serverApiBase()
+  const apiBase = getServerApiBase()
   const qs = ref ? `?${new URLSearchParams({ ref }).toString()}` : ''
   try {
     const res = await fetchWithTimeout(`${apiBase}/api/v1/share/${kind}/${id}${qs}`, {
@@ -68,7 +73,7 @@ export function absolutizeShareImage(url: string | null | undefined): string {
   if (trimmed.startsWith('/')) {
     return `${SITE_ORIGIN}${trimmed}`
   }
-  const apiBase = serverApiBase()
+  const apiBase = getServerApiBase()
   return `${apiBase}/${trimmed.replace(/^\/+/, '')}`
 }
 
@@ -93,7 +98,7 @@ type ApiPreviewPost = {
 }
 
 export async function fetchPostSharePreview(postId: string): Promise<SharePostPreview> {
-  const apiBase = serverApiBase()
+  const apiBase = getServerApiBase()
   const fallback: SharePostPreview = {
     title: 'Post on MyHigh5',
     description: 'See this post on MyHigh5.',
@@ -162,7 +167,7 @@ type ApiContestant = {
 export async function fetchContestantSharePreview(
   contestantId: string
 ): Promise<ShareContestantPreview> {
-  const apiBase = serverApiBase()
+  const apiBase = getServerApiBase()
   const fallback: ShareContestantPreview = {
     title: 'Contestant on MyHigh5',
     description: 'Vote and support on MyHigh5.',

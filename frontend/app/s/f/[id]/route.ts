@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { buildOgShareHtml } from '@/lib/og-share-html'
 import {
   SITE_ORIGIN,
-  fetchBackendShareHtml,
   fetchPostSharePreview,
   isSocialCrawler,
 } from '@/lib/share-preview-server'
@@ -28,19 +27,6 @@ export async function GET(
 
   const ua = request.headers.get('user-agent') || ''
   const crawler = isSocialCrawler(ua)
-
-  const backendHtml = await fetchBackendShareHtml('f', id, ref)
-  if (backendHtml && /og:image/i.test(backendHtml)) {
-    return new NextResponse(backendHtml, {
-      status: 200,
-      headers: {
-        'Content-Type': 'text/html; charset=utf-8',
-        'Cache-Control': 'public, max-age=60, s-maxage=300',
-        'X-Robots-Tag': 'noindex, nofollow',
-      },
-    })
-  }
-
   const preview = await fetchPostSharePreview(id)
 
   const html = buildOgShareHtml({
