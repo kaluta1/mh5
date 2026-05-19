@@ -859,6 +859,7 @@ class CRUDContest:
             contest.id,
             round_id,
             prefer_nomination_submit_round=_nomination_contest,
+            current_user_id=current_user.id if current_user else None,
         )
         if display_round_for_scope is None and _nomination_contest:
             pref_r = crud_round.round.get_preferred_nomination_round_for_contest(db, contest.id)
@@ -1179,55 +1180,42 @@ class CRUDContest:
             entries_count = entries_query.scalar() or 0
         
         # Vérifier si l'utilisateur connecté participe à ce concours
-        # CRITICAL: Use the EXACT same logic as create_contestant duplicate check
         current_user_contesting = False
         if current_user:
             try:
-                from app.models.contests import ContestSeason, ContestSeasonLink
                 from app.crud import contestant as crud_contestant
                 from app import crud
-                
-                # 1. First, check active round as participation is now round-specific
-                active_round = crud.round.get_active_round_for_contest(db, contest.id)
-                target_round_id = active_round.id if active_round else None
-                
-                existing = None
-                # Déterminer le entry_type attendu basé sur le contest_mode
+
                 contest_mode = _normalize_contest_mode(getattr(contest, 'contest_mode', 'participation'))
                 expected_entry_type = 'nomination' if contest_mode == 'nomination' else 'participation'
-                if target_round_id:
-                    existing = crud_contestant.get_by_round_and_user(
-                        db, target_round_id, current_user.id,
-                        entry_type=expected_entry_type,
-                        season_id=contest.id
-                    )
-                else:
-                    # 2. Try to find active ContestSeason via ContestSeasonLink (legacy/fallback)
-                    season_link = db.query(ContestSeasonLink).filter(
-                        ContestSeasonLink.contest_id == contest.id,
-                        ContestSeasonLink.is_active == True
-                    ).first()
+                check_round_id = crud_round.round.resolve_display_round_id_for_contest(
+                    db,
+                    contest.id,
+                    round_id,
+                    prefer_nomination_submit_round=(contest_mode == 'nomination'),
+                    current_user_id=current_user.id,
+                )
+                if check_round_id is None and contest_mode == 'nomination':
+                    pref_r = crud_round.round.get_preferred_nomination_round_for_contest(db, contest.id)
+                    if pref_r is not None:
+                        check_round_id = pref_r.id
 
-                    season_id = None
-                    if season_link:
-                        season = db.query(ContestSeason).filter(
-                            ContestSeason.id == season_link.season_id,
-                            ContestSeason.is_deleted == False
-                        ).first()
-                        if season:
-                            season_id = season.id
-                    
-                    # 3. Fallback to contest.id if no active season found (legacy behavior)
-                    if not season_id:
-                        season_id = contest.id
-                    
-                    existing = crud_contestant.get_by_season_and_user(
+                existing = crud_contestant.get_latest_entry_in_contest(
+                    db,
+                    contest_id=contest.id,
+                    user_id=current_user.id,
+                    entry_type=expected_entry_type,
+                    round_id=check_round_id,
+                )
+                if existing is None and expected_entry_type == 'nomination':
+                    existing = crud_contestant.get_latest_entry_in_contest(
                         db,
-                        season_id,
-                        current_user.id,
+                        contest_id=contest.id,
+                        user_id=current_user.id,
                         entry_type=expected_entry_type,
+                        round_id=None,
                     )
-                
+
                 current_user_contesting = existing is not None
                 
                 if current_user_contesting:
@@ -1695,6 +1683,7 @@ class CRUDContest:
             contest_id,
             round_id,
             prefer_nomination_submit_round=(contest_mode_early == "nomination"),
+            current_user_id=current_user_id,
         )
         if target_round_id is None and contest_mode_early == "nomination":
             pref_tr = crud_round.round.get_preferred_nomination_round_for_contest(db, contest_id)
@@ -2039,7 +2028,13 @@ class CRUDContest:
                     conds.append(Contestant.country.ilike(pat))
                     conds.append(Contestant.nominator_country.ilike(pat))
                     conds.append(User.country.ilike(pat))
-                location_conditions.append(or_(*conds))
+                country_or = or_(*conds)
+                if nomination_context and current_user_id:
+                    location_conditions.append(
+                        or_(country_or, Contestant.user_id == current_user_id)
+                    )
+                else:
+                    location_conditions.append(country_or)
             if effective_region:
                 logger.info(f"[get_contest_with_enriched_contestants] Filtering by region: '{effective_region}'")
                 region_conditions: list = []

@@ -1074,7 +1074,18 @@ async def create_contest(
             category = db.query(Category).filter(Category.id == category_id).first()
             if category:
                 contest_type = category.slug
-        
+
+        from app.services.contest_category_integrity import assert_unique_category_mode
+
+        try:
+            assert_unique_category_mode(
+                db,
+                category_id=category_id,
+                contest_type=contest_type,
+                contest_mode=contest_mode,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
         
         # Create contest with auto-generated values
         new_contest = Contest(
@@ -1320,6 +1331,18 @@ async def update_contest(
             if category:
                 contest.contest_type = category.slug
 
+        from app.services.contest_category_integrity import assert_unique_category_mode
+
+        try:
+            assert_unique_category_mode(
+                db,
+                category_id=contest.category_id,
+                contest_type=contest.contest_type,
+                contest_mode=contest.contest_mode,
+                exclude_contest_id=contest.id,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
         
         # Update verification fields
         contest.requires_kyc = contest_data.requires_kyc

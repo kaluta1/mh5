@@ -303,6 +303,19 @@ export default function ContestDetailPage() {
 
       setContest(contestData)
 
+      if (user?.id) {
+        const ownRow = mappedContestants.some(
+          (ct) => ct.userId != null && Number(ct.userId) === Number(user.id),
+        )
+        setUserHasEntry(
+          ownRow ||
+            Boolean(c.current_user_contesting) ||
+            Boolean(c.current_user_participation),
+        )
+      } else {
+        setUserHasEntry(false)
+      }
+
       setFavorites(mappedContestants.filter(ct => ct.isFavorite).map(ct => ct.id))
 
     } catch (error: any) {
@@ -317,7 +330,7 @@ export default function ContestDetailPage() {
         setPageLoading(false)
       }
     }
-  }, [contestId, filterCountry, filterRegion, filterContinent, entryType, roundIdFromUrl, viewOnly, t])
+  }, [contestId, filterCountry, filterRegion, filterContinent, entryType, roundIdFromUrl, viewOnly, user?.id, t])
 
   // Decide if the current user already submitted (so the CTA should show "Edit").
   // This is needed because `current_user_contesting` from the API can be inaccurate for nominations.
@@ -385,7 +398,17 @@ export default function ContestDetailPage() {
     // Cleanup handled in fetchContestDetails via abortController
   }, [fetchContestDetails])
 
-  // Nomination contests: keep ?roundId= in sync with the API roster (fixes stale grid links).
+  // If the user nominated but the roster is empty (stale round/country), refetch once with cache bust.
+  const rosterRecoveryRef = React.useRef(false)
+  useEffect(() => {
+    if (pageLoading || !contest || rosterRecoveryRef.current) return
+    if (!userHasEntry || (contest.contestants?.length ?? 0) > 0) return
+    rosterRecoveryRef.current = true
+    void fetchContestDetails({ silent: true })
+  }, [pageLoading, contest, userHasEntry, fetchContestDetails])
+
+  // Nomination contests: fill missing ?roundId= only — never override an explicit URL round
+  // (overriding hid the user's just-submitted nomination when display_round_id differed).
   React.useEffect(() => {
     if (pageLoading || !contest?.contest) return
     const mode = normalizeContestMode(contest.contest.contest_mode)
@@ -393,7 +416,7 @@ export default function ContestDetailPage() {
     const dr = contest.contest.display_round_id
     if (dr == null) return
     const urlNum = roundIdFromUrl ? parseInt(roundIdFromUrl, 10) : NaN
-    if (Number.isFinite(urlNum) && urlNum === dr) return
+    if (Number.isFinite(urlNum)) return
     const p = new URLSearchParams(searchParams.toString())
     p.set('roundId', String(dr))
     router.replace(`/dashboard/contests/${contestId}?${p.toString()}`, { scroll: false })

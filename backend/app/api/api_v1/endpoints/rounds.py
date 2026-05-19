@@ -11,6 +11,7 @@ from app.schemas import round as round_schema
 from app.api import deps
 from app.models.round import Round, RoundStatus
 from app.scripts.generate_monthly_rounds import generate_monthly_round
+from app.services.contest_category_integrity import dedupe_contests_one_per_category_mode
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -245,6 +246,10 @@ def _lightweight_round_data(
                     _normalize_contest_mode(getattr(c, "contest_mode", "participation")),
                 )) == wanted_level
             ]
+
+        all_contests = dedupe_contests_one_per_category_mode(
+            all_contests, contest_mode_filter=contest_mode
+        )
 
         contests_count = len(all_contests)
         contests = all_contests[contest_skip:contest_skip + contest_limit]
@@ -513,6 +518,10 @@ def _enrich_round_data(
                         continue
                 
                 valid_contests.append(c)
+
+            valid_contests = dedupe_contests_one_per_category_mode(
+                valid_contests, contest_mode_filter=contest_mode
+            )
             
             contests_count = len(valid_contests)
 
@@ -582,6 +591,7 @@ def _enrich_round_data(
             # IMPORTANT: "Edit" must be shown only for the exact contest/category where
             # the user already has a nomination/participation, not every contest sharing voting_type.
             user_contested_contest_ids: set = set()
+            entry_round_by_contest: dict = {}
             if user_id:
                 try:
                     from app.models.contests import Contestant, ContestSeason, ContestSeasonLink
@@ -625,11 +635,23 @@ def _enrich_round_data(
                     ).all()
 
                     if valid_contests:
-                        user_contestants = [uc for uc in all_user_contestants if uc.round_id == round_id]
                         expected_type = "nomination" if contest_mode == "nomination" else "participation"
                         contested_ids: set = set()
-                        for uc in user_contestants:
-                            if getattr(uc, "entry_type", "participation") != expected_type:
+
+                        def _uc_entry_matches(uc) -> bool:
+                            raw_et = getattr(uc, "entry_type", None)
+                            if expected_type == "nomination":
+                                if raw_et is None:
+                                    return True
+                                return str(raw_et).strip().lower() == "nomination"
+                            return (raw_et or "participation") == expected_type
+
+                        pool = all_user_contestants
+                        if expected_type != "nomination":
+                            pool = [uc for uc in all_user_contestants if uc.round_id == round_id]
+
+                        for uc in pool:
+                            if not _uc_entry_matches(uc):
                                 continue
                             cid_direct = getattr(uc, "season_id", None)
                             if (
@@ -637,6 +659,11 @@ def _enrich_round_data(
                                 and _entry_type_for_contest(cid_direct) == expected_type
                             ):
                                 contested_ids.add(cid_direct)
+                                rid = getattr(uc, "round_id", None)
+                                if rid is not None:
+                                    prev = entry_round_by_contest.get(cid_direct)
+                                    if prev is None or int(rid) >= int(prev):
+                                        entry_round_by_contest[cid_direct] = int(rid)
                                 continue
                             for _s in unique_seasons.values():
                                 resolved = contestant_ep._resolve_contest_for_contestant_vote(
@@ -648,6 +675,11 @@ def _enrich_round_data(
                                     and _entry_type_for_contest(resolved.id) == expected_type
                                 ):
                                     contested_ids.add(resolved.id)
+                                    rid = getattr(uc, "round_id", None)
+                                    if rid is not None:
+                                        prev = entry_round_by_contest.get(resolved.id)
+                                        if prev is None or int(rid) >= int(prev):
+                                            entry_round_by_contest[resolved.id] = int(rid)
                                     break
                         user_contested_contest_ids = contested_ids
                 except Exception as e:
@@ -681,7 +713,8 @@ def _enrich_round_data(
                         "created_at": getattr(contest, 'created_at', None),
                         "updated_at": getattr(contest, 'updated_at', None),
                         "contest_mode": contest_mode_value,
-                        "current_user_contesting": bool(is_contesting)  # Explicitly convert to bool
+                        "current_user_contesting": bool(is_contesting),
+                        "user_entry_round_id": entry_round_by_contest.get(contest.id) if is_contesting else None,
                     }
                     r_data.setdefault("contests", []).append(contest_data)
                 except Exception as e:

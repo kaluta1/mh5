@@ -64,6 +64,10 @@ function setToCache(key: string, data: any) {
   contestsCache.set(key, { data, timestamp: Date.now() })
 }
 
+function clearContestsListCache() {
+  contestsCache.clear()
+}
+
 type NominationMigrationLevel = 'all' | 'city' | 'country' | 'regional' | 'continental' | 'global'
 
 function normalizeContestLevel(level?: string): Exclude<NominationMigrationLevel, 'all'> | null {
@@ -290,6 +294,14 @@ function ContestsPageContent() {
   useEffect(() => {
     if (typeof window !== 'undefined') localStorage.setItem('contests_category_tab', categoryTab)
   }, [categoryTab])
+
+  useEffect(() => {
+    const onContestantSubmitted = () => {
+      clearContestsListCache()
+    }
+    window.addEventListener('contestant-submitted', onContestantSubmitted)
+    return () => window.removeEventListener('contestant-submitted', onContestantSubmitted)
+  }, [])
 
   // Sync filters to URL for persistence on refresh
   useEffect(() => {
@@ -654,6 +666,7 @@ function ContestsPageContent() {
         // to avoid showing Edit on contests/categories where user has no submission.
         currentUserParticipated: Boolean(c.currentUserParticipated === true || c.current_user_participated === true),
         currentUserContesting: Boolean(c.currentUserContesting === true || c.current_user_contesting === true),
+        userEntryRoundId: c.user_entry_round_id ?? c.userEntryRoundId ?? null,
         topContestants: [], // Not fetching top contestants per contest in new query yet
         contest_mode: c.contest_mode ?? null,
       }
@@ -806,10 +819,13 @@ function ContestsPageContent() {
     isEditing: boolean,
     roundId: string | null,
     contestModeFromRow?: unknown,
+    userEntryRoundId?: number | null,
   ) => {
     const params = new URLSearchParams()
     if (isEditing) params.set('edit', 'true')
-    if (roundId) params.set('roundId', roundId)
+    const roundForApply =
+      isEditing && userEntryRoundId != null ? String(userEntryRoundId) : roundId
+    if (roundForApply) params.set('roundId', roundForApply)
     const entryType = normalizeContestMode(contestModeFromRow) === 'nomination' ? 'nomination' : 'participation'
     params.set('entryType', entryType)
     const q = params.toString()
@@ -1052,6 +1068,7 @@ function ContestsPageContent() {
                       (isNominationCard ? contest.currentUserContesting : contest.currentUserParticipated) || false,
                       roundIdNav,
                       contest.contest_mode,
+                      contest.userEntryRoundId ?? null,
                     )
                   }
                   onViewContestants={() => {

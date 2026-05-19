@@ -202,6 +202,7 @@ class CRUDRound:
         round_id: Optional[int],
         *,
         prefer_nomination_submit_round: bool = False,
+        current_user_id: Optional[int] = None,
     ) -> Optional[int]:
         """
         Which calendar round to use when listing contestants for a contest.
@@ -234,6 +235,7 @@ class CRUDRound:
                     contest_id,
                     None,
                     prefer_nomination_submit_round=True,
+                    current_user_id=current_user_id,
                 )
                 if canonical is not None and canonical != round_id:
                     from app.models.contests import Contestant
@@ -267,10 +269,46 @@ class CRUDRound:
                     # (ne <= 1 and nc > ne) replaced URL rounds that still had real rows — users saw
                     # another month's roster while ?roundId= pointed at the previous period.)
                     if ne == 0 and nc > 0:
+                        if current_user_id:
+                            mine_in_requested = (
+                                db.query(Contestant.id)
+                                .filter(
+                                    Contestant.season_id == contest_id,
+                                    Contestant.user_id == current_user_id,
+                                    Contestant.is_deleted == False,
+                                    _nom_row,
+                                    Contestant.round_id == round_id,
+                                )
+                                .first()
+                            )
+                            if mine_in_requested:
+                                return round_id
                         return canonical
             return round_id
 
         if prefer_nomination_submit_round:
+            if current_user_id:
+                from app.models.contests import Contestant
+
+                _nom_row = or_(
+                    Contestant.entry_type == "nomination",
+                    Contestant.entry_type.is_(None),
+                )
+                latest_user_round = (
+                    db.query(Contestant.round_id)
+                    .filter(
+                        Contestant.season_id == contest_id,
+                        Contestant.user_id == current_user_id,
+                        Contestant.is_deleted == False,
+                        _nom_row,
+                        Contestant.round_id.isnot(None),
+                    )
+                    .order_by(Contestant.registration_date.desc(), Contestant.id.desc())
+                    .first()
+                )
+                if latest_user_round and latest_user_round[0] is not None:
+                    return int(latest_user_round[0])
+
             pref = self.get_preferred_nomination_round_for_contest(db, contest_id)
             if pref is not None:
                 return pref.id

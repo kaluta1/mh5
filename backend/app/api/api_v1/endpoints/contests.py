@@ -255,26 +255,41 @@ def read_contests(
                     
                     for contest_id in contest_ids:
                         expected_entry_type = _entry_type_from_contest_mode(contest_mode_map.get(contest_id))
+                        is_nomination = expected_entry_type == "nomination"
 
-                        # 1. First, check active round (contest-specific check)
+                        def _entry_matches(uc) -> bool:
+                            raw_et = getattr(uc, "entry_type", None)
+                            if is_nomination:
+                                if raw_et is None:
+                                    return True
+                                return str(raw_et).strip().lower() == "nomination"
+                            return (raw_et or "participation") == expected_entry_type
+
+                        # Nominations: any round for this contest (hub pill may be vote month).
+                        if is_nomination:
+                            is_contesting = any(
+                                uc.season_id == contest_id and _entry_matches(uc)
+                                for uc in user_contestants
+                            )
+                            if is_contesting:
+                                current_user_contesting_map[contest_id] = True
+                            continue
+
+                        # Participations: round-scoped when an active submission round exists.
                         if contest_id in active_rounds_by_contest:
                             target_round_id = active_rounds_by_contest[contest_id]
-                            # Contestant.season_id is canonically contest.id in this codebase.
-                            # Include entry_type match to avoid cross-tab confusion.
                             is_contesting = any(
                                 uc.round_id == target_round_id
                                 and uc.season_id == contest_id
-                                and (getattr(uc, "entry_type", "participation") or "participation") == expected_entry_type
+                                and _entry_matches(uc)
                                 for uc in user_contestants
                             )
                             if is_contesting:
                                 current_user_contesting_map[contest_id] = True
                                 continue
-                                
-                        # 2. Fallback: check contest ownership + entry_type (no active round resolution)
+
                         is_contesting = any(
-                            uc.season_id == contest_id
-                            and (getattr(uc, "entry_type", "participation") or "participation") == expected_entry_type
+                            uc.season_id == contest_id and _entry_matches(uc)
                             for uc in user_contestants
                         )
                         if is_contesting:
@@ -343,6 +358,23 @@ def read_contests(
                 )
 
             
+            user_entry_round_id = None
+            if current_user and current_user_contesting_map.get(c.id, False):
+                expected_et = _entry_type_from_contest_mode(
+                    _normalize_contest_mode(getattr(c, "contest_mode", "participation"))
+                )
+                from app.crud import contestant as crud_contestant_mod
+
+                latest = crud_contestant_mod.get_latest_entry_in_contest(
+                    db,
+                    contest_id=c.id,
+                    user_id=current_user.id,
+                    entry_type=expected_et,
+                    round_id=None,
+                )
+                if latest and getattr(latest, "round_id", None) is not None:
+                    user_entry_round_id = latest.round_id
+
             basic_contest = {
                 "id": c.id,
                 "name": c.name,
@@ -361,6 +393,7 @@ def read_contests(
                 "participant_count": visible_participants_count,
                 "total_votes": 0,  # Skip vote counting for list view
                 "current_user_contesting": bool(current_user_contesting_map.get(c.id, False)),  # Explicitly convert to bool, default False
+                "user_entry_round_id": user_entry_round_id,
             }
             # Debug log for current_user_contesting
             if current_user and current_user_contesting_map.get(c.id, False):
@@ -682,58 +715,29 @@ def read_contest(
         ).first()
 
         from app import crud
-        # Prefer the URL/query round so participation matches the same roster as GET contest body.
+        # Use the same calendar round as the roster (display_round_id), not a stale URL round.
         display_rid = enriched_contest.get("display_round_id") if isinstance(enriched_contest, dict) else None
-        if round_id is not None:
-            target_round_id = round_id
-        elif display_rid:
-            target_round_id = display_rid
-        else:
+        target_round_id = display_rid
+        if target_round_id is None:
             active_round = crud.round.get_active_round_for_contest(db, contest_id)
             target_round_id = active_round.id if active_round else None
 
         expected_entry_type = _entry_type_from_contest_mode(getattr(contest_obj, "contest_mode", "participation"))
-        participation = None
-        if target_round_id:
-            # Pass season_id to scope to THIS specific contest (rounds are shared)
-            # Filter by entry_type to avoid cross-tab confusion (nomination vs participation).
-            participation = crud_contestant.get_by_round_and_user(
+        participation = crud_contestant.get_latest_entry_in_contest(
+            db=db,
+            contest_id=contest_id,
+            user_id=current_user.id,
+            entry_type=expected_entry_type,
+            round_id=target_round_id,
+        )
+        if participation is None and expected_entry_type == "nomination":
+            participation = crud_contestant.get_latest_entry_in_contest(
                 db=db,
-                round_id=target_round_id,
+                contest_id=contest_id,
                 user_id=current_user.id,
                 entry_type=expected_entry_type,
-                season_id=contest_id
+                round_id=None,
             )
-        else:
-            # Canonical storage in this codebase: Contestant.season_id == contest_id.
-            # Check this first, then fallback to linked ContestSeason for legacy data.
-            participation = crud_contestant.get_by_season_and_user(
-                db=db,
-                season_id=contest_id,
-                user_id=current_user.id,
-                entry_type=expected_entry_type,
-            )
-            if participation:
-                season_link = None
-            # Fallback to season logic if no active round / no canonical record
-            else:
-                season_link = db.query(ContestSeasonLink).filter(
-                    ContestSeasonLink.contest_id == contest_id,
-                    ContestSeasonLink.is_active == True
-                ).first()
-
-            if not participation and season_link:
-                season = db.query(ContestSeason).filter(
-                    ContestSeason.id == season_link.season_id,
-                    ContestSeason.is_deleted == False
-                ).first()
-                if season:
-                    participation = crud_contestant.get_by_season_and_user(
-                        db=db,
-                        season_id=season.id,
-                        user_id=current_user.id,
-                        entry_type=expected_entry_type,
-                    )
 
         if participation:
             try:
@@ -754,6 +758,8 @@ def read_contest(
                 }
                 enriched_contest["current_user_participation"] = participation_dict
                 enriched_contest["current_user_contesting"] = True
+                if getattr(participation, "round_id", None) is not None:
+                    enriched_contest["user_entry_round_id"] = participation.round_id
             except Exception as e:
                 logger.warning(f"Error enriching user participation for contest {contest_id}: {str(e)}")
                 logger.debug(traceback.format_exc())

@@ -1686,9 +1686,15 @@ def get_contest_contestants(
         )
         if round_id is not None:
             if user_id is not None:
-                # Country nominations: strict calendar round (no NULL-round bleed into a new round).
+                # When loading only this user's rows (apply/edit), always include their entries
+                # even if the URL round pill differs from the round they nominated in.
                 if _is_nomination_contest_round:
-                    query = query.filter(Contestant.round_id == round_id)
+                    query = query.filter(
+                        or_(
+                            Contestant.round_id == round_id,
+                            Contestant.user_id == user_id,
+                        )
+                    )
                 else:
                     query = query.filter(
                         or_(
@@ -1742,6 +1748,8 @@ def get_contest_contestants(
                 conds.append(Contestant.nominator_country.ilike(pat))
                 conds.append(User.country.ilike(pat))
             country_or = or_(*conds)
+            if _is_nomination_contest_round and user_id is not None:
+                country_or = or_(country_or, Contestant.user_id == user_id)
             query = query.outerjoin(User, Contestant.user_id == User.id).filter(country_or)
         if has_region_filter and not suppress_geo_filters:
             query = query.filter(func.lower(Contestant.region) == fr_norm)

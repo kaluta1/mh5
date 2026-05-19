@@ -408,9 +408,26 @@ export default function ApplyToContestPage() {
     allVerificationRequirementsMet,
   ])
 
+  const buildContestDetailUrl = useCallback(() => {
+    const params = new URLSearchParams()
+    const urlRound = roundIdParam ? parseInt(roundIdParam, 10) : NaN
+    const displayR = contest?.display_round_id != null ? Number(contest.display_round_id) : NaN
+    const activeR = contest?.active_round_id != null ? Number(contest.active_round_id) : NaN
+    if (Number.isFinite(urlRound)) params.set('roundId', String(urlRound))
+    else if (Number.isFinite(displayR)) params.set('roundId', String(displayR))
+    else if (Number.isFinite(activeR)) params.set('roundId', String(activeR))
+    const mode = normalizeContestMode(contest?.contest_mode)
+    params.set('entryType', mode === 'nomination' ? 'nomination' : 'participation')
+    if (user?.country) params.set('country', user.country)
+    const qs = params.toString()
+    return contestId
+      ? `/dashboard/contests/${contestId}${qs ? `?${qs}` : ''}`
+      : '/dashboard/contests'
+  }, [contestId, roundIdParam, contest, user?.country])
+
   const handleVerificationDialogClose = () => {
     setShowVerificationDialog(false)
-    router.push(contestId ? `/dashboard/contests/${contestId}` : '/dashboard/contests')
+    router.push(buildContestDetailUrl())
   }
 
   // Temps restant jusqu'à la fin des nominations (grâce + extension alignée jour de vote — voir backend)
@@ -931,18 +948,29 @@ export default function ApplyToContestPage() {
                   </p>
                 </div>
               </div>
-              {isSubmissionActuallyOpen(contest) && (
+              <div className="flex flex-col sm:flex-row gap-2">
                 <button
-                  onClick={() => {
-                    // Permettre de modifier à nouveau
-                    setIsEditingParticipation(true)
-                    setSubmitSuccess(false)
-                  }}
-                  className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition text-sm"
+                  type="button"
+                  onClick={() => router.push(buildContestDetailUrl())}
+                  className="flex-1 px-4 py-2 bg-myhigh5-primary hover:bg-myhigh5-primary-dark text-white rounded-lg font-medium transition text-sm"
                 >
-                  ✏️ {t('dashboard.contests.participation_form.edit_participation') || 'Modifier ma candidature'}
+                  {isNomination
+                    ? `${t('dashboard.contests.view') || 'View'} ${t('dashboard.contests.nominators') || 'nominations'}`
+                    : t('dashboard.contests.view_contestants') || 'View participants'}
                 </button>
-              )}
+                {isSubmissionActuallyOpen(contest) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsEditingParticipation(true)
+                      setSubmitSuccess(false)
+                    }}
+                    className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition text-sm"
+                  >
+                    ✏️ {t('dashboard.contests.participation_form.edit_participation') || 'Modifier ma candidature'}
+                  </button>
+                )}
+              </div>
             </div>
           )}
 

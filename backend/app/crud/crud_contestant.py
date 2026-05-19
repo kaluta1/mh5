@@ -637,6 +637,72 @@ class CRUDContestant:
             .order_by(Contestant.registration_date.desc(), Contestant.id.desc())
             .first()
         )
+
+    def user_has_entry_in_contest(
+        self,
+        db: Session,
+        *,
+        contest_id: int,
+        user_id: int,
+        entry_type: str,
+        round_id: Optional[int] = None,
+    ) -> bool:
+        """
+        True when the user already submitted for this contest.
+        Nominations: any calendar round for this contest (nominator may only appear once per round).
+        Participations: scoped to round_id when provided.
+        """
+        from sqlalchemy import or_
+
+        filters = [
+            Contestant.season_id == contest_id,
+            Contestant.user_id == user_id,
+            Contestant.is_deleted == False,
+        ]
+        et = (entry_type or "participation").strip().lower()
+        if et == "nomination":
+            filters.append(
+                or_(Contestant.entry_type == "nomination", Contestant.entry_type.is_(None))
+            )
+        else:
+            filters.append(Contestant.entry_type == et)
+        q = db.query(Contestant.id).filter(and_(*filters))
+        if round_id is not None and et != "nomination":
+            q = q.filter(Contestant.round_id == round_id)
+        elif round_id is not None:
+            q = q.filter(Contestant.round_id == round_id)
+        return q.first() is not None
+
+    def get_latest_entry_in_contest(
+        self,
+        db: Session,
+        *,
+        contest_id: int,
+        user_id: int,
+        entry_type: str,
+        round_id: Optional[int] = None,
+    ) -> Optional[Contestant]:
+        """Latest row for Edit / participation payload (same scoping as user_has_entry_in_contest)."""
+        from sqlalchemy import or_
+
+        filters = [
+            Contestant.season_id == contest_id,
+            Contestant.user_id == user_id,
+            Contestant.is_deleted == False,
+        ]
+        et = (entry_type or "participation").strip().lower()
+        if et == "nomination":
+            filters.append(
+                or_(Contestant.entry_type == "nomination", Contestant.entry_type.is_(None))
+            )
+        else:
+            filters.append(Contestant.entry_type == et)
+        q = db.query(Contestant).filter(and_(*filters))
+        if round_id is not None:
+            q = q.filter(Contestant.round_id == round_id)
+        return (
+            q.order_by(Contestant.registration_date.desc(), Contestant.id.desc()).first()
+        )
     
     def get_multi_by_season(
         self, db: Session, season_id: int, *, skip: int = 0, limit: int = 10
