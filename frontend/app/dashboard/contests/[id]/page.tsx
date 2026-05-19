@@ -249,10 +249,33 @@ export default function ContestDetailPage() {
       }
 
       const rawContestants = (c.contestants || []) as any[]
-      // Do not dedupe nominations by user_id: for nominations, user_id is the nominator, so every
-      // row from the same person would collapse to a single card and counts would stay at 1.
+      const contestModeNorm = String(c.contest_mode || '')
+        .split('.')
+        .pop()
+        ?.trim()
+        .toLowerCase()
+      // Nomination: user_id is the nominator — show one card per person (backend dedupes too).
+      const dedupedRaw =
+        contestModeNorm === 'nomination'
+          ? (() => {
+              const seen = new Set<number>()
+              const out: any[] = []
+              for (const row of rawContestants) {
+                const uid = row.user_id
+                if (uid == null) {
+                  out.push(row)
+                  continue
+                }
+                const n = Number(uid)
+                if (seen.has(n)) continue
+                seen.add(n)
+                out.push(row)
+              }
+              return out
+            })()
+          : rawContestants
 
-      const mappedContestants: Contestant[] = rawContestants.map((ct: any, index: number) => {
+      const mappedContestants: Contestant[] = dedupedRaw.map((ct: any, index: number) => {
         const images = parseMediaIds(ct.image_media_ids, 'image') // snake_case from python
         const videos = parseMediaIds(ct.video_media_ids, 'video')
         return {

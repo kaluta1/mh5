@@ -83,7 +83,19 @@ export default function ContestantsListPage() {
       setContestName(data.name || '')
       setContestMode(String(data.contest_mode || '').split('.').pop()?.trim().toLowerCase() || 'participation')
       setActiveRoundId(data.display_round_id ?? data.active_round_id ?? null)
-      const cts: ContestantData[] = data.contestants || []
+      let cts: ContestantData[] = data.contestants || []
+      const mode = String(data.contest_mode || '').split('.').pop()?.trim().toLowerCase()
+      if (mode === 'nomination') {
+        const seen = new Set<number>()
+        cts = cts.filter((c) => {
+          const uid = (c as any).user_id
+          if (uid == null) return true
+          const n = Number(uid)
+          if (seen.has(n)) return false
+          seen.add(n)
+          return true
+        })
+      }
       setAllContestants(viewOnly ? cts.map((c) => ({ ...c, can_vote: false })) : cts)
       const countries = new Set<string>()
       cts.forEach((c: ContestantData) => { if (c.author_country) countries.add(c.author_country) })

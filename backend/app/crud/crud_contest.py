@@ -956,12 +956,19 @@ class CRUDContest:
             and season_level_lower_for_count in ("regional", "region")
             and count_by_active_season_members
         )
+
+        def _entries_count_agg():
+            """Nomination: one nominator = one participant; participation: one row."""
+            if contest_mode == "nomination":
+                return func.count(func.distinct(Contestant.user_id))
+            return func.count(Contestant.id.distinct())
+
         if count_by_active_season_members:
             active_member_ids = db.query(ContestantSeason.contestant_id).filter(
                 ContestantSeason.season_id == season_link.season_id,
                 ContestantSeason.is_active == True,
             )
-            base_entries_query = db.query(func.count(Contestant.id.distinct()))\
+            base_entries_query = db.query(_entries_count_agg())\
                 .filter(
                     Contestant.is_deleted == False,
                     _entries_entry_type_clause,
@@ -969,7 +976,7 @@ class CRUDContest:
                     Contestant.season_id == contest.id,
                 )
         elif conditions:
-            base_entries_query = db.query(func.count(Contestant.id.distinct()))\
+            base_entries_query = db.query(_entries_count_agg())\
                 .filter(
                     Contestant.is_deleted == False,
                     _entries_entry_type_clause,
@@ -981,7 +988,7 @@ class CRUDContest:
                 )
         else:
             # No conditions - return 0 (contest has no rounds or seasons linked yet)
-            base_entries_query = db.query(func.count(Contestant.id.distinct()))\
+            base_entries_query = db.query(_entries_count_agg())\
                 .filter(Contestant.id == -1)  # Impossible condition = 0 results
 
         # Compter le nombre de participants selon la saison/round et la localisation
@@ -990,7 +997,7 @@ class CRUDContest:
                 ContestantSeason.season_id == season_link.season_id,
                 ContestantSeason.is_active == True,
             )
-            entries_query = db.query(func.count(Contestant.id.distinct()))\
+            entries_query = db.query(_entries_count_agg())\
                 .filter(
                     Contestant.is_deleted == False,
                     _entries_entry_type_clause,
@@ -998,7 +1005,7 @@ class CRUDContest:
                     Contestant.season_id == contest.id,
                 )
         elif conditions:
-            entries_query = db.query(func.count(Contestant.id.distinct()))\
+            entries_query = db.query(_entries_count_agg())\
                 .filter(
                     Contestant.is_deleted == False,
                     _entries_entry_type_clause,
@@ -1010,7 +1017,7 @@ class CRUDContest:
                 )
         else:
             # No conditions - return 0
-            entries_query = db.query(func.count(Contestant.id.distinct()))\
+            entries_query = db.query(_entries_count_agg())\
                 .filter(Contestant.id == -1)  # Impossible condition = 0 results
 
         if ea_regional_nomination_count:
@@ -2362,10 +2369,9 @@ class CRUDContest:
             votes_count_by_contestant[contestant_id] = len(votes_list)
             points_by_contestant[contestant_id] = sum(v.get("points", 0) for v in votes_list)
 
-        # Participation: collapse duplicate rows per user_id (migration artifacts), keep best score.
-        # Nominations: user_id is the nominator — they may submit many different nominees; never
-        # collapse by user_id here (that showed a single card / count of 1 for multi-nominations).
-        if contest_mode != "nomination" and contestants:
+        # One roster row per user_id: participation entrant OR nomination nominator (never two
+        # cards for the same person in one category/round — fixes legacy duplicate contest rows).
+        if contestants:
             best_by_uid: Dict[int, Contestant] = {}
             for c in contestants:
                 uid = getattr(c, "user_id", None)
@@ -2398,15 +2404,6 @@ class CRUDContest:
                 )
             )
             contestants = merged
-        elif contestants:
-            contestants = sorted(
-                contestants,
-                key=lambda c: (
-                    -points_by_contestant.get(c.id, 0),
-                    -votes_count_by_contestant.get(c.id, 0),
-                    -(c.id or 0),
-                ),
-            )
         
         ranks: Dict[int, int] = {}
         # Calculer les rangs (on ignore les rangs éventuellement stockés en base
@@ -2700,6 +2697,29 @@ class CRUDContest:
             -x["votes_count"],   # Then votes (descending)
             x.get("rank", float('inf'))  # Then by rank (lower is better)
         ))
+
+        # Nomination: one card per nominator (user_id). Legacy duplicate submissions
+        # or duplicate contest rows can leave two active contestant records for one person.
+        if contest_mode == "nomination" and enriched_contestants:
+            seen_nominator_ids: set[int] = set()
+            deduped_enriched: list = []
+            for row in enriched_contestants:
+                uid = row.get("user_id")
+                if uid is None:
+                    deduped_enriched.append(row)
+                    continue
+                uid_int = int(uid)
+                if uid_int in seen_nominator_ids:
+                    continue
+                seen_nominator_ids.add(uid_int)
+                deduped_enriched.append(row)
+            if len(deduped_enriched) < len(enriched_contestants):
+                logger.warning(
+                    "[get_contest_with_enriched_contestants] Dropped duplicate nomination "
+                    "cards for contest_id=%s (same nominator user_id); kept highest-scoring row",
+                    contest_id,
+                )
+            enriched_contestants = deduped_enriched
         
         # Ajouter les contestants enrichis au résultat
         contest_data["contestants"] = enriched_contestants

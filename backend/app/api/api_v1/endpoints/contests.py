@@ -190,24 +190,37 @@ def read_contests(
             # Build contest_mode map for entry_type filtering
             contest_mode_map = {c.id: _normalize_contest_mode(getattr(c, 'contest_mode', 'participation')) for c in contests}
 
+            from sqlalchemy import or_
+
             for contest_id in contest_ids:
                 count = 0
                 # Determine expected entry_type based on contest_mode
                 expected_entry_type = _entry_type_from_contest_mode(contest_mode_map.get(contest_id))
+                is_nomination = expected_entry_type == "nomination"
+                if is_nomination:
+                    entry_clause = or_(
+                        Contestant.entry_type == "nomination",
+                        Contestant.entry_type.is_(None),
+                    )
+                    count_agg = func.count(func.distinct(Contestant.user_id))
+                else:
+                    entry_clause = Contestant.entry_type == expected_entry_type
+                    count_agg = func.count(Contestant.id)
+
                 # Check via season_id from ContestSeasonLink
                 if contest_id in season_by_contest:
                     season_id = season_by_contest[contest_id]
-                    count = db.query(func.count(Contestant.id)).filter(
+                    count = db.query(count_agg).filter(
                         Contestant.season_id == season_id,
                         Contestant.is_deleted == False,
-                        Contestant.entry_type == expected_entry_type
+                        entry_clause,
                     ).scalar() or 0
                 
                 # Also check if season_id directly equals contest_id (legacy)
-                direct_count = db.query(func.count(Contestant.id)).filter(
+                direct_count = db.query(count_agg).filter(
                     Contestant.season_id == contest_id,
                     Contestant.is_deleted == False,
-                    Contestant.entry_type == expected_entry_type
+                    entry_clause,
                 ).scalar() or 0
                 
                 # Prefer direct_count (season_id == contest_id) as it is contest-specific

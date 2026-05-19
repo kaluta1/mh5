@@ -2301,6 +2301,8 @@ def create_contestant(
                 )
 
         vid_norm = _normalize_video_media_ids_for_dedup(getattr(contestant_data, "video_media_ids", None))
+        from sqlalchemy import or_
+
         nomination_base = (
             db.query(Contestant)
             .filter(
@@ -2308,7 +2310,10 @@ def create_contestant(
                 Contestant.user_id == current_user.id,
                 Contestant.season_id == season_id,
                 Contestant.is_deleted == False,
-                Contestant.entry_type == "nomination",
+                or_(
+                    Contestant.entry_type == "nomination",
+                    Contestant.entry_type.is_(None),
+                ),
             )
         )
         if vid_norm:

@@ -47,6 +47,24 @@ python scripts/fix_contest_category_duplicates.py --apply  # fix DB
 
 Duplicate **contest** rows (two Gospel nominations) let the same nominator submit twice; migration promoted both to regional. Fix: category-wide nomination guard + migration dedupe by nominator + one promotion per category.
 
+### Complete fix (prevention + DB repair)
+
+| Layer | What |
+|-------|------|
+| **Prevent** | One nomination per category per round on submit; one contest per category+mode on admin create |
+| **Migrate** | One promotion per category; top-5 dedupe by nominator |
+| **Display/counts** | One card per nominator; hub counts use `distinct user_id` |
+| **Repair existing data** | After deploy on staging/production: |
+
+```bash
+cd backend
+python scripts/fix_nomination_integrity.py          # audit only
+python scripts/fix_nomination_integrity.py --apply  # merge votes, soft-delete dupes, fix contest pairs
+python scripts/fix_nomination_integrity.py --apply --overlap
+```
+
+Keeps the row with the most MyHigh5 points; removes duplicate `contestants` and deactivates extra `contestant_seasons`.
+
 ### Tabs
 - **Nominate** → only `contest_mode = nomination`
 - **Participations** → only `contest_mode = participation`

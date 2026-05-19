@@ -281,6 +281,8 @@ def nominator_has_nomination_in_category_round(
     if not contest_ids:
         return None
 
+    from sqlalchemy import or_
+
     row = (
         db.query(Contestant.id)
         .filter(
@@ -288,7 +290,10 @@ def nominator_has_nomination_in_category_round(
             Contestant.round_id == round_id,
             Contestant.season_id.in_(contest_ids),
             Contestant.is_deleted == False,
-            Contestant.entry_type == "nomination",
+            or_(
+                Contestant.entry_type == "nomination",
+                Contestant.entry_type.is_(None),
+            ),
         )
         .order_by(Contestant.registration_date.desc(), Contestant.id.desc())
         .first()
@@ -393,3 +398,264 @@ def assert_unique_category_mode(
                 f"(contest id={existing.id}, name={existing.name!r}). "
                 f"Use Participations tab for participation or edit the existing row."
             )
+
+
+def contestant_nomination_score(db, contestant_id: int) -> Tuple[int, int, int]:
+    """(total_points, vote_rows, contestant_id) for picking canonical row."""
+    from sqlalchemy import func
+    from app.models.voting import ContestantVoting
+
+    row = (
+        db.query(
+            func.coalesce(func.sum(ContestantVoting.points), 0),
+            func.count(ContestantVoting.id),
+        )
+        .filter(ContestantVoting.contestant_id == contestant_id)
+        .first()
+    )
+    pts = int(row[0] or 0) if row else 0
+    cnt = int(row[1] or 0) if row else 0
+    return (pts, cnt, int(contestant_id))
+
+
+def find_duplicate_nominator_nomination_groups(
+    db,
+    *,
+    round_id: Optional[int] = None,
+    category_scope: Optional[str] = None,
+) -> List[dict]:
+    """
+    Groups where the same nominator (user_id) has 2+ active nomination rows
+    in the same category + calendar round (often duplicate contest rows).
+    """
+    from sqlalchemy import or_
+    from app.models.contest import Contest
+    from app.models.contests import Contestant
+
+    q = (
+        db.query(Contestant, Contest)
+        .join(Contest, Contestant.season_id == Contest.id)
+        .filter(
+            Contestant.is_deleted == False,
+            Contest.is_deleted == False,
+            or_(
+                Contestant.entry_type == "nomination",
+                Contestant.entry_type.is_(None),
+            ),
+        )
+    )
+    if round_id is not None:
+        q = q.filter(Contestant.round_id == round_id)
+
+    buckets: Dict[str, List[Tuple[Any, Any]]] = {}
+    for contestant, contest in q.all():
+        if normalize_contest_mode(getattr(contest, "contest_mode", None)) != "nomination":
+            continue
+        scope = category_scope_key(contest)
+        if category_scope is not None and scope != category_scope:
+            continue
+        uid = getattr(contestant, "user_id", None)
+        if uid is None:
+            continue
+        key = f"{scope}:r{contestant.round_id}:u{int(uid)}"
+        buckets.setdefault(key, []).append((contestant, contest))
+
+    out: List[dict] = []
+    for key, members in buckets.items():
+        if len(members) < 2:
+            continue
+        rows = [m[0] for m in members]
+        contests = [m[1] for m in members]
+        out.append(
+            {
+                "key": key,
+                "category_scope": key.split(":r")[0],
+                "round_id": rows[0].round_id,
+                "user_id": int(rows[0].user_id),
+                "contestant_ids": [int(r.id) for r in rows],
+                "contest_ids": [int(c.id) for c in contests],
+                "scores": {
+                    int(r.id): contestant_nomination_score(db, int(r.id)) for r in rows
+                },
+            }
+        )
+    return out
+
+
+def _merge_contestant_votes(db, source_id: int, target_id: int) -> int:
+    """Reassign MyHigh5 votes from duplicate row; drop conflicts. Returns moves."""
+    from app.models.voting import ContestantVoting
+
+    moved = 0
+    for vote in db.query(ContestantVoting).filter(
+        ContestantVoting.contestant_id == source_id
+    ).all():
+        conflict = (
+            db.query(ContestantVoting)
+            .filter(
+                ContestantVoting.user_id == vote.user_id,
+                ContestantVoting.contestant_id == target_id,
+                ContestantVoting.season_id == vote.season_id,
+            )
+            .first()
+        )
+        if conflict:
+            if int(vote.points or 0) > int(conflict.points or 0):
+                conflict.points = vote.points
+                conflict.position = vote.position
+            db.delete(vote)
+        else:
+            vote.contestant_id = target_id
+            db.add(vote)
+            moved += 1
+    return moved
+
+
+def _merge_contestant_engagement(db, source_id: int, target_id: int) -> None:
+    """Move or drop favorites, likes, comments, etc. tied to duplicate contestant id."""
+    from app.models.voting import (
+        ContestLike,
+        ContestComment,
+        ContestantReaction,
+        ContestantShare,
+        MyFavorites,
+        PageView,
+        Vote,
+    )
+
+    def _repoint(model, user_col: str = "user_id") -> None:
+        rows = db.query(model).filter(model.contestant_id == source_id).all()
+        for row in rows:
+            uid = getattr(row, user_col, None)
+            if uid is None:
+                row.contestant_id = target_id
+                db.add(row)
+                continue
+            conflict = (
+                db.query(model)
+                .filter(
+                    model.contestant_id == target_id,
+                    getattr(model, user_col) == uid,
+                )
+                .first()
+            )
+            if conflict:
+                db.delete(row)
+            else:
+                row.contestant_id = target_id
+                db.add(row)
+
+    _repoint(MyFavorites)
+    _repoint(ContestLike)
+    _repoint(ContestComment)
+    _repoint(ContestantReaction)
+    _repoint(ContestantShare)
+    for row in db.query(PageView).filter(PageView.contestant_id == source_id).all():
+        row.contestant_id = target_id
+        db.add(row)
+    for row in db.query(Vote).filter(Vote.contestant_id == source_id).all():
+        conflict = (
+            db.query(Vote)
+            .filter(
+                Vote.voter_id == row.voter_id,
+                Vote.contestant_id == target_id,
+                Vote.stage_id == row.stage_id,
+            )
+            .first()
+        )
+        if conflict:
+            db.delete(row)
+        else:
+            row.contestant_id = target_id
+            db.add(row)
+
+
+def _deactivate_contestant_season_links(db, contestant_id: int) -> int:
+    from app.models.contests import ContestantSeason
+
+    return (
+        db.query(ContestantSeason)
+        .filter(
+            ContestantSeason.contestant_id == contestant_id,
+            ContestantSeason.is_active == True,
+        )
+        .update({ContestantSeason.is_active: False}, synchronize_session=False)
+        or 0
+    )
+
+
+def repair_duplicate_nominator_nominations(
+    db,
+    *,
+    apply: bool = False,
+    round_id: Optional[int] = None,
+) -> List[dict]:
+    """
+    Keep one nomination per nominator per category per round:
+    - merge votes/engagement onto canonical contestant (highest points)
+    - soft-delete duplicate contestant rows
+    - deactivate duplicate ContestantSeason links
+    """
+    from app.models.contests import Contestant
+
+    actions: List[dict] = []
+    groups = find_duplicate_nominator_nomination_groups(db, round_id=round_id)
+
+    for group in groups:
+        rows = (
+            db.query(Contestant)
+            .filter(Contestant.id.in_(group["contestant_ids"]))
+            .all()
+        )
+        if len(rows) < 2:
+            continue
+        canonical = max(rows, key=lambda r: contestant_nomination_score(db, int(r.id)))
+        for dup in rows:
+            if int(dup.id) == int(canonical.id):
+                continue
+            act = {
+                "action": "merge_and_soft_delete",
+                "keep_contestant_id": int(canonical.id),
+                "remove_contestant_id": int(dup.id),
+                "user_id": group["user_id"],
+                "round_id": group["round_id"],
+                "category_scope": group["category_scope"],
+                "key": group["key"],
+            }
+            actions.append(act)
+            if apply:
+                votes_moved = _merge_contestant_votes(db, int(dup.id), int(canonical.id))
+                _merge_contestant_engagement(db, int(dup.id), int(canonical.id))
+                seasons_off = _deactivate_contestant_season_links(db, int(dup.id))
+                dup.is_deleted = True
+                act["votes_reassigned"] = votes_moved
+                act["season_links_deactivated"] = seasons_off
+                logger.info(
+                    "Repaired duplicate nomination: removed contestant_id=%s -> keep=%s (%s)",
+                    dup.id,
+                    canonical.id,
+                    group["key"],
+                )
+
+    if apply and actions:
+        db.commit()
+    return actions
+
+
+def repair_all_nomination_integrity(
+    db,
+    *,
+    apply: bool = False,
+    round_id: Optional[int] = None,
+) -> dict:
+    """
+    Full repair pass: duplicate contest rows, duplicate nominators, optional overlap cleanup.
+    """
+    contest_actions = repair_category_mode_duplicates(db, apply=apply)
+    nominator_actions = repair_duplicate_nominator_nominations(
+        db, apply=apply, round_id=round_id
+    )
+    return {
+        "contest_row_repairs": contest_actions,
+        "duplicate_nominator_repairs": nominator_actions,
+    }
