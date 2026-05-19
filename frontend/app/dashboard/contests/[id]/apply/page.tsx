@@ -48,6 +48,8 @@ export default function ApplyToContestPage() {
   const [isEditingParticipation, setIsEditingParticipation] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitSuccess, setSubmitSuccess] = useState(false)
+  /** Round id returned by API after submit (source of truth for View nominations link). */
+  const [submittedRoundId, setSubmittedRoundId] = useState<number | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [isDeletingSubmission, setIsDeletingSubmission] = useState(false)
   const [timeRemaining, setTimeRemaining] = useState<string>('')
@@ -413,7 +415,9 @@ export default function ApplyToContestPage() {
     const urlRound = roundIdParam ? parseInt(roundIdParam, 10) : NaN
     const displayR = contest?.display_round_id != null ? Number(contest.display_round_id) : NaN
     const activeR = contest?.active_round_id != null ? Number(contest.active_round_id) : NaN
-    if (Number.isFinite(urlRound)) params.set('roundId', String(urlRound))
+    if (submittedRoundId != null && Number.isFinite(submittedRoundId)) {
+      params.set('roundId', String(submittedRoundId))
+    } else if (Number.isFinite(urlRound)) params.set('roundId', String(urlRound))
     else if (Number.isFinite(displayR)) params.set('roundId', String(displayR))
     else if (Number.isFinite(activeR)) params.set('roundId', String(activeR))
     const mode = normalizeContestMode(contest?.contest_mode)
@@ -423,7 +427,7 @@ export default function ApplyToContestPage() {
     return contestId
       ? `/dashboard/contests/${contestId}${qs ? `?${qs}` : ''}`
       : '/dashboard/contests'
-  }, [contestId, roundIdParam, contest, user?.country])
+  }, [contestId, roundIdParam, contest, user?.country, submittedRoundId])
 
   const handleVerificationDialogClose = () => {
     setShowVerificationDialog(false)
@@ -578,6 +582,7 @@ export default function ApplyToContestPage() {
 
     try {
       let response
+      let roundIdUsed: number | undefined
       // Legal guard: nominations must never carry image uploads.
       const safeImageMediaIds = isNomination ? undefined : imageMediaIds
 
@@ -598,10 +603,9 @@ export default function ApplyToContestPage() {
         const urlRound = roundIdParam ? parseInt(roundIdParam, 10) : NaN
         const displayR = contest?.display_round_id != null ? Number(contest.display_round_id) : NaN
         const activeR = contest?.active_round_id != null ? Number(contest.active_round_id) : NaN
-        let roundId: number | undefined
-        if (Number.isFinite(urlRound)) roundId = urlRound
-        else if (Number.isFinite(displayR)) roundId = displayR
-        else if (Number.isFinite(activeR)) roundId = activeR
+        if (Number.isFinite(urlRound)) roundIdUsed = urlRound
+        else if (Number.isFinite(displayR)) roundIdUsed = displayR
+        else if (Number.isFinite(activeR)) roundIdUsed = activeR
 
         response = await contestService.submitContestant(
           contestId,
@@ -611,13 +615,20 @@ export default function ApplyToContestPage() {
           videoMediaIds,
           nominatorCity,
           nominatorCountry,
-          roundId,
+          roundIdUsed,
           isNomination ? 'nomination' : 'participation'
         )
       }
 
       setSubmitSuccess(true)
       setUserAlreadyParticipating(true)
+      const savedRound =
+        response?.round_id != null
+          ? Number(response.round_id)
+          : roundIdUsed
+      if (savedRound != null && Number.isFinite(savedRound)) {
+        setSubmittedRoundId(savedRound)
+      }
 
       // Bust client cache so contest detail / lists refetch fresh nominee counts and rows.
       try {

@@ -229,6 +229,43 @@ class CRUDRound:
                     round_id,
                     contest_id,
                 )
+            if prefer_nomination_submit_round and current_user_id:
+                from app.models.contests import Contestant
+
+                _nom_row_early = or_(
+                    Contestant.entry_type == "nomination",
+                    Contestant.entry_type.is_(None),
+                )
+                mine_in_requested = (
+                    db.query(Contestant.id)
+                    .filter(
+                        Contestant.season_id == contest_id,
+                        Contestant.user_id == current_user_id,
+                        Contestant.is_deleted == False,
+                        _nom_row_early,
+                        Contestant.round_id == round_id,
+                    )
+                    .first()
+                )
+                if not mine_in_requested:
+                    mine_round_row = (
+                        db.query(Contestant.round_id)
+                        .filter(
+                            Contestant.season_id == contest_id,
+                            Contestant.user_id == current_user_id,
+                            Contestant.is_deleted == False,
+                            _nom_row_early,
+                            Contestant.round_id.isnot(None),
+                        )
+                        .order_by(
+                            Contestant.registration_date.desc(),
+                            Contestant.id.desc(),
+                        )
+                        .first()
+                    )
+                    if mine_round_row and mine_round_row[0] is not None:
+                        return int(mine_round_row[0])
+
             if prefer_nomination_submit_round:
                 canonical = self.resolve_display_round_id_for_contest(
                     db,

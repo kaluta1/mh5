@@ -421,36 +421,87 @@ export default function ContestDetailPage() {
     // Cleanup handled in fetchContestDetails via abortController
   }, [fetchContestDetails])
 
-  // If the user nominated but the roster is empty (stale round/country), refetch once with cache bust.
+  // If the user nominated but the roster is empty (stale round/country), refetch with correct scope.
   const rosterRecoveryRef = React.useRef(false)
   useEffect(() => {
     if (pageLoading || !contest || rosterRecoveryRef.current) return
-    if (!userHasEntry || (contest.contestants?.length ?? 0) > 0) return
+    const hasRoster = (contest.contestants?.length ?? 0) > 0
+    const shouldRecover =
+      Boolean(contest.contest?.current_user_contesting) ||
+      userHasEntry
+    if (!shouldRecover || hasRoster) return
     rosterRecoveryRef.current = true
-    void fetchContestDetails({ silent: true })
-  }, [pageLoading, contest, userHasEntry, fetchContestDetails])
 
-  // Nomination contests: fill missing ?roundId= only — never override an explicit URL round
-  // (overriding hid the user's just-submitted nomination when display_round_id differed).
+    const recover = async () => {
+      const entryRound = contest.contest?.user_entry_round_id
+      const parsedUrl = roundIdFromUrl ? parseInt(roundIdFromUrl, 10) : NaN
+      const roundForFetch =
+        entryRound ??
+        (Number.isFinite(parsedUrl) ? parsedUrl : undefined)
+
+      try {
+        const c = await ApiService.getContest(parseInt(contestId), {
+          entryType: entryType,
+          roundId: roundForFetch,
+          filterCountry: user?.country || undefined,
+          filterContinent: 'all',
+          filterRegion: 'all',
+          _t: Date.now(),
+        }) as any
+        if ((c.contestants || []).length > 0) {
+          await fetchContestDetails({ silent: true })
+        } else {
+          await fetchContestDetails({ silent: true })
+        }
+      } catch {
+        await fetchContestDetails({ silent: true })
+      }
+    }
+    void recover()
+  }, [
+    pageLoading,
+    contest,
+    userHasEntry,
+    fetchContestDetails,
+    contestId,
+    entryType,
+    roundIdFromUrl,
+    user?.country,
+  ])
+
+  // Nomination: align ?roundId= with where the user's row actually lives (submit fallback / stale URL).
   React.useEffect(() => {
     if (pageLoading || !contest?.contest) return
     const mode = normalizeContestMode(contest.contest.contest_mode)
     if (mode !== 'nomination') return
-    const dr = contest.contest.display_round_id
-    if (dr == null) return
+
+    const entryRound =
+      contest.contest.user_entry_round_id ?? contest.contest.display_round_id
+    if (entryRound == null) return
+
     const urlNum = roundIdFromUrl ? parseInt(roundIdFromUrl, 10) : NaN
-    if (Number.isFinite(urlNum)) return
+    if (Number.isFinite(urlNum) && urlNum === Number(entryRound)) return
+
     const p = new URLSearchParams(searchParams.toString())
-    p.set('roundId', String(dr))
+    p.set('roundId', String(entryRound))
+    if (
+      user?.country &&
+      (!p.get('country') || p.get('country') === 'all')
+    ) {
+      p.set('country', user.country)
+    }
     router.replace(`/dashboard/contests/${contestId}?${p.toString()}`, { scroll: false })
   }, [
     pageLoading,
     contest?.contest?.contest_mode,
     contest?.contest?.display_round_id,
+    contest?.contest?.user_entry_round_id,
+    contest?.contest?.current_user_contesting,
     contestId,
     roundIdFromUrl,
     router,
     searchParams,
+    user?.country,
   ])
 
   // After vote / replace: silent refresh so we do not unmount the grid (skeleton reset "Vote" button state)

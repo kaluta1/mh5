@@ -47,6 +47,12 @@ python scripts/fix_contest_category_duplicates.py --apply  # fix DB
 
 Duplicate **contest** rows (two Gospel nominations) let the same nominator submit twice; migration promoted both to regional. Fix: category-wide nomination guard + migration dedupe by nominator + one promotion per category.
 
+### Empty view after nominate (fixed)
+
+**Cause:** Nomination roster used a strict `round_id` filter. If submit stored a different calendar round than `?roundId=` in the URL (fallback round / stale link), the API returned 0 rows while `current_user_contesting` was true.
+
+**Fix:** Backend always includes the signed-in nominator's rows for that contest; resolves display round to the user's stored round when missing from URL round; frontend syncs `?roundId=` from `user_entry_round_id` and submit response.
+
 ### Complete fix (prevention + DB repair)
 
 | Layer | What |

@@ -699,7 +699,14 @@ class CRUDContestant:
             filters.append(Contestant.entry_type == et)
         q = db.query(Contestant).filter(and_(*filters))
         if round_id is not None:
-            q = q.filter(Contestant.round_id == round_id)
+            q_round = q.filter(Contestant.round_id == round_id)
+            row = (
+                q_round.order_by(Contestant.registration_date.desc(), Contestant.id.desc())
+                .first()
+            )
+            # Nominations: URL round can differ from stored round after fallback submit.
+            if row is not None or et != "nomination":
+                return row
         return (
             q.order_by(Contestant.registration_date.desc(), Contestant.id.desc()).first()
         )

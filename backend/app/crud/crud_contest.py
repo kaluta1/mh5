@@ -1830,9 +1830,21 @@ class CRUDContest:
         if target_round_id is not None and not nomination_country_membership_scope:
             round_scope = Contestant.round_id == target_round_id
             if contest_mode == "nomination":
-                contestants_query = contestants_query.filter(round_scope)
+                # Always include the signed-in nominator's row(s) for this contest even when
+                # ?roundId= differs from the round stored at submit (fallback round / stale URL).
+                if current_user_id:
+                    my_nomination_in_contest = and_(
+                        Contestant.user_id == current_user_id,
+                        _nomination_row_entry_type_clause(effective_entry_type, contest_mode),
+                    )
+                    contestants_query = contestants_query.filter(
+                        or_(round_scope, my_nomination_in_contest)
+                    )
+                else:
+                    contestants_query = contestants_query.filter(round_scope)
                 logger.info(
-                    f"[get_contest_with_enriched_contestants] Nomination roster strict round_id={target_round_id}"
+                    f"[get_contest_with_enriched_contestants] Nomination roster round_id={target_round_id}"
+                    f" (includes current user rows when authenticated)"
                 )
             elif nomination_context and current_user_id:
                 my_legacy_null_round = and_(
