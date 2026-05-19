@@ -1,33 +1,48 @@
 from typing import Any, List
 import os
 from fastapi import APIRouter, Depends, File, UploadFile, HTTPException, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_active_user
 from app.crud import media as crud_media
 from app.db.session import get_db
 from app.schemas.media import MediaCreate, Media
-from app.core.storage import store_media
+from app.core.storage import (
+    store_media,
+    resolve_media_for_serving,
+    iter_s3_object,
+)
 from app.core.config import settings
 
 router = APIRouter()
 
 
 @router.get("/file/{user_id}/{filename}")
-def serve_local_media_file(user_id: int, filename: str):
-    """
-    Serve locally stored media files through API route.
-    This avoids dependency on reverse-proxy static `/media/*` mapping.
-    """
-    safe_name = os.path.basename(filename)
-    file_path = os.path.join(settings.LOCAL_STORAGE_PATH, str(user_id), safe_name)
-    if not os.path.isfile(file_path):
+def serve_media_file(user_id: int, filename: str):
+    """Serve user media from local disk or S3 (production STORAGE_TYPE=s3)."""
+    source, ref, content_type = resolve_media_for_serving(user_id, filename)
+    if not source or not ref:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Media file not found"
+            detail="Media file not found",
         )
-    return FileResponse(file_path)
+
+    headers = {
+        "Cache-Control": "public, max-age=86400",
+        "Access-Control-Allow-Origin": "*",
+    }
+
+    if source == "local":
+        return FileResponse(ref, media_type=content_type, headers=headers)
+
+    bucket = (settings.S3_BUCKET_NAME or settings.AWS_S3_BUCKET or "").strip()
+    return StreamingResponse(
+        iter_s3_object(bucket, ref),
+        media_type=content_type,
+        headers=headers,
+    )
+
 
 @router.post("/upload", response_model=Media)
 async def upload_media(
@@ -42,25 +57,22 @@ async def upload_media(
     Upload un nouveau média (image ou vidéo).
     """
     try:
-        # Vérifier le type de fichier
         content_type = file.content_type or ""
-        if not content_type.startswith(('image/', 'video/')):
+        if not content_type.startswith(("image/", "video/")):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Le fichier doit être une image ou une vidéo"
+                detail="Le fichier doit être une image ou une vidéo",
             )
 
-        # Stocker le fichier
         media_info = await store_media(file, current_user.id)
 
-        # Créer l'entrée en base de données
         media_data = MediaCreate(
             title=title or file.filename or "uploaded-media",
             description=description or "",
-            media_type=content_type.split('/')[0],
+            media_type=content_type.split("/")[0],
             path=media_info["path"],
             url=media_info["url"],
-            user_id=current_user.id
+            user_id=current_user.id,
         )
         media = crud_media.create(db=db, obj_in=media_data)
         return media
@@ -69,8 +81,9 @@ async def upload_media(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Media upload failed: {str(e)}"
+            detail=f"Media upload failed: {str(e)}",
         )
+
 
 @router.get("/", response_model=List[Media])
 def read_medias(
@@ -88,6 +101,7 @@ def read_medias(
     )
     return medias
 
+
 @router.get("/{media_id}", response_model=Media)
 def read_media(
     *,
@@ -102,14 +116,15 @@ def read_media(
     if not media:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Média non trouvé"
+            detail="Média non trouvé",
         )
     if media.user_id != current_user.id and not current_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission insuffisante"
+            detail="Permission insuffisante",
         )
     return media
+
 
 @router.delete("/{media_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_media(
@@ -125,11 +140,11 @@ def delete_media(
     if not media:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Média non trouvé"
+            detail="Média non trouvé",
         )
     if media.user_id != current_user.id and not current_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission insuffisante"
+            detail="Permission insuffisante",
         )
     crud_media.remove(db=db, id=media_id)

@@ -16,7 +16,17 @@ export function normalizeMediaUrl(url?: string | null): string {
 
   const origin = mediaApiOrigin()
 
-  if (raw.startsWith("http://") || raw.startsWith("https://") || raw.startsWith("data:")) {
+  if (raw.startsWith("data:")) {
+    return raw
+  }
+
+  if (raw.startsWith("http://") || raw.startsWith("https://")) {
+    // Legacy direct S3 URLs → API file route (bucket may be private).
+    const s3Match = raw.match(/\/uploads\/([^/]+)\/([^/?#]+)$/)
+    if (s3Match) {
+      const [, userId, filename] = s3Match
+      return `${origin}/api/v1/media/file/${encodeURIComponent(userId)}/${encodeURIComponent(filename)}`
+    }
     return raw
   }
 

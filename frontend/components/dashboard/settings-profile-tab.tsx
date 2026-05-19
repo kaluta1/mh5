@@ -193,41 +193,73 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
   const showAvatarPreview =
     Boolean(avatarUrl?.trim()) && Boolean(avatarDisplayUrl) && !avatarImageFailed
 
+  const verifyAvatarReachable = (displayUrl: string): Promise<boolean> =>
+    new Promise((resolve) => {
+      const img = new window.Image()
+      img.onload = () => resolve(true)
+      img.onerror = () => resolve(false)
+      img.src = displayUrl
+    })
+
   const handleAvatarChange = async (url: string) => {
+    if (!url) {
+      setAvatarUrl('')
+      setAvatarImageFailed(false)
+      return
+    }
+
+    const displayUrl = normalizeMediaUrl(url)
+    if (!displayUrl) {
+      addToast(t('profile_setup.upload_error') || 'Upload failed', 'error')
+      return
+    }
+
+    const reachable = await verifyAvatarReachable(displayUrl)
+    if (!reachable) {
+      setAvatarImageFailed(true)
+      addToast(
+        t('profile_setup.avatar_load_failed') ||
+          'Photo uploaded but could not be loaded. Please try again or contact support.',
+        'error'
+      )
+      return
+    }
+
     setAvatarUrl(url)
     setAvatarImageFailed(false)
     if (errors.avatarUrl) {
       setErrors(prev => ({ ...prev, avatarUrl: undefined }))
     }
 
-    // Sauvegarder automatiquement la photo de profil
-    if (url) {
-      try {
-        const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
-        if (!token) {
-          return
-        }
-
-        const response = await fetch(`${getEffectiveApiUrl()}/api/v1/users/me`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            avatar_url: url,
-          }),
-        })
-
-        if (response.ok) {
-          // Rafraîchir les données utilisateur pour mettre à jour l'affichage
-          if (onUpdate) {
-            await onUpdate()
-          }
-        }
-      } catch (err) {
-        console.error('Erreur lors de la sauvegarde automatique de la photo:', err)
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
+      if (!token) {
+        addToast(t('profile_setup.session_expired') || 'Session expired', 'error')
+        return
       }
+
+      const response = await fetch(`${getEffectiveApiUrl()}/api/v1/users/me`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ avatar_url: url }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}))
+        throw new Error(error.detail || t('profile_setup.update_error') || 'Update failed')
+      }
+
+      if (onUpdate) {
+        await onUpdate()
+      }
+      addToast(t('profile_setup.avatar_saved') || 'Profile photo saved.', 'success')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Update failed'
+      console.error('Avatar save error:', err)
+      addToast(message, 'error')
     }
   }
 

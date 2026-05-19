@@ -1,15 +1,78 @@
 import os
 import uuid
-from typing import Dict, Any
+import mimetypes
+from typing import Dict, Any, Optional, Tuple, Iterator
 import logging
 import aiofiles
 from fastapi import UploadFile
 import boto3
+from botocore.exceptions import ClientError
 from PIL import Image
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+def media_s3_key(user_id: int, filename: str) -> str:
+    safe_name = os.path.basename(filename)
+    return f"uploads/{user_id}/{safe_name}"
+
+
+def local_media_path(user_id: int, filename: str) -> str:
+    safe_name = os.path.basename(filename)
+    return os.path.join(settings.LOCAL_STORAGE_PATH, str(user_id), safe_name)
+
+
+def resolve_media_for_serving(
+    user_id: int, filename: str
+) -> Tuple[Optional[str], Optional[str], str]:
+    """
+    Resolve media for HTTP serving: local disk first, then S3.
+    Returns (source, ref, content_type) where source is 'local' or 's3'.
+    """
+    safe_name = os.path.basename(filename)
+    content_type, _ = mimetypes.guess_type(safe_name)
+    content_type = content_type or "application/octet-stream"
+
+    local_path = local_media_path(user_id, safe_name)
+    if os.path.isfile(local_path):
+        return "local", local_path, content_type
+
+    bucket = (settings.S3_BUCKET_NAME or settings.AWS_S3_BUCKET or "").strip()
+    if bucket and settings.AWS_ACCESS_KEY_ID and settings.AWS_SECRET_ACCESS_KEY:
+        s3_key = media_s3_key(user_id, safe_name)
+        try:
+            s3_client = boto3.client(
+                "s3",
+                aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+                aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+                region_name=settings.S3_REGION,
+            )
+            s3_client.head_object(Bucket=bucket, Key=s3_key)
+            return "s3", s3_key, content_type
+        except ClientError as e:
+            code = e.response.get("Error", {}).get("Code", "")
+            if code not in ("404", "NoSuchKey", "NotFound"):
+                logger.warning("S3 head_object failed for %s: %s", s3_key, e)
+
+    return None, None, content_type
+
+
+def iter_s3_object(bucket: str, key: str) -> Iterator[bytes]:
+    s3_client = boto3.client(
+        "s3",
+        aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+        region_name=settings.S3_REGION,
+    )
+    obj = s3_client.get_object(Bucket=bucket, Key=key)
+    body = obj["Body"]
+    while True:
+        chunk = body.read(1024 * 64)
+        if not chunk:
+            break
+        yield chunk
 
 
 def _build_public_media_url(user_id: int, filename: str) -> str:
@@ -177,12 +240,9 @@ async def store_in_s3(file: UploadFile, filename: str, user_id: int) -> Dict[str
         ContentType=file.content_type
     )
     
-    # URL publique
-    url = f"https://{settings.S3_BUCKET_NAME}.s3.amazonaws.com/{s3_path}"
-    
-    # Métadonnées - pour les images, nous pourrions utiliser les services AWS pour les récupérer
-    # mais pour simplifier, nous ne les incluons pas ici
-    
+    # Always expose the API file route (works for private S3 buckets).
+    url = _build_public_media_url(user_id, filename)
+
     return {
         "path": s3_path,
         "url": url,
