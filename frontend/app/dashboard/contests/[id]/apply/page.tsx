@@ -48,6 +48,8 @@ export default function ApplyToContestPage() {
   const [isEditingParticipation, setIsEditingParticipation] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitSuccess, setSubmitSuccess] = useState(false)
+  /** Shown inline when submit fails (e.g. missing gender on profile). */
+  const [submitError, setSubmitError] = useState<string | null>(null)
   /** Round id returned by API after submit (source of truth for View nominations link). */
   const [submittedRoundId, setSubmittedRoundId] = useState<number | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -579,6 +581,7 @@ export default function ApplyToContestPage() {
     }
 
     setIsSubmitting(true)
+    setSubmitError(null)
 
     try {
       let response
@@ -675,14 +678,15 @@ export default function ApplyToContestPage() {
     } catch (err: any) {
       console.error('Erreur lors de la soumission:', err)
 
-      // Try to get error detail from different possible locations
+      // Try to get error detail from different possible locations (detail or message)
       let errorDetail = ''
-      if (err?.response?.data?.detail) {
-        errorDetail = typeof err.response.data.detail === 'string'
-          ? err.response.data.detail
-          : JSON.stringify(err.response.data.detail)
-      } else if (err?.response?.data?.message) {
-        errorDetail = err.response.data.message
+      const data = err?.response?.data
+      if (typeof data?.message === 'string' && data.message.trim()) {
+        errorDetail = data.message.trim()
+      } else if (data?.detail) {
+        errorDetail = typeof data.detail === 'string'
+          ? data.detail
+          : JSON.stringify(data.detail)
       } else if (err?.message) {
         errorDetail = err.message
       }
@@ -745,7 +749,7 @@ export default function ApplyToContestPage() {
         }
       }
 
-      // Display the error message to the user
+      setSubmitError(errorMessage)
       addToast(errorMessage, 'error')
 
       // Recovery path: backend says submission already exists for this round/contest.
@@ -872,6 +876,17 @@ export default function ApplyToContestPage() {
                 <div className="p-4 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 text-sm text-amber-900 dark:text-amber-100">
                   {t('verification.incomplete_warning') ||
                     'Complétez toutes les vérifications dans la fenêtre pour accéder au formulaire.'}
+                </div>
+              )}
+
+              {submitError && (
+                <div
+                  role="alert"
+                  className="rounded-xl border border-red-300 bg-red-50 p-4 dark:border-red-800 dark:bg-red-950/40"
+                >
+                  <p className="text-sm font-medium text-red-800 dark:text-red-200">
+                    {submitError}
+                  </p>
                 </div>
               )}
 

@@ -10,6 +10,7 @@ import { LocationSelectorWithCreate } from '@/components/dashboard/location-sele
 import { UploadButton } from '@/components/ui/upload-button'
 import { Calendar, User, Image as ImageIcon, FileText } from 'lucide-react'
 import { API_URL } from '@/lib/config'
+import { normalizeMediaUrl } from '@/lib/media-url'
 
 export default function ProfileSetupPage() {
   const router = useRouter()
@@ -183,7 +184,11 @@ export default function ProfileSetupPage() {
               </label>
               {avatarUrl ? (
                 <div className="flex items-center gap-4">
-                  <img src={avatarUrl} alt="Avatar" className="w-20 h-20 rounded-lg object-cover" />
+                  <img
+                    src={normalizeMediaUrl(avatarUrl) || avatarUrl}
+                    alt="Avatar"
+                    className="w-20 h-20 rounded-lg object-cover"
+                  />
                   <button
                     type="button"
                     onClick={() => setAvatarUrl('')}

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { UploadButton } from '@/components/ui/upload-button'
 import { User, FileText, Image as ImageIcon, MapPin } from 'lucide-react'
 import { getEffectiveApiUrl } from '@/lib/config'
+import { normalizeMediaUrl } from '@/lib/media-url'
 import geographyData from '@/lib/geography-data-complete.json'
 import { getCitiesByCountry } from '@/lib/geography'
 
@@ -26,6 +27,7 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
   const [city, setCity] = useState('')
   const [availableCities, setAvailableCities] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [avatarImageFailed, setAvatarImageFailed] = useState(false)
   const [errors, setErrors] = useState<{
     firstName?: string
     lastName?: string
@@ -40,6 +42,7 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
       setFirstName(user.first_name || '')
       setLastName(user.last_name || '')
       setAvatarUrl(user.avatar_url || '')
+      setAvatarImageFailed(false)
       setBio(user.bio || '')
       setCity(user.city || '')
 
@@ -186,8 +189,13 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
     t('profile_setup.avatar_requirements') ||
     'Max file size: 2 MB. Accepted formats: JPG, PNG, GIF, WebP. Square images work best.'
 
+  const avatarDisplayUrl = normalizeMediaUrl(avatarUrl)
+  const showAvatarPreview =
+    Boolean(avatarUrl?.trim()) && Boolean(avatarDisplayUrl) && !avatarImageFailed
+
   const handleAvatarChange = async (url: string) => {
     setAvatarUrl(url)
+    setAvatarImageFailed(false)
     if (errors.avatarUrl) {
       setErrors(prev => ({ ...prev, avatarUrl: undefined }))
     }
@@ -232,9 +240,14 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
           {t('profile_setup.avatar') || 'Avatar'} *
         </label>
         <div className="flex justify-center mb-8">
-          {avatarUrl ? (
+          {showAvatarPreview ? (
             <div className="flex flex-col items-center gap-4">
-              <img src={avatarUrl} alt="Avatar" className="w-32 h-32 rounded-full object-cover border-4 border-myhigh5-primary shadow-lg" />
+              <img
+                src={avatarDisplayUrl}
+                alt=""
+                className="w-32 h-32 rounded-full object-cover border-4 border-myhigh5-primary shadow-lg bg-gray-200 dark:bg-gray-700"
+                onError={() => setAvatarImageFailed(true)}
+              />
               <div className="flex gap-2">
                 <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-2 bg-gray-50 dark:bg-gray-700/50">
                   <UploadButton
@@ -263,22 +276,33 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
               </div>
             </div>
           ) : (
-            <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-6 bg-gray-50 dark:bg-gray-700/50 w-full max-w-xs">
-              <UploadButton
-                endpoint="profileAvatar"
-                content={{
-                  button: () => <span>{t('profile_setup.choose_photo') || 'Choose photo'}</span>,
-                  allowedContent: () => null,
-                }}
-                onClientUploadComplete={async (res) => {
-                  if (res && res.length > 0) {
-                    await handleAvatarChange(res[0].url)
-                  }
-                }}
-                onUploadError={(error: Error) => {
-                  addToast(`${t('profile_setup.upload_error') || 'Erreur d\'upload'}: ${error.message}`, 'error')
-                }}
-              />
+            <div className="flex flex-col items-center gap-3 w-full max-w-xs">
+              {avatarImageFailed && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 text-center px-2">
+                  {t('profile_setup.avatar_load_failed') ||
+                    'Could not load your photo. Please upload it again.'}
+                </p>
+              )}
+              <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-6 bg-gray-50 dark:bg-gray-700/50 w-full flex flex-col items-center gap-3">
+                <div className="w-32 h-32 rounded-full border-4 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center bg-gray-100 dark:bg-gray-800">
+                  <User className="w-12 h-12 text-gray-400 dark:text-gray-500" />
+                </div>
+                <UploadButton
+                  endpoint="profileAvatar"
+                  content={{
+                    button: () => <span>{t('profile_setup.choose_photo') || 'Choose photo'}</span>,
+                    allowedContent: () => null,
+                  }}
+                  onClientUploadComplete={async (res) => {
+                    if (res && res.length > 0) {
+                      await handleAvatarChange(res[0].url)
+                    }
+                  }}
+                  onUploadError={(error: Error) => {
+                    addToast(`${t('profile_setup.upload_error') || 'Erreur d\'upload'}: ${error.message}`, 'error')
+                  }}
+                />
+              </div>
             </div>
           )}
         </div>

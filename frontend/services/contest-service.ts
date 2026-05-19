@@ -1,6 +1,27 @@
 import api, { apiService } from '@/lib/api'
 import { cacheService } from '@/lib/cache-service'
 
+/** axios validateStatus accepts 4xx — treat as errors so nominate/participate UI can show messages. */
+function throwIfParticipateError(
+  response: { status: number; data?: unknown },
+  fallback = 'Submission failed',
+) {
+  if (response.status < 400) return
+  const data = response.data as Record<string, unknown> | undefined
+  let msg = fallback
+  if (data) {
+    if (typeof data.detail === 'string') msg = data.detail
+    else if (typeof data.message === 'string') msg = data.message
+    else if (Array.isArray(data.detail) && data.detail.length > 0) {
+      const first = data.detail[0] as { msg?: string } | string
+      msg = typeof first === 'string' ? first : first?.msg || JSON.stringify(data.detail)
+    }
+  }
+  const err: Error & { response?: typeof response } = new Error(msg)
+  err.response = response
+  throw err
+}
+
 export interface Contestant {
   id: number
   user_id: number
@@ -672,6 +693,7 @@ class ContestService {
       }
 
       const response = await api.post(`/api/v1/contests/${contestId}/participate`, payload);
+      throwIfParticipateError(response);
       return response.data;
     } catch (error) {
       console.error('Error submitting contestant:', error);
@@ -745,6 +767,7 @@ class ContestService {
         nominator_city: nominatorCity,
         nominator_country: nominatorCountry
       });
+      throwIfParticipateError(response);
 
       // Invalider tous les caches liés aux contests et contestants
       cacheService.invalidate('/api/v1/contests/');
