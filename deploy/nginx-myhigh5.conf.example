@@ -6,6 +6,9 @@
 # Requires:
 #   - Next.js: 127.0.0.1:3000  (cd frontend && npm run build && npm run start:vps)
 #   - FastAPI: 127.0.0.1:8000  (uvicorn on port 8000)
+#
+# VPS media: set STORAGE_TYPE=local and LOCAL_STORAGE_PATH=/app/storage (Docker)
+# or /var/lib/myhigh5/media (bare metal). See backend/.env.vps.example.
 
 server {
     listen 80;

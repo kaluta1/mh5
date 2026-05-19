@@ -77,14 +77,11 @@ def iter_s3_object(bucket: str, key: str) -> Iterator[bytes]:
 
 def _build_public_media_url(user_id: int, filename: str) -> str:
     """
-    Build a browser-safe media URL served by backend API (works even when `/media/*`
-    is not exposed by reverse proxy).
+    Relative API path — frontend resolves host via getEffectiveApiUrl() / nginx proxy.
+    Avoids hard-coding api.myhigh5.com when the UI is served from myhigh5.com.
     """
-    base = (settings.BACKEND_PUBLIC_URL or settings.FRONTEND_URL or "").rstrip("/")
-    path = f"/api/v1/media/file/{user_id}/{filename}"
-    if base:
-        return f"{base}{path}"
-    return path
+    safe_name = os.path.basename(filename)
+    return f"/api/v1/media/file/{user_id}/{safe_name}"
 
 # Proof-of-address: scans / photos / PDF bills
 KYC_POA_MAX_BYTES = 10 * 1024 * 1024
@@ -172,6 +169,7 @@ async def store_media(file: UploadFile, user_id: int) -> Dict[str, Any]:
         except Exception as e:
             # Production safety: if S3 is misconfigured, do not block user uploads.
             logger.exception("S3 upload failed, falling back to local storage: %s", e)
+            await file.seek(0)
             return await store_locally(file, filename, user_id)
     # local par défaut
     return await store_locally(file, filename, user_id)
@@ -219,22 +217,22 @@ async def store_in_s3(file: UploadFile, filename: str, user_id: int) -> Dict[str
     Stocke un fichier sur AWS S3
     """
     # Configuration de S3
+    bucket = (settings.S3_BUCKET_NAME or settings.AWS_S3_BUCKET or "").strip()
+    if not bucket:
+        raise ValueError("S3 bucket is not configured")
+
     s3_client = boto3.client(
-        's3',
-        aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
-        aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
-        region_name=settings.S3_REGION
+        "s3",
+        aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+        region_name=settings.S3_REGION,
     )
-    
-    # Chemin dans le bucket
-    s3_path = f"uploads/{user_id}/{filename}"
-    
-    # Lire le contenu du fichier
+
+    s3_path = media_s3_key(user_id, filename)
     content = await file.read()
-    
-    # Upload vers S3
+
     s3_client.put_object(
-        Bucket=settings.S3_BUCKET_NAME,
+        Bucket=bucket,
         Key=s3_path,
         Body=content,
         ContentType=file.content_type

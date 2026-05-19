@@ -66,6 +66,20 @@ async def upload_media(
 
         media_info = await store_media(file, current_user.id)
 
+        # Ensure the file is actually readable before returning success to the client.
+        import os as _os
+
+        _url = media_info.get("url") or ""
+        _parts = _url.rstrip("/").split("/")
+        if len(_parts) >= 2:
+            _filename = _os.path.basename(_parts[-1])
+            _src, _ref, _ = resolve_media_for_serving(current_user.id, _filename)
+            if not _src or not _ref:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Upload saved but file is not available to serve. Check S3/local storage.",
+                )
+
         media_data = MediaCreate(
             title=title or file.filename or "uploaded-media",
             description=description or "",

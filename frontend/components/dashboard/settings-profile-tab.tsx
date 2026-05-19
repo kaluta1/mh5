@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { UploadButton } from '@/components/ui/upload-button'
 import { User, FileText, Image as ImageIcon, MapPin } from 'lucide-react'
 import { getEffectiveApiUrl } from '@/lib/config'
-import { normalizeMediaUrl } from '@/lib/media-url'
+import { normalizeMediaUrl, toStoredMediaUrl, withMediaCacheBust } from '@/lib/media-url'
 import geographyData from '@/lib/geography-data-complete.json'
 import { getCitiesByCountry } from '@/lib/geography'
 
@@ -28,6 +28,8 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
   const [availableCities, setAvailableCities] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [avatarImageFailed, setAvatarImageFailed] = useState(false)
+  const [avatarCacheBust, setAvatarCacheBust] = useState(0)
+  const [localPreviewUrl, setLocalPreviewUrl] = useState<string | null>(null)
   const [errors, setErrors] = useState<{
     firstName?: string
     lastName?: string
