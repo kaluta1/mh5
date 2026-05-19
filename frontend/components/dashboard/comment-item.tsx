@@ -7,7 +7,7 @@ import { useLanguage } from '@/contexts/language-context'
 import { commentsService, Comment } from '@/lib/services/comments-service'
 import { useToast } from '@/components/ui/toast'
 import { MentionAutocomplete } from './mention-autocomplete'
-import Image from 'next/image'
+import { MediaImage } from '@/components/ui/media-image'
 
 interface CommentItemProps {
   comment: Comment
@@ -148,7 +148,7 @@ export function CommentItem({
           <div className="flex-shrink-0">
             <div className="cursor-pointer" onClick={() => comment.user_id && router.push(`/dashboard/users/${comment.user_id}`)}>
             {comment.author_avatar ? (
-              <Image
+              <MediaImage
                 src={comment.author_avatar}
                 alt={comment.author_name}
                 width={40}

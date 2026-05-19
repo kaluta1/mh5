@@ -4,7 +4,7 @@ import { useState, useRef } from 'react'
 import { ThumbsUp, AlertCircle } from 'lucide-react'
 import { useLanguage } from '@/contexts/language-context'
 import { contestService } from '@/services/contest-service'
-import Image from 'next/image'
+import { MediaImage } from '@/components/ui/media-image'
 
 interface VoteButtonProps {
   contestantId: number
@@ -192,7 +192,7 @@ export function VoteButton({ contestantId, canVote, hasVoted, isVoting, onVote, 
                   <div key={voter.user_id} className="flex items-center justify-between gap-2 text-sm">
                     <div className="flex items-center gap-2 flex-1">
                       {voter.avatar_url ? (
-                        <Image
+                        <MediaImage
                           src={voter.avatar_url}
                           alt={voter.full_name || voter.username || ''}
                           width={24}

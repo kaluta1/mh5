@@ -3,6 +3,7 @@
 import * as React from "react"
 import { User } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { normalizeMediaUrl } from "@/lib/media-url"
 
 interface UserAvatarProps {
   src?: string
@@ -26,7 +27,7 @@ export function UserAvatar({
   className,
   fallback 
 }: UserAvatarProps) {
-  const avatarSrc = src || user?.avatar_url
+  const avatarSrc = normalizeMediaUrl(src || user?.avatar_url)
   const avatarAlt = alt || user?.full_name || user?.username || "User avatar"
   const avatarFallback = fallback || user?.username?.[0]?.toUpperCase() || user?.full_name?.[0]?.toUpperCase() || "U"
   const sizeClasses = {

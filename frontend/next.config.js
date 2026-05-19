@@ -13,6 +13,49 @@ const nextVersion = (() => {
 const nextMajor = Number(String(nextVersion).split('.')[0] || 0)
 const turbopackConfig = nextMajor >= 16 ? { turbopack: {} } : {}
 
+/** Allow next/image for API-hosted user media (avatars, contest photos). */
+function buildApiMediaRemotePatterns() {
+  const seen = new Set()
+  const patterns = []
+  const candidates = [
+    process.env.NEXT_PUBLIC_API_URL,
+    process.env.NEXT_PUBLIC_BACKEND_URL,
+    'https://api.myhigh5.com',
+    'https://myhigh5.com',
+    'http://localhost:8001',
+    'http://localhost:8000',
+  ]
+    .filter(Boolean)
+    .flatMap((raw) => String(raw).split(',').map((s) => s.trim()).filter(Boolean))
+
+  for (const raw of candidates) {
+    try {
+      const u = new URL(raw.replace(/\/+$/, ''))
+      const key = `${u.protocol}//${u.hostname}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      const protocol = u.protocol.replace(':', '')
+      patterns.push(
+        {
+          protocol,
+          hostname: u.hostname,
+          ...(u.port ? { port: u.port } : {}),
+          pathname: '/api/v1/media/file/**',
+        },
+        {
+          protocol,
+          hostname: u.hostname,
+          ...(u.port ? { port: u.port } : {}),
+          pathname: '/media/**',
+        }
+      )
+    } catch {
+      // ignore invalid URL
+    }
+  }
+  return patterns
+}
+
 const nextConfig = {
   ...turbopackConfig,
 
@@ -74,6 +117,7 @@ const nextConfig = {
         hostname: 'utfs.io',
         pathname: '/**',
       },
+      ...buildApiMediaRemotePatterns(),
     ],
     unoptimized: false,
     formats: ['image/avif', 'image/webp'],

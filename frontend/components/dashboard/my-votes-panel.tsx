@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Trophy, GripVertical, X, ChevronDown, ChevronUp } from 'lucide-react'
 import { contestService } from '@/services/contest-service'
 import { useLanguage } from '@/contexts/language-context'
-import Image from 'next/image'
+import { MediaImage } from '@/components/ui/media-image'
 
 const POINTS_BY_POSITION = [5, 4, 3, 2, 1]
 
@@ -231,7 +231,7 @@ export default function MyVotesPanel({ contestId, onVoteChanged }: MyVotesPanelP
               {/* Avatar */}
               <div className="w-6 h-6 rounded-full overflow-hidden flex-shrink-0 bg-gray-200 dark:bg-gray-600">
                 {vote.author_avatar_url ? (
-                  <Image
+                  <MediaImage
                     src={vote.author_avatar_url}
                     alt=""
                     width={24}

@@ -4,7 +4,7 @@ import { useState, useRef } from 'react'
 import { Heart } from 'lucide-react'
 import { useLanguage } from '@/contexts/language-context'
 import { contestService } from '@/services/contest-service'
-import Image from 'next/image'
+import { MediaImage } from '@/components/ui/media-image'
 
 interface FavoriteButtonProps {
   contestantId: number
@@ -95,7 +95,7 @@ export function FavoriteButton({ contestantId, isFavorite, onToggle, isAuthor = 
                 {favoriteDetails.users.slice(0, 10).map((user: any) => (
                   <div key={user.user_id} className="flex items-center gap-2 text-sm">
                     {user.avatar_url ? (
-                      <Image
+                      <MediaImage
                         src={user.avatar_url}
                         alt={user.full_name || user.username || ''}
                         width={24}

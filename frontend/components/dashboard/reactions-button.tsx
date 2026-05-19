@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { ThumbsUp, Heart, Smile, ThumbsDown, Star } from 'lucide-react'
 import { useLanguage } from '@/contexts/language-context'
 import { reactionsService, ReactionDetails } from '@/services/reactions-service'
-import Image from 'next/image'
+import { MediaImage } from '@/components/ui/media-image'
 
 interface ReactionsButtonProps {
   contestantId: number
@@ -131,7 +131,7 @@ export function ReactionsButton({ contestantId, selectedReaction, onReactionSele
                         {users.slice(0, 5).map((user) => (
                           <div key={user.user_id} className="flex items-center gap-2 text-sm">
                             {user.avatar_url ? (
-                              <Image
+                              <MediaImage
                                 src={user.avatar_url}
                                 alt={user.full_name || user.username || ''}
                                 width={24}

@@ -26,7 +26,7 @@ import {
 } from 'lucide-react'
 import api from '@/lib/api'
 import { followService } from '@/services/follow-service'
-import Image from 'next/image'
+import { MediaImage } from '@/components/ui/media-image'
 
 interface UserProfile {
   id: number
@@ -235,7 +235,7 @@ export default function UserProfilePage() {
             <div className="flex-shrink-0">
               {profile.avatar_url ? (
                 <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white dark:border-gray-800 shadow-lg">
-                  <Image
+                  <MediaImage
                     src={profile.avatar_url}
                     alt={displayName}
                     width={96}

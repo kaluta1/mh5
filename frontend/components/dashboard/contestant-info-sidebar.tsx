@@ -4,7 +4,7 @@ import { useLanguage } from '@/contexts/language-context'
 import { ReactionsButton } from './reactions-button'
 import { Button } from '@/components/ui/button'
 import { ThumbsUp, Heart, Share2 } from 'lucide-react'
-import Image from 'next/image'
+import { MediaImage } from '@/components/ui/media-image'
 import { ReactionDetails } from '@/services/reactions-service'
 
 interface ContestantInfoSidebarProps {
@@ -233,7 +233,7 @@ export function ContestantInfoSidebar({
                       {reactionDetails.reactions_by_type.like.slice(0, 5).map((user: any) => (
                         <div key={user.user_id} className="relative group">
                           {user.avatar_url ? (
-                            <Image
+                            <MediaImage
                               src={user.avatar_url}
                               alt={user.full_name || user.username || ''}
                               width={32}
@@ -265,7 +265,7 @@ export function ContestantInfoSidebar({
                       {reactionDetails.reactions_by_type.love.slice(0, 5).map((user: any) => (
                         <div key={user.user_id} className="relative group">
                           {user.avatar_url ? (
-                            <Image
+                            <MediaImage
                               src={user.avatar_url}
                               alt={user.full_name || user.username || ''}
                               width={32}
@@ -297,7 +297,7 @@ export function ContestantInfoSidebar({
                 {voters.slice(0, 10).map((voter) => (
                   <div key={voter.user_id} className="relative group">
                     {voter.avatar_url ? (
-                      <Image
+                      <MediaImage
                         src={voter.avatar_url}
                         alt={voter.full_name || voter.username || ''}
                         width={32}

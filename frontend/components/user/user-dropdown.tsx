@@ -1,8 +1,8 @@
 "use client"
 
 import * as React from "react"
-import Image from "next/image"
-import { LogOut, Settings, User, Shield } from "lucide-react"
+import { LogOut, Settings, Shield } from "lucide-react"
+import { UserAvatar } from "@/components/user/user-avatar"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -56,14 +56,12 @@ export function UserDropdown({ user, onLogout, onSettings, onProfile, onKYC }: U
       <DropdownMenuTrigger asChild>
         <button className="flex items-center rounded-full focus:outline-none focus:ring-2 focus:ring-myhigh5-primary/50 transition-all hover:opacity-80">
           {avatarUrl ? (
-            <div className="relative w-10 h-10 rounded-full overflow-hidden ring-2 ring-myhigh5-primary/30 shadow-lg">
-              <Image
-                src={avatarUrl}
-                alt={displayName}
-                fill
-                className="object-cover"
-              />
-            </div>
+            <UserAvatar
+              src={avatarUrl}
+              alt={displayName}
+              size="md"
+              className="ring-2 ring-myhigh5-primary/30 shadow-lg"
+            />
           ) : (
             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-myhigh5-primary to-purple-600 flex items-center justify-center text-white font-semibold text-sm ring-2 ring-myhigh5-primary/30 shadow-lg">
               {initials}

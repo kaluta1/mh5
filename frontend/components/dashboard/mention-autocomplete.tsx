@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import Image from 'next/image'
+import { MediaImage } from '@/components/ui/media-image'
 
 interface MentionUser {
   id: number
@@ -142,7 +142,7 @@ export function MentionAutocomplete({
               }`}
             >
               {user.avatar_url ? (
-                <Image
+                <MediaImage
                   src={user.avatar_url}
                   alt={user.name}
                   width={32}
