@@ -638,6 +638,23 @@ class CRUDContestant:
             .first()
         )
 
+    def _nomination_season_ids_for_contest(self, db: Session, contest_id: int) -> List[int]:
+        from app.models.contest import Contest
+        from app.services.contest_category_integrity import contest_ids_for_category
+
+        contest = (
+            db.query(Contest)
+            .filter(Contest.id == contest_id, Contest.is_deleted == False)
+            .first()
+        )
+        if not contest:
+            return [contest_id]
+        return contest_ids_for_category(
+            db,
+            category_id=getattr(contest, "category_id", None),
+            contest_type=getattr(contest, "contest_type", None) or "",
+        ) or [contest_id]
+
     def user_has_entry_in_contest(
         self,
         db: Session,
@@ -649,23 +666,27 @@ class CRUDContestant:
     ) -> bool:
         """
         True when the user already submitted for this contest.
-        Nominations: any calendar round for this contest (nominator may only appear once per round).
-        Participations: scoped to round_id when provided.
+        Nominations: same category scope (duplicate contest rows share one nomination).
+        Participations: scoped to this contest id and round_id when provided.
         """
         from sqlalchemy import or_
 
-        filters = [
-            Contestant.season_id == contest_id,
-            Contestant.user_id == user_id,
-            Contestant.is_deleted == False,
-        ]
         et = (entry_type or "participation").strip().lower()
         if et == "nomination":
-            filters.append(
-                or_(Contestant.entry_type == "nomination", Contestant.entry_type.is_(None))
-            )
+            season_ids = self._nomination_season_ids_for_contest(db, contest_id)
+            filters = [
+                Contestant.season_id.in_(season_ids),
+                Contestant.user_id == user_id,
+                Contestant.is_deleted == False,
+                or_(Contestant.entry_type == "nomination", Contestant.entry_type.is_(None)),
+            ]
         else:
-            filters.append(Contestant.entry_type == et)
+            filters = [
+                Contestant.season_id == contest_id,
+                Contestant.user_id == user_id,
+                Contestant.is_deleted == False,
+                Contestant.entry_type == et,
+            ]
         q = db.query(Contestant.id).filter(and_(*filters))
         if round_id is not None and et != "nomination":
             q = q.filter(Contestant.round_id == round_id)
@@ -685,18 +706,22 @@ class CRUDContestant:
         """Latest row for Edit / participation payload (same scoping as user_has_entry_in_contest)."""
         from sqlalchemy import or_
 
-        filters = [
-            Contestant.season_id == contest_id,
-            Contestant.user_id == user_id,
-            Contestant.is_deleted == False,
-        ]
         et = (entry_type or "participation").strip().lower()
         if et == "nomination":
-            filters.append(
-                or_(Contestant.entry_type == "nomination", Contestant.entry_type.is_(None))
-            )
+            season_ids = self._nomination_season_ids_for_contest(db, contest_id)
+            filters = [
+                Contestant.season_id.in_(season_ids),
+                Contestant.user_id == user_id,
+                Contestant.is_deleted == False,
+                or_(Contestant.entry_type == "nomination", Contestant.entry_type.is_(None)),
+            ]
         else:
-            filters.append(Contestant.entry_type == et)
+            filters = [
+                Contestant.season_id == contest_id,
+                Contestant.user_id == user_id,
+                Contestant.is_deleted == False,
+                Contestant.entry_type == et,
+            ]
         q = db.query(Contestant).filter(and_(*filters))
         if round_id is not None:
             q_round = q.filter(Contestant.round_id == round_id)

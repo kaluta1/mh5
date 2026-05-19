@@ -218,14 +218,23 @@ export default function ContestDetailPage() {
         setPageLoading(true)
       }
       // Fetch contest data
+      const justSubmitted =
+        typeof window !== 'undefined' &&
+        sessionStorage.getItem(`mh5-nominated-${contestId}`) === '1'
       const c = await ApiService.getContest(parseInt(contestId), {
-        filterCountry: (!filterCountry || filterCountry === 'all') ? undefined : filterCountry,
+        filterCountry:
+          justSubmitted || !filterCountry || filterCountry === 'all'
+            ? undefined
+            : filterCountry,
         filterRegion: (!filterRegion || filterRegion === 'all') ? undefined : filterRegion,
         filterContinent: filterContinent === 'all' ? undefined : filterContinent,
         entryType: entryType,
         roundId: roundIdFromUrl ? parseInt(roundIdFromUrl, 10) : undefined,
-        ...(silent ? { _t: Date.now() } : {}),
+        _t: Date.now(),
       }) as any
+      if (justSubmitted && typeof window !== 'undefined') {
+        sessionStorage.removeItem(`mh5-nominated-${contestId}`)
+      }
 
       // Check if aborted
       if (abortController.signal.aborted) return

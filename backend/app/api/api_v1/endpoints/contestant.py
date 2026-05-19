@@ -1678,8 +1678,18 @@ def get_contest_contestants(
         # Step 2: Build simplified query - try season_id first (most common)
         query = db.query(Contestant).filter(Contestant.is_deleted == False)
         
-        # Filter by season_id only (round_id is shared between ALL contests)
-        query = query.filter(Contestant.season_id == real_contest_id)
+        from app.services.contest_category_integrity import contestant_roster_season_clause
+
+        if contest:
+            query = query.filter(
+                contestant_roster_season_clause(
+                    db,
+                    contest,
+                    current_user_id=current_user.id if current_user else None,
+                )
+            )
+        else:
+            query = query.filter(Contestant.season_id == real_contest_id)
 
         _is_nomination_contest_round = bool(
             contest and _norm_cm_round(getattr(contest, "contest_mode", None)) == "nomination"
@@ -2286,6 +2296,19 @@ def create_contestant(
         if existing_cat is not None:
             existing_row = crud_contestant.get(db, existing_cat)
             if existing_row:
+                from app.services.contest_category_integrity import rehome_nomination_to_contest
+
+                rehome_nomination_to_contest(
+                    db,
+                    existing_row,
+                    target_contest_id=int(season_id),
+                    apply=True,
+                )
+                if target_round_id and existing_row.round_id != target_round_id:
+                    existing_row.round_id = target_round_id
+                    db.add(existing_row)
+                    db.commit()
+                    db.refresh(existing_row)
                 return ContestantSubmissionResponse(
                     id=existing_row.id,
                     season_id=existing_row.season_id,

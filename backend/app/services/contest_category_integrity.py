@@ -232,6 +232,64 @@ def repair_category_mode_duplicates(db, *, apply: bool = False) -> List[dict]:
     return actions
 
 
+def contestant_roster_season_clause(
+    db,
+    contest: Any,
+    *,
+    current_user_id: Optional[int] = None,
+):
+    """
+    Roster filter: rows for this contest id, plus the signed-in nominator's row(s) on
+    sibling contest ids in the same category (duplicate nomination contests in DB).
+    """
+    from sqlalchemy import and_, or_
+    from app.models.contests import Contestant
+
+    base = Contestant.season_id == int(contest.id)
+    if current_user_id is None:
+        return base
+    if normalize_contest_mode(getattr(contest, "contest_mode", None)) != "nomination":
+        return base
+
+    sibling_ids = contest_ids_for_category(
+        db,
+        category_id=getattr(contest, "category_id", None),
+        contest_type=getattr(contest, "contest_type", None) or "",
+    )
+    if not sibling_ids or set(sibling_ids) == {int(contest.id)}:
+        return base
+
+    return or_(
+        base,
+        and_(
+            Contestant.user_id == int(current_user_id),
+            Contestant.season_id.in_(sibling_ids),
+        ),
+    )
+
+
+def rehome_nomination_to_contest(
+    db,
+    contestant_row: Any,
+    *,
+    target_contest_id: int,
+    apply: bool = True,
+) -> bool:
+    """Move nomination row onto the contest the user is submitting/viewing."""
+    if contestant_row is None:
+        return False
+    current = int(getattr(contestant_row, "season_id", 0) or 0)
+    target = int(target_contest_id)
+    if current == target:
+        return False
+    if apply:
+        contestant_row.season_id = target
+        db.add(contestant_row)
+        db.commit()
+        db.refresh(contestant_row)
+    return True
+
+
 def contest_ids_for_category(
     db,
     *,

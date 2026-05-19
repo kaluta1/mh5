@@ -1776,11 +1776,18 @@ class CRUDContest:
         filter_season_id = contest_id
         logger.info(f"[get_contest_with_enriched_contestants] Filtering contestants by contest_id={contest_id}")
 
-        # Query contestants by season_id only (rounds are global/shared)
+        # Query contestants by contest id (season_id legacy). Nominations: always surface the
+        # signed-in nominator even if their row was stored on a duplicate contest id.
+        from app.services.contest_category_integrity import contestant_roster_season_clause
+
         contestants_query = db.query(Contestant)\
             .filter(
                 Contestant.is_deleted == False,
-                Contestant.season_id == filter_season_id
+                contestant_roster_season_clause(
+                    db,
+                    contest_obj,
+                    current_user_id=current_user_id,
+                ),
             )\
             .outerjoin(User, Contestant.user_id == User.id) \
             .options(

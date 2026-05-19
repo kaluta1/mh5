@@ -636,6 +636,9 @@ export default function ApplyToContestPage() {
       } catch {
         /* ignore */
       }
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem(`mh5-nominated-${contestId}`, '1')
+      }
       window.dispatchEvent(new Event('contestant-submitted'))
 
       // Mettre à jour les données existantes avec les nouvelles valeurs
