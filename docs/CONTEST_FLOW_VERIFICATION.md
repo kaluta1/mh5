@@ -57,10 +57,22 @@ Duplicate **contest** rows (two Gospel nominations) let the same nominator submi
 | **Repair existing data** | After deploy on staging/production: |
 
 ```bash
-cd backend
-python scripts/fix_nomination_integrity.py          # audit only
-python scripts/fix_nomination_integrity.py --apply  # merge votes, soft-delete dupes, fix contest pairs
-python scripts/fix_nomination_integrity.py --apply --overlap
+# Production/staging: use Docker (system `python` has no pydantic) or backend/.venv
+cd ~/mh5
+
+# Option A — Docker (recommended; same DATABASE_URL as API):
+docker compose -f backend/docker-compose.yml exec app python scripts/fix_nomination_integrity.py
+docker compose -f backend/docker-compose.yml exec app python scripts/fix_nomination_integrity.py --apply
+docker compose -f backend/docker-compose.yml exec app python scripts/fix_nomination_integrity.py --apply --overlap
+
+# Option B — helper (auto-picks Docker or .venv):
+bash backend/scripts/run_fix_nomination_integrity.sh
+bash backend/scripts/run_fix_nomination_integrity.sh --apply --overlap
+
+# Option C — host venv only if API is not in Docker:
+cd backend && python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+python scripts/fix_nomination_integrity.py --apply
 ```
 
 Keeps the row with the most MyHigh5 points; removes duplicate `contestants` and deactivates extra `contestant_seasons`.

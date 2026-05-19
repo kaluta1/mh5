@@ -6,12 +6,22 @@ Fixes:
   2. Duplicate nomination rows per nominator per category per round
      (merge votes → canonical row, soft-delete extras, deactivate season links)
 
-Examples:
-  cd backend
-  python scripts/fix_nomination_integrity.py
+Requires the backend virtualenv OR the API Docker container (system python has no pydantic).
+
+Examples (from repo root ~/mh5):
+
+  # Docker (recommended — same deps + DATABASE_URL as the API):
+  docker compose -f backend/docker-compose.yml exec app python scripts/fix_nomination_integrity.py
+  docker compose -f backend/docker-compose.yml exec app python scripts/fix_nomination_integrity.py --apply
+
+  # Or use the helper script:
+  bash backend/scripts/run_fix_nomination_integrity.sh
+  bash backend/scripts/run_fix_nomination_integrity.sh --apply --overlap
+
+  # Host venv (only if API is not in Docker):
+  cd backend && python3 -m venv .venv && source .venv/bin/activate
+  pip install -r requirements.txt
   python scripts/fix_nomination_integrity.py --apply
-  python scripts/fix_nomination_integrity.py --apply --round-id 12
-  python scripts/fix_nomination_integrity.py --apply --overlap
 """
 from __future__ import annotations
 
@@ -20,7 +30,32 @@ import subprocess
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+_BACKEND_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(_BACKEND_ROOT))
+
+
+def _ensure_backend_deps() -> None:
+    try:
+        import pydantic  # noqa: F401
+    except ModuleNotFoundError:
+        print(
+            "ERROR: Backend dependencies are not installed for this Python.\n\n"
+            "Use ONE of:\n"
+            "  1) Docker (same env as API):\n"
+            "     docker compose -f backend/docker-compose.yml exec app "
+            "python scripts/fix_nomination_integrity.py\n\n"
+            "  2) Host venv:\n"
+            "     cd backend && python3 -m venv .venv && source .venv/bin/activate\n"
+            "     pip install -r requirements.txt\n"
+            "     python scripts/fix_nomination_integrity.py\n\n"
+            "  3) Helper:\n"
+            "     bash backend/scripts/run_fix_nomination_integrity.sh\n",
+            file=sys.stderr,
+        )
+        raise SystemExit(1) from None
+
+
+_ensure_backend_deps()
 
 from app.db.session import SessionLocal
 from app.services.contest_category_integrity import (
