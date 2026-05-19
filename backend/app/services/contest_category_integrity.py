@@ -232,6 +232,133 @@ def repair_category_mode_duplicates(db, *, apply: bool = False) -> List[dict]:
     return actions
 
 
+def contest_ids_for_category(
+    db,
+    *,
+    category_id: Optional[int],
+    contest_type: str,
+) -> List[int]:
+    """All active contest ids sharing a category scope."""
+    from app.models.contest import Contest
+
+    q = db.query(Contest.id).filter(
+        Contest.is_deleted == False,
+        Contest.is_active == True,
+    )
+    if category_id and category_id > 0:
+        q = q.filter(Contest.category_id == category_id)
+    else:
+        q = q.filter(
+            Contest.category_id.is_(None),
+            Contest.contest_type == contest_type,
+        )
+    return [row[0] for row in q.all()]
+
+
+def nominator_has_nomination_in_category_round(
+    db,
+    *,
+    nominator_user_id: int,
+    category_id: Optional[int],
+    contest_type: str,
+    round_id: int,
+    exclude_contest_id: Optional[int] = None,
+) -> Optional[int]:
+    """
+  One nomination per nominator per category per calendar round (any contest row).
+  Returns existing contestant id if found.
+    """
+    from app.models.contests import Contestant
+    from app.models.contest import Contest
+
+    contest_ids = contest_ids_for_category(
+        db, category_id=category_id, contest_type=contest_type
+    )
+    if not contest_ids:
+        return None
+    if exclude_contest_id is not None:
+        contest_ids = [cid for cid in contest_ids if cid != exclude_contest_id]
+    if not contest_ids:
+        return None
+
+    row = (
+        db.query(Contestant.id)
+        .filter(
+            Contestant.user_id == nominator_user_id,
+            Contestant.round_id == round_id,
+            Contestant.season_id.in_(contest_ids),
+            Contestant.is_deleted == False,
+            Contestant.entry_type == "nomination",
+        )
+        .order_by(Contestant.registration_date.desc(), Contestant.id.desc())
+        .first()
+    )
+    return int(row[0]) if row else None
+
+
+def filter_contest_ids_one_per_category(
+    db,
+    contest_ids: List[int],
+) -> List[int]:
+    """
+    Keep one contest id per category for migration (avoids double country→regional
+    promotion when duplicate nomination rows exist for the same category).
+    """
+    from app.models.contest import Contest
+
+    if len(contest_ids) <= 1:
+        return contest_ids
+
+    by_key: Dict[str, Any] = {}
+    for cid in contest_ids:
+        c = db.query(Contest).filter(Contest.id == cid).first()
+        if not c:
+            continue
+        mode = normalize_contest_mode(c.contest_mode)
+        key = f"{category_scope_key(c)}:{mode}"
+        prev = by_key.get(key)
+        if prev is None:
+            by_key[key] = c
+            continue
+        if _level_rank_for_mode(c, mode) > _level_rank_for_mode(prev, mode):
+            by_key[key] = c
+
+    return sorted({c.id for c in by_key.values()})
+
+
+def dedupe_contestants_by_nominator(
+    contestants: List[Any],
+    *,
+    points_by_contestant: Optional[Dict[int, int]] = None,
+) -> List[Any]:
+    """
+    Nomination rows use user_id = nominator. At most one winner slot per nominator
+    per location group (fixes duplicate contest rows for the same category).
+    """
+    if not contestants:
+        return contestants
+    points_by_contestant = points_by_contestant or {}
+
+    def rank(c: Any) -> Tuple[int, int]:
+        cid = int(getattr(c, "id", 0) or 0)
+        return (int(points_by_contestant.get(cid, 0)), cid)
+
+    best_by_nominator: Dict[int, Any] = {}
+    for c in contestants:
+        uid = getattr(c, "user_id", None)
+        if uid is None:
+            continue
+        uid = int(uid)
+        prev = best_by_nominator.get(uid)
+        if prev is None or rank(c) > rank(prev):
+            best_by_nominator[uid] = c
+
+    without_user = [c for c in contestants if getattr(c, "user_id", None) is None]
+    merged = list(best_by_nominator.values()) + without_user
+    merged.sort(key=lambda c: rank(c), reverse=True)
+    return merged
+
+
 def assert_unique_category_mode(
     db,
     *,

@@ -1007,6 +1007,13 @@ class SeasonMigrationService:
                 reverse=True
             )
             
+            # One country winner per nominator (nomination user_id = nominator).
+            from app.services.contest_category_integrity import dedupe_contestants_by_nominator
+
+            sorted_contestants = dedupe_contestants_by_nominator(
+                sorted_contestants,
+                points_by_contestant=points_by_contestant,
+            )
             # Prendre les N premiers (ou tous si limit is None)
             selected = sorted_contestants if limit is None else sorted_contestants[:limit]
             result[location_value] = selected
@@ -1463,6 +1470,9 @@ class SeasonMigrationService:
                     ),
                     reverse=True
                 )
+                from app.services.contest_category_integrity import dedupe_contestants_by_nominator
+
+                ranked = dedupe_contestants_by_nominator(ranked, points_by_contestant=points_dict)
                 selected_contestants = ranked[:limit]
             else:
                 selected_contestants = []
@@ -1926,6 +1936,13 @@ class SeasonMigrationService:
                         if eff_sid is None or eff_sid != season.id:
                             continue
                         contest_ids_to_promote.append(cid)
+                    from app.services.contest_category_integrity import (
+                        filter_contest_ids_one_per_category,
+                    )
+
+                    contest_ids_to_promote = filter_contest_ids_one_per_category(
+                        db, contest_ids_to_promote
+                    )
                     contest_ids_to_promote.sort()
                 else:
                     contest_links = (

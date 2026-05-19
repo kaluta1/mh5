@@ -2266,10 +2266,40 @@ def create_contestant(
     submission_entry_type = "nomination" if contest_mode_value == "nomination" else "participation"
     
     # Participation: one submission per user per round + contest (season_id stores contest.id).
-    # Nominations: user_id is the nominator — they may nominate multiple different people in the
-    # same round/contest. Only short-circuit true double-submit (same video URLs or same title
-    # when no video), not "any prior nomination".
+    # Nominations: user_id is the nominator — one nomination per category per round across
+    # all contest rows (duplicate DB contests must not allow two Gospel nominations).
     if submission_entry_type == "nomination":
+        from app.services.contest_category_integrity import (
+            nominator_has_nomination_in_category_round,
+        )
+
+        cat_id = getattr(contest_for_mode, "category_id", None) if contest_for_mode else None
+        ctype = getattr(contest_for_mode, "contest_type", None) or ""
+        existing_cat = nominator_has_nomination_in_category_round(
+            db,
+            nominator_user_id=current_user.id,
+            category_id=cat_id,
+            contest_type=ctype,
+            round_id=target_round_id,
+            exclude_contest_id=season_id,
+        )
+        if existing_cat is not None:
+            existing_row = crud_contestant.get(db, existing_cat)
+            if existing_row:
+                return ContestantSubmissionResponse(
+                    id=existing_row.id,
+                    season_id=existing_row.season_id,
+                    round_id=existing_row.round_id,
+                    user_id=existing_row.user_id,
+                    title=existing_row.title,
+                    description=existing_row.description,
+                    registration_date=existing_row.registration_date,
+                    message=(
+                        "You already nominated in this category for this round. "
+                        "Returning existing nomination."
+                    ),
+                )
+
         vid_norm = _normalize_video_media_ids_for_dedup(getattr(contestant_data, "video_media_ids", None))
         nomination_base = (
             db.query(Contestant)

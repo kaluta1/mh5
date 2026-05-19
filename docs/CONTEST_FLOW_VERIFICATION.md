@@ -37,6 +37,16 @@ python scripts/fix_contest_category_duplicates.py --apply  # fix DB
 
 **Regional vote (Nominate tab):** With the **Vote** pill selected, open level **Regional**. The API uses the vote round (+1 calendar round for migrated pool) and `contestLevel=regional`. Only contests with an active **REGIONAL** season link on that round appear. Duplicates per category are deduped on the list API.
 
+### Why one nominator could appear twice as regional winners (fixed)
+
+| Layer | Old behavior | Correct rule |
+|-------|----------------|--------------|
+| **Nominate** | One row per `contest_id` only | **One nomination per category per round** (any contest row) |
+| **Vote** | One vote per nominator per `cat:{category_id}` bucket | Same |
+| **Country → Regional migration** | Ran **once per contest id** on the round | **Once per category**; top 5 per country keeps **one slot per nominator** |
+
+Duplicate **contest** rows (two Gospel nominations) let the same nominator submit twice; migration promoted both to regional. Fix: category-wide nomination guard + migration dedupe by nominator + one promotion per category.
+
 ### Tabs
 - **Nominate** → only `contest_mode = nomination`
 - **Participations** → only `contest_mode = participation`
