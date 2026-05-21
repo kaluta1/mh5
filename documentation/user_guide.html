@@ -1,0 +1,1325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MyHigh5 – Developer User Guide &amp; Documentation</title>
+  <style>
+    :root {
+      --primary: #2c3e6b;
+      --accent:  #e74c3c;
+      --green:   #27ae60;
+      --yellow:  #f39c12;
+      --bg:      #f4f6f9;
+      --card:    #ffffff;
+      --text:    #2c3e50;
+      --border:  #dce1e7;
+      --code-bg: #1e2533;
+      --code-fg: #a8d8a8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.75; }
+
+    /* ── HERO ── */
+    .hero {
+      background: linear-gradient(135deg, #1a1f36 0%, #2c3e6b 60%, #1a3050 100%);
+      color: #fff; padding: 72px 60px;
+      position: relative; overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: url("data:image/svg+xml,%3Csvg width='80' height='80' viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M50 50c0-5.523 4.477-10 10-10s10 4.477 10 10-4.477 10-10 10c0 5.523-4.477 10-10 10s-10-4.477-10-10 4.477-10 10-10zM10 10c0-5.523 4.477-10 10-10s10 4.477 10 10-4.477 10-10 10c0 5.523-4.477 10-10 10S0 25.523 0 20s4.477-10 10-10z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    }
+    .hero-label {
+      display: inline-block;
+      background: rgba(231,76,60,0.85);
+      border-radius: 4px; padding: 4px 14px;
+      font-size: 11px; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 24px;
+    }
+    .hero h1 { font-size: 44px; font-weight: 800; line-height: 1.15; margin-bottom: 12px; }
+    .hero p { font-size: 18px; opacity: 0.8; max-width: 680px; margin-bottom: 32px; }
+    .hero-meta { display: flex; gap: 40px; flex-wrap: wrap; }
+    .hero-meta-item label { display: block; font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; opacity: 0.5; margin-bottom: 4px; }
+    .hero-meta-item span { font-size: 15px; font-weight: 600; }
+
+    /* ── LAYOUT ── */
+    .container { display: flex; max-width: 1200px; margin: 0 auto; }
+    /* Sidebar */
+    .sidebar {
+      width: 260px; flex-shrink: 0;
+      background: var(--card); border-right: 1px solid var(--border);
+      padding: 32px 0; position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    }
+    .sidebar-title { font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: #999; padding: 0 20px; margin-bottom: 8px; margin-top: 20px; }
+    .sidebar a { display: block; padding: 8px 20px; font-size: 14px; color: var(--text); text-decoration: none; border-left: 3px solid transparent; }
+    .sidebar a:hover { background: #f0f4f8; border-left-color: var(--primary); color: var(--primary); }
+    /* Main content */
+    .main { flex: 1; padding: 48px 48px; min-width: 0; }
+
+    /* ── SECTION ── */
+    .section { margin-bottom: 56px; }
+    .section-title {
+      font-size: 26px; font-weight: 800;
+      color: var(--primary);
+      border-bottom: 3px solid var(--accent);
+      padding-bottom: 10px; margin-bottom: 24px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .section-title .icon { font-size: 28px; }
+    h3 { font-size: 18px; font-weight: 700; margin: 28px 0 10px; color: var(--primary); }
+    h4 { font-size: 15px; font-weight: 700; margin: 18px 0 8px; }
+    p { margin-bottom: 12px; font-size: 15px; }
+    ul, ol { padding-left: 22px; margin-bottom: 14px; }
+    ul li, ol li { margin-bottom: 6px; font-size: 15px; }
+
+    /* ── CARDS ── */
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 24px 28px; margin-bottom: 20px; }
+    .card h3 { margin-top: 0; }
+
+    /* ── TECH GRID ── */
+    .tech-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; margin-bottom: 16px; }
+    .tech-card {
+      background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+      padding: 18px 20px;
+    }
+    .tech-card .tech-name { font-weight: 700; font-size: 15px; color: var(--primary); margin-bottom: 4px; }
+    .tech-card .tech-version { font-size: 12px; color: #888; margin-bottom: 8px; }
+    .tech-card .tech-desc { font-size: 13px; color: #666; }
+
+    /* ── CODE ── */
+    pre {
+      background: var(--code-bg); color: var(--code-fg);
+      border-radius: 8px; padding: 18px 22px;
+      overflow-x: auto; font-size: 13px;
+      font-family: 'Consolas', 'Courier New', monospace; line-height: 1.65;
+      margin: 12px 0;
+    }
+    code {
+      background: #eef1f5; padding: 2px 7px; border-radius: 3px;
+      font-family: 'Consolas', 'Courier New', monospace; font-size: 13px;
+    }
+    pre code { background: none; padding: 0; }
+
+    /* ── CALLOUTS ── */
+    .callout {
+      border-radius: 8px; padding: 14px 18px; margin: 16px 0; font-size: 14px;
+      border-left: 4px solid;
+    }
+    .callout.info { background: #eaf4fb; border-color: #2980b9; }
+    .callout.warn { background: #fef9e7; border-color: #f39c12; }
+    .callout.success { background: #eafaf1; border-color: #27ae60; }
+    .callout.danger { background: #fdf0f0; border-color: #e74c3c; }
+    .callout strong { display: block; margin-bottom: 4px; }
+
+    /* ── STEP BLOCKS ── */
+    .steps { counter-reset: step; }
+    .step {
+      background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+      padding: 20px 24px 20px 72px; margin-bottom: 16px; position: relative;
+    }
+    .step::before {
+      counter-increment: step;
+      content: counter(step);
+      position: absolute; left: 20px; top: 50%; transform: translateY(-50%);
+      width: 36px; height: 36px; background: var(--primary); color: #fff;
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 16px;
+    }
+    .step h4 { margin-top: 0; }
+
+    /* ── TABLE ── */
+    table { width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 16px; }
+    th { background: var(--primary); color: #fff; padding: 10px 14px; text-align: left; }
+    td { padding: 10px 14px; border: 1px solid var(--border); }
+    tr:nth-child(even) td { background: #f8f9fb; }
+
+    /* ── BADGE ── */
+    .tag {
+      display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 700;
+      letter-spacing: 0.5px; margin-right: 4px;
+    }
+    .tag.be { background: #dbeafe; color: #1e40af; }
+    .tag.fe { background: #dcfce7; color: #166534; }
+    .tag.db { background: #fce7f3; color: #9d174d; }
+    .tag.infra { background: #fef3c7; color: #92400e; }
+
+    /* ── FEATURES ── */
+    .feature-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+    .feature-item { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; }
+    .feature-item .f-icon { font-size: 22px; margin-bottom: 8px; }
+    .feature-item .f-title { font-weight: 700; margin-bottom: 4px; }
+    .feature-item .f-desc { font-size: 13px; color: #666; }
+
+    /* ── API TABLE ── */
+    .endpoint-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 14px; }
+    .endpoint-table th { background: #2c3e6b; color: #fff; padding: 9px 12px; text-align: left; }
+    .endpoint-table td { padding: 9px 12px; border: 1px solid var(--border); }
+    .endpoint-table tr:nth-child(even) td { background: #f8f9fb; }
+    .method { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 11px; font-weight: 700; }
+    .method.get { background: #dcfce7; color: #166534; }
+    .method.post { background: #dbeafe; color: #1e40af; }
+    .method.put { background: #fef3c7; color: #92400e; }
+    .method.delete { background: #fee2e2; color: #991b1b; }
+    .method.patch { background: #ede9fe; color: #5b21b6; }
+
+    /* ── FOOTER ── */
+    footer { text-align: center; padding: 40px 0 24px; font-size: 13px; color: #aaa; background: #1e2533; color: #888; }
+    footer p { margin-bottom: 6px; }
+    footer strong { color: #ccc; }
+
+    @media (max-width: 900px) {
+      .sidebar { display: none; }
+      .main { padding: 24px 20px; }
+      .hero { padding: 40px 24px; }
+      .hero h1 { font-size: 28px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══ HERO ══════════════════════════════════════════════════════════════════════ -->
+<div class="hero">
+  <div class="hero-label">Official Documentation</div>
+  <h1>MyHigh5 Platform<br>Developer Guide &amp; Documentation</h1>
+  <p>A comprehensive reference covering the project architecture, technology stack, platform features, API reference, and step-by-step developer setup instructions.</p>
+  <div class="hero-meta">
+    <div class="hero-meta-item"><label>Version</label><span>1.0 (May 2026)</span></div>
+    <div class="hero-meta-item"><label>Backend</label><span>FastAPI (Python 3.11+)</span></div>
+    <div class="hero-meta-item"><label>Frontend</label><span>Next.js 14 / React 18</span></div>
+    <div class="hero-meta-item"><label>Database</label><span>PostgreSQL (Neon) + Redis</span></div>
+  </div>
+</div>
+
+<!-- ══ LAYOUT ══════════════════════════════════════════════════════════════════ -->
+<div class="container">
+
+  <!-- SIDEBAR -->
+  <nav class="sidebar">
+    <div class="sidebar-title">Getting Started</div>
+    <a href="#overview">Project Overview</a>
+    <a href="#features">Platform Features</a>
+
+    <div class="sidebar-title">Technology</div>
+    <a href="#tech-backend">Backend Stack</a>
+    <a href="#tech-frontend">Frontend Stack</a>
+    <a href="#tech-infra">Infrastructure</a>
+    <a href="#tech-integrations">Integrations</a>
+
+    <div class="sidebar-title">Architecture</div>
+    <a href="#architecture">System Architecture</a>
+    <a href="#database">Database Design</a>
+    <a href="#auth">Auth &amp; Security</a>
+
+    <div class="sidebar-title">Developer Setup</div>
+    <a href="#prereqs">Prerequisites</a>
+    <a href="#setup-backend">Backend Setup</a>
+    <a href="#setup-frontend">Frontend Setup</a>
+    <a href="#env-vars">Environment Variables</a>
+    <a href="#running">Running the App</a>
+    <a href="#migrations">Database Migrations</a>
+    <a href="#celery">Celery Workers</a>
+
+    <div class="sidebar-title">API Reference</div>
+    <a href="#api-overview">API Overview</a>
+    <a href="#api-auth">Auth Endpoints</a>
+    <a href="#api-contests">Contest Endpoints</a>
+    <a href="#api-media">Media Endpoints</a>
+    <a href="#api-payments">Payment Endpoints</a>
+    <a href="#api-admin">Admin Endpoints</a>
+
+    <div class="sidebar-title">Deployment</div>
+    <a href="#deploy">Deployment Guide</a>
+    <a href="#scripts">Utility Scripts</a>
+  </nav>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <!-- 1. PROJECT OVERVIEW -->
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <section class="section" id="overview">
+      <div class="section-title"><span class="icon">&#127942;</span> Project Overview</div>
+
+      <p><strong>MyHigh5</strong> is a multilingual, feature-rich online contest and voting platform. It enables individuals and organisations to create competitions, register contestants, manage voting rounds, process payments (fiat and cryptocurrency), verify identities via KYC, and run affiliate marketing campaigns — all under a single, unified platform.</p>
+
+      <div class="card">
+        <h3>What is MyHigh5?</h3>
+        <p>MyHigh5 is designed as a global contest platform where:</p>
+        <ul>
+          <li><strong>Contest Organisers</strong> create and manage competitions with configurable rules, voting types, entry fees, and prize structures.</li>
+          <li><strong>Contestants</strong> register, upload media (photos/videos), undergo identity verification, and compete for prizes and rankings.</li>
+          <li><strong>Voters</strong> discover, follow, and vote for their favourite contestants.</li>
+          <li><strong>Affiliates</strong> earn commissions through a 10-level multi-tier referral system.</li>
+          <li><strong>Advertisers</strong> reach the audience through an integrated sponsor/advertising system (Annual Ads).</li>
+          <li><strong>Administrators</strong> manage the entire platform: users, contests, KYC reviews, financial reports, and content moderation.</li>
+        </ul>
+      </div>
+
+      <div class="callout info">
+        <strong>Project Codename:  mh5 </strong>
+      </div>
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <!-- 2. PLATFORM FEATURES -->
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <section class="section" id="features">
+      <div class="section-title"><span class="icon">&#10024;</span> Platform Features</div>
+
+      <div class="feature-list">
+        <div class="feature-item">
+          <div class="f-icon">&#127942;</div>
+          <div class="f-title">Contest Management</div>
+          <div class="f-desc">Create, configure, and manage contests with custom voting types, age restrictions, media limits, prize structures, and multi-round seasons.</div>
+        </div>
+        <div class="feature-item">
+          <div class="f-icon">&#128100;</div>
+          <div class="f-title">Contestant Profiles</div>
+          <div class="f-desc">Contestant registration, selfie/voice/video verification, media uploads, ranking leaderboards, and fan following.</div>
+        </div>
+        <div class="feature-item">
+          <div class="f-icon">&#128242;</div>
+          <div class="f-title">KYC Identity Verification</div>
+          <div class="f-desc">Shufti Pro integration for identity documents, face matching, and address proof verification with full audit trail.</div>
+        </div>
+        <div class="feature-item">
+          <div class="f-icon">&#128176;</div>
+          <div class="f-title">Payments &amp; Wallet</div>
+          <div class="f-desc">Multi-currency payments: fiat + BSC/USDT, Ethereum, Solana, and Bitcoin. Internal wallet with DSP (Digital Shopping Points) system.</div>
+        </div>
+        <div class="feature-item">
+          <div class="f-icon">&#128279;</div>
+          <div class="f-title">10-Level Affiliate System</div>
+          <div class="f-desc">Multi-tier affiliate tree with automated commission distribution, referral codes, and real-time tracking.</div>
+        </div>
+        <div class="feature-item">
+          <div class="f-icon">&#128172;</div>
+          <div class="f-title">Private &amp; Group Messaging</div>
+          <div class="f-desc">End-to-end encrypted direct messages and WhatsApp-style group chats with real-time delivery via Socket.IO.</div>
+        </div>
+        <div class="feature-item">
+          <div class="f-icon">&#128248;</div>
+          <div class="f-title">Social Features</div>
+          <div class="f-desc">Posts, comments, reactions, shares, following, fan clubs, social groups, and a personalised activity feed.</div>
+        </div>
+        <div class="feature-item">
+          <div class="f-icon">&#128202;</div>
+          <div class="f-title">Analytics Dashboard</div>
+          <div class="f-desc">User engagement metrics, contest performance, voting analytics, and revenue reporting with Recharts visualisations.</div>
+        </div>
+        <div class="feature-item">
+          <div class="f-icon">&#128366;</div>
+          <div class="f-title">Accounting Engine</div>
+          <div class="f-desc">CPA Canada–compliant double-entry accounting with Chart of Accounts, Journal Entries, and automated financial reports.</div>
+        </div>
+        <div class="feature-item">
+          <div class="f-icon">&#128269;</div>
+          <div class="f-title">Content Moderation</div>
+          <div class="f-desc">Optional Sightengine integration for NSFW/violence detection. User reporting system for community moderation.</div>
+        </div>
+        <div class="feature-item">
+          <div class="f-icon">&#127758;</div>
+          <div class="f-title">Multilingual &amp; Geographic</div>
+          <div class="f-desc">Full geographic data (continents, regions, countries, cities). AI-powered translation via Cursor/OpenAI.</div>
+        </div>
+        <div class="feature-item">
+          <div class="f-icon">&#128337;</div>
+          <div class="f-title">Voting System</div>
+          <div class="f-desc">Configurable voting types per contest, 1–5 position rankings, vote history, and real-time leaderboard updates.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <!-- 3. BACKEND TECHNOLOGY -->
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <section class="section" id="tech-backend">
+      <div class="section-title"><span class="icon">&#9881;</span> Backend Technology Stack</div>
+      <p><span class="tag be">Backend</span> Python 3.11+ · FastAPI · PostgreSQL</p>
+
+      <div class="tech-grid">
+        <div class="tech-card">
+          <div class="tech-name">FastAPI</div>
+          <div class="tech-version">v0.123.5</div>
+          <div class="tech-desc">High-performance async REST API framework with automatic OpenAPI documentation generation.</div>
+        </div>
+        <div class="tech-card">
+          <div class="tech-name">SQLAlchemy</div>
+          <div class="tech-version">v2.0.44</div>
+          <div class="tech-desc">ORM for database models using modern Mapped[] type annotations. Supports async operations.</div>
+        </div>
+        <div class="tech-card">
+          <div class="tech-name">Alembic</div>
+          <div class="tech-version">Latest</div>
+          <div class="tech-desc">Database migration framework. Auto-runs on startup via <code>alembic upgrade heads</code>.</div>
+        </div>
+        <div class="tech-card">
+          <div class="tech-name">Pydantic</div>
+          <div class="tech-version">v2.12.5</div>
+          <div class="tech-desc">Data validation and settings management using Python type annotations.</div>
+        </div>
+        <div class="tech-card">
+          <div class="tech-name">Uvicorn</div>
+          <div class="tech-version">Latest</div>
+          <div class="tech-desc">ASGI server for serving the FastAPI application in production and development.</div>
+        </div>
+        <div class="tech-card">
+          <div class="tech-name">Celery</div>
+          <div class="tech-version">v5.3.4</div>
+          <div class="tech-desc">Distributed task queue for background jobs: payment processing, email notifications, scheduled tasks.</div>
+        </div>
+        <div class="tech-card">
+          <div class="tech-name">Redis</div>
+          <div class="tech-version">Latest</div>
+          <div class="tech-desc">Celery broker, result backend, and caching layer for search results and session data.</div>
+        </div>
+        <div class="tech-card">
+          <div class="tech-name">Python-Jose</div>
+          <div class="tech-version">Latest</div>
+          <div class="tech-desc">JWT token creation and validation using HS256 algorithm.</div>
+        </div>
+        <div class="tech-card">
+          <div class="tech-name">bcrypt</div>
+          <div class="tech-version">v4.1.2</div>
+          <div class="tech-desc">Password hashing with 12 salt rounds. Used via passlib for secure credential storage.</div>
+        </div>
+        <div class="tech-card">
+          <div class="tech-name">Pillow</div>
+          <div class="tech-version">v12.0.0</div>
+          <div class="tech-desc">Image processing library for uploaded media. Handles image validation and optimisation.</div>
+        </div>
+        <div class="tech-card">
+          <div class="tech-name">Boto3</div>
+          <div class="tech-version">v1.28.56</div>
+          <div class="tech-desc">AWS SDK for S3 object storage — used for production media file storage.</div>
+        </div>
+        <div class="tech-card">
+          <div class="tech-name">Python-SocketIO</div>
+          <div class="tech-version">v5.11.0</div>
+          <div class="tech-desc">WebSocket support for real-time messaging, notifications, and live updates.</div>
+        </div>
+        <div class="tech-card">
+          <div class="tech-name">PyNaCl</div>
+          <div class="tech-version">v1.5.0</div>
+          <div class="tech-desc">End-to-end encryption for private messages using NaCl cryptographic primitives.</div>
+        </div>
+        <div class="tech-card">
+          <div class="tech-name">Resend</div>
+          <div class="tech-version">v2.19.0</div>
+          <div class="tech-desc">Transactional email service API. Sends verification emails, password resets, and notifications.</div>
+        </div>
+        <div class="tech-card">
+          <div class="tech-name">Strawberry GraphQL</div>
+          <div class="tech-version">Latest</div>
+          <div class="tech-desc">Optional GraphQL endpoint alongside the REST API. Can be disabled via configuration.</div>
+        </div>
+        <div class="tech-card">
+          <div class="tech-name">Web3.py / Ethers</div>
+          <div class="tech-version">Latest</div>
+          <div class="tech-desc">On-chain payment verification for BSC/USDT smart contract interactions.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <!-- 4. FRONTEND TECHNOLOGY -->
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <section class="section" id="tech-frontend">
+      <div class="section-title"><span class="icon">&#127760;</span> Frontend Technology Stack</div>
+      <p><span class="tag fe">Frontend</span> TypeScript · React 18 · Next.js 14</p>
+
+      <div class="tech-grid">
+        <div class="tech-card">
+          <div class="tech-name">Next.js</div>
+          <div class="tech-version">v14.2.35</div>
+          <div class="tech-desc">React framework with App Router, server-side rendering, and static site generation capabilities.</div>
+        </div>
+        <div class="tech-card">
+          <div class="tech-name">React</div>
+          <div class="tech-version">v18</div>
+          <div class="tech-desc">UI library with hooks, context API for state management, and concurrent rendering features.</div>
+        </div>
+        <div class="tech-card">
+          <div class="tech-name">TypeScript</div>
+          <div class="tech-version">v5</div>
+          <div class="tech-desc">Static type checking across all frontend code for improved maintainability and developer experience.</div>
+        </div>
+        <div class="tech-card">
+          <div class="tech-name">Tailwind CSS</div>
+          <div class="tech-version">v3.3.0</div>
+          <div class="tech-desc">Utility-first CSS framework for rapid UI development. Custom theme configuration applied.</div>
+        </div>
+        <div class="tech-card">
+          <div class="tech-name">Radix UI</div>
+          <div class="tech-version">v1</div>
+          <div class="tech-desc">Accessible, unstyled component primitives: dialogs, dropdowns, tooltips, tabs, select menus.</div>
+        </div>
+        <div class="tech-card">
+          <div class="tech-name">Axios</div>
+          <div class="tech-version">v1.13.4</div>
+          <div class="tech-desc">HTTP client for all API calls to the FastAPI backend. Used with Bearer token authentication.</div>
+        </div>
+        <div class="tech-card">
+          <div class="tech-name">Socket.io-client</div>
+          <div class="tech-version">v4.8.3</div>
+          <div class="tech-desc">WebSocket client for real-time messaging, live contest updates, and notifications.</div>
+        </div>
+        <div class="tech-card">
+          <div class="tech-name">Reown AppKit</div>
+          <div class="tech-version">v1.8.19</div>
+          <div class="tech-desc">WalletConnect integration for connecting Web3 wallets (MetaMask, etc.) for crypto payments.</div>
+        </div>
+        <div class="tech-card">
+          <div class="tech-name">Ethers.js</div>
+          <div class="tech-version">v6.16.0</div>
+          <div class="tech-desc">Ethereum/BSC blockchain interaction library for initiating crypto payment transactions.</div>
+        </div>
+        <div class="tech-card">
+          <div class="tech-name">Recharts</div>
+          <div class="tech-version">v3.5.0</div>
+          <div class="tech-desc">Composable charting library for analytics dashboards and contest performance visualisations.</div>
+        </div>
+        <div class="tech-card">
+          <div class="tech-name">QRCode.react</div>
+          <div class="tech-version">v4.2.0</div>
+          <div class="tech-desc">QR code generation for referral links, wallet addresses, and sharing features.</div>
+        </div>
+        <div class="tech-card">
+          <div class="tech-name">Lucide React</div>
+          <div class="tech-version">v0.294.0</div>
+          <div class="tech-desc">Comprehensive icon library providing consistent iconography throughout the UI.</div>
+        </div>
+        <div class="tech-card">
+          <div class="tech-name">Sharp</div>
+          <div class="tech-version">v0.34.5</div>
+          <div class="tech-desc">High-performance image processing for Next.js Image optimisation.</div>
+        </div>
+        <div class="tech-card">
+          <div class="tech-name">UploadThing</div>
+          <div class="tech-version">v7.3.3</div>
+          <div class="tech-desc">File upload component library integrated with the backend media API.</div>
+        </div>
+        <div class="tech-card">
+          <div class="tech-name">ESLint</div>
+          <div class="tech-version">Latest</div>
+          <div class="tech-desc">JavaScript/TypeScript linting with the Next.js recommended configuration.</div>
+        </div>
+        <div class="tech-card">
+          <div class="tech-name">PostCSS</div>
+          <div class="tech-version">Latest</div>
+          <div class="tech-desc">CSS post-processing for Tailwind compilation and autoprefixing.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <!-- 5. INFRASTRUCTURE -->
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <section class="section" id="tech-infra">
+      <div class="section-title"><span class="icon">&#9729;</span> Infrastructure &amp; Services</div>
+      <p><span class="tag infra">Infrastructure</span> Cloud-native · Containerisable</p>
+
+      <div class="tech-grid">
+        <div class="tech-card">
+          <div class="tech-name">PostgreSQL</div>
+          <div class="tech-version">Neon Serverless</div>
+          <div class="tech-desc">Primary relational database. Hosted on Neon (serverless PostgreSQL). SSL required. Connection pooling: 5 base + 10 overflow.</div>
+        </div>
+        <div class="tech-card">
+          <div class="tech-name">Redis</div>
+          <div class="tech-version">Latest</div>
+          <div class="tech-desc">Used as Celery broker, result backend, and caching layer for search and session data.</div>
+        </div>
+        <div class="tech-card">
+          <div class="tech-name">AWS S3</div>
+          <div class="tech-version">via boto3</div>
+          <div class="tech-desc">Production object storage for user-uploaded media files and KYC documents.</div>
+        </div>
+        <div class="tech-card">
+          <div class="tech-name">Vercel</div>
+          <div class="tech-version">Frontend Host</div>
+          <div class="tech-desc">Frontend Next.js deployment with automatic preview deployments on each PR.</div>
+        </div>
+        <div class="tech-card">
+          <div class="tech-name">Render</div>
+          <div class="tech-version">Backend Host</div>
+          <div class="tech-desc">Backend FastAPI deployment. Auto-deploys from main branch. Free tier with sleep on inactivity.</div>
+        </div>
+        <div class="tech-card">
+          <div class="tech-name">Alembic Migrations</div>
+          <div class="tech-version">Auto on startup</div>
+          <div class="tech-desc">Database schema migrations run automatically when the backend application starts.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <!-- 6. INTEGRATIONS -->
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <section class="section" id="tech-integrations">
+      <div class="section-title"><span class="icon">&#128279;</span> Third-Party Integrations</div>
+
+      <table>
+        <tr>
+          <th>Service</th>
+          <th>Purpose</th>
+          <th>Required Credentials</th>
+          <th>Notes</th>
+        </tr>
+        <tr>
+          <td><strong>Shufti Pro</strong></td>
+          <td>KYC identity verification</td>
+          <td><code>SHUFTI_CLIENT_ID</code>, <code>SHUFTI_SECRET_KEY</code></td>
+          <td>Webhook callback for verification results</td>
+        </tr>
+        <tr>
+          <td><strong>Resend</strong></td>
+          <td>Transactional email</td>
+          <td><code>RESEND_API_KEY</code></td>
+          <td>Primary email provider; falls back to SMTP</td>
+        </tr>
+        <tr>
+          <td><strong>Sightengine</strong></td>
+          <td>Content moderation (optional)</td>
+          <td><code>SIGHTENGINE_API_USER</code>, <code>SIGHTENGINE_API_KEY</code></td>
+          <td>Detects NSFW / violent content in uploads</td>
+        </tr>
+        <tr>
+          <td><strong>OpenAI</strong></td>
+          <td>AI features / translation (optional)</td>
+          <td><code>OPENAI_API_KEY</code></td>
+          <td>Content classification and translation</td>
+        </tr>
+        <tr>
+          <td><strong>Annual Ads</strong></td>
+          <td>Sponsor advertising platform</td>
+          <td><code>ANNUALADS_SSO_SECRET</code>, <code>ANNUALADS_TENANT_ID</code>, <code>ANNUALADS_API_KEY</code>, <code>ANNUALADS_WEBHOOK_SECRET</code></td>
+          <td>SSO embed + payment webhook integration</td>
+        </tr>
+        <tr>
+          <td><strong>Reown / WalletConnect</strong></td>
+          <td>Web3 wallet connection</td>
+          <td><code>NEXT_PUBLIC_REOWN_PROJECT_ID</code></td>
+          <td>Enables MetaMask and other wallet connections</td>
+        </tr>
+        <tr>
+          <td><strong>BSC Smart Contract</strong></td>
+          <td>USDT crypto payments</td>
+          <td><code>BSC_RPC_URL</code>, <code>BSC_PAYMENT_CONTRACT</code></td>
+          <td>On-chain payment verification</td>
+        </tr>
+        <tr>
+          <td><strong>AWS S3</strong></td>
+          <td>Media / file storage</td>
+          <td><code>AWS_ACCESS_KEY_ID</code>, <code>AWS_SECRET_ACCESS_KEY</code>, <code>AWS_S3_BUCKET</code></td>
+          <td>Production storage backend</td>
+        </tr>
+      </table>
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <!-- 7. ARCHITECTURE -->
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <section class="section" id="architecture">
+      <div class="section-title"><span class="icon">&#127963;</span> System Architecture</div>
+
+      <div class="card">
+        <h3>High-Level Architecture</h3>
+        <pre>
+┌─────────────────────────────────────────────────────────────────┐
+│                         CLIENT LAYER                            │
+│   Browser (Next.js / React)   Mobile   Third-party Webhooks     │
+└──────────────┬──────────────────────┬──────────────────────────┘
+               │ HTTPS                │ Webhooks (HMAC-verified)
+               ▼                      ▼
+┌──────────────────────────────────────────────────────────────── ┐
+│                     API GATEWAY LAYER                            │
+│          FastAPI (uvicorn)  ·  /api/v1  ·  CORS Middleware      │
+│          JWT Authentication · RBAC · Pydantic Validation         │
+└────────┬─────────────────────────┬───────────────────┬──────────┘
+         │                         │                   │
+         ▼                         ▼                   ▼
+┌─────────────┐          ┌──────────────────┐  ┌─────────────────┐
+│  PostgreSQL │          │  Redis           │  │  File Storage   │
+│  (Neon DB)  │          │  Cache / Celery  │  │  Local / S3     │
+│  36 models  │          │  Background jobs │  │  Media / KYC    │
+└─────────────┘          └──────────────────┘  └─────────────────┘
+         │                         │
+         ▼                         ▼
+┌──────────────────────────────────────────┐
+│          EXTERNAL SERVICES               │
+│  Shufti Pro (KYC)  ·  Resend (Email)     │
+│  BSC Blockchain    ·  Annual Ads         │
+│  Sightengine       ·  OpenAI             │
+└──────────────────────────────────────────┘</pre>
+      </div>
+
+      <div class="card">
+        <h3>Request Lifecycle</h3>
+        <ol>
+          <li><strong>Client</strong> sends HTTP request with <code>Authorization: Bearer &lt;JWT&gt;</code> header.</li>
+          <li><strong>CORS Middleware</strong> validates the request origin against the allowlist.</li>
+          <li><strong>FastAPI Router</strong> matches the route and calls the endpoint function.</li>
+          <li><strong>Dependency Injection</strong> (<code>get_current_user</code>) decodes and validates the JWT, loads the user from PostgreSQL.</li>
+          <li><strong>RBAC Check</strong> verifies the user has the required permission for the endpoint.</li>
+          <li><strong>Pydantic</strong> validates the request body/query params against the schema.</li>
+          <li><strong>Business Logic</strong> executes, querying PostgreSQL via SQLAlchemy ORM.</li>
+          <li><strong>Background Tasks</strong> (if needed) are dispatched to Celery via Redis.</li>
+          <li><strong>Response</strong> is serialised by Pydantic and returned as JSON.</li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <!-- 8. DATABASE DESIGN -->
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <section class="section" id="database">
+      <div class="section-title"><span class="icon">&#128196;</span> Database Design</div>
+      <p><span class="tag db">Database</span> PostgreSQL · SQLAlchemy 2.0 ORM · 36 Models</p>
+
+      <h3>Model Groups</h3>
+      <table>
+        <tr>
+          <th>Domain</th>
+          <th>Key Models</th>
+          <th>Description</th>
+        </tr>
+        <tr>
+          <td><strong>Users &amp; Auth</strong></td>
+          <td>User, Role, Permission, LoginLog</td>
+          <td>User accounts, RBAC roles/permissions, login audit trail</td>
+        </tr>
+        <tr>
+          <td><strong>KYC</strong></td>
+          <td>KYCVerification, KYCDocument, KYCAuditLog</td>
+          <td>Identity verification lifecycle with full audit trail</td>
+        </tr>
+        <tr>
+          <td><strong>Contests</strong></td>
+          <td>Contest, Contestant, Round, VotingType, Prize</td>
+          <td>Competition engine with rounds, voting, and prizes</td>
+        </tr>
+        <tr>
+          <td><strong>Voting</strong></td>
+          <td>Voting, VoteRanking</td>
+          <td>Vote records and leaderboard rankings</td>
+        </tr>
+        <tr>
+          <td><strong>Media</strong></td>
+          <td>Media</td>
+          <td>User-uploaded images and videos with storage metadata</td>
+        </tr>
+        <tr>
+          <td><strong>Payments</strong></td>
+          <td>Payment, Deposit, Wallet, DSPWallet, Transaction</td>
+          <td>Fiat and crypto payment records, internal wallet system</td>
+        </tr>
+        <tr>
+          <td><strong>Affiliates</strong></td>
+          <td>Affiliate, AffiliateTree, AffiliateCommission, ReferralCode</td>
+          <td>10-level referral tree with commission tracking</td>
+        </tr>
+        <tr>
+          <td><strong>Messaging</strong></td>
+          <td>PrivateConversation, PrivateMessage, SocialGroup, GroupMessage</td>
+          <td>Direct and group messaging with E2E encryption keys</td>
+        </tr>
+        <tr>
+          <td><strong>Social</strong></td>
+          <td>Post, PostComment, PostReaction, Follow, FanClub</td>
+          <td>Social feed, posts, reactions, following, and clubs</td>
+        </tr>
+        <tr>
+          <td><strong>Accounting</strong></td>
+          <td>ChartOfAccounts, JournalEntry, JournalLine, TaxConfiguration</td>
+          <td>CPA Canada–compliant double-entry bookkeeping</td>
+        </tr>
+        <tr>
+          <td><strong>Geography</strong></td>
+          <td>Country, Region, Continent, City</td>
+          <td>Global geographic reference data</td>
+        </tr>
+        <tr>
+          <td><strong>Notifications</strong></td>
+          <td>Notification, Newsletter</td>
+          <td>User notifications and email subscription management</td>
+        </tr>
+      </table>
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <!-- 9. AUTH & SECURITY -->
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <section class="section" id="auth">
+      <div class="section-title"><span class="icon">&#128274;</span> Authentication &amp; Security</div>
+
+      <h3>Authentication Flow</h3>
+      <div class="steps">
+        <div class="step">
+          <h4>User Registration</h4>
+          <p>User submits email, password, and optional sponsor code to <code>POST /api/v1/auth/register</code>. Password is hashed with bcrypt (12 rounds). A verification email is sent via Resend.</p>
+        </div>
+        <div class="step">
+          <h4>Email Verification</h4>
+          <p>User clicks the link in the verification email. Token is valid for 24 hours. Account becomes active after verification.</p>
+        </div>
+        <div class="step">
+          <h4>Login</h4>
+          <p>User submits credentials to <code>POST /api/v1/auth/login</code> (OAuth2 password form). Server validates password hash, generates a JWT token (HS256, 7-day expiry), and returns it.</p>
+        </div>
+        <div class="step">
+          <h4>Authenticated Requests</h4>
+          <p>Client includes <code>Authorization: Bearer &lt;token&gt;</code> header on all subsequent requests. The <code>get_current_active_user</code> dependency validates the token on every request.</p>
+        </div>
+      </div>
+
+      <h3>Role-Based Access Control (RBAC)</h3>
+      <div class="card">
+        <p>The platform uses a hierarchical RBAC system:</p>
+        <ul>
+          <li><strong>Roles</strong> are assigned to users and can inherit from parent roles.</li>
+          <li><strong>Permissions</strong> are string-named capabilities (e.g., <code>manage_contests</code>, <code>approve_kyc</code>).</li>
+          <li><strong>Admin</strong> roles have an <code>'all'</code> permission that bypasses individual permission checks.</li>
+          <li>Endpoint protection uses <code>PermissionChecker</code> dependency: <code>require_permission("manage_contests")</code>.</li>
+        </ul>
+        <pre># Example dependency usage in an endpoint:
+@router.post("/admin/contests")
+async def create_admin_contest(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("manage_contests"))
+):</pre>
+      </div>
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <!-- 10. PREREQUISITES -->
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <section class="section" id="prereqs">
+      <div class="section-title"><span class="icon">&#128203;</span> Prerequisites</div>
+
+      <div class="callout warn">
+        <strong>Important:</strong> Ensure all tools below are installed before starting the setup process.
+      </div>
+
+      <table>
+        <tr>
+          <th>Tool</th>
+          <th>Minimum Version</th>
+          <th>Purpose</th>
+          <th>Install</th>
+        </tr>
+        <tr>
+          <td><strong>Python</strong></td>
+          <td>3.11+</td>
+          <td>Backend runtime</td>
+          <td><code>python.org/downloads</code></td>
+        </tr>
+        <tr>
+          <td><strong>pip</strong></td>
+          <td>23+</td>
+          <td>Python package manager</td>
+          <td>Bundled with Python</td>
+        </tr>
+        <tr>
+          <td><strong>Node.js</strong></td>
+          <td>18+ (LTS)</td>
+          <td>Frontend runtime</td>
+          <td><code>nodejs.org</code></td>
+        </tr>
+        <tr>
+          <td><strong>npm</strong></td>
+          <td>9+</td>
+          <td>Node package manager</td>
+          <td>Bundled with Node.js</td>
+        </tr>
+        <tr>
+          <td><strong>PostgreSQL</strong></td>
+          <td>14+</td>
+          <td>Primary database</td>
+          <td><code>postgresql.org</code> or use Neon cloud</td>
+        </tr>
+        <tr>
+          <td><strong>Redis</strong></td>
+          <td>6+</td>
+          <td>Celery broker / cache</td>
+          <td><code>redis.io</code> or Docker: <code>docker run -d -p 6379:6379 redis</code></td>
+        </tr>
+        <tr>
+          <td><strong>Git</strong></td>
+          <td>2.30+</td>
+          <td>Version control</td>
+          <td><code>git-scm.com</code></td>
+        </tr>
+      </table>
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <!-- 11. BACKEND SETUP -->
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <section class="section" id="setup-backend">
+      <div class="section-title"><span class="icon">&#9881;</span> Backend Setup</div>
+
+      <div class="steps">
+        <div class="step">
+          <h4>Navigate to the backend directory</h4>
+          <pre>cd D:\laragon\www\mh5\backend</pre>
+        </div>
+        <div class="step">
+          <h4>Create and activate a Python virtual environment</h4>
+          <pre># Windows (PowerShell)
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+
+# macOS / Linux
+python3 -m venv venv
+source venv/bin/activate</pre>
+        </div>
+        <div class="step">
+          <h4>Install Python dependencies</h4>
+          <pre>pip install -r requirements.txt</pre>
+          <p>This installs FastAPI, SQLAlchemy, Alembic, Celery, and all other backend dependencies.</p>
+        </div>
+        <div class="step">
+          <h4>Create the environment file</h4>
+          <pre># Copy the example env file (if present) or create .env manually:
+copy .env.example .env   # Windows
+cp .env.example .env     # macOS/Linux
+
+# Edit the file and fill in all required variables (see Environment Variables section)</pre>
+        </div>
+        <div class="step">
+          <h4>Verify database connectivity</h4>
+          <pre>python -c "from app.db.session import engine; print('DB OK')"</pre>
+        </div>
+        <div class="step">
+          <h4>Run database migrations (optional – auto-runs on startup)</h4>
+          <pre>alembic upgrade heads</pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <!-- 12. FRONTEND SETUP -->
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <section class="section" id="setup-frontend">
+      <div class="section-title"><span class="icon">&#127760;</span> Frontend Setup</div>
+
+      <div class="steps">
+        <div class="step">
+          <h4>Navigate to the frontend directory</h4>
+          <pre>cd D:\laragon\www\mh5\frontend</pre>
+        </div>
+        <div class="step">
+          <h4>Install Node.js dependencies</h4>
+          <pre>npm install</pre>
+          <p>This installs Next.js, React, Tailwind CSS, Radix UI components, and all other frontend dependencies.</p>
+        </div>
+        <div class="step">
+          <h4>Create the local environment file</h4>
+          <pre># Create .env.local (this file is NOT committed to git):
+# Windows PowerShell
+New-Item -Name ".env.local" -ItemType File
+
+# macOS / Linux
+touch .env.local</pre>
+          <p>Add the following minimum variables:</p>
+          <pre>NEXT_PUBLIC_API_URL=http://localhost:8000
+IS_MAINTENANCE_MODE=false
+NEXT_PUBLIC_REOWN_PROJECT_ID=&lt;your_project_id&gt;</pre>
+        </div>
+        <div class="step">
+          <h4>Verify the configuration</h4>
+          <pre>npm run build   # Should complete without errors</pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <!-- 13. ENVIRONMENT VARIABLES -->
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <section class="section" id="env-vars">
+      <div class="section-title"><span class="icon">&#128295;</span> Environment Variables</div>
+
+      <div class="callout danger">
+        <strong>Security Warning:</strong> Never commit <code>.env</code> files to git. Store production secrets in your deployment platform's secrets manager (Vercel Dashboard, Render Environment, AWS Secrets Manager).
+      </div>
+
+      <h3>Backend Environment Variables (<code>backend/.env</code>)</h3>
+      <table>
+        <tr><th>Variable</th><th>Required</th><th>Default</th><th>Description</th></tr>
+        <tr><td><code>SECRET_KEY</code></td><td>&#10004; YES</td><td>—</td><td>JWT signing secret. Generate with: <code>python -c "import secrets; print(secrets.token_hex(32))"</code></td></tr>
+        <tr><td><code>DATABASE_URL</code></td><td>&#10004; YES</td><td>—</td><td>PostgreSQL connection string: <code>postgresql://user:pass@host/dbname</code></td></tr>
+        <tr><td><code>REDIS_HOST</code></td><td>&#10004; YES</td><td><code>localhost</code></td><td>Redis hostname</td></tr>
+        <tr><td><code>REDIS_PORT</code></td><td>No</td><td><code>6379</code></td><td>Redis port</td></tr>
+        <tr><td><code>RESEND_API_KEY</code></td><td>&#10004; YES</td><td>—</td><td>Resend email service API key</td></tr>
+        <tr><td><code>EMAIL_FROM</code></td><td>No</td><td><code>infos@myhigh5.com</code></td><td>Sender email address</td></tr>
+        <tr><td><code>FRONTEND_URL</code></td><td>No</td><td><code>http://localhost:3001</code></td><td>Frontend URL (for email links)</td></tr>
+        <tr><td><code>BACKEND_PUBLIC_URL</code></td><td>No</td><td>—</td><td>Backend public URL (for KYC callbacks)</td></tr>
+        <tr><td><code>STORAGE_TYPE</code></td><td>No</td><td><code>local</code></td><td><code>local</code>, <code>s3</code>, or <code>azure</code></td></tr>
+        <tr><td><code>LOCAL_STORAGE_PATH</code></td><td>No</td><td><code>./media</code></td><td>Local storage directory path</td></tr>
+        <tr><td><code>AWS_S3_BUCKET</code></td><td>If S3</td><td>—</td><td>S3 bucket name</td></tr>
+        <tr><td><code>AWS_REGION</code></td><td>If S3</td><td><code>us-east-1</code></td><td>AWS region</td></tr>
+        <tr><td><code>AWS_ACCESS_KEY_ID</code></td><td>If S3</td><td>—</td><td>AWS access key</td></tr>
+        <tr><td><code>AWS_SECRET_ACCESS_KEY</code></td><td>If S3</td><td>—</td><td>AWS secret key</td></tr>
+        <tr><td><code>SHUFTI_CLIENT_ID</code></td><td>For KYC</td><td>—</td><td>Shufti Pro client ID</td></tr>
+        <tr><td><code>SHUFTI_SECRET_KEY</code></td><td>For KYC</td><td>—</td><td>Shufti Pro secret key</td></tr>
+        <tr><td><code>MASTER_ENCRYPTION_KEY</code></td><td>&#10004; YES</td><td>—</td><td>Master key for E2E message encryption</td></tr>
+        <tr><td><code>ENCRYPTION_KEY_DERIVATION_SALT</code></td><td>&#10004; YES</td><td>—</td><td>Salt for key derivation (must not use default)</td></tr>
+        <tr><td><code>ALGORITHM</code></td><td>No</td><td><code>HS256</code></td><td>JWT algorithm</td></tr>
+        <tr><td><code>ACCESS_TOKEN_EXPIRE_MINUTES</code></td><td>No</td><td><code>10080</code></td><td>Token expiry in minutes (7 days)</td></tr>
+        <tr><td><code>BACKEND_CORS_ORIGINS</code></td><td>No</td><td>localhost origins</td><td>Comma-separated allowed origins</td></tr>
+      </table>
+
+      <h3 style="margin-top:28px;">Frontend Environment Variables (<code>frontend/.env.local</code>)</h3>
+      <table>
+        <tr><th>Variable</th><th>Required</th><th>Default</th><th>Description</th></tr>
+        <tr><td><code>NEXT_PUBLIC_API_URL</code></td><td>&#10004; YES</td><td>—</td><td>Backend API base URL (e.g., <code>http://localhost:8000</code>)</td></tr>
+        <tr><td><code>IS_MAINTENANCE_MODE</code></td><td>No</td><td><code>false</code></td><td>Toggle maintenance page</td></tr>
+        <tr><td><code>MAINTENANCE_BYPASS_TOKEN</code></td><td>No</td><td>—</td><td>Token to bypass maintenance mode</td></tr>
+        <tr><td><code>NEXT_PUBLIC_REOWN_PROJECT_ID</code></td><td>For Crypto</td><td>—</td><td>WalletConnect / Reown project ID</td></tr>
+        <tr><td><code>NEXT_PUBLIC_ANNUALADS_EMBED_BASE</code></td><td>For Ads</td><td>—</td><td>Annual Ads embed base URL</td></tr>
+        <tr><td><code>NEXT_PUBLIC_ANNUALADS_API_KEY</code></td><td>For Ads</td><td>—</td><td>Annual Ads public API key</td></tr>
+        <tr><td><code>CURSOR_API_KEY</code></td><td>For Translation</td><td>—</td><td>Cursor AI translation API key</td></tr>
+      </table>
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <!-- 14. RUNNING THE APPLICATION -->
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <section class="section" id="running">
+      <div class="section-title"><span class="icon">&#9654;</span> Running the Application</div>
+
+      <div class="callout info">
+        <strong>Development Mode:</strong> Run the backend and frontend in separate terminal windows simultaneously.
+      </div>
+
+      <h3>Start the Backend (FastAPI)</h3>
+      <pre>cd D:\laragon\www\mh5\backend
+
+# Activate virtual environment first:
+.\venv\Scripts\Activate.ps1   # Windows PowerShell
+# OR
+source venv/bin/activate      # macOS/Linux
+
+# Run the development server:
+uvicorn main:app --reload --host 0.0.0.0 --port 8000</pre>
+
+      <p>The backend will be available at:</p>
+      <ul>
+        <li><strong>API:</strong> <code>http://localhost:8000/api/v1</code></li>
+        <li><strong>Swagger UI:</strong> <code>http://localhost:8000/docs</code></li>
+        <li><strong>ReDoc:</strong> <code>http://localhost:8000/redoc</code></li>
+        <li><strong>OpenAPI JSON:</strong> <code>http://localhost:8000/openapi.json</code></li>
+      </ul>
+
+      <h3>Start the Frontend (Next.js)</h3>
+      <pre>cd D:\laragon\www\mh5\frontend
+
+# Run the development server:
+npm run dev</pre>
+
+      <p>The frontend will be available at: <strong><code>http://localhost:3000</code></strong> (or 3001 if 3000 is in use).</p>
+
+      <h3>Start Redis (Required for Celery)</h3>
+      <pre># Using Docker (recommended for development):
+docker run -d --name mh5-redis -p 6379:6379 redis:latest
+
+# OR if Redis is installed locally:
+redis-server</pre>
+
+      <div class="card" style="margin-top:24px;">
+        <h3>Available npm Scripts (Frontend)</h3>
+        <table>
+          <tr><th>Script</th><th>Command</th><th>Description</th></tr>
+          <tr><td><strong>Development</strong></td><td><code>npm run dev</code></td><td>Start development server with hot reload</td></tr>
+          <tr><td><strong>Build</strong></td><td><code>npm run build</code></td><td>Create production build</td></tr>
+          <tr><td><strong>Start</strong></td><td><code>npm run start</code></td><td>Start production server (after build)</td></tr>
+          <tr><td><strong>Lint</strong></td><td><code>npm run lint</code></td><td>Run ESLint checks</td></tr>
+        </table>
+      </div>
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <!-- 15. DATABASE MIGRATIONS -->
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <section class="section" id="migrations">
+      <div class="section-title"><span class="icon">&#128196;</span> Database Migrations</div>
+
+      <div class="callout success">
+        <strong>Automatic:</strong> Migrations run automatically when the backend starts via <code>alembic upgrade heads</code> in the startup lifespan handler.
+      </div>
+
+      <h3>Manual Migration Commands</h3>
+      <pre>cd D:\laragon\www\mh5\backend
+
+# Apply all pending migrations:
+alembic upgrade heads
+
+# Check current revision:
+alembic current
+
+# View migration history:
+alembic history --verbose
+
+# Create a new migration (after model changes):
+alembic revision --autogenerate -m "Add new_field to users"
+
+# Roll back one revision:
+alembic downgrade -1
+
+# Roll back to base (CAUTION — drops all tables):
+alembic downgrade base</pre>
+
+      <div class="callout warn">
+        <strong>Warning:</strong> Never run <code>alembic downgrade base</code> against a production database without a full backup.
+      </div>
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <!-- 16. CELERY WORKERS -->
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <section class="section" id="celery">
+      <div class="section-title"><span class="icon">&#128337;</span> Celery Background Workers</div>
+
+      <p>Celery handles asynchronous tasks such as sending emails, processing payments, and running scheduled jobs. Redis is used as both the broker and result backend.</p>
+
+      <h3>Start a Celery Worker</h3>
+      <pre>cd D:\laragon\www\mh5\backend
+
+# Activate venv first, then:
+celery -A app.worker.celery_app worker --loglevel=info
+
+# Windows (use --pool=solo or --pool=gevent):
+celery -A app.worker.celery_app worker --loglevel=info --pool=solo</pre>
+
+      <h3>Start Celery Beat (Scheduled Tasks)</h3>
+      <pre>celery -A app.worker.celery_app beat --loglevel=info</pre>
+
+      <div class="callout info">
+        <strong>Background Schedulers:</strong> The FastAPI lifespan also starts in-process schedulers for: payment processing, contest status updates, season migration, and monthly round creation. These run within the main process and do not require separate Celery beat for basic functionality.
+      </div>
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <!-- 17. API OVERVIEW -->
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <section class="section" id="api-overview">
+      <div class="section-title"><span class="icon">&#128196;</span> API Reference Overview</div>
+
+      <div class="card">
+        <h3>API Base Information</h3>
+        <table>
+          <tr><th>Property</th><th>Value</th></tr>
+          <tr><td>Base URL</td><td><code>http://localhost:8000/api/v1</code></td></tr>
+          <tr><td>Authentication</td><td>Bearer JWT token in <code>Authorization</code> header</td></tr>
+          <tr><td>Content-Type</td><td><code>application/json</code> (or <code>multipart/form-data</code> for uploads)</td></tr>
+          <tr><td>Interactive Docs</td><td><code>http://localhost:8000/docs</code> (Swagger UI)</td></tr>
+          <tr><td>Response Format</td><td>JSON</td></tr>
+          <tr><td>Pagination</td><td>Query params: <code>?skip=0&amp;limit=20</code></td></tr>
+        </table>
+      </div>
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <!-- 18. AUTH ENDPOINTS -->
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <section class="section" id="api-auth">
+      <div class="section-title"><span class="icon">&#128274;</span> Auth Endpoints (<code>/api/v1/auth</code>)</div>
+
+      <table class="endpoint-table">
+        <tr><th>Method</th><th>Endpoint</th><th>Auth</th><th>Description</th></tr>
+        <tr><td><span class="method post">POST</span></td><td><code>/auth/register</code></td><td>None</td><td>Register a new user account</td></tr>
+        <tr><td><span class="method post">POST</span></td><td><code>/auth/login</code></td><td>None</td><td>Login with email + password; returns JWT token</td></tr>
+        <tr><td><span class="method get">GET</span></td><td><code>/auth/verify-email</code></td><td>None</td><td>Verify email address with token from link</td></tr>
+        <tr><td><span class="method post">POST</span></td><td><code>/auth/verify-email</code></td><td>None</td><td>Verify email via POST body token</td></tr>
+        <tr><td><span class="method post">POST</span></td><td><code>/auth/password-reset-request</code></td><td>None</td><td>Request password reset email</td></tr>
+        <tr><td><span class="method post">POST</span></td><td><code>/auth/password-reset-confirm</code></td><td>None</td><td>Confirm password reset with token and new password</td></tr>
+        <tr><td><span class="method post">POST</span></td><td><code>/auth/change-password</code></td><td>Required</td><td>Change password while logged in</td></tr>
+        <tr><td><span class="method get">GET</span></td><td><code>/auth/me</code></td><td>Required</td><td>Get current user profile</td></tr>
+        <tr><td><span class="method post">POST</span></td><td><code>/auth/validate-token</code></td><td>Service</td><td>Validate JWT for microservices</td></tr>
+        <tr><td><span class="method get">GET</span></td><td><code>/auth/health</code></td><td>None</td><td>Auth service health check</td></tr>
+      </table>
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <!-- 19. CONTEST ENDPOINTS -->
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <section class="section" id="api-contests">
+      <div class="section-title"><span class="icon">&#127942;</span> Contest Endpoints (<code>/api/v1/contests</code>)</div>
+
+      <table class="endpoint-table">
+        <tr><th>Method</th><th>Endpoint</th><th>Auth</th><th>Description</th></tr>
+        <tr><td><span class="method get">GET</span></td><td><code>/contests</code></td><td>Optional</td><td>List all active contests with filtering</td></tr>
+        <tr><td><span class="method post">POST</span></td><td><code>/contests</code></td><td>Required</td><td>Create a new contest</td></tr>
+        <tr><td><span class="method get">GET</span></td><td><code>/contests/{id}</code></td><td>Optional</td><td>Get contest details with media and contestants</td></tr>
+        <tr><td><span class="method put">PUT</span></td><td><code>/contests/{id}</code></td><td>Required</td><td>Update contest (owner or admin only)</td></tr>
+        <tr><td><span class="method delete">DELETE</span></td><td><code>/contests/{id}</code></td><td>Admin</td><td>Delete a contest</td></tr>
+        <tr><td><span class="method get">GET</span></td><td><code>/contestants</code></td><td>Optional</td><td>List contestants with filtering</td></tr>
+        <tr><td><span class="method post">POST</span></td><td><code>/contestants</code></td><td>Required</td><td>Register as a contestant in a contest</td></tr>
+        <tr><td><span class="method get">GET</span></td><td><code>/contestants/{id}</code></td><td>Optional</td><td>Get contestant profile and statistics</td></tr>
+        <tr><td><span class="method post">POST</span></td><td><code>/votes</code></td><td>Required</td><td>Cast a vote for a contestant</td></tr>
+        <tr><td><span class="method get">GET</span></td><td><code>/votes</code></td><td>Required</td><td>Get user's vote history</td></tr>
+        <tr><td><span class="method get">GET</span></td><td><code>/rounds</code></td><td>Optional</td><td>List all contest rounds</td></tr>
+        <tr><td><span class="method get">GET</span></td><td><code>/rounds/{id}</code></td><td>Optional</td><td>Get round details and leaderboard</td></tr>
+      </table>
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <!-- 20. MEDIA ENDPOINTS -->
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <section class="section" id="api-media">
+      <div class="section-title"><span class="icon">&#128248;</span> Media Endpoints (<code>/api/v1/media</code>)</div>
+
+      <table class="endpoint-table">
+        <tr><th>Method</th><th>Endpoint</th><th>Auth</th><th>Description</th></tr>
+        <tr><td><span class="method post">POST</span></td><td><code>/media/upload</code></td><td>Required</td><td>Upload image or video file (multipart/form-data)</td></tr>
+        <tr><td><span class="method get">GET</span></td><td><code>/media</code></td><td>Required</td><td>List current user's media files</td></tr>
+        <tr><td><span class="method get">GET</span></td><td><code>/media/{id}</code></td><td>Required</td><td>Get media file metadata</td></tr>
+        <tr><td><span class="method delete">DELETE</span></td><td><code>/media/{id}</code></td><td>Required</td><td>Delete a media file</td></tr>
+        <tr><td><span class="method get">GET</span></td><td><code>/media/file/{user_id}/{filename}</code></td><td>None*</td><td>Serve media file (local or S3)</td></tr>
+      </table>
+      <p style="font-size:13px; color:#666;">* The file serving endpoint is currently unauthenticated. See security finding F-14 for recommendations.</p>
+
+      <div class="card">
+        <h3>Upload Request Example</h3>
+        <pre>curl -X POST http://localhost:8000/api/v1/media/upload \
+  -H "Authorization: Bearer &lt;your_token&gt;" \
+  -F "file=@photo.jpg" \
+  -F "title=My Profile Photo"</pre>
+        <p><strong>Accepted MIME types:</strong> <code>image/*</code> (JPEG, PNG, GIF, WebP) and <code>video/*</code> (MP4, WebM, MOV)</p>
+      </div>
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <!-- 21. PAYMENT ENDPOINTS -->
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <section class="section" id="api-payments">
+      <div class="section-title"><span class="icon">&#128176;</span> Payment Endpoints (<code>/api/v1/payments</code>)</div>
+
+      <table class="endpoint-table">
+        <tr><th>Method</th><th>Endpoint</th><th>Auth</th><th>Description</th></tr>
+        <tr><td><span class="method get">GET</span></td><td><code>/payments/methods</code></td><td>Required</td><td>List available payment methods</td></tr>
+        <tr><td><span class="method post">POST</span></td><td><code>/payments/deposit</code></td><td>Required</td><td>Initiate a fiat or crypto deposit</td></tr>
+        <tr><td><span class="method get">GET</span></td><td><code>/wallet</code></td><td>Required</td><td>Get wallet balance and transaction history</td></tr>
+        <tr><td><span class="method get">GET</span></td><td><code>/wallet/transactions</code></td><td>Required</td><td>Get detailed transaction history</td></tr>
+        <tr><td><span class="method post">POST</span></td><td><code>/webhooks/payments</code></td><td>HMAC</td><td>Payment provider webhook callback</td></tr>
+        <tr><td><span class="method post">POST</span></td><td><code>/webhooks/annualads</code></td><td>HMAC</td><td>Annual Ads sponsor payment webhook</td></tr>
+      </table>
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <!-- 22. ADMIN ENDPOINTS -->
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <section class="section" id="api-admin">
+      <div class="section-title"><span class="icon">&#128737;</span> Admin Endpoints (<code>/api/v1/admin</code>)</div>
+
+      <div class="callout warn">
+        <strong>Access Restricted:</strong> All admin endpoints require the <code>is_admin=True</code> flag or the <code>'all'</code> permission. Do not expose these endpoints publicly.
+      </div>
+
+      <table class="endpoint-table">
+        <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+        <tr><td><span class="method get">GET</span></td><td><code>/admin/users</code></td><td>List all users with search and filtering</td></tr>
+        <tr><td><span class="method patch">PATCH</span></td><td><code>/admin/users/{id}/ban</code></td><td>Ban or suspend a user account</td></tr>
+        <tr><td><span class="method patch">PATCH</span></td><td><code>/admin/users/{id}/roles</code></td><td>Assign or remove user roles</td></tr>
+        <tr><td><span class="method get">GET</span></td><td><code>/admin/contests</code></td><td>View all contests including inactive ones</td></tr>
+        <tr><td><span class="method patch">PATCH</span></td><td><code>/admin/contests/{id}/status</code></td><td>Update contest status</td></tr>
+        <tr><td><span class="method get">GET</span></td><td><code>/admin/kyc</code></td><td>List KYC verification requests</td></tr>
+        <tr><td><span class="method patch">PATCH</span></td><td><code>/admin/kyc/{id}/approve</code></td><td>Manually approve a KYC verification</td></tr>
+        <tr><td><span class="method patch">PATCH</span></td><td><code>/admin/kyc/{id}/reject</code></td><td>Reject a KYC verification</td></tr>
+        <tr><td><span class="method get">GET</span></td><td><code>/admin/reports/financial</code></td><td>Financial summary reports</td></tr>
+        <tr><td><span class="method get">GET</span></td><td><code>/admin/affiliates</code></td><td>View affiliate tree and commissions</td></tr>
+      </table>
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <!-- 23. DEPLOYMENT -->
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <section class="section" id="deploy">
+      <div class="section-title"><span class="icon">&#128640;</span> Deployment Guide</div>
+
+      <h3>Frontend – Deploy to Vercel</h3>
+      <div class="steps">
+        <div class="step">
+          <h4>Connect GitHub Repository to Vercel</h4>
+          <p>Go to vercel.com → Import Project → Select the <code>frontend/</code> directory as the root.</p>
+        </div>
+        <div class="step">
+          <h4>Configure Build Settings</h4>
+          <pre>Framework: Next.js
+Build Command: npm run build
+Output Directory: .next
+Install Command: npm install</pre>
+        </div>
+        <div class="step">
+          <h4>Set Environment Variables in Vercel Dashboard</h4>
+          <p>Add all <code>NEXT_PUBLIC_*</code> variables and any server-side secrets via the Vercel Environment Variables panel. Never use committed <code>.env</code> files.</p>
+        </div>
+      </div>
+
+      <h3>Backend – Deploy to Render</h3>
+      <div class="steps">
+        <div class="step">
+          <h4>Create a New Web Service on Render</h4>
+          <p>Connect GitHub repo, set root directory to <code>backend/</code>.</p>
+        </div>
+        <div class="step">
+          <h4>Configure Build and Start Commands</h4>
+          <pre>Build Command:  pip install -r requirements.txt
+Start Command:  uvicorn main:app --host 0.0.0.0 --port $PORT</pre>
+        </div>
+        <div class="step">
+          <h4>Add All Environment Variables</h4>
+          <p>Use Render's Environment Variables panel to add all backend <code>.env</code> values including the <code>DATABASE_URL</code>, <code>SECRET_KEY</code>, and all API keys.</p>
+        </div>
+        <div class="step">
+          <h4>Provision a Redis Instance</h4>
+          <p>Add a Redis instance via Render's database panel or use an external Redis provider (Redis Cloud, Upstash). Set <code>REDIS_URL</code> accordingly.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <!-- 24. UTILITY SCRIPTS -->
+    <!-- ─────────────────────────────────────────────────────────────────────── -->
+    <section class="section" id="scripts">
+      <div class="section-title"><span class="icon">&#128295;</span> Utility Scripts</div>
+
+      <div class="card">
+        <h3>Backend Scripts (<code>/scripts/</code>)</h3>
+        <p>The <code>scripts/</code> directory contains utility scripts for data seeding, migration assistance, and administrative tasks. Review each script carefully before running in a production environment.</p>
+
+        <h3 style="margin-top:20px;">API Serverless Functions (<code>/api/</code>)</h3>
+        <p>The <code>api/</code> directory contains serverless function scripts intended for Vercel serverless deployment as auxiliary endpoints.</p>
+      </div>
+
+      <div class="card">
+        <h3>Generate a Strong Secret Key</h3>
+        <pre>python -c "import secrets; print(secrets.token_hex(32))"</pre>
+        <p>Use this to generate values for <code>SECRET_KEY</code>, <code>MASTER_ENCRYPTION_KEY</code>, and <code>ENCRYPTION_KEY_DERIVATION_SALT</code>.</p>
+      </div>
+
+      <div class="card">
+        <h3>Health Check Endpoints</h3>
+        <pre># Backend health:
+GET http://localhost:8000/api/v1/auth/health
+
+# API docs (development only):
+GET http://localhost:8000/docs</pre>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ══ FOOTER ═══════════════════════════════════════════════════════════════ -->
+<footer>
+  <p><strong>MyHigh5 Platform</strong> – Developer Documentation</p>
+  <p>Version 1.0 &middot; Generated May 2026</p>
+  <p>Backend: FastAPI 0.123.5 &middot; Frontend: Next.js 14.2.35 &middot; Database: PostgreSQL (Neon) &middot; Cache: Redis</p>
+</footer>
+
+</body>
+</html>
