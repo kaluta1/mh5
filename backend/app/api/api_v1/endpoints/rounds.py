@@ -125,6 +125,76 @@ def _dedupe_voting_open_to_latest_round(result: List[dict]) -> None:
             r["is_voting_open"] = False
 
 
+def _ui_level_to_season_enum(wanted_level: str):
+    from app.models.contests import SeasonLevel
+
+    m = {
+        "country": SeasonLevel.COUNTRY,
+        "city": SeasonLevel.CITY,
+        "regional": SeasonLevel.REGIONAL,
+        "region": SeasonLevel.REGIONAL,
+        "continent": SeasonLevel.CONTINENT,
+        "continental": SeasonLevel.CONTINENT,
+        "global": SeasonLevel.GLOBAL,
+    }
+    return m.get(wanted_level)
+
+
+def _contest_eligible_at_ui_level(
+    db: Session,
+    round_obj: Round,
+    contest: Any,
+    mode: str,
+    wanted_level: str,
+) -> bool:
+    """
+    True when the user may browse/vote this contest at the UI geography chip level.
+
+    Uses an active (or relaxed) ContestSeason row at that level on this round — not the
+    auto \"highest migrated\" card label — so May+Country and March+Continental work correctly.
+    """
+    wl = _normalize_contest_level(wanted_level)
+    if not wl:
+        return True
+    if mode != "nomination":
+        return wl == "city"
+
+    from app.models.contests import ContestSeason, ContestSeasonLink
+    from app.services.season_migration import SeasonMigrationService
+
+    target_enum = _ui_level_to_season_enum(wl)
+    if not target_enum:
+        return (
+            _normalize_contest_level(
+                _contest_card_level_for_round(db, round_obj, contest, mode)
+            )
+            == wl
+        )
+
+    row = (
+        db.query(ContestSeasonLink.id)
+        .join(ContestSeason, ContestSeason.id == ContestSeasonLink.season_id)
+        .filter(
+            ContestSeasonLink.contest_id == contest.id,
+            ContestSeason.round_id == round_obj.id,
+            ContestSeason.level == target_enum,
+            ContestSeason.is_deleted == False,
+        )
+        .order_by(ContestSeasonLink.is_active.desc(), ContestSeasonLink.linked_at.desc())
+        .first()
+    )
+    if row:
+        return True
+
+    min_start = SeasonMigrationService._nomination_min_start_for_level(round_obj, target_enum)
+    if min_start and date.today() < min_start:
+        return False
+
+    if wl == "country":
+        return True
+    return False
+
+
 def _contest_card_level_for_round(db: Session, round_obj: Round, contest: Any, mode: str) -> str:
     """
     Resolve the level shown on contest cards from the selected round timeline.
@@ -238,13 +308,15 @@ def _lightweight_round_data(
         wanted_level = _normalize_contest_level(contest_level)
         if wanted_level:
             all_contests = [
-                c for c in all_contests
-                if _normalize_contest_level(_contest_card_level_for_round(
+                c
+                for c in all_contests
+                if _contest_eligible_at_ui_level(
                     db,
                     round_obj,
                     c,
                     _normalize_contest_mode(getattr(c, "contest_mode", "participation")),
-                )) == wanted_level
+                    wanted_level,
+                )
             ]
 
         all_contests = dedupe_contests_one_per_category_mode(
@@ -257,10 +329,15 @@ def _lightweight_round_data(
         for contest in contests:
             contest_mode_value = _normalize_contest_mode(getattr(contest, "contest_mode", "participation"))
             try:
-                display_level = _contest_card_level_for_round(db, round_obj, contest, contest_mode_value)
+                display_level = (
+                    wanted_level
+                    or _contest_card_level_for_round(db, round_obj, contest, contest_mode_value)
+                )
             except Exception as e:
                 logger.warning(f"Error resolving lightweight contest level {contest.id}: {str(e)}")
-                display_level = getattr(contest, "level", None) or ("country" if contest_mode_value == "nomination" else "city")
+                display_level = wanted_level or getattr(contest, "level", None) or (
+                    "country" if contest_mode_value == "nomination" else "city"
+                )
 
             participant_count = int(getattr(contest, "participant_count", 0) or 0)
             contests_data.append({
@@ -505,8 +582,9 @@ def _enrich_round_data(
 
                 if wanted_level:
                     c_mode_for_level = _normalize_contest_mode(getattr(c, 'contest_mode', 'participation'))
-                    display_level_for_filter = _contest_card_level_for_round(db, round_obj, c, c_mode_for_level)
-                    if _normalize_contest_level(display_level_for_filter) != wanted_level:
+                    if not _contest_eligible_at_ui_level(
+                        db, round_obj, c, c_mode_for_level, wanted_level
+                    ):
                         continue
                 
                 # Filter by search term
@@ -573,6 +651,7 @@ def _enrich_round_data(
                             include_top_contestants=False,
                             entry_type=entry_type,
                             round_id=round_id,
+                            requested_ui_level=contest_level,
                         )
                         contest_participant_counts[vc.id] = int(
                             stats.get("participants_count", stats.get("entries_count", 0))

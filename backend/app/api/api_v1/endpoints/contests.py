@@ -671,6 +671,11 @@ def read_contest(
         alias="roundId",
         description="Calendar round (e.g. March vs April). Only contestants for this round are listed.",
     ),
+    contest_level: Optional[str] = Query(
+        None,
+        alias="contestLevel",
+        description="Nomination UI level: country, regional, continental, global (selects season roster).",
+    ),
     current_user: Optional[Any] = Depends(get_current_active_user_optional),
 ) -> Any:
     """
@@ -708,6 +713,7 @@ def read_contest(
         filter_continent=merged_continent,
         entry_type=entry_type,
         round_id=round_id,
+        requested_ui_level=contest_level,
     )
     
     if not enriched_contest:

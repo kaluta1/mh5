@@ -15,6 +15,93 @@ export function roundTabKey(kind: RoundTabKind, roundId: number): string {
   return `${kind}:${roundId}`
 }
 
+/** Geography chip under the Vote pill → which calendar cohort (submission month). */
+export type VoteGeographyLevel = "country" | "regional" | "continental" | "global"
+
+/**
+ * Months to subtract from the live vote round's submission month.
+ * May vote + Country → May cohort; Regional → April; Continental → March; Global → Feb.
+ */
+const VOTE_LEVEL_SUBMISSION_MONTH_OFFSET: Record<VoteGeographyLevel, number> = {
+  country: 0,
+  regional: 1,
+  continental: 2,
+  global: 3,
+}
+
+function addCalendarMonths(d: Date, deltaMonths: number): Date {
+  const out = new Date(d.getFullYear(), d.getMonth(), 1)
+  out.setMonth(out.getMonth() - deltaMonths)
+  return out
+}
+
+function cohortAnchorDate(round: Round): Date | null {
+  const sub = parseDay(round.submission_start_date)
+  if (sub) return new Date(sub.getFullYear(), sub.getMonth(), 1)
+  const name = String(round.name || "")
+    .toLowerCase()
+    .replace(/^\s*(round|season)\s*#?\d*\s*[:-–—]?\s*/i, "")
+    .trim()
+  const m = name.match(
+    /(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{4})/i,
+  )
+  if (!m) return null
+  const months: Record<string, number> = {
+    january: 0,
+    february: 1,
+    march: 2,
+    april: 3,
+    may: 4,
+    june: 5,
+    july: 6,
+    august: 7,
+    september: 8,
+    october: 9,
+    november: 10,
+    december: 11,
+  }
+  const mo = months[m[1].toLowerCase()]
+  if (mo === undefined) return null
+  return new Date(parseInt(m[2], 10), mo, 1)
+}
+
+function roundMatchesMonthYear(round: Round, target: Date): boolean {
+  const anchor = cohortAnchorDate(round)
+  if (!anchor) return false
+  return anchor.getFullYear() === target.getFullYear() && anchor.getMonth() === target.getMonth()
+}
+
+/**
+ * Under **Vote**, each level chip is a different nomination cohort month, not the same round id.
+ * Vote pill stays on the live vote round (e.g. May); Country uses that month, Regional uses M-1, etc.
+ */
+export function cohortRoundForVoteGeographyLevel(
+  voteRound: Round | undefined,
+  level: VoteGeographyLevel | "all",
+  rounds: Round[],
+): Round | undefined {
+  if (!voteRound || !rounds.length) return voteRound
+  if (!level || level === "all") return voteRound
+
+  const offset = VOTE_LEVEL_SUBMISSION_MONTH_OFFSET[level]
+  const anchor = cohortAnchorDate(voteRound)
+  if (!anchor) return voteRound
+
+  const targetMonth = addCalendarMonths(anchor, offset)
+  const match = rounds.find((r) => roundMatchesMonthYear(r, targetMonth))
+  return match ?? voteRound
+}
+
+export function voteLevelCohortHint(
+  voteRound: Round | undefined,
+  level: VoteGeographyLevel,
+  rounds: Round[],
+): string | null {
+  const r = cohortRoundForVoteGeographyLevel(voteRound, level, rounds)
+  if (!r?.name) return null
+  return r.name.replace(/^\s*round\s*/i, "").trim()
+}
+
 function isSubmissionWindowOpen(round: Round): boolean {
   if (round.is_submission_open) return true
   const b = roundScheduleBounds(round)

@@ -288,10 +288,87 @@ def _contest_season_link_for_round_relaxed(
     return row[0], row[1]
 
 
+def _normalize_requested_ui_level(raw: Optional[str]) -> Optional[str]:
+    if not raw:
+        return None
+    token = str(raw).strip().lower()
+    if token in ("region", "regional"):
+        return "regional"
+    if token in ("continent", "continental"):
+        return "continental"
+    if token in ("city", "country", "global"):
+        return token
+    return token or None
+
+
+def _season_pair_for_requested_ui_level(
+    db: Session,
+    contest_id: int,
+    target_round_id: int,
+    requested_ui_level: str,
+) -> tuple[Any, Any]:
+    """Pick ContestSeasonLink + ContestSeason for explicit UI level (Vote / Top High5 chips)."""
+    from app.models.contests import ContestSeason, ContestSeasonLink, SeasonLevel
+    from app.services.season_migration import SeasonMigrationService
+
+    ui = _normalize_requested_ui_level(requested_ui_level)
+    if not ui:
+        return None, None
+
+    level_map = {
+        "city": SeasonLevel.CITY,
+        "country": SeasonLevel.COUNTRY,
+        "regional": SeasonLevel.REGIONAL,
+        "continent": SeasonLevel.CONTINENT,
+        "global": SeasonLevel.GLOBAL,
+    }
+    target_enum = level_map.get(ui)
+    if not target_enum:
+        return None, None
+
+    round_obj = (
+        db.query(ContestSeason)
+        .filter(ContestSeason.round_id == target_round_id)
+        .first()
+    )
+    round_row = round_obj.round if round_obj else None
+    if round_row is None:
+        from app.models.round import Round
+
+        round_row = db.query(Round).filter(Round.id == target_round_id).first()
+
+    # Explicit UI geography chip: use migrated season rows when they exist, even if
+    # calendar min_start for that level is still in the future (e.g. continental pool in June).
+
+    for active_only in (True, False):
+        q = (
+            db.query(ContestSeasonLink, ContestSeason)
+            .join(ContestSeason, ContestSeason.id == ContestSeasonLink.season_id)
+            .filter(
+                ContestSeasonLink.contest_id == contest_id,
+                ContestSeason.round_id == target_round_id,
+                ContestSeason.level == target_enum,
+                ContestSeason.is_deleted == False,
+            )
+            .order_by(
+                ContestSeasonLink.is_active.desc(),
+                ContestSeasonLink.linked_at.desc(),
+                ContestSeason.id.desc(),
+            )
+        )
+        if active_only:
+            q = q.filter(ContestSeasonLink.is_active == True)
+        row = q.first()
+        if row:
+            return row[0], row[1]
+    return None, None
+
+
 def resolve_nomination_display_season_for_contest_round(
     db: Session,
     contest_obj: Contest,
     target_round_id: Optional[int],
+    requested_ui_level: Optional[str] = None,
 ) -> tuple[Any, Any]:
     """
     Pick the ContestSeason (+ link) driving visible roster/counts/timeline for one contest round.
@@ -326,6 +403,18 @@ def resolve_nomination_display_season_for_contest_round(
 
     if target_round_id is None:
         return naive_sl, naive_season
+
+    ui_level = _normalize_requested_ui_level(requested_ui_level)
+    if ui_level:
+        forced = _season_pair_for_requested_ui_level(
+            db, contest_id, int(target_round_id), ui_level
+        )
+        if forced[1] is not None:
+            return forced
+        if ui_level == "country":
+            pass
+        else:
+            return naive_sl, naive_season
 
     pairs = (
         db.query(ContestSeasonLink, ContestSeason)
@@ -831,6 +920,7 @@ class CRUDContest:
         include_top_contestants: bool = False,
         entry_type: Optional[str] = None,
         round_id: Optional[int] = None,
+        requested_ui_level: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Enrichit un contest avec les statistiques (nombre de participants et votes).
@@ -854,11 +944,13 @@ class CRUDContest:
         season = None
         season_level = None
         _nomination_contest = _normalize_contest_mode(getattr(contest, "contest_mode", None)) == "nomination"
+        ui_level_norm = _normalize_requested_ui_level(requested_ui_level)
+        prefer_submit = _nomination_contest and not ui_level_norm
         display_round_for_scope = crud_round.round.resolve_display_round_id_for_contest(
             db,
             contest.id,
             round_id,
-            prefer_nomination_submit_round=_nomination_contest,
+            prefer_nomination_submit_round=prefer_submit,
             current_user_id=current_user.id if current_user else None,
         )
         if display_round_for_scope is None and _nomination_contest:
@@ -869,6 +961,7 @@ class CRUDContest:
             db,
             contest,
             display_round_for_scope,
+            requested_ui_level=ui_level_norm,
         )
         if season is not None:
             season_level = (
@@ -1633,6 +1726,7 @@ class CRUDContest:
         filter_region: Optional[str] = None,
         entry_type: Optional[str] = None,
         round_id: Optional[int] = None,
+        requested_ui_level: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Récupère un contest avec tous ses contestants enrichis de toutes les informations :
@@ -1678,6 +1772,7 @@ class CRUDContest:
             filter_continent=filter_continent,
             entry_type=entry_type,
             round_id=round_id,
+            requested_ui_level=requested_ui_level,
         )
         
         # Récupérer la saison active d'abord (alignée sur enrich pour ce round)
@@ -1685,11 +1780,13 @@ class CRUDContest:
         from app.crud import crud_round
 
         contest_mode_early = _normalize_contest_mode(getattr(contest_obj, "contest_mode", "participation"))
+        ui_level_norm = _normalize_requested_ui_level(requested_ui_level)
+        prefer_submit = contest_mode_early == "nomination" and not ui_level_norm
         target_round_id = crud_round.round.resolve_display_round_id_for_contest(
             db,
             contest_id,
             round_id,
-            prefer_nomination_submit_round=(contest_mode_early == "nomination"),
+            prefer_nomination_submit_round=prefer_submit,
             current_user_id=current_user_id,
         )
         if target_round_id is None and contest_mode_early == "nomination":
@@ -1700,6 +1797,7 @@ class CRUDContest:
             db,
             contest_obj,
             target_round_id,
+            requested_ui_level=ui_level_norm,
         )
 
         contest_mode = contest_mode_early

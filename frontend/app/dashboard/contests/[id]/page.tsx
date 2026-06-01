@@ -152,6 +152,7 @@ export default function ContestDetailPage() {
   })
   const entryType = normalizeEntryTypeQueryParam(searchParams.get('entryType'))
   const roundIdFromUrl = searchParams.get('roundId')
+  const contestLevelFromUrl = searchParams.get('contestLevel')
   const viewOnly = searchParams.get('viewOnly') === 'true'
 
   // Sync state from URL when params change (e.g. navigation from list with country=Uganda)
@@ -197,13 +198,16 @@ export default function ContestDetailPage() {
     if (roundIdFromUrl) {
       params.set('roundId', roundIdFromUrl)
     }
+    if (contestLevelFromUrl) {
+      params.set('contestLevel', contestLevelFromUrl)
+    }
     if (viewOnly) {
       params.set('viewOnly', 'true')
     }
     const queryString = params.toString()
     const newUrl = `/dashboard/contests/${contestId}${queryString ? `?${queryString}` : ''}`
     router.replace(newUrl, { scroll: false })
-  }, [router, contestId, entryType, roundIdFromUrl, viewOnly])
+  }, [router, contestId, entryType, roundIdFromUrl, contestLevelFromUrl, viewOnly])
 
   // REST Data Fetching - Optimized for speed
   // silent: do not show full-page skeleton (avoids remounting contestant cards and losing "Voted" UI after vote)
@@ -230,6 +234,7 @@ export default function ContestDetailPage() {
         filterContinent: filterContinent === 'all' ? undefined : filterContinent,
         entryType: entryType,
         roundId: roundIdFromUrl ? parseInt(roundIdFromUrl, 10) : undefined,
+        contestLevel: contestLevelFromUrl || undefined,
         _t: Date.now(),
       }) as any
       if (justSubmitted && typeof window !== 'undefined') {
@@ -362,7 +367,7 @@ export default function ContestDetailPage() {
         setPageLoading(false)
       }
     }
-  }, [contestId, filterCountry, filterRegion, filterContinent, entryType, roundIdFromUrl, viewOnly, user?.id, t])
+  }, [contestId, filterCountry, filterRegion, filterContinent, entryType, roundIdFromUrl, contestLevelFromUrl, viewOnly, user?.id, t])
 
   // Decide if the current user already submitted (so the CTA should show "Edit").
   // This is needed because `current_user_contesting` from the API can be inaccurate for nominations.

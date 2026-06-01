@@ -119,6 +119,8 @@ export const ApiService = {
         entryType?: string;
         /** Calendar round (March vs April); only contestants for this round */
         roundId?: number;
+        /** Nomination migration UI level: country | regional | continental | global */
+        contestLevel?: string;
         /** Bust caches after vote / replace (client-only query param) */
         _t?: number;
     }) => {
@@ -130,12 +132,14 @@ export const ApiService = {
                 filterContinent: params?.filterContinent,
                 entryType: normalizeEntryTypeQueryParam(params?.entryType),
                 roundId: params?.roundId,
+                contestLevel: params?.contestLevel,
                 // Keep legacy keys for backward-compatible backends/routes
                 country: params?.filterCountry,
                 region: params?.filterRegion,
                 continent: params?.filterContinent,
                 entry_type: normalizeEntryTypeQueryParam(params?.entryType),
                 round_id: params?.roundId,
+                contest_level: params?.contestLevel,
                 ...(params?._t != null ? { _t: params._t } : {}),
             }
         });

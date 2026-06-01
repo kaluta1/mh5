@@ -70,6 +70,7 @@ export default function ContestantsListPage() {
   }, [])
 
   const roundIdParam = searchParams.get('roundId')
+  const contestLevelParam = searchParams.get('contestLevel')
   const viewOnly = searchParams.get('viewOnly') === 'true'
 
   const loadData = useCallback(async () => {
@@ -79,6 +80,7 @@ export default function ContestantsListPage() {
         filterCountry: 'all',
         filterContinent: 'all',
         roundId: roundIdParam ? parseInt(roundIdParam, 10) : undefined,
+        contestLevel: contestLevelParam || undefined,
       }) as any
       setContestName(data.name || '')
       setContestMode(String(data.contest_mode || '').split('.').pop()?.trim().toLowerCase() || 'participation')

@@ -57,13 +57,21 @@ function contestModeOf(c: Contest): "nomination" | "participation" {
   return m === "participation" ? "participation" : "nomination"
 }
 
-function buildViewOnlyContestHref(contest: Contest, roundId: number, country: string) {
+function buildViewOnlyContestHref(
+  contest: Contest,
+  roundId: number,
+  country: string,
+  uiLevel?: string,
+) {
   const params = new URLSearchParams()
   params.set("roundId", String(roundId))
   params.set("viewOnly", "true")
   const mode = contestModeOf(contest)
   params.set("entryType", mode)
-  const level = String(contest.level || "").toLowerCase()
+  const level = String(uiLevel || contest.level || "").toLowerCase()
+  if (level && level !== "all") {
+    params.set("contestLevel", level)
+  }
   if (["regional", "continent", "continental", "global"].includes(level)) {
     if (level === "regional") {
       const pool = regionalPoolForCountry(country)
@@ -243,6 +251,7 @@ export function PastContestsArchiveDialog({ open, onOpenChange, countryFallback 
                 const participation = contests.filter((c) => contestModeOf(c) === "participation")
                 const thCountry = `/dashboard/top-high5?round_id=${r.id}&country=${encodeURIComponent(country)}&level=country`
                 const thRegional = `/dashboard/top-high5?round_id=${r.id}&country=${encodeURIComponent(country)}&level=regional`
+                const thContinental = `/dashboard/top-high5?round_id=${r.id}&country=${encodeURIComponent(country)}&level=continental`
 
                 return (
                   <li
@@ -274,6 +283,12 @@ export function PastContestsArchiveDialog({ open, onOpenChange, countryFallback 
                           <Button type="button" variant="secondary" size="sm" asChild>
                             <Link href={thRegional} onClick={() => onOpenChange(false)}>
                               {t("dashboard.contests.past_top_high5_regional") || "Top High5 · Regional"}
+                              <ExternalLink className="ml-1 h-3.5 w-3.5 opacity-70" />
+                            </Link>
+                          </Button>
+                          <Button type="button" variant="secondary" size="sm" asChild>
+                            <Link href={thContinental} onClick={() => onOpenChange(false)}>
+                              {t("dashboard.contests.past_top_high5_continental") || "Top High5 · Continental"}
                               <ExternalLink className="ml-1 h-3.5 w-3.5 opacity-70" />
                             </Link>
                           </Button>

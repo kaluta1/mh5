@@ -17,7 +17,13 @@ import { logger } from '@/lib/logger'
 import { LocationFilterBar } from '@/components/dashboard/location-filter-bar'
 import { getEffectiveApiUrl } from '@/lib/config'
 import { regionalPoolForCountry } from '@/lib/regional-pool'
-import { computeDisplayRounds, roundTabKey } from '@/lib/contest-round-tabs'
+import {
+  cohortRoundForVoteGeographyLevel,
+  computeDisplayRounds,
+  roundTabKey,
+  voteLevelCohortHint,
+  type VoteGeographyLevel,
+} from '@/lib/contest-round-tabs'
 import { normalizeContestMode } from '@/lib/contest-mode'
 
 // GraphQL
@@ -224,24 +230,28 @@ function ContestsPageContent() {
     })
   }, [rounds])
 
+  const voteRoundRow = useMemo(
+    () => rounds.find((r: Round) => isRoundVotingLive(r, rounds)),
+    [rounds],
+  )
+
+  /**
+   * Submit pill → that round only. Vote pill → cohort month per level chip
+   * (May/country, April/regional, March/continental, …).
+   */
   const effectiveRoundIdForFetch = useMemo(() => {
     if (!activeRoundId) return null
-    if (categoryTab !== 'nomination') return activeRoundId
-    const offsetByStage: Partial<Record<NominationMigrationLevel, number>> = {
-      regional: 1,
-      continental: 2,
-      global: 3,
-    }
-    const offset = offsetByStage[nominationMigrationLevel]
-    if (!offset) return activeRoundId
-    const idx = rounds.findIndex((r: any) => String(r.id) === activeRoundId)
-    if (idx < 0) return activeRoundId
-    const target = rounds[idx + offset]
-    return target ? String(target.id) : activeRoundId
-  }, [activeRoundId, categoryTab, nominationMigrationLevel, rounds])
+    if (activeDisplayTab?.kind !== 'vote') return activeRoundId
+    if (nominationMigrationLevel === 'all') return activeRoundId
+    const cohort = cohortRoundForVoteGeographyLevel(
+      voteRoundRow,
+      nominationMigrationLevel as VoteGeographyLevel,
+      rounds,
+    )
+    return cohort ? String(cohort.id) : activeRoundId
+  }, [activeRoundId, activeDisplayTab?.kind, nominationMigrationLevel, voteRoundRow, rounds])
 
-  /** Round id sent to contest detail / apply (must match API round scoped to migration data). */
-  const roundIdNav = effectiveRoundIdForFetch ?? activeRoundId
+  const roundIdNav = effectiveRoundIdForFetch
 
   // 1. Fetch Rounds for Selector (allow unauthenticated users) - Optimized for speed
   useEffect(() => {
@@ -337,15 +347,20 @@ function ContestsPageContent() {
     }
   }, [categoryTab, nominationMigrationLevel, filterCountry, filterRegion, user?.country, (user as any)?.region])
 
-  // Regional nomination voting must stay on the current "VOTE NOW" round.
+  // Vote pill: default geography chip to country (May nominees voting at country stage).
   useEffect(() => {
     if (categoryTab !== 'nomination') return
-    if (!['regional', 'continental', 'global'].includes(nominationMigrationLevel)) return
-    if (!voteNowRoundId) return
-    const voteKey = roundTabKey('vote', Number(voteNowRoundId))
-    if (activeTabKey === voteKey) return
-    setActiveTabKey(voteKey)
-  }, [categoryTab, nominationMigrationLevel, voteNowRoundId, activeTabKey])
+    if (activeDisplayTab?.kind !== 'vote') return
+    if (nominationMigrationLevel !== 'all') return
+    setNominationMigrationLevel('country')
+  }, [categoryTab, activeDisplayTab?.kind, nominationMigrationLevel])
+
+  useEffect(() => {
+    if (categoryTab !== 'nomination') return
+    if (activeDisplayTab?.kind === 'nominate') {
+      setNominationMigrationLevel('all')
+    }
+  }, [categoryTab, activeDisplayTab?.kind])
 
   // Set default filters based on category tab and user location (only when no filter is set yet)
   useEffect(() => {
@@ -401,9 +416,12 @@ function ContestsPageContent() {
       const activeRegion = (filterRegion && nominationMigrationLevel === 'regional') ? filterRegion : undefined
       const activeContinent = (filterContinent && filterContinent !== 'all') ? filterContinent : undefined
       const activeSearch = committedSearch || undefined
-      const activeNominationLevel = categoryTab === 'nomination' && nominationMigrationLevel !== 'all'
-        ? nominationMigrationLevel
-        : undefined
+      const activeNominationLevel =
+        categoryTab === 'nomination' &&
+        activeDisplayTab?.kind === 'vote' &&
+        nominationMigrationLevel !== 'all'
+          ? nominationMigrationLevel
+          : undefined
 
       // Check cache first
       const authKey = userIdRef.current || 'anon'
@@ -525,13 +543,16 @@ function ContestsPageContent() {
     const activeRegion = (filterRegion && nominationMigrationLevel === 'regional') ? filterRegion : undefined
     const activeContinent = filterContinent !== 'all' ? filterContinent : undefined
     const activeSearch = committedSearch || undefined
-    const activeNominationLevel = categoryTab === 'nomination' && nominationMigrationLevel !== 'all'
-      ? nominationMigrationLevel
-      : undefined
+    const activeNominationLevel =
+      categoryTab === 'nomination' &&
+      activeDisplayTab?.kind === 'vote' &&
+      nominationMigrationLevel !== 'all'
+        ? nominationMigrationLevel
+        : undefined
 
     try {
       const data = await ApiService.getRounds({
-        roundId: parseInt(effectiveRoundIdForFetch),
+        roundId: parseInt(effectiveRoundIdForFetch!),
         contestMode,
         filterCountry: activeRegion ? undefined : activeCountry,
         filterRegion: activeRegion,
@@ -607,7 +628,13 @@ function ContestsPageContent() {
         params.set('viewOnly', 'true')
       }
 
-      const level = normalizeContestLevel(String(contestStatus ?? ''))
+      const level =
+        nominationMigrationLevel !== 'all'
+          ? nominationMigrationLevel
+          : normalizeContestLevel(String(contestStatus ?? ''))
+      if (level) {
+        params.set('contestLevel', level)
+      }
       const region = filterRegion || regionalPoolForCountry(filterCountry) || regionalPoolForCountry(user?.country)
       if (level === 'regional') {
         if (region) params.set('region', region)
@@ -625,7 +652,7 @@ function ContestsPageContent() {
       params.set('entryType', rowMode)
       return params
     },
-    [roundIdNav, displayRounds, activeTabKey, filterRegion, filterCountry, user?.country, shouldPassCountryNavParam, filterContinent, categoryTab]
+    [roundIdNav, displayRounds, activeTabKey, filterRegion, filterCountry, user?.country, shouldPassCountryNavParam, filterContinent, categoryTab, nominationMigrationLevel]
   )
 
   // Raw Contests List (Before filtering by type) - Now uses allContests for infinite scroll
@@ -858,8 +885,9 @@ function ContestsPageContent() {
         <div className="mb-6">
           <div className="flex space-x-2 overflow-x-auto pb-2 scrollbar-hide">
             {displayRounds.map(({ round, pill, kind, tabKey }, index) => {
-              const isPast = new Date(round.submission_end_date + 'T23:59:59') < new Date()
-              const showLock = isPast && kind === 'vote'
+              const votingClosed =
+                kind === 'vote' && !isRoundVotingLive(round, rounds)
+              const showLock = votingClosed
               const iconVote = (
                 <Image
                   src="/contests/vote-tab-icon.png?v=2"
@@ -1016,7 +1044,30 @@ function ContestsPageContent() {
         )}
 
         {categoryTab === 'nomination' && showVoteGeographyLevels && (
-          <div className="mb-6 flex items-center gap-2 flex-wrap">
+          <div className="mb-6 space-y-2">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              {t('dashboard.contests.vote_level_explainer') ||
+                'Choose the migration stage to vote. Each level uses its own month cohort (not April for every chip).'}
+            </p>
+            {nominationMigrationLevel !== 'all' && voteRoundRow && (
+              <p className="text-xs font-medium text-blue-700 dark:text-blue-300">
+                {(t('dashboard.contests.vote_level_cohort') || 'Cohort')}:{' '}
+                {voteLevelCohortHint(voteRoundRow, nominationMigrationLevel as VoteGeographyLevel, rounds) ||
+                  effectiveRoundIdForFetch}
+                {' · '}
+                {nominationMigrationLevel === 'country'
+                  ? (t('dashboard.contests.vote_level_country_hint') ||
+                      'Nominees from the live vote month (e.g. May)')
+                  : nominationMigrationLevel === 'regional'
+                    ? (t('dashboard.contests.vote_level_regional_hint') ||
+                        'Country winners from the previous month, now regional')
+                    : nominationMigrationLevel === 'continental'
+                      ? (t('dashboard.contests.vote_level_continental_hint') ||
+                          'Regional winners from earlier cohort, now continental')
+                      : (t('dashboard.contests.vote_level_global_hint') || 'Continental winners, global stage')}
+              </p>
+            )}
+          <div className="flex items-center gap-2 flex-wrap">
             <MapPin className="w-4 h-4 text-gray-400 dark:text-gray-500" />
             <span className="text-sm text-gray-500 mr-1">{t('dashboard.contests.filter_level') || 'Level'}:</span>
             {nominationStageOptions.map((stage) => (
@@ -1034,6 +1085,7 @@ function ContestsPageContent() {
                 <span className="leading-tight text-center max-w-[4.5rem]">{stage.label}</span>
               </button>
             ))}
+          </div>
           </div>
         )}
 
