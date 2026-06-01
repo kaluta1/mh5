@@ -5,10 +5,19 @@ One-shot ops script (run on VPS after deploy or on the 1st of the month):
   1. Create / fix Round {Current Month YYYY} (submission open, contests linked)
   2. Run all pending season migrations (country → regional → continent → global)
 
-Usage (from backend/):
+Usage (from repo root ~/mh5 — do not use bare system python3; no pydantic there):
 
-  PYTHONPATH=. python scripts/ensure_month_round_and_migrations.py
-  PYTHONPATH=. python scripts/ensure_month_round_and_migrations.py --june-2026-only
+  bash backend/scripts/run_ensure_month_round_and_migrations.sh
+
+Or inside a running API container (backend-app):
+
+  docker exec -i backend-app python scripts/ensure_month_round_and_migrations.py
+
+Or with backend/.venv:
+
+  cd backend && source .venv/bin/activate && pip install -r requirements.txt
+  export PYTHONPATH=.
+  python scripts/ensure_month_round_and_migrations.py
 """
 from __future__ import annotations
 
