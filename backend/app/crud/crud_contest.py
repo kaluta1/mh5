@@ -1706,6 +1706,7 @@ class CRUDContest:
         filter_region: Optional[str] = None,
         entry_type: Optional[str] = None,
         round_id: Optional[int] = None,
+        requested_ui_level: Optional[str] = None,
     ) -> int:
         """Dashboard card count for nominations under geo filters — same query as opened contest."""
         data = self.get_contest_with_enriched_contestants(
@@ -1717,6 +1718,7 @@ class CRUDContest:
             filter_region=filter_region,
             entry_type=entry_type,
             round_id=round_id,
+            requested_ui_level=requested_ui_level,
         )
         return len((data or {}).get("contestants") or [])
 
@@ -1964,46 +1966,12 @@ class CRUDContest:
         # 5 winners in REGIONAL), not every original contestant from the round.
         # Nominations stay on Contestant rows until promotion; pooling hid everyone
         # except ContestantSeason members + the signed-in user's own nominations.
-        if pooled_season_membership_scope and contest_mode != "nomination":
+        if pooled_season_membership_scope:
             active_season_member_ids = db.query(ContestantSeason.contestant_id).filter(
                 ContestantSeason.season_id == season.id,
                 ContestantSeason.is_active == True,
             )
-            if contest_mode == "nomination" and current_user_id:
-                mine_q = (
-                    db.query(Contestant.id)
-                    .filter(
-                        Contestant.is_deleted == False,
-                        Contestant.season_id == filter_season_id,
-                        Contestant.user_id == current_user_id,
-                        or_(
-                            Contestant.entry_type == "nomination",
-                            Contestant.entry_type.is_(None),
-                        ),
-                    )
-                )
-                if target_round_id is not None:
-                    if contest_mode == "nomination":
-                        mine_q = mine_q.filter(Contestant.round_id == target_round_id)
-                    else:
-                        mine_q = mine_q.filter(
-                            or_(
-                                Contestant.round_id == target_round_id,
-                                and_(Contestant.user_id == current_user_id, Contestant.round_id.is_(None)),
-                            )
-                        )
-                my_nom_ids = [row[0] for row in mine_q.all()]
-                if my_nom_ids:
-                    contestants_query = contestants_query.filter(
-                        or_(
-                            Contestant.id.in_(active_season_member_ids),
-                            Contestant.id.in_(my_nom_ids),
-                        )
-                    )
-                else:
-                    contestants_query = contestants_query.filter(Contestant.id.in_(active_season_member_ids))
-            else:
-                contestants_query = contestants_query.filter(Contestant.id.in_(active_season_member_ids))
+            contestants_query = contestants_query.filter(Contestant.id.in_(active_season_member_ids))
             logger.info(
                 f"[get_contest_with_enriched_contestants] Scoping visible roster to active "
                 f"ContestantSeason links for {season_level} season_id={season.id}"

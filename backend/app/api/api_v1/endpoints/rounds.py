@@ -661,6 +661,7 @@ def _enrich_round_data(
                                 filter_continent=filter_continent,
                                 entry_type=entry_type,
                                 round_id=round_id,
+                                requested_ui_level=contest_level,
                             )
                             continue
                         stats = crud.contest.enrich_contest_with_stats(
@@ -794,11 +795,14 @@ def _enrich_round_data(
                     # Strict per-contest check: only true when the user has already contested THIS contest.
                     is_contesting = contest.id in user_contested_contest_ids
                     contest_mode_value = _normalize_contest_mode(getattr(contest, 'contest_mode', 'participation'))
-                    display_level = _contest_card_level_for_round(
-                        db,
-                        round_obj,
-                        contest,
-                        contest_mode_value,
+                    display_level = (
+                        wanted_level
+                        or _contest_card_level_for_round(
+                            db,
+                            round_obj,
+                            contest,
+                            contest_mode_value,
+                        )
                     )
                     
                     contest_data = {
