@@ -1965,6 +1965,12 @@ class CRUDContest:
                 ContestantSeason.is_active == True,
             )
             contestants_query = contestants_query.filter(Contestant.id.in_(active_season_member_ids))
+            if contest_mode == "nomination":
+                # Continental/regional cards must match the migration membership for
+                # this exact contest/category row. The broad roster clause may include
+                # duplicate same-category contest rows; those inflate UI counts beyond
+                # the direct migration query used on the VPS.
+                contestants_query = contestants_query.filter(Contestant.season_id == contest_id)
             logger.info(
                 f"[get_contest_with_enriched_contestants] Scoping visible roster to active "
                 f"ContestantSeason links for {season_level} season_id={season.id}"
