@@ -437,6 +437,14 @@ def read_rounds(
     try:
         contest_mode = _normalize_contest_mode(contest_mode) if contest_mode else None
         user_id = current_user.id if current_user else None
+        requested_level = _normalize_contest_level(contest_level)
+        if (
+            contest_mode == "nomination"
+            and requested_level in {"regional", "continental", "global"}
+        ):
+            # Pooled nomination vote stages are not country-scoped. A stale
+            # ?country=Tanzania URL must not shrink regional/continental cards.
+            filter_country = None
         
         # Simple query - fetch rounds without complex joins first
         try:

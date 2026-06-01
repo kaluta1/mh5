@@ -401,7 +401,8 @@ function ContestsPageContent() {
     } else {
       params.delete('region')
     }
-    if (filterCountry && filterCountry !== 'all' && nominationMigrationLevel !== 'regional') {
+    const pooledNominationLevel = ['regional', 'continental', 'global'].includes(nominationMigrationLevel)
+    if (filterCountry && filterCountry !== 'all' && !pooledNominationLevel) {
       params.set('country', filterCountry)
     } else {
       params.delete('country')
