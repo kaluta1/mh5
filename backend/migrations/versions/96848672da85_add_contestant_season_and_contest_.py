@@ -17,9 +17,14 @@ depends_on = None
 
 
 def upgrade():
+    bind = op.get_bind()
+    insp = sa.inspect(bind)
+    existing = insp.get_table_names()
+    
     # Create contestant_seasons table
-    op.create_table(
-        'contestant_seasons',
+    if 'contestant_seasons' not in existing:
+        op.create_table(
+            'contestant_seasons',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('contestant_id', sa.Integer(), nullable=False),
         sa.Column('season_id', sa.Integer(), nullable=False),
@@ -37,8 +42,9 @@ def upgrade():
     op.create_index(op.f('ix_contestant_seasons_season_id'), 'contestant_seasons', ['season_id'], unique=False)
 
     # Create contest_season_links table
-    op.create_table(
-        'contest_season_links',
+    if 'contest_season_links' not in existing:
+        op.create_table(
+            'contest_season_links',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('contest_id', sa.Integer(), nullable=False),
         sa.Column('season_id', sa.Integer(), nullable=False),

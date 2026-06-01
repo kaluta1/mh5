@@ -17,10 +17,16 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Add is_deleted column to users table
-    op.add_column('users', sa.Column('is_deleted', sa.Boolean(), nullable=False, server_default='false'))
+    bind = op.get_bind()
+    insp = sa.inspect(bind)
+    columns = [c['name'] for c in insp.get_columns('users')]
+    if 'is_deleted' not in columns:
+        op.add_column('users', sa.Column('is_deleted', sa.Boolean(), nullable=False, server_default='false'))
 
 
 def downgrade() -> None:
-    # Remove is_deleted column from users table
-    op.drop_column('users', 'is_deleted')
+    bind = op.get_bind()
+    insp = sa.inspect(bind)
+    columns = [c['name'] for c in insp.get_columns('users')]
+    if 'is_deleted' in columns:
+        op.drop_column('users', 'is_deleted')

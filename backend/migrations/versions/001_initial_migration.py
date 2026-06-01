@@ -39,7 +39,7 @@ def upgrade():
     op.create_index(op.f('ix_role_name'), 'role', ['name'], unique=False)
     
     # Create user table
-    op.create_table('user',
+    op.create_table('users',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('created_at', sa.DateTime(), nullable=True),
     sa.Column('updated_at', sa.DateTime(), nullable=True),
@@ -55,15 +55,15 @@ def upgrade():
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('email')
     )
-    op.create_index(op.f('ix_user_email'), 'user', ['email'], unique=False)
-    op.create_index(op.f('ix_user_username'), 'user', ['username'], unique=False)
+    op.create_index(op.f('ix_users_email'), 'users', ['email'], unique=False)
+    op.create_index(op.f('ix_users_username'), 'users', ['username'], unique=False)
     
     # Create user_roles association table
     op.create_table('user_roles',
     sa.Column('user_id', sa.Integer(), nullable=False),
     sa.Column('role_id', sa.Integer(), nullable=False),
     sa.ForeignKeyConstraint(['role_id'], ['role.id'], ),
-    sa.ForeignKeyConstraint(['user_id'], ['user.id'], ),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('user_id', 'role_id')
     )
     
@@ -76,7 +76,7 @@ def upgrade():
     sa.Column('balance', sa.Numeric(precision=10, scale=2), nullable=False),
     sa.Column('currency', sa.String(length=3), nullable=False),
     sa.Column('frozen_balance', sa.Numeric(precision=10, scale=2), nullable=False),
-    sa.ForeignKeyConstraint(['user_id'], ['user.id'], ),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('user_id')
     )
@@ -151,7 +151,7 @@ def upgrade():
     sa.Column('height', sa.Integer(), nullable=True),
     sa.Column('duration', sa.Integer(), nullable=True),
     sa.Column('user_id', sa.Integer(), nullable=False),
-    sa.ForeignKeyConstraint(['user_id'], ['user.id'], ),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
     
@@ -172,7 +172,7 @@ def upgrade():
     sa.Column('payment_reference', sa.String(length=100), nullable=True),
     sa.Column('processed_at', sa.DateTime(), nullable=True),
     sa.ForeignKeyConstraint(['contest_id'], ['contest.id'], ),
-    sa.ForeignKeyConstraint(['user_id'], ['user.id'], ),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('reference')
     )
@@ -190,7 +190,7 @@ def upgrade():
     sa.Column('avatar_url', sa.String(length=512), nullable=True),
     sa.Column('cover_url', sa.String(length=512), nullable=True),
     sa.Column('member_count', sa.Integer(), nullable=False),
-    sa.ForeignKeyConstraint(['creator_id'], ['user.id'], ),
+    sa.ForeignKeyConstraint(['creator_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_club_name'), 'club', ['name'], unique=False)
@@ -207,7 +207,7 @@ def upgrade():
     sa.Column('invite_code', sa.String(length=50), nullable=True),
     sa.Column('avatar_url', sa.String(length=512), nullable=True),
     sa.Column('member_count', sa.Integer(), nullable=False),
-    sa.ForeignKeyConstraint(['creator_id'], ['user.id'], ),
+    sa.ForeignKeyConstraint(['creator_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('invite_code')
     )
@@ -222,8 +222,8 @@ def upgrade():
     sa.Column('following_id', sa.Integer(), nullable=False),
     sa.Column('notify_new_posts', sa.Boolean(), nullable=False),
     sa.Column('notify_contests', sa.Boolean(), nullable=False),
-    sa.ForeignKeyConstraint(['follower_id'], ['user.id'], ),
-    sa.ForeignKeyConstraint(['following_id'], ['user.id'], ),
+    sa.ForeignKeyConstraint(['follower_id'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['following_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
     
@@ -240,7 +240,7 @@ def upgrade():
     sa.Column('commission_rate', sa.Integer(), nullable=False),
     sa.Column('valid_from', sa.DateTime(), nullable=True),
     sa.Column('valid_until', sa.DateTime(), nullable=True),
-    sa.ForeignKeyConstraint(['user_id'], ['user.id'], ),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('code')
     )
@@ -257,8 +257,8 @@ def upgrade():
     sa.Column('is_active', sa.Boolean(), nullable=False),
     sa.Column('total_commission_earned', sa.Integer(), nullable=False),
     sa.Column('first_transaction_date', sa.DateTime(), nullable=True),
-    sa.ForeignKeyConstraint(['affiliate_id'], ['user.id'], ),
-    sa.ForeignKeyConstraint(['referred_user_id'], ['user.id'], ),
+    sa.ForeignKeyConstraint(['affiliate_id'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['referred_user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
     
@@ -274,7 +274,7 @@ def upgrade():
     sa.Column('rank', sa.Integer(), nullable=True),
     sa.ForeignKeyConstraint(['contest_id'], ['contest.id'], ),
     sa.ForeignKeyConstraint(['media_id'], ['media.id'], ),
-    sa.ForeignKeyConstraint(['user_id'], ['user.id'], ),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
     
@@ -287,7 +287,7 @@ def upgrade():
     sa.Column('user_id', sa.Integer(), nullable=False),
     sa.Column('score', sa.Integer(), nullable=False),
     sa.ForeignKeyConstraint(['entry_id'], ['contest_entry.id'], ),
-    sa.ForeignKeyConstraint(['user_id'], ['user.id'], ),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
     
@@ -308,7 +308,7 @@ def upgrade():
     sa.ForeignKeyConstraint(['contest_entry_id'], ['contest_entry.id'], ),
     sa.ForeignKeyConstraint(['media_id'], ['media.id'], ),
     sa.ForeignKeyConstraint(['parent_id'], ['comment.id'], ),
-    sa.ForeignKeyConstraint(['user_id'], ['user.id'], ),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
     
@@ -324,7 +324,7 @@ def upgrade():
     sa.ForeignKeyConstraint(['comment_id'], ['comment.id'], ),
     sa.ForeignKeyConstraint(['contest_entry_id'], ['contest_entry.id'], ),
     sa.ForeignKeyConstraint(['media_id'], ['media.id'], ),
-    sa.ForeignKeyConstraint(['user_id'], ['user.id'], ),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
     
@@ -362,7 +362,7 @@ def upgrade():
     sa.Column('is_paid', sa.Boolean(), nullable=False),
     sa.ForeignKeyConstraint(['contest_id'], ['contest.id'], ),
     sa.ForeignKeyConstraint(['transaction_id'], ['transaction.id'], ),
-    sa.ForeignKeyConstraint(['user_id'], ['user.id'], ),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
     
@@ -373,7 +373,7 @@ def upgrade():
     sa.Column('joined_at', sa.DateTime(), nullable=True),
     sa.Column('is_admin', sa.Boolean(), nullable=True),
     sa.ForeignKeyConstraint(['club_id'], ['club.id'], ),
-    sa.ForeignKeyConstraint(['user_id'], ['user.id'], ),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('club_id', 'user_id')
     )
     
@@ -383,7 +383,7 @@ def upgrade():
     sa.Column('joined_at', sa.DateTime(), nullable=True),
     sa.Column('is_admin', sa.Boolean(), nullable=True),
     sa.ForeignKeyConstraint(['group_id'], ['private_group.id'], ),
-    sa.ForeignKeyConstraint(['user_id'], ['user.id'], ),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('group_id', 'user_id')
     )
     
@@ -399,8 +399,8 @@ def upgrade():
     sa.Column('reviewed_by', sa.Integer(), nullable=True),
     sa.Column('reviewed_at', sa.DateTime(), nullable=True),
     sa.ForeignKeyConstraint(['club_id'], ['club.id'], ),
-    sa.ForeignKeyConstraint(['reviewed_by'], ['user.id'], ),
-    sa.ForeignKeyConstraint(['user_id'], ['user.id'], ),
+    sa.ForeignKeyConstraint(['reviewed_by'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
     
@@ -422,9 +422,9 @@ def upgrade():
     sa.ForeignKeyConstraint(['comment_id'], ['comment.id'], ),
     sa.ForeignKeyConstraint(['contest_entry_id'], ['contest_entry.id'], ),
     sa.ForeignKeyConstraint(['media_id'], ['media.id'], ),
-    sa.ForeignKeyConstraint(['reporter_id'], ['user.id'], ),
-    sa.ForeignKeyConstraint(['reviewed_by'], ['user.id'], ),
-    sa.ForeignKeyConstraint(['user_id'], ['user.id'], ),
+    sa.ForeignKeyConstraint(['reporter_id'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['reviewed_by'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
     
@@ -442,7 +442,7 @@ def upgrade():
     sa.Column('admin_notes', sa.String(length=1000), nullable=True),
     sa.ForeignKeyConstraint(['contest_entry_id'], ['contest_entry.id'], ),
     sa.ForeignKeyConstraint(['prize_id'], ['prize.id'], ),
-    sa.ForeignKeyConstraint(['user_id'], ['user.id'], ),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('prize_id')
     )
@@ -478,9 +478,9 @@ def downgrade():
     op.drop_table('location')
     op.drop_table('wallet')
     op.drop_table('user_roles')
-    op.drop_index(op.f('ix_user_username'), table_name='user')
-    op.drop_index(op.f('ix_user_email'), table_name='user')
-    op.drop_table('user')
+    op.drop_index(op.f('ix_users_username'), table_name='users')
+    op.drop_index(op.f('ix_users_email'), table_name='users')
+    op.drop_table('users')
     op.drop_index(op.f('ix_role_name'), table_name='role')
     op.drop_table('role')
     # ### end Alembic commands ###
