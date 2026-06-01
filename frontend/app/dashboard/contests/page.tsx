@@ -17,7 +17,7 @@ import { logger } from '@/lib/logger'
 import { LocationFilterBar } from '@/components/dashboard/location-filter-bar'
 import { getEffectiveApiUrl } from '@/lib/config'
 import { regionalPoolForCountry } from '@/lib/regional-pool'
-import { computeDisplayRounds } from '@/lib/contest-round-tabs'
+import { computeDisplayRounds, roundTabKey } from '@/lib/contest-round-tabs'
 import { normalizeContestMode } from '@/lib/contest-mode'
 
 // GraphQL
@@ -89,7 +89,8 @@ function ContestsPageContent() {
   const { addToast } = useToast()
 
   // State
-  const [activeRoundId, setActiveRoundId] = useState<string | null>(null)
+  /** `${kind}:${roundId}` — keeps Submit and Vote as separate pills even when they share a round row. */
+  const [activeTabKey, setActiveTabKey] = useState<string | null>(null)
   const [categoryTab, setCategoryTab] = useState<'nomination' | 'participations'>(() => {
     if (typeof window !== 'undefined') {
       const savedTab = localStorage.getItem('contests_category_tab')
@@ -140,25 +141,24 @@ function ContestsPageContent() {
     return voteRound ? String(voteRound.id) : null
   }, [rounds])
   const displayRounds = useMemo(() => computeDisplayRounds(rounds), [rounds])
+  const activeDisplayTab = useMemo(
+    () => displayRounds.find((d) => d.tabKey === activeTabKey) ?? displayRounds[0],
+    [displayRounds, activeTabKey],
+  )
+  const activeRoundId = activeDisplayTab ? String(activeDisplayTab.round.id) : null
   /**
    * Show Country / Regional / … chips when the user is in a voting-round context.
    * Use several signals — frontend pill `kind`, API live-vote id, and `isRoundVotingLive` on the active row —
    * so levels still appear if one of them drifts out of sync.
    */
   const showVoteGeographyLevels = useMemo(() => {
-    if (!activeRoundId || !rounds.length) return false
-    const entryIdx = displayRounds.findIndex((d) => String(d.round.id) === activeRoundId)
-    const entry = entryIdx >= 0 ? displayRounds[entryIdx] : undefined
-    if (entry?.kind === 'vote' || entry?.kind === 'combined') return true
-    // Two top pills are always [current nomination month, live vote round]; index > 0 is the Vote round.
-    if (displayRounds.length >= 2 && entryIdx > 0) return true
+    if (!activeDisplayTab || !rounds.length) return false
+    if (activeDisplayTab.kind === 'vote') return true
     if (voteNowRoundId && activeRoundId === voteNowRoundId) return true
-    // Never infer "voting context" from dates alone when this row is the Nominate-month pill.
-    if (entry?.kind === 'nominate') return false
     const activeRound = rounds.find((r: any) => String(r.id) === activeRoundId)
     if (activeRound && isRoundVotingLive(activeRound as any, rounds)) return true
     return false
-  }, [displayRounds, activeRoundId, rounds, voteNowRoundId])
+  }, [activeDisplayTab, activeRoundId, rounds, voteNowRoundId])
 
   const nominationStageOptions = useMemo(() => {
     const allStages: Array<{
@@ -217,10 +217,10 @@ function ContestsPageContent() {
   useEffect(() => {
     if (!rounds.length) return
     const dr = computeDisplayRounds(rounds)
-    const allowed = new Set(dr.map((d) => String(d.round.id)))
-    setActiveRoundId((prev) => {
+    const allowed = new Set(dr.map((d) => d.tabKey))
+    setActiveTabKey((prev) => {
       if (prev && allowed.has(prev)) return prev
-      return String(dr[0].round.id)
+      return dr[0]?.tabKey ?? null
     })
   }, [rounds])
 
@@ -258,10 +258,10 @@ function ContestsPageContent() {
         
         setRounds(data)
         const nextDisplayRounds = computeDisplayRounds(data)
-        const allowedRoundIds = new Set(nextDisplayRounds.map((d) => String(d.round.id)))
-        setActiveRoundId((prev) => {
-          if (prev && allowedRoundIds.has(prev)) return prev
-          return nextDisplayRounds[0] ? String(nextDisplayRounds[0].round.id) : prev
+        const allowedTabKeys = new Set(nextDisplayRounds.map((d) => d.tabKey))
+        setActiveTabKey((prev) => {
+          if (prev && allowedTabKeys.has(prev)) return prev
+          return nextDisplayRounds[0]?.tabKey ?? prev
         })
       } catch (error: any) {
         if (error.name === 'AbortError' || abortController.signal.aborted) {
@@ -342,9 +342,10 @@ function ContestsPageContent() {
     if (categoryTab !== 'nomination') return
     if (!['regional', 'continental', 'global'].includes(nominationMigrationLevel)) return
     if (!voteNowRoundId) return
-    if (activeRoundId === voteNowRoundId) return
-    setActiveRoundId(voteNowRoundId)
-  }, [categoryTab, nominationMigrationLevel, voteNowRoundId, activeRoundId])
+    const voteKey = roundTabKey('vote', Number(voteNowRoundId))
+    if (activeTabKey === voteKey) return
+    setActiveTabKey(voteKey)
+  }, [categoryTab, nominationMigrationLevel, voteNowRoundId, activeTabKey])
 
   // Set default filters based on category tab and user location (only when no filter is set yet)
   useEffect(() => {
@@ -600,7 +601,7 @@ function ContestsPageContent() {
     (contestStatus: unknown, contestModeFromRow?: unknown) => {
       const params = new URLSearchParams()
       if (roundIdNav) params.set('roundId', String(roundIdNav))
-      const activeRoundEntry = displayRounds.find((d) => String(d.round.id) === activeRoundId)
+      const activeRoundEntry = displayRounds.find((d) => d.tabKey === activeTabKey)
       const rowMode = normalizeContestMode(contestModeFromRow)
       if (rowMode === 'nomination' && activeRoundEntry?.kind === 'nominate') {
         params.set('viewOnly', 'true')
@@ -624,7 +625,7 @@ function ContestsPageContent() {
       params.set('entryType', rowMode)
       return params
     },
-    [roundIdNav, displayRounds, activeRoundId, filterRegion, filterCountry, user?.country, shouldPassCountryNavParam, filterContinent, categoryTab]
+    [roundIdNav, displayRounds, activeTabKey, filterRegion, filterCountry, user?.country, shouldPassCountryNavParam, filterContinent, categoryTab]
   )
 
   // Raw Contests List (Before filtering by type) - Now uses allContests for infinite scroll
@@ -856,7 +857,7 @@ function ContestsPageContent() {
         {/* Round Selector (Top Tabs) */}
         <div className="mb-6">
           <div className="flex space-x-2 overflow-x-auto pb-2 scrollbar-hide">
-            {displayRounds.map(({ round, pill, kind }, index) => {
+            {displayRounds.map(({ round, pill, kind, tabKey }, index) => {
               const isPast = new Date(round.submission_end_date + 'T23:59:59') < new Date()
               const showLock = isPast && kind === 'vote'
               const iconVote = (
@@ -881,21 +882,16 @@ function ContestsPageContent() {
               )
               const archiveLabel = t('dashboard.contests.past_contests_short') || 'Past'
               return (
-                <React.Fragment key={round.id}>
+                <React.Fragment key={tabKey}>
                   <button
-                    onClick={() => setActiveRoundId(String(round.id))}
-                    className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 whitespace-nowrap flex flex-row items-center justify-center gap-2 min-h-[3rem] ${activeRoundId === String(round.id)
+                    onClick={() => setActiveTabKey(tabKey)}
+                    className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 whitespace-nowrap flex flex-row items-center justify-center gap-2 min-h-[3rem] ${activeTabKey === tabKey
                       ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-500/30 scale-105'
                       : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-900 dark:bg-gray-800/80 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white hover:scale-[1.02]'
                       }`}
                   >
                     {showLock && <Lock className="w-4 h-4 opacity-80 flex-shrink-0" aria-hidden />}
-                    {kind === 'combined' ? (
-                      <span className="inline-flex items-center gap-1">
-                        {iconNominateForSubmit}
-                        {iconVote}
-                      </span>
-                    ) : kind === 'vote' ? (
+                    {kind === 'vote' ? (
                       iconVote
                     ) : (
                       iconNominateForSubmit

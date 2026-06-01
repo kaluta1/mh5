@@ -1,40 +1,88 @@
 import type { Round } from "@/lib/api-service"
 import { isRoundVotingLive } from "@/lib/is-round-voting-live"
 
-export type RoundTabKind = "nominate" | "vote" | "combined"
+export type RoundTabKind = "nominate" | "vote"
 
-/**
- * Same round pills as the contests dashboard: current nomination month + live vote round
- * (or a single combined tab when they are the same round).
- */
-export function computeDisplayRounds(rounds: Round[]): Array<{ round: Round; pill: string; kind: RoundTabKind }> {
-  if (!rounds?.length) return []
-  const voteRound = rounds.find((r: Round) => isRoundVotingLive(r, rounds))
+export type DisplayRoundTab = {
+  round: Round
+  pill: string
+  kind: RoundTabKind
+  /** Unique pill id — `${kind}:${roundId}` so Submit and Vote stay separate even for the same round row. */
+  tabKey: string
+}
+
+export function roundTabKey(kind: RoundTabKind, roundId: number): string {
+  return `${kind}:${roundId}`
+}
+
+function isSubmissionWindowOpen(round: Round): boolean {
+  if (round.is_submission_open) return true
+  const b = roundScheduleBounds(round)
+  if (!b) return false
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const startDay = new Date(b.start.getFullYear(), b.start.getMonth(), b.start.getDate())
+  const endDay = new Date(b.end.getFullYear(), b.end.getMonth(), b.end.getDate())
+  return today >= startDay && today <= endDay
+}
+
+/** Submit-month round: open submission, title match, or newest non-vote round — never reuse the live vote round. */
+function pickNominationRound(rounds: Round[], voteRound: Round | undefined): Round | undefined {
   const now = new Date()
   const currentMonthStr = now.toLocaleDateString("en-US", { month: "long", year: "numeric" }).toLowerCase()
-  const nominationRound =
-    rounds.find((r: Round) => String(r.name || "").toLowerCase().includes(currentMonthStr)) || rounds[0]
-  if (nominationRound && voteRound && Number(nominationRound.id) === Number(voteRound.id)) {
-    return [{ round: nominationRound, pill: "Submit & Vote", kind: "combined" }]
-  }
-  const out: Array<{ round: Round; pill: string; kind: RoundTabKind }> = []
-  const seen = new Set<number>()
+  const notVote = (r: Round) => !voteRound || Number(r.id) !== Number(voteRound.id)
+
+  const byOpenSubmission = rounds.find((r) => notVote(r) && isSubmissionWindowOpen(r))
+  if (byOpenSubmission) return byOpenSubmission
+
+  const byName = rounds.find(
+    (r) => notVote(r) && roundTitleStartsWithCurrentMonthYear(r.name, currentMonthStr),
+  )
+  if (byName) return byName
+
+  const looseName = rounds.find(
+    (r) => notVote(r) && String(r.name || "").toLowerCase().includes(currentMonthStr),
+  )
+  if (looseName) return looseName
+
+  const sorted = [...rounds].filter(notVote).sort((a, b) => Number(b.id) - Number(a.id))
+  return sorted[0]
+}
+
+/**
+ * Contests dashboard top pills: always separate **Submit** (nomination month) and **Vote** (live vote round).
+ */
+export function computeDisplayRounds(rounds: Round[]): DisplayRoundTab[] {
+  if (!rounds?.length) return []
+  const voteRound = rounds.find((r: Round) => isRoundVotingLive(r, rounds))
+  const nominationRound = pickNominationRound(rounds, voteRound)
+
+  const out: DisplayRoundTab[] = []
+  const seen = new Set<string>()
   const push = (r: Round | undefined | null, pill: string, kind: RoundTabKind) => {
     if (!r) return
     const id = Number(r.id)
-    if (Number.isNaN(id) || seen.has(id)) return
-    seen.add(id)
-    out.push({ round: r, pill, kind })
+    if (Number.isNaN(id)) return
+    const key = roundTabKey(kind, id)
+    if (seen.has(key)) return
+    seen.add(key)
+    out.push({ round: r, pill, kind, tabKey: key })
   }
+
   push(nominationRound, "Submit", "nominate")
-  push(voteRound as Round | undefined, "Vote", "vote")
-  return out.length
-    ? out
-    : rounds.map((r) => ({
-        round: r,
-        pill: isRoundVotingLive(r, rounds) ? "Vote" : "Submit",
-        kind: (isRoundVotingLive(r, rounds) ? "vote" : "nominate") as RoundTabKind,
-      }))
+  push(voteRound, "Vote", "vote")
+
+  if (out.length) return out
+
+  return rounds.map((r) => {
+    const kind: RoundTabKind = isRoundVotingLive(r, rounds) ? "vote" : "nominate"
+    return {
+      round: r,
+      pill: kind === "vote" ? "Vote" : "Submit",
+      kind,
+      tabKey: roundTabKey(kind, r.id),
+    }
+  })
 }
 
 /**

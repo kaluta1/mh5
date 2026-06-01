@@ -120,14 +120,34 @@ async def lifespan(app: FastAPI):
             logger.info("Starting monthly round scheduler...")
             await monthly_round_scheduler.start()
             
-            # Ensure rounds exist for all months up to current month
+            loop = asyncio.get_event_loop()
+
             logger.info("Ensuring current month round exists...")
             try:
-                loop = asyncio.get_event_loop()
                 await loop.run_in_executor(None, monthly_round_scheduler.ensure_current_month_round)
                 logger.info("Current month round ready")
             except Exception as e:
                 logger.error(f"Error ensuring current month round: {e}")
+
+            logger.info("Running season migrations after round ensure...")
+            try:
+                from app.db.session import SessionLocal
+                from app.services.season_migration import season_migration_service
+
+                def _run_migrations():
+                    db = SessionLocal()
+                    try:
+                        return season_migration_service.check_and_process_migrations(db)
+                    finally:
+                        db.close()
+
+                mig = await loop.run_in_executor(None, _run_migrations)
+                logger.info(
+                    "Startup migrations processed=%s",
+                    mig.get("processed") if isinstance(mig, dict) else mig,
+                )
+            except Exception as e:
+                logger.error(f"Error running startup season migrations: {e}")
 
         # Fire and forget the async task
         asyncio.create_task(_delayed_start())

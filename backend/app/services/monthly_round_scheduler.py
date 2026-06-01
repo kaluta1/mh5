@@ -18,6 +18,90 @@ from app.scripts.generate_monthly_rounds import generate_monthly_round
 logger = logging.getLogger(__name__)
 
 
+def sync_round_calendar_flags(db: Session, round_obj: Round) -> bool:
+    """
+    Align is_submission_open / is_voting_open / status with calendar dates on the round row.
+    Called when ensuring the current-month round so June submissions work on the 1st.
+    """
+    today = date.today()
+    changed = False
+
+    in_submission = bool(
+        round_obj.submission_start_date
+        and round_obj.submission_end_date
+        and round_obj.submission_start_date <= today <= round_obj.submission_end_date
+    )
+    in_voting = bool(
+        round_obj.voting_start_date
+        and round_obj.voting_end_date
+        and round_obj.voting_start_date <= today <= round_obj.voting_end_date
+    )
+
+    if in_submission:
+        if round_obj.status == RoundStatus.COMPLETED:
+            round_obj.status = RoundStatus.ACTIVE
+            changed = True
+        if not round_obj.is_submission_open:
+            round_obj.is_submission_open = True
+            changed = True
+    elif round_obj.submission_end_date and today > round_obj.submission_end_date:
+        if round_obj.is_submission_open:
+            round_obj.is_submission_open = False
+            changed = True
+
+    if in_voting:
+        if round_obj.status == RoundStatus.COMPLETED:
+            round_obj.status = RoundStatus.ACTIVE
+            changed = True
+        if not round_obj.is_voting_open:
+            round_obj.is_voting_open = True
+            changed = True
+    elif round_obj.voting_end_date and today > round_obj.voting_end_date:
+        if round_obj.is_voting_open:
+            round_obj.is_voting_open = False
+            changed = True
+        if round_obj.status != RoundStatus.CANCELLED and not in_submission:
+            if round_obj.status != RoundStatus.COMPLETED:
+                round_obj.status = RoundStatus.COMPLETED
+                changed = True
+
+    if changed:
+        db.add(round_obj)
+        db.commit()
+        db.refresh(round_obj)
+    return changed
+
+
+def link_active_contests_to_round(db: Session, round_id: int) -> int:
+    """Link every active contest to the round if not already linked. Returns new link count."""
+    active_contests = db.query(Contest).filter(Contest.is_active == True).all()
+    try:
+        active_contests = [c for c in active_contests if not getattr(c, "is_deleted", False)]
+    except Exception:
+        pass
+
+    linked = 0
+    for contest in active_contests:
+        existing_link = db.execute(
+            select(round_contests).where(
+                round_contests.c.round_id == round_id,
+                round_contests.c.contest_id == contest.id,
+            )
+        ).first()
+        if not existing_link:
+            db.execute(
+                insert(round_contests).values(
+                    round_id=round_id,
+                    contest_id=contest.id,
+                    created_at=datetime.utcnow(),
+                )
+            )
+            linked += 1
+    if linked:
+        db.commit()
+    return linked
+
+
 class MonthlyRoundScheduler:
     """
     Background service that automatically creates monthly rounds
@@ -53,16 +137,12 @@ class MonthlyRoundScheduler:
         """Main loop that checks and creates rounds periodically"""
         while self.running:
             try:
-                await asyncio.sleep(self.check_interval)
-                
+                logger.info(f"[MonthlyRoundScheduler] Running check at {datetime.utcnow()}")
+                await self._create_monthly_round_if_needed()
+
                 if not self.running:
                     break
-                
-                logger.info(f"[MonthlyRoundScheduler] Running check at {datetime.utcnow()}")
-                
-                # Check if we need to create a round for the current month
-                await self._create_monthly_round_if_needed()
-                
+                await asyncio.sleep(self.check_interval)
             except asyncio.CancelledError:
                 logger.info("[MonthlyRoundScheduler] Task cancelled")
                 break
@@ -85,12 +165,14 @@ class MonthlyRoundScheduler:
             
             if existing_round:
                 logger.info(f"[MonthlyRoundScheduler] Round '{round_name}' already exists (id={existing_round.id})")
+                sync_round_calendar_flags(db, existing_round)
+                link_active_contests_to_round(db, existing_round.id)
                 return
-            
-            # Create the round
+
             logger.info(f"[MonthlyRoundScheduler] Creating round for {month_name}...")
             new_round = generate_monthly_round(db, target_date=today)
-            
+            sync_round_calendar_flags(db, new_round)
+
             logger.info(f"[MonthlyRoundScheduler] ✅ Round '{round_name}' created successfully (id={new_round.id})")
             
         except Exception as e:
@@ -250,10 +332,10 @@ class MonthlyRoundScheduler:
             db.close()
 
 
-    def ensure_current_month_round(self):
+    def ensure_current_month_round(self) -> Optional[Round]:
         """
         Ensure a round exists for the current month.
-        Creates the round if missing and links all active contests.
+        Creates the round if missing, links active contests, and opens submission on the 1st.
         """
         today = date.today()
         month_name = today.strftime("%B %Y")
@@ -266,34 +348,22 @@ class MonthlyRoundScheduler:
             existing = db.query(Round).filter(Round.name == round_name).first()
             if existing:
                 logger.info(f"Round '{round_name}' already exists (id={existing.id})")
-
-                # Ensure all active contests are linked
-                active_contests = db.query(Contest).filter(Contest.is_active == True).all()
-                links = db.execute(
-                    select(round_contests).where(round_contests.c.round_id == existing.id)
-                ).all()
-                linked = {l.contest_id for l in links}
-
-                unlinked = [c for c in active_contests if c.id not in linked]
-                if unlinked:
-                    for c in unlinked:
-                        try:
-                            db.execute(insert(round_contests).values(
-                                round_id=existing.id, contest_id=c.id
-                            ))
-                        except Exception:
-                            pass
-                    db.commit()
-                    logger.info(f"Linked {len(unlinked)} new contests to {round_name}")
+                sync_round_calendar_flags(db, existing)
+                linked = link_active_contests_to_round(db, existing.id)
+                if linked:
+                    logger.info(f"Linked {linked} new contests to {round_name}")
                 return existing
-            else:
-                logger.info(f"Creating {round_name}...")
-                round_obj = generate_monthly_round(db, target_date=today)
-                logger.info(f"{round_name} created (id={round_obj.id})")
-                return round_obj
+
+            logger.info(f"Creating {round_name}...")
+            round_obj = generate_monthly_round(db, target_date=today)
+            sync_round_calendar_flags(db, round_obj)
+            link_active_contests_to_round(db, round_obj.id)
+            logger.info(f"{round_name} created (id={round_obj.id})")
+            return round_obj
         except Exception as e:
-            logger.error(f"Error ensuring current month round: {e}")
+            logger.error(f"Error ensuring current month round: {e}", exc_info=True)
             db.rollback()
+            raise
         finally:
             db.close()
 

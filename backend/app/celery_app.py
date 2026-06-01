@@ -20,7 +20,11 @@ celery_app = Celery(
     "myfav",
     broker=get_redis_url(),
     backend=get_redis_url(),
-    include=["app.tasks.season_migration", "app.tasks.contest_status"]
+    include=[
+        "app.tasks.season_migration",
+        "app.tasks.contest_status",
+        "app.tasks.monthly_round",
+    ]
 )
 
 # Configuration Celery
@@ -39,6 +43,10 @@ celery_app.conf.update(
 
 # Configuration des tâches périodiques (beat schedule)
 celery_app.conf.beat_schedule = {
+    "ensure-current-month-round": {
+        "task": "app.tasks.monthly_round.ensure_current_month_round",
+        "schedule": 3600.0,  # Hourly — creates Round {Month YYYY} on the 1st if missing
+    },
     "process-season-migrations": {
         "task": "app.tasks.season_migration.process_season_migrations",
         "schedule": 3600.0,  # Exécuter toutes les heures (3600 secondes)

@@ -66,6 +66,15 @@ def generate_monthly_round(db: Session, target_date: Optional[date] = None) -> R
     
     if existing_round:
         print(f"Round '{round_name}' déjà existant (id={existing_round.id})")
+        from app.services.monthly_round_scheduler import (
+            link_active_contests_to_round,
+            sync_round_calendar_flags,
+        )
+
+        sync_round_calendar_flags(db, existing_round)
+        linked = link_active_contests_to_round(db, existing_round.id)
+        if linked:
+            print(f"Linked {linked} active contest(s) to existing round")
         return existing_round
     
     # Calculer les dates
