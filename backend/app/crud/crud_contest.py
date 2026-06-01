@@ -360,6 +360,36 @@ def _season_pair_for_requested_ui_level(
         row = q.first()
         if row:
             return row[0], row[1]
+
+    # Fallback: for pooled phases (regional/continental/global) the season may have
+    # been created with the source round_id. Search for the nearest season at this
+    # level across all rounds so promoted rosters are still found when the UI is on
+    # a later calendar round.
+    if ui in ("regional", "region", "continent", "continental", "global"):
+        for active_only in (True, False):
+            q = (
+                db.query(ContestSeasonLink, ContestSeason)
+                .join(ContestSeason, ContestSeason.id == ContestSeasonLink.season_id)
+                .filter(
+                    ContestSeasonLink.contest_id == contest_id,
+                    ContestSeason.level == target_enum,
+                    ContestSeason.is_deleted == False,
+                )
+                .order_by(
+                    case(
+                        (ContestSeason.round_id <= target_round_id, 0),
+                        else_=1,
+                    ),
+                    ContestSeason.round_id.desc(),
+                    ContestSeason.id.desc(),
+                )
+            )
+            if active_only:
+                q = q.filter(ContestSeasonLink.is_active == True)
+            row = q.first()
+            if row:
+                return row[0], row[1]
+
     return None, None
 
 
@@ -1036,11 +1066,12 @@ class CRUDContest:
         else:
             _entries_entry_type_clause = Contestant.entry_type == contest_entry_type
         season_level_lower_for_count = str(season_level or "").lower()
-        # Nominations are always counted from Contestant rows (by round + geo), not
-        # ContestantSeason membership — otherwise cards/rosters show only pool + self.
+        # For pooled phases (regional/continental/global) the visible roster is defined
+        # by ContestantSeason membership, regardless of contest mode.  Country-level
+        # nominations still fall through to the round+geo branch because "country" is
+        # not in the pooled-level list.
         count_by_active_season_members = (
-            contest_mode != "nomination"
-            and season_link is not None
+            season_link is not None
             and season_level_lower_for_count in ("regional", "region", "continent", "global")
         )
         ea_regional_nomination_count = (
@@ -1935,13 +1966,22 @@ class CRUDContest:
         if target_round_id is not None and not nomination_country_membership_scope:
             round_scope = Contestant.round_id == target_round_id
             if contest_mode == "nomination":
-                # A new submit month must stay empty/fresh until the user nominates in
-                # that exact calendar round. Older nominations are available via their
-                # own roundId, not mixed into the current Submit round.
-                contestants_query = contestants_query.filter(round_scope)
-                logger.info(
-                    f"[get_contest_with_enriched_contestants] Nomination roster round_id={target_round_id}"
-                )
+                # For pooled phases (regional, continental, global) the visible roster is
+                # defined by ContestantSeason membership, not by the original nomination
+                # round_id. Applying round_id here would exclude promoted contestants.
+                if pooled_season_membership_scope:
+                    logger.info(
+                        f"[get_contest_with_enriched_contestants] Skipping round_id filter for pooled "
+                        f"{season_level} season — roster scoped by ContestantSeason membership"
+                    )
+                else:
+                    # A new submit month must stay empty/fresh until the user nominates in
+                    # that exact calendar round. Older nominations are available via their
+                    # own roundId, not mixed into the current Submit round.
+                    contestants_query = contestants_query.filter(round_scope)
+                    logger.info(
+                        f"[get_contest_with_enriched_contestants] Nomination roster round_id={target_round_id}"
+                    )
             elif nomination_context and current_user_id:
                 my_legacy_null_round = and_(
                     Contestant.user_id == current_user_id,

@@ -771,6 +771,13 @@ function ContestsPageContent() {
     (contestStatus: unknown) => {
       const s = String(contestStatus ?? '').toLowerCase()
       if (['regional', 'continent', 'continental', 'global'].includes(s)) return false
+      // Pooled nomination phases (regional/continental/global) must not pass a
+      // country filter to the detail page — the roster is cross-country.
+      const level =
+        nominationMigrationLevel !== 'all'
+          ? nominationMigrationLevel
+          : normalizeContestLevel(String(contestStatus ?? ''))
+      if (['regional', 'region', 'continent', 'continental', 'global'].includes(level)) return false
       if (categoryTab === 'nomination') {
         const explicit =
           !!(filterCountry && filterCountry !== 'all' && filterCountry !== '')
@@ -778,7 +785,7 @@ function ContestsPageContent() {
       }
       return !!(filterCountry && filterCountry !== 'all' && filterCountry !== '')
     },
-    [filterCountry, user?.country, categoryTab]
+    [filterCountry, user?.country, categoryTab, nominationMigrationLevel]
   )
 
   // Keep contest detail filters aligned with current list filters
