@@ -50,8 +50,11 @@ def main() -> int:
     from app.models.round import Round
     from app.scripts.generate_monthly_rounds import generate_monthly_round
     from app.services.monthly_round_scheduler import (
+        close_stale_voting_rounds,
+        dedupe_submission_month_rounds,
         link_active_contests_to_round,
         monthly_round_scheduler,
+        resolve_live_nomination_vote_round,
         sync_round_calendar_flags,
     )
     from app.services.season_migration import season_migration_service
@@ -77,6 +80,21 @@ def main() -> int:
         f"submission={rnd.submission_start_date}..{rnd.submission_end_date} "
         f"is_submission_open={rnd.is_submission_open} is_voting_open={rnd.is_voting_open}"
     )
+
+    logger.info("=== Step 1b: dedupe June / close stale vote flags ===")
+    db = SessionLocal()
+    try:
+        from datetime import date as date_cls
+
+        today = date_cls.today()
+        n_dup = dedupe_submission_month_rounds(db, today)
+        n_vote = close_stale_voting_rounds(db, today)
+        live = resolve_live_nomination_vote_round(db, today)
+        print(f"Deduped duplicate month rounds: {n_dup}; closed stale vote flags: {n_vote}")
+        if live:
+            print(f"Live vote round: id={live.id} name={live.name!r}")
+    finally:
+        db.close()
 
     logger.info("=== Step 2: sync contest submission/voting flags from rounds ===")
     db = SessionLocal()

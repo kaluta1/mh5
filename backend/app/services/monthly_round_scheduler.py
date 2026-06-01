@@ -72,6 +72,82 @@ def sync_round_calendar_flags(db: Session, round_obj: Round) -> bool:
     return changed
 
 
+def resolve_live_nomination_vote_round(db: Session, today: Optional[date] = None) -> Optional[Round]:
+    """
+    The round users vote in this calendar month: latest round whose submission month has ended.
+    On 2026-06-01 that is May (not April with a stale is_voting_open flag).
+    """
+    today = today or date.today()
+    rows = (
+        db.query(Round)
+        .filter(
+            Round.is_voting_open == True,
+            Round.status != RoundStatus.COMPLETED,
+            Round.submission_end_date.isnot(None),
+            Round.submission_end_date < today,
+        )
+        .all()
+    )
+    if not rows:
+        return None
+    return max(rows, key=lambda r: (r.submission_end_date, r.id))
+
+
+def close_stale_voting_rounds(db: Session, today: Optional[date] = None) -> int:
+    """Keep is_voting_open on at most one nomination vote round (latest completed submission month)."""
+    today = today or date.today()
+    live = resolve_live_nomination_vote_round(db, today)
+    changed = 0
+    flagged = db.query(Round).filter(Round.is_voting_open == True).all()
+    for rnd in flagged:
+        if live and rnd.id == live.id:
+            continue
+        if rnd.submission_end_date and rnd.submission_end_date < today:
+            rnd.is_voting_open = False
+            db.add(rnd)
+            changed += 1
+    if changed:
+        db.commit()
+    return changed
+
+
+def dedupe_submission_month_rounds(db: Session, target_date: Optional[date] = None) -> int:
+    """
+    Collapse duplicate rows for the same calendar month (e.g. four 'Round June 2026').
+    Keeps the highest id; cancels the rest so Submit picks one canonical round.
+    """
+    target_date = target_date or date.today()
+    month_name = target_date.strftime("%B %Y")
+    pattern = f"%{month_name}%"
+    rows = (
+        db.query(Round)
+        .filter(Round.name.ilike(pattern))
+        .order_by(Round.id.asc())
+        .all()
+    )
+    if len(rows) <= 1:
+        return 0
+    keep = rows[-1]
+    cancelled = 0
+    for rnd in rows[:-1]:
+        if rnd.id == keep.id:
+            continue
+        rnd.status = RoundStatus.CANCELLED
+        rnd.is_submission_open = False
+        rnd.is_voting_open = False
+        db.add(rnd)
+        cancelled += 1
+    if cancelled:
+        db.commit()
+        logger.info(
+            "Deduped %s submission month: kept id=%s, cancelled %s duplicate(s)",
+            month_name,
+            keep.id,
+            cancelled,
+        )
+    return cancelled
+
+
 def link_active_contests_to_round(db: Session, round_id: int) -> int:
     """Link every active contest to the round if not already linked. Returns new link count."""
     active_contests = db.query(Contest).filter(Contest.is_active == True).all()
@@ -345,7 +421,27 @@ class MonthlyRoundScheduler:
 
         db = SessionLocal()
         try:
-            existing = db.query(Round).filter(Round.name == round_name).first()
+            dedupe_submission_month_rounds(db, today)
+            close_stale_voting_rounds(db, today)
+
+            month_start = date(today.year, today.month, 1)
+            existing = (
+                db.query(Round)
+                .filter(
+                    Round.name.ilike(f"%{month_name}%"),
+                    Round.status != RoundStatus.CANCELLED,
+                    Round.submission_start_date == month_start,
+                )
+                .order_by(Round.id.desc())
+                .first()
+            )
+            if not existing:
+                existing = (
+                    db.query(Round)
+                    .filter(Round.name == round_name, Round.status != RoundStatus.CANCELLED)
+                    .order_by(Round.id.desc())
+                    .first()
+                )
             if existing:
                 logger.info(f"Round '{round_name}' already exists (id={existing.id})")
                 sync_round_calendar_flags(db, existing)

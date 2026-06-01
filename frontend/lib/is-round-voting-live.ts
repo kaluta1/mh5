@@ -4,6 +4,37 @@ type RoundVotingFields = {
   status?: string
   voting_start_date?: string | null
   voting_end_date?: string | null
+  submission_end_date?: string | null
+}
+
+function parseDay(s?: string | null): Date | null {
+  if (!s) return null
+  const d = new Date(s.includes('T') ? s : `${s}T12:00:00`)
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
+/** Latest completed submission month among open vote rounds (e.g. May when today is June). */
+function pickLiveVoteRound(candidates: RoundVotingFields[]): RoundVotingFields | null {
+  if (!candidates.length) return null
+  const today = new Date()
+  const todayMid = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  const scored = candidates
+    .map((r) => {
+      const end = parseDay(r.submission_end_date)
+      const endMid = end
+        ? new Date(end.getFullYear(), end.getMonth(), end.getDate())
+        : null
+      return { r, endMid }
+    })
+    .filter((x) => x.endMid && x.endMid <= todayMid)
+  const pool = scored.length ? scored : candidates.map((r) => ({ r, endMid: parseDay(r.submission_end_date) }))
+  pool.sort((a, b) => {
+    const ta = a.endMid?.getTime() ?? 0
+    const tb = b.endMid?.getTime() ?? 0
+    if (tb !== ta) return tb - ta
+    return b.r.id - a.r.id
+  })
+  return pool[0]?.r ?? null
 }
 
 /**
@@ -35,21 +66,28 @@ function _calendarVotingWindowOpen(round: RoundVotingFields): boolean {
 }
 
 export function isRoundVotingLive(round: RoundVotingFields, allRounds?: RoundVotingFields[]): boolean {
+  if (round.status === 'completed') return false
   const calendarOpen =
     !!(round.voting_start_date && round.voting_end_date) && _calendarVotingWindowOpen(round)
   if (!round.is_voting_open && !calendarOpen) return false
-  if (round.status === 'completed') return false
 
   if (allRounds && allRounds.length > 0) {
+    const flagged = allRounds.filter(
+      (r) => r.status !== 'completed' && Boolean(r.is_voting_open),
+    )
+    if (flagged.length > 0) {
+      const live = pickLiveVoteRound(flagged)
+      if (live) return round.id === live.id
+    }
     const candidates = allRounds.filter((r) => {
       const cal =
         !!(r.voting_start_date && r.voting_end_date) && _calendarVotingWindowOpen(r)
       return (Boolean(r.is_voting_open) || cal) && r.status !== 'completed'
     })
     if (candidates.length === 0) return false
-    const maxId = Math.max(...candidates.map((r) => r.id))
-    if (round.id !== maxId) return false
+    const live = pickLiveVoteRound(candidates) ?? candidates.sort((a, b) => b.id - a.id)[0]
+    if (round.id !== live.id) return false
   }
 
-  return _calendarVotingWindowOpen(round)
+  return Boolean(round.is_voting_open) || _calendarVotingWindowOpen(round)
 }

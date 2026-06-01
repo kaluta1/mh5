@@ -87,6 +87,31 @@ function normalizeContestLevel(level?: string): Exclude<NominationMigrationLevel
   return null
 }
 
+/** Vote geography chips: country-only filter at country; no country filter at regional+ pools. */
+function geoFiltersForVoteFetch(
+  level: NominationMigrationLevel,
+  filterCountry: string,
+  filterRegion: string,
+  filterContinent: string,
+): { filterCountry?: string; filterRegion?: string; filterContinent?: string } {
+  if (level === 'regional') {
+    return {
+      filterRegion: filterRegion || undefined,
+    }
+  }
+  if (level === 'continental' || level === 'global') {
+    return {
+      filterContinent: filterContinent && filterContinent !== 'all' ? filterContinent : undefined,
+    }
+  }
+  if (level === 'country') {
+    return {
+      filterCountry: filterCountry && filterCountry !== 'all' ? filterCountry : undefined,
+    }
+  }
+  return {}
+}
+
 function ContestsPageContent() {
   const { t } = useLanguage()
   const { user, isAuthenticated, isLoading } = useAuth()
@@ -394,7 +419,7 @@ function ContestsPageContent() {
   // after the first (and every) page load and would overwrite setHasMore from the fetch with false.
   useEffect(() => {
     setHasMore(false)
-  }, [activeRoundId, effectiveRoundIdForFetch, categoryTab, filterCountry, filterRegion, filterContinent, nominationMigrationLevel, committedSearch])
+  }, [activeRoundId, effectiveRoundIdForFetch, categoryTab, activeDisplayTab?.kind, filterCountry, filterRegion, filterContinent, nominationMigrationLevel, committedSearch])
 
   // 2. Fetch Contests for Selected Round (Initial load) - allow unauthenticated users
   // Use a ref to track current user id without triggering re-fetches
@@ -412,15 +437,36 @@ function ContestsPageContent() {
     const fetchContestsForRound = async () => {
       setContestsLoading(true)
       const contestMode = categoryTab === 'nomination' ? 'nomination' : categoryTab === 'participations' ? 'participation' : undefined
-      const activeCountry = (filterCountry && filterCountry !== 'all') ? filterCountry : undefined
-      const activeRegion = (filterRegion && nominationMigrationLevel === 'regional') ? filterRegion : undefined
-      const activeContinent = (filterContinent && filterContinent !== 'all') ? filterContinent : undefined
       const activeSearch = committedSearch || undefined
       const activeNominationLevel =
         categoryTab === 'nomination' &&
         activeDisplayTab?.kind === 'vote' &&
         nominationMigrationLevel !== 'all'
           ? nominationMigrationLevel
+          : undefined
+      const voteGeo =
+        activeNominationLevel && activeDisplayTab?.kind === 'vote'
+          ? geoFiltersForVoteFetch(
+              nominationMigrationLevel,
+              filterCountry,
+              filterRegion,
+              filterContinent,
+            )
+          : null
+      const activeCountry = voteGeo
+        ? voteGeo.filterCountry
+        : filterCountry && filterCountry !== 'all'
+          ? filterCountry
+          : undefined
+      const activeRegion = voteGeo
+        ? voteGeo.filterRegion
+        : filterRegion && nominationMigrationLevel === 'regional'
+          ? filterRegion
+          : undefined
+      const activeContinent = voteGeo
+        ? voteGeo.filterContinent
+        : filterContinent && filterContinent !== 'all'
+          ? filterContinent
           : undefined
 
       // Check cache first
@@ -531,7 +577,7 @@ function ContestsPageContent() {
     }
     // isAuthenticated/user removed: prevents race condition where auth resolve
     // aborts in-flight request. userIdRef handles cache key without re-triggering.
-  }, [activeRoundId, effectiveRoundIdForFetch, categoryTab, filterCountry, filterRegion, filterContinent, nominationMigrationLevel, committedSearch])
+  }, [activeRoundId, effectiveRoundIdForFetch, categoryTab, activeDisplayTab?.kind, filterCountry, filterRegion, filterContinent, nominationMigrationLevel, committedSearch])
 
   // Load more contests function
   const loadMoreContests = useCallback(async () => {
@@ -539,15 +585,36 @@ function ContestsPageContent() {
 
     setLoadingMore(true)
     const contestMode = categoryTab === 'nomination' ? 'nomination' : categoryTab === 'participations' ? 'participation' : undefined
-    const activeCountry = (filterCountry && filterCountry !== 'all') ? filterCountry : undefined
-    const activeRegion = (filterRegion && nominationMigrationLevel === 'regional') ? filterRegion : undefined
-    const activeContinent = filterContinent !== 'all' ? filterContinent : undefined
     const activeSearch = committedSearch || undefined
     const activeNominationLevel =
       categoryTab === 'nomination' &&
       activeDisplayTab?.kind === 'vote' &&
       nominationMigrationLevel !== 'all'
         ? nominationMigrationLevel
+        : undefined
+    const voteGeo =
+      activeNominationLevel && activeDisplayTab?.kind === 'vote'
+        ? geoFiltersForVoteFetch(
+            nominationMigrationLevel,
+            filterCountry,
+            filterRegion,
+            filterContinent,
+          )
+        : null
+    const activeCountry = voteGeo
+      ? voteGeo.filterCountry
+      : filterCountry && filterCountry !== 'all'
+        ? filterCountry
+        : undefined
+    const activeRegion = voteGeo
+      ? voteGeo.filterRegion
+      : filterRegion && nominationMigrationLevel === 'regional'
+        ? filterRegion
+        : undefined
+    const activeContinent = voteGeo
+      ? voteGeo.filterContinent
+      : filterContinent !== 'all'
+        ? filterContinent
         : undefined
 
     try {
@@ -592,7 +659,7 @@ function ContestsPageContent() {
     } finally {
       setLoadingMore(false)
     }
-  }, [loadingMore, hasMore, activeRoundId, effectiveRoundIdForFetch, categoryTab, filterCountry, filterRegion, filterContinent, nominationMigrationLevel, committedSearch, allContests.length])
+  }, [loadingMore, hasMore, activeRoundId, effectiveRoundIdForFetch, categoryTab, activeDisplayTab?.kind, filterCountry, filterRegion, filterContinent, nominationMigrationLevel, committedSearch, allContests.length])
 
   const loadMoreContestsRef = useRef(loadMoreContests)
   loadMoreContestsRef.current = loadMoreContests
@@ -726,8 +793,12 @@ function ContestsPageContent() {
       filtered = filtered.filter((c) => normalizeContestLevel(c.status) === want)
     }
 
-    // 3. Filter by migration stage (for nominations tab)
-    if (categoryTab === 'nomination' && nominationMigrationLevel !== 'all') {
+    // 3. Migration stage filter — skip when Vote tab already sent contestLevel to the API
+    if (
+      categoryTab === 'nomination' &&
+      nominationMigrationLevel !== 'all' &&
+      activeDisplayTab?.kind !== 'vote'
+    ) {
       filtered = filtered.filter((c) => normalizeContestLevel(c.status) === nominationMigrationLevel)
     }
 
@@ -765,7 +836,7 @@ function ContestsPageContent() {
     })
 
     return filtered
-  }, [rawContests, committedSearch, sortBy, categoryTab, filterLevel, nominationMigrationLevel])
+  }, [rawContests, committedSearch, sortBy, categoryTab, filterLevel, nominationMigrationLevel, activeDisplayTab?.kind])
 
   if (displayedContests.length > 0) {
     lastDisplayedContestsRef.current = displayedContests

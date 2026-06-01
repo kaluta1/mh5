@@ -59,11 +59,26 @@ def generate_monthly_round(db: Session, target_date: Optional[date] = None) -> R
     month_name = target_date.strftime("%B %Y")
     round_name = f"Round {month_name}"
     
-    # Vérifier si un round existe déjà pour ce mois
-    existing_round = db.query(Round).filter(
-        Round.name == round_name
-    ).first()
-    
+    month_start = get_month_start(year, month)
+
+    # Vérifier si un round existe déjà pour ce mois (name + submission_start; highest id wins)
+    existing_round = (
+        db.query(Round)
+        .filter(
+            Round.submission_start_date == month_start,
+            Round.status != RoundStatus.CANCELLED,
+        )
+        .order_by(Round.id.desc())
+        .first()
+    )
+    if not existing_round:
+        existing_round = (
+            db.query(Round)
+            .filter(Round.name == round_name, Round.status != RoundStatus.CANCELLED)
+            .order_by(Round.id.desc())
+            .first()
+        )
+
     if existing_round:
         print(f"Round '{round_name}' déjà existant (id={existing_round.id})")
         from app.services.monthly_round_scheduler import (

@@ -35,7 +35,7 @@ function addCalendarMonths(d: Date, deltaMonths: number): Date {
   return out
 }
 
-function cohortAnchorDate(round: Round): Date | null {
+export function cohortAnchorDate(round: Round): Date | null {
   const sub = parseDay(round.submission_start_date)
   if (sub) return new Date(sub.getFullYear(), sub.getMonth(), 1)
   const name = String(round.name || "")
@@ -113,24 +113,41 @@ function isSubmissionWindowOpen(round: Round): boolean {
   return today >= startDay && today <= endDay
 }
 
-/** Submit-month round: open submission, title match, or newest non-vote round — never reuse the live vote round. */
+function sameCalendarMonth(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth()
+}
+
+function bestRoundForMonth(rounds: Round[], target: Date, notVote: (r: Round) => boolean): Round | undefined {
+  const matches = rounds.filter((r) => {
+    if (!notVote(r)) return false
+    const anchor = cohortAnchorDate(r)
+    return anchor ? sameCalendarMonth(anchor, target) : false
+  })
+  if (!matches.length) return undefined
+  const open = matches.filter((r) => isSubmissionWindowOpen(r))
+  const pool = open.length ? open : matches
+  return pool.sort((a, b) => Number(b.id) - Number(a.id))[0]
+}
+
+/** Submit-month round: current calendar month (highest id if duplicates) — never the live vote round. */
 function pickNominationRound(rounds: Round[], voteRound: Round | undefined): Round | undefined {
   const now = new Date()
+  const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1)
   const currentMonthStr = now.toLocaleDateString("en-US", { month: "long", year: "numeric" }).toLowerCase()
   const notVote = (r: Round) => !voteRound || Number(r.id) !== Number(voteRound.id)
 
-  const byOpenSubmission = rounds.find((r) => notVote(r) && isSubmissionWindowOpen(r))
+  const byMonth = bestRoundForMonth(rounds, currentMonth, notVote)
+  if (byMonth) return byMonth
+
+  const byOpenSubmission = [...rounds]
+    .filter((r) => notVote(r) && isSubmissionWindowOpen(r))
+    .sort((a, b) => Number(b.id) - Number(a.id))[0]
   if (byOpenSubmission) return byOpenSubmission
 
   const byName = rounds.find(
     (r) => notVote(r) && roundTitleStartsWithCurrentMonthYear(r.name, currentMonthStr),
   )
   if (byName) return byName
-
-  const looseName = rounds.find(
-    (r) => notVote(r) && String(r.name || "").toLowerCase().includes(currentMonthStr),
-  )
-  if (looseName) return looseName
 
   const sorted = [...rounds].filter(notVote).sort((a, b) => Number(b.id) - Number(a.id))
   return sorted[0]
