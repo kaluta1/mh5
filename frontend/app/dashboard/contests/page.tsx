@@ -1259,6 +1259,18 @@ function ContestsPageContent() {
               {visibleContests.map((contest: any) => {
                 const rowMode = normalizeContestMode(contest.contest_mode)
                 const isNominationCard = rowMode === 'nomination'
+                const selectedRoundId = roundIdNav ? String(roundIdNav) : null
+                const entryRoundId = contest.userEntryRoundId != null ? String(contest.userEntryRoundId) : null
+                const hasEntryInSelectedRound = Boolean(
+                  isNominationCard &&
+                  contest.currentUserContesting &&
+                  selectedRoundId &&
+                  entryRoundId &&
+                  entryRoundId === selectedRoundId,
+                )
+                const isCurrentUserInThisCardRound = isNominationCard
+                  ? hasEntryInSelectedRound
+                  : contest.currentUserParticipated
                 return (
                 <ContestCard
                   key={contest.id}
@@ -1268,16 +1280,16 @@ function ContestsPageContent() {
                   isFavorite={false}
                   isNomination={isNominationCard}
                   contest_mode={contest.contest_mode}
-                  currentUserContesting={(isNominationCard ? contest.currentUserContesting : contest.currentUserParticipated) || false}
+                  currentUserContesting={Boolean(isCurrentUserInThisCardRound)}
                   onToggleFavorite={() => { }}
                   isRoundClosed={isRoundClosed}
                   onParticipate={() =>
                     handleParticipate(
                       contest.id,
-                      (isNominationCard ? contest.currentUserContesting : contest.currentUserParticipated) || false,
+                      Boolean(isCurrentUserInThisCardRound),
                       roundIdNav,
                       contest.contest_mode,
-                      contest.userEntryRoundId ?? null,
+                      hasEntryInSelectedRound ? contest.userEntryRoundId ?? null : null,
                     )
                   }
                   onViewContestants={() => {
