@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { logger } from '@/lib/logger'
 import { LocationFilterBar } from '@/components/dashboard/location-filter-bar'
 import { getEffectiveApiUrl } from '@/lib/config'
+import { COUNTRIES_DATA } from '@/lib/countries-data'
 import { regionalPoolForCountry } from '@/lib/regional-pool'
 import {
   cohortAnchorDate,
@@ -86,6 +87,14 @@ function normalizeContestLevel(level?: string): Exclude<NominationMigrationLevel
   if (raw === 'continental' || raw === 'continent') return 'continental'
   if (raw === 'global') return 'global'
   return null
+}
+
+function continentForCountry(country?: string | null): string | undefined {
+  const key = country?.trim().toLowerCase()
+  if (!key) return undefined
+  return COUNTRIES_DATA.find((item) =>
+    item.name.toLowerCase() === key || item.code.toLowerCase() === key
+  )?.continent
 }
 
 /** Vote geography chips: country-only filter at country; no country filter at regional+ pools. */
@@ -426,6 +435,24 @@ function ContestsPageContent() {
       setFilterCountry('')
     }
   }, [categoryTab, nominationMigrationLevel, filterCountry, filterRegion, user?.country, (user as any)?.region])
+
+  useEffect(() => {
+    if (categoryTab !== 'nomination' || nominationMigrationLevel !== 'continental') return
+    const nextContinent =
+      (filterContinent && filterContinent !== 'all' ? filterContinent : undefined) ||
+      continentForCountry(filterCountry) ||
+      (user as any)?.continent ||
+      continentForCountry(user?.country)
+    if (nextContinent && filterContinent !== nextContinent) {
+      setFilterContinent(nextContinent)
+    }
+    if (filterCountry) {
+      setFilterCountry('')
+    }
+    if (filterRegion) {
+      setFilterRegion('')
+    }
+  }, [categoryTab, nominationMigrationLevel, filterCountry, filterRegion, filterContinent, user?.country, (user as any)?.continent])
 
   // Vote pill: default geography chip to country (May nominees voting at country stage).
   useEffect(() => {
