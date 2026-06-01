@@ -230,6 +230,12 @@ class CRUDRound:
             return round_id
 
         if prefer_nomination_submit_round:
+            pref = self.get_preferred_nomination_round_for_contest(db, contest_id)
+            if pref is not None:
+                return pref.id
+            active_sub = self.get_active_round_for_contest(db, contest_id)
+            if active_sub is not None:
+                return active_sub.id
             if current_user_id:
                 from app.models.contests import Contestant
 
@@ -252,12 +258,6 @@ class CRUDRound:
                 if latest_user_round and latest_user_round[0] is not None:
                     return int(latest_user_round[0])
 
-            pref = self.get_preferred_nomination_round_for_contest(db, contest_id)
-            if pref is not None:
-                return pref.id
-            active_sub = self.get_active_round_for_contest(db, contest_id)
-            if active_sub is not None:
-                return active_sub.id
             from app.models.contests import Contestant
 
             max_rid = (

@@ -435,23 +435,23 @@ export default function ContestDetailPage() {
     // Cleanup handled in fetchContestDetails via abortController
   }, [fetchContestDetails])
 
-  // If the user nominated but the roster is empty (stale round/country), refetch with correct scope.
+  // If the user nominated in the selected round but the roster is empty, refetch with
+  // the same selected scope. Do not jump to an older nomination round.
   const rosterRecoveryRef = React.useRef(false)
   useEffect(() => {
     if (pageLoading || !contest || rosterRecoveryRef.current) return
     const hasRoster = (contest.contestants?.length ?? 0) > 0
     const shouldRecover =
-      Boolean(contest.contest?.current_user_contesting) ||
       userHasEntry
     if (!shouldRecover || hasRoster) return
     rosterRecoveryRef.current = true
 
     const recover = async () => {
-      const entryRound = contest.contest?.user_entry_round_id
       const parsedUrl = roundIdFromUrl ? parseInt(roundIdFromUrl, 10) : NaN
       const roundForFetch =
-        entryRound ??
-        (Number.isFinite(parsedUrl) ? parsedUrl : undefined)
+        Number.isFinite(parsedUrl)
+          ? parsedUrl
+          : contest.contest?.display_round_id ?? undefined
 
       try {
         const c = await ApiService.getContest(parseInt(contestId), {
@@ -483,14 +483,16 @@ export default function ContestDetailPage() {
     user?.country,
   ])
 
-  // Nomination: align ?roundId= with where the user's row actually lives (submit fallback / stale URL).
+  // Nomination: keep the page on the selected/current Submit round. Older nominations
+  // must not rewrite June back to May and force edit mode.
   React.useEffect(() => {
     if (pageLoading || !contest?.contest) return
     const mode = normalizeContestMode(contest.contest.contest_mode)
     if (mode !== 'nomination') return
 
-    const entryRound =
-      contest.contest.user_entry_round_id ?? contest.contest.display_round_id
+    if (roundIdFromUrl) return
+
+    const entryRound = contest.contest.display_round_id
     if (entryRound == null) return
 
     const urlNum = roundIdFromUrl ? parseInt(roundIdFromUrl, 10) : NaN

@@ -749,7 +749,7 @@ def read_contest(
             entry_type=expected_entry_type,
             round_id=target_round_id,
         )
-        if participation is None and expected_entry_type == "nomination":
+        if participation is None and expected_entry_type == "nomination" and target_round_id is None:
             participation = crud_contestant.get_latest_entry_in_contest(
                 db=db,
                 contest_id=contest_id,
