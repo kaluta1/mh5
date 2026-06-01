@@ -152,6 +152,7 @@ function ContestsPageContent() {
     const urlRegion = searchParams.get('region')
     return urlRegion || ''
   })
+  const roundIdFromUrl = searchParams.get('roundId')
   const [filterLevel, setFilterLevel] = useState<string>('all') // Level filter for participations: 'city', 'country', 'all'
   const [nominationMigrationLevel, setNominationMigrationLevel] = useState<NominationMigrationLevel>('all')
 
@@ -277,6 +278,9 @@ function ContestsPageContent() {
     const dr = computeDisplayRounds(rounds)
     const allowed = new Set(dr.map((d) => d.tabKey))
     setActiveTabKey((prev) => {
+      if (roundIdFromUrl && rounds.some((r) => String(r.id) === roundIdFromUrl)) {
+        return roundTabKey('nominate', Number(roundIdFromUrl))
+      }
       if (prev && allowed.has(prev)) return prev
       if (prev?.startsWith('nominate:')) {
         const id = prev.split(':')[1]
@@ -284,7 +288,7 @@ function ContestsPageContent() {
       }
       return dr[0]?.tabKey ?? null
     })
-  }, [rounds])
+  }, [rounds, roundIdFromUrl])
 
   useEffect(() => {
     if (activeDisplayTab?.kind === 'nominate' && activeRoundId) {
@@ -332,6 +336,10 @@ function ContestsPageContent() {
         const nextDisplayRounds = computeDisplayRounds(data)
         const allowedTabKeys = new Set(nextDisplayRounds.map((d) => d.tabKey))
         setActiveTabKey((prev) => {
+          const roundIdFromQuery = searchParams.get('roundId')
+          if (roundIdFromQuery && data.some((r: Round) => String(r.id) === roundIdFromQuery)) {
+            return roundTabKey('nominate', Number(roundIdFromQuery))
+          }
           if (prev && allowedTabKeys.has(prev)) return prev
           if (prev?.startsWith('nominate:')) {
             const id = prev.split(':')[1]
@@ -382,6 +390,11 @@ function ContestsPageContent() {
   // Sync filters to URL for persistence on refresh
   useEffect(() => {
     const params = new URLSearchParams(searchParams.toString())
+    if (categoryTab === 'nomination' && activeDisplayTab?.kind === 'nominate' && activeRoundId) {
+      params.set('roundId', activeRoundId)
+    } else if (activeDisplayTab?.kind === 'vote') {
+      params.delete('roundId')
+    }
     if (filterRegion && nominationMigrationLevel === 'regional') {
       params.set('region', filterRegion)
       params.delete('country')
@@ -400,7 +413,7 @@ function ContestsPageContent() {
     }
     const newUrl = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname
     window.history.replaceState(null, '', newUrl)
-  }, [filterCountry, filterRegion, filterContinent, nominationMigrationLevel, searchParams])
+  }, [filterCountry, filterRegion, filterContinent, nominationMigrationLevel, searchParams, categoryTab, activeDisplayTab?.kind, activeRoundId])
 
   useEffect(() => {
     if (categoryTab !== 'nomination' || nominationMigrationLevel !== 'regional') return
@@ -460,6 +473,9 @@ function ContestsPageContent() {
     if (!pendingSubmitRoundId) return
     setActiveTabKey(roundTabKey('nominate', Number(pendingSubmitRoundId)))
     setNominationMigrationLevel('all')
+    setContestsData(null)
+    setAllContests([])
+    lastDisplayedContestsRef.current = []
     clearContestsListCache()
   }
 
@@ -468,6 +484,12 @@ function ContestsPageContent() {
   useEffect(() => {
     setHasMore(false)
   }, [activeRoundId, effectiveRoundIdForFetch, categoryTab, activeDisplayTab?.kind, filterCountry, filterRegion, filterContinent, nominationMigrationLevel, committedSearch])
+
+  useEffect(() => {
+    setContestsData(null)
+    setAllContests([])
+    lastDisplayedContestsRef.current = []
+  }, [effectiveRoundIdForFetch, categoryTab, activeDisplayTab?.kind, nominationMigrationLevel])
 
   // 2. Fetch Contests for Selected Round (Initial load) - allow unauthenticated users
   // Use a ref to track current user id without triggering re-fetches

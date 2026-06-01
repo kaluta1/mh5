@@ -207,11 +207,9 @@ class CRUDRound:
         """
         Which calendar round to use when listing contestants for a contest.
 
-        - If the client passes an explicit ``round_id``, it is honored by default.
-        - For **nomination** contests (``prefer_nomination_submit_round``), if the URL round is
-          a stale voting-era scope (e.g. almost no nomination rows) while the canonical nomination
-          round has more activity, the explicit ``round_id`` is replaced so redeploys and old
-          ``?roundId=`` links still show the right roster.
+        - If the client passes an explicit ``round_id``, honor it exactly. This is
+          important for Submit: a newly opened month (June) legitimately has zero
+          nominations and must not be replaced by last month's populated round.
         - If ``round_id`` is omitted and ``prefer_nomination_submit_round`` is True, prefer the
           current submission month (``get_preferred_nomination_round_for_contest``), then any
           submission window open today, then the latest ``round_id`` among nomination rows, before
@@ -229,98 +227,6 @@ class CRUDRound:
                     round_id,
                     contest_id,
                 )
-            if prefer_nomination_submit_round and current_user_id:
-                from app.models.contests import Contestant
-
-                _nom_row_early = or_(
-                    Contestant.entry_type == "nomination",
-                    Contestant.entry_type.is_(None),
-                )
-                mine_in_requested = (
-                    db.query(Contestant.id)
-                    .filter(
-                        Contestant.season_id == contest_id,
-                        Contestant.user_id == current_user_id,
-                        Contestant.is_deleted == False,
-                        _nom_row_early,
-                        Contestant.round_id == round_id,
-                    )
-                    .first()
-                )
-                if not mine_in_requested:
-                    mine_round_row = (
-                        db.query(Contestant.round_id)
-                        .filter(
-                            Contestant.season_id == contest_id,
-                            Contestant.user_id == current_user_id,
-                            Contestant.is_deleted == False,
-                            _nom_row_early,
-                            Contestant.round_id.isnot(None),
-                        )
-                        .order_by(
-                            Contestant.registration_date.desc(),
-                            Contestant.id.desc(),
-                        )
-                        .first()
-                    )
-                    if mine_round_row and mine_round_row[0] is not None:
-                        return int(mine_round_row[0])
-
-            if prefer_nomination_submit_round:
-                canonical = self.resolve_display_round_id_for_contest(
-                    db,
-                    contest_id,
-                    None,
-                    prefer_nomination_submit_round=True,
-                    current_user_id=current_user_id,
-                )
-                if canonical is not None and canonical != round_id:
-                    from app.models.contests import Contestant
-
-                    # Align with roster counts: legacy rows may have entry_type NULL for nominations.
-                    _nom_row = or_(
-                        Contestant.entry_type == "nomination",
-                        Contestant.entry_type.is_(None),
-                    )
-                    ne = (
-                        db.query(func.count(Contestant.id))
-                        .filter(
-                            Contestant.season_id == contest_id,
-                            Contestant.is_deleted == False,
-                            _nom_row,
-                            Contestant.round_id == round_id,
-                        )
-                        .scalar()
-                    ) or 0
-                    nc = (
-                        db.query(func.count(Contestant.id))
-                        .filter(
-                            Contestant.season_id == contest_id,
-                            Contestant.is_deleted == False,
-                            _nom_row,
-                            Contestant.round_id == canonical,
-                        )
-                        .scalar()
-                    ) or 0
-                    # Only jump to canonical when the requested round has *no* nominations.
-                    # (ne <= 1 and nc > ne) replaced URL rounds that still had real rows — users saw
-                    # another month's roster while ?roundId= pointed at the previous period.)
-                    if ne == 0 and nc > 0:
-                        if current_user_id:
-                            mine_in_requested = (
-                                db.query(Contestant.id)
-                                .filter(
-                                    Contestant.season_id == contest_id,
-                                    Contestant.user_id == current_user_id,
-                                    Contestant.is_deleted == False,
-                                    _nom_row,
-                                    Contestant.round_id == round_id,
-                                )
-                                .first()
-                            )
-                            if mine_in_requested:
-                                return round_id
-                        return canonical
             return round_id
 
         if prefer_nomination_submit_round:

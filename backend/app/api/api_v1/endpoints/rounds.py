@@ -1,5 +1,6 @@
 from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from datetime import date, datetime
 import logging
@@ -326,6 +327,27 @@ def _lightweight_round_data(
         contests_count = len(all_contests)
         contests = all_contests[contest_skip:contest_skip + contest_limit]
 
+        from app.models.contests import Contestant
+
+        def _round_entry_count(contest: Any, contest_mode_value: str) -> int:
+            """Round-specific card count; never use stale all-time Contest.participant_count."""
+            q = db.query(Contestant).filter(
+                Contestant.season_id == contest.id,
+                Contestant.round_id == round_obj.id,
+                Contestant.is_deleted == False,
+            )
+            if contest_mode_value == "nomination":
+                q = q.filter(
+                    (Contestant.entry_type == "nomination")
+                    | (Contestant.entry_type.is_(None))
+                )
+                return int(
+                    q.with_entities(func.count(func.distinct(Contestant.user_id))).scalar()
+                    or 0
+                )
+            q = q.filter(Contestant.entry_type == "participation")
+            return int(q.with_entities(func.count(Contestant.id)).scalar() or 0)
+
         for contest in contests:
             contest_mode_value = _normalize_contest_mode(getattr(contest, "contest_mode", "participation"))
             try:
@@ -339,7 +361,7 @@ def _lightweight_round_data(
                     "country" if contest_mode_value == "nomination" else "city"
                 )
 
-            participant_count = int(getattr(contest, "participant_count", 0) or 0)
+            participant_count = _round_entry_count(contest, contest_mode_value)
             contests_data.append({
                 "id": contest.id,
                 "name": contest.name,
