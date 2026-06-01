@@ -1743,11 +1743,6 @@ def get_contest_contestants(
         has_continent_filter = bool(fco and fco_norm != "all")
         has_city_filter = bool(fci and fci_norm != "all")
 
-        # If explicit country is provided, never suppress it (country-level pages must stay country-scoped).
-        # Suppress only for pooled phases when country is not explicitly requested.
-        if has_country_filter:
-            suppress_geo_filters = False
-
         from app.crud.crud_contest import _get_country_match_patterns
 
         if has_country_filter and not suppress_geo_filters:
