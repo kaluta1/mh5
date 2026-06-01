@@ -18,6 +18,7 @@ import { LocationFilterBar } from '@/components/dashboard/location-filter-bar'
 import { getEffectiveApiUrl } from '@/lib/config'
 import { regionalPoolForCountry } from '@/lib/regional-pool'
 import {
+  cohortAnchorDate,
   cohortRoundForVoteGeographyLevel,
   computeDisplayRounds,
   roundTabKey,
@@ -122,6 +123,7 @@ function ContestsPageContent() {
   // State
   /** `${kind}:${roundId}` — keeps Submit and Vote as separate pills even when they share a round row. */
   const [activeTabKey, setActiveTabKey] = useState<string | null>(null)
+  const [pendingSubmitRoundId, setPendingSubmitRoundId] = useState<string>('')
   const [categoryTab, setCategoryTab] = useState<'nomination' | 'participations'>(() => {
     if (typeof window !== 'undefined') {
       const savedTab = localStorage.getItem('contests_category_tab')
@@ -172,11 +174,36 @@ function ContestsPageContent() {
     return voteRound ? String(voteRound.id) : null
   }, [rounds])
   const displayRounds = useMemo(() => computeDisplayRounds(rounds), [rounds])
-  const activeDisplayTab = useMemo(
-    () => displayRounds.find((d) => d.tabKey === activeTabKey) ?? displayRounds[0],
-    [displayRounds, activeTabKey],
-  )
+  const activeDisplayTab = useMemo(() => {
+    const computed = displayRounds.find((d) => d.tabKey === activeTabKey)
+    if (computed) return computed
+    if (activeTabKey?.startsWith('nominate:')) {
+      const id = activeTabKey.split(':')[1]
+      const round = rounds.find((r) => String(r.id) === id)
+      if (round) {
+        return {
+          round,
+          pill: 'Submit',
+          kind: 'nominate' as const,
+          tabKey: activeTabKey,
+        }
+      }
+    }
+    return displayRounds[0]
+  }, [displayRounds, activeTabKey, rounds])
   const activeRoundId = activeDisplayTab ? String(activeDisplayTab.round.id) : null
+  const submitRoundOptions = useMemo(() => {
+    const options = rounds.filter((r) => !isRoundVotingLive(r, rounds))
+    return options.sort((a, b) => {
+      const da = cohortAnchorDate(a)?.getTime() ?? 0
+      const db = cohortAnchorDate(b)?.getTime() ?? 0
+      if (db !== da) return db - da
+      return Number(b.id) - Number(a.id)
+    })
+  }, [rounds])
+  const activeSubmitRoundLabel = activeDisplayTab?.kind === 'nominate'
+    ? activeDisplayTab.round.name || `Round ${activeDisplayTab.round.id}`
+    : ''
   /**
    * Show Country / Regional / … chips when the user is in a voting-round context.
    * Use several signals — frontend pill `kind`, API live-vote id, and `isRoundVotingLive` on the active row —
@@ -251,9 +278,19 @@ function ContestsPageContent() {
     const allowed = new Set(dr.map((d) => d.tabKey))
     setActiveTabKey((prev) => {
       if (prev && allowed.has(prev)) return prev
+      if (prev?.startsWith('nominate:')) {
+        const id = prev.split(':')[1]
+        if (rounds.some((r) => String(r.id) === id)) return prev
+      }
       return dr[0]?.tabKey ?? null
     })
   }, [rounds])
+
+  useEffect(() => {
+    if (activeDisplayTab?.kind === 'nominate' && activeRoundId) {
+      setPendingSubmitRoundId(activeRoundId)
+    }
+  }, [activeDisplayTab?.kind, activeRoundId])
 
   const voteRoundRow = useMemo(
     () => rounds.find((r: Round) => isRoundVotingLive(r, rounds)),
@@ -296,6 +333,10 @@ function ContestsPageContent() {
         const allowedTabKeys = new Set(nextDisplayRounds.map((d) => d.tabKey))
         setActiveTabKey((prev) => {
           if (prev && allowedTabKeys.has(prev)) return prev
+          if (prev?.startsWith('nominate:')) {
+            const id = prev.split(':')[1]
+            if (data.some((r: Round) => String(r.id) === id)) return prev
+          }
           return nextDisplayRounds[0]?.tabKey ?? prev
         })
       } catch (error: any) {
@@ -413,6 +454,13 @@ function ContestsPageContent() {
   // Handle Search Execution
   const handleSearch = () => {
     setCommittedSearch(searchTerm)
+  }
+
+  const applySubmitRoundSelection = () => {
+    if (!pendingSubmitRoundId) return
+    setActiveTabKey(roundTabKey('nominate', Number(pendingSubmitRoundId)))
+    setNominationMigrationLevel('all')
+    clearContestsListCache()
   }
 
   // Pessimistic hasMore when list params change. Do NOT depend on allContests.length — that fires
@@ -1017,6 +1065,48 @@ function ContestsPageContent() {
             })}
           </div>
         </div>
+
+        {categoryTab === 'nomination' && activeDisplayTab?.kind === 'nominate' && (
+          <div className="mb-6 rounded-2xl border border-blue-100 bg-blue-50/70 p-3 shadow-sm dark:border-blue-900/50 dark:bg-blue-950/20">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+                  {t('dashboard.contests.submit_round') || 'Submit round'}: {activeSubmitRoundLabel}
+                </p>
+                <p className="text-xs text-blue-700/80 dark:text-blue-300/80">
+                  {t('dashboard.contests.submit_round_hint') ||
+                    'Choose the month where you want to submit a new nomination.'}
+                </p>
+              </div>
+              <div className="flex w-full gap-2 sm:w-auto">
+                <Select
+                  value={pendingSubmitRoundId || activeRoundId || ''}
+                  onValueChange={setPendingSubmitRoundId}
+                >
+                  <SelectTrigger className="h-10 min-w-0 flex-1 bg-white sm:w-64 dark:bg-gray-900">
+                    <SelectValue placeholder={t('dashboard.contests.choose_round') || 'Choose round'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {submitRoundOptions.map((round) => (
+                      <SelectItem key={round.id} value={String(round.id)}>
+                        {round.name || `Round ${round.id}`}
+                        {round.is_submission_open ? ' · Open' : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  type="button"
+                  onClick={applySubmitRoundSelection}
+                  className="h-10 bg-blue-600 px-4 text-white hover:bg-blue-700"
+                  disabled={!pendingSubmitRoundId || pendingSubmitRoundId === activeRoundId}
+                >
+                  {t('dashboard.contests.apply_round') || 'Apply'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Location Filter Bar */}
         <div className="mb-6">
