@@ -460,7 +460,14 @@ def get_top_high5_by_country(
                                 per_location_groups.append((key, pool_members))
                             continue
 
-                        # city / continent keep country-scoped view as before
+                        if season.level == SeasonLevel.CONTINENT:
+                            # Continental voting is the whole continent pool:
+                            # all regional winners from Africa compete together,
+                            # not only winners from the viewer's country.
+                            per_location_groups.append((key, members))
+                            continue
+
+                        # city keeps the country-scoped view.
                         country_matching_members = [
                             c for c in members
                             if any(v in variants for v in _normalized_country_candidates(c))

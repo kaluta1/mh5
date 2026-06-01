@@ -225,9 +225,11 @@ export default function ContestDetailPage() {
       const justSubmitted =
         typeof window !== 'undefined' &&
         sessionStorage.getItem(`mh5-nominated-${contestId}`) === '1'
+      const requestedLevel = (contestLevelFromUrl || '').toLowerCase().trim()
+      const isPooledNominationLevel = ['regional', 'region', 'continent', 'continental', 'global'].includes(requestedLevel)
       const c = await ApiService.getContest(parseInt(contestId), {
         filterCountry:
-          justSubmitted || !filterCountry || filterCountry === 'all'
+          justSubmitted || isPooledNominationLevel || !filterCountry || filterCountry === 'all'
             ? undefined
             : filterCountry,
         filterRegion: (!filterRegion || filterRegion === 'all') ? undefined : filterRegion,
@@ -730,6 +732,8 @@ export default function ContestDetailPage() {
   // Déterminer si c'est une nomination
   const isNomination = normalizeContestMode(contest.contest.contest_mode) === 'nomination'
   const hasNoContestants = filteredContestants.length === 0
+  const requestedContestLevel = (contestLevelFromUrl || '').toLowerCase().trim()
+  const isPooledNominationLevel = isNomination && ['regional', 'region', 'continent', 'continental', 'global'].includes(requestedContestLevel)
 
   // Déterminer si l'utilisateur peut participer (pays sélectionné = son pays ou aucun filtre)
   const isUserCountrySelected = !filterCountry || filterCountry === 'all' || filterCountry === '' || (user?.country && filterCountry.toLowerCase() === user.country.toLowerCase())
@@ -1132,7 +1136,7 @@ export default function ContestDetailPage() {
                     const params = new URLSearchParams()
                     if (roundIdFromUrl) params.set('roundId', roundIdFromUrl)
                     if (entryType) params.set('entryType', entryType)
-                    if (filterCountry && filterCountry !== 'all') params.set('country', filterCountry)
+                    if (!isPooledNominationLevel && filterCountry && filterCountry !== 'all') params.set('country', filterCountry)
                     if (filterContinent && filterContinent !== 'all') params.set('continent', filterContinent)
                     if (filterRegion && filterRegion !== 'all') params.set('region', filterRegion)
                     if (viewOnly) params.set('viewOnly', 'true')
@@ -1235,7 +1239,7 @@ export default function ContestDetailPage() {
                         contestants={locationFilteredContestants}
                         contestId={contestId}
                         onShowToast={showToast}
-                        filterCountry={filterCountry || undefined}
+                        filterCountry={!isPooledNominationLevel ? filterCountry || undefined : undefined}
                         filterContinent={filterContinent !== 'all' ? filterContinent : undefined}
                         roundId={roundIdFromUrl || undefined}
                       />
