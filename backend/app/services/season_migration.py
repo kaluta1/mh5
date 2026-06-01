@@ -821,6 +821,54 @@ class SeasonMigrationService:
             logger.info(f"  - Qualified contestants with {location_field} location: {len(contestants)}")
             print(f"[Migration]   Qualified contestants with {location_field} location: {len(contestants)}")
         
+        if not contestants and contest_id is not None:
+            # Nomination promotions can be driven by the previous month's Top High5
+            # votes even when legacy data missed ContestantSeason membership rows.
+            fallback_candidates = SeasonMigrationService._contestants_for_contest_in_season(
+                db,
+                season_id=season_id,
+                contest_id=contest_id,
+                active_only=active_links_only,
+                qualified_only=qualified_only,
+            )
+            if fallback_candidates:
+                if country_filter:
+                    raw = country_filter.strip().lower()
+                    alias_map = {
+                        "tanzania": "tz",
+                        "tz": "tanzania",
+                        "uganda": "ug",
+                        "ug": "uganda",
+                        "kenya": "ke",
+                        "ke": "kenya",
+                    }
+                    variants = {raw}
+                    if raw in alias_map:
+                        variants.add(alias_map[raw])
+                    fallback_candidates = [
+                        c
+                        for c in fallback_candidates
+                        if (c.country or c.nominator_country or "").strip().lower() in variants
+                    ]
+                if location_field == 'city':
+                    fallback_candidates = [c for c in fallback_candidates if c.city]
+                elif location_field == 'country':
+                    fallback_candidates = [c for c in fallback_candidates if (c.country or c.nominator_country)]
+                elif location_field == 'region':
+                    fallback_candidates = [
+                        c
+                        for c in fallback_candidates
+                        if (
+                            SeasonMigrationService.regional_pool_label_for_raw_country(
+                                c.country or c.nominator_country
+                            )
+                            or c.region
+                        )
+                    ]
+                elif location_field == 'continent':
+                    fallback_candidates = [c for c in fallback_candidates if c.continent]
+                contestants = fallback_candidates
+
         if not contestants:
             # Vérifier pourquoi aucun contestant n'est trouvé
             base_q = db.query(Contestant).join(
