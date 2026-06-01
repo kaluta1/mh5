@@ -1,0 +1,1146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MyHigh5 – Penetration Testing Report</title>
+  <style>
+    :root {
+      --critical: #c0392b;
+      --high:     #e67e22;
+      --medium:   #f1c40f;
+      --low:      #27ae60;
+      --info:     #2980b9;
+      --bg:       #f4f6f9;
+      --card:     #ffffff;
+      --text:     #2c3e50;
+      --border:   #dce1e7;
+      --code-bg:  #1e2533;
+      --code-fg:  #a8d8a8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+    }
+    /* ── Cover page ── */
+    .cover {
+      background: linear-gradient(135deg, #1a1f36 0%, #2c3e6b 60%, #1a1f36 100%);
+      color: #fff;
+      padding: 80px 60px;
+      position: relative;
+      overflow: hidden;
+    }
+    .cover::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    }
+    .cover-badge {
+      display: inline-block;
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 4px;
+      padding: 4px 14px;
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 28px;
+    }
+    .cover h1 { font-size: 42px; font-weight: 700; line-height: 1.2; margin-bottom: 12px; }
+    .cover h2 { font-size: 20px; font-weight: 400; opacity: 0.75; margin-bottom: 48px; }
+    .cover-meta { display: flex; gap: 48px; flex-wrap: wrap; }
+    .cover-meta-item label { display: block; font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; opacity: 0.55; margin-bottom: 4px; }
+    .cover-meta-item span { font-size: 15px; font-weight: 600; }
+    /* ── Layout ── */
+    .wrapper { max-width: 1100px; margin: 0 auto; padding: 48px 32px; }
+    /* ── Section headers ── */
+    .section-title {
+      font-size: 22px; font-weight: 700;
+      border-left: 4px solid #2980b9;
+      padding-left: 14px;
+      margin: 48px 0 20px;
+    }
+    /* ── Executive summary box ── */
+    .exec-box {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 28px 32px;
+      margin-bottom: 32px;
+    }
+    /* ── Stats grid ── */
+    .stats-grid { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 32px; }
+    .stat-card {
+      flex: 1; min-width: 140px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+      text-align: center;
+    }
+    .stat-card .count { font-size: 42px; font-weight: 800; line-height: 1; }
+    .stat-card .label { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.6; margin-top: 6px; }
+    .stat-card.critical .count { color: var(--critical); }
+    .stat-card.high .count { color: var(--high); }
+    .stat-card.medium .count { color: var(--medium); }
+    .stat-card.low .count { color: var(--low); }
+    .stat-card.info .count { color: var(--info); }
+    /* ── Finding cards ── */
+    .finding {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 28px;
+      overflow: hidden;
+    }
+    .finding-header {
+      display: flex; align-items: center; gap: 16px;
+      padding: 18px 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #fff;
+      white-space: nowrap;
+    }
+    .badge.critical { background: var(--critical); }
+    .badge.high     { background: var(--high); }
+    .badge.medium   { background: var(--medium); color: #333; }
+    .badge.low      { background: var(--low); }
+    .badge.info     { background: var(--info); }
+    .finding-header h3 { font-size: 17px; font-weight: 600; }
+    .finding-body { padding: 24px; }
+    .finding-body table { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 14px; }
+    .finding-body table th { text-align: left; padding: 8px 12px; background: #f8f9fb; border: 1px solid var(--border); width: 180px; font-weight: 600; }
+    .finding-body table td { padding: 8px 12px; border: 1px solid var(--border); }
+    .finding-body h4 { font-size: 14px; font-weight: 700; margin: 18px 0 8px; color: #2c3e50; text-transform: uppercase; letter-spacing: 0.5px; }
+    .finding-body p { font-size: 14px; margin-bottom: 10px; }
+    .finding-body ul { padding-left: 20px; font-size: 14px; }
+    .finding-body ul li { margin-bottom: 6px; }
+    code {
+      background: #eef1f5;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 13px;
+    }
+    pre {
+      background: var(--code-bg);
+      color: var(--code-fg);
+      border-radius: 8px;
+      padding: 18px 20px;
+      overflow-x: auto;
+      font-size: 13px;
+      font-family: 'Consolas', 'Courier New', monospace;
+      line-height: 1.6;
+      margin: 12px 0;
+    }
+    /* ── Fix box ── */
+    .fix-box {
+      background: #eafaf1;
+      border-left: 4px solid #27ae60;
+      border-radius: 0 8px 8px 0;
+      padding: 16px 20px;
+      margin-top: 18px;
+    }
+    .fix-box .fix-title { font-weight: 700; font-size: 13px; color: #1a7a40; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+    .fix-box ul { padding-left: 20px; font-size: 14px; }
+    .fix-box ul li { margin-bottom: 6px; }
+    /* ── OWASP table ── */
+    .owasp-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    .owasp-table th { background: #2c3e6b; color: #fff; padding: 10px 14px; text-align: left; }
+    .owasp-table td { padding: 10px 14px; border: 1px solid var(--border); }
+    .owasp-table tr:nth-child(even) td { background: #f8f9fb; }
+    /* ── Disclaimer ── */
+    .disclaimer {
+      background: #fff8e1;
+      border: 1px solid #ffc107;
+      border-radius: 8px;
+      padding: 18px 24px;
+      font-size: 13px;
+      margin: 32px 0;
+    }
+    /* ── Footer ── */
+    footer { text-align: center; padding: 40px 0 24px; font-size: 13px; color: #aaa; }
+    /* ── TOC ── */
+    .toc { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 24px 32px; margin-bottom: 32px; }
+    .toc h3 { font-size: 16px; font-weight: 700; margin-bottom: 12px; }
+    .toc ol { padding-left: 20px; }
+    .toc ol li { margin-bottom: 6px; font-size: 14px; }
+    .toc a { color: #2980b9; text-decoration: none; }
+    .toc a:hover { text-decoration: underline; }
+    .severity-legend { display: flex; gap: 12px; flex-wrap: wrap; margin: 12px 0 24px; }
+    .severity-legend span { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+
+<!-- ╔══════════════════════════════════════════════════════╗ -->
+<!-- ║                    COVER PAGE                       ║ -->
+<!-- ╚══════════════════════════════════════════════════════╝ -->
+<div class="cover">
+  <div class="cover-badge">Confidential – Security Report</div>
+  <h1>MyHigh5 Platform<br>Penetration Testing Report</h1>
+  <h2>Full-Scope White-Box Security Assessment</h2>
+  <div class="cover-meta">
+    <div class="cover-meta-item">
+      <label>Target Application</label>
+      <span>MyHigh5 (mh5) – Contest &amp; Voting Platform</span>
+    </div>
+    <div class="cover-meta-item">
+      <label>Report Date</label>
+      <span>20 May 2026</span>
+    </div>
+    <div class="cover-meta-item">
+      <label>Assessment Type</label>
+      <span>White-Box Penetration Test</span>
+    </div>
+    <div class="cover-meta-item">
+      <label>Tester Role</label>
+      <span>Penetration Tester / Security Analyst</span>
+    </div>
+    <div class="cover-meta-item">
+      <label>Classification</label>
+      <span>CONFIDENTIAL – Internal Use Only</span>
+    </div>
+  </div>
+</div>
+
+<!-- ╔══════════════════════════════════════════════════════╗ -->
+<!-- ║                    BODY                             ║ -->
+<!-- ╚══════════════════════════════════════════════════════╝ -->
+<div class="wrapper">
+
+  <!-- DISCLAIMER -->
+  <div class="disclaimer" style="margin-top:32px;">
+    <strong>Important Notice:</strong> This report was produced through a white-box, read-only code review. No active exploitation, denial-of-service attempts, or production data access was performed. All findings are derived from static analysis of the source code. The recommendations are provided in good faith to improve the security posture of the MyHigh5 platform.
+  </div>
+
+  <!-- TABLE OF CONTENTS -->
+  <div class="toc">
+    <h3>Table of Contents</h3>
+    <ol>
+      <li><a href="#exec">Executive Summary</a></li>
+      <li><a href="#scope">Scope &amp; Methodology</a></li>
+      <li><a href="#stats">Vulnerability Statistics</a></li>
+      <li><a href="#findings">Detailed Findings</a>
+        <ol type="a" style="margin-top:6px;">
+          <li><a href="#F01">F-01 · Hardcoded Default JWT Secret Key [CRITICAL]</a></li>
+          <li><a href="#F02">F-02 · Exposed Secrets in Committed Environment Files [CRITICAL]</a></li>
+          <li><a href="#F03">F-03 · No JWT Refresh / Revocation Mechanism [HIGH]</a></li>
+          <li><a href="#F04">F-04 · Unrestricted File-Upload MIME Spoofing [HIGH]</a></li>
+          <li><a href="#F05">F-05 · No Upload File-Size Limit Enforced [HIGH]</a></li>
+          <li><a href="#F06">F-06 · CORS Wildcard Allow-Headers [HIGH]</a></li>
+          <li><a href="#F07">F-07 · User Enumeration via Email / Username Probing [MEDIUM]</a></li>
+          <li><a href="#F08">F-08 · No Rate Limiting on Authentication Endpoints [MEDIUM]</a></li>
+          <li><a href="#F09">F-09 · Verbose Swagger/OpenAPI Documentation Exposed in Production [MEDIUM]</a></li>
+          <li><a href="#F10">F-10 · HS256 JWT Algorithm (Shared Secret) vs RS256 [MEDIUM]</a></li>
+          <li><a href="#F11">F-11 · Overly Long JWT Token Expiry (7 Days, No Rotation) [MEDIUM]</a></li>
+          <li><a href="#F12">F-12 · Insecure Default Encryption Salt [MEDIUM]</a></li>
+          <li><a href="#F13">F-13 · Missing Security HTTP Headers [MEDIUM]</a></li>
+          <li><a href="#F14">F-14 · S3 Bucket Object Enumeration Risk [MEDIUM]</a></li>
+          <li><a href="#F15">F-15 · Maintenance Bypass Token Committed to Repository [MEDIUM]</a></li>
+          <li><a href="#F16">F-16 · Hard-Coded Smart-Contract &amp; Blockchain Addresses [LOW]</a></li>
+          <li><a href="#F17">F-17 · Circular Role Inheritance Denial-of-Service Risk [LOW]</a></li>
+          <li><a href="#F18">F-18 · Login Log IP Not Validated / Spoofable [LOW]</a></li>
+          <li><a href="#F19">F-19 · Missing Content Security Policy (CSP) [LOW]</a></li>
+          <li><a href="#F20">F-20 · Admin "All" Permission Wildcard [INFORMATIONAL]</a></li>
+          <li><a href="#F21">F-21 · WebSocket / Socket.IO Authentication Unclear [INFORMATIONAL]</a></li>
+          <li><a href="#F22">F-22 · Database Connection String with Credentials in Environment Variable [INFORMATIONAL]</a></li>
+        </ol>
+      </li>
+      <li><a href="#owasp">OWASP Top 10 Mapping</a></li>
+      <li><a href="#conclusion">Conclusion &amp; Remediation Priority</a></li>
+    </ol>
+  </div>
+
+  <!-- ─── 1. EXECUTIVE SUMMARY ─────────────────────────────────────────────── -->
+  <div class="section-title" id="exec">1. Executive Summary</div>
+  <div class="exec-box">
+    <p>MyHigh5 is a multilingual contest and voting platform built on <strong>FastAPI</strong> (Python) for the backend and <strong>Next.js 14</strong> (TypeScript/React) for the frontend, backed by <strong>PostgreSQL</strong> and <strong>Redis</strong>. The platform integrates cryptocurrency payments (BSC, Ethereum, Solana, Bitcoin), KYC identity verification (Shufti Pro), a multi-level affiliate system, social features, and a CPA-compliant double-entry accounting engine.</p>
+    <p style="margin-top:12px;">This assessment was conducted as a <strong>white-box static code review</strong>. The codebase is large (~36 database models, 45+ API endpoint files, ~250 KB of route code) and generally follows good practices such as Pydantic input validation, bcrypt password hashing (12 rounds), parameterised ORM queries via SQLAlchemy, and HMAC-based webhook signature verification.</p>
+    <p style="margin-top:12px;">However, several <strong>critical and high-severity issues</strong> were identified — most of them centred on <em>secret management</em>, <em>token lifecycle</em>, and <em>file-upload validation</em>. Two of the critical issues (hardcoded JWT secret and committed production secrets) could allow an attacker to forge authentication tokens or directly compromise third-party service accounts without needing to exploit any runtime vulnerability.</p>
+    <p style="margin-top:12px;"><strong>Overall Risk Rating: HIGH</strong> — Immediate action is required on the two CRITICAL findings before this application is operated in a production environment.</p>
+  </div>
+
+  <!-- ─── 2. SCOPE & METHODOLOGY ────────────────────────────────────────────── -->
+  <div class="section-title" id="scope">2. Scope &amp; Methodology</div>
+  <div class="exec-box">
+    <h4 style="margin-bottom:12px;">In-Scope Assets</h4>
+    <ul>
+      <li><code>backend/</code> – FastAPI application (Python 3.11+)</li>
+      <li><code>frontend/</code> – Next.js 14 / React application (TypeScript)</li>
+      <li><code>migrations/</code> – Alembic database migration scripts</li>
+      <li><code>contracts/</code> – Smart contract source files</li>
+      <li><code>.env</code>, <code>.env.production</code>, <code>.env.development</code> – Environment files</li>
+      <li>All configuration, middleware, and dependency files</li>
+    </ul>
+    <h4 style="margin-top:18px; margin-bottom:12px;">Methodology</h4>
+    <ul>
+      <li><strong>OWASP Testing Guide v4.2</strong> used as the primary reference</li>
+      <li>White-box static analysis of all source code files</li>
+      <li>Dependency review (requirements.txt, package.json)</li>
+      <li>Configuration and environment variable analysis</li>
+      <li>Authentication and authorisation flow tracing</li>
+      <li>Data-flow analysis for input validation and output encoding</li>
+      <li>API endpoint enumeration and privilege escalation path analysis</li>
+      <li>Cryptographic algorithm and key management review</li>
+    </ul>
+    <h4 style="margin-top:18px; margin-bottom:12px;">Severity Scale</h4>
+    <div class="severity-legend">
+      <span class="badge critical">Critical</span>
+      <span class="badge high">High</span>
+      <span class="badge medium">Medium</span>
+      <span class="badge low">Low</span>
+      <span class="badge info">Informational</span>
+    </div>
+  </div>
+
+  <!-- ─── 3. STATISTICS ─────────────────────────────────────────────────────── -->
+  <div class="section-title" id="stats">3. Vulnerability Statistics</div>
+  <div class="stats-grid">
+    <div class="stat-card critical"><div class="count">2</div><div class="label">Critical</div></div>
+    <div class="stat-card high"><div class="count">4</div><div class="label">High</div></div>
+    <div class="stat-card medium"><div class="count">8</div><div class="label">Medium</div></div>
+    <div class="stat-card low"><div class="count">4</div><div class="label">Low</div></div>
+    <div class="stat-card info"><div class="count">4</div><div class="label">Informational</div></div>
+    <div class="stat-card" style="border-color:#ccc;"><div class="count" style="color:#555;">22</div><div class="label">Total</div></div>
+  </div>
+
+  <!-- ─── 4. DETAILED FINDINGS ──────────────────────────────────────────────── -->
+  <div class="section-title" id="findings">4. Detailed Findings</div>
+
+  <!-- F-01 -->
+  <div class="finding" id="F01">
+    <div class="finding-header">
+      <span class="badge critical">Critical</span>
+      <h3>F-01 · Hardcoded Default JWT Secret Key</h3>
+    </div>
+    <div class="finding-body">
+      <table>
+        <tr><th>ID</th><td>F-01</td></tr>
+        <tr><th>Severity</th><td><strong style="color:var(--critical);">Critical</strong></td></tr>
+        <tr><th>OWASP Category</th><td>A02:2021 – Cryptographic Failures</td></tr>
+        <tr><th>Location</th><td><code>backend/app/core/config.py</code> – line ~34</td></tr>
+        <tr><th>CVSS Score (Est.)</th><td>9.8 (Critical)</td></tr>
+      </table>
+
+      <h4>Description</h4>
+      <p>The application's configuration class defines a fallback value for <code>SECRET_KEY</code> — the signing key used for all JWT authentication tokens:</p>
+      <pre>SECRET_KEY: str = "c7d9fbef58c5ac4fe7d31e32a89e2c336468843c1c307177ab0ee55f54063115"</pre>
+      <p>If the production environment does not set the <code>SECRET_KEY</code> environment variable, this static, publicly visible key is used. Any attacker who reads the source code (or this report) can forge valid JWT tokens for <em>any user</em>, including administrators, without knowing a password. Because the token is the only authentication mechanism, this effectively bypasses the entire authentication layer.</p>
+
+      <h4>Impact</h4>
+      <ul>
+        <li>Complete authentication bypass – attacker can sign a JWT with <code>sub=&lt;any_user_id&gt;</code></li>
+        <li>Full privilege escalation to administrator</li>
+        <li>Access to all financial, KYC, and personal data</li>
+        <li>Ability to approve KYC, transfer funds, modify contests</li>
+      </ul>
+
+      <h4>Proof of Concept (Conceptual)</h4>
+      <pre># An attacker who knows the secret key can produce:
+import jwt, time
+payload = {"sub": "1", "exp": int(time.time()) + 86400*7}
+token = jwt.encode(payload, "c7d9fbef58c5ac4fe7d31e32a89e2c336468843c1c307177ab0ee55f54063115", algorithm="HS256")
+# Use token as Bearer token to authenticate as user ID 1 (typically admin)</pre>
+
+      <div class="fix-box">
+        <div class="fix-title">How to Fix</div>
+        <ul>
+          <li>Remove the hardcoded fallback value entirely; make the setting <strong>required</strong>:<br><code>SECRET_KEY: str  # No default — will raise at startup if not set</code></li>
+          <li>Generate a cryptographically random key of at least 256 bits:<br><code>python -c "import secrets; print(secrets.token_hex(32))"</code></li>
+          <li>Store the value exclusively in the server's environment (AWS Secrets Manager, Vault, or a secure CI/CD secret).</li>
+          <li>Add a startup assertion that fails if the key is shorter than 32 bytes or matches known defaults.</li>
+          <li>Rotate the key immediately in all existing environments; invalidate all active tokens by doing so.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- F-02 -->
+  <div class="finding" id="F02">
+    <div class="finding-header">
+      <span class="badge critical">Critical</span>
+      <h3>F-02 · Exposed Secrets in Committed Environment Files</h3>
+    </div>
+    <div class="finding-body">
+      <table>
+        <tr><th>ID</th><td>F-02</td></tr>
+        <tr><th>Severity</th><td><strong style="color:var(--critical);">Critical</strong></td></tr>
+        <tr><th>OWASP Category</th><td>A02:2021 – Cryptographic Failures / A05:2021 – Security Misconfiguration</td></tr>
+        <tr><th>Location</th><td><code>frontend/.env.production</code></td></tr>
+        <tr><th>CVSS Score (Est.)</th><td>9.1 (Critical)</td></tr>
+      </table>
+
+      <h4>Description</h4>
+      <p>The <code>frontend/.env.production</code> file has been committed to the git repository and contains live production secrets:</p>
+      <pre># Found in frontend/.env.production (committed to source control)
+CURSOR_API_KEY=crsr_8cced7dbd01f51b958646d22528928eb505ca38b57849d6dddb770ecb0783a3d
+MAINTENANCE_BYPASS_TOKEN=3554c74e6eb44910a1c19808b5531abef434b4ddf4d74d8596af0f1978fc2c18
+NEXT_PUBLIC_REOWN_PROJECT_ID=8fdb507d78ee0a3b9df5355281be94a1
+NEXT_PUBLIC_ANNUALADS_API_KEY=d9de1649ceec6f9efd7b3a9154ae83a9f5d40a1feb4ff5ee2487ec5a2331e56d</pre>
+      <p>Even if this repository is private today, leaked credentials in git history are permanent — any repository exposure (insider threat, misconfigured deployment, future public release) makes these secrets immediately usable by attackers.</p>
+
+      <h4>Impact</h4>
+      <ul>
+        <li>The <strong>MAINTENANCE_BYPASS_TOKEN</strong> allows any attacker to access the application while it is in maintenance mode, bypassing the intended service interruption protection.</li>
+        <li>The <strong>ANNUALADS_API_KEY</strong> could allow unauthorised advertising API calls or financial fraud via the sponsor integration.</li>
+        <li>The <strong>CURSOR_API_KEY</strong> exposes a paid AI translation service to abuse.</li>
+        <li>Secrets committed to git are retrievable from history even after deletion: <code>git log -p</code></li>
+      </ul>
+
+      <div class="fix-box">
+        <div class="fix-title">How to Fix</div>
+        <ul>
+          <li>Add <code>.env.production</code>, <code>.env.local</code>, <code>.env*.local</code>, and <code>*.env</code> to <code>.gitignore</code> immediately.</li>
+          <li>Remove the files from git tracking: <code>git rm --cached frontend/.env.production</code></li>
+          <li>Purge the secrets from git history using <code>git filter-repo</code> or BFG Repo Cleaner.</li>
+          <li><strong>Immediately rotate every exposed secret</strong> — treat them as compromised.</li>
+          <li>Use platform-level environment variable injection (Vercel Dashboard, GitHub Actions Secrets, AWS Parameter Store) instead of committing <code>.env</code> files.</li>
+          <li>Implement a pre-commit hook (e.g., <code>detect-secrets</code>) to prevent future secret commits.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- F-03 -->
+  <div class="finding" id="F03">
+    <div class="finding-header">
+      <span class="badge high">High</span>
+      <h3>F-03 · No JWT Refresh / Token Revocation Mechanism</h3>
+    </div>
+    <div class="finding-body">
+      <table>
+        <tr><th>ID</th><td>F-03</td></tr>
+        <tr><th>Severity</th><td><strong style="color:var(--high);">High</strong></td></tr>
+        <tr><th>OWASP Category</th><td>A07:2021 – Identification and Authentication Failures</td></tr>
+        <tr><th>Location</th><td><code>backend/app/core/security.py</code>, <code>backend/app/api/endpoints/auth.py</code></td></tr>
+      </table>
+
+      <h4>Description</h4>
+      <p>The platform uses <strong>stateless JWT tokens with a 7-day expiry</strong> (10,080 minutes) and provides no token revocation endpoint (logout), no refresh-token flow, and no token blocklist. Once a token is issued, it is valid for 7 days regardless of:</p>
+      <ul>
+        <li>User password changes</li>
+        <li>User account suspension or banning</li>
+        <li>Suspected token theft</li>
+        <li>User-initiated logout</li>
+      </ul>
+      <p>Notably, there is a ban mechanism in the admin endpoints, but a banned user's existing token continues to work until it expires naturally — a 7-day window of continued access.</p>
+
+      <h4>Impact</h4>
+      <ul>
+        <li>Stolen tokens remain usable for up to 7 days after theft is detected.</li>
+        <li>Users cannot truly log out; clearing client storage does not invalidate the server-side token.</li>
+        <li>Banned or suspended users retain full API access for the remainder of the token lifetime.</li>
+      </ul>
+
+      <div class="fix-box">
+        <div class="fix-title">How to Fix</div>
+        <ul>
+          <li>Implement a <strong>token blocklist</strong> in Redis: on logout or ban, store the token's JTI (JWT ID claim) with a TTL matching the token's remaining lifetime. Check the blocklist on every authenticated request.</li>
+          <li>Alternatively, use short-lived <strong>access tokens</strong> (15 minutes) combined with long-lived <strong>refresh tokens</strong> (7 days, single-use, stored in HttpOnly cookies). Refresh tokens can be revoked server-side.</li>
+          <li>Add a <code>jti</code> (JWT ID) claim to every token so individual tokens can be targeted for revocation.</li>
+          <li>The <code>get_current_active_user()</code> dependency already checks <code>is_active</code> — ensure this check is always hit and that banning sets <code>is_active=False</code> atomically.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- F-04 -->
+  <div class="finding" id="F04">
+    <div class="finding-header">
+      <span class="badge high">High</span>
+      <h3>F-04 · Unrestricted File-Upload MIME Type Spoofing</h3>
+    </div>
+    <div class="finding-body">
+      <table>
+        <tr><th>ID</th><td>F-04</td></tr>
+        <tr><th>Severity</th><td><strong style="color:var(--high);">High</strong></td></tr>
+        <tr><th>OWASP Category</th><td>A03:2021 – Injection / A04:2021 – Insecure Design</td></tr>
+        <tr><th>Location</th><td><code>backend/app/api/endpoints/media.py</code> – upload endpoint</td></tr>
+      </table>
+
+      <h4>Description</h4>
+      <p>The upload endpoint validates the file's <strong>Content-Type header</strong> (must start with <code>image/</code> or <code>video/</code>). However, <strong>the Content-Type is attacker-controlled</strong> — it is sent by the client and is not verified against the actual file magic bytes. A malicious actor can:</p>
+      <pre>curl -X POST /api/v1/media/upload \
+  -H "Authorization: Bearer &lt;token&gt;" \
+  -F "file=@malware.php;type=image/jpeg"</pre>
+      <p>The backend will accept the file as a valid image. Depending on the web server configuration, served files could be interpreted as executable scripts.</p>
+
+      <h4>Impact</h4>
+      <ul>
+        <li>Uploading server-side scripts (PHP, Python, shell scripts) disguised as images.</li>
+        <li>Potential Remote Code Execution (RCE) if the server executes the uploaded file.</li>
+        <li>Malware distribution via the platform's CDN/media serving infrastructure.</li>
+      </ul>
+
+      <div class="fix-box">
+        <div class="fix-title">How to Fix</div>
+        <ul>
+          <li>Validate file content using <strong>magic bytes / file signatures</strong> (not just the Content-Type header). Use Python's <code>python-magic</code> library:<br><code>import magic; mime = magic.from_buffer(file_content, mime=True)</code></li>
+          <li>Use Pillow's <code>Image.open()</code> + <code>image.verify()</code> to confirm image files are truly valid images — this will reject non-image data.</li>
+          <li>Strip EXIF metadata from uploaded images using Pillow to prevent metadata injection.</li>
+          <li>When serving uploaded files, set <code>Content-Disposition: attachment</code> and <code>X-Content-Type-Options: nosniff</code> to prevent browser execution.</li>
+          <li>Serve all user uploads from a separate domain (not the main app domain) to isolate any XSS or script-execution risk.</li>
+          <li>If using S3, never make the bucket publicly readable; use pre-signed URLs with short expiry.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- F-05 -->
+  <div class="finding" id="F05">
+    <div class="finding-header">
+      <span class="badge high">High</span>
+      <h3>F-05 · No Upload File-Size Limit Enforced</h3>
+    </div>
+    <div class="finding-body">
+      <table>
+        <tr><th>ID</th><td>F-05</td></tr>
+        <tr><th>Severity</th><td><strong style="color:var(--high);">High</strong></td></tr>
+        <tr><th>OWASP Category</th><td>A04:2021 – Insecure Design</td></tr>
+        <tr><th>Location</th><td><code>backend/app/api/endpoints/media.py</code></td></tr>
+      </table>
+
+      <h4>Description</h4>
+      <p>No explicit maximum file size is enforced in the upload endpoint or in the FastAPI/uvicorn configuration. While the Contest model has optional fields for <code>media_max_size_mb</code> and <code>video_max_duration_seconds</code>, these are not applied as upload guardrails at the API level. An authenticated user can upload arbitrarily large files, consuming storage and memory resources.</p>
+
+      <h4>Impact</h4>
+      <ul>
+        <li>Storage exhaustion on local disk or excessive S3 costs.</li>
+        <li>Memory exhaustion on the server (reading large files into memory during processing).</li>
+        <li>Application-level Denial of Service for other concurrent users.</li>
+      </ul>
+
+      <div class="fix-box">
+        <div class="fix-title">How to Fix</div>
+        <ul>
+          <li>Enforce a global maximum upload size in FastAPI:<br><code>app = FastAPI() # then add middleware or use max_upload_size in multipart handling</code></li>
+          <li>Configure uvicorn with a maximum request body size: <code>--limit-max-requests</code> / set <code>MAX_REQUEST_SIZE</code> in a custom middleware.</li>
+          <li>Read uploaded files in chunks rather than loading the entire file into memory.</li>
+          <li>Apply per-contest size restrictions from the Contest model as hard limits at the API level, not just as advisory metadata.</li>
+          <li>Set S3 multi-part upload conditions with pre-signed URL expiry and maximum byte constraints.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- F-06 -->
+  <div class="finding" id="F06">
+    <div class="finding-header">
+      <span class="badge high">High</span>
+      <h3>F-06 · CORS Wildcard Allow-Headers</h3>
+    </div>
+    <div class="finding-body">
+      <table>
+        <tr><th>ID</th><td>F-06</td></tr>
+        <tr><th>Severity</th><td><strong style="color:var(--high);">High</strong></td></tr>
+        <tr><th>OWASP Category</th><td>A05:2021 – Security Misconfiguration</td></tr>
+        <tr><th>Location</th><td><code>backend/main.py</code> – CORSMiddleware configuration</td></tr>
+      </table>
+
+      <h4>Description</h4>
+      <p>The CORS middleware is configured with:</p>
+      <pre>allow_headers=["*"]
+allow_credentials=True
+expose_headers=["*"]</pre>
+      <p>Combining <code>allow_headers=["*"]</code> with <code>allow_credentials=True</code> is <strong>prohibited by the CORS specification</strong> in modern browsers and creates a security risk. Some browsers may ignore the wildcard when credentials are enabled, but this configuration signals a lack of intentional header restriction. Additionally, the custom <code>CORSExtraMiddleware</code> uses regex matching that may inadvertently allow unintended origins.</p>
+
+      <h4>Impact</h4>
+      <ul>
+        <li>Cross-origin requests from attacker-controlled sites may include sensitive headers.</li>
+        <li>Any subdomain compromise (XSS on a Vercel preview deploy) could make credentialed cross-origin requests to the API.</li>
+        <li>Regex origin matching errors could whitelist unintended origins.</li>
+      </ul>
+
+      <div class="fix-box">
+        <div class="fix-title">How to Fix</div>
+        <ul>
+          <li>Replace <code>allow_headers=["*"]</code> with an explicit allowlist:<br><code>allow_headers=["Authorization", "Content-Type", "Accept", "X-Requested-With"]</code></li>
+          <li>Replace <code>expose_headers=["*"]</code> with only the headers the frontend actually reads.</li>
+          <li>Audit the regex in <code>CORSExtraMiddleware</code> — use exact string matching where possible, and test edge cases (e.g., <code>evilmyhigh5.com</code> matching a pattern intended for <code>myhigh5.com</code>).</li>
+          <li>In production, ensure the allowed origin list does not include <code>localhost</code> or preview deployment wildcards.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- F-07 -->
+  <div class="finding" id="F07">
+    <div class="finding-header">
+      <span class="badge medium">Medium</span>
+      <h3>F-07 · User Enumeration via Email / Username Probing</h3>
+    </div>
+    <div class="finding-body">
+      <table>
+        <tr><th>ID</th><td>F-07</td></tr>
+        <tr><th>Severity</th><td><strong style="color:#c8a800;">Medium</strong></td></tr>
+        <tr><th>OWASP Category</th><td>A07:2021 – Identification and Authentication Failures</td></tr>
+        <tr><th>Location</th><td><code>backend/app/api/endpoints/auth.py</code> – login, password-reset endpoints</td></tr>
+      </table>
+
+      <h4>Description</h4>
+      <p>The login endpoint may return different error messages or response codes depending on whether the email/username exists versus whether the password is wrong. The registration endpoint likely returns a distinct error when an email is already taken. The password-reset endpoint may confirm whether an account exists for a given email. This allows an attacker to enumerate valid user accounts through response differences.</p>
+
+      <h4>Impact</h4>
+      <ul>
+        <li>Attacker builds a list of valid platform usernames/emails for targeted phishing or credential stuffing.</li>
+        <li>Facilitates social engineering attacks against identified users.</li>
+      </ul>
+
+      <div class="fix-box">
+        <div class="fix-title">How to Fix</div>
+        <ul>
+          <li>Return <strong>identical generic error messages</strong> for all authentication failures: <em>"Invalid credentials"</em> (not "User not found" vs "Wrong password").</li>
+          <li>The password-reset endpoint should always return the same response regardless of whether the email exists: <em>"If an account with that email exists, you will receive a reset link."</em></li>
+          <li>Add a constant-time delay to authentication responses to prevent timing-based enumeration.</li>
+          <li>Implement CAPTCHA on registration and password-reset to slow automated probing.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- F-08 -->
+  <div class="finding" id="F08">
+    <div class="finding-header">
+      <span class="badge medium">Medium</span>
+      <h3>F-08 · No Rate Limiting on Authentication Endpoints</h3>
+    </div>
+    <div class="finding-body">
+      <table>
+        <tr><th>ID</th><td>F-08</td></tr>
+        <tr><th>Severity</th><td><strong style="color:#c8a800;">Medium</strong></td></tr>
+        <tr><th>OWASP Category</th><td>A07:2021 – Identification and Authentication Failures</td></tr>
+        <tr><th>Location</th><td><code>backend/app/api/endpoints/auth.py</code>, <code>backend/main.py</code></td></tr>
+      </table>
+
+      <h4>Description</h4>
+      <p>No rate-limiting middleware or decorator was observed on any API endpoint, including <code>POST /auth/login</code>, <code>POST /auth/register</code>, <code>POST /auth/password-reset-request</code>, and voting endpoints. While Redis is available in the stack, it is not used for request throttling. An attacker can make unlimited requests to these endpoints.</p>
+
+      <h4>Impact</h4>
+      <ul>
+        <li>Brute-force attacks against user passwords (login endpoint).</li>
+        <li>Mass automated account registration (spam/bot accounts).</li>
+        <li>Email bombing via repeated password-reset requests.</li>
+        <li>Vote manipulation through automated voting attempts.</li>
+      </ul>
+
+      <div class="fix-box">
+        <div class="fix-title">How to Fix</div>
+        <ul>
+          <li>Implement rate limiting using <code>slowapi</code> (the FastAPI-native rate limiter built on Redis):<br><code>pip install slowapi</code> – then decorate sensitive endpoints with <code>@limiter.limit("5/minute")</code>.</li>
+          <li>Apply stricter limits to authentication endpoints (e.g., 5 login attempts per IP per 15 minutes with exponential backoff).</li>
+          <li>Use Redis to track failed login attempts per IP and per username; implement account lockout after N failures.</li>
+          <li>Consider deploying a WAF (Cloudflare, AWS WAF) in front of the API for additional layer protection.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- F-09 -->
+  <div class="finding" id="F09">
+    <div class="finding-header">
+      <span class="badge medium">Medium</span>
+      <h3>F-09 · Verbose Swagger / OpenAPI Documentation Exposed</h3>
+    </div>
+    <div class="finding-body">
+      <table>
+        <tr><th>ID</th><td>F-09</td></tr>
+        <tr><th>Severity</th><td><strong style="color:#c8a800;">Medium</strong></td></tr>
+        <tr><th>OWASP Category</th><td>A05:2021 – Security Misconfiguration</td></tr>
+        <tr><th>Location</th><td><code>backend/main.py</code> – FastAPI default docs at <code>/docs</code> and <code>/redoc</code></td></tr>
+      </table>
+
+      <h4>Description</h4>
+      <p>FastAPI automatically exposes interactive Swagger UI at <code>/docs</code> and ReDoc at <code>/redoc</code>. The OpenAPI JSON schema is available at <code>/openapi.json</code>. These endpoints are currently unrestricted and provide a complete map of all API routes, request/response schemas, authentication requirements, and example payloads — serving as a ready-made attack surface guide for any attacker.</p>
+
+      <h4>Impact</h4>
+      <ul>
+        <li>Full API reconnaissance without any authentication.</li>
+        <li>Attacker can identify admin-only endpoints and target them specifically.</li>
+        <li>Internal schema and field names revealed, aiding injection attack crafting.</li>
+      </ul>
+
+      <div class="fix-box">
+        <div class="fix-title">How to Fix</div>
+        <ul>
+          <li>In production, disable docs entirely:<br><code>app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)</code></li>
+          <li>Alternatively, protect the docs behind authentication or IP allowlisting (restrict to office IPs / VPN).</li>
+          <li>Use an environment variable to toggle docs on/off:<br><code>docs_url="/docs" if settings.DEBUG else None</code></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- F-10 -->
+  <div class="finding" id="F10">
+    <div class="finding-header">
+      <span class="badge medium">Medium</span>
+      <h3>F-10 · HS256 JWT Algorithm (Shared Secret) vs RS256</h3>
+    </div>
+    <div class="finding-body">
+      <table>
+        <tr><th>ID</th><td>F-10</td></tr>
+        <tr><th>Severity</th><td><strong style="color:#c8a800;">Medium</strong></td></tr>
+        <tr><th>OWASP Category</th><td>A02:2021 – Cryptographic Failures</td></tr>
+        <tr><th>Location</th><td><code>backend/app/core/config.py</code>, <code>backend/app/core/security.py</code></td></tr>
+      </table>
+
+      <h4>Description</h4>
+      <p>The JWT tokens use HMAC-SHA256 (<code>HS256</code>) which requires the same secret key for both signing and verification. In a microservices architecture (the codebase has a <code>/auth/validate-token</code> endpoint suggesting microservice token validation), this means every service that validates tokens must have a copy of the secret — increasing the attack surface. If any service is compromised, the shared secret allows forgery of tokens for all services.</p>
+
+      <h4>Impact</h4>
+      <ul>
+        <li>Single secret compromise → full token forgery across all services.</li>
+        <li>Secret must be shared with all token-validating services, multiplying exposure.</li>
+      </ul>
+
+      <div class="fix-box">
+        <div class="fix-title">How to Fix</div>
+        <ul>
+          <li>Migrate to <strong>RS256</strong> (RSA asymmetric signing): the auth service holds the private key for signing; all other services hold only the public key for verification.</li>
+          <li>This way, only the auth service can mint tokens; other services cannot.</li>
+          <li>Generate a 2048-bit or 4096-bit RSA key pair and expose the public key at a JWKS endpoint (<code>/.well-known/jwks.json</code>).</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- F-11 -->
+  <div class="finding" id="F11">
+    <div class="finding-header">
+      <span class="badge medium">Medium</span>
+      <h3>F-11 · Overly Long JWT Token Expiry (7 Days, No Rotation)</h3>
+    </div>
+    <div class="finding-body">
+      <table>
+        <tr><th>ID</th><td>F-11</td></tr>
+        <tr><th>Severity</th><td><strong style="color:#c8a800;">Medium</strong></td></tr>
+        <tr><th>OWASP Category</th><td>A07:2021 – Identification and Authentication Failures</td></tr>
+        <tr><th>Location</th><td><code>backend/app/core/config.py</code> – <code>ACCESS_TOKEN_EXPIRE_MINUTES = 10080</code></td></tr>
+      </table>
+
+      <h4>Description</h4>
+      <p>Access tokens are valid for 7 days (10,080 minutes) with no rotation mechanism. This is an unusually long expiry for a high-value platform dealing with financial transactions, KYC data, and cryptocurrency wallets. Token theft (via XSS, network interception, or device compromise) gives an attacker a 7-day window of authenticated access.</p>
+
+      <h4>Impact</h4>
+      <ul>
+        <li>Stolen token usable for 7 days — ample time for financial fraud.</li>
+        <li>No way for users to invalidate tokens without waiting for expiry.</li>
+      </ul>
+
+      <div class="fix-box">
+        <div class="fix-title">How to Fix</div>
+        <ul>
+          <li>Reduce access token expiry to <strong>15–60 minutes</strong>.</li>
+          <li>Implement a secure refresh token flow (see F-03) with refresh tokens stored in HttpOnly, Secure, SameSite=Strict cookies.</li>
+          <li>Implement <strong>sliding session</strong> expiry: issue a new access token on each API call if the existing token is within the last 5 minutes of validity.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- F-12 -->
+  <div class="finding" id="F12">
+    <div class="finding-header">
+      <span class="badge medium">Medium</span>
+      <h3>F-12 · Insecure Default Encryption Salt</h3>
+    </div>
+    <div class="finding-body">
+      <table>
+        <tr><th>ID</th><td>F-12</td></tr>
+        <tr><th>Severity</th><td><strong style="color:#c8a800;">Medium</strong></td></tr>
+        <tr><th>OWASP Category</th><td>A02:2021 – Cryptographic Failures</td></tr>
+        <tr><th>Location</th><td><code>backend/app/core/config.py</code> – <code>ENCRYPTION_KEY_DERIVATION_SALT</code></td></tr>
+      </table>
+
+      <h4>Description</h4>
+      <p>The encryption key derivation salt used for end-to-end messaging has a hardcoded default value:</p>
+      <pre>ENCRYPTION_KEY_DERIVATION_SALT: str = "default-salt-change-in-production"</pre>
+      <p>If this value is not overridden in production, all derived encryption keys for private messages share a predictable salt, significantly weakening the key derivation function (KDF) and making key derivation attacks feasible.</p>
+
+      <h4>Impact</h4>
+      <ul>
+        <li>Predictable key derivation may allow decryption of private messages if the master key is also compromised.</li>
+        <li>Salt collision across deployments if multiple instances share the same default.</li>
+      </ul>
+
+      <div class="fix-box">
+        <div class="fix-title">How to Fix</div>
+        <ul>
+          <li>Remove the default value and make it a required environment variable.</li>
+          <li>Generate a random 32-byte salt: <code>python -c "import secrets; print(secrets.token_hex(32))"</code></li>
+          <li>Add a startup check that rejects the known default value and fails loudly.</li>
+          <li>Use per-user or per-conversation salts in addition to the global salt for better key isolation.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- F-13 -->
+  <div class="finding" id="F13">
+    <div class="finding-header">
+      <span class="badge medium">Medium</span>
+      <h3>F-13 · Missing Security HTTP Headers</h3>
+    </div>
+    <div class="finding-body">
+      <table>
+        <tr><th>ID</th><td>F-13</td></tr>
+        <tr><th>Severity</th><td><strong style="color:#c8a800;">Medium</strong></td></tr>
+        <tr><th>OWASP Category</th><td>A05:2021 – Security Misconfiguration</td></tr>
+        <tr><th>Location</th><td><code>backend/main.py</code> (middleware config), <code>frontend/next.config.js</code></td></tr>
+      </table>
+
+      <h4>Description</h4>
+      <p>The application does not explicitly configure the following security response headers on API responses or frontend pages:</p>
+      <ul>
+        <li><code>Strict-Transport-Security</code> (HSTS) – enforce HTTPS</li>
+        <li><code>X-Content-Type-Options: nosniff</code> – prevent MIME-sniffing</li>
+        <li><code>X-Frame-Options: DENY</code> – prevent clickjacking</li>
+        <li><code>Referrer-Policy: strict-origin-when-cross-origin</code></li>
+        <li><code>Permissions-Policy</code> – restrict browser features</li>
+        <li><code>Content-Security-Policy</code> (see F-19)</li>
+      </ul>
+
+      <div class="fix-box">
+        <div class="fix-title">How to Fix</div>
+        <ul>
+          <li>Add a <strong>SecurityHeadersMiddleware</strong> to FastAPI that injects these headers on all responses.</li>
+          <li>In <code>next.config.js</code>, add the <code>headers()</code> function to set security headers for all Next.js routes.</li>
+          <li>Use <a href="https://securityheaders.com">securityheaders.com</a> to verify headers after deployment.</li>
+          <li>Set <code>Strict-Transport-Security: max-age=31536000; includeSubDomains; preload</code> after confirming full HTTPS deployment.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- F-14 -->
+  <div class="finding" id="F14">
+    <div class="finding-header">
+      <span class="badge medium">Medium</span>
+      <h3>F-14 · S3 Bucket Object Enumeration Risk</h3>
+    </div>
+    <div class="finding-body">
+      <table>
+        <tr><th>ID</th><td>F-14</td></tr>
+        <tr><th>Severity</th><td><strong style="color:#c8a800;">Medium</strong></td></tr>
+        <tr><th>OWASP Category</th><td>A01:2021 – Broken Access Control</td></tr>
+        <tr><th>Location</th><td><code>backend/app/api/endpoints/media.py</code> – media serving endpoint</td></tr>
+      </table>
+
+      <h4>Description</h4>
+      <p>The media serving endpoint <code>GET /api/v1/media/file/{user_id}/{filename}</code> serves files based on a predictable <code>user_id/filename</code> path. If the S3 bucket is publicly accessible, or if filenames follow a predictable pattern, an attacker can enumerate and access media files belonging to other users — including KYC documents — by iterating user IDs.</p>
+
+      <h4>Impact</h4>
+      <ul>
+        <li>Unauthorised access to other users' profile images, contest media, and potentially KYC documents.</li>
+        <li>Privacy violation and potential regulatory (GDPR/PIPEDA) non-compliance.</li>
+      </ul>
+
+      <div class="fix-box">
+        <div class="fix-title">How to Fix</div>
+        <ul>
+          <li>Require authentication on the media serving endpoint and verify the requesting user owns or has permission to view the requested file.</li>
+          <li>For S3: keep the bucket <strong>private</strong> and generate <strong>pre-signed URLs</strong> (15–60 minute expiry) rather than serving files through the backend.</li>
+          <li>Use cryptographically random filenames (UUID4 or similar) to prevent predictable enumeration.</li>
+          <li>KYC documents must be served only to the owning user or authorised admin staff, never publicly.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- F-15 -->
+  <div class="finding" id="F15">
+    <div class="finding-header">
+      <span class="badge medium">Medium</span>
+      <h3>F-15 · Maintenance Bypass Token Committed to Repository</h3>
+    </div>
+    <div class="finding-body">
+      <table>
+        <tr><th>ID</th><td>F-15</td></tr>
+        <tr><th>Severity</th><td><strong style="color:#c8a800;">Medium</strong></td></tr>
+        <tr><th>OWASP Category</th><td>A05:2021 – Security Misconfiguration</td></tr>
+        <tr><th>Location</th><td><code>frontend/.env.production</code></td></tr>
+      </table>
+
+      <h4>Description</h4>
+      <p>The <code>MAINTENANCE_BYPASS_TOKEN</code> — used to access the application while it is in maintenance mode — is committed to the repository in <code>.env.production</code>. This token is now permanently in the git history. Any developer with repository access (or any attacker who gains read access) can use this token to access the application during a maintenance window, when additional protective measures may not be in place.</p>
+
+      <div class="fix-box">
+        <div class="fix-title">How to Fix</div>
+        <ul>
+          <li>Rotate the bypass token immediately.</li>
+          <li>Store it only in the deployment platform's environment secrets (Vercel, GitHub Actions).</li>
+          <li>Purge it from git history using BFG Repo Cleaner or <code>git filter-repo</code>.</li>
+          <li>Consider using IP-based allowlisting instead of a static bypass token for maintenance mode access.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- F-16 -->
+  <div class="finding" id="F16">
+    <div class="finding-header">
+      <span class="badge low">Low</span>
+      <h3>F-16 · Hard-Coded Smart Contract &amp; Blockchain Addresses</h3>
+    </div>
+    <div class="finding-body">
+      <table>
+        <tr><th>ID</th><td>F-16</td></tr>
+        <tr><th>Severity</th><td><strong style="color:var(--low);">Low</strong></td></tr>
+        <tr><th>OWASP Category</th><td>A05:2021 – Security Misconfiguration</td></tr>
+        <tr><th>Location</th><td><code>backend/app/core/config.py</code></td></tr>
+      </table>
+
+      <h4>Description</h4>
+      <p>BSC payment contract and token addresses are hard-coded as defaults in the configuration:</p>
+      <pre>BSC_PAYMENT_CONTRACT: str = "0x12Ccb74E7A8B8f0fDc14e55A82C8693145e36EdA"
+BSC_USDT_ADDRESS: str = "0x55d398326f99059fF775485246999027B3197955"</pre>
+      <p>While on-chain addresses are inherently public, hard-coding them in source means that pointing the application to a different contract (e.g., for a security patch or contract upgrade) requires a code change and redeployment rather than a configuration update.</p>
+
+      <div class="fix-box">
+        <div class="fix-title">How to Fix</div>
+        <ul>
+          <li>Move all contract addresses to environment variables (they already have defaults, which is the current pattern). Ensure they can be overridden without code changes.</li>
+          <li>Add validation to reject obviously invalid addresses (wrong length, wrong checksum) at startup.</li>
+          <li>Document the address change procedure in the operations runbook.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- F-17 -->
+  <div class="finding" id="F17">
+    <div class="finding-header">
+      <span class="badge low">Low</span>
+      <h3>F-17 · Circular Role Inheritance — Potential DoS</h3>
+    </div>
+    <div class="finding-body">
+      <table>
+        <tr><th>ID</th><td>F-17</td></tr>
+        <tr><th>Severity</th><td><strong style="color:var(--low);">Low</strong></td></tr>
+        <tr><th>OWASP Category</th><td>A04:2021 – Insecure Design</td></tr>
+        <tr><th>Location</th><td><code>backend/app/models/role.py</code> – <code>get_all_permissions()</code></td></tr>
+      </table>
+
+      <h4>Description</h4>
+      <p>The <code>Role</code> model supports hierarchical inheritance via a self-referential foreign key (<code>parent_id</code>). The <code>get_all_permissions()</code> method recursively traverses the inheritance chain. If an admin accidentally creates a circular role chain (Role A → Role B → Role A), this method will recurse infinitely and crash the worker process — a self-inflicted Denial of Service on any authenticated request.</p>
+
+      <div class="fix-box">
+        <div class="fix-title">How to Fix</div>
+        <ul>
+          <li>Add cycle detection to <code>get_all_permissions()</code> using a <code>visited</code> set:<br><code>def get_all_permissions(self, visited=None): if visited is None: visited = set(); if self.id in visited: return set(); visited.add(self.id); ...</code></li>
+          <li>Add a database constraint or admin-level validation to prevent creating circular role chains at insert/update time.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- F-18 -->
+  <div class="finding" id="F18">
+    <div class="finding-header">
+      <span class="badge low">Low</span>
+      <h3>F-18 · Login Log IP Address Spoofable</h3>
+    </div>
+    <div class="finding-body">
+      <table>
+        <tr><th>ID</th><td>F-18</td></tr>
+        <tr><th>Severity</th><td><strong style="color:var(--low);">Low</strong></td></tr>
+        <tr><th>OWASP Category</th><td>A09:2021 – Security Logging and Monitoring Failures</td></tr>
+        <tr><th>Location</th><td><code>backend/app/models/login_log.py</code>, auth endpoint</td></tr>
+      </table>
+
+      <h4>Description</h4>
+      <p>The <code>LoginLog</code> model stores the user's IP address, which is read from request headers. If the application is behind a reverse proxy and trusts headers like <code>X-Forwarded-For</code> or <code>X-Real-IP</code> without validation, an attacker can spoof their IP address by injecting these headers, making security auditing and IP-based blocking unreliable.</p>
+
+      <div class="fix-box">
+        <div class="fix-title">How to Fix</div>
+        <ul>
+          <li>Configure the application to trust the proxy header (<code>X-Forwarded-For</code>) <strong>only</strong> when the request comes from a known trusted proxy IP. Use <code>trusted_hosts</code> middleware or configure uvicorn with <code>--forwarded-allow-ips</code>.</li>
+          <li>Use Starlette's <code>ProxyHeadersMiddleware</code> with an explicit trusted proxy list.</li>
+          <li>Never trust client-supplied IP headers directly without proxy validation.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- F-19 -->
+  <div class="finding" id="F19">
+    <div class="finding-header">
+      <span class="badge low">Low</span>
+      <h3>F-19 · Missing Content Security Policy (CSP)</h3>
+    </div>
+    <div class="finding-body">
+      <table>
+        <tr><th>ID</th><td>F-19</td></tr>
+        <tr><th>Severity</th><td><strong style="color:var(--low);">Low</strong></td></tr>
+        <tr><th>OWASP Category</th><td>A03:2021 – Injection (XSS)</td></tr>
+        <tr><th>Location</th><td><code>frontend/next.config.js</code></td></tr>
+      </table>
+
+      <h4>Description</h4>
+      <p>No Content Security Policy header was identified. CSP is a critical defence-in-depth measure that instructs browsers which sources of scripts, styles, images, and other resources are legitimate. Without CSP, a successful XSS attack can freely load attacker-controlled scripts, exfiltrate tokens, and manipulate the UI.</p>
+
+      <div class="fix-box">
+        <div class="fix-title">How to Fix</div>
+        <ul>
+          <li>Add a CSP header in <code>next.config.js</code> via the <code>headers()</code> function.</li>
+          <li>Start with a reporting-only policy (<code>Content-Security-Policy-Report-Only</code>) to identify violations before enforcing.</li>
+          <li>A baseline CSP for Next.js: <code>default-src 'self'; script-src 'self' 'nonce-{nonce}'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' wss: https:;</code></li>
+          <li>Use nonce-based CSP for inline scripts generated by Next.js.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- F-20 -->
+  <div class="finding" id="F20">
+    <div class="finding-header">
+      <span class="badge info">Informational</span>
+      <h3>F-20 · Admin "All" Permission Wildcard</h3>
+    </div>
+    <div class="finding-body">
+      <table>
+        <tr><th>ID</th><td>F-20</td></tr>
+        <tr><th>Severity</th><td><strong style="color:var(--info);">Informational</strong></td></tr>
+        <tr><th>OWASP Category</th><td>A01:2021 – Broken Access Control</td></tr>
+        <tr><th>Location</th><td><code>backend/app/core/permissions.py</code></td></tr>
+      </table>
+
+      <h4>Description</h4>
+      <p>The RBAC system grants administrators a special <code>'all'</code> permission that bypasses all permission checks. While practical, this means there is no way to create a "restricted admin" (e.g., a content moderator with admin access only to moderation endpoints). Any user with the admin role has full platform access.</p>
+
+      <div class="fix-box">
+        <div class="fix-title">How to Fix</div>
+        <ul>
+          <li>Consider implementing fine-grained admin roles (e.g., <code>content_moderator</code>, <code>financial_admin</code>, <code>kyc_reviewer</code>) without the wildcard <code>'all'</code> permission.</li>
+          <li>Reserve the <code>'all'</code> wildcard for a super-admin role and apply the principle of least privilege to all other admin roles.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- F-21 -->
+  <div class="finding" id="F21">
+    <div class="finding-header">
+      <span class="badge info">Informational</span>
+      <h3>F-21 · WebSocket / Socket.IO Authentication Clarity</h3>
+    </div>
+    <div class="finding-body">
+      <table>
+        <tr><th>ID</th><td>F-21</td></tr>
+        <tr><th>Severity</th><td><strong style="color:var(--info);">Informational</strong></td></tr>
+        <tr><th>OWASP Category</th><td>A07:2021 – Identification and Authentication Failures</td></tr>
+        <tr><th>Location</th><td><code>backend/app/</code> – Socket.IO integration</td></tr>
+      </table>
+
+      <h4>Description</h4>
+      <p>The application uses <code>python-socketio</code> 5.11.0 for real-time WebSocket communication. The authentication mechanism for WebSocket connections (whether JWT is validated on connection, and whether per-event authorisation is enforced) was not fully visible in the reviewed code. Unauthenticated WebSocket connections would allow real-time data leakage and event injection.</p>
+
+      <div class="fix-box">
+        <div class="fix-title">How to Fix</div>
+        <ul>
+          <li>Ensure WebSocket connections require a valid JWT token in the handshake (query param or auth header).</li>
+          <li>Validate the token on every connection event, not just the initial connection.</li>
+          <li>Implement per-room / per-channel authorisation checks.</li>
+          <li>Document the Socket.IO authentication flow in the security documentation.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- F-22 -->
+  <div class="finding" id="F22">
+    <div class="finding-header">
+      <span class="badge info">Informational</span>
+      <h3>F-22 · Database Connection String in Environment Variable</h3>
+    </div>
+    <div class="finding-body">
+      <table>
+        <tr><th>ID</th><td>F-22</td></tr>
+        <tr><th>Severity</th><td><strong style="color:var(--info);">Informational</strong></td></tr>
+        <tr><th>OWASP Category</th><td>A05:2021 – Security Misconfiguration</td></tr>
+        <tr><th>Location</th><td><code>backend/app/core/config.py</code> – <code>DATABASE_URL</code></td></tr>
+      </table>
+
+      <h4>Description</h4>
+      <p>The database connection string (which includes username, password, host, and database name) is passed as a single <code>DATABASE_URL</code> environment variable. This is a standard pattern, but it means that any process or log that dumps environment variables exposes full database credentials.</p>
+
+      <div class="fix-box">
+        <div class="fix-title">How to Fix</div>
+        <ul>
+          <li>Use a secrets manager (AWS Secrets Manager, HashiCorp Vault) to inject the <code>DATABASE_URL</code> at runtime rather than baking it into the container environment.</li>
+          <li>Ensure application logs do not print environment variables or startup configuration.</li>
+          <li>Rotate database credentials periodically; use IAM-based authentication (AWS RDS IAM) where possible to avoid static passwords.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── 5. OWASP MAPPING ───────────────────────────────────────────────────── -->
+  <div class="section-title" id="owasp">5. OWASP Top 10 Mapping</div>
+  <table class="owasp-table">
+    <thead>
+      <tr>
+        <th>OWASP Category (2021)</th>
+        <th>Finding(s)</th>
+        <th>Severity</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>A01 – Broken Access Control</td><td>F-14 (Media Enumeration), F-20 (Admin Wildcard)</td><td>Medium / Info</td></tr>
+      <tr><td>A02 – Cryptographic Failures</td><td>F-01 (Hardcoded Secret), F-10 (HS256), F-11 (Token Expiry), F-12 (Default Salt)</td><td>Critical / Medium</td></tr>
+      <tr><td>A03 – Injection</td><td>F-04 (MIME Spoofing), F-19 (No CSP / XSS protection)</td><td>High / Low</td></tr>
+      <tr><td>A04 – Insecure Design</td><td>F-05 (No Upload Size Limit), F-17 (Circular Role Inheritance)</td><td>High / Low</td></tr>
+      <tr><td>A05 – Security Misconfiguration</td><td>F-02 (Committed Secrets), F-06 (CORS Wildcard), F-09 (Swagger Exposed), F-13 (Missing Headers), F-15 (Bypass Token), F-16 (Hardcoded Addresses), F-22 (DB Credentials)</td><td>Critical / High / Medium / Low</td></tr>
+      <tr><td>A06 – Vulnerable Components</td><td>No findings (dependencies appear current)</td><td>—</td></tr>
+      <tr><td>A07 – Auth Failures</td><td>F-03 (No Revocation), F-07 (User Enumeration), F-08 (No Rate Limiting), F-21 (WebSocket Auth)</td><td>High / Medium / Info</td></tr>
+      <tr><td>A08 – Software Integrity Failures</td><td>No findings identified</td><td>—</td></tr>
+      <tr><td>A09 – Logging &amp; Monitoring Failures</td><td>F-18 (Spoofable IP in Logs)</td><td>Low</td></tr>
+      <tr><td>A10 – SSRF</td><td>No findings identified in reviewed code</td><td>—</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ─── 6. CONCLUSION ────────────────────────────────────────────────────────── -->
+  <div class="section-title" id="conclusion">6. Conclusion &amp; Remediation Priority</div>
+  <div class="exec-box">
+    <p>The MyHigh5 platform is a feature-rich, architecturally sound application. The use of Pydantic for input validation, bcrypt for password hashing, SQLAlchemy ORM for parameterised queries, and HMAC signature verification for webhooks demonstrates a security-conscious development approach.</p>
+    <p style="margin-top:12px;">However, <strong>two Critical findings must be addressed before any production launch</strong>:</p>
+    <ol style="padding-left:20px; margin-top:10px;">
+      <li style="margin-bottom:8px;"><strong>F-01 (Hardcoded JWT Secret)</strong> — Any developer or repository reader can currently forge admin tokens. Remove the default and generate a strong random secret.</li>
+      <li style="margin-bottom:8px;"><strong>F-02 (Committed Secrets)</strong> — Rotate all exposed API keys immediately and purge them from git history. Add <code>.env*</code> to <code>.gitignore</code>.</li>
+    </ol>
+    <p style="margin-top:12px;"><strong>Recommended remediation order:</strong></p>
+    <table style="width:100%; border-collapse:collapse; margin-top:10px; font-size:14px;">
+      <tr style="background:#2c3e6b; color:#fff;">
+        <th style="padding:8px 12px; text-align:left;">Priority</th>
+        <th style="padding:8px 12px; text-align:left;">Finding</th>
+        <th style="padding:8px 12px; text-align:left;">Effort</th>
+        <th style="padding:8px 12px; text-align:left;">Impact</th>
+      </tr>
+      <tr style="background:#fdf0f0;"><td style="padding:8px 12px; border:1px solid #ddd;">1 (Immediate)</td><td style="padding:8px 12px; border:1px solid #ddd;">F-01, F-02</td><td style="padding:8px 12px; border:1px solid #ddd;">Low</td><td style="padding:8px 12px; border:1px solid #ddd;">Authentication bypass prevention</td></tr>
+      <tr><td style="padding:8px 12px; border:1px solid #ddd;">2 (This Sprint)</td><td style="padding:8px 12px; border:1px solid #ddd;">F-03, F-04, F-05, F-06</td><td style="padding:8px 12px; border:1px solid #ddd;">Medium</td><td style="padding:8px 12px; border:1px solid #ddd;">Token, upload, and CORS hardening</td></tr>
+      <tr style="background:#f8f9fb;"><td style="padding:8px 12px; border:1px solid #ddd;">3 (Next Sprint)</td><td style="padding:8px 12px; border:1px solid #ddd;">F-07, F-08, F-09, F-13, F-14, F-15</td><td style="padding:8px 12px; border:1px solid #ddd;">Medium</td><td style="padding:8px 12px; border:1px solid #ddd;">Enumeration, rate limiting, headers</td></tr>
+      <tr><td style="padding:8px 12px; border:1px solid #ddd;">4 (Backlog)</td><td style="padding:8px 12px; border:1px solid #ddd;">F-10, F-11, F-12, F-16, F-17, F-18, F-19, F-20, F-21, F-22</td><td style="padding:8px 12px; border:1px solid #ddd;">Low–High</td><td style="padding:8px 12px; border:1px solid #ddd;">Defence-in-depth improvements</td></tr>
+    </table>
+  </div>
+
+</div>
+
+<footer>
+  <p>MyHigh5 Security Assessment &mdash; Confidential &mdash; Generated: 20 May 2026</p>
+  <p style="margin-top:6px; color:#ccc;">This report is intended solely for the development and security teams of MyHigh5. Unauthorised distribution is prohibited.</p>
+</footer>
+
+</body>
+</html>
