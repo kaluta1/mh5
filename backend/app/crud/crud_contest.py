@@ -1164,6 +1164,11 @@ class CRUDContest:
 
         skip_explicit_geo_filters = (
             (season_level_lc in pooled_geo_levels or contest_level_lc in pooled_geo_levels)
+            and not (
+                filter_continent
+                and str(filter_continent).strip().lower() not in ("", "all", "unknown", "none", "null")
+                and (season_level_lc in ("continent", "continental", "global") or contest_level_lc in ("continent", "continental", "global"))
+            )
         )
         allow_explicit_region_filter = bool(
             filter_region
@@ -2073,7 +2078,8 @@ class CRUDContest:
             # Pooled nomination stages are selected by season membership. A stale
             # country query from the country tab must not hide cross-country winners.
             effective_country = None
-            effective_continent = None
+            if season_level_for_filter not in ("continent", "continental", "global"):
+                effective_continent = None
             # Keep an explicit regional bloc filter (for example "East Africa").
             # Only implicit/user fallback regions are suppressed.
             effective_region = explicit_region_filter
@@ -2767,6 +2773,10 @@ class CRUDContest:
         # This ensures contestants with most participants/votes appear at top immediately
         enriched_contestants.sort(key=lambda x: (
             -x["total_points"],  # Points first (descending - most points first)
+            -x.get("shares_count", 0),
+            -x.get("favorites_count", 0),
+            -x.get("reactions_count", 0),
+            -x.get("comments_count", 0),
             -x["votes_count"],   # Then votes (descending)
             x.get("rank", float('inf'))  # Then by rank (lower is better)
         ))
