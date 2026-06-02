@@ -327,10 +327,36 @@ def _lightweight_round_data(
         contests_count = len(all_contests)
         contests = all_contests[contest_skip:contest_skip + contest_limit]
 
-        from app.models.contests import Contestant
+        from app.models.contests import Contestant, ContestantSeason, ContestSeasonLink, ContestSeason, SeasonLevel
 
         def _round_entry_count(contest: Any, contest_mode_value: str) -> int:
             """Round-specific card count; never use stale all-time Contest.participant_count."""
+            # Pooled phases (regional/continental/global): roster is driven by
+            # ContestantSeason membership, not by season_id + round_id.
+            pooled_levels = {SeasonLevel.REGIONAL, SeasonLevel.CONTINENT, SeasonLevel.GLOBAL}
+            active_pool_season = (
+                db.query(ContestSeason)
+                .join(ContestSeasonLink, ContestSeasonLink.season_id == ContestSeason.id)
+                .filter(
+                    ContestSeasonLink.contest_id == contest.id,
+                    ContestSeasonLink.is_active == True,
+                    ContestSeason.level.in_(pooled_levels),
+                    ContestSeason.is_deleted == False,
+                )
+                .first()
+            )
+            if active_pool_season is not None:
+                member_count = (
+                    db.query(func.count(ContestantSeason.contestant_id))
+                    .filter(
+                        ContestantSeason.season_id == active_pool_season.id,
+                        ContestantSeason.is_active == True,
+                    )
+                    .scalar()
+                    or 0
+                )
+                return int(member_count)
+
             q = db.query(Contestant).filter(
                 Contestant.season_id == contest.id,
                 Contestant.round_id == round_obj.id,

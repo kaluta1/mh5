@@ -1096,7 +1096,6 @@ class CRUDContest:
                     Contestant.is_deleted == False,
                     _entries_entry_type_clause,
                     Contestant.id.in_(active_member_ids),
-                    Contestant.season_id == contest.id,
                 )
         elif conditions:
             base_entries_query = db.query(_entries_count_agg())\
@@ -1905,23 +1904,60 @@ class CRUDContest:
         filter_season_id = contest_id
         logger.info(f"[get_contest_with_enriched_contestants] Filtering contestants by contest_id={contest_id}")
 
+        # Déterminer le niveau de la saison AVANT de construire la requête de base
+        # afin de savoir si on doit utiliser le filtre season_id ou ContestantSeason.
+        season_level = None
+        if season and hasattr(season, "level") and season.level is not None:
+            season_level = season.level.value if hasattr(season.level, "value") else str(season.level)
+            if isinstance(season_level, str):
+                season_level = season_level.lower()
+
+        if (
+            season_level == "city"
+            and contest_mode == "nomination"
+        ):
+            season_level = "country"
+
+        pooled_season_membership_scope = bool(
+            season and season_level in ("regional", "region", "continent", "global")
+        )
+        # Intentionally False: country membership branch is disabled below.
+        nomination_country_membership_scope = False
+
         # Query contestants by contest id (season_id legacy). Nominations: always surface the
         # signed-in nominator even if their row was stored on a duplicate contest id.
+        # For pooled phases (regional/continental/global), the roster is driven by
+        # ContestantSeason membership, NOT Contestant.season_id. Promoted contestants
+        # retain their original season_id, so filtering by season_id would exclude them.
         from app.services.contest_category_integrity import contestant_roster_season_clause
 
-        contestants_query = db.query(Contestant)\
-            .filter(
-                Contestant.is_deleted == False,
-                contestant_roster_season_clause(
-                    db,
-                    contest_obj,
-                    current_user_id=current_user_id,
-                ),
-            )\
-            .outerjoin(User, Contestant.user_id == User.id) \
-            .options(
-                contains_eager(Contestant.user)
+        if pooled_season_membership_scope:
+            # Pooled phases: base query without season_id filter.
+            # ContestantSeason membership filter is applied later (see below).
+            contestants_query = db.query(Contestant)\
+                .filter(Contestant.is_deleted == False)\
+                .outerjoin(User, Contestant.user_id == User.id) \
+                .options(
+                    contains_eager(Contestant.user)
+                )
+            logger.info(
+                f"[get_contest_with_enriched_contestants] Pooled phase {season_level}: "
+                "skipping contestant_roster_season_clause (season_id filter)"
             )
+        else:
+            contestants_query = db.query(Contestant)\
+                .filter(
+                    Contestant.is_deleted == False,
+                    contestant_roster_season_clause(
+                        db,
+                        contest_obj,
+                        current_user_id=current_user_id,
+                    ),
+                )\
+                .outerjoin(User, Contestant.user_id == User.id) \
+                .options(
+                    contains_eager(Contestant.user)
+                )
         # Filtrer par entry_type basé sur le contest_mode (données corrigées)
         effective_entry_type = entry_type or ('nomination' if contest_mode == 'nomination' else 'participation')
         if contest_mode == "nomination":
@@ -1940,25 +1976,6 @@ class CRUDContest:
         current_user = None
         if current_user_id:
             current_user = db.query(User).filter(User.id == current_user_id).first()
-        
-        # Déterminer le niveau de la saison pour le filtrage
-        season_level = None
-        if season and hasattr(season, "level") and season.level is not None:
-            season_level = season.level.value if hasattr(season.level, "value") else str(season.level)
-            if isinstance(season_level, str):
-                season_level = season_level.lower()
-
-        if (
-            season_level == "city"
-            and contest_mode == "nomination"
-        ):
-            season_level = "country"
-
-        pooled_season_membership_scope = bool(
-            season and season_level in ("regional", "region", "continent", "global")
-        )
-        # Intentionally False: country membership branch is disabled below.
-        nomination_country_membership_scope = False
 
         # Calendar round scope must never be skipped for "pooled" seasons: when the active
         # ContestSeason row is REGIONAL+/etc., we still must filter by target_round_id or
@@ -2010,12 +2027,11 @@ class CRUDContest:
                 ContestantSeason.is_active == True,
             )
             contestants_query = contestants_query.filter(Contestant.id.in_(active_season_member_ids))
-            if contest_mode == "nomination":
-                # Continental/regional cards must match the migration membership for
-                # this exact contest/category row. The broad roster clause may include
-                # duplicate same-category contest rows; those inflate UI counts beyond
-                # the direct migration query used on the VPS.
-                contestants_query = contestants_query.filter(Contestant.season_id == contest_id)
+            # NOTE: We do NOT filter by Contestant.season_id == contest_id here.
+            # Promoted contestants retain their original season_id from the source
+            # contest. The ContestantSeason membership already scopes to the exact
+            # season, so duplicate same-category rows from other contests are
+            # naturally excluded.
             logger.info(
                 f"[get_contest_with_enriched_contestants] Scoping visible roster to active "
                 f"ContestantSeason links for {season_level} season_id={season.id}"

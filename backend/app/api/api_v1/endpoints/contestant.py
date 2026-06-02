@@ -1677,10 +1677,55 @@ def get_contest_contestants(
         
         # Step 2: Build simplified query - try season_id first (most common)
         query = db.query(Contestant).filter(Contestant.is_deleted == False)
-        
-        from app.services.contest_category_integrity import contestant_roster_season_clause
 
+        # Resolve active season to detect pooled phases (regional/continental/global)
+        from sqlalchemy import case
+        from app.models.contests import ContestSeasonLink as CSLink, ContestSeason as CSeason, ContestantSeason as CSeas, SeasonLevel
+        season_link_for_pool = None
+        season_for_pool = None
+        season_level_for_pool = None
+        pooled_membership_scope = False
         if contest:
+            # Find the active season link for this contest
+            sl = db.query(CSLink, CSeason).join(
+                CSeason, CSeason.id == CSLink.season_id
+            ).filter(
+                CSLink.contest_id == contest.id,
+                CSLink.is_active == True,
+                CSeason.is_deleted == False,
+            ).order_by(
+                case((CSeason.level == SeasonLevel.GLOBAL, 0),
+                     (CSeason.level == SeasonLevel.CONTINENT, 1),
+                     (CSeason.level == SeasonLevel.REGIONAL, 2),
+                     (CSeason.level == SeasonLevel.COUNTRY, 3),
+                     (CSeason.level == SeasonLevel.CITY, 4),
+                     else_=5),
+                CSeason.id.desc(),
+            ).first()
+            if sl:
+                season_link_for_pool, season_for_pool = sl
+                season_level_for_pool = (
+                    season_for_pool.level.value
+                    if hasattr(season_for_pool.level, "value")
+                    else str(season_for_pool.level)
+                )
+                if isinstance(season_level_for_pool, str):
+                    season_level_for_pool = season_level_for_pool.lower()
+                pooled_membership_scope = season_level_for_pool in (
+                    "regional", "region", "continent", "global"
+                )
+
+        if pooled_membership_scope and season_for_pool is not None:
+            # Pooled phase: roster is driven by ContestantSeason membership.
+            # Skip contestant_roster_season_clause (which filters by season_id)
+            # because promoted contestants retain their original season_id.
+            active_member_ids = db.query(CSeas.contestant_id).filter(
+                CSeas.season_id == season_for_pool.id,
+                CSeas.is_active == True,
+            )
+            query = query.filter(Contestant.id.in_(active_member_ids))
+        elif contest:
+            from app.services.contest_category_integrity import contestant_roster_season_clause
             query = query.filter(
                 contestant_roster_season_clause(
                     db,
@@ -1694,7 +1739,7 @@ def get_contest_contestants(
         _is_nomination_contest_round = bool(
             contest and _norm_cm_round(getattr(contest, "contest_mode", None)) == "nomination"
         )
-        if round_id is not None:
+        if round_id is not None and not pooled_membership_scope:
             if user_id is not None:
                 # When loading only this user's rows (apply/edit), always include their entries
                 # even if the URL round pill differs from the round they nominated in.
@@ -1721,7 +1766,7 @@ def get_contest_contestants(
         suppress_geo_filters = bool(
             contest
             and str(getattr(contest, "level", None) or "").lower() in pooled_card_levels
-        )
+        ) or pooled_membership_scope
 
         # Normalize filters from both modern keys (filterCountry,...) and
         # legacy keys (country,...) used by some detail page routes.
