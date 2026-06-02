@@ -56,6 +56,13 @@ api_router.include_router(newsletter.router, prefix="/newsletter", tags=["Newsle
 api_router.include_router(share.router, prefix="/share", tags=["Partage Social"])
 api_router.include_router(follow.router, prefix="/follow", tags=["Follow"])
 
+# TEMPORARY: Debug endpoint for continental issue — remove after fix verified
+try:
+    from app.api.api_v1.endpoints import debug_continental
+    api_router.include_router(debug_continental.router, prefix="/debug", tags=["Debug"])
+except Exception:
+    pass
+
 # Feed System Endpoints (merged from microservice)
 api_router.include_router(feed_groups.router, prefix="/feed/groups", tags=["Feed Groups"])
 api_router.include_router(feed_messages.router, prefix="/feed/messages", tags=["Feed Messages"])
