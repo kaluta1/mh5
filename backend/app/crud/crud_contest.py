@@ -2026,6 +2026,19 @@ class CRUDContest:
                 ContestantSeason.season_id == season.id,
                 ContestantSeason.is_active == True,
             )
+            # DEBUG: log the raw member IDs so we can verify promotion links exist
+            _raw_member_ids = [r[0] for r in active_season_member_ids.all()]
+            logger.info(
+                f"[DEBUG-CONTINENTAL] contest_id={contest_id} | "
+                f"season_id={season.id} | level={season_level} | "
+                f"active_member_count={len(_raw_member_ids)} | "
+                f"member_ids={_raw_member_ids[:50]}"
+            )
+            # Re-create the subquery for the actual filter (do not reuse .all() cursor)
+            active_season_member_ids = db.query(ContestantSeason.contestant_id).filter(
+                ContestantSeason.season_id == season.id,
+                ContestantSeason.is_active == True,
+            )
             contestants_query = contestants_query.filter(Contestant.id.in_(active_season_member_ids))
             # NOTE: We do NOT filter by Contestant.season_id == contest_id here.
             # Promoted contestants retain their original season_id from the source
@@ -2249,6 +2262,9 @@ class CRUDContest:
             logger.info(f"[get_contest_with_enriched_contestants] Filter: season_id={filter_season_id}")
             contestants = contestants_query.all()
             logger.info(f"[get_contest_with_enriched_contestants] Found {len(contestants)} contestants")
+            # DEBUG: dump countries of returned contestants
+            _countries = [(c.id, getattr(c, 'country', None), getattr(c, 'region', None), getattr(c, 'continent', None), getattr(c, 'season_id', None)) for c in contestants]
+            logger.info(f"[DEBUG-CONTINENTAL-RESULT] contest_id={contest_id} | returned_countries={_countries[:30]}")
             
             # If no contestants, try fallbacks
             # IMPORTANT: Only try fallbacks if we DID NOT apply a location or entry_type filter.
