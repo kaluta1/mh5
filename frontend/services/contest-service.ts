@@ -597,7 +597,8 @@ class ContestService {
     limit: number = 10,
     searchTerm?: string,
     votingLevel?: string,
-    contestMode?: string
+    contestMode?: string,
+    continent?: string
   ): Promise<{ contests: Contest[]; total: number }> {
     try {
       const params: any = {
@@ -605,7 +606,8 @@ class ContestService {
         limit,
         ...(searchTerm && { search: searchTerm }),
         ...(votingLevel && { voting_level: votingLevel }),
-        ...(contestMode && { contest_mode: contestMode })
+        ...(contestMode && { contest_mode: contestMode }),
+        ...(continent && { filter_continent: continent })
       };
 
 

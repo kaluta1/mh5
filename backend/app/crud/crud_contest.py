@@ -319,6 +319,7 @@ def _season_pair_for_requested_ui_level(
         "country": SeasonLevel.COUNTRY,
         "regional": SeasonLevel.REGIONAL,
         "continent": SeasonLevel.CONTINENT,
+        "continental": SeasonLevel.CONTINENT,
         "global": SeasonLevel.GLOBAL,
     }
     target_enum = level_map.get(ui)
@@ -1087,11 +1088,16 @@ class CRUDContest:
             return func.count(Contestant.id.distinct())
 
         if count_by_active_season_members:
-            active_member_ids = db.query(ContestantSeason.contestant_id).filter(
-                ContestantSeason.season_id == season_link.season_id,
-                ContestantSeason.is_active == True,
+            active_member_ids = (
+                db.query(ContestantSeason.contestant_id)
+                .filter(
+                    ContestantSeason.season_id == season_link.season_id,
+                    ContestantSeason.is_active == True,
+                )
+                .scalar_subquery()
             )
             base_entries_query = db.query(_entries_count_agg())\
+                .outerjoin(User, Contestant.user_id == User.id)\
                 .filter(
                     Contestant.is_deleted == False,
                     _entries_entry_type_clause,
@@ -1099,6 +1105,7 @@ class CRUDContest:
                 )
         elif conditions:
             base_entries_query = db.query(_entries_count_agg())\
+                .outerjoin(User, Contestant.user_id == User.id)\
                 .filter(
                     Contestant.is_deleted == False,
                     _entries_entry_type_clause,
@@ -1115,19 +1122,24 @@ class CRUDContest:
 
         # Compter le nombre de participants selon la saison/round et la localisation
         if count_by_active_season_members:
-            active_member_ids = db.query(ContestantSeason.contestant_id).filter(
-                ContestantSeason.season_id == season_link.season_id,
-                ContestantSeason.is_active == True,
+            active_member_ids = (
+                db.query(ContestantSeason.contestant_id)
+                .filter(
+                    ContestantSeason.season_id == season_link.season_id,
+                    ContestantSeason.is_active == True,
+                )
+                .scalar_subquery()
             )
             entries_query = db.query(_entries_count_agg())\
+                .outerjoin(User, Contestant.user_id == User.id)\
                 .filter(
                     Contestant.is_deleted == False,
                     _entries_entry_type_clause,
                     Contestant.id.in_(active_member_ids),
-                    Contestant.season_id == contest.id,
                 )
         elif conditions:
             entries_query = db.query(_entries_count_agg())\
+                .outerjoin(User, Contestant.user_id == User.id)\
                 .filter(
                     Contestant.is_deleted == False,
                     _entries_entry_type_clause,
@@ -1228,10 +1240,8 @@ class CRUDContest:
                         conds.append(Contestant.country.ilike(pat))
                         conds.append(Contestant.nominator_country.ilike(pat))
                         conds.append(User.country.ilike(pat))
-                    # outerjoin: roster uses outerjoin(User); inner join understated card counts.
-                    entries_query = entries_query.outerjoin(
-                        User, Contestant.user_id == User.id
-                    ).filter(or_(*conds))
+                    # User is already outer-joined in the base entries query.
+                    entries_query = entries_query.filter(or_(*conds))
             if filter_region:
                 region_conds: list = []
                 if allow_explicit_region_filter:
@@ -1260,8 +1270,14 @@ class CRUDContest:
                 entries_query = entries_query.filter(or_(*region_conds))
             if filter_continent:
                 if not skip_explicit_geo_filters:
+                    # Match both the contestant snapshot and the user profile so rows
+                    # whose Contestant.continent is empty still count when the user
+                    # belongs to the requested continent.
                     entries_query = entries_query.filter(
-                        func.lower(Contestant.continent) == func.lower(filter_continent)
+                        or_(
+                            func.lower(Contestant.continent) == func.lower(filter_continent),
+                            func.lower(User.continent) == func.lower(filter_continent),
+                        )
                     )
         elif current_user and season_level:
             # Filtrer par localisation selon le niveau de la saison et l'utilisateur connecté

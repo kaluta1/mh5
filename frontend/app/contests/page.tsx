@@ -55,6 +55,8 @@ function ContestsPageContent() {
   const [categoryTab, setCategoryTab] = useState<'nomination' | 'participations'>('nomination')
   const [activeTab, setActiveTab] = useState<string>('all')
   const [sortBy, setSortBy] = useState<string>('participants') // participants, votes, date, name
+  // Continent filter driven by the URL query string (e.g. ?continent=Africa)
+  const [continent, setContinent] = useState<string>(() => searchParams.get('continent') || '')
   const [favorites, setFavorites] = useState<Array<string | number>>([])
   const [showAuthDialog, setShowAuthDialog] = useState(false)
   const [showLoginModal, setShowLoginModal] = useState(false)
@@ -138,10 +140,19 @@ function ContestsPageContent() {
     }
   }, [searchParams])
 
+  // Synchronise local continent state with the URL query string
+  useEffect(() => {
+    const urlContinent = searchParams.get('continent') || ''
+    if (urlContinent !== continent) {
+      setContinent(urlContinent)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
+
   // Charger les contests
   useEffect(() => {
     loadContests()
-  }, [activeSearchTerm, categoryTab])
+  }, [activeSearchTerm, categoryTab, continent])
 
   // Filtrer et trier les contests
   useEffect(() => {
@@ -219,7 +230,8 @@ function ContestsPageContent() {
           pageSize,
           activeSearchTerm || undefined,
           undefined, // votingLevel n'est plus utilisé
-          contestMode
+          contestMode,
+          continent || undefined
         )
 
         if (!contests || !Array.isArray(contests) || contests.length === 0) {

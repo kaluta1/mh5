@@ -711,7 +711,7 @@ function ContestsPageContent() {
         : undefined
     const activeContinent = voteGeo
       ? voteGeo.filterContinent
-      : filterContinent !== 'all'
+      : filterContinent && filterContinent !== 'all'
         ? filterContinent
         : undefined
 
