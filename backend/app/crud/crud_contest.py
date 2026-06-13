@@ -2153,7 +2153,22 @@ class CRUDContest:
             # Only implicit/user fallback regions are suppressed.
             effective_region = explicit_region_filter
 
-        if current_user and not is_explicit_all_country and not is_explicit_all_continent:
+        # Only fall back to the authenticated user's location when the caller
+        # did not provide any explicit geo filter. An explicit continent like
+        # "Africa" must stay continent-wide and not be narrowed to the user's
+        # country (e.g. Tanzania).
+        has_explicit_geo_filter = bool(
+            (filter_country and is_valid_location(filter_country))
+            or (filter_continent and is_valid_location(filter_continent))
+            or (filter_region and is_valid_location(filter_region))
+        )
+
+        if (
+            current_user
+            and not is_explicit_all_country
+            and not is_explicit_all_continent
+            and not has_explicit_geo_filter
+        ):
             # Pas de filtre explicite (ni spécifique ni "all") -> utiliser la localisation de l'utilisateur
             if not effective_country and is_valid_location(current_user.country) and not suppress_user_country_fallback:
                 effective_country = current_user.country
