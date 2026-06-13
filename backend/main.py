@@ -12,6 +12,10 @@ import sys
 import time
 import uvicorn
 
+# Setup Logger to fix NameError globally
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("uvicorn.error")
+
 # Fix Windows console encoding for emoji/log output
 if sys.platform == "win32":
     try:
@@ -26,7 +30,7 @@ from app.services.socketio_app import create_socketio_app
 
 def validate_critical_settings():
     """Fail fast when required secrets are not provided via env."""
-    is_production = os.getenv("ENVIRONMENT", "development").lower() == "production"
+    is_production = os.getenv("ENVIRONMENT", "production").lower() == "production"
     errors = []
     if not settings.SECRET_KEY or len(settings.SECRET_KEY) < 32:
         errors.append(
@@ -66,14 +70,7 @@ async def lifespan(app: FastAPI):
     """Application lifespan - start/stop background services."""
     validate_critical_settings()
 
-    # NOTE: Database migrations are intentionally NOT run automatically here.
-    # They should be applied explicitly during deployment (e.g. Render
-    # buildCommand or a manual `alembic upgrade heads`). Running migrations in
-    # a background thread can race with the first requests and hide failures.
-
     # Start all background schedulers through the unified manager.
-    # If an external task runner (e.g. Celery) is enabled, skip the in-process
-    # schedulers to avoid running the same jobs twice.
     from app.services.scheduler_manager import scheduler_manager
     use_celery = os.getenv("USE_CELERY", "false").lower() in ("true", "1", "yes")
     scheduler_task: asyncio.Task | None = None
@@ -119,14 +116,15 @@ cors_origins = [
     "https://myhigh5.com",
     "https://www.myhigh5.com",
     "https://mh5-hbjp.onrender.com",
-    "https://mh5-backend.onrender.com",  # Alternative backend URL
-    "https://frontend-rho-eight-72.vercel.app",  # Vercel frontend
-    # Note: Wildcards don't work in allow_origins list, use allow_origin_regex instead
+    "https://mh5-backend.onrender.com",
+    "https://frontend-rho-eight-72.vercel.app",
+    # ---- new domain ----
+    "https://kaluta.tech",
+    "https://www.kaluta.tech"
 ]
 
 # Ajouter les origines depuis les settings
 if settings.BACKEND_CORS_ORIGINS:
-    # Handle both comma-separated string and list
     if isinstance(settings.BACKEND_CORS_ORIGINS, str):
         cors_origins.extend([origin.strip() for origin in settings.BACKEND_CORS_ORIGINS.split(",") if origin.strip()])
     elif isinstance(settings.BACKEND_CORS_ORIGINS, list):
@@ -137,7 +135,7 @@ cors_origins = list(set([origin.strip() for origin in cors_origins if origin]))
 
 print(f"CORS Origins configured: {cors_origins}")
 
-# Origin regex: localhost, Vercel/Render deploys, and raw IPv4 (e.g. http://203.0.113.1:3000 on a VPS dev box).
+# Origin regex
 _CORS_ORIGIN_REGEX = (
     r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
     r"|^https://.*\.vercel\.app$"
@@ -147,12 +145,11 @@ _CORS_ORIGIN_REGEX = (
 )
 
 # IMPORTANT: Ajouter le middleware CORS EN PREMIER
-# Use regex to allow all Vercel deployments and localhost
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins,  # Use explicit origins list
+    allow_origins=cors_origins,
     allow_origin_regex=_CORS_ORIGIN_REGEX,
-    allow_credentials=True,  # Allow credentials for authentication cookies/tokens
+    allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"],
     allow_headers=["*"],
     expose_headers=["*"],
@@ -168,7 +165,6 @@ class CORSExtraMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         origin = request.headers.get("origin")
         if origin:
-            # Check if origin matches our patterns
             is_allowed = (
                 origin in cors_origins or
                 re.match(r"^https://.*\.vercel\.(app|dev)$", origin) or
@@ -214,13 +210,12 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             )
             raise
 
-
 app.add_middleware(RequestLoggingMiddleware)
 
 # Inclusion des routes API
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
-# GraphQL endpoint (optional - skip if strawberry not available)
+# GraphQL endpoint
 try:
     from app.graphql.schema import graphql_app
     app.include_router(graphql_app, prefix="/graphql")
@@ -234,12 +229,8 @@ except ImportError as e:
 if os.path.exists(settings.LOCAL_STORAGE_PATH):
     app.mount("/media", StaticFiles(directory=settings.LOCAL_STORAGE_PATH), name="media")
 
-# Intégration Socket.IO (optionnel)
+# Intégration Socket.IO
 socketio_app = create_socketio_app(app)
-if socketio_app:
-    # Si Socket.IO est disponible, utiliser l'app Socket.IO qui encapsule FastAPI
-    # Sinon, utiliser directement l'app FastAPI
-    pass  # L'app sera montée dans le serveur ASGI
 
 # Route racine
 @app.get("/", tags=["Status"])
@@ -251,21 +242,19 @@ def read_root():
         "documentation": "/docs"
     }
 
-# Route health check pour Docker
+# Route health check
 @app.get("/health", tags=["Status"])
 def health_check():
     return {"status": "healthy"}
 
-# Route favicon pour éviter les erreurs 404
+# Route favicon
 @app.get("/favicon.ico", tags=["Static"], include_in_schema=False)
 def favicon():
-    """Handle favicon requests to prevent 404 errors"""
-    return Response(status_code=204)  # No Content - browser will use default favicon
+    return Response(status_code=204)
 
-# Route robots.txt pour éviter les erreurs 404
+# Route robots.txt
 @app.get("/robots.txt", tags=["Static"], include_in_schema=False)
 def robots_txt():
-    """Handle robots.txt requests to prevent 404 errors"""
     return Response(
         content="User-agent: *\nDisallow: /api/\nDisallow: /docs\nDisallow: /redoc\n",
         media_type="text/plain"
@@ -280,10 +269,9 @@ def debug_cors():
         "backend_cors_origins_from_settings": settings.BACKEND_CORS_ORIGINS
     }
 
-# Custom exception handler for HTTP exceptions (including 404)
+# Custom exception handler for HTTP exceptions
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
-    """Handle HTTP exceptions (404, etc.) with a consistent error format"""
     if exc.status_code == 404:
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -295,7 +283,6 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
                 "method": request.method
             }
         )
-    # For other HTTP exceptions, return the default format
     return JSONResponse(
         status_code=exc.status_code,
         content={
@@ -305,10 +292,9 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
         }
     )
 
-# Custom exception handler for all HTTP exceptions
+# Custom exception handler for validation errors
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    """Handle validation errors with a consistent format"""
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={
