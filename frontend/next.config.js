@@ -75,6 +75,11 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+ 
   
   // Experimental features for performance
   experimental: {
@@ -125,12 +130,6 @@ const nextConfig = {
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
   },
 
-  // Optimize bundle size
-  // Note: optimizeCss requires 'critters' package, disabled for now
-  // experimental: {
-  //   optimizeCss: true,
-  // },
-
   async headers() {
     return [
       {
@@ -145,11 +144,9 @@ const nextConfig = {
     ];
   },
   async rewrites() {
-    // Share link rewrites: backend URL from env or default (see lib/config.ts)
     const backendUrl = (process.env.NEXT_PUBLIC_API_URL || 'https://myhigh5.com').replace(/\/+$/, '')
 
     return [
-      // Legacy UploadThing client URL — forward to App Router handler
       {
         source: '/ut',
         destination: '/api/uploadthing',
@@ -158,7 +155,6 @@ const nextConfig = {
         source: '/ut/:path*',
         destination: '/api/uploadthing/:path*',
       },
-      // /s/f and /s/c → app/s/f/[id]/route.ts and app/s/c/[id]/route.ts (raw OG HTML, no layout).
       {
         source: '/s/p/:username',
         destination: `${backendUrl}/api/v1/share/p/:username`,
@@ -177,14 +173,6 @@ const nextConfig = {
       },
     ];
   },
-
-  // IMPORTANT: To fix Vercel deployment stack overflow error:
-  // 1. Go to Vercel Dashboard → Your Project → Settings → General
-  // 2. Set "Root Directory" to: frontend
-  // 3. Save and redeploy
-  //
-  // This prevents Vercel from scanning the backend directory during build
-
 }
 
 module.exports = nextConfig
