@@ -29,41 +29,58 @@ from app.services.socketio_app import create_socketio_app
 
 
 def validate_critical_settings():
-    """Fail fast when required secrets are not provided via env."""
-    is_production = os.getenv("ENVIRONMENT", "production").lower() == "production"
-    errors = []
+    """Fail fast when required critical secrets are missing, but warn for optional features."""
+    # .env-এ ENVIRONMENT সেট করা না থাকলে ডিফল্ট 'development' ধরবে, যাতে লোকাল বা টেস্ট সার্ভারে হুট করে ক্র্যাশ না করে
+    is_production = os.getenv("ENVIRONMENT", "development").lower() == "production"
+    
+    critical_errors = []
+    payment_warnings = []
+
+    # 1. Critical Security Checks: These checks are absolutely essential, and the application should never run without them.
+
     if not settings.SECRET_KEY or len(settings.SECRET_KEY) < 32:
-        errors.append(
+        critical_errors.append(
             "SECRET_KEY is missing or too short (min 32 chars). JWT tokens are insecure. "
             "Set a strong SECRET_KEY in your .env file."
         )
     if not settings.MASTER_ENCRYPTION_KEY:
-        errors.append(
+        critical_errors.append(
             "MASTER_ENCRYPTION_KEY is missing. End-to-end messaging encryption will not work."
         )
     if not settings.ENCRYPTION_KEY_DERIVATION_SALT:
-        errors.append(
+        critical_errors.append(
             "ENCRYPTION_KEY_DERIVATION_SALT is missing. Set a random salt in your .env file."
         )
+
+    # Optional Crypto Payment Check (If any crypto payment methods are missing, display a warning but keep the application running normally.)
     if not settings.BSC_PAYMENT_CONTRACT:
-        errors.append(
+        payment_warnings.append(
             "BSC_PAYMENT_CONTRACT is missing. On-chain crypto payments will not work."
         )
     if not settings.BSC_USDT_ADDRESS:
-        errors.append(
+        payment_warnings.append(
             "BSC_USDT_ADDRESS is missing. On-chain USDT payments will not work."
         )
 
-    if errors:
+    # Cryptogriphic key missing, the app will shut down in production 
+    if critical_errors:
         print("\n" + "=" * 70)
-        print("SECURITY / CONFIGURATION ERRORS")
+        print("CRITICAL SECURITY / CONFIGURATION ERRORS")
         print("=" * 70)
-        for e in errors:
+        for e in critical_errors:
             print(f"🚫  {e}")
         print("=" * 70 + "\n")
         if is_production:
-            raise RuntimeError("Missing required secrets. See console output above.")
+            raise RuntimeError("Missing required critical secrets. See console output above.")
 
+    # If payment key missing then print the notice, don't crush 
+    if payment_warnings:
+        print("\n" + "=" * 70)
+        print("CONFIG WARNINGS (NON-CRITICAL)")
+        print("=" * 70)
+        for w in payment_warnings:
+            print(f"⚠️  {w}")
+        print("=" * 70 + "\n")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
