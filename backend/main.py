@@ -178,22 +178,32 @@ import re
 from starlette.middleware.base import BaseHTTPMiddleware
 
 class CORSExtraMiddleware(BaseHTTPMiddleware):
+    """Ensure CORS headers are present for edge-case origins without duplicating
+    headers already set by FastAPI's CORSMiddleware.
+    """
+
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
         origin = request.headers.get("origin")
-        if origin:
-            is_allowed = (
-                origin in cors_origins or
-                re.match(r"^https://.*\.vercel\.(app|dev)$", origin) or
-                re.match(r"^https://.*\.onrender\.com$", origin) or
-                re.match(r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$", origin) or
-                re.match(r"^https?://(?:[0-9]{1,3}\.){3}[0-9]{1,3}(:\d+)?$", origin)
-            )
-            if is_allowed:
-                response.headers["Access-Control-Allow-Origin"] = origin
-                response.headers["Access-Control-Allow-Credentials"] = "true"
-                response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD"
-                response.headers["Access-Control-Allow-Headers"] = "*"
+        if not origin:
+            return response
+
+        # If FastAPI's CORSMiddleware already handled this origin, do nothing.
+        if "access-control-allow-origin" in response.headers:
+            return response
+
+        is_allowed = (
+            origin in cors_origins or
+            re.match(r"^https://.*\.vercel\.(app|dev)$", origin) or
+            re.match(r"^https://.*\.onrender\.com$", origin) or
+            re.match(r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$", origin) or
+            re.match(r"^https?://(?:[0-9]{1,3}\.){3}[0-9]{1,3}(:\d+)?$", origin)
+        )
+        if is_allowed:
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD"
+            response.headers["Access-Control-Allow-Headers"] = "*"
         return response
 
 app.add_middleware(CORSExtraMiddleware)

@@ -66,40 +66,15 @@ export function Footer() {
     }
   }, [])
 
-  // Collecter les informations de localisation
+  // Location info is optional for newsletter subscriptions. External IP
+  // geolocation APIs trigger CORS errors in the browser and are therefore
+  // skipped; timezone is sufficient metadata and avoids network failures.
   useEffect(() => {
-    const fetchLocationInfo = async () => {
-      try {
-        // Utiliser une API de géolocalisation gratuite
-        const response = await fetch('https://ipapi.co/json/')
-        if (response.ok) {
-          const data = await response.json()
-          setLocationInfo({
-            country: data.country_name,
-            city: data.city,
-            continent: data.continent_code,
-            ip: data.ip,
-            timezone: data.timezone,
-          })
-        }
-      } catch (error) {
-        // Silently fail - location is optional
-        // Essayer une autre API en fallback
-        try {
-          const fallbackResponse = await fetch('https://api.ipify.org?format=json')
-          if (fallbackResponse.ok) {
-            const ipData = await fallbackResponse.json()
-            setLocationInfo({
-              ip: ipData.ip,
-            })
-          }
-        } catch (fallbackError) {
-          // Silently fail - location is optional
-        }
-      }
+    if (typeof window !== 'undefined') {
+      setLocationInfo({
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      })
     }
-
-    fetchLocationInfo()
   }, [])
 
   const handleSubscribe = async (e: React.FormEvent) => {
