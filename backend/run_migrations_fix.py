@@ -9,7 +9,8 @@ import psycopg2
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 def recreate_db():
-    conn = psycopg2.connect(host='localhost', port=5432, user='postgres', password='', database='postgres')
+    # conn = psycopg2.connect(host='localhost', port=5432, user='postgres', password='', database='postgres')
+    conn = psycopg2.connect("postgresql://neondb_owner:npg_G8PuypwWERm7@ep-winter-heart-a7ysbm7f-pooler.ap-southeast-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require")
     conn.autocommit = True
     cur = conn.cursor()
     cur.execute('DROP DATABASE IF EXISTS myhigh5;')
