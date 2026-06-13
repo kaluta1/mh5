@@ -4,13 +4,27 @@ Script to fetch all contests from the database
 """
 import os
 import sys
+from pathlib import Path
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 import json
 from datetime import datetime
 
-# Database URL
-DATABASE_URL = "postgresql://neondb_owner:npg_pBhM89cZikgE@ep-winter-heart-a7ysbm7f-pooler.ap-southeast-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+# Load backend .env so DATABASE_URL can be supplied from environment.
+# fetch_contests.py lives in the repo root, so we point one level down.
+_DOTENV_PATH = Path(__file__).resolve().parent / "backend" / ".env"
+if _DOTENV_PATH.exists():
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(_DOTENV_PATH, encoding="utf-8-sig")
+    except Exception:
+        pass
+
+# Database URL: prefer environment, keep the old Neon URL as a last resort.
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql://neondb_owner:npg_pBhM89cZikgE@ep-winter-heart-a7ysbm7f-pooler.ap-southeast-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require",
+)
 
 def format_date(date_obj):
     """Format date object to string"""
@@ -21,47 +35,53 @@ def format_date(date_obj):
     return str(date_obj)
 
 def fetch_all_contests():
-    """Fetch all contests from the database"""
+    """Fetch all contests from the database.
+
+    Returns a tuple (contests, has_voting_type_id).
+    """
     try:
         # Create engine
         engine = create_engine(DATABASE_URL, echo=False)
-        
+
         # Create session
         Session = sessionmaker(bind=engine)
         session = Session()
-        
+
         # First, get the actual columns in the table
         columns_query = text("""
-            SELECT column_name 
-            FROM information_schema.columns 
+            SELECT column_name
+            FROM information_schema.columns
             WHERE table_name = 'contest'
             ORDER BY ordinal_position
         """)
         columns_result = session.execute(columns_query)
         available_columns = [row[0] for row in columns_result]
-        
+
         print(f"Available columns in contest table: {', '.join(available_columns)}")
-        
+
         # Build query dynamically based on available columns
         select_fields = []
-        for col in ['id', 'name', 'description', 'contest_type', 'cover_image_url', 
-                   'image_url', 'is_active', 'is_submission_open', 'is_voting_open', 
-                   'level', 'location_id', 'voting_type_id', 'category_id', 'template_id', 
+        for col in ['id', 'name', 'description', 'contest_type', 'cover_image_url',
+                   'image_url', 'is_active', 'is_submission_open', 'is_voting_open',
+                   'level', 'location_id', 'voting_type_id', 'category_id', 'template_id',
                    'gender_restriction', 'max_entries_per_user', 'created_at', 'updated_at']:
             if col in available_columns:
                 select_fields.append(col)
-        
+
         # Add date fields if they exist
         for col in ['submission_start_date', 'submission_end_date', 'voting_start_date', 'voting_end_date']:
             if col in available_columns:
                 select_fields.append(col)
-        
+
+        # Remember which optional columns exist for display/summary logic
+        has_voting_type_id = 'voting_type_id' in available_columns
+
         query_str = f"SELECT {', '.join(select_fields)} FROM contest ORDER BY id"
         query = text(query_str)
-        
+
         result = session.execute(query)
         contests = []
-        
+
         for row in result:
             # Create a dictionary from the row
             contest = {}
@@ -73,40 +93,60 @@ def fetch_all_contests():
                 else:
                     contest[col] = value
             contests.append(contest)
-        
+
         session.close()
         engine.dispose()
-        
-        return contests
-        
+
+        return contests, has_voting_type_id
+
     except Exception as e:
         print(f"Error fetching contests: {str(e)}", file=sys.stderr)
         raise
 
 def fetch_all_contestants_counts(contest_ids):
-    """Fetch the count of contestants for all contests in one query"""
+    """Fetch the count of contestants for all contests in one query.
+
+    Modern contestants are linked to a contest through:
+        contest -> contest_season_links -> contest_seasons -> contestant_seasons -> contestants
+
+    The legacy `contestants.season_id` column is unreliable (it sometimes stored
+    a contest id, sometimes a season id) and is the reason counts used to look
+    Tanzania-only for continental contests: only legacy rows happened to match,
+    and those rows were mostly Tanzania.
+    """
+    if not contest_ids:
+        return {}
+
     try:
         engine = create_engine(DATABASE_URL, echo=False)
         Session = sessionmaker(bind=engine)
         session = Session()
-        
-        # Count contestants by season_id for all contests at once
+
+        # Proper count: join contest -> seasons -> contestant_seasons -> contestants
         query = text("""
-            SELECT season_id, COUNT(*) as count
-            FROM contestants 
-            WHERE season_id = ANY(:contest_ids)
-            AND is_deleted = false
-            GROUP BY season_id
+            SELECT
+                csl.contest_id AS contest_id,
+                COUNT(DISTINCT cs.contestant_id) AS count
+            FROM contest_season_links csl
+            JOIN contest_seasons sess ON sess.id = csl.season_id
+            JOIN contestant_seasons cs ON cs.season_id = sess.id
+            JOIN contestants c ON c.id = cs.contestant_id
+            WHERE csl.contest_id = ANY(:contest_ids)
+              AND csl.is_active = true
+              AND cs.is_active = true
+              AND c.is_deleted = false
+              AND sess.is_deleted = false
+            GROUP BY csl.contest_id
         """)
-        
+
         result = session.execute(query, {"contest_ids": contest_ids})
         counts = {row[0]: row[1] for row in result}
-        
+
         session.close()
         engine.dispose()
-        
+
         return counts
-        
+
     except Exception as e:
         print(f"Error counting contestants: {str(e)}", file=sys.stderr)
         return {}
@@ -116,8 +156,8 @@ def main():
     print("Fetching all contests from database...")
     print("=" * 80)
     
-    contests = fetch_all_contests()
-    
+    contests, has_voting_type_id = fetch_all_contests()
+
     print(f"\nTotal contests found: {len(contests)}\n")
     
     if not contests:
@@ -137,9 +177,10 @@ def main():
     if len(contests) > 20:
         print(f"\nShowing summary for {len(contests)} contests (use JSON export for full details)...\n")
         for i, contest in enumerate(contests[:20], 1):
+            is_nomination = contest.get('voting_type_id') if has_voting_type_id else None
             print(f"{i}. ID: {contest['id']} | {contest['name']} | Type: {contest['contest_type']} | "
                   f"Active: {contest['is_active']} | Contestants: {contest['contestants_count']} | "
-                  f"Nomination: {'Yes' if contest.get('voting_type_id') else 'No'}")
+                  f"Nomination: {'Yes' if is_nomination else 'No'}")
         print(f"\n... and {len(contests) - 20} more contests")
     else:
         # Display all contests in detail
@@ -160,9 +201,9 @@ def main():
                 desc = contest['description'][:100] + "..." if len(contest['description']) > 100 else contest['description']
                 print(f"Description: {desc}")
             
-            if contest.get('voting_type_id'):
+            if has_voting_type_id and contest.get('voting_type_id'):
                 print(f"Voting Type ID: {contest['voting_type_id']} (This is a NOMINATION)")
-            else:
+            elif has_voting_type_id:
                 print(f"Voting Type ID: None (This is a PARTICIPATION)")
             
             if 'submission_start_date' in contest or 'submission_end_date' in contest:
@@ -194,8 +235,11 @@ def main():
     print(f"Active Contests: {sum(1 for c in contests if c['is_active'])}")
     print(f"Submission Open: {sum(1 for c in contests if c['is_submission_open'])}")
     print(f"Voting Open: {sum(1 for c in contests if c['is_voting_open'])}")
-    print(f"Nominations (has voting_type_id): {sum(1 for c in contests if c['voting_type_id'])}")
-    print(f"Participations (no voting_type_id): {sum(1 for c in contests if not c['voting_type_id'])}")
+    if has_voting_type_id:
+        print(f"Nominations (has voting_type_id): {sum(1 for c in contests if c['voting_type_id'])}")
+        print(f"Participations (no voting_type_id): {sum(1 for c in contests if not c['voting_type_id'])}")
+    else:
+        print("Nominations/Participations: voting_type_id column not present in this database")
     
     # Count total contestants (already fetched)
     total_contestants = sum(c['contestants_count'] for c in contests)
