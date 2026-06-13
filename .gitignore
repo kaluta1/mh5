@@ -6,6 +6,8 @@
 # Node artifact files
 node_modules/
 dist/
+docs/SERVER_CONFIGURATION.md
+docs/STABILIZATION_SUMMARY.md
 
 # Compiled Java class files
 *.class

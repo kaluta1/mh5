@@ -214,4 +214,3 @@ export const ALL_COUNTRIES = [
   { code: "VU", name: "Vanuatu", continent: "Oceania", region: "Oceania" },
 ];
 
-console.log(`Total countries: ${ALL_COUNTRIES.length}`);

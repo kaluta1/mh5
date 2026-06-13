@@ -377,15 +377,11 @@ export default function ContactPage() {
         message: formData.message.trim(),
       }
       
-      console.log('Envoi du message de contact:', payload)
-      console.log('Endpoint:', '/api/v1/contact')
-      console.log('Langue:', language)
       
       // Appeler l'API pour envoyer le message avec la langue dans les headers
       // La langue sera détectée automatiquement depuis les headers Accept-Language du navigateur
       const response = await apiService.post('/api/v1/contact', payload)
       
-      console.log('Réponse du serveur:', response)
       
       setIsSubmitting(false)
       setIsSubmitted(true)
@@ -407,7 +403,6 @@ export default function ContactPage() {
       // Gérer les erreurs de validation du backend
       if (error?.response?.data?.detail) {
         const detail = error.response.data.detail
-        console.log('Detail de l\'erreur:', detail)
         
         // Si c'est une erreur de validation Pydantic, parser les erreurs
         if (typeof detail === 'object' && Array.isArray(detail)) {

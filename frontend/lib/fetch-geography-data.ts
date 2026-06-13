@@ -43,7 +43,6 @@ async function fetchContinents(): Promise<string[]> {
   try {
     const response = await fetch(`${BACKEND_URL}/oxilor/continents`)
     const data = await response.json()
-    console.log('Continents récupérés:', data)
     
     if (Array.isArray(data)) {
       return data
@@ -64,7 +63,6 @@ async function fetchCountries(): Promise<CountryData[]> {
   try {
     const response = await fetch(`${BACKEND_URL}/oxilor/countries`)
     const data = await response.json()
-    console.log('Pays récupérés:', data)
     
     if (Array.isArray(data)) {
       return data
@@ -85,7 +83,6 @@ async function fetchCitiesByCountry(countryCode: string): Promise<CityData[]> {
   try {
     const response = await fetch(`${BACKEND_URL}/oxilor/cities?country_code=${countryCode}`)
     const data = await response.json()
-    console.log(`Villes pour ${countryCode}:`, data)
     
     if (Array.isArray(data)) {
       return data
@@ -106,7 +103,6 @@ async function fetchRegionsByCountry(countryCode: string): Promise<RegionData[]>
   try {
     const response = await fetch(`${BACKEND_URL}/oxilor/regions?country_code=${countryCode}`)
     const data = await response.json()
-    console.log(`Régions pour ${countryCode}:`, data)
     
     if (Array.isArray(data)) {
       return data
@@ -124,13 +120,10 @@ async function fetchRegionsByCountry(countryCode: string): Promise<RegionData[]>
  * Récupérer toutes les données géographiques
  */
 export async function fetchAllGeographyData(): Promise<GeographyData> {
-  console.log('Récupération des données géographiques...')
   
   const continents = await fetchContinents()
-  console.log(`${continents.length} continents trouvés`)
   
   const countries = await fetchCountries()
-  console.log(`${countries.length} pays trouvés`)
   
   // Récupérer les villes et régions pour chaque pays
   const allCities: CityData[] = []
@@ -147,8 +140,6 @@ export async function fetchAllGeographyData(): Promise<GeographyData> {
     await new Promise(resolve => setTimeout(resolve, 100))
   }
   
-  console.log(`${allCities.length} villes trouvées`)
-  console.log(`${allRegions.length} régions trouvées`)
   
   return {
     continents,
@@ -164,7 +155,5 @@ export async function fetchAllGeographyData(): Promise<GeographyData> {
 export async function exportGeographyDataToJSON() {
   const data = await fetchAllGeographyData()
   const json = JSON.stringify(data, null, 2)
-  console.log('Données géographiques:')
-  console.log(json)
   return json
 }

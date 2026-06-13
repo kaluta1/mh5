@@ -4,7 +4,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    from app.api.api_v1.endpoints import auth, users, media, contests, votes, kyc, contestant, geography, favorites, search, search_history, comments, admin, season_migration, notifications, analytics, affiliate, payments, roles, verifications, wallet, suggested_contests, social, private_messages, contact, categories, newsletter, share, follow, rounds, voting_types, fmr, sponsor_annualads
+    from app.api.api_v1.endpoints import auth, users, media, contests, votes, kyc, contestant, geography, favorites, search, search_history, comments, admin, season_migration, notifications, analytics, affiliate, payments, roles, verifications, wallet, suggested_contests, social, private_messages, contact, categories, newsletter, share, follow, rounds, voting_types, fmr, sponsor_annualads, scheduler
     from app.api.api_v1.endpoints import feed_groups, feed_messages, feed_posts, feed, feed_keys, groups
     logger.info("All endpoints imported successfully")
 except ImportError as e:
@@ -33,7 +33,7 @@ api_router.include_router(kyc.router, prefix="/kyc", tags=["Vérification KYC"])
 api_router.include_router(verifications.router, prefix="/verifications", tags=["Vérifications utilisateur"])
 api_router.include_router(payments.router, prefix="/payments", tags=["Paiements"])
 api_router.include_router(contestant.router, prefix="/contestants", tags=["Candidatures"])
-api_router.include_router(comments.router, prefix="/contestants", tags=["Commentaires"])
+api_router.include_router(comments.router, prefix="/comments", tags=["Commentaires"])
 api_router.include_router(geography.router, prefix="/geography", tags=["Géographie"])
 api_router.include_router(favorites.router, prefix="/favorites", tags=["Favoris"])
 api_router.include_router(search.router, tags=["Recherche"])
@@ -49,12 +49,15 @@ api_router.include_router(sponsor_annualads.sso_router, prefix="/sponsor-embed",
 api_router.include_router(wallet.router, prefix="/wallet", tags=["Portefeuille"])
 api_router.include_router(roles.router, prefix="/rbac", tags=["Rôles et Permissions"])
 api_router.include_router(social.router, prefix="/social", tags=["Service Social"])
-api_router.include_router(groups.router, prefix="/api/v1", tags=["Groupes WhatsApp-like"])
+# Groups router routes already start with /groups/..., so no extra prefix is needed.
+# Using an empty prefix keeps the full path as /api/v1/groups/... (api_router is mounted at /api/v1).
+api_router.include_router(groups.router, prefix="", tags=["Groupes WhatsApp-like"])
 api_router.include_router(private_messages.router, prefix="/messages", tags=["Messagerie Privée"])
 api_router.include_router(contact.router, tags=["Contact"])
 api_router.include_router(newsletter.router, prefix="/newsletter", tags=["Newsletter"])
 api_router.include_router(share.router, prefix="/share", tags=["Partage Social"])
 api_router.include_router(follow.router, prefix="/follow", tags=["Follow"])
+api_router.include_router(scheduler.router, prefix="/scheduler", tags=["Scheduler"])
 
 # TEMPORARY: Debug endpoint for continental issue — remove after fix verified
 try:

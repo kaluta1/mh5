@@ -2,7 +2,7 @@
  * Métadonnées SEO partagées pour toutes les pages
  */
 import { Metadata } from "next"
-import { Language } from "@/lib/translations"
+import type { Language } from "@/lib/locale-registry"
 import { getMetadataTranslations, detectLanguageFromHeaders } from "@/lib/metadata-translations"
 import { headers } from "next/headers"
 

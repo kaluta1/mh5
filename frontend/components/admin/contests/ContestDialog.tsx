@@ -222,11 +222,9 @@ export function ContestDialog({
             newErrors.contest_mode = t('admin.contests.error_contest_type_required') || 'Le type de compétition est obligatoire pour les nominations'
         }
 
-        console.log('Validation errors:', newErrors)
         setErrors(newErrors)
 
         const isValid = Object.keys(newErrors).length === 0
-        console.log('Form is valid:', isValid)
         return isValid
     }
 

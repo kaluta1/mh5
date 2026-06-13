@@ -31,7 +31,7 @@ class Settings(BaseModel):
     PROJECT_NAME: str = "High5 API"
     
     # SECURITY
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "c7d9fbef58c5ac4fe7d31e32a89e2c336468843c1c307177ab0ee55f54063115")
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "")
     ALGORITHM: str = os.getenv("ALGORITHM", "HS256")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", str(60 * 24 * 7)))  # Default: 7 jours
     PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 30  # 30 minutes
@@ -137,10 +137,10 @@ class Settings(BaseModel):
     # ============================================
     BSC_RPC_URL: str = os.getenv("BSC_RPC_URL", "https://bsc-dataseed.binance.org")
     BSC_CHAIN_ID: int = int(os.getenv("BSC_CHAIN_ID", "56"))
-    BSC_PAYMENT_CONTRACT: str = os.getenv("BSC_PAYMENT_CONTRACT", "0x12Ccb74E7A8B8f0fDc14e55A82C8693145e36EdA")
+    BSC_PAYMENT_CONTRACT: str = os.getenv("BSC_PAYMENT_CONTRACT", "")
     BSC_CONFIRMATIONS: int = int(os.getenv("BSC_CONFIRMATIONS", "1"))
     BSC_EXPLORER_URL: str = os.getenv("BSC_EXPLORER_URL", "https://bscscan.com")
-    BSC_USDT_ADDRESS: str = os.getenv("BSC_USDT_ADDRESS", "0x55d398326f99059fF775485246999027B3197955")
+    BSC_USDT_ADDRESS: str = os.getenv("BSC_USDT_ADDRESS", "")
     BSC_USDT_DECIMALS: int = int(os.getenv("BSC_USDT_DECIMALS", "18"))
     
     # CONTENT MODERATION (Sightengine)
@@ -153,10 +153,13 @@ class Settings(BaseModel):
     
     # EDEN API (if needed)
     EDEN_API: str = os.getenv("EDEN_API", "")
-    
+
+    # CRON / SCHEDULER
+    CRON_SECRET: str = os.getenv("CRON_SECRET", "")
+
     # ENCRYPTION (E2E Messaging)
     MASTER_ENCRYPTION_KEY: str = os.getenv("MASTER_ENCRYPTION_KEY", "")
-    ENCRYPTION_KEY_DERIVATION_SALT: str = os.getenv("ENCRYPTION_KEY_DERIVATION_SALT", "default-salt-change-in-production")
+    ENCRYPTION_KEY_DERIVATION_SALT: str = os.getenv("ENCRYPTION_KEY_DERIVATION_SALT", "")
     
     # Validation des origines CORS
     @field_validator("BACKEND_CORS_ORIGINS", mode="before")

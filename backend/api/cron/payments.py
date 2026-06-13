@@ -1,50 +1,40 @@
 """
-Vercel Cron Job: Payment Status Checker
-Runs every 2 minutes to check pending payments
+Cron entry point: Payment Status Checker.
+
+Can be invoked by a Python-friendly cron service (e.g. Render cron) or by an
+HTTP-triggered job that calls the backend scheduler endpoint.
 """
 import sys
 import os
 
-# Add backend directory to path
 backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if backend_dir not in sys.path:
     sys.path.insert(0, backend_dir)
 
-from app.db.session import SessionLocal
-from app.services.payment_scheduler import PaymentScheduler
-import asyncio
+from app.services.payment_scheduler import payment_scheduler
+from app.services.cron_runner import run_scheduler_coro
 import logging
 
 logger = logging.getLogger(__name__)
 
-def handler(request):
-    """Vercel cron handler for payment checks"""
+
+def handler(request=None):
+    """Cron handler for payment status checks."""
     try:
-        payment_scheduler = PaymentScheduler()
-        db = SessionLocal()
-        try:
-            # Run payment checks asynchronously
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            loop.run_until_complete(payment_scheduler._check_pending_payments())
-        except Exception as e:
-            logger.error(f"Error in payment cron job: {e}", exc_info=True)
-            return {
-                "statusCode": 500,
-                "body": f"Error: {str(e)}"
-            }
-        finally:
-            db.close()
-            if 'loop' in locals():
-                loop.close()
-        
+        run_scheduler_coro(payment_scheduler._check_pending_payments())
         return {
             "statusCode": 200,
-            "body": "Payment cron job executed successfully"
+            "body": "Payment cron job executed successfully",
         }
     except Exception as e:
-        logger.error(f"Cron job error: {e}", exc_info=True)
+        logger.error(f"Payment cron job error: {e}", exc_info=True)
         return {
             "statusCode": 500,
-            "body": f"Error: {str(e)}"
+            "body": f"Error: {str(e)}",
         }
+
+
+if __name__ == "__main__":
+    result = handler()
+    print(result["body"])
+    sys.exit(0 if result["statusCode"] == 200 else 1)

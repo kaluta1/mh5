@@ -16,7 +16,7 @@ import { CheckCircle, XCircle, Eye, AlertCircle, FileText, ExternalLink } from '
 import api from '@/lib/api'
 import { API_URL } from '@/lib/config'
 import { LOCALE_BY_LANG } from '@/lib/date-utils'
-import type { Language } from '@/lib/translations'
+import type { Language } from '@/lib/locale-registry'
 
 interface KYCVerification {
   id: number

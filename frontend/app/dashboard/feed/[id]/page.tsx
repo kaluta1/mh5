@@ -1,5 +1,6 @@
 'use client'
 
+import { Suspense } from 'react'
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { ArrowLeft, Loader2 } from 'lucide-react'
@@ -12,7 +13,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { useLanguage } from '@/contexts/language-context'
 import { useToast } from '@/components/ui/toast'
 
-export default function PostDetailPage() {
+function PostDetailPage() {
   const params = useParams()
   const router = useRouter()
   const { isAuthenticated, user } = useAuth()
@@ -189,3 +190,10 @@ export default function PostDetailPage() {
   )
 }
 
+export default function PostDetailPageWrapper() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 border-4 border-myhigh5-primary border-t-transparent rounded-full animate-spin" /></div>}>
+      <PostDetailPage />
+    </Suspense>
+  )
+}

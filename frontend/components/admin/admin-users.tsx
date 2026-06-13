@@ -151,8 +151,6 @@ export default function AdminUsers() {
   const fetchUserDetails = async (userId: number) => {
     try {
       const response = await api.get(`/api/v1/admin/users/${userId}`)
-      console.log('User details:', response.data)
-      console.log('Comments:', response.data.contest_comments)
       setSelectedUser(response.data)
       setShowDetails(true)
     } catch (error) {

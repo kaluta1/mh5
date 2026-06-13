@@ -78,7 +78,6 @@ export function useModeratedUpload(options: UseModeratedUploadOptions = {}) {
       // ============================================
       const cachedFile = await getCachedFile(file)
       if (cachedFile) {
-        console.log('📦 Fichier déjà uploadé, utilisation du cache:', cachedFile.url)
         
         const result: UploadResult = {
           url: cachedFile.url,

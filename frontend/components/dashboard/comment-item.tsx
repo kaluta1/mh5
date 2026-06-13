@@ -229,7 +229,6 @@ export function CommentItem({
                   value={replyText}
                   onChange={setReplyText}
                   onMentionSelect={(username) => {
-                    console.log('Mention sélectionnée:', username)
                   }}
                   users={commenters}
                   placeholder={t('dashboard.contests.reply_placeholder') || 'Écrire une réponse...'}

@@ -9,5 +9,23 @@
       "src": "frontend/package.json",
       "use": "@vercel/next"
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/payments",
+      "schedule": "*/2 * * * *"
+    },
+    {
+      "path": "/api/cron/contest-status",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/season-migration",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/monthly-round",
+      "schedule": "0 0 1 * *"
+    }
   ]
 }

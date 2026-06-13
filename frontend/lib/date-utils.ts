@@ -19,7 +19,7 @@ import {
   tr,
   zhCN,
 } from 'date-fns/locale'
-import { Language } from './translations'
+import type { Language } from './locale-registry'
 
 /** date-fns locale per app language (Swahili: no locale in date-fns → enUS). */
 const DATE_FNS_LOCALE_BY_LANG: Partial<Record<Language, Locale>> = {

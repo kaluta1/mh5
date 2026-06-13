@@ -648,7 +648,6 @@ export async function verifyOwnership(
 
     const data = await response.json()
     
-    console.log('Face comparison result:', data)
 
     // Vérifier si des visages ont été détectés
     if (data.status !== 'success') {

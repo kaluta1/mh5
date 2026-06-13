@@ -45,7 +45,6 @@ export function SuggestedUsers({ currentUserId }: SuggestedUsersProps) {
 
   const handleFollow = async (userId: number) => {
     // TODO: Implémenter la logique de suivi
-    console.log('Follow user:', userId)
   }
 
   if (isLoading) {

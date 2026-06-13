@@ -58,7 +58,7 @@ export function Testimonials() {
                 {/* Content */}
                   <blockquote className="text-base leading-relaxed mb-8 text-gray-700 dark:text-gray-300 font-medium relative">
                     <Quote className="absolute -top-2 -left-2 w-8 h-8 text-myhigh5-primary/20" />
-                    <span className="relative z-10">"{t(`testimonials.items.${key}.text`)}"</span>
+                    <span className="relative z-10">&ldquo;{t(`testimonials.items.${key}.text`)}&rdquo;</span>
                 </blockquote>
 
                 {/* Author */}

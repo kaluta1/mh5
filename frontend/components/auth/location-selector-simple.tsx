@@ -34,21 +34,16 @@ export function LocationSelectorSimple({
 
   // Quand le pays change
   const handleCountryChange = (countryCode: string) => {
-    console.log('Pays sélectionné:', countryCode)
     setSelectedCountryCode(countryCode)
     
     const country = allCountries.find(c => c.code === countryCode)
     if (country) {
-      console.log('Pays trouvé:', country)
       
       // Appeler les callbacks immédiatement
-      console.log('Appel onCountryChange avec:', country.name)
       onCountryChange(country.name)
       
-      console.log('Appel onRegionChange avec:', country.region)
       onRegionChange(country.region)
       
-      console.log('Appel onContinentChange avec:', country.continent)
       onContinentChange(country.continent)
       
       // Réinitialiser la ville (callback vide si non utilisé)

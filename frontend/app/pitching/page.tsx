@@ -106,7 +106,7 @@ export default function MyHigh5LandingPage() {
     Company: [
       { label: "About", href: "/about" },
       { label: "Contact", href: "/contact" },
-      { label: "FAQ", href: "/pages_mobile/faq" },
+      { label: "FAQ", href: "/faq" },
       { label: "Download App", href: "/#download-app" },
     ],
     Legal: [

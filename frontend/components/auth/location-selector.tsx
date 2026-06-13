@@ -34,7 +34,6 @@ export function LocationSelector({
       setError('')
       try {
         const data = await getAllCountries()
-        console.log('Pays chargés:', data.length)
         if (data.length === 0) {
           setError('Impossible de charger les pays. Vérifiez votre connexion.')
         }
@@ -54,7 +53,6 @@ export function LocationSelector({
     if (selectedCountryCode && countries.length > 0) {
       const country = countries.find(c => c.code === selectedCountryCode)
       if (country) {
-        console.log('Pays sélectionné:', country)
         // Mettre à jour le pays, région et continent
         onCountryChange(country.name)
         onRegionChange(country.subregion || country.region || '')
@@ -63,7 +61,6 @@ export function LocationSelector({
         // Charger les villes
         const loadCities = async () => {
           const cityList = await getCitiesByCountry(selectedCountryCode)
-          console.log('Villes chargées:', cityList)
           setCities(cityList)
         }
         loadCities()
@@ -90,7 +87,6 @@ export function LocationSelector({
           value={selectedCountryCode}
           onChange={(e) => {
             const code = e.target.value
-            console.log('Changement de pays:', code)
             setSelectedCountryCode(code)
             setCities([])
           }}

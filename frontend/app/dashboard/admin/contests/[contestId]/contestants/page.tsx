@@ -1,5 +1,6 @@
 'use client'
 
+import { Suspense } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
@@ -13,7 +14,7 @@ interface Contest {
   description?: string
 }
 
-export default function ContestContestantsPage() {
+function ContestContestantsPage() {
   const params = useParams()
   const router = useRouter()
   const contestId = params.contestId as string
@@ -67,5 +68,13 @@ export default function ContestContestantsPage() {
         <AdminContestants contestId={parseInt(contestId)} />
       )}
     </div>
+  )
+}
+
+export default function ContestContestantsPageWrapper() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 border-4 border-myhigh5-primary border-t-transparent rounded-full animate-spin" /></div>}>
+      <ContestContestantsPage />
+    </Suspense>
   )
 }

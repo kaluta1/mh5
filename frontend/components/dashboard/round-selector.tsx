@@ -121,7 +121,7 @@ export function RoundSelector({
                                 </div>
                                 {round.current_user_participated && (
                                     <span className="ml-2 px-1.5 py-0.5 bg-green-500/20 text-green-400 text-xs rounded">
-                                        You're in
+                                        You&apos;re in
                                     </span>
                                 )}
                             </div>

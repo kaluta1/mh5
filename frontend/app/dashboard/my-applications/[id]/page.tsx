@@ -1,10 +1,11 @@
 'use client'
 
+import { Suspense } from 'react'
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useLanguage } from '@/contexts/language-context'
 import { useAuth } from '@/hooks/use-auth'
-import { ContestantDetailSkeleton } from '@/components/ui/skeleton'
+import { ContestantDetailSkeleton } from '@/components/ui/page-skeletons'
 import { Button } from '@/components/ui/button'
 import { ContestantHeader, ContestantInfoCard } from '@/components/contestant'
 import { MediaGallery, MediaViewerModal } from '@/components/media'
@@ -124,7 +125,7 @@ function DescriptionWithPopover({ description, maxLength = 200 }: { description:
   )
 }
 
-export default function MyApplicationDetailPage() {
+function MyApplicationDetailPage() {
   const { t } = useLanguage()
   const { user, isAuthenticated, isLoading } = useAuth()
   const router = useRouter()
@@ -795,3 +796,10 @@ export default function MyApplicationDetailPage() {
   )
 }
 
+export default function MyApplicationDetailPageWrapper() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 border-4 border-myhigh5-primary border-t-transparent rounded-full animate-spin" /></div>}>
+      <MyApplicationDetailPage />
+    </Suspense>
+  )
+}

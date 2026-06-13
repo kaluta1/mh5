@@ -1,12 +1,12 @@
 "use client"
 
 import Image from "next/image"
-import { maintenanceTranslations } from "@/lib/translations"
+import { getMaintenanceTranslations } from "@/lib/maintenance-translations"
 import { useLanguage } from "@/contexts/language-context"
 
 export default function MaintenancePage() {
     const { language } = useLanguage()
-    const t = maintenanceTranslations[language]?.maintenance || maintenanceTranslations['en'].maintenance
+    const t = getMaintenanceTranslations(language).maintenance
 
     return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-background text-foreground p-4">

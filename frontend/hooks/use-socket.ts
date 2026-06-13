@@ -34,7 +34,6 @@ export function useSocket(options: UseSocketOptions = {}) {
   useEffect(() => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
     if (!token) {
-      console.log('No access token available for socket connection')
       return
     }
 
@@ -60,13 +59,11 @@ export function useSocket(options: UseSocketOptions = {}) {
       socketRef.current = socket
 
       socket.on('connect', () => {
-        console.log('Socket connected:', socket.id)
         setIsConnected(true)
         optionsRef.current.onConnect?.()
       })
 
       socket.on('disconnect', (reason: string) => {
-        console.log('Socket disconnected:', reason)
         setIsConnected(false)
         optionsRef.current.onDisconnect?.()
       })
@@ -77,17 +74,14 @@ export function useSocket(options: UseSocketOptions = {}) {
       })
 
       socket.on('new_message', (message: SocketMessage) => {
-        console.log('New message received:', message)
         optionsRef.current.onNewMessage?.(message)
       })
 
       socket.on('new_private_message', (message: SocketMessage) => {
-        console.log('New private message received:', message)
         optionsRef.current.onNewMessage?.(message)
       })
 
       socket.on('message_read', (data: { message_id: number; user_id: number }) => {
-        console.log('Message read:', data)
         optionsRef.current.onMessageRead?.(data)
       })
     }).catch((err) => {
@@ -111,7 +105,6 @@ export function useSocket(options: UseSocketOptions = {}) {
     }
     socket.emit('join_group', { group_id: groupId }, (response: any) => {
       if (response?.success) {
-        console.log('Joined group room:', groupId)
       } else {
         console.error('Failed to join group:', response?.error)
       }
@@ -132,7 +125,6 @@ export function useSocket(options: UseSocketOptions = {}) {
     }
     socket.emit('join_conversation', { conversation_id: conversationId }, (response: any) => {
       if (response?.success) {
-        console.log('Joined conversation:', conversationId)
       } else {
         console.error('Failed to join conversation:', response?.error)
       }

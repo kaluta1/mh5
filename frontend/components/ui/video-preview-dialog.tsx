@@ -160,8 +160,6 @@ export function VideoPreviewDialog({
     }
   }
 
-  if (!isOpen) return null
-
   const platform = detectVideoPlatform(videoUrl)
   const config = PLATFORM_CONFIG[platform]
   const isTikTok = platform === 'tiktok'
@@ -173,6 +171,8 @@ export function VideoPreviewDialog({
       setViewTracked(false)
     }
   }, [isOpen, contestantId, videoUrl])
+
+  if (!isOpen) return null
 
   const handleViewed30s = async () => {
     if (!contestantId || viewTracked) return

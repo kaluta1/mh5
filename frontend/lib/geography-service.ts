@@ -86,4 +86,3 @@ export function searchLocations(searchTerm: string): any[] {
   return results.slice(0, 10)
 }
 
-console.log('Service géographique chargé avec', data.countries.length, 'pays')

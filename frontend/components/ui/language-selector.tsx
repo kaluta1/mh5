@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Globe, Loader2 } from "lucide-react"
 import { useLanguage } from "@/contexts/language-context"
-import { languages, Language } from "@/lib/translations"
+import { languages, type Language } from "@/lib/locale-registry"
 import { Input } from "@/components/ui/input"
 
 export function LanguageSelector() {

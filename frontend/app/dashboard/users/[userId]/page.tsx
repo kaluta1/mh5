@@ -1,5 +1,6 @@
 'use client'
 
+import { Suspense } from 'react'
 import { useEffect, useState, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useLanguage } from '@/contexts/language-context'
@@ -71,7 +72,7 @@ interface ContestantEntry {
   author_avatar_url?: string
 }
 
-export default function UserProfilePage() {
+function UserProfilePage() {
   const { t } = useLanguage()
   const { user: currentUser, isAuthenticated, isLoading: authLoading } = useAuth()
   const router = useRouter()
@@ -514,5 +515,13 @@ export default function UserProfilePage() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function UserProfilePageWrapper() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 border-4 border-myhigh5-primary border-t-transparent rounded-full animate-spin" /></div>}>
+      <UserProfilePage />
+    </Suspense>
   )
 }

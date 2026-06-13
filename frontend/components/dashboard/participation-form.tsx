@@ -8,6 +8,7 @@ import { ImagePreviewDialog } from '@/components/ui/image-preview-dialog'
 import { VideoPreviewDialog } from '@/components/ui/video-preview-dialog'
 import { VideoEmbed } from '@/components/ui/video-embed'
 import { useLanguage } from '@/contexts/language-context'
+import { useClock } from '@/contexts/clock-context'
 import { useRouter } from 'next/navigation'
 import { useModeratedUpload } from '@/hooks/use-moderated-upload'
 import { useToast } from '@/components/ui/toast'
@@ -176,6 +177,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
   const [loadingCities, setLoadingCities] = useState(false)
 
   // Countdown state
+  const now = useClock()
   const [countdown, setCountdown] = useState<{ days: number; hours: number; minutes: number; seconds: number; isClosed: boolean } | null>(null)
 
   // Media requirements with defaults
@@ -203,25 +205,19 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
       return
     }
 
-    const update = () => {
-      const diff = endMs - Date.now()
-      if (diff <= 0) {
-        setCountdown({ days: 0, hours: 0, minutes: 0, seconds: 0, isClosed: true })
-        return
-      }
-      setCountdown({
-        days: Math.floor(diff / (1000 * 60 * 60 * 24)),
-        hours: Math.floor((diff / (1000 * 60 * 60)) % 24),
-        minutes: Math.floor((diff / 1000 / 60) % 60),
-        seconds: Math.floor((diff / 1000) % 60),
-        isClosed: false
-      })
+    const diff = endMs - now.getTime()
+    if (diff <= 0) {
+      setCountdown({ days: 0, hours: 0, minutes: 0, seconds: 0, isClosed: true })
+      return
     }
-
-    update()
-    const interval = setInterval(update, 1000)
-    return () => clearInterval(interval)
-  }, [roundData?.submission_end_date, roundData?.voting_start_date])
+    setCountdown({
+      days: Math.floor(diff / (1000 * 60 * 60 * 24)),
+      hours: Math.floor((diff / (1000 * 60 * 60)) % 24),
+      minutes: Math.floor((diff / 1000 / 60) % 60),
+      seconds: Math.floor((diff / 1000) % 60),
+      isClosed: false
+    })
+  }, [now, roundData?.submission_end_date, roundData?.voting_start_date])
 
   // Load cities when country changes (for nominations)
   useEffect(() => {

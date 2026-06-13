@@ -1,10 +1,11 @@
 'use client'
 
+import { Suspense } from 'react'
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useLanguage } from '@/contexts/language-context'
 import { useAuth } from '@/hooks/use-auth'
-import { ContestantDetailSkeleton } from '@/components/ui/skeleton'
+import { ContestantDetailSkeleton } from '@/components/ui/page-skeletons'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ArrowLeft, MapPin, Heart } from 'lucide-react'
@@ -39,7 +40,7 @@ interface ContestantDetail {
   can_vote?: boolean
 }
 
-export default function ContestantDetailPage() {
+function ContestantDetailPage() {
   const { t } = useLanguage()
   const { user, isAuthenticated, isLoading } = useAuth()
   const router = useRouter()
@@ -256,5 +257,13 @@ export default function ContestantDetailPage() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function ContestantDetailPageWrapper() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 border-4 border-myhigh5-primary border-t-transparent rounded-full animate-spin" /></div>}>
+      <ContestantDetailPage />
+    </Suspense>
   )
 }

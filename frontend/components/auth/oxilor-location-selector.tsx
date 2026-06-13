@@ -44,13 +44,11 @@ export function OxilorLocationSelector({
       setError('')
       try {
         const data = await getContinentsFromOxilor()
-        console.log('Continents chargés depuis Oxilor:', data)
         
         if (data && data.length > 0) {
           setContinents(data)
         } else {
           // Fallback aux données statiques
-          console.log('Fallback aux données statiques')
           const staticContinents = Array.from(new Set(COUNTRIES_DATA.map(c => c.continent)))
           setContinents(staticContinents)
         }
@@ -74,13 +72,11 @@ export function OxilorLocationSelector({
       const loadCountries = async () => {
         try {
           const data = await getCountriesByContinent(selectedContinent)
-          console.log(`Pays pour ${selectedContinent}:`, data)
           
           if (data && data.length > 0) {
             setCountries(data)
           } else {
             // Fallback aux données statiques
-            console.log('Fallback aux données statiques pour les pays')
             const staticCountries = COUNTRIES_DATA
               .filter(c => c.continent === selectedContinent)
               .map(c => ({
@@ -95,7 +91,6 @@ export function OxilorLocationSelector({
           
           setSelectedCountryCode('')
           setCities([])
-          console.log('Appel onContinentChange avec:', selectedContinent)
           onContinentChange(selectedContinent)
         } catch (err) {
           console.error('Erreur pays:', err)
@@ -128,15 +123,11 @@ export function OxilorLocationSelector({
         try {
           const country = countries.find(c => c.code === selectedCountryCode)
           if (country) {
-            console.log('Pays trouvé:', country)
-            console.log('Appel onCountryChange avec:', country.name)
-            console.log('Appel onRegionChange avec:', country.region || '')
             
             onCountryChange(country.name)
             onRegionChange(country.region || '')
 
             const data = await getCitiesFromOxilor(selectedCountryCode)
-            console.log(`Villes pour ${selectedCountryCode}:`, data)
             setCities(data)
           }
         } catch (err) {
@@ -193,7 +184,6 @@ export function OxilorLocationSelector({
           <select
             value={selectedCountryCode}
             onChange={(e) => {
-              console.log('Sélection pays:', e.target.value)
               setSelectedCountryCode(e.target.value)
             }}
             className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myhigh5-primary disabled:opacity-50"
@@ -222,7 +212,6 @@ export function OxilorLocationSelector({
           <select
             value={selectedCity}
             onChange={(e) => {
-              console.log('Sélection ville:', e.target.value)
               onCityChange(e.target.value)
             }}
             className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myhigh5-primary"

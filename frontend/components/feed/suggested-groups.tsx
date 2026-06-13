@@ -52,7 +52,6 @@ export function SuggestedGroups({ currentUserId }: SuggestedGroupsProps) {
 
   const handleJoin = async (groupId: number) => {
     // TODO: Implémenter la logique de rejoindre un groupe
-    console.log('Join group:', groupId)
   }
 
   if (isLoading) {

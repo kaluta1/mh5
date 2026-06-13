@@ -9,6 +9,7 @@ import "../styles/quill-snow.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { AuthProvider } from "@/hooks/use-auth"
 import { LanguageProvider } from "@/contexts/language-context"
+import { ClockProvider } from "@/contexts/clock-context"
 import { ToastProvider } from "@/components/ui/toast"
 import { CookieConsent } from "@/components/ui/cookie-consent"
 import { ErrorBoundary } from "@/components/error-boundary"
@@ -230,11 +231,13 @@ export default function RootLayout({
           <ErrorBoundary>
             <ToastProvider>
               <LanguageProvider>
-                <AuthProvider>
-                  {children}
-                  <CookieConsent />
-                  <AnnualAdsPartnerRotator />
-                </AuthProvider>
+                <ClockProvider>
+                  <AuthProvider>
+                    {children}
+                    <CookieConsent />
+                    <AnnualAdsPartnerRotator />
+                  </AuthProvider>
+                </ClockProvider>
               </LanguageProvider>
             </ToastProvider>
           </ErrorBoundary>

@@ -19,18 +19,22 @@ class Logger {
     switch (level) {
       case 'debug':
         if (this.isDevelopment) {
+          // eslint-disable-next-line no-console -- logger wrapper; debug only in development
           console.debug(prefix, message, ...args)
         }
         break
       case 'info':
         if (this.isDevelopment) {
+          // eslint-disable-next-line no-console -- logger wrapper; info only in development
           console.info(prefix, message, ...args)
         }
         break
       case 'warn':
+        // eslint-disable-next-line no-console -- logger wrapper; warnings/errors are intentional
         console.warn(prefix, message, ...args)
         break
       case 'error':
+        // eslint-disable-next-line no-console -- logger wrapper; warnings/errors are intentional
         console.error(prefix, message, ...args)
         // In production, you might want to send errors to a logging service
         // e.g., Sentry, LogRocket, etc.

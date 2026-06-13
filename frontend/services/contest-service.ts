@@ -608,7 +608,6 @@ class ContestService {
         ...(contestMode && { contest_mode: contestMode })
       };
 
-      console.log('[ContestService] Fetching contests with params:', params);
 
       // Backend returns List[dict] directly, not wrapped in { items, total }
       const response = await api.get<ContestResponse[]>('/api/v1/contests', { params });

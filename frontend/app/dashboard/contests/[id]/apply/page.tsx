@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo, Suspense } from 'react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { ArrowLeft, Trash2 } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { useLanguage } from '@/contexts/language-context'
+import { useClock } from '@/contexts/clock-context'
 import { useToast } from '@/components/ui/toast'
 
 import { ParticipationForm } from '@/components/dashboard/participation-form'
@@ -24,7 +25,7 @@ import {
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { normalizeContestMode } from '@/lib/contest-mode'
 
-export default function ApplyToContestPage() {
+function ApplyToContestPageContent() {
   const { t } = useLanguage()
   const router = useRouter()
   const params = useParams()
@@ -58,6 +59,7 @@ export default function ApplyToContestPage() {
   const [timeValues, setTimeValues] = useState<{ days: number; hours: number; minutes: number; seconds: number; isClosed: boolean; isNA: boolean } | null>(null)
   const [existingParticipationData, setExistingParticipationData] = useState<any>(null)
   const [participantId, setParticipantId] = useState<number | null>(null)
+  const clockNow = useClock()
   const [hasActiveSubmissionRound, setHasActiveSubmissionRound] = useState<boolean>(true)
   const [roundData, setRoundData] = useState<any>(null)
 
@@ -452,26 +454,20 @@ export default function ApplyToContestPage() {
       return
     }
 
-    const updateTimeRemaining = () => {
-      const difference = endMs - new Date().getTime()
+    const difference = endMs - clockNow.getTime()
 
-      if (difference <= 0) {
-        setTimeValues({ days: 0, hours: 0, minutes: 0, seconds: 0, isClosed: true, isNA: false })
-        return
-      }
-
-      const days = Math.floor(difference / (1000 * 60 * 60 * 24))
-      const hours = Math.floor((difference / (1000 * 60 * 60)) % 24)
-      const minutes = Math.floor((difference / 1000 / 60) % 60)
-      const seconds = Math.floor((difference / 1000) % 60)
-
-      setTimeValues({ days, hours, minutes, seconds, isClosed: false, isNA: false })
+    if (difference <= 0) {
+      setTimeValues({ days: 0, hours: 0, minutes: 0, seconds: 0, isClosed: true, isNA: false })
+      return
     }
 
-    updateTimeRemaining()
-    const interval = setInterval(updateTimeRemaining, 1000)
-    return () => clearInterval(interval)
-  }, [roundData?.submission_end_date, roundData?.voting_start_date])
+    const days = Math.floor(difference / (1000 * 60 * 60 * 24))
+    const hours = Math.floor((difference / (1000 * 60 * 60)) % 24)
+    const minutes = Math.floor((difference / 1000 / 60) % 60)
+    const seconds = Math.floor((difference / 1000) % 60)
+
+    setTimeValues({ days, hours, minutes, seconds, isClosed: false, isNA: false })
+  }, [clockNow, roundData?.submission_end_date, roundData?.voting_start_date])
 
   // Formater le temps restant avec les traductions
   useEffect(() => {
@@ -1115,6 +1111,14 @@ export default function ApplyToContestPage() {
         </>
       )}
     </div>
+  )
+}
+
+export default function ApplyToContestPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center" />}>
+      <ApplyToContestPageContent />
+    </Suspense>
   )
 }
 

@@ -104,7 +104,6 @@ export default function MessagesPage() {
       if (error?.response?.status === 404 || !error?.response) {
         try {
           await messagingService.generateKeys()
-          console.log('Encryption keys generated successfully')
         } catch (err: any) {
           const status = err?.response?.status
           const message = err?.response?.data?.detail || err?.message

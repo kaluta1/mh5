@@ -80,7 +80,6 @@ export async function getCachedFile(file: File): Promise<CachedFile | null> {
   
   const cached = cache.files[hash]
   if (cached) {
-    console.log('📦 Fichier trouvé dans le cache:', cached.url)
     return cached
   }
   
@@ -103,7 +102,6 @@ export function addToCache(file: File, url: string, hash: string): void {
   }
   
   saveCache(cache)
-  console.log('💾 Fichier ajouté au cache:', url)
 }
 
 /**
@@ -121,7 +119,6 @@ export function removeFromCache(hash: string): void {
 export function clearCache(): void {
   if (typeof window === 'undefined') return
   localStorage.removeItem(CACHE_KEY)
-  console.log('🗑️ Cache vidé')
 }
 
 /**

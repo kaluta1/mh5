@@ -5,171 +5,93 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from contextlib import asynccontextmanager
-import uvicorn
+import asyncio
+import logging
 import os
+import sys
+import time
+import uvicorn
+
+# Fix Windows console encoding for emoji/log output
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 from app.core.config import settings
 from app.api.api_v1.api import api_router
-from app.services.payment_scheduler import payment_scheduler
-from app.services.contest_status import contest_status_scheduler
-from app.services.season_migration_scheduler import season_migration_scheduler
-from app.services.monthly_round_scheduler import monthly_round_scheduler
 from app.services.socketio_app import create_socketio_app
+
+
+def validate_critical_settings():
+    """Fail fast when required secrets are not provided via env."""
+    is_production = os.getenv("ENVIRONMENT", "development").lower() == "production"
+    errors = []
+    if not settings.SECRET_KEY or len(settings.SECRET_KEY) < 32:
+        errors.append(
+            "SECRET_KEY is missing or too short (min 32 chars). JWT tokens are insecure. "
+            "Set a strong SECRET_KEY in your .env file."
+        )
+    if not settings.MASTER_ENCRYPTION_KEY:
+        errors.append(
+            "MASTER_ENCRYPTION_KEY is missing. End-to-end messaging encryption will not work."
+        )
+    if not settings.ENCRYPTION_KEY_DERIVATION_SALT:
+        errors.append(
+            "ENCRYPTION_KEY_DERIVATION_SALT is missing. Set a random salt in your .env file."
+        )
+    if not settings.BSC_PAYMENT_CONTRACT:
+        errors.append(
+            "BSC_PAYMENT_CONTRACT is missing. On-chain crypto payments will not work."
+        )
+    if not settings.BSC_USDT_ADDRESS:
+        errors.append(
+            "BSC_USDT_ADDRESS is missing. On-chain USDT payments will not work."
+        )
+
+    if errors:
+        print("\n" + "=" * 70)
+        print("SECURITY / CONFIGURATION ERRORS")
+        print("=" * 70)
+        for e in errors:
+            print(f"🚫  {e}")
+        print("=" * 70 + "\n")
+        if is_production:
+            raise RuntimeError("Missing required secrets. See console output above.")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan - start/stop background services"""
-    # Startup
-    print("Starting schema fix for contest table...")
-    try:
-        from backend.fix_contest_schema import fix_schema
-        fix_schema()
-        print("✅ Schema fix completed")
-    except ImportError:
-        # Try local import if backend package not resolvable (local dev)
-        try:
-            from fix_contest_schema import fix_schema
-            fix_schema()
-            print("✅ Schema fix completed (local)")
-        except Exception as e:
-            print(f"⚠️ Could not import/run fix_contest_schema: {e}")
-    except Exception as e:
-        print(f"⚠️ Error running schema fix: {e}")
+    """Application lifespan - start/stop background services."""
+    validate_critical_settings()
 
-    # --- AUTOMATIC MIGRATIONS ---
-    def run_migrations():
-        """Run alembic migrations in background"""
-        import subprocess
-        import os
-        import sys
-        import logging
-        
-        logger = logging.getLogger("uvicorn.error")
-        logger.info("Starting background database migrations...")
-        
-        try:
-            env = os.environ.copy()
-            # Ensure we can find the app
-            project_root = os.path.dirname(os.path.abspath(__file__))
-            if 'PYTHONPATH' in env:
-                env['PYTHONPATH'] = f"{project_root}{os.pathsep}{env['PYTHONPATH']}"
-            else:
-                env['PYTHONPATH'] = project_root
+    # NOTE: Database migrations are intentionally NOT run automatically here.
+    # They should be applied explicitly during deployment (e.g. Render
+    # buildCommand or a manual `alembic upgrade heads`). Running migrations in
+    # a background thread can race with the first requests and hide failures.
 
-            # Use the same Python interpreter (and its venv) that is running this process
-            # This ensures alembic is found even when PATH doesn't include the venv bin dir
-            alembic_path = os.path.join(os.path.dirname(sys.executable), "alembic")
-            if not os.path.isfile(alembic_path):
-                alembic_path = "alembic"  # fallback to PATH
+    # Start all background schedulers through the unified manager.
+    # If an external task runner (e.g. Celery) is enabled, skip the in-process
+    # schedulers to avoid running the same jobs twice.
+    from app.services.scheduler_manager import scheduler_manager
+    use_celery = os.getenv("USE_CELERY", "false").lower() in ("true", "1", "yes")
+    scheduler_task: asyncio.Task | None = None
+    if use_celery:
+        print("USE_CELERY is enabled: skipping in-process background schedulers.")
+    else:
+        scheduler_task = asyncio.create_task(scheduler_manager.start(delay_seconds=10))
 
-            # Run alembic upgrade heads
-            result = subprocess.run(
-                [alembic_path, "upgrade", "heads"],
-                check=True, env=env, capture_output=True, text=True,
-                cwd=project_root
-            )
-            logger.info("✅ Database migrations completed successfully")
-            logger.info(result.stdout)
-            
-            # Init data after migrations if needed
-            try:
-                from app.initial_data import init_db
-                logger.info("Initializing base data...")
-                init_db()
-                logger.info("✅ Base data initialized")
-            except Exception as e:
-                logger.warning(f"⚠️ Data initialization skipped or failed: {e}")
-                
-        except subprocess.CalledProcessError as e:
-            logger.error(f"❌ Migration failed: {e}")
-            logger.error(f"Stderr: {e.stderr}")
-        except Exception as e:
-            logger.error(f"❌ Error during background migration: {e}")
-
-    # Start migrations in background thread
-    import threading
-    migration_thread = threading.Thread(target=run_migrations)
-    migration_thread.daemon = True
-    migration_thread.start()
-    # ---------------------------
-
-    
-    # Start delayed background services (schedulers)
-    # This ensures the API starts immediately and migrations have time to run
-    def start_background_services():
-        import time
-        import asyncio
-        import logging
-        
-        logger = logging.getLogger("uvicorn.error")
-        
-        async def _delayed_start():
-            # Wait for migrations to likely complete (10 seconds)
-            logger.info("⏳ Waiting 10s before starting background schedulers...")
-            await asyncio.sleep(10)
-            
-            logger.info("Starting payment scheduler...")
-            await payment_scheduler.start()
-            
-            logger.info("Starting contest status scheduler...")
-            await contest_status_scheduler.start()
-            
-            logger.info("Starting season migration scheduler...")
-            await season_migration_scheduler.start()
-            
-            logger.info("Starting monthly round scheduler...")
-            await monthly_round_scheduler.start()
-            
-            loop = asyncio.get_event_loop()
-
-            logger.info("Ensuring current month round exists...")
-            try:
-                await loop.run_in_executor(None, monthly_round_scheduler.ensure_current_month_round)
-                logger.info("Current month round ready")
-            except Exception as e:
-                logger.error(f"Error ensuring current month round: {e}")
-
-            logger.info("Running season migrations after round ensure...")
-            try:
-                from app.db.session import SessionLocal
-                from app.services.season_migration import season_migration_service
-
-                def _run_migrations():
-                    db = SessionLocal()
-                    try:
-                        return season_migration_service.check_and_process_migrations(db)
-                    finally:
-                        db.close()
-
-                mig = await loop.run_in_executor(None, _run_migrations)
-                logger.info(
-                    "Startup migrations processed=%s",
-                    mig.get("processed") if isinstance(mig, dict) else mig,
-                )
-            except Exception as e:
-                logger.error(f"Error running startup season migrations: {e}")
-
-        # Fire and forget the async task
-        asyncio.create_task(_delayed_start())
-
-    start_background_services()
-    
-    # Initialize encryption service for E2E messaging
-    
     yield
-    
+
     # Shutdown
-    print("Stopping monthly round scheduler...")
-    await monthly_round_scheduler.stop()
-    
-    print("Stopping season migration scheduler...")
-    await season_migration_scheduler.stop()
-    
-    print("Stopping contest status scheduler...")
-    await contest_status_scheduler.stop()
-    
-    print("Stopping payment scheduler...")
-    await payment_scheduler.stop()
+    if scheduler_task is not None:
+        await scheduler_manager.stop()
+        scheduler_task.cancel()
+        try:
+            await scheduler_task
+        except asyncio.CancelledError:
+            pass
 
 # Import all models to ensure they are registered with SQLAlchemy
 import app.models
@@ -262,6 +184,38 @@ class CORSExtraMiddleware(BaseHTTPMiddleware):
         return response
 
 app.add_middleware(CORSExtraMiddleware)
+
+
+class RequestLoggingMiddleware(BaseHTTPMiddleware):
+    """Lightweight request/response logging for debugging and monitoring."""
+
+    async def dispatch(self, request: Request, call_next):
+        start = time.perf_counter()
+        try:
+            response = await call_next(request)
+            duration_ms = (time.perf_counter() - start) * 1000
+            logger.info(
+                "%s %s %s - %.2fms",
+                request.method,
+                request.url.path,
+                response.status_code,
+                duration_ms,
+            )
+            return response
+        except Exception as exc:
+            duration_ms = (time.perf_counter() - start) * 1000
+            logger.error(
+                "%s %s ERROR %s - %.2fms",
+                request.method,
+                request.url.path,
+                exc.__class__.__name__,
+                duration_ms,
+                exc_info=True,
+            )
+            raise
+
+
+app.add_middleware(RequestLoggingMiddleware)
 
 # Inclusion des routes API
 app.include_router(api_router, prefix=settings.API_V1_STR)
@@ -365,4 +319,5 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     )
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)

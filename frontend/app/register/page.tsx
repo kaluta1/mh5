@@ -158,35 +158,28 @@ function RegisterPageContent() {
 
   // Callbacks pour la localisation - mémorisés pour éviter la boucle infinie
   const handleCountryChange = useCallback((country: string) => {
-    console.log('handleCountryChange appelé avec:', country)
     setFormData(prev => {
       const newData = { ...prev, country }
-      console.log('FormData après handleCountryChange:', newData)
       return newData
     })
   }, [])
 
 
   const handleRegionChange = useCallback((region: string) => {
-    console.log('handleRegionChange appelé avec:', region)
     setFormData(prev => {
       const newData = { ...prev, region }
-      console.log('FormData après handleRegionChange:', newData)
       return newData
     })
   }, [])
 
   const handleContinentChange = useCallback((continent: string) => {
-    console.log('handleContinentChange appelé avec:', continent)
     setFormData(prev => {
       const newData = { ...prev, continent }
-      console.log('FormData après handleContinentChange:', newData)
       return newData
     })
   }, [])
 
   const validateForm = () => {
-    console.log('Validation formData:', formData)
     const errors: Record<string, boolean> = {}
     let errorMessage = ''
     

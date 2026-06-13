@@ -60,8 +60,6 @@ export function CommentsSection({
         limit
       )
       
-      console.log('Comments loaded:', response.comments.length, 'Total:', response.total)
-      console.log('First comment:', response.comments[0])
       
       if (reset) {
         setCommentsList(response.comments)
@@ -246,7 +244,6 @@ export function CommentsSection({
                   onChange={setNewComment}
                   onMentionSelect={(username) => {
                     // La mention est déjà ajoutée par le composant
-                    console.log('Mention sélectionnée:', username)
                   }}
                   users={commenters}
                   placeholder={t('dashboard.contests.add_comment_placeholder') || 'Ajouter un commentaire...'}

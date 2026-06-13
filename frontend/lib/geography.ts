@@ -97,7 +97,6 @@ export function getCitiesByCountry(countryCode: string): string[] {
   // CRITICAL: If requesting Tanzania, return early to avoid any filtering issues
   if (normalizedCode === 'TZ') {
     const tzCities = ['Dar es Salaam', 'Mwanza', 'Arusha', 'Dodoma', 'Mbeya', 'Zanzibar City', 'Morogoro', 'Tanga', 'Mtwara', 'Tabora', 'Kigoma', 'Iringa', 'Songea', 'Shinyanga', 'Musoma', 'Bukoba', 'Sumbawanga', 'Singida', 'Lindi', 'Moshi', 'Kilimanjaro', 'Bagamoyo', 'Pemba', 'Unguja', 'Stone Town', 'Kibaha', 'Ifakara', 'Mpanda', 'Kasulu', 'Njombe', 'Babati', 'Geita', 'Kahama', 'Same', 'Korogwe', 'Handeni']
-    console.log(`[getCitiesByCountry] Returning Tanzania cities for TZ`)
     return Array.from(tzCities)
   }
   
@@ -322,7 +321,6 @@ export function getCitiesByCountry(countryCode: string): string[] {
   }
   
   // CRITICAL: Log the exact lookup being performed
-  console.log(`[getCitiesByCountry] Looking up cities for code: "${normalizedCode}" (original: "${countryCode}")`)
   
   // CRITICAL: Use explicit key check - do NOT use hasOwnProperty as it might have issues
   // Instead, check if the key exists in the object using 'in' operator
@@ -352,7 +350,6 @@ export function getCitiesByCountry(countryCode: string): string[] {
     return true
   })
   
-  console.log(`[getCitiesByCountry] Found ${rawCities.length} cities, ${cities.length} after removing duplicates for ${normalizedCode}. First city: "${cities[0]}"`)
   
   // STEP 2: Build comprehensive maps of ALL cities by country (for validation)
   const allCitiesByCountry: Record<string, Set<string>> = {}
@@ -448,6 +445,5 @@ export function getCitiesByCountry(countryCode: string): string[] {
     }
   }
   
-  console.log(`[getCitiesByCountry] ✓ Returning ${finalCities.length} unique, validated cities for ${normalizedCode}. First 3:`, finalCities.slice(0, 3))
   return finalCities
 }

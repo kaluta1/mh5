@@ -5,7 +5,6 @@ const BACKEND_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:80
 const API_V1_PREFIX = '/api/v1'
 const GEOGRAPHY_ENDPOINT = `${BACKEND_BASE_URL}${API_V1_PREFIX}/geography`
 
-console.log('GEOGRAPHY_ENDPOINT:', GEOGRAPHY_ENDPOINT)
 
 export interface OxilorCountry {
   id: string
@@ -28,7 +27,6 @@ export interface OxilorCity {
 export async function getCountriesFromOxilor(): Promise<OxilorCountry[]> {
   try {
     const url = `${GEOGRAPHY_ENDPOINT}/oxilor/countries`
-    console.log('Appel API backend:', url)
     const response = await fetch(url)
     
     if (!response.ok) {
@@ -37,7 +35,6 @@ export async function getCountriesFromOxilor(): Promise<OxilorCountry[]> {
     }
     
     const data = await response.json()
-    console.log('Réponse backend (pays):', data)
     
     // Adapter la réponse selon le format de l'API
     if (Array.isArray(data)) {
@@ -61,7 +58,6 @@ export async function getCountriesFromOxilor(): Promise<OxilorCountry[]> {
 export async function getCitiesFromOxilor(countryCode: string): Promise<OxilorCity[]> {
   try {
     const url = `${GEOGRAPHY_ENDPOINT}/oxilor/cities?country_code=${countryCode}`
-    console.log('Appel API backend:', url)
     const response = await fetch(url)
     
     if (!response.ok) {
@@ -70,7 +66,6 @@ export async function getCitiesFromOxilor(countryCode: string): Promise<OxilorCi
     }
     
     const data = await response.json()
-    console.log(`Réponse Oxilor (villes pour ${countryCode}):`, data)
     
     // Adapter la réponse selon le format de l'API
     if (Array.isArray(data)) {
@@ -94,7 +89,6 @@ export async function getCitiesFromOxilor(countryCode: string): Promise<OxilorCi
 export async function getRegionsFromOxilor(countryCode: string): Promise<string[]> {
   try {
     const url = `${GEOGRAPHY_ENDPOINT}/oxilor/regions?country_code=${countryCode}`
-    console.log('Appel API backend:', url)
     const response = await fetch(url)
     
     if (!response.ok) {
@@ -103,7 +97,6 @@ export async function getRegionsFromOxilor(countryCode: string): Promise<string[
     }
     
     const data = await response.json()
-    console.log(`Réponse Oxilor (régions pour ${countryCode}):`, data)
     
     // Adapter la réponse selon le format de l'API
     if (Array.isArray(data)) {
@@ -127,10 +120,8 @@ export async function getRegionsFromOxilor(countryCode: string): Promise<string[
 export async function getContinentsFromOxilor(): Promise<string[]> {
   try {
     const url = `${GEOGRAPHY_ENDPOINT}/oxilor/continents`
-    console.log('Appel API backend continents:', url)
     const response = await fetch(url)
     
-    console.log('Statut réponse:', response.status, response.statusText)
     
     if (!response.ok) {
       console.error(`API Error: ${response.status} ${response.statusText}`)
@@ -138,20 +129,16 @@ export async function getContinentsFromOxilor(): Promise<string[]> {
     }
     
     const data = await response.json()
-    console.log('Réponse Oxilor (continents):', data)
     
     // Adapter la réponse selon le format de l'API
     if (Array.isArray(data)) {
       const continents = data.map(c => typeof c === 'string' ? c : c.name)
-      console.log('Continents extraits:', continents)
       return continents
     } else if (data.data && Array.isArray(data.data)) {
       const continents = data.data.map(c => typeof c === 'string' ? c : c.name)
-      console.log('Continents extraits (data):', continents)
       return continents
     } else if (data.continents && Array.isArray(data.continents)) {
       const continents = data.continents.map(c => typeof c === 'string' ? c : c.name)
-      console.log('Continents extraits (continents):', continents)
       return continents
     }
     
@@ -169,7 +156,6 @@ export async function getContinentsFromOxilor(): Promise<string[]> {
 export async function getCountriesByContinent(continent: string): Promise<OxilorCountry[]> {
   try {
     const url = `${GEOGRAPHY_ENDPOINT}/oxilor/countries?continent=${continent}`
-    console.log('Appel API backend:', url)
     const response = await fetch(url)
     
     if (!response.ok) {
@@ -178,7 +164,6 @@ export async function getCountriesByContinent(continent: string): Promise<Oxilor
     }
     
     const data = await response.json()
-    console.log(`Réponse Oxilor (pays pour ${continent}):`, data)
     
     // Adapter la réponse selon le format de l'API
     if (Array.isArray(data)) {
@@ -202,7 +187,6 @@ export async function getCountriesByContinent(continent: string): Promise<Oxilor
 export async function searchCities(searchTerm: string, locationType: string = 'city', limit: number = 10): Promise<any[]> {
   try {
     const url = `${GEOGRAPHY_ENDPOINT}/oxilor/search?search_term=${encodeURIComponent(searchTerm)}&location_type=${locationType}&first=${limit}`
-    console.log('Appel API recherche:', url)
     const response = await fetch(url)
     
     if (!response.ok) {
@@ -211,7 +195,6 @@ export async function searchCities(searchTerm: string, locationType: string = 'c
     }
     
     const data = await response.json()
-    console.log('Résultats recherche:', data)
     
     // Adapter la réponse selon le format de l'API
     if (Array.isArray(data)) {

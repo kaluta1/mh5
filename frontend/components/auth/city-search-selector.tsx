@@ -33,7 +33,6 @@ export function CitySearchSelector({
     setLoading(true)
     try {
       const results = await searchCities(value, 'city', 5)
-      console.log('Résultats recherche:', results)
       setSuggestions(results)
     } catch (error) {
       console.error('Erreur recherche:', error)

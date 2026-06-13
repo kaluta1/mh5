@@ -1,4 +1,5 @@
 import logging
+import os
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
@@ -9,6 +10,21 @@ from app.models.user import Role
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def _get_admin_password() -> str:
+    """Return the initial admin password from the environment only."""
+    password = os.getenv("INITIAL_ADMIN_PASSWORD", "").strip()
+    if not password:
+        raise RuntimeError(
+            "INITIAL_ADMIN_PASSWORD environment variable is required to create the default admin user. "
+            "Set a strong password and restart the application."
+        )
+    if len(password) < 12:
+        raise RuntimeError(
+            "INITIAL_ADMIN_PASSWORD must be at least 12 characters long."
+        )
+    return password
 
 def init_db() -> None:
     db = SessionLocal()
@@ -83,7 +99,7 @@ def create_admin_user(db: Session) -> None:
 
             user_in = UserCreate(
                 email=admin_email,
-                password="admin123",  # À changer en production !
+                password=_get_admin_password(),
                 full_name="Admin MyHigh5",
                 username="admin",
                 is_active=True,

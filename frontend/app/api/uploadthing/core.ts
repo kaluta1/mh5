@@ -53,7 +53,6 @@ const auth = async (req: Request) => {
       throw new UploadThingError("Unauthorized: No access token found");
     }
 
-    console.log("Access token found, length:", accessToken.length);
 
     // Appeler l'endpoint /me pour vérifier le token et récupérer l'utilisateur
     // Ensure API URL doesn't have trailing slash
@@ -66,7 +65,6 @@ const auth = async (req: Request) => {
       ? `${apiUrl}/auth/me`
       : `${apiUrl}/api/v1/auth/me`;
     
-    console.log("Auth endpoint URL:", authEndpoint);
     
     const meResponse = await fetch(authEndpoint, {
       method: "GET",
@@ -85,7 +83,6 @@ const auth = async (req: Request) => {
     }
 
     const user = await meResponse.json();
-    console.log("User authenticated:", user.id || user.userId);
     
     return { userId: user.id || user.userId };
   } catch (error) {
@@ -113,7 +110,6 @@ export const ourFileRouter = {
       return user;
     })
     .onUploadComplete(async ({ metadata, file }) => {
-      console.log("File uploaded successfully:", file);
       
       return {
         uploadedBy: metadata.userId,
@@ -135,7 +131,6 @@ export const ourFileRouter = {
       return user;
     })
     .onUploadComplete(async ({ metadata, file }) => {
-      console.log("Profile image uploaded:", file);
       
       return {
         uploadedBy: metadata.userId,
@@ -155,7 +150,6 @@ export const ourFileRouter = {
       return user;
     })
     .onUploadComplete(async ({ metadata, file }) => {
-      console.log("Profile avatar uploaded:", file);
       
       return {
         uploadedBy: metadata.userId,
@@ -178,7 +172,6 @@ export const ourFileRouter = {
       return user;
     })
     .onUploadComplete(async ({ metadata, file }) => {
-      console.log("Participation document uploaded:", file);
       
       return {
         uploadedBy: metadata.userId,
@@ -202,7 +195,6 @@ export const ourFileRouter = {
       return user;
     })
     .onUploadComplete(async ({ metadata, file }) => {
-      console.log("Contestant media uploaded:", file);
       
       let moderation: ModerationResult | null = null;
       
@@ -217,7 +209,6 @@ export const ourFileRouter = {
             moderation = await moderateImage(file.ufsUrl);
           }
           
-          console.log("Content moderation result:", moderation);
           
           // Si le contenu n'est pas approuvé, supprimer le fichier
           if (!moderation.isApproved) {
@@ -270,7 +261,6 @@ export const ourFileRouter = {
       return user;
     })
     .onUploadComplete(async ({ metadata, file }) => {
-      console.log("Verification media uploaded:", file);
       
       return {
         uploadedBy: metadata.userId,
@@ -293,7 +283,6 @@ export const ourFileRouter = {
       return user;
     })
     .onUploadComplete(async ({ metadata, file }) => {
-      console.log("Social image uploaded:", file);
       
       return {
         uploadedBy: metadata.userId,
@@ -315,7 +304,6 @@ export const ourFileRouter = {
       return user;
     })
     .onUploadComplete(async ({ metadata, file }) => {
-      console.log("Social video uploaded:", file);
       
       return {
         uploadedBy: metadata.userId,

@@ -6,7 +6,8 @@ import { Heart, Users, Clock, ArrowRight, Eye, Mic, ShieldCheck, FileCheck, PawP
 import { Button } from '@/components/ui/button'
 import { useLanguage } from '@/contexts/language-context'
 import { Badge } from '@/components/ui/badge'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { useClock } from '@/contexts/clock-context'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 
@@ -105,18 +106,9 @@ export function ContestCard({
   onOpenDetails
 }: ContestCardProps) {
   const { t } = useLanguage()
-  const [currentTime, setCurrentTime] = useState(new Date())
+  const currentTime = useClock()
   const [imageError, setImageError] = useState(false)
   const [showInfoDialog, setShowInfoDialog] = useState(false)
-
-  // Mettre à jour l'heure chaque seconde pour le décompte en temps réel
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentTime(new Date())
-    }, 1000)
-
-    return () => clearInterval(interval)
-  }, [])
 
   // Debug: Log topContestants data (disabled to reduce console noise)
   // console.log(`Contest ${id} - topContestants:`, topContestants?.length || 0, topContestants?.map(c => ({ id: c.id, image_url: c.image_url?.substring(0, 50) })))
@@ -262,7 +254,6 @@ export function ContestCard({
             className="object-cover"
             priority={false}
             sizes="(max-width: 768px) 100vw, 50vw"
-            unoptimized={true}
             onError={() => {
               setImageError(true)
             }}
@@ -666,7 +657,6 @@ export function ContestCard({
                         fill
                         className="object-cover"
                         sizes="28px"
-                        unoptimized={true}
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-gray-200 text-[9px] text-gray-600 dark:bg-gray-700 dark:text-white font-medium">

@@ -78,7 +78,6 @@ export async function POST(request: NextRequest) {
     // ÉTAPE 1: MODÉRATION DU CONTENU (seulement images/vidéos)
     // ============================================
     if (ENABLE_MODERATION && SIGHTENGINE_API_USER && SIGHTENGINE_API_SECRET && (isImage || isVideo)) {
-      console.log('🔍 Modération du contenu avant upload...')
       
       const moderationResult = await moderateContent(base64, file.type, isVideo)
       
@@ -91,13 +90,11 @@ export async function POST(request: NextRequest) {
         }, { status: 422 })
       }
       
-      console.log('✅ Contenu approuvé par la modération')
 
       // ============================================
       // ÉTAPE 2: VÉRIFICATION OWNERSHIP (si image de vérification fournie)
       // ============================================
       if (verificationImageUrl && isImage) {
-        console.log('🔍 Vérification ownership...')
         
         const ownershipResult = await verifyOwnership(base64, verificationImageUrl)
         
@@ -109,17 +106,14 @@ export async function POST(request: NextRequest) {
           }, { status: 422 })
         }
         
-        console.log('✅ Ownership vérifié')
       }
     } else if (isAudio || isDocument) {
       // Audio et documents ne passent pas par la modération visuelle
-      console.log('📁 Fichier audio/document - pas de modération visuelle')
     }
 
     // ============================================
     // ÉTAPE 3: UPLOAD VERS UPLOADTHING
     // ============================================
-    console.log('📤 Upload vers Uploadthing...')
     
     const utapi = new UTApi()
     
@@ -140,7 +134,6 @@ export async function POST(request: NextRequest) {
     const uploadedFile = uploadResponse[0].data
     // Utiliser ufsUrl (nouveau format) avec fallback sur url (déprécié)
     const fileUrl = (uploadedFile as any).ufsUrl || uploadedFile.url
-    console.log('✅ Fichier uploadé:', fileUrl)
 
     return NextResponse.json({
       success: true,

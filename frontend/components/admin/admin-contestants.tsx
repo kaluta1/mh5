@@ -1307,7 +1307,6 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
                   endpoint="profileImageUploader"
                   onClientUploadComplete={(res) => {
                     if (res && res.length > 0) {
-                      console.log('Image uploaded:', res[0].url)
                       // Refresh contestants data
                       fetchContestants()
                       setShowUploadDialog(false)
@@ -1326,7 +1325,6 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
                   endpoint="profileImageUploader"
                   onClientUploadComplete={(res) => {
                     if (res && res.length > 0) {
-                      console.log('Video uploaded:', res[0].url)
                       // Refresh contestants data
                       fetchContestants()
                       setShowUploadDialog(false)
