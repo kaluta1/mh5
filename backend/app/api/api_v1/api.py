@@ -59,6 +59,20 @@ api_router.include_router(share.router, prefix="/share", tags=["Partage Social"]
 api_router.include_router(follow.router, prefix="/follow", tags=["Follow"])
 api_router.include_router(scheduler.router, prefix="/scheduler", tags=["Scheduler"])
 
+from app.core.build_info import BACKEND_BUILD_ID
+
+
+@api_router.get("/build-info", tags=["Status"])
+def build_info():
+    """Confirm deployed backend version (works through nginx /api/v1 proxy)."""
+    import os
+
+    return {
+        "build_id": BACKEND_BUILD_ID,
+        "git_sha": os.getenv("GIT_SHA", BACKEND_BUILD_ID),
+        "nomination_roster_fix": True,
+    }
+
 # TEMPORARY: Debug endpoint for continental issue — remove after fix verified
 try:
     from app.api.api_v1.endpoints import debug_continental

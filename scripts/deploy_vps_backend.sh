@@ -34,4 +34,4 @@ sleep 3
 echo "==> health check"
 curl -sf "http://127.0.0.1:8001/health" || curl -sf "http://127.0.0.1:8000/health" || true
 echo
-echo "Expected build_id header: nomination-roster-fix-c75bdbb (or newer git_sha)"
+echo "Expected: curl $BASE/api/v1/build-info shows nomination-roster-fix-5a0110a"

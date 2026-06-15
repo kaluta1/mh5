@@ -34,6 +34,12 @@ def _debug_log(payload: dict) -> None:
 
 
 def _fetch_build_id(base: str) -> str:
+    try:
+        data = get(base, "/build-info")
+        if isinstance(data, dict):
+            return data.get("build_id") or data.get("git_sha") or "unknown"
+    except Exception:
+        pass
     origin = base.replace("/api/v1", "").rstrip("/")
     for url in (f"{origin}/health", f"{base}/health"):
         try:
@@ -42,7 +48,6 @@ def _fetch_build_id(base: str) -> str:
                 return data.get("build_id") or data.get("git_sha") or "unknown"
         except Exception:
             continue
-    # nginx often routes /health to frontend; read build id from API response header
     try:
         req = urllib.request.Request(
             f"{base}/rounds/?limit=1",

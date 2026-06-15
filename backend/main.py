@@ -24,11 +24,9 @@ if sys.platform == "win32":
     except Exception:
         pass
 from app.core.config import settings
+from app.core.build_info import BACKEND_BUILD_ID
 from app.api.api_v1.api import api_router
 from app.services.socketio_app import create_socketio_app
-
-# Bump when deploying nomination vote fixes so API responses expose the running build.
-BACKEND_BUILD_ID = "nomination-roster-fix-c75bdbb"
 
 
 def validate_critical_settings():
