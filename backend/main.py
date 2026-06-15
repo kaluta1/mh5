@@ -27,6 +27,9 @@ from app.core.config import settings
 from app.api.api_v1.api import api_router
 from app.services.socketio_app import create_socketio_app
 
+# Bump when deploying nomination vote fixes so API responses expose the running build.
+BACKEND_BUILD_ID = "nomination-roster-fix-c75bdbb"
+
 
 def validate_critical_settings():
     """Fail fast when required critical secrets are missing, but warn for optional features."""
@@ -239,6 +242,18 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(RequestLoggingMiddleware)
 
+
+class BuildIdMiddleware(BaseHTTPMiddleware):
+    """Expose build id on every API response (nginx may not proxy public /health)."""
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Backend-Build-Id"] = BACKEND_BUILD_ID
+        return response
+
+
+app.add_middleware(BuildIdMiddleware)
+
 # Inclusion des routes API
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
@@ -268,9 +283,6 @@ def read_root():
         "version": "0.1.0",
         "documentation": "/docs"
     }
-
-# Bump when deploying nomination vote fixes so /health confirms the running build.
-BACKEND_BUILD_ID = "nomination-roster-fix-5abf2d1"
 
 
 # Route health check

@@ -33,15 +33,26 @@ def _debug_log(payload: dict) -> None:
         pass
 
 
-def _fetch_health(base: str) -> dict:
+def _fetch_build_id(base: str) -> str:
     origin = base.replace("/api/v1", "").rstrip("/")
     for url in (f"{origin}/health", f"{base}/health"):
         try:
             with urllib.request.urlopen(url, timeout=15) as resp:
-                return json.loads(resp.read().decode())
+                data = json.loads(resp.read().decode())
+                return data.get("build_id") or data.get("git_sha") or "unknown"
         except Exception:
             continue
-    raise RuntimeError("health endpoint not reachable")
+    # nginx often routes /health to frontend; read build id from API response header
+    try:
+        req = urllib.request.Request(
+            f"{base}/rounds/?limit=1",
+            method="GET",
+            headers={"Accept": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return resp.headers.get("X-Backend-Build-Id", "unknown")
+    except Exception:
+        return "unknown"
 
 
 def main() -> int:
@@ -58,13 +69,12 @@ def main() -> int:
     # 0) Confirm backend build is deployed
     build_id = "unknown"
     try:
-        health = _fetch_health(base)
-        build_id = health.get("build_id") or health.get("git_sha") or "unknown"
+        build_id = _fetch_build_id(base)
         print(f"Backend build: {build_id}")
         if "nomination-roster-fix" not in str(build_id):
-            print("[WARN] Old backend may still be running — run scripts/deploy_vps_backend.sh on VPS")
+            print("[WARN] Old backend still running — run scripts/deploy_vps_backend.sh on VPS")
     except Exception as e:
-        print(f"[WARN] Could not read /health: {e}")
+        print(f"[WARN] Could not detect build id: {e}")
 
     _debug_log(
         {
