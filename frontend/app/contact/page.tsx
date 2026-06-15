@@ -380,9 +380,8 @@ export default function ContactPage() {
       
       // Appeler l'API pour envoyer le message avec la langue dans les headers
       // La langue sera détectée automatiquement depuis les headers Accept-Language du navigateur
-      const response = await apiService.post('/api/v1/contact', payload)
-      
-      
+      await apiService.post('/api/v1/contact', payload)
+
       setIsSubmitting(false)
       setIsSubmitted(true)
       setFormData({ name: "", email: "", subject: "", category: "", message: "" })

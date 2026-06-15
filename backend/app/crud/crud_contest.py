@@ -440,11 +440,14 @@ def resolve_nomination_display_season_for_contest_round(
             db, contest_id, int(target_round_id), ui_level
         )
         if forced[1] is not None:
-            return forced
+            if _pair_matches_nomination_dashboard_level(forced[1], ui_level):
+                return forced
+            return None, None
         if ui_level == "country":
             pass
         else:
-            return naive_sl, naive_season
+            # Pooled vote chip with no migrated season: do not fall back to country season.
+            return None, None
 
     pairs = (
         db.query(ContestSeasonLink, ContestSeason)
@@ -1073,7 +1076,7 @@ class CRUDContest:
         # not in the pooled-level list.
         count_by_active_season_members = (
             season_link is not None
-            and season_level_lower_for_count in ("regional", "region", "continent", "global")
+            and season_level_lower_for_count in ("regional", "region", "continent", "continental", "global")
         )
         ea_regional_nomination_count = (
             contest_mode == "nomination"
@@ -1739,6 +1742,20 @@ class CRUDContest:
             return True
         return False
 
+    @staticmethod
+    def nomination_card_uses_exact_roster(
+        filter_country: Optional[str],
+        filter_region: Optional[str],
+        filter_continent: Optional[str],
+        requested_ui_level: Optional[str] = None,
+    ) -> bool:
+        """Vote-tab list cards must match GET /contests/{id} roster (same CRUD query)."""
+        if CRUDContest.explicit_geo_filters_for_nomination_card(
+            filter_country, filter_region, filter_continent
+        ):
+            return True
+        return bool(_normalize_requested_ui_level(requested_ui_level))
+
     def count_nomination_roster_for_card(
         self,
         db: Session,
@@ -1846,6 +1863,33 @@ class CRUDContest:
             requested_ui_level=ui_level_norm,
         )
 
+        # Explicit pooled vote level but no migrated season → empty roster (not country rows).
+        if (
+            contest_mode_early == "nomination"
+            and ui_level_norm in ("regional", "continental", "global")
+            and season is None
+        ):
+            contest_data["contestants"] = []
+            contest_data["display_round_id"] = target_round_id
+            # #region agent log
+            try:
+                from app.core.agent_debug_log import agent_debug_log
+                agent_debug_log(
+                    hypothesis_id="F",
+                    location="crud_contest.py:get_contest_with_enriched_contestants",
+                    message="empty pooled roster — no season for requested ui level",
+                    data={
+                        "runId": "post-fix-3",
+                        "contest_id": contest_id,
+                        "requested_ui_level": ui_level_norm,
+                        "target_round_id": target_round_id,
+                    },
+                )
+            except Exception:
+                pass
+            # #endregion
+            return contest_data
+
         contest_mode = contest_mode_early
         requested_entry_type = str(entry_type or "").strip().lower()
         nomination_context = contest_mode == "nomination" or requested_entry_type == "nomination"
@@ -1935,7 +1979,7 @@ class CRUDContest:
             season_level = "country"
 
         pooled_season_membership_scope = bool(
-            season and season_level in ("regional", "region", "continent", "global")
+            season and season_level in ("regional", "region", "continent", "continental", "global")
         )
         # Intentionally False: country membership branch is disabled below.
         nomination_country_membership_scope = False

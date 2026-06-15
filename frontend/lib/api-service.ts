@@ -2,6 +2,7 @@
 import axios from 'axios';
 import { API_URL as CONFIG_API_ORIGIN, getEffectiveApiUrl } from './config';
 import { normalizeEntryTypeQueryParam } from './contest-mode';
+import { throwIfApiError } from './http-error';
 
 /** Single source of truth: config.ts (handles comma-separated broken env + fallbacks). */
 const getApiV1Base = () => {
@@ -98,17 +99,20 @@ export const ApiService = {
         contestSkip?: number;
     }) => {
         const response = await api.get<Round[]>('/rounds/', { params });
+        throwIfApiError(response);
         return response.data;
     },
 
     getRound: async (id: number) => {
         const response = await api.get<Round>(`/rounds/${id}`);
+        throwIfApiError(response);
         return response.data;
     },
 
     // Contests
     getContests: async (params?: any) => {
         const response = await api.get<Contest[]>('/contests/', { params });
+        throwIfApiError(response);
         return response.data;
     },
 
@@ -143,16 +147,19 @@ export const ApiService = {
                 ...(params?._t != null ? { _t: params._t } : {}),
             }
         });
+        throwIfApiError(response);
         return response.data;
     },
 
     createContest: async (data: any) => {
         const response = await api.post<Contest>('/contests/', data);
+        throwIfApiError(response);
         return response.data;
     },
 
     updateContest: async (id: number, data: any) => {
         const response = await api.put<Contest>(`/contests/${id}`, data);
+        throwIfApiError(response);
         return response.data;
     },
 

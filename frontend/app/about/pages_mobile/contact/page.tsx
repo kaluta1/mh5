@@ -259,7 +259,7 @@ export default function ContactMobilePage() {
 
     setIsSubmitting(true)
     try {
-      await apiService.post('/contact', formData)
+      await apiService.post('/api/v1/contact', formData)
       setIsSubmitted(true)
       setFormData({ name: "", email: "", subject: "", category: "", message: "" })
       setTouched({})

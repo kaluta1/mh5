@@ -355,7 +355,7 @@ def read_contests(
                 visible_participants_count = len(opened_rows)
             elif (
                 _normalize_contest_mode(getattr(c, "contest_mode", "participation")) == "nomination"
-                and contest.explicit_geo_filters_for_nomination_card(
+                and contest.nomination_card_uses_exact_roster(
                     filter_country, filter_region, filter_continent
                 )
             ):
@@ -715,6 +715,37 @@ def read_contest(
         round_id=round_id,
         requested_ui_level=contest_level,
     )
+
+    # #region agent log
+    try:
+        from app.core.agent_debug_log import agent_debug_log
+
+        _roster = (enriched_contest or {}).get("contestants") or []
+        _season_level = None
+        if _roster and isinstance(_roster[0], dict):
+            _season_level = (_roster[0].get("season") or {}).get("level")
+        agent_debug_log(
+            hypothesis_id="D",
+            location="contests.py:read_contest",
+            message="detail nomination roster",
+            data={
+                "runId": "post-fix",
+                "contest_id": contest_id,
+                "contest_level": contest_level,
+                "round_id": round_id,
+                "filter_country": merged_country,
+                "filter_region": filter_region,
+                "filter_continent": merged_continent,
+                "roster_count": len(_roster),
+                "contestant_ids": [r.get("id") for r in _roster[:50]],
+                "nominator_user_ids": [r.get("user_id") for r in _roster[:50]],
+                "season_level": _season_level,
+                "display_round_id": (enriched_contest or {}).get("display_round_id"),
+            },
+        )
+    except Exception:
+        pass
+    # #endregion
     
     if not enriched_contest:
         raise HTTPException(

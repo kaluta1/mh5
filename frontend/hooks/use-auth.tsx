@@ -209,6 +209,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
+  React.useEffect(() => {
+    const onUnauthorized = () => {
+      setUser(null)
+      setPermissions([])
+    }
+    window.addEventListener('auth:unauthorized', onUnauthorized)
+    return () => window.removeEventListener('auth:unauthorized', onUnauthorized)
+  }, [])
+
   const login = async (credentials: { email_or_username: string; password: string }) => {
     // Login et récupérer les tokens
     await authService.login(credentials)

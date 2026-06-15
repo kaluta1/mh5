@@ -517,6 +517,7 @@ function ContestsPageContent() {
     setContestsData(null)
     setAllContests([])
     lastDisplayedContestsRef.current = []
+    clearContestsListCache()
   }, [effectiveRoundIdForFetch, categoryTab, activeDisplayTab?.kind, nominationMigrationLevel])
 
   // 2. Fetch Contests for Selected Round (Initial load) - allow unauthenticated users
@@ -616,6 +617,12 @@ function ContestsPageContent() {
           setTotalContests(0)
           setHasMore(false)
         }
+
+        // #region agent log
+        if (activeNominationLevel && data?.[0]?.contests?.length) {
+          fetch('http://127.0.0.1:7349/ingest/df627543-d3e3-49ba-9975-89e66fb57ed0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e34593'},body:JSON.stringify({sessionId:'e34593',hypothesisId:'E',location:'contests/page.tsx:fetchContestsForRound',message:'vote list loaded',data:{runId:'post-fix-2',contestLevel:activeNominationLevel,roundId:effectiveRoundIdForFetch,filterCountry:activeCountry,filterRegion:activeRegion,filterContinent:activeContinent,contests:(data[0].contests||[]).slice(0,10).map((c:any)=>({id:c.id,name:c.name,participants_count:c.participants_count,status:c.status}))},timestamp:Date.now()})}).catch(()=>{});
+        }
+        // #endregion
       } catch (error: any) {
         if (error.name === 'AbortError' || abortController.signal.aborted) {
           return
@@ -1352,11 +1359,19 @@ function ContestsPageContent() {
                   onViewContestants={() => {
                     const params = buildContestNavParams(contest.status, contest.contest_mode)
                     const q = params.toString()
+                    if (typeof window !== 'undefined') {
+                      const auditKey = `mh5-list-count-${contest.id}-${params.get('contestLevel') || 'none'}-${params.get('roundId') || 'none'}`
+                      sessionStorage.setItem(auditKey, String(contest.contestants ?? 0))
+                    }
                     router.push(`/dashboard/contests/${contest.id}${q ? `?${q}` : ''}`)
                   }}
                   onOpenDetails={() => {
                     const params = buildContestNavParams(contest.status, contest.contest_mode)
                     const q = params.toString()
+                    if (typeof window !== 'undefined') {
+                      const auditKey = `mh5-list-count-${contest.id}-${params.get('contestLevel') || 'none'}-${params.get('roundId') || 'none'}`
+                      sessionStorage.setItem(auditKey, String(contest.contestants ?? 0))
+                    }
                     router.push(`/dashboard/contests/${contest.id}${q ? `?${q}` : ''}`)
                   }}
                 />

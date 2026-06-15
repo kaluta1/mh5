@@ -4,6 +4,7 @@ import { logger } from './logger'
 import { API_URL, getEffectiveApiUrl } from './config'
 import { LANGUAGE_PREFERENCE_KEY } from './language-cookie'
 import { LANGUAGE_CODES } from './locale-registry'
+import { logApiResponseStatus, throwIfApiError } from './http-error'
 
 // Must match lib/config.ts (localhost in dev when NEXT_PUBLIC_API_URL is unset — not always myhigh5.com).
 const API_BASE_URL = API_URL.replace(/\/+$/, '')
@@ -75,7 +76,7 @@ authApi.interceptors.request.use(
 
 // Intercepteur pour gérer les réponses et erreurs avec retry logic
 api.interceptors.response.use(
-  (response) => response,
+  (response) => logApiResponseStatus(response),
   async (error: AxiosError) => {
     const config = error.config as InternalAxiosRequestConfig & { _retry?: boolean; _retryCount?: number }
 
@@ -306,12 +307,14 @@ export const authService = {
 
   // Demande de réinitialisation de mot de passe
   async requestPasswordReset(email: string): Promise<void> {
-    await api.post('/api/v1/auth/password-reset-request', { email })
+    const response = await api.post('/api/v1/auth/password-reset-request', { email })
+    throwIfApiError(response, 'Password reset request failed')
   },
 
   // Confirmation de réinitialisation de mot de passe
   async confirmPasswordReset(data: PasswordResetConfirm): Promise<void> {
-    await api.post('/api/v1/auth/password-reset-confirm', data)
+    const response = await api.post('/api/v1/auth/password-reset-confirm', data)
+    throwIfApiError(response, 'Password reset failed')
   },
 
   // Vérifier l'email avec un token
@@ -345,30 +348,35 @@ export const apiService = {
   async get<T>(endpoint: string, params?: Record<string, unknown>, useCache?: boolean): Promise<T> {
     // Le cache est maintenant géré côté backend avec Redis
     const response = await api.get(endpoint, { params })
+    throwIfApiError(response)
     return response.data
   },
 
   // POST request
   async post<T>(endpoint: string, data?: unknown, invalidateCache?: string, config?: Record<string, unknown>): Promise<T> {
     const response = await api.post(endpoint, data, config)
+    throwIfApiError(response)
     return response.data
   },
 
   // PUT request
   async put<T>(endpoint: string, data?: unknown, invalidateCache?: string): Promise<T> {
     const response = await api.put(endpoint, data)
+    throwIfApiError(response)
     return response.data
   },
 
   // PATCH request
   async patch<T>(endpoint: string, data?: unknown): Promise<T> {
     const response = await api.patch(endpoint, data)
+    throwIfApiError(response)
     return response.data
   },
 
   // DELETE request
   async delete<T>(endpoint: string, invalidateCache?: string): Promise<T> {
     const response = await api.delete(endpoint)
+    throwIfApiError(response)
     return response.data
   }
 }

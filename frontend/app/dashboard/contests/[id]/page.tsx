@@ -170,10 +170,12 @@ export default function ContestDetailPage() {
     const urlCountry = searchParams.get('country')
     const urlRegion = searchParams.get('region')
     const urlContinent = searchParams.get('continent')
+    const urlContestLevel = searchParams.get('contestLevel')
     const meaningfulCountry = urlCountry && urlCountry.toLowerCase() !== 'all'
     const meaningfulRegion = urlRegion && urlRegion.toLowerCase() !== 'all'
     const meaningfulContinent = urlContinent && urlContinent.toLowerCase() !== 'all'
-    if (meaningfulCountry || meaningfulRegion || meaningfulContinent) return
+    // Vote navigation passes contestLevel; do not wipe geo context before fetch.
+    if (meaningfulCountry || meaningfulRegion || meaningfulContinent || urlContestLevel) return
     setFilterCountry('all')
     setFilterRegion('all')
     setFilterContinent('all')
@@ -227,13 +229,18 @@ export default function ContestDetailPage() {
         sessionStorage.getItem(`mh5-nominated-${contestId}`) === '1'
       const requestedLevel = (contestLevelFromUrl || '').toLowerCase().trim()
       const isPooledNominationLevel = ['regional', 'region', 'continent', 'continental', 'global'].includes(requestedLevel)
+      const apiFilterCountry =
+        justSubmitted || isPooledNominationLevel || !filterCountry || filterCountry === 'all'
+          ? undefined
+          : filterCountry
+      const apiFilterRegion =
+        !filterRegion || filterRegion === 'all' ? undefined : filterRegion
+      const apiFilterContinent =
+        !filterContinent || filterContinent === 'all' ? undefined : filterContinent
       const c = await ApiService.getContest(parseInt(contestId), {
-        filterCountry:
-          justSubmitted || isPooledNominationLevel || !filterCountry || filterCountry === 'all'
-            ? undefined
-            : filterCountry,
-        filterRegion: (!filterRegion || filterRegion === 'all') ? undefined : filterRegion,
-        filterContinent: filterContinent === 'all' ? undefined : filterContinent,
+        filterCountry: apiFilterCountry,
+        filterRegion: apiFilterRegion,
+        filterContinent: apiFilterContinent,
         entryType: entryType,
         roundId: roundIdFromUrl ? parseInt(roundIdFromUrl, 10) : undefined,
         contestLevel: contestLevelFromUrl || undefined,
@@ -290,6 +297,12 @@ export default function ContestDetailPage() {
               return out
             })()
           : rawContestants
+
+      // #region agent log
+      const listAuditKey = `mh5-list-count-${contestId}-${contestLevelFromUrl || 'none'}-${roundIdFromUrl || 'none'}`
+      const listCardCount = typeof window !== 'undefined' ? sessionStorage.getItem(listAuditKey) : null
+      fetch('http://127.0.0.1:7349/ingest/df627543-d3e3-49ba-9975-89e66fb57ed0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e34593'},body:JSON.stringify({sessionId:'e34593',hypothesisId:'E',location:'contests/[id]/page.tsx:fetchContestDetails',message:'detail roster loaded',data:{runId:'post-fix-2',contestId,contestLevel:contestLevelFromUrl,roundId:roundIdFromUrl,apiFilterCountry,apiFilterRegion,apiFilterContinent,rosterCount:dedupedRaw.length,listCardCount:listCardCount?Number(listCardCount):null,mismatch:listCardCount!=null&&Number(listCardCount)!==dedupedRaw.length,contestantIds:dedupedRaw.map((r:any)=>r.id),seasonLevel:dedupedRaw[0]?.season?.level},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
 
       const mappedContestants: Contestant[] = dedupedRaw.map((ct: any, index: number) => {
         const images = parseMediaIds(ct.image_media_ids, 'image') // snake_case from python
