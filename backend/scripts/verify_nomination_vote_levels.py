@@ -30,6 +30,16 @@ def main() -> int:
     rid = args.round_id
     failures = 0
 
+    # 0) Confirm backend build is deployed
+    try:
+        health = get(base, "/health")
+        build_id = health.get("build_id") or health.get("git_sha") or "unknown"
+        print(f"Backend build: {build_id}")
+        if "nomination-roster-fix" not in str(build_id) and build_id == "unknown":
+            print("[WARN] Old backend may still be running — deploy scripts/deploy_vps_backend.sh on VPS")
+    except Exception as e:
+        print(f"[WARN] Could not read /health: {e}")
+
     cases = [
         ("country", {"filterCountry": "Tanzania"}),
         ("regional", {"filterRegion": "East Africa"}),

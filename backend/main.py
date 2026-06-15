@@ -269,10 +269,18 @@ def read_root():
         "documentation": "/docs"
     }
 
+# Bump when deploying nomination vote fixes so /health confirms the running build.
+BACKEND_BUILD_ID = "nomination-roster-fix-5abf2d1"
+
+
 # Route health check
 @app.get("/health", tags=["Status"])
 def health_check():
-    return {"status": "healthy"}
+    return {
+        "status": "healthy",
+        "build_id": BACKEND_BUILD_ID,
+        "git_sha": os.getenv("GIT_SHA", BACKEND_BUILD_ID),
+    }
 
 # Route favicon
 @app.get("/favicon.ico", tags=["Static"], include_in_schema=False)
