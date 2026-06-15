@@ -10,13 +10,38 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 import urllib.parse
 import urllib.request
+from pathlib import Path
 
 
 def get(base: str, path: str) -> dict | list:
     with urllib.request.urlopen(base.rstrip("/") + path, timeout=90) as resp:
         return json.loads(resp.read().decode())
+
+
+def _debug_log(payload: dict) -> None:
+    log_path = Path(__file__).resolve().parents[2] / ".cursor" / "debug-e34593.log"
+    try:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        payload.setdefault("sessionId", "e34593")
+        payload.setdefault("timestamp", int(time.time() * 1000))
+        with log_path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(payload, default=str) + "\n")
+    except Exception:
+        pass
+
+
+def _fetch_health(base: str) -> dict:
+    origin = base.replace("/api/v1", "").rstrip("/")
+    for url in (f"{origin}/health", f"{base}/health"):
+        try:
+            with urllib.request.urlopen(url, timeout=15) as resp:
+                return json.loads(resp.read().decode())
+        except Exception:
+            continue
+    raise RuntimeError("health endpoint not reachable")
 
 
 def main() -> int:
@@ -31,14 +56,25 @@ def main() -> int:
     failures = 0
 
     # 0) Confirm backend build is deployed
+    build_id = "unknown"
     try:
-        health = get(base, "/health")
+        health = _fetch_health(base)
         build_id = health.get("build_id") or health.get("git_sha") or "unknown"
         print(f"Backend build: {build_id}")
-        if "nomination-roster-fix" not in str(build_id) and build_id == "unknown":
-            print("[WARN] Old backend may still be running — deploy scripts/deploy_vps_backend.sh on VPS")
+        if "nomination-roster-fix" not in str(build_id):
+            print("[WARN] Old backend may still be running — run scripts/deploy_vps_backend.sh on VPS")
     except Exception as e:
         print(f"[WARN] Could not read /health: {e}")
+
+    _debug_log(
+        {
+            "runId": "verify-prod",
+            "hypothesisId": "deploy",
+            "location": "verify_nomination_vote_levels.py:main",
+            "message": "backend build check",
+            "data": {"build_id": build_id, "base_url": base, "round_id": rid},
+        }
+    )
 
     cases = [
         ("country", {"filterCountry": "Tanzania"}),
@@ -86,6 +122,26 @@ def main() -> int:
             print("       ^ regional list empty but detail has nominees (eligibility bug)")
         if level == "continental" and detail_count > 0 and not ok_season:
             print("       ^ continental tab showing non-continental season (fallback bug)")
+
+        _debug_log(
+            {
+                "runId": "verify-prod",
+                "hypothesisId": "E" if level == "regional" else "F" if level == "continental" else "A",
+                "location": "verify_nomination_vote_levels.py:case",
+                "message": f"{level} verification",
+                "data": {
+                    "status": status,
+                    "round_id": rid,
+                    "contest_id": cid,
+                    "list_total": list_total,
+                    "in_list": in_list,
+                    "list_count": list_count,
+                    "detail_count": detail_count,
+                    "season_level": season_level,
+                    "build_id": build_id,
+                },
+            }
+        )
 
     print(f"\n{failures} failure(s)")
     return 1 if failures else 0
