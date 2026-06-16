@@ -28,6 +28,7 @@ import {
 } from '@/lib/contest-round-tabs'
 import { normalizeContestMode } from '@/lib/contest-mode'
 import { pooledNominationRosterCount } from '@/lib/nomination-pooled-level'
+import { backendHasNominationRosterFix } from '@/lib/backend-nomination-fix'
 
 // GraphQL
 // REST API
@@ -139,18 +140,21 @@ async function fetchPooledVoteContestsWithLegacyFallback(
   },
   limit: number,
 ): Promise<{ contests: any[]; usedFallback: boolean; roundRow: any | null }> {
-  const data = await ApiService.getRounds(roundsParams)
-  const roundRow = data?.[0] ?? null
-  let contests = roundRow?.contests ?? []
   const level = roundsParams.contestLevel
-  if (
-    contests.length > 0 ||
-    !level ||
-    !POOLED_NOMINATION_VOTE_LEVELS.has(level)
-  ) {
-    return { contests, usedFallback: false, roundRow }
+  if (!level || !POOLED_NOMINATION_VOTE_LEVELS.has(level)) {
+    const data = await ApiService.getRounds(roundsParams)
+    const roundRow = data?.[0] ?? null
+    return { contests: roundRow?.contests ?? [], usedFallback: false, roundRow }
   }
 
+  const hasBackendFix = await backendHasNominationRosterFix()
+  if (hasBackendFix) {
+    const data = await ApiService.getRounds(roundsParams)
+    const roundRow = data?.[0] ?? null
+    return { contests: roundRow?.contests ?? [], usedFallback: false, roundRow }
+  }
+
+  // Old backend: list with contestLevel is empty — skip that call, use broad list + detail counts.
   const broad = await ApiService.getRounds({
     ...roundsParams,
     contestLevel: undefined,
@@ -190,7 +194,7 @@ async function fetchPooledVoteContestsWithLegacyFallback(
   return {
     contests: page,
     usedFallback: true,
-    roundRow: roundRow ?? broad?.[0] ?? null,
+    roundRow: broad?.[0] ?? null,
   }
 }
 
