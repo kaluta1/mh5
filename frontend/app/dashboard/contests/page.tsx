@@ -122,6 +122,76 @@ function geoFiltersForVoteFetch(
   return {}
 }
 
+const POOLED_NOMINATION_VOTE_LEVELS = new Set(['regional', 'continental', 'global'])
+
+/** When backend lacks cross-round list eligibility, detail API still returns the correct roster. */
+async function fetchPooledVoteContestsWithLegacyFallback(
+  roundsParams: {
+    roundId: number
+    contestMode?: string
+    filterCountry?: string
+    filterRegion?: string
+    filterContinent?: string
+    contestLevel?: string
+    searchTerm?: string
+    contestLimit: number
+  },
+  limit: number,
+): Promise<{ contests: any[]; usedFallback: boolean; roundRow: any | null }> {
+  const data = await ApiService.getRounds(roundsParams)
+  const roundRow = data?.[0] ?? null
+  let contests = roundRow?.contests ?? []
+  const level = roundsParams.contestLevel
+  if (
+    contests.length > 0 ||
+    !level ||
+    !POOLED_NOMINATION_VOTE_LEVELS.has(level)
+  ) {
+    return { contests, usedFallback: false, roundRow }
+  }
+
+  const broad = await ApiService.getRounds({
+    ...roundsParams,
+    contestLevel: undefined,
+    contestLimit: 200,
+  })
+  const pool: any[] = broad?.[0]?.contests ?? []
+  const enriched: any[] = []
+  const chunkSize = 15
+  for (let i = 0; i < pool.length && enriched.length < limit; i += chunkSize) {
+    const slice = pool.slice(i, i + chunkSize)
+    const batch = await Promise.all(
+      slice.map(async (c) => {
+        try {
+          const detail = await ApiService.getContest(c.id, {
+            entryType: 'nomination',
+            roundId: roundsParams.roundId,
+            contestLevel: level,
+            filterCountry: roundsParams.filterRegion ? undefined : roundsParams.filterCountry,
+            filterRegion: roundsParams.filterRegion,
+            filterContinent: roundsParams.filterContinent,
+          })
+          const count = (detail as { contestants?: unknown[] })?.contestants?.length ?? 0
+          if (count <= 0) return null
+          return { ...c, participants_count: count }
+        } catch {
+          return null
+        }
+      }),
+    )
+    enriched.push(...batch.filter(Boolean))
+  }
+  enriched.sort(
+    (a, b) => (Number(b.participants_count) || 0) - (Number(a.participants_count) || 0),
+  )
+  const page = enriched.slice(0, limit)
+  return {
+    contests: page,
+    usedFallback: true,
+    roundRow: roundRow ?? broad?.[0] ?? null,
+  }
+}
+
 function ContestsPageContent() {
   const { t } = useLanguage()
   const { user, isAuthenticated, isLoading } = useAuth()
@@ -583,7 +653,7 @@ function ContestsPageContent() {
       }
 
       try {
-        const data = await ApiService.getRounds({
+        const roundsParams = {
           roundId: parseInt(effectiveRoundIdForFetch),
           contestMode,
           filterCountry: activeRegion ? undefined : activeCountry,
@@ -591,15 +661,27 @@ function ContestsPageContent() {
           filterContinent: activeContinent,
           contestLevel: activeNominationLevel,
           searchTerm: activeSearch,
-          contestLimit: INITIAL_CONTESTS
-        })
+          contestLimit: INITIAL_CONTESTS,
+        }
+
+        const { contests, usedFallback, roundRow } =
+          activeNominationLevel && POOLED_NOMINATION_VOTE_LEVELS.has(activeNominationLevel)
+            ? await fetchPooledVoteContestsWithLegacyFallback(roundsParams, INITIAL_CONTESTS)
+            : await (async () => {
+                const data = await ApiService.getRounds(roundsParams)
+                return {
+                  contests: data?.[0]?.contests ?? [],
+                  usedFallback: false,
+                  roundRow: data?.[0] ?? null,
+                }
+              })()
 
         // Check if request was aborted
         if (abortController.signal.aborted) return
 
-        if (data && data.length > 0) {
-          setContestsData(data[0])
-          const contests = data[0].contests || []
+        if (roundRow) {
+          const payload = { ...roundRow, contests }
+          setContestsData(payload)
           if (contests.length > 1) {
             contests.sort((a: any, b: any) => {
               const aCount = Number(a.participants_count) || 0
@@ -608,9 +690,9 @@ function ContestsPageContent() {
             })
           }
           setAllContests(contests)
-          setTotalContests(data[0].contests_count || contests.length || 0)
-          setHasMore(contests.length < (data[0].contests_count || 0))
-          setToCache(cacheKey, data[0])
+          setTotalContests(usedFallback ? contests.length : roundRow.contests_count || contests.length || 0)
+          setHasMore(!usedFallback && contests.length < (roundRow.contests_count || 0))
+          setToCache(cacheKey, payload)
         } else {
           setContestsData(null)
           setAllContests([])
@@ -619,8 +701,8 @@ function ContestsPageContent() {
         }
 
         // #region agent log
-        if (activeNominationLevel && data?.[0]?.contests?.length) {
-          fetch('http://127.0.0.1:7349/ingest/df627543-d3e3-49ba-9975-89e66fb57ed0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e34593'},body:JSON.stringify({sessionId:'e34593',hypothesisId:'E',location:'contests/page.tsx:fetchContestsForRound',message:'vote list loaded',data:{runId:'post-fix-2',contestLevel:activeNominationLevel,roundId:effectiveRoundIdForFetch,filterCountry:activeCountry,filterRegion:activeRegion,filterContinent:activeContinent,contests:(data[0].contests||[]).slice(0,10).map((c:any)=>({id:c.id,name:c.name,participants_count:c.participants_count,status:c.status}))},timestamp:Date.now()})}).catch(()=>{});
+        if (activeNominationLevel) {
+          fetch('http://127.0.0.1:7349/ingest/df627543-d3e3-49ba-9975-89e66fb57ed0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e34593'},body:JSON.stringify({sessionId:'e34593',hypothesisId:'G',location:'contests/page.tsx:fetchContestsForRound',message:'vote list loaded',data:{runId:'frontend-fallback',contestLevel:activeNominationLevel,roundId:effectiveRoundIdForFetch,usedFallback,contestCount:contests.length,contests:contests.slice(0,10).map((c:any)=>({id:c.id,participants_count:c.participants_count}))},timestamp:Date.now()})}).catch(()=>{});
         }
         // #endregion
       } catch (error: any) {
