@@ -21,6 +21,7 @@ import { ReportContestantDialog } from '@/components/dashboard/report-contestant
 import { LocationFilterBar } from '@/components/dashboard/location-filter-bar'
 import { getEffectiveApiUrl } from '@/lib/config'
 import { normalizeContestMode, normalizeEntryTypeQueryParam } from '@/lib/contest-mode'
+import { rosterMatchesRequestedPooledLevel } from '@/lib/nomination-pooled-level'
 
 interface Media {
   id: string
@@ -298,13 +299,20 @@ export default function ContestDetailPage() {
             })()
           : rawContestants
 
+      const rosterRows =
+        isPooledNominationLevel &&
+        requestedLevel &&
+        !rosterMatchesRequestedPooledLevel(dedupedRaw, requestedLevel)
+          ? []
+          : dedupedRaw
+
       // #region agent log
       const listAuditKey = `mh5-list-count-${contestId}-${contestLevelFromUrl || 'none'}-${roundIdFromUrl || 'none'}`
       const listCardCount = typeof window !== 'undefined' ? sessionStorage.getItem(listAuditKey) : null
-      fetch('http://127.0.0.1:7349/ingest/df627543-d3e3-49ba-9975-89e66fb57ed0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e34593'},body:JSON.stringify({sessionId:'e34593',hypothesisId:'E',location:'contests/[id]/page.tsx:fetchContestDetails',message:'detail roster loaded',data:{runId:'post-fix-2',contestId,contestLevel:contestLevelFromUrl,roundId:roundIdFromUrl,apiFilterCountry,apiFilterRegion,apiFilterContinent,rosterCount:dedupedRaw.length,listCardCount:listCardCount?Number(listCardCount):null,mismatch:listCardCount!=null&&Number(listCardCount)!==dedupedRaw.length,contestantIds:dedupedRaw.map((r:any)=>r.id),seasonLevel:dedupedRaw[0]?.season?.level},timestamp:Date.now()})}).catch(()=>{});
+      fetch('http://127.0.0.1:7349/ingest/df627543-d3e3-49ba-9975-89e66fb57ed0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e34593'},body:JSON.stringify({sessionId:'e34593',hypothesisId:'F',location:'contests/[id]/page.tsx:fetchContestDetails',message:'detail roster loaded',data:{runId:'frontend-season-guard',contestId,contestLevel:contestLevelFromUrl,roundId:roundIdFromUrl,rosterCount:rosterRows.length,rawCount:dedupedRaw.length,seasonFiltered:rosterRows.length!==dedupedRaw.length,seasonLevel:dedupedRaw[0]?.season?.level,listCardCount:listCardCount?Number(listCardCount):null},timestamp:Date.now()})}).catch(()=>{});
       // #endregion
 
-      const mappedContestants: Contestant[] = dedupedRaw.map((ct: any, index: number) => {
+      const mappedContestants: Contestant[] = rosterRows.map((ct: any, index: number) => {
         const images = parseMediaIds(ct.image_media_ids, 'image') // snake_case from python
         const videos = parseMediaIds(ct.video_media_ids, 'video')
         return {

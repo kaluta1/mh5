@@ -27,6 +27,7 @@ import {
   type VoteGeographyLevel,
 } from '@/lib/contest-round-tabs'
 import { normalizeContestMode } from '@/lib/contest-mode'
+import { pooledNominationRosterCount } from '@/lib/nomination-pooled-level'
 
 // GraphQL
 // REST API
@@ -171,7 +172,8 @@ async function fetchPooledVoteContestsWithLegacyFallback(
             filterRegion: roundsParams.filterRegion,
             filterContinent: roundsParams.filterContinent,
           })
-          const count = (detail as { contestants?: unknown[] })?.contestants?.length ?? 0
+          const rows = (detail as { contestants?: { season?: { level?: string } }[] })?.contestants ?? []
+          const count = pooledNominationRosterCount(rows, level)
           if (count <= 0) return null
           return { ...c, participants_count: count }
         } catch {
