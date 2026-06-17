@@ -31,7 +31,22 @@ else
 fi
 
 sleep 3
-echo "==> health check"
-curl -sf "http://127.0.0.1:8001/health" || curl -sf "http://127.0.0.1:8000/health" || true
+echo "==> run season migrations"
+cd "$REPO_ROOT/backend"
+PYTHONPATH=. python3 -c "
+from app.db.session import SessionLocal
+from app.services.season_migration import season_migration_service
+db = SessionLocal()
+try:
+    print(season_migration_service.check_and_process_migrations(db))
+finally:
+    db.close()
+"
+
+echo "==> health / build-info"
+for port in 8001 8000; do
+  curl -sf "http://127.0.0.1:${port}/api/v1/build-info" && echo " (port ${port})" && break
+done || curl -sf "http://127.0.0.1:8001/health" || curl -sf "http://127.0.0.1:8000/health" || true
 echo
-echo "Expected: curl $BASE/api/v1/build-info shows nomination-roster-fix-5a0110a"
+echo "Expected build_id: nomination-migration-fix-20260616"
+curl -sf "https://myhigh5.com/api/v1/build-info" | python3 -m json.tool 2>/dev/null || echo "Public /build-info not ready yet"

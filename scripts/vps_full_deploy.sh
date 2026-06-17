@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+# Full backend deploy on VPS: pull, deps, restart, run migrations, verify.
+# Run as root ON THE VPS: bash scripts/vps_full_deploy.sh
+set -euo pipefail
+
+EXPECTED_BUILD="nomination-migration-fix-20260616"
+
+find_repo() {
+  if [ -f "$(pwd)/backend/main.py" ] && [ -d "$(pwd)/.git" ]; then
+    pwd
+    return
+  fi
+  for candidate in \
+    /root/mh5 \
+    /var/www/mh5 \
+    /home/*/mh5 \
+    /opt/mh5; do
+    if [ -f "$candidate/backend/main.py" ] && [ -d "$candidate/.git" ]; then
+      echo "$candidate"
+      return
+    fi
+  done
+  local hit
+  hit="$(find /root /var/www /home /opt -maxdepth 5 -type f -path '*/mh5/backend/main.py' 2>/dev/null | head -1 || true)"
+  if [ -n "$hit" ]; then
+    dirname "$(dirname "$hit")"
+    return
+  fi
+  echo "ERROR: mh5 repo not found. cd to repo root and re-run." >&2
+  exit 1
+}
+
+REPO_ROOT="$(find_repo)"
+cd "$REPO_ROOT"
+echo "==> repo: $REPO_ROOT"
+
+echo "==> git pull"
+git fetch origin main
+git pull origin main
+GIT_SHA="$(git rev-parse --short HEAD)"
+echo "    HEAD=$GIT_SHA"
+
+echo "==> backend deps"
+cd backend
+if [ -d .venv ]; then
+  # shellcheck disable=SC1091
+  source .venv/bin/activate
+elif [ -d venv ]; then
+  # shellcheck disable=SC1091
+  source venv/bin/activate
+else
+  python3 -m venv .venv
+  # shellcheck disable=SC1091
+  source .venv/bin/activate
+fi
+pip install -q -r requirements.txt
+
+export GIT_SHA
+
+echo "==> restart backend"
+RESTARTED=""
+for svc in myhigh5-backend mh5-backend myhigh5-api mh5-api; do
+  if systemctl list-unit-files "$svc.service" 2>/dev/null | grep -q "$svc.service"; then
+    systemctl restart "$svc"
+    echo "    restarted $svc"
+    RESTARTED="$svc"
+    break
+  fi
+done
+if [ -z "$RESTARTED" ]; then
+  echo "    WARNING: no systemd unit found — restart uvicorn/docker manually"
+fi
+
+sleep 4
+
+echo "==> local build-info"
+OK_LOCAL=0
+for port in 8001 8000; do
+  if resp="$(curl -sf "http://127.0.0.1:${port}/api/v1/build-info" 2>/dev/null)"; then
+    echo "    port $port: $resp"
+    OK_LOCAL=1
+    break
+  fi
+done
+if [ "$OK_LOCAL" -eq 0 ]; then
+  echo "    FAIL: no local /api/v1/build-info on 8001 or 8000"
+fi
+
+echo "==> run season migrations (sync + promote)"
+cd "$REPO_ROOT/backend"
+PYTHONPATH=. python3 -c "
+from app.db.session import SessionLocal
+from app.services.season_migration import season_migration_service
+db = SessionLocal()
+try:
+    out = season_migration_service.check_and_process_migrations(db)
+    print('processed:', out.get('processed', 0))
+finally:
+    db.close()
+"
+
+echo "==> optional: March round regional backfill"
+for round_name in "Round March 2026" "Round March 2025"; do
+  if PYTHONPATH=. python3 scripts/diagnose_round_regional_migration.py --round-name "$round_name" 2>/dev/null | head -3; then
+    PYTHONPATH=. python3 scripts/diagnose_round_regional_migration.py --round-name "$round_name" --apply || true
+    break
+  fi
+done
+
+echo "==> public build-info"
+PUBLIC="$(curl -sf "https://myhigh5.com/api/v1/build-info" 2>/dev/null || echo FAIL)"
+echo "    $PUBLIC"
+if echo "$PUBLIC" | grep -q "$EXPECTED_BUILD"; then
+  echo "    OK build_id=$EXPECTED_BUILD"
+else
+  echo "    WARN expected build_id=$EXPECTED_BUILD — check nginx proxy to backend port"
+fi
+
+echo "==> nomination verify (round 21 contest 7)"
+cd "$REPO_ROOT"
+python3 backend/scripts/verify_nomination_vote_levels.py \
+  --base-url https://myhigh5.com/api/v1 --round-id 21 --contest-id 7 || true
+
+echo "==> done"
