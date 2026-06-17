@@ -65,8 +65,14 @@ def main() -> int:
     p.add_argument("--base-url", required=True)
     p.add_argument("--round-id", type=int, required=True)
     p.add_argument("--contest-id", type=int, default=7)
+    p.add_argument(
+        "--list-base-url",
+        default=None,
+        help="Optional base for heavy /rounds/ calls (e.g. http://127.0.0.1:8001/api/v1 on VPS to avoid nginx 504)",
+    )
     args = p.parse_args()
     base = args.base_url.rstrip("/")
+    list_base = (args.list_base_url or base).rstrip("/")
     cid = args.contest_id
     rid = args.round_id
     failures = 0
@@ -76,8 +82,11 @@ def main() -> int:
     try:
         build_id = _fetch_build_id(base)
         print(f"Backend build: {build_id}")
-        if "nomination-roster-fix" not in str(build_id):
-            print("[WARN] Old backend still running — run scripts/deploy_vps_backend.sh on VPS")
+        if not any(
+            token in str(build_id)
+            for token in ("nomination-migration-fix", "nomination-roster-fix")
+        ):
+            print("[WARN] Unexpected backend build — redeploy if fixes are missing")
     except Exception as e:
         print(f"[WARN] Could not detect build id: {e}")
 
@@ -99,10 +108,10 @@ def main() -> int:
 
     print(f"Checking contest {cid} on round {rid} @ {base}\n")
     for level, geo in cases:
-        q = f"roundId={rid}&contestMode=nomination&contestLevel={level}&contestLimit=200"
+        q = f"roundId={rid}&contestMode=nomination&contestLevel={level}&contestLimit=50"
         for k, v in geo.items():
             q += f"&{k}={urllib.parse.quote(v)}"
-        rounds = get(base, f"/rounds/?{q}")
+        rounds = get(list_base, f"/rounds/?{q}")
         contests = (rounds[0].get("contests") if rounds else []) or []
         row = next((c for c in contests if c.get("id") == cid), None)
         list_count = int(row.get("participants_count") or 0) if row else None

@@ -132,9 +132,23 @@ else
   echo "    WARN expected build_id=$EXPECTED_BUILD — check nginx proxy to backend port"
 fi
 
-echo "==> nomination verify (round 21 contest 7)"
+echo "==> nomination verify (round 3 contest 7 — use localhost for heavy /rounds/ list)"
 cd "$REPO_ROOT"
-python3 backend/scripts/verify_nomination_vote_levels.py \
-  --base-url https://myhigh5.com/api/v1 --round-id 21 --contest-id 7 || true
+LOCAL_API=""
+for port in 8001 8000; do
+  if curl -sf "http://127.0.0.1:${port}/api/v1/build-info" >/dev/null 2>&1; then
+    LOCAL_API="http://127.0.0.1:${port}/api/v1"
+    break
+  fi
+done
+if [ -n "$LOCAL_API" ]; then
+  python3 backend/scripts/verify_nomination_vote_levels.py \
+    --base-url https://myhigh5.com/api/v1 \
+    --list-base-url "$LOCAL_API" \
+    --round-id 3 --contest-id 7 || true
+else
+  python3 backend/scripts/verify_nomination_vote_levels.py \
+    --base-url https://myhigh5.com/api/v1 --round-id 3 --contest-id 7 || true
+fi
 
 echo "==> done"
