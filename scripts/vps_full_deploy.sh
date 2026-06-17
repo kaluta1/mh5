@@ -34,9 +34,16 @@ REPO_ROOT="$(find_repo)"
 cd "$REPO_ROOT"
 echo "==> repo: $REPO_ROOT"
 
-echo "==> git pull"
+echo "==> git sync (VPS must match GitHub main exactly)"
 git fetch origin main
-git pull origin main
+# Production VPS: discard local commits so deploy matches origin/main
+if ! git merge-base --is-ancestor HEAD origin/main 2>/dev/null || \
+   ! git merge-base --is-ancestor origin/main HEAD 2>/dev/null; then
+  echo "    divergent history — resetting to origin/main"
+  git reset --hard origin/main
+else
+  git pull --ff-only origin main
+fi
 GIT_SHA="$(git rev-parse --short HEAD)"
 echo "    HEAD=$GIT_SHA"
 
