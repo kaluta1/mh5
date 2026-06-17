@@ -54,12 +54,18 @@ class SeasonMigrationService:
 
     @staticmethod
     def _nomination_min_start_for_level(round_obj: Round, level: SeasonLevel) -> Optional[date]:
-        """Calendar guard for nomination stages: country=M+1, regional=M+2, continent=M+3, global=M+4."""
+        """
+        Nomination calendar relative to round month M (submission / nomination month):
+        - COUNTRY: M — nominations open from round start (e.g. March 1)
+        - REGIONAL: M+2 — country winners pool for regional vote (e.g. May 1 for March round)
+        - CONTINENT: M+3 — regional winners → continental (e.g. June 1)
+        - GLOBAL: M+4
+        """
         month_start = SeasonMigrationService._round_month_start(round_obj)
         if not month_start:
             return None
         offsets = {
-            SeasonLevel.COUNTRY: 1,
+            SeasonLevel.COUNTRY: 0,
             SeasonLevel.REGIONAL: 2,
             SeasonLevel.CONTINENT: 3,
             SeasonLevel.GLOBAL: 4,
@@ -68,6 +74,57 @@ class SeasonMigrationService:
         if offset is None:
             return None
         return SeasonMigrationService._add_months(month_start, offset)
+
+    @staticmethod
+    def _nomination_country_init_ready(round_obj: Round, today: date) -> bool:
+        """True when nomination contests may attach to COUNTRY season (from round month start)."""
+        month_start = SeasonMigrationService._round_month_start(round_obj)
+        if month_start and today >= month_start:
+            return True
+        sub_start = getattr(round_obj, "submission_start_date", None)
+        return bool(sub_start and sub_start <= today)
+
+    @staticmethod
+    def _promotion_due_for_contest(
+        round_obj: Round,
+        from_level: SeasonLevel,
+        to_level: SeasonLevel,
+        contest_mode: str,
+        today: date,
+    ) -> bool:
+        """
+        Whether one contest should promote from from_level to to_level today.
+        Nomination uses M+offset calendar; participation uses round stage date columns.
+        """
+        mode = (contest_mode or "").strip().lower()
+        if mode == "nomination":
+            min_start = SeasonMigrationService._nomination_min_start_for_level(round_obj, to_level)
+            return bool(min_start and today >= min_start)
+
+        participation_triggers = {
+            (SeasonLevel.CITY, SeasonLevel.COUNTRY): (
+                round_obj.city_season_end_date,
+                round_obj.country_season_start_date,
+            ),
+            (SeasonLevel.COUNTRY, SeasonLevel.REGIONAL): (
+                round_obj.country_season_end_date,
+                round_obj.regional_start_date,
+            ),
+            (SeasonLevel.REGIONAL, SeasonLevel.CONTINENT): (
+                round_obj.regional_end_date,
+                round_obj.continental_start_date,
+            ),
+            (SeasonLevel.CONTINENT, SeasonLevel.GLOBAL): (
+                round_obj.continental_end_date,
+                round_obj.global_start_date,
+            ),
+        }
+        end_d, start_d = participation_triggers.get((from_level, to_level), (None, None))
+        if end_d and end_d <= today:
+            return True
+        if start_d and start_d <= today:
+            return True
+        return False
 
     # Named macro blocs for regional nomination / voting (disjoint country key sets).
     # Keys are lowercase: ISO2 and normalized country tokens from _country_key / aliases.
@@ -1226,6 +1283,47 @@ class SeasonMigrationService:
         }
 
     @staticmethod
+    def _sync_contestants_to_season(
+        db: Session,
+        contest_id: int,
+        round_id: int,
+        target_season_id: int,
+    ) -> list[int]:
+        """Ensure every active contestant for this contest+round has an active ContestantSeason row."""
+        contestants = db.query(Contestant).filter(
+            and_(
+                Contestant.season_id == contest_id,
+                Contestant.round_id == round_id,
+                Contestant.is_active == True,
+                Contestant.is_deleted == False,
+            )
+        ).all()
+        synced: list[int] = []
+        for contestant in contestants:
+            contestant.is_qualified = True
+            existing_contestant_season = db.query(ContestantSeason).filter(
+                and_(
+                    ContestantSeason.contestant_id == contestant.id,
+                    ContestantSeason.season_id == target_season_id,
+                )
+            ).first()
+            if not existing_contestant_season:
+                db.add(
+                    ContestantSeason(
+                        contestant_id=contestant.id,
+                        season_id=target_season_id,
+                        joined_at=datetime.utcnow(),
+                        is_active=True,
+                    )
+                )
+                synced.append(contestant.id)
+            else:
+                existing_contestant_season.is_active = True
+                existing_contestant_season.joined_at = datetime.utcnow()
+                synced.append(contestant.id)
+        return synced
+
+    @staticmethod
     def migrate_to_country_start(db: Session, contest_id: int, round_id: int) -> dict:
         """
         Initialise la saison COUNTRY pour les contests de type Nomination (Nomination starts at Country).
@@ -1236,7 +1334,7 @@ class SeasonMigrationService:
         if not contest or not round_obj:
             return {"error": "Contest or Round not found"}
         
-        # Vérifier si la migration a déjà été faite
+        # Resolve country season (create link if missing; always sync nominees for this round).
         existing_link = db.query(ContestSeasonLink).join(ContestSeason).filter(
             and_(
                 ContestSeasonLink.contest_id == contest_id,
@@ -1245,9 +1343,25 @@ class SeasonMigrationService:
                 ContestSeason.round_id == round_id
             )
         ).first()
-        
+
         if existing_link:
-            return {"message": "Migration already done", "season_id": existing_link.season_id}
+            country_season = (
+                db.query(ContestSeason)
+                .filter(ContestSeason.id == existing_link.season_id)
+                .first()
+            )
+            if not country_season:
+                return {"error": "Country season not found for existing link"}
+            synced = SeasonMigrationService._sync_contestants_to_season(
+                db, contest_id, round_id, country_season.id
+            )
+            db.commit()
+            return {
+                "message": "Country season synced",
+                "season_id": country_season.id,
+                "contestants_migrated": len(synced),
+                "migrated_contestant_ids": synced,
+            }
         
         # Récupérer ou créer la saison COUNTRY
         country_season = SeasonMigrationService.get_or_create_season(
@@ -1257,44 +1371,12 @@ class SeasonMigrationService:
             round_id=round_id
         )
         
-        # Récupérer tous les contestants actifs du contest (Entry Season)
-        contestants = db.query(Contestant).filter(
-            and_(
-                Contestant.season_id == contest_id,
-                Contestant.is_active == True,
-                Contestant.is_deleted == False
-            )
-        ).all()
+        migrated_contestant_ids = SeasonMigrationService._sync_contestants_to_season(
+            db, contest_id, round_id, country_season.id
+        )
         
         import logging
         logger = logging.getLogger(__name__)
-        
-        # Tous les contestants sont qualifiés par défaut pour le démarrage
-        migrated_contestant_ids = []
-        for contestant in contestants:
-            contestant.is_qualified = True
-            # Créer le lien contestant-season
-            existing_contestant_season = db.query(ContestantSeason).filter(
-                and_(
-                    ContestantSeason.contestant_id == contestant.id,
-                    ContestantSeason.season_id == country_season.id
-                )
-            ).first()
-            
-            if not existing_contestant_season:
-                contestant_season = ContestantSeason(
-                    contestant_id=contestant.id,
-                    season_id=country_season.id,
-                    joined_at=datetime.utcnow(),
-                    is_active=True
-                )
-                db.add(contestant_season)
-                migrated_contestant_ids.append(contestant.id)
-            else:
-                existing_contestant_season.is_active = True
-                existing_contestant_season.joined_at = datetime.utcnow()
-                migrated_contestant_ids.append(contestant.id)
-        
         logger.info(f"Contestants initialisés en COUNTRY ({len(migrated_contestant_ids)}): {migrated_contestant_ids}")
         
         # Mettre à jour le contest
@@ -1324,9 +1406,9 @@ class SeasonMigrationService:
         print(f"[Migration] ✓ Initialisation COUNTRY réussie: Contest {contest.id}")
         
         return {
-            "message": f"Initialized {len(contestants)} contestants to COUNTRY season",
+            "message": f"Initialized {len(migrated_contestant_ids)} contestants to COUNTRY season",
             "season_id": country_season.id,
-            "contestants_migrated": len(contestants),
+            "contestants_migrated": len(migrated_contestant_ids),
             "migrated_contestant_ids": migrated_contestant_ids
         }
 
@@ -1369,6 +1451,10 @@ class SeasonMigrationService:
                 link_rec.is_active = True
                 link_rec.linked_at = datetime.utcnow()
                 db.flush()
+            SeasonMigrationService._sync_contestants_to_season(
+                db, contest_id, round_id, seas.id
+            )
+            db.commit()
             return seas.id
 
         init = SeasonMigrationService.migrate_to_country_start(db, contest_id, round_id)
@@ -1755,15 +1841,14 @@ class SeasonMigrationService:
         Vérifie et traite toutes les migrations nécessaires pour tous les rounds actifs.
         Utilise round_contests (N:N) car Round.contest_id est toujours NULL.
         
-        Lifecycle d'un round :
-        1. Création du round (1er du mois) → is_submission_open=True, is_voting_open=False
-        2. Fin du mois → is_submission_open=False 
-        3. Mois suivant (M+1) → is_voting_open=True, migration vers CITY (participation) ou COUNTRY (nomination)
-        4. Fin M+1 → top 5 par ville/pays promus vers le niveau suivant
-        5. M+2 → top 5 par pays promus vers régional
-        6. M+3 → top 5 par région promus vers continental
-        7. M+4 → top 5 par continent promus vers global
-        8. M+5 → fin, round terminé
+        Lifecycle d'un round (nomination) :
+        1. M (ex. March) → submission/nomination at COUNTRY; no voting
+        2. M+1 (April) → country voting for M nominees; new M+1 nominations at country
+        3. M+2 (May 1) → top 5 per country/category → REGIONAL pool (East Africa, etc.)
+        4. M+3 (June 1) → top 5 per regional bloc → CONTINENTAL
+        5. M+4 → top 5 per continent → GLOBAL
+
+        Participation contests use round stage date columns (city M+1, country M+2, …).
         """
         import logging
         logger = logging.getLogger(__name__)
@@ -1829,15 +1914,12 @@ class SeasonMigrationService:
         # Utilise round_contests (N:N) pour trouver les contests liés aux rounds
         # ============================================================
         
-        # Récupérer tous les rounds dont la city_season_start_date est atteinte
-        rounds_ready = db.query(Round).filter(
-            and_(
-                Round.city_season_start_date <= today,
-                Round.status != RoundStatus.CANCELLED
-            )
+        # Init seasons per contest mode: nomination from submission month (M), participation from city start (M+1)
+        rounds_for_init = db.query(Round).filter(
+            Round.status != RoundStatus.CANCELLED
         ).all()
-        
-        for round_obj in rounds_ready:
+
+        for round_obj in rounds_for_init:
             # Trouver les contests liés à ce round via round_contests
             from sqlalchemy import select
             contest_ids_result = db.execute(
@@ -1853,6 +1935,8 @@ class SeasonMigrationService:
                 contest_mode = getattr(contest, 'contest_mode', None)
                 
                 if contest_mode == "participation":
+                    if not round_obj.city_season_start_date or round_obj.city_season_start_date > today:
+                        continue
                     # PARTICIPATION → init CITY
                     existing_link = db.query(ContestSeasonLink).join(ContestSeason).filter(
                         and_(
@@ -1871,7 +1955,9 @@ class SeasonMigrationService:
                             results.append({"contest_id": cid, "round_id": round_obj.id, "action": "init_participation_city", "result": {"error": str(e)}})
                 
                 elif contest_mode == "nomination":
-                    # NOMINATION → init COUNTRY
+                    if not SeasonMigrationService._nomination_country_init_ready(round_obj, today):
+                        continue
+                    # NOMINATION → init COUNTRY (from round month M, not city_season M+1)
                     existing_link = db.query(ContestSeasonLink).join(ContestSeason).filter(
                         and_(
                             ContestSeasonLink.contest_id == cid,
@@ -1911,169 +1997,143 @@ class SeasonMigrationService:
             if round_obj.status == RoundStatus.CANCELLED:
                 continue
             
-            # Déterminer si une promotion est nécessaire
+            # Next level for this season row
             next_level = None
             limit = 5
-            should_promote = False
-            
+
             if season.level == SeasonLevel.CITY:
-                if round_obj.city_season_end_date and round_obj.city_season_end_date <= today:
-                    should_promote = True
-                elif round_obj.country_season_start_date and round_obj.country_season_start_date <= today:
-                    should_promote = True
                 next_level = SeasonLevel.COUNTRY
-                
             elif season.level == SeasonLevel.COUNTRY:
-                if round_obj.country_season_end_date and round_obj.country_season_end_date <= today:
-                    should_promote = True
-                elif round_obj.regional_start_date and round_obj.regional_start_date <= today:
-                    should_promote = True
                 next_level = SeasonLevel.REGIONAL
-                
             elif season.level == SeasonLevel.REGIONAL:
-                if round_obj.regional_end_date and round_obj.regional_end_date <= today:
-                    should_promote = True
-                elif round_obj.continental_start_date and round_obj.continental_start_date <= today:
-                    should_promote = True
                 next_level = SeasonLevel.CONTINENT
-                    
             elif season.level == SeasonLevel.CONTINENT:
-                if round_obj.continental_end_date and round_obj.continental_end_date <= today:
-                    should_promote = True
-                elif round_obj.global_start_date and round_obj.global_start_date <= today:
-                    should_promote = True
                 next_level = SeasonLevel.GLOBAL
-            
-            if should_promote and next_level:
-                contest_ids_to_promote: List[int]
 
-                # COUNTRY → REGIONAL: shared country seasons often have INACTIVE links
-                # while contestants remain in the pool. Scan every nomination on the round,
-                # reactivate/link, then promote when the canonical country season is this row.
-                if (
-                    season.level == SeasonLevel.COUNTRY
-                    and next_level == SeasonLevel.REGIONAL
-                ):
-                    from sqlalchemy import select
+            if not next_level:
+                continue
 
-                    rc_rows = db.execute(
-                        select(rc_table.c.contest_id).where(
-                            rc_table.c.round_id == round_obj.id
-                        )
-                    ).fetchall()
-                    contest_ids_to_promote = []
-                    seen_c = set()
-                    for (cid,) in rc_rows:
-                        if cid in seen_c:
-                            continue
-                        seen_c.add(cid)
-                        c_row = db.query(Contest).filter(Contest.id == cid).first()
-                        if (
-                            not c_row
-                            or (getattr(c_row, "contest_mode", "") or "")
-                            .strip()
-                            .lower()
-                            != "nomination"
-                        ):
-                            continue
-                        eff_sid = (
-                            SeasonMigrationService.ensure_active_country_round_link_for_nomination(
-                                db, cid, round_obj.id
-                            )
-                        )
-                        if eff_sid is None or eff_sid != season.id:
-                            continue
-                        contest_ids_to_promote.append(cid)
-                    from app.services.contest_category_integrity import (
-                        filter_contest_ids_one_per_category,
+            contest_ids_to_promote: List[int]
+
+            if (
+                season.level == SeasonLevel.COUNTRY
+                and next_level == SeasonLevel.REGIONAL
+            ):
+                from sqlalchemy import select
+
+                rc_rows = db.execute(
+                    select(rc_table.c.contest_id).where(
+                        rc_table.c.round_id == round_obj.id
                     )
-
-                    contest_ids_to_promote = filter_contest_ids_one_per_category(
-                        db, contest_ids_to_promote
-                    )
-                    contest_ids_to_promote.sort()
-                else:
-                    contest_links = (
-                        db.query(ContestSeasonLink)
-                        .filter(
-                            and_(
-                                ContestSeasonLink.season_id == season.id,
-                                ContestSeasonLink.is_active == True,
-                            )
-                        )
-                        .order_by(ContestSeasonLink.contest_id.asc())
-                        .all()
-                    )
-                    contest_ids_to_promote = [cl.contest_id for cl in contest_links]
-
-                for contest_id in contest_ids_to_promote:
-                    promotion_key = (contest_id, round_obj.id)
-                    contest_obj = db.query(Contest).filter(Contest.id == contest_id).first()
-
-                    # Nomination timeline guard:
-                    # March nominations are voted at COUNTRY in April and become REGIONAL in May.
-                    # April nominations remain COUNTRY in May and should not become REGIONAL until June 1.
+                ).fetchall()
+                contest_ids_to_promote = []
+                seen_c = set()
+                for (cid,) in rc_rows:
+                    if cid in seen_c:
+                        continue
+                    seen_c.add(cid)
+                    c_row = db.query(Contest).filter(Contest.id == cid).first()
                     if (
-                        contest_obj
-                        and (getattr(contest_obj, "contest_mode", "") or "").strip().lower() == "nomination"
+                        not c_row
+                        or (getattr(c_row, "contest_mode", "") or "")
+                        .strip()
+                        .lower()
+                        != "nomination"
                     ):
-                        min_start = SeasonMigrationService._nomination_min_start_for_level(round_obj, next_level)
-                        if min_start and today < min_start:
-                            logger.info(
-                                f"Skipping nomination promotion for contest {contest_id}, round {round_obj.id}: "
-                                f"{next_level.value} starts no earlier than {min_start}"
-                            )
-                            continue
-
-                    # Prevent multiple stage promotions for the same contest+round
-                    # in one execution (e.g. country->regional then regional->continent).
-                    if promotion_key in promoted_contests_this_run:
                         continue
+                    eff_sid = (
+                        SeasonMigrationService.ensure_active_country_round_link_for_nomination(
+                            db, cid, round_obj.id
+                        )
+                    )
+                    if eff_sid is None or eff_sid != season.id:
+                        continue
+                    contest_ids_to_promote.append(cid)
+                from app.services.contest_category_integrity import (
+                    filter_contest_ids_one_per_category,
+                )
 
-                    # Vérifier qu'on n'a pas déjà promu CE contest vers ce niveau.
-                    # NOTE: A round can contain multiple contests, so checking only
-                    # (round_id, level) incorrectly blocks other contests.
-                    existing_next = db.query(ContestSeasonLink).join(
-                        ContestSeason, ContestSeason.id == ContestSeasonLink.season_id
-                    ).filter(
+                contest_ids_to_promote = filter_contest_ids_one_per_category(
+                    db, contest_ids_to_promote
+                )
+                contest_ids_to_promote.sort()
+            else:
+                contest_links = (
+                    db.query(ContestSeasonLink)
+                    .filter(
                         and_(
-                            ContestSeasonLink.contest_id == contest_id,
+                            ContestSeasonLink.season_id == season.id,
                             ContestSeasonLink.is_active == True,
-                            ContestSeason.round_id == round_obj.id,
-                            ContestSeason.level == next_level,
-                            ContestSeason.is_deleted == False,
                         )
-                    ).first()
+                    )
+                    .order_by(ContestSeasonLink.contest_id.asc())
+                    .all()
+                )
+                contest_ids_to_promote = [cl.contest_id for cl in contest_links]
 
-                    if existing_next:
-                        continue
+            for contest_id in contest_ids_to_promote:
+                promotion_key = (contest_id, round_obj.id)
+                contest_obj = db.query(Contest).filter(Contest.id == contest_id).first()
 
-                    try:
-                        result = SeasonMigrationService.promote_to_next_level(
-                            db,
-                            season.level,
-                            next_level,
-                            contest_id,
-                            limit=limit,
-                            from_season_id=season.id,
-                        )
-                        results.append({
-                            "contest_id": contest_id,
-                            "round_id": round_obj.id,
-                            "action": f"promote_{season.level.value}_to_{next_level.value}",
-                            "result": result
-                        })
-                        # Mark as processed only when a real promotion happened.
-                        if isinstance(result, dict) and not result.get("error") and not result.get("skipped"):
-                            promoted_contests_this_run.add(promotion_key)
-                    except Exception as e:
-                        logger.error(f"Error promoting contest {contest_id}: {e}")
-                        results.append({
-                            "contest_id": contest_id,
-                            "round_id": round_obj.id,
-                            "action": f"promote_{season.level.value}_to_{next_level.value}",
-                            "result": {"error": str(e)}
-                        })
+                if not contest_obj:
+                    continue
+
+                contest_mode = (getattr(contest_obj, "contest_mode", "") or "").strip().lower()
+                if not SeasonMigrationService._promotion_due_for_contest(
+                    round_obj,
+                    season.level,
+                    next_level,
+                    contest_mode,
+                    today,
+                ):
+                    continue
+
+                # Prevent multiple stage promotions for the same contest+round
+                # in one execution (e.g. country->regional then regional->continent).
+                if promotion_key in promoted_contests_this_run:
+                    continue
+
+                # Vérifier qu'on n'a pas déjà promu CE contest vers ce niveau.
+                existing_next = db.query(ContestSeasonLink).join(
+                    ContestSeason, ContestSeason.id == ContestSeasonLink.season_id
+                ).filter(
+                    and_(
+                        ContestSeasonLink.contest_id == contest_id,
+                        ContestSeasonLink.is_active == True,
+                        ContestSeason.round_id == round_obj.id,
+                        ContestSeason.level == next_level,
+                        ContestSeason.is_deleted == False,
+                    )
+                ).first()
+
+                if existing_next:
+                    continue
+
+                try:
+                    result = SeasonMigrationService.promote_to_next_level(
+                        db,
+                        season.level,
+                        next_level,
+                        contest_id,
+                        limit=limit,
+                        from_season_id=season.id,
+                    )
+                    results.append({
+                        "contest_id": contest_id,
+                        "round_id": round_obj.id,
+                        "action": f"promote_{season.level.value}_to_{next_level.value}",
+                        "result": result
+                    })
+                    if isinstance(result, dict) and not result.get("error") and not result.get("skipped"):
+                        promoted_contests_this_run.add(promotion_key)
+                except Exception as e:
+                    logger.error(f"Error promoting contest {contest_id}: {e}")
+                    results.append({
+                        "contest_id": contest_id,
+                        "round_id": round_obj.id,
+                        "action": f"promote_{season.level.value}_to_{next_level.value}",
+                        "result": {"error": str(e)}
+                    })
 
         processed = len(results)
         if processed > 0:

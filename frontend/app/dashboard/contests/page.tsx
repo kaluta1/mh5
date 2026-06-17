@@ -326,11 +326,13 @@ function ContestsPageContent() {
       { value: 'city', label: t('dashboard.contests.level_city') || 'City', icon: 'city' },
       { value: 'country', label: t('dashboard.contests.country') || 'Country', icon: 'country' },
       { value: 'regional', label: t('dashboard.contests.regional') || 'Regional', icon: 'regional' },
+      { value: 'continental', label: t('dashboard.contests.continental') || 'Continental', icon: 'continent' },
       { value: 'global', label: t('dashboard.contests.global') || 'Global', icon: 'global' },
     ]
     const slim: Opt[] = [
       { value: 'country', label: t('dashboard.contests.country') || 'Country', icon: 'country' },
       { value: 'regional', label: t('dashboard.contests.regional') || 'Regional', icon: 'regional' },
+      { value: 'continental', label: t('dashboard.contests.continental') || 'Continental', icon: 'continent' },
     ]
     return showVoteGeographyLevels ? full : slim
   }, [showVoteGeographyLevels, t])
@@ -719,7 +721,7 @@ function ContestsPageContent() {
         if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
           logger.warn('Request timeout, retrying once...')
           try {
-            const retryData = await ApiService.getRounds({
+            const retryParams = {
               roundId: parseInt(effectiveRoundIdForFetch),
               contestMode,
               filterCountry: activeRegion ? undefined : activeCountry,
@@ -727,14 +729,32 @@ function ContestsPageContent() {
               filterContinent: activeContinent,
               contestLevel: activeNominationLevel,
               searchTerm: activeSearch,
-              contestLimit: INITIAL_CONTESTS
-            })
-            if (!abortController.signal.aborted && retryData && retryData.length > 0) {
-              setContestsData(retryData[0])
-              const contests = retryData[0].contests || []
-              setAllContests(contests)
-              setTotalContests(retryData[0].contests_count || contests.length || 0)
-              setHasMore(contests.length < (retryData[0].contests_count || 0))
+              contestLimit: INITIAL_CONTESTS,
+            }
+            const retryResult =
+              activeNominationLevel && POOLED_NOMINATION_VOTE_LEVELS.has(activeNominationLevel)
+                ? await fetchPooledVoteContestsWithLegacyFallback(retryParams, INITIAL_CONTESTS)
+                : await (async () => {
+                    const retryData = await ApiService.getRounds(retryParams)
+                    return {
+                      contests: retryData?.[0]?.contests ?? [],
+                      usedFallback: false,
+                      roundRow: retryData?.[0] ?? null,
+                    }
+                  })()
+            if (!abortController.signal.aborted && retryResult.roundRow) {
+              const payload = { ...retryResult.roundRow, contests: retryResult.contests }
+              setContestsData(payload)
+              setAllContests(retryResult.contests)
+              setTotalContests(
+                retryResult.usedFallback
+                  ? retryResult.contests.length
+                  : retryResult.roundRow.contests_count || retryResult.contests.length || 0,
+              )
+              setHasMore(
+                !retryResult.usedFallback &&
+                  retryResult.contests.length < (retryResult.roundRow.contests_count || 0),
+              )
               setContestsLoading(false)
               setInitialLoadComplete(true)
               return
@@ -1387,7 +1407,10 @@ function ContestsPageContent() {
               <button
                 key={stage.value}
                 type="button"
-                onClick={() => setNominationMigrationLevel(stage.value)}
+                onClick={() => {
+                  clearContestsListCache()
+                  setNominationMigrationLevel(stage.value)
+                }}
                 className={`inline-flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-2xl text-[11px] font-semibold transition-all min-w-[3.25rem] ${
                   nominationMigrationLevel === stage.value
                     ? 'bg-blue-600 text-white shadow-sm ring-2 ring-blue-400/60 ring-offset-1 ring-offset-white dark:ring-offset-gray-900'

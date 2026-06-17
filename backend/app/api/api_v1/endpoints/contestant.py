@@ -2596,21 +2596,29 @@ def create_contestant(
     logger.info("Starting contestant creation...")
     # Créer la candidature
     try:
-        # Lier automatiquement le contestant à la saison "city"
         from app.services.season_migration import SeasonMigrationService
         from datetime import datetime
 
+        real_contest_id = int(season_id)
+        if submission_entry_type == "nomination":
+            entry_season = SeasonMigrationService.get_or_create_season(
+                db,
+                level=SeasonLevel.COUNTRY,
+                title="Saison Country",
+                round_id=target_round_id,
+                contest_id=real_contest_id,
+            )
+            SeasonMigrationService.ensure_active_country_round_link_for_nomination(
+                db, real_contest_id, target_round_id
+            )
+        else:
+            entry_season = SeasonMigrationService.get_or_create_season(
+                db,
+                level=SeasonLevel.CITY,
+                title="Saison City",
+                round_id=target_round_id,
+            )
 
-        # Trouver ou créer la saison "city" avant de créer le contestant
-        # IMPORTANT: Utiliser le round_id pour scoper la saison
-        city_season = SeasonMigrationService.get_or_create_season(
-            db, 
-            level=SeasonLevel.CITY,
-            title="Saison City",
-            round_id=target_round_id
-        )
-        
-        # Créer la candidature
         contestant = crud_contestant.create(
             db, 
             user_id=current_user.id,
@@ -2628,14 +2636,13 @@ def create_contestant(
         # Vérifier si le lien existe déjà
         existing_link = db.query(ContestantSeason).filter(
             ContestantSeason.contestant_id == contestant.id,
-            ContestantSeason.season_id == city_season.id
+            ContestantSeason.season_id == entry_season.id
         ).first()
         
         if not existing_link:
-            # Créer le lien contestant-season pour la saison city
             contestant_season_link = ContestantSeason(
                 contestant_id=contestant.id,
-                season_id=city_season.id,
+                season_id=entry_season.id,
                 joined_at=datetime.utcnow(),
                 is_active=True
             )
