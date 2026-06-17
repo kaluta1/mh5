@@ -49,17 +49,26 @@ echo "    HEAD=$GIT_SHA"
 
 echo "==> backend deps"
 cd backend
-if [ -d .venv ]; then
-  # shellcheck disable=SC1091
-  source .venv/bin/activate
-elif [ -d venv ]; then
-  # shellcheck disable=SC1091
-  source venv/bin/activate
-else
+
+activate_venv() {
+  if [ -f .venv/bin/activate ]; then
+    # shellcheck disable=SC1091
+    source .venv/bin/activate
+    return
+  fi
+  if [ -f venv/bin/activate ]; then
+    # shellcheck disable=SC1091
+    source venv/bin/activate
+    return
+  fi
+  echo "    creating .venv (missing or incomplete)"
+  rm -rf .venv
   python3 -m venv .venv
   # shellcheck disable=SC1091
   source .venv/bin/activate
-fi
+}
+
+activate_venv
 pip install -q -r requirements.txt
 
 export GIT_SHA

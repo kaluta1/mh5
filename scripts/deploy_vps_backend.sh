@@ -10,10 +10,17 @@ git pull origin main
 
 echo "==> backend deps"
 cd backend
-if [ -d .venv ]; then
+if [ -f .venv/bin/activate ]; then
+  # shellcheck disable=SC1091
   source .venv/bin/activate
-elif [ -d venv ]; then
+elif [ -f venv/bin/activate ]; then
+  # shellcheck disable=SC1091
   source venv/bin/activate
+else
+  rm -rf .venv
+  python3 -m venv .venv
+  # shellcheck disable=SC1091
+  source .venv/bin/activate
 fi
 pip install -r requirements.txt
 
