@@ -153,7 +153,7 @@ def read_rounds(
     skip: int = 0,
     limit: int = 12,
     contestLimit: int = Query(1, description="Max contests per round structure"),
-    current_user: Optional[models.User] = Depends(deps.get_current_user_optional),
+    current_user: Optional[models.User] = Depends(deps.get_current_active_user_optional),
 ) -> Any:
     """
     Retrieve rounds with heavily optimized lightweight fast path.
