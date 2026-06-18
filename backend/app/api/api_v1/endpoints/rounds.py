@@ -152,7 +152,7 @@ def _contest_eligible_at_ui_level(
     True when the user may browse/vote this contest at the UI geography chip level.
 
     Uses an active (or relaxed) ContestSeason row at that level on this round — not the
-    auto \"highest migrated\" card label — so May+Country and March+Continental work correctly.
+    auto "highest migrated" card label — so May+Country and March+Continental work correctly.
     """
     wl = _normalize_contest_level(wanted_level)
     if not wl:
@@ -348,45 +348,54 @@ def _lightweight_round_data(
             # Pooled phases (regional/continental/global): roster is driven by
             # ContestantSeason membership, not by season_id + round_id.
             pooled_levels = {SeasonLevel.REGIONAL, SeasonLevel.CONTINENT, SeasonLevel.GLOBAL}
-            active_pool_season = (
-                db.query(ContestSeason)
-                .join(ContestSeasonLink, ContestSeasonLink.season_id == ContestSeason.id)
-                .filter(
-                    ContestSeasonLink.contest_id == contest.id,
-                    ContestSeasonLink.is_active == True,
-                    ContestSeason.level.in_(pooled_levels),
-                    ContestSeason.is_deleted == False,
-                )
-                .first()
-            )
-            if active_pool_season is not None:
-                member_count = (
-                    db.query(func.count(ContestantSeason.contestant_id))
+            try:
+                active_pool_season = (
+                    db.query(ContestSeason)
+                    .join(ContestSeasonLink, ContestSeasonLink.season_id == ContestSeason.id)
                     .filter(
-                        ContestantSeason.season_id == active_pool_season.id,
-                        ContestantSeason.is_active == True,
+                        ContestSeasonLink.contest_id == contest.id,
+                        ContestSeasonLink.is_active == True,
+                        ContestSeason.level.in_(pooled_levels),
+                        ContestSeason.is_deleted == False,
                     )
-                    .scalar()
-                    or 0
+                    .first()
                 )
-                return int(member_count)
+                if active_pool_season is not None:
+                    member_count = (
+                        db.query(func.count(ContestantSeason.contestant_id))
+                        .filter(
+                            ContestantSeason.season_id == active_pool_season.id,
+                            ContestantSeason.is_active == True,
+                        )
+                        .scalar()
+                        or 0
+                    )
+                    return int(member_count)
+            except Exception as e:
+                db.rollback()
+                logger.warning(f"Error checking active pool season: {e}")
 
-            q = db.query(Contestant).filter(
-                Contestant.season_id == contest.id,
-                Contestant.round_id == round_obj.id,
-                Contestant.is_deleted == False,
-            )
-            if contest_mode_value == "nomination":
-                q = q.filter(
-                    (Contestant.entry_type == "nomination")
-                    | (Contestant.entry_type.is_(None))
+            try:
+                q = db.query(Contestant).filter(
+                    Contestant.season_id == contest.id,
+                    Contestant.round_id == round_obj.id,
+                    Contestant.is_deleted == False,
                 )
-                return int(
-                    q.with_entities(func.count(func.distinct(Contestant.user_id))).scalar()
-                    or 0
-                )
-            q = q.filter(Contestant.entry_type == "participation")
-            return int(q.with_entities(func.count(Contestant.id)).scalar() or 0)
+                if contest_mode_value == "nomination":
+                    q = q.filter(
+                        (Contestant.entry_type == "nomination")
+                        | (Contestant.entry_type.is_(None))
+                    )
+                    return int(
+                        q.with_entities(func.count(func.distinct(Contestant.user_id))).scalar()
+                        or 0
+                    )
+                q = q.filter(Contestant.entry_type == "participation")
+                return int(q.with_entities(func.count(Contestant.id)).scalar() or 0)
+            except Exception as e:
+                db.rollback()
+                logger.warning(f"Error running round entry count query: {e}")
+                return 0
 
         for contest in contests:
             contest_mode_value = _normalize_contest_mode(getattr(contest, "contest_mode", "participation"))
@@ -405,17 +414,22 @@ def _lightweight_round_data(
             if contest_mode_value == "nomination" and crud.contest.nomination_card_uses_exact_roster(
                 filter_country, filter_region, filter_continent, contest_level
             ):
-                participant_count = crud.contest.count_nomination_roster_for_card(
-                    db,
-                    contest_id=contest.id,
-                    current_user_id=user_id,
-                    filter_country=filter_country,
-                    filter_region=filter_region,
-                    filter_continent=filter_continent,
-                    entry_type="nomination",
-                    round_id=round_obj.id,
-                    requested_ui_level=contest_level,
-                )
+                try:
+                    participant_count = crud.contest.count_nomination_roster_for_card(
+                        db,
+                        contest_id=contest.id,
+                        current_user_id=user_id,
+                        filter_country=filter_country,
+                        filter_region=filter_region,
+                        filter_continent=filter_continent,
+                        entry_type="nomination",
+                        round_id=round_obj.id,
+                        requested_ui_level=contest_level,
+                    )
+                except Exception as e:
+                    db.rollback()
+                    logger.warning(f"Failed count_nomination_roster_for_card in fast path: {e}")
+                    
             contests_data.append({
                 "id": contest.id,
                 "name": contest.name,
@@ -722,18 +736,24 @@ def _enrich_round_data(
             paginated_contests = valid_contests[contest_skip:contest_skip + contest_limit]
 
             if paginated_contests:
-                try:
-                    current_user_obj = None
-                    if user_id:
+                current_user_obj = None
+                if user_id:
+                    try:
                         current_user_obj = (
                             db.query(models.User)
                             .filter(models.User.id == user_id)
                             .first()
                         )
+                    except Exception as user_err:
+                        db.rollback()
+                        logger.warning(f"Failed to fetch user in enrich: {user_err}")
 
-                    for vc in paginated_contests:
-                        c_mode = _normalize_contest_mode(getattr(vc, "contest_mode", "participation"))
-                        entry_type = "nomination" if c_mode == "nomination" else "participation"
+                for vc in paginated_contests:
+                    c_mode = _normalize_contest_mode(getattr(vc, "contest_mode", "participation"))
+                    entry_type = "nomination" if c_mode == "nomination" else "participation"
+                    
+                    # 🛠️ FIXED: try-except and db.rollback inside the loop to prevent thread deadlock
+                    try:
                         if c_mode == "nomination" and crud.contest.nomination_card_uses_exact_roster(
                             filter_country, filter_region, filter_continent, contest_level
                         ):
@@ -749,6 +769,7 @@ def _enrich_round_data(
                                 requested_ui_level=contest_level,
                             )
                             continue
+                        
                         stats = crud.contest.enrich_contest_with_stats(
                             db,
                             vc,
@@ -764,10 +785,10 @@ def _enrich_round_data(
                         contest_participant_counts[vc.id] = int(
                             stats.get("participants_count", stats.get("entries_count", 0))
                         )
-                except Exception as e:
-                    logger.warning(
-                        f"Per-contest enrich stats for round {round_id} failed, using DB columns: {e}"
-                    )
+                    except Exception as inner_err:
+                        db.rollback() # Safely unlock transaction
+                        logger.warning(f"Enrichment error for contest {vc.id} (falling back to model count): {inner_err}")
+                        contest_participant_counts[vc.id] = int(getattr(vc, "participant_count", 0) or 0)
 
             paginated_contests.sort(
                 key=lambda c: contest_participant_counts.get(c.id, 0),
@@ -793,21 +814,26 @@ def _enrich_round_data(
 
                     season_by_contest_id: dict = {}
                     if valid_contest_ids:
-                        rows = (
-                            db.query(ContestSeasonLink.contest_id, ContestSeason)
-                            .join(
-                                ContestSeason,
-                                ContestSeason.id == ContestSeasonLink.season_id,
+                        try:
+                            rows = (
+                                db.query(ContestSeasonLink.contest_id, ContestSeason)
+                                .join(
+                                    ContestSeason,
+                                    ContestSeason.id == ContestSeasonLink.season_id,
+                                )
+                                .filter(
+                                    ContestSeasonLink.contest_id.in_(list(valid_contest_ids)),
+                                    ContestSeasonLink.is_active == True,
+                                )
+                                .all()
                             )
-                            .filter(
-                                ContestSeasonLink.contest_id.in_(list(valid_contest_ids)),
-                                ContestSeasonLink.is_active == True,
-                            )
-                            .all()
-                        )
-                        for cid, s in rows:
-                            if cid is not None and s is not None and cid not in season_by_contest_id:
-                                season_by_contest_id[cid] = s
+                            for cid, s in rows:
+                                if cid is not None and s is not None and cid not in season_by_contest_id:
+                                    season_by_contest_id[cid] = s
+                        except Exception as season_err:
+                            db.rollback()
+                            logger.warning(f"Error fetching season lines: {season_err}")
+                            
                         for cid in valid_contest_ids:
                             season_by_contest_id.setdefault(cid, None)
 
@@ -816,12 +842,17 @@ def _enrich_round_data(
                         if _se is not None and _se.id not in unique_seasons:
                             unique_seasons[_se.id] = _se
 
-                    all_user_contestants = db.query(Contestant).filter(
-                        Contestant.user_id == user_id,
-                        Contestant.is_deleted == False,
-                    ).all()
+                    all_user_contestants = []
+                    try:
+                        all_user_contestants = db.query(Contestant).filter(
+                            Contestant.user_id == user_id,
+                            Contestant.is_deleted == False,
+                        ).all()
+                    except Exception as e:
+                        db.rollback()
+                        logger.warning(f"Error loading user contestants: {e}")
 
-                    if valid_contests:
+                    if valid_contests and all_user_contestants:
                         expected_type = "nomination" if contest_mode == "nomination" else "participation"
                         contested_ids: set = set()
 
@@ -853,21 +884,25 @@ def _enrich_round_data(
                                         entry_round_by_contest[cid_direct] = int(rid)
                                 continue
                             for _s in unique_seasons.values():
-                                resolved = contestant_ep._resolve_contest_for_contestant_vote(
-                                    db, uc, _s
-                                )
-                                if (
-                                    resolved
-                                    and resolved.id in valid_contest_ids
-                                    and _entry_type_for_contest(resolved.id) == expected_type
-                                ):
-                                    contested_ids.add(resolved.id)
-                                    rid = getattr(uc, "round_id", None)
-                                    if rid is not None:
-                                        prev = entry_round_by_contest.get(resolved.id)
-                                        if prev is None or int(rid) >= int(prev):
-                                            entry_round_by_contest[resolved.id] = int(rid)
-                                    break
+                                try:
+                                    resolved = contestant_ep._resolve_contest_for_contestant_vote(
+                                        db, uc, _s
+                                    )
+                                    if (
+                                        resolved
+                                        and resolved.id in valid_contest_ids
+                                        and _entry_type_for_contest(resolved.id) == expected_type
+                                    ):
+                                        contested_ids.add(resolved.id)
+                                        rid = getattr(uc, "round_id", None)
+                                        if rid is not None:
+                                            prev = entry_round_by_contest.get(resolved.id)
+                                            if prev is None or int(rid) >= int(prev):
+                                                entry_round_by_contest[resolved.id] = int(rid)
+                                        break
+                                except Exception as inner_res:
+                                    db.rollback()
+                                    continue
                         user_contested_contest_ids = contested_ids
                 except Exception as e:
                     logger.warning(f"Error batch-checking user participation for round {round_id}: {str(e)}")
@@ -1073,6 +1108,7 @@ def create_round(
     round = crud.round.create_with_contest(db=db, obj_in=round_in)
     return round
 
+
 @router.put("/{id}", response_model=round_schema.Round)
 def update_round(
     *,
@@ -1089,6 +1125,7 @@ def update_round(
         raise HTTPException(status_code=404, detail="Round not found")
     round = crud.round.update(db=db, db_obj=round, obj_in=round_in)
     return round
+
 
 @router.delete("/{id}", response_model=round_schema.Round)
 def delete_round(
