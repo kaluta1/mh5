@@ -5,6 +5,9 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
 
+# shellcheck disable=SC1091
+source "$REPO_ROOT/scripts/load_backend_env.sh" "$REPO_ROOT"
+
 echo "==> git pull"
 git pull origin main
 
@@ -55,5 +58,5 @@ for port in 8001 8000; do
   curl -sf "http://127.0.0.1:${port}/api/v1/build-info" && echo " (port ${port})" && break
 done || curl -sf "http://127.0.0.1:8001/health" || curl -sf "http://127.0.0.1:8000/health" || true
 echo
-echo "Expected build_id: nomination-migration-fix-20260616"
+echo "Expected build_id: rounds-list-perf-fix-20260615"
 curl -sf "https://myhigh5.com/api/v1/build-info" | python3 -m json.tool 2>/dev/null || echo "Public /build-info not ready yet"

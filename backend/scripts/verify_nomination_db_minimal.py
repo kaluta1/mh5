@@ -34,10 +34,16 @@ def log(hypothesis_id: str, message: str, data: dict) -> None:
         fh.write(json.dumps(payload, default=str) + "\n")
 
 
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from app.core.config import settings
+
+
 def main() -> int:
-    url = os.getenv("DATABASE_URL")
-    if not url:
-        print("Set DATABASE_URL to run this script")
+    url = settings.DATABASE_URL
+    if not url or url == "postgresql://user:password@localhost/myhigh5":
+        print("Set DATABASE_URL in backend/.env to run this script")
         return 1
 
     conn = psycopg2.connect(url)

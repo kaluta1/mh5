@@ -3,17 +3,16 @@
 
 import os
 import sys
-from dotenv import load_dotenv
+from pathlib import Path
 from sqlalchemy import create_engine, text
 
-# Load environment variables
-load_dotenv()
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from app.core.config import settings
 
-# Get database URL from environment
-DATABASE_URL = os.getenv("DATABASE_URL")
+DATABASE_URL = settings.DATABASE_URL
 
-if not DATABASE_URL:
-    print("DATABASE_URL not set in environment")
+if not DATABASE_URL or DATABASE_URL == "postgresql://user:password@localhost/myhigh5":
+    print("DATABASE_URL not set in backend/.env")
     sys.exit(1)
 
 print(f"Connecting to database: {DATABASE_URL}")

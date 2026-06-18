@@ -9,17 +9,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from dotenv import load_dotenv
+from app.core.env_loader import require_database_url
 
-load_dotenv(ROOT / ".env", override=False)
-if not os.getenv("DATABASE_URL"):
-    load_dotenv(ROOT.parent / "backend" / ".env", override=False)
-if not os.getenv("DATABASE_URL"):
-    # Same fallback as fetch_contests.py for local verification only.
-    os.environ.setdefault(
-        "DATABASE_URL",
-        "postgresql://neondb_owner:npg_pBhM89cZikgE@ep-winter-heart-a7ysbm7f-pooler.ap-southeast-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require",
-    )
+require_database_url()  # fail fast if backend/.env missing DATABASE_URL
 
 from app.api.api_v1.endpoints.rounds import _contest_eligible_at_ui_level
 from app.crud.crud_contest import contest as contest_crud

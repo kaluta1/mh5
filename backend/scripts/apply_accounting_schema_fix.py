@@ -5,18 +5,17 @@ Apply accounting DDL from DATABASE_URL (same user as the app — needs table own
   cd backend
   python scripts/apply_accounting_schema_fix.py
 
-Uses backend/.env via dotenv. Safe to re-run: skips journal status conversion if already VARCHAR.
+Uses backend/.env via app.core.config. Safe to re-run: skips journal status conversion if already VARCHAR.
 """
 from __future__ import annotations
 
 import os
 import sys
 
-# backend/ on path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from dotenv import load_dotenv
 from sqlalchemy import create_engine, inspect, text
+from app.core.config import settings
 
 
 def _journal_status_is_varchar(conn) -> bool:
@@ -38,10 +37,9 @@ def _journal_status_is_varchar(conn) -> bool:
 
 
 def main() -> int:
-    load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"))
-    url = os.getenv("DATABASE_URL")
-    if not url:
-        print("DATABASE_URL missing in environment", file=sys.stderr)
+    url = settings.DATABASE_URL
+    if not url or url == "postgresql://user:password@localhost/myhigh5":
+        print("DATABASE_URL missing in backend/.env", file=sys.stderr)
         return 1
 
     engine = create_engine(url)
@@ -52,7 +50,6 @@ def main() -> int:
         return 0
 
     with engine.begin() as conn:
-        # 1) balance
         cols = {c["name"] for c in insp.get_columns("chart_of_accounts")}
         if "balance" not in cols:
             conn.execute(
@@ -64,7 +61,6 @@ def main() -> int:
         else:
             print("chart_of_accounts.balance already present")
 
-        # 2) journal_entries.status → VARCHAR
         if insp.has_table("journal_entries"):
             if _journal_status_is_varchar(conn):
                 print("journal_entries.status already VARCHAR")

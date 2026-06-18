@@ -5,11 +5,7 @@ Run this to diagnose database connection issues.
 """
 import os
 import sys
-from dotenv import load_dotenv
 
-load_dotenv()
-
-# Add the backend directory to the path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from sqlalchemy import create_engine, text

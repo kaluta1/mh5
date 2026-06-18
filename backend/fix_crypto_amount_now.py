@@ -5,20 +5,19 @@ This script changes the column from NUMERIC(18, 8) to VARCHAR(255) to store wei 
 """
 import os
 import sys
+from pathlib import Path
 from sqlalchemy import create_engine, text
-from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from app.core.config import settings
+
 
 def fix_crypto_amount_column():
     """Fix the crypto_amount column type in the deposits table"""
-    
-    # Get database URL from environment
-    database_url = os.getenv("DATABASE_URL", "").strip()
-    if not database_url:
-        print("ERROR: DATABASE_URL environment variable is not set")
-        print("Please set DATABASE_URL in your .env file or environment")
+
+    database_url = settings.DATABASE_URL.strip()
+    if not database_url or database_url == "postgresql://user:password@localhost/myhigh5":
+        print("ERROR: DATABASE_URL is not set in backend/.env")
         sys.exit(1)
     
     print("Connecting to database...")

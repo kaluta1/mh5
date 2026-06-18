@@ -7,21 +7,13 @@ import sys
 from sqlalchemy import create_engine, text
 from pathlib import Path
 
-# Load .env if present (so local backend/.env can provide DATABASE_URL)
-_DOTENV_PATH = Path(__file__).resolve().parent / ".env"
-if _DOTENV_PATH.exists():
-    try:
-        from dotenv import load_dotenv
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from app.core.config import settings
 
-        load_dotenv(_DOTENV_PATH, encoding="utf-8-sig")
-    except Exception:
-        pass
-
-# Configuration de la base de données — require DATABASE_URL from environment
-DATABASE_URL = os.getenv("DATABASE_URL")
-if not DATABASE_URL:
+DATABASE_URL = settings.DATABASE_URL
+if not DATABASE_URL or DATABASE_URL == "postgresql://user:password@localhost/myhigh5":
     print(
-        "ERROR: DATABASE_URL is not set. Please set DATABASE_URL in backend/.env or your environment.",
+        "ERROR: DATABASE_URL is not set. Please set DATABASE_URL in backend/.env.",
         file=sys.stderr,
     )
     sys.exit(2)

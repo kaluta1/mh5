@@ -10,21 +10,20 @@ from sqlalchemy.orm import sessionmaker
 import json
 from datetime import datetime
 
-# Load backend .env so DATABASE_URL can be supplied from environment.
-# fetch_contests.py lives in the repo root, so we point one level down.
-_DOTENV_PATH = Path(__file__).resolve().parent / "backend" / ".env"
-if _DOTENV_PATH.exists():
-    try:
-        from dotenv import load_dotenv
-        load_dotenv(_DOTENV_PATH, encoding="utf-8-sig")
-    except Exception:
-        pass
+# Load backend/.env via app.core.config (same as the API).
+import sys
+from pathlib import Path
 
-# Database URL: prefer environment, keep the old Neon URL as a last resort.
-DATABASE_URL = os.getenv("DATABASE_URL")
-if not DATABASE_URL:
+_ROOT = Path(__file__).resolve().parent
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+from app.core.config import settings
+
+DATABASE_URL = settings.DATABASE_URL
+if not DATABASE_URL or DATABASE_URL == "postgresql://user:password@localhost/myhigh5":
     print(
-        "ERROR: DATABASE_URL is not set. Please set DATABASE_URL in backend/.env or your environment.",
+        "ERROR: DATABASE_URL is not set. Please set DATABASE_URL in backend/.env.",
         file=sys.stderr,
     )
     sys.exit(2)

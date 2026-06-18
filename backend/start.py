@@ -12,9 +12,11 @@ logger = logging.getLogger("start-script")
 def run_alembic_migrations():
     """Exécute les migrations de base de données avec Alembic"""
     logger.info("Exécution des migrations Alembic...")
-    
-    # Valider que DATABASE_URL est défini
-    database_url = os.getenv("DATABASE_URL", "").strip()
+
+    from app.core.config import settings
+
+    # Always use backend/.env via app.core.config (not process cwd).
+    database_url = settings.DATABASE_URL.strip()
     if not database_url:
         logger.error(
             "DATABASE_URL n'est pas défini dans les variables d'environnement. "
@@ -176,10 +178,9 @@ def main():
     # Afficher les variables d'environnement importantes pour le débogage
     if args.debug:
         try:
-            import os
-            from dotenv import load_dotenv
-            load_dotenv()
-            db_url = os.getenv('DATABASE_URL', 'Non défini')
+            from app.core.config import settings
+
+            db_url = settings.DATABASE_URL or "Non défini"
             if db_url and db_url != 'Non défini':
                 # Masquer le mot de passe dans l'URL pour la sécurité
                 if '@' in db_url:

@@ -9,18 +9,16 @@ import subprocess
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from app.core.config import settings
+
+
 def run_migration():
     """Run the Alembic migration"""
     print("Running social groups migration...")
-    
-    # Check if DATABASE_URL is set
-    database_url = os.getenv("DATABASE_URL")
-    if not database_url:
-        print("ERROR: DATABASE_URL environment variable is not set!")
-        print("Please set it to your Neon PostgreSQL connection string:")
-        print("  export DATABASE_URL='postgresql://user:password@host/database'")
-        print("\nOr on Windows PowerShell:")
-        print("  $env:DATABASE_URL='postgresql://user:password@host/database'")
+
+    database_url = settings.DATABASE_URL.strip()
+    if not database_url or database_url == "postgresql://user:password@localhost/myhigh5":
+        print("ERROR: DATABASE_URL is not set in backend/.env")
         return False
     
     print(f"Using database: {database_url.split('@')[-1] if '@' in database_url else '***'}")

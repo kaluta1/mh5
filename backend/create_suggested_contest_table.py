@@ -5,23 +5,16 @@ Ce script peut être exécuté directement sans passer par Alembic.
 """
 import os
 import sys
+from pathlib import Path
 import psycopg
-from dotenv import load_dotenv
 
-# Charger les variables d'environnement
-load_dotenv()
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from app.core.config import settings
 
-# Récupérer les informations de connexion depuis les variables d'environnement
-DATABASE_URL = os.getenv("DATABASE_URL")
-if not DATABASE_URL:
-    # Essayer de construire l'URL depuis les variables individuelles
-    DB_USER = os.getenv("POSTGRES_USER", "postgres")
-    DB_PASSWORD = os.getenv("POSTGRES_PASSWORD", "")
-    DB_HOST = os.getenv("POSTGRES_SERVER", "localhost")
-    DB_PORT = os.getenv("POSTGRES_PORT", "5432")
-    DB_NAME = os.getenv("POSTGRES_DB", "myfav")
-    
-    DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+DATABASE_URL = settings.DATABASE_URL
+if not DATABASE_URL or DATABASE_URL == "postgresql://user:password@localhost/myhigh5":
+    print("ERROR: set DATABASE_URL in backend/.env")
+    sys.exit(1)
 
 def create_table():
     """Créer la table suggested_contest et le type ENUM"""

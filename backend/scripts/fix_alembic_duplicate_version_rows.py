@@ -17,8 +17,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
+from app.core.config import settings
 
 
 def main() -> int:
@@ -26,10 +26,9 @@ def main() -> int:
     p.add_argument("--dry-run", action="store_true")
     args = p.parse_args()
 
-    load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"))
-    url = os.getenv("DATABASE_URL")
-    if not url:
-        print("DATABASE_URL missing", file=sys.stderr)
+    url = settings.DATABASE_URL
+    if not url or url == "postgresql://user:password@localhost/myhigh5":
+        print("DATABASE_URL missing in backend/.env", file=sys.stderr)
         return 1
 
     engine = create_engine(url)

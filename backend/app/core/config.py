@@ -2,15 +2,11 @@ from typing import List, Union, Optional
 from pathlib import Path
 from pydantic import BaseModel, field_validator, ConfigDict
 import os
-from dotenv import load_dotenv
 
-# Always load backend/.env (this file lives in backend/app/core/). Using load_dotenv()
-# without a path only reads from the process cwd, so starting uvicorn from the repo
-# root would skip DATABASE_URL and other vars — wrong DB / login appears "broken".
-_BACKEND_DIR = Path(__file__).resolve().parents[2]
-# utf-8-sig strips BOM from Windows Notepad–saved .env files
-load_dotenv(_BACKEND_DIR / ".env", encoding="utf-8-sig")
-load_dotenv(_BACKEND_DIR / ".env.local", override=True, encoding="utf-8-sig")
+from app.core.env_loader import BACKEND_DIR, load_backend_env
+
+# Always load backend/.env (cwd-independent). See env_loader.py.
+load_backend_env()
 
 
 def _first_nonempty_env(*keys: str) -> str:

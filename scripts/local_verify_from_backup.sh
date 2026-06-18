@@ -8,6 +8,27 @@ BACKUP="${ROOT}/db-backup/mh5-db-backup.sql"
 DB_NAME="${MH5_DB_NAME:-mh5_local}"
 PORT="${BACKEND_PORT:-8001}"
 
+# Production checks: use DATABASE_URL from backend/.env only.
+# Local backup restore: set MH5_USE_LOCAL_RESTORE=1 to point at a restored local DB.
+if [ -f "$ROOT/backend/.env" ]; then
+  set -a
+  # shellcheck disable=SC1091
+  source "$ROOT/backend/.env"
+  set +a
+  if [ -f "$ROOT/backend/.env.local" ]; then
+    set -a
+    # shellcheck disable=SC1091
+    source "$ROOT/backend/.env.local"
+    set +a
+  fi
+fi
+if [ "${MH5_USE_LOCAL_RESTORE:-0}" = "1" ]; then
+  export DATABASE_URL="postgresql://$(whoami)@127.0.0.1:5432/${DB_NAME}"
+elif [ -z "${DATABASE_URL:-}" ]; then
+  echo "ERROR: set DATABASE_URL in backend/.env (or MH5_USE_LOCAL_RESTORE=1 for backup restore)" >&2
+  exit 1
+fi
+
 if ! command -v pg_restore >/dev/null; then
   echo "Install PostgreSQL 17+ (backup format 1.16 needs pg_restore 17+)"
   exit 1
@@ -24,7 +45,6 @@ pg_restore -d "$DB_NAME" --no-owner --no-acl "$BACKUP" 2>/dev/null || {
 
 echo "==> start backend on :${PORT} (background)"
 cd "$ROOT/backend"
-export DATABASE_URL="${DATABASE_URL:-postgresql://$(whoami)@127.0.0.1:5432/${DB_NAME}}"
 if [ -d .venv ]; then source .venv/bin/activate; fi
 pip install -q -r requirements.txt 2>/dev/null || pip install -q fastapi uvicorn sqlalchemy psycopg2-binary python-dotenv python-jose bcrypt 'pydantic[email]' 2>/dev/null
 uvicorn main:app --host 127.0.0.1 --port "$PORT" &

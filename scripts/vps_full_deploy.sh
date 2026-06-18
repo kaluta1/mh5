@@ -3,7 +3,7 @@
 # Run as root ON THE VPS: bash scripts/vps_full_deploy.sh
 set -euo pipefail
 
-EXPECTED_BUILD="nomination-migration-fix-20260616"
+EXPECTED_BUILD="rounds-list-perf-fix-20260615"
 
 find_repo() {
   if [ -f "$(pwd)/backend/main.py" ] && [ -d "$(pwd)/.git" ]; then
@@ -33,6 +33,11 @@ find_repo() {
 REPO_ROOT="$(find_repo)"
 cd "$REPO_ROOT"
 echo "==> repo: $REPO_ROOT"
+
+# Single DATABASE_URL for migrations, verify scripts, and API (backend/.env)
+# shellcheck disable=SC1091
+source "$REPO_ROOT/scripts/load_backend_env.sh" "$REPO_ROOT"
+echo "    DATABASE_URL host: ${DATABASE_URL#*@}"
 
 echo "==> git sync (VPS must match GitHub main exactly)"
 git fetch origin main
