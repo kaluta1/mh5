@@ -21,10 +21,13 @@ if _DOTENV_PATH.exists():
         pass
 
 # Database URL: prefer environment, keep the old Neon URL as a last resort.
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://neondb_owner:npg_pBhM89cZikgE@ep-winter-heart-a7ysbm7f-pooler.ap-southeast-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require",
-)
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    print(
+        "ERROR: DATABASE_URL is not set. Please set DATABASE_URL in backend/.env or your environment.",
+        file=sys.stderr,
+    )
+    sys.exit(2)
 
 def format_date(date_obj):
     """Format date object to string"""

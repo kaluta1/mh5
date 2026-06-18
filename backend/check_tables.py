@@ -5,9 +5,26 @@ Script pour vérifier les tables dans la base de données Neon
 import os
 import sys
 from sqlalchemy import create_engine, text
+from pathlib import Path
 
-# Configuration de la base de données
-DATABASE_URL = "postgresql://neondb_owner:npg_Pqpdik54DZNa@ep-noisy-violet-adh359sw-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+# Load .env if present (so local backend/.env can provide DATABASE_URL)
+_DOTENV_PATH = Path(__file__).resolve().parent / ".env"
+if _DOTENV_PATH.exists():
+    try:
+        from dotenv import load_dotenv
+
+        load_dotenv(_DOTENV_PATH, encoding="utf-8-sig")
+    except Exception:
+        pass
+
+# Configuration de la base de données — require DATABASE_URL from environment
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    print(
+        "ERROR: DATABASE_URL is not set. Please set DATABASE_URL in backend/.env or your environment.",
+        file=sys.stderr,
+    )
+    sys.exit(2)
 
 def check_tables():
     try:
