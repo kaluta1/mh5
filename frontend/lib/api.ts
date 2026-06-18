@@ -32,12 +32,7 @@ const authApi = axios.create({
   },
 })
 
-function resolveRequestBaseURL(): string {
-  if (typeof window === 'undefined') {
-    return API_BASE_URL
-  }
-  return getEffectiveApiUrl()
-}
+function resolveRequestBaseURL(): string {   return 'https://myhigh5.com/api/v1'}
 
 // Helper pour ajouter les headers communs
 const addCommonHeaders = (config: InternalAxiosRequestConfig) => {
