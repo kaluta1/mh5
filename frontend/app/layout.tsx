@@ -137,6 +137,7 @@ export default function RootLayout({
     <html lang={htmlLang} suppressHydrationWarning>
       <head>
         {/* Preconnect to API for faster requests */}
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <link rel="preconnect" href={API_ORIGIN} crossOrigin="anonymous" />
         {/* DNS prefetch for external resources */}
         <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
