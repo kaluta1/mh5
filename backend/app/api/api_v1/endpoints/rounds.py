@@ -22,7 +22,7 @@ def _normalize_contest_mode(mode: Any) -> str:
     if mode is None:
         return "participation"
     value = mode.value if hasattr(mode, "value") else mode
-    text = str(value).strip().strip('\"').strip("'")
+    text = str(value).strip().strip('"').strip("'")
     if not text:
         return "participation"
     low = text.lower()
