@@ -528,7 +528,18 @@ def read_rounds(
                 if not db_rounds:
                     return []
 
-                if not round_id and not contest_id and not filter_country and not filter_region and not filter_continent:
+                # Fast path: round selector, vote list, and ?roundId=… must not run
+                # enrich_contest_with_stats / roster counts for every contest (~100+),
+                # which caused nginx 504s and empty Vote / Contestants UI after login.
+                use_lightweight = not contest_id and (
+                    round_id is not None
+                    or (
+                        not filter_country
+                        and not filter_region
+                        and not filter_continent
+                    )
+                )
+                if use_lightweight:
                     result = [
                         _lightweight_round_data(
                             db,
@@ -702,7 +713,15 @@ def _enrich_round_data(
             valid_contests_by_id = {vc.id: vc for vc in valid_contests}
             valid_contest_ids = set(valid_contests_by_id.keys())
 
-            if valid_contests:
+            valid_contests.sort(
+                key=lambda c: contest_participant_counts.get(c.id, 0),
+                reverse=True,
+            )
+
+            # Apply pagination BEFORE expensive per-contest stats (geo-filter list path).
+            paginated_contests = valid_contests[contest_skip:contest_skip + contest_limit]
+
+            if paginated_contests:
                 try:
                     current_user_obj = None
                     if user_id:
@@ -712,7 +731,7 @@ def _enrich_round_data(
                             .first()
                         )
 
-                    for vc in valid_contests:
+                    for vc in paginated_contests:
                         c_mode = _normalize_contest_mode(getattr(vc, "contest_mode", "participation"))
                         entry_type = "nomination" if c_mode == "nomination" else "participation"
                         if c_mode == "nomination" and crud.contest.nomination_card_uses_exact_roster(
@@ -729,28 +748,6 @@ def _enrich_round_data(
                                 round_id=round_id,
                                 requested_ui_level=contest_level,
                             )
-                            # #region agent log
-                            try:
-                                from app.core.agent_debug_log import agent_debug_log
-                                agent_debug_log(
-                                    hypothesis_id="A",
-                                    location="rounds.py:list_card_count",
-                                    message="list card count via roster",
-                                    data={
-                                        "runId": "post-fix",
-                                        "contest_id": vc.id,
-                                        "contest_level": contest_level,
-                                        "round_id": round_id,
-                                        "filter_country": filter_country,
-                                        "filter_region": filter_region,
-                                        "filter_continent": filter_continent,
-                                        "count": contest_participant_counts[vc.id],
-                                        "method": "count_nomination_roster_for_card",
-                                    },
-                                )
-                            except Exception:
-                                pass
-                            # #endregion
                             continue
                         stats = crud.contest.enrich_contest_with_stats(
                             db,
@@ -767,50 +764,15 @@ def _enrich_round_data(
                         contest_participant_counts[vc.id] = int(
                             stats.get("participants_count", stats.get("entries_count", 0))
                         )
-                        # #region agent log
-                        if c_mode == "nomination" and contest_level:
-                            try:
-                                from app.core.agent_debug_log import agent_debug_log
-                                roster_count = crud.contest.count_nomination_roster_for_card(
-                                    db,
-                                    contest_id=vc.id,
-                                    current_user_id=user_id,
-                                    filter_country=filter_country,
-                                    filter_region=filter_region,
-                                    filter_continent=filter_continent,
-                                    entry_type=entry_type,
-                                    round_id=round_id,
-                                    requested_ui_level=contest_level,
-                                )
-                                agent_debug_log(
-                                    hypothesis_id="A",
-                                    location="rounds.py:list_card_count",
-                                    message="list enrich vs roster mismatch check",
-                                    data={
-                                        "contest_id": vc.id,
-                                        "contest_level": contest_level,
-                                        "round_id": round_id,
-                                        "filter_country": filter_country,
-                                        "filter_region": filter_region,
-                                        "filter_continent": filter_continent,
-                                        "enrich_count": contest_participant_counts[vc.id],
-                                        "roster_count": roster_count,
-                                        "mismatch": contest_participant_counts[vc.id] != roster_count,
-                                        "method": "enrich_contest_with_stats",
-                                    },
-                                )
-                            except Exception:
-                                pass
-                        # #endregion
                 except Exception as e:
                     logger.warning(
                         f"Per-contest enrich stats for round {round_id} failed, using DB columns: {e}"
                     )
 
-            valid_contests.sort(key=lambda c: contest_participant_counts.get(c.id, 0), reverse=True)
-
-            # Apply pagination AFTER sorting
-            paginated_contests = valid_contests[contest_skip:contest_skip + contest_limit]
+            paginated_contests.sort(
+                key=lambda c: contest_participant_counts.get(c.id, 0),
+                reverse=True,
+            )
             
             # Batch query: find all contests where current user has participated in this round
             # IMPORTANT: "Edit" must be shown only for the exact contest/category where
