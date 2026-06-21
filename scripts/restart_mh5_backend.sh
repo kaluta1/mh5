@@ -37,7 +37,19 @@ if [ -f "$UNIT_SRC" ]; then
   systemctl enable "$UNIT_NAME"
 fi
 
-# Stop legacy services that steal :8001 with old code
+# Stop PM2-managed legacy backend (common on this VPS)
+if command -v pm2 >/dev/null 2>&1; then
+  for name in myhigh5-api mh5-api mh5-backend; do
+    if pm2 describe "$name" >/dev/null 2>&1; then
+      echo "    stopping pm2 $name (superseded by myhigh5-backend systemd unit)"
+      pm2 stop "$name" 2>/dev/null || true
+      pm2 delete "$name" 2>/dev/null || true
+    fi
+  done
+  pm2 save 2>/dev/null || true
+fi
+
+# Stop legacy systemd services that steal :8001 with old code
 for svc in "${LEGACY_UNITS[@]}"; do
   if systemctl is-active --quiet "$svc" 2>/dev/null; then
     echo "    stopping legacy $svc (superseded by myhigh5-backend)"
