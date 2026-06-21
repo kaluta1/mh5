@@ -598,6 +598,14 @@ function ContestsPageContent() {
     clearContestsListCache()
   }, [effectiveRoundIdForFetch, categoryTab, activeDisplayTab?.kind, nominationMigrationLevel])
 
+  useEffect(() => {
+    if (roundsLoading) return
+    if (!activeRoundId || !effectiveRoundIdForFetch) {
+      setContestsLoading(false)
+      setInitialLoadComplete(true)
+    }
+  }, [roundsLoading, activeRoundId, effectiveRoundIdForFetch])
+
   // 2. Fetch Contests for Selected Round (Initial load) - allow unauthenticated users
   // Use a ref to track current user id without triggering re-fetches
   const userIdRef = useRef<number | null>(null)
@@ -1508,6 +1516,15 @@ function ContestsPageContent() {
           <div className="flex flex-col items-center justify-center py-20 gap-3">
             <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
             <p className="text-gray-500 dark:text-gray-400">{t('common.loading') || 'Loading...'}</p>
+          </div>
+        ) : rounds.length === 0 ? (
+          <div className="text-center py-20 space-y-2">
+            <p className="text-gray-500 dark:text-gray-400">
+              {t('dashboard.contests.no_rounds') || 'No contest rounds are available right now.'}
+            </p>
+            <p className="text-sm text-gray-400 dark:text-gray-500">
+              {t('dashboard.contests.api_retry_hint') || 'If this persists, the server API may need a restart — try again in a minute.'}
+            </p>
           </div>
         ) : (
           <div className="text-center py-20">
