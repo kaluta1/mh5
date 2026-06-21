@@ -19,6 +19,7 @@ from app.models.contest import Contest
 from app.models.contests import ContestSeason, ContestSeasonLink, SeasonLevel
 from app.models.voting import ContestantVoting
 from app.models.contests import Contestant, ContestantSeason
+from sqlalchemy import text
 
 router = APIRouter()
 
@@ -115,6 +116,12 @@ def get_top_high5_by_country(
 
     db = SessionLocal()
     try:
+        # Avoid indefinitely hung requests on heavy seasons.
+        try:
+            db.execute(text("SET LOCAL statement_timeout = 8000"))
+        except Exception:
+            # If the backend driver or DB does not support statement_timeout, continue without it.
+            pass
         # Prevent stale CDN/browser caches for rapidly-changing leaderboard data.
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         response.headers["Pragma"] = "no-cache"

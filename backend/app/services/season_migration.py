@@ -818,6 +818,39 @@ class SeasonMigrationService:
         elif location_field == 'continent':
             contestants_query = contestants_query.filter(Contestant.continent.isnot(None))
         
+        # Hard cap the candidate pool to avoid timeouts on very large seasons.
+        # We still rank and dedupe later, so we keep a generous buffer above the
+        # requested `limit` to preserve the true Top 5 while reducing load.
+        candidate_limit = None
+        if limit is not None:
+            candidate_limit = max(limit * 25, 200)  # e.g., limit=5 -> cap at 125; floor at 200
+
+        if candidate_limit is not None:
+            try:
+                # Prefer candidates with the highest points first so the cap
+                # keeps relevant rows. Fall back to plain limit if the subquery
+                # fails for any reason.
+                pts_subq = (
+                    db.query(
+                        ContestantVoting.contestant_id.label("cid"),
+                        func.coalesce(func.sum(ContestantVoting.points), 0).label("total_points"),
+                    )
+                    .filter(
+                        ContestantVoting.contestant_id.in_(
+                            contestants_query.with_entities(Contestant.id).subquery()
+                        )
+                    )
+                    .group_by(ContestantVoting.contestant_id)
+                ).subquery()
+
+                contestants_query = (
+                    contestants_query.outerjoin(pts_subq, pts_subq.c.cid == Contestant.id)
+                    .order_by(pts_subq.c.total_points.desc().nullslast(), Contestant.id.desc())
+                    .limit(candidate_limit)
+                )
+            except Exception:
+                contestants_query = contestants_query.limit(candidate_limit)
+
         contestants = contestants_query.all()
 
         # Legacy-data fallback:

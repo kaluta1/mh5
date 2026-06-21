@@ -1215,17 +1215,14 @@ class ContestService {
           level: params?.level,
           _ts: Date.now(),
         },
+        // Prevent the UI from hanging forever on upstream stalls.
+        timeout: 8000,
       })
       return response.data
     } catch (error) {
       console.error('Error fetching top high5 by country:', error)
-      return {
-        round_id: 0,
-        round_name: '',
-        country: params?.country || '',
-        level: params?.level,
-        contests: [],
-      }
+      // Surface the error so the UI can show diagnostics instead of silent empties.
+      throw error
     }
   }
 
