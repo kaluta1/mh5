@@ -30,15 +30,8 @@ pip install -r requirements.txt
 export GIT_SHA="$(git -C "$REPO_ROOT" rev-parse --short HEAD)"
 echo "==> GIT_SHA=$GIT_SHA"
 
-echo "==> restart backend (adjust service name if needed)"
-if systemctl is-active --quiet myhigh5-backend 2>/dev/null; then
-  sudo systemctl restart myhigh5-backend
-elif systemctl is-active --quiet mh5-backend 2>/dev/null; then
-  sudo systemctl restart mh5-backend
-else
-  echo "No systemd unit found. Restart uvicorn/docker manually."
-  echo "Example: uvicorn main:app --host 0.0.0.0 --port 8001"
-fi
+echo "==> restart backend"
+bash "$REPO_ROOT/scripts/restart_mh5_backend.sh"
 
 sleep 3
 echo "==> run season migrations"
@@ -58,5 +51,5 @@ for port in 8001 8000; do
   curl -sf "http://127.0.0.1:${port}/api/v1/build-info" && echo " (port ${port})" && break
 done || curl -sf "http://127.0.0.1:8001/health" || curl -sf "http://127.0.0.1:8000/health" || true
 echo
-echo "Expected build_id: rounds-list-perf-fix-20260615"
+echo "Expected build_id: nomination-roster-fix-20260621"
 curl -sf "https://myhigh5.com/api/v1/build-info" | python3 -m json.tool 2>/dev/null || echo "Public /build-info not ready yet"

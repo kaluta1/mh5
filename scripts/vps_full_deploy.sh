@@ -79,20 +79,9 @@ pip install -q -r requirements.txt
 export GIT_SHA
 
 echo "==> restart backend"
-RESTARTED=""
-for svc in myhigh5-backend mh5-backend myhigh5-api mh5-api; do
-  if systemctl list-unit-files "$svc.service" 2>/dev/null | grep -q "$svc.service"; then
-    systemctl restart "$svc"
-    echo "    restarted $svc"
-    RESTARTED="$svc"
-    break
-  fi
-done
-if [ -z "$RESTARTED" ]; then
-  echo "    WARNING: no systemd unit found — restart uvicorn/docker manually"
-fi
+bash "$REPO_ROOT/scripts/restart_mh5_backend.sh"
 
-sleep 4
+sleep 2
 
 echo "==> local build-info"
 OK_LOCAL=0
@@ -134,10 +123,12 @@ echo "    $PUBLIC"
 if echo "$PUBLIC" | grep -q "$EXPECTED_BUILD"; then
   echo "    OK build_id=$EXPECTED_BUILD"
 else
-  echo "    WARN expected build_id=$EXPECTED_BUILD — check nginx proxy to backend port"
+  echo "    FAIL expected build_id=$EXPECTED_BUILD but public API returned: $PUBLIC"
+  echo "    Run: bash scripts/restart_mh5_backend.sh && curl -s http://127.0.0.1:8001/api/v1/build-info"
+  exit 1
 fi
 
-echo "==> nomination verify (round 3 contest 7 — use localhost for heavy /rounds/ list)"
+echo "==> nomination verify (auto round — use localhost for heavy /rounds/ list)"
 cd "$REPO_ROOT"
 LOCAL_API=""
 for port in 8001 8000; do
@@ -150,10 +141,10 @@ if [ -n "$LOCAL_API" ]; then
   python3 backend/scripts/verify_nomination_vote_levels.py \
     --base-url https://myhigh5.com/api/v1 \
     --list-base-url "$LOCAL_API" \
-    --round-id 3 --contest-id 7 || true
+    --contest-id 7 || true
 else
   python3 backend/scripts/verify_nomination_vote_levels.py \
-    --base-url https://myhigh5.com/api/v1 --round-id 3 --contest-id 7 || true
+    --base-url https://myhigh5.com/api/v1 --contest-id 7 || true
 fi
 
 echo "==> done"

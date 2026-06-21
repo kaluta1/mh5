@@ -7,7 +7,7 @@ cd "$ROOT"
 
 echo "=== git ==="
 git log -1 --oneline 2>/dev/null || echo "not a git repo?"
-echo "expected: f779e57 or newer (nomination roster fix)"
+echo "expected: 4da2e62 or newer (rounds API restore + nomination-roster-fix-20260621)"
 
 echo ""
 echo "=== backend build-info (local) ==="

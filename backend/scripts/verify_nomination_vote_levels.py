@@ -60,10 +60,22 @@ def _fetch_build_id(base: str) -> str:
         return "unknown"
 
 
+def _pick_verify_round_id(list_base: str, explicit: int | None) -> int:
+    if explicit is not None:
+        return explicit
+    try:
+        rounds = get(list_base, "/rounds/?limit=24&contestLimit=1")
+        if isinstance(rounds, list) and rounds:
+            return max(int(r.get("id") or 0) for r in rounds)
+    except Exception:
+        pass
+    return 3
+
+
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--base-url", required=True)
-    p.add_argument("--round-id", type=int, required=True)
+    p.add_argument("--round-id", type=int, default=None, help="Round to verify (default: latest from /rounds/)")
     p.add_argument("--contest-id", type=int, default=7)
     p.add_argument(
         "--list-base-url",
@@ -74,7 +86,7 @@ def main() -> int:
     base = args.base_url.rstrip("/")
     list_base = (args.list_base_url or base).rstrip("/")
     cid = args.contest_id
-    rid = args.round_id
+    rid = _pick_verify_round_id(list_base, args.round_id)
     failures = 0
 
     # 0) Confirm backend build is deployed
@@ -84,7 +96,11 @@ def main() -> int:
         print(f"Backend build: {build_id}")
         if not any(
             token in str(build_id)
-            for token in ("nomination-migration-fix", "nomination-roster-fix")
+            for token in (
+                "nomination-migration-fix",
+                "nomination-roster-fix",
+                "rounds-list-perf-fix",
+            )
         ):
             print("[WARN] Unexpected backend build — redeploy if fixes are missing")
     except Exception as e:
