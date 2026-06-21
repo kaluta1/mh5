@@ -3,7 +3,7 @@
 # Run as root ON THE VPS: bash scripts/vps_full_deploy.sh
 set -euo pipefail
 
-EXPECTED_BUILD="rounds-list-perf-fix-20260615"
+EXPECTED_BUILD="nomination-roster-fix-20260621"
 
 find_repo() {
   if [ -f "$(pwd)/backend/main.py" ] && [ -d "$(pwd)/.git" ]; then

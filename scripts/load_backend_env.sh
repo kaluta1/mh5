@@ -16,7 +16,7 @@ _load_backend_env_impl() {
   # shellcheck disable=SC1090
   source "$env_file"
   set +a
-  if [ -f "${root}/backend/.env.local" ]; then
+  if [ -f "${root}/backend/.env.local" ] && [ "${ENVIRONMENT:-}" != "production" ]; then
     set -a
     # shellcheck disable=SC1090
     source "${root}/backend/.env.local"

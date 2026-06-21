@@ -12,9 +12,11 @@ BACKEND_DIR = Path(__file__).resolve().parents[2]
 
 
 def load_backend_env(*, override_local: bool = True) -> Path:
-    """Load backend/.env (+ optional .env.local). Safe to call multiple times."""
+    """Load backend/.env (+ optional .env.local on non-production). Safe to call multiple times."""
     load_dotenv(BACKEND_DIR / ".env", encoding="utf-8-sig")
-    if override_local:
+    env = (os.getenv("ENVIRONMENT") or "").strip().lower()
+    is_production = env == "production"
+    if override_local and not is_production:
         load_dotenv(BACKEND_DIR / ".env.local", override=True, encoding="utf-8-sig")
     return BACKEND_DIR
 
