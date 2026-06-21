@@ -21,11 +21,11 @@ for port in 8001 8000; do
 done
 
 echo ""
-echo "=== systemd ==="
-for svc in myhigh5-backend mh5-backend; do
+echo "=== systemd (prefer myhigh5-backend; legacy mh5-api must be stopped) ==="
+for svc in myhigh5-backend mh5-backend mh5-api myhigh5-api; do
   if systemctl is-active --quiet "$svc" 2>/dev/null; then
-    systemctl status "$svc" --no-pager -l | head -15
-    break
+    echo "--- $svc ---"
+    systemctl status "$svc" --no-pager -l | head -12
   fi
 done
 
