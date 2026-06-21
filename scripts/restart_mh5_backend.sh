@@ -13,6 +13,9 @@ expected_build_id() {
   python3 -c "import re; print(re.search(r'BACKEND_BUILD_ID\s*=\s*\"([^\"]+)\"', open('${BACKEND}/app/core/build_info.py').read()).group(1))"
 }
 
+echo "==> ensure backend/.env secrets"
+bash "$ROOT/scripts/ensure_backend_env_secrets.sh"
+
 echo "==> restart mh5 backend (port ${PORT})"
 EXPECTED="$(expected_build_id)"
 echo "    expected build_id: ${EXPECTED}"
