@@ -11,7 +11,11 @@ import React, {
 } from "react"
 import { type Language, LANGUAGE_CODES, languages } from "@/lib/locale-registry"
 import { LANGUAGE_PREFERENCE_KEY, setLanguagePreferenceClient } from "@/lib/language-cookie"
-import { loadTranslations } from "@/lib/translations-loader"
+import {
+  ENGLISH_TRANSLATIONS,
+  loadTranslations,
+  lookupTranslation,
+} from "@/lib/translations-loader"
 
 interface LanguageContextType {
   language: Language
@@ -26,16 +30,15 @@ const SUPPORTED_LANGUAGES = LANGUAGE_CODES as readonly Language[]
 type TranslationsMap = Record<string, any>
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
+  // English is bundled synchronously so labels never render blank on first paint.
   const [language, setLanguageState] = useState<Language>("en")
-  const [translationsBundle, setTranslationsBundle] = useState<TranslationsMap | null>(null)
-  const aiTranslationPending = false
+  const [translationsBundle, setTranslationsBundle] =
+    useState<TranslationsMap>(ENGLISH_TRANSLATIONS)
+  const [aiTranslationPending, setAiTranslationPending] = useState(false)
 
-  const setLanguage = useCallback(
-    (lang: Language) => {
-      setLanguageState(lang)
-    },
-    [],
-  )
+  const setLanguage = useCallback((lang: Language) => {
+    setLanguageState(lang)
+  }, [])
 
   /** Load saved language before paint so the persist effect does not clobber localStorage with a stray `en`. */
   useLayoutEffect(() => {
@@ -50,12 +53,21 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let active = true
+    setAiTranslationPending(language !== "en")
+
     loadTranslations(language)
       .then((bundle) => {
-        if (active) setTranslationsBundle(bundle)
+        if (active) {
+          setTranslationsBundle(bundle)
+          setAiTranslationPending(false)
+        }
       })
       .catch(() => {
-        if (active) setTranslationsBundle(null)
+        // Never clear labels — keep English (or the last good bundle).
+        if (active) {
+          setTranslationsBundle(ENGLISH_TRANSLATIONS)
+          setAiTranslationPending(false)
+        }
       })
 
     return () => {
@@ -79,30 +91,17 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const t = useCallback(
     (key: string): string => {
       try {
-        if (!translationsBundle) return ""
-        const keys = key.split(".")
-        let value: any = translationsBundle
-
-        for (const k of keys) {
-          if (value && typeof value === "object" && k in value) {
-            value = value[k]
-          } else {
-            return ""
-          }
-        }
-
-        if (typeof value === "string") {
-          return value
-        }
-        return ""
+        const primary = lookupTranslation(translationsBundle, key)
+        if (primary) return primary
+        return lookupTranslation(ENGLISH_TRANSLATIONS, key)
       } catch {
-        return ""
+        return lookupTranslation(ENGLISH_TRANSLATIONS, key)
       }
     },
-    [language, translationsBundle],
+    [translationsBundle],
   )
 
-  const value = React.useMemo(
+  const value = useMemo(
     () => ({ language, setLanguage, t, aiTranslationPending }),
     [language, setLanguage, t, aiTranslationPending],
   )

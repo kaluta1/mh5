@@ -12,6 +12,10 @@ export function Hero() {
   const { t } = useLanguage()
   const router = useRouter()
   const { isAuthenticated } = useAuth()
+  const ctaLabel = t('hero.cta') || 'Get Started Now'
+  const contestsLabel = t('navigation.contests') || 'Contests'
+  const supportLabel = t('hero.trust.support') || '24/7 Support'
+  const freeLabel = t('hero.trust.free') || 'Free to Join'
 
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-gradient-to-br from-white via-blue-50/30 to-purple-50/30 dark:from-gray-900 dark:via-gray-800/50 dark:to-gray-900 pt-20 md:pt-16">
@@ -59,7 +63,7 @@ export function Hero() {
                 onClick={() => router.push('/register')}
                 className="group text-base sm:text-lg px-8 sm:px-10 py-6 sm:py-7 bg-gradient-to-r from-myhigh5-primary to-myhigh5-secondary hover:from-myhigh5-primary-dark hover:to-myhigh5-secondary-dark text-white font-bold rounded-xl shadow-xl hover:shadow-2xl hover:shadow-myhigh5-primary/50 transition-all duration-300 hover:-translate-y-1 hover:scale-105"
               >
-                <span>{t('hero.cta')}</span>
+                <span>{ctaLabel}</span>
                 <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
               </Button>
               <Button
@@ -69,7 +73,7 @@ export function Hero() {
                 className="text-base sm:text-lg px-8 sm:px-10 py-6 sm:py-7 border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white font-semibold rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-all duration-300 hover:-translate-y-1 hover:border-myhigh5-primary dark:hover:border-myhigh5-primary"
               >
                 <Trophy className="mr-2 h-5 w-5" />
-                {t('navigation.contests')}
+                {contestsLabel}
               </Button>
             </div>
 
@@ -103,11 +107,11 @@ export function Hero() {
 
               <div className="flex items-center gap-3 bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm rounded-full px-4 py-2 border border-gray-200/50 dark:border-gray-700/50">
                 <CheckCircle2 className="w-5 h-5 text-green-500" />
-                <span className="text-sm sm:text-base text-gray-700 dark:text-gray-200 font-medium">{t('hero.trust.support')}</span>
+                <span className="text-sm sm:text-base text-gray-700 dark:text-gray-200 font-medium">{supportLabel}</span>
               </div>
               <div className="flex items-center gap-3 bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm rounded-full px-4 py-2 border border-gray-200/50 dark:border-gray-700/50">
                 <CheckCircle2 className="w-5 h-5 text-green-500" />
-                <span className="text-sm sm:text-base text-gray-700 dark:text-gray-200 font-medium">{t('hero.trust.free')}</span>
+                <span className="text-sm sm:text-base text-gray-700 dark:text-gray-200 font-medium">{freeLabel}</span>
               </div>
             </div>
           </div>

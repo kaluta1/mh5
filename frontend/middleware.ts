@@ -41,13 +41,17 @@ export function middleware(request: NextRequest) {
     }
 
     const response = NextResponse.redirect(redirectUrl)
+    const isHttps = request.nextUrl.protocol === 'https:'
     response.cookies.set(MAINTENANCE_COOKIE, bypassToken, {
       httpOnly: true,
       sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
+      secure: isHttps,
       path: '/',
       maxAge: 60 * 60 * 24 * 7,
     })
+    // Fresh devices opening the bypass link must not reuse stale HTML that points at old JS chunks.
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate')
+    response.headers.set('Pragma', 'no-cache')
     return response
   }
 
@@ -69,7 +73,13 @@ export function middleware(request: NextRequest) {
     response.headers.set('x-myhigh5-share-route', '1')
     return response
   }
-  return NextResponse.next()
+  const response = NextResponse.next()
+  // During maintenance preview, HTML must always match the latest Next build id/chunks.
+  if (maintenanceEnabled && hasBypassCookie && !isPublicAsset(pathname)) {
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate')
+    response.headers.set('Pragma', 'no-cache')
+  }
+  return response
 }
 
 export const config = {

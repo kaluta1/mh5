@@ -1,6 +1,26 @@
 import { Language, LANGUAGE_CODES } from './locale-registry'
 import enBase from './translations/en.json'
 
+/** Synchronous English bundle — always available on first paint (no async chunk). */
+export const ENGLISH_TRANSLATIONS = enBase as Record<string, any>
+
+export function lookupTranslation(
+  bundle: Record<string, any> | null | undefined,
+  key: string,
+): string {
+  if (!bundle || !key) return ''
+  const keys = key.split('.')
+  let value: unknown = bundle
+  for (const k of keys) {
+    if (value && typeof value === 'object' && k in (value as Record<string, unknown>)) {
+      value = (value as Record<string, unknown>)[k]
+    } else {
+      return ''
+    }
+  }
+  return typeof value === 'string' ? value : ''
+}
+
 function mergeLocaleWithEnglish(base: any, candidate: any): any {
   if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
     return base
@@ -26,7 +46,7 @@ export async function loadTranslations(lang: Language): Promise<Record<string, a
   }
 
   if (lang === 'en') {
-    return enBase as Record<string, any>
+    return ENGLISH_TRANSLATIONS
   }
 
   try {
@@ -35,7 +55,7 @@ export async function loadTranslations(lang: Language): Promise<Record<string, a
     return mergeLocaleWithEnglish(enBase, locale)
   } catch (error) {
     console.warn(`[translations] Failed to load ${lang}, falling back to English`, error)
-    return enBase as Record<string, any>
+    return ENGLISH_TRANSLATIONS
   }
 }
 

@@ -141,6 +141,16 @@ const nextConfig = {
           },
         ],
       },
+      {
+        // Prevent stale HTML after deploy (bypass-link preview on fresh devices).
+        source: '/((?!_next/static|_next/image|api/).*)',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'no-store, must-revalidate',
+          },
+        ],
+      },
     ];
   },
   async rewrites() {
