@@ -11,6 +11,7 @@ import React, {
 } from "react"
 import { type Language, LANGUAGE_CODES, languages } from "@/lib/locale-registry"
 import { LANGUAGE_PREFERENCE_KEY, setLanguagePreferenceClient } from "@/lib/language-cookie"
+import { loadTranslations } from "@/lib/translations-loader"
 
 interface LanguageContextType {
   language: Language
@@ -49,9 +50,9 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let active = true
-    import("@/lib/translations")
-      .then((mod) => {
-        if (active) setTranslationsBundle(mod.translations)
+    loadTranslations(language)
+      .then((bundle) => {
+        if (active) setTranslationsBundle(bundle)
       })
       .catch(() => {
         if (active) setTranslationsBundle(null)
@@ -60,7 +61,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     return () => {
       active = false
     }
-  }, [])
+  }, [language])
 
   useEffect(() => {
     localStorage.setItem(LANGUAGE_PREFERENCE_KEY, language)
@@ -80,25 +81,13 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
       try {
         if (!translationsBundle) return ""
         const keys = key.split(".")
-        let value: any = translationsBundle[language]
-
-        if (!value || language === "en") {
-          value = translationsBundle.en
-        }
+        let value: any = translationsBundle
 
         for (const k of keys) {
           if (value && typeof value === "object" && k in value) {
             value = value[k]
           } else {
-            let fallback: any = translationsBundle.en
-            for (const fk of keys) {
-              if (fallback && typeof fallback === "object" && fk in fallback) {
-                fallback = fallback[fk]
-              } else {
-                return ""
-              }
-            }
-            return typeof fallback === "string" ? fallback : ""
+            return ""
           }
         }
 
