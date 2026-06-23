@@ -100,6 +100,7 @@ def main() -> int:
                 "nomination-migration-fix",
                 "nomination-roster-fix",
                 "nomination-category-scope",
+                "march-cohort-align",
                 "rounds-list-perf-fix",
             )
         ):

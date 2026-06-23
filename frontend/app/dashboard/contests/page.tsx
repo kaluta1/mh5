@@ -377,6 +377,21 @@ function ContestsPageContent() {
     }
   }, [showVoteGeographyLevels, nominationMigrationLevel])
 
+  // Vote tab: always pick a geography stage (default Country) so cohort month + level reach the API.
+  useEffect(() => {
+    if (activeDisplayTab?.kind !== 'vote') return
+    if (nominationMigrationLevel === 'all') {
+      setNominationMigrationLevel('country')
+    }
+  }, [activeDisplayTab?.kind, nominationMigrationLevel])
+
+  // Submit tab: geography chips hidden — scope is current month nominations only.
+  useEffect(() => {
+    if (activeDisplayTab?.kind === 'nominate' && nominationMigrationLevel !== 'all') {
+      setNominationMigrationLevel('all')
+    }
+  }, [activeDisplayTab?.kind, nominationMigrationLevel])
+
   useEffect(() => {
     if (showVoteGeographyLevels && nominationMigrationLevel === 'city') {
       setNominationMigrationLevel('all')

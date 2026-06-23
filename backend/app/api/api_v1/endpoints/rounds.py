@@ -356,6 +356,7 @@ def _lightweight_round_data(
                         ContestSeasonLink.contest_id == contest.id,
                         ContestSeasonLink.is_active == True,
                         ContestSeason.level.in_(pooled_levels),
+                        ContestSeason.round_id == round_obj.id,
                         ContestSeason.is_deleted == False,
                     )
                     .first()

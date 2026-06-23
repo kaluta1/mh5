@@ -362,35 +362,8 @@ def _season_pair_for_requested_ui_level(
         if row:
             return row[0], row[1]
 
-    # Fallback: for pooled phases (regional/continental/global) the season may have
-    # been created with the source round_id. Search for the nearest season at this
-    # level across all rounds so promoted rosters are still found when the UI is on
-    # a later calendar round.
-    if ui in ("regional", "region", "continent", "continental", "global"):
-        for active_only in (True, False):
-            q = (
-                db.query(ContestSeasonLink, ContestSeason)
-                .join(ContestSeason, ContestSeason.id == ContestSeasonLink.season_id)
-                .filter(
-                    ContestSeasonLink.contest_id == contest_id,
-                    ContestSeason.level == target_enum,
-                    ContestSeason.is_deleted == False,
-                )
-                .order_by(
-                    case(
-                        (ContestSeason.round_id <= target_round_id, 0),
-                        else_=1,
-                    ),
-                    ContestSeason.round_id.desc(),
-                    ContestSeason.id.desc(),
-                )
-            )
-            if active_only:
-                q = q.filter(ContestSeasonLink.is_active == True)
-            row = q.first()
-            if row:
-                return row[0], row[1]
-
+    # Pooled phases are cohort-scoped: March continental ≠ June continental.
+    # Do not reuse an older round's season when this calendar round has none yet.
     return None, None
 
 

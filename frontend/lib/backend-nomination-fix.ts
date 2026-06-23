@@ -17,7 +17,11 @@ export async function backendHasNominationRosterFix(): Promise<boolean> {
         return false
       }
       const data = (await res.json()) as { build_id?: string }
-      cachedHasFix = String(data?.build_id ?? '').includes('nomination-roster-fix')
+      const bid = String(data?.build_id ?? '')
+      cachedHasFix =
+        bid.includes('nomination-roster-fix') ||
+        bid.includes('nomination-category-scope') ||
+        bid.includes('march-cohort-align')
       return cachedHasFix
     } catch {
       cachedHasFix = false
