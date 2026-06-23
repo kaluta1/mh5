@@ -5,12 +5,8 @@ import { Suspense } from "react"
 import dynamicImport from "next/dynamic"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Header } from "@/components/layout/header"
+import { Hero } from "@/components/sections/hero"
 import type { User } from "@/types/user"
-
-// Lazy load Hero component for faster initial page load (it's heavy with animations)
-const Hero = dynamicImport(() => import("@/components/sections/hero").then(mod => ({ default: mod.Hero })), {
-  loading: () => <div className="min-h-screen animate-pulse bg-gradient-to-br from-white via-blue-50/30 to-purple-50/30 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900" />
-})
 
 // Lazy load components below the fold for faster initial page load
 const Features = dynamicImport(() => import("@/components/sections/features").then(mod => ({ default: mod.Features })), {
