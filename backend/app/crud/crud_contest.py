@@ -1812,6 +1812,26 @@ class CRUDContest:
         current_user = None
         if current_user_id:
             current_user = db.query(User).filter(User.id == current_user_id).first()
+
+        if round_id and entry_type == "nomination" and requested_ui_level:
+            from app.models.round import Round as RoundModel
+            from app.core.nomination_calendar import nomination_vote_list_blocked
+
+            round_row = db.query(RoundModel).filter(RoundModel.id == round_id).first()
+            if nomination_vote_list_blocked(round_row, entry_type, requested_ui_level):
+                empty = self.enrich_contest_with_stats(
+                    db,
+                    contest_obj,
+                    current_user=current_user,
+                    filter_country=filter_country,
+                    filter_region=filter_region,
+                    filter_continent=filter_continent,
+                    entry_type=entry_type,
+                    round_id=round_id,
+                    requested_ui_level=requested_ui_level,
+                )
+                empty["contestants"] = []
+                return empty
         
         # Enrichir le contest avec les stats
         contest_data = self.enrich_contest_with_stats(

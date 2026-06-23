@@ -3,7 +3,7 @@
 # Run as root ON THE VPS: bash scripts/vps_full_deploy.sh
 set -euo pipefail
 
-EXPECTED_BUILD="march-cohort-calendar-20260623"
+EXPECTED_BUILD="march-cohort-calendar-20260623b"
 
 find_repo() {
   if [ -f "$(pwd)/backend/main.py" ] && [ -d "$(pwd)/.git" ]; then
@@ -82,6 +82,9 @@ echo "==> restart backend"
 bash "$REPO_ROOT/scripts/restart_mh5_backend.sh"
 
 sleep 2
+
+echo "==> rebuild + restart frontend"
+bash "$REPO_ROOT/scripts/restart_mh5_frontend.sh" || echo "    WARN: frontend restart failed (check pm2 list)"
 
 echo "==> local build-info"
 OK_LOCAL=0

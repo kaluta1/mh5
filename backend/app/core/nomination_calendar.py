@@ -32,3 +32,21 @@ def is_official_nomination_cohort_round(round_obj) -> bool:
     if name_start is not None:
         return name_start >= OFFICIAL_NOMINATION_START
     return True
+
+
+def nomination_vote_list_blocked(
+    round_obj,
+    contest_mode: str | None,
+    wanted_level: str | None,
+) -> bool:
+    """
+    True when a nomination Vote list/detail request must return an empty roster.
+
+    Blocks pre-March placeholder rounds (Jan/Feb 2026) even if legacy seasons exist.
+    """
+    if (contest_mode or "").strip().lower() != "nomination":
+        return False
+    level = (wanted_level or "").strip().lower()
+    if level not in {"country", "regional", "continental", "global", "continent", "region"}:
+        return False
+    return not is_official_nomination_cohort_round(round_obj)

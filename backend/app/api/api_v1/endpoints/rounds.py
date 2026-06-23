@@ -289,7 +289,14 @@ def _lightweight_round_data(
     Fast path for the round selector/page-open request.
     It avoids per-contest stat enrichment and uses denormalized contest counts.
     """
+    from app.core.nomination_calendar import nomination_vote_list_blocked
+
     r_data = _round_response_base(round_obj)
+    if nomination_vote_list_blocked(round_obj, contest_mode, contest_level):
+        r_data["contests"] = []
+        r_data["contests_count"] = 0
+        r_data["is_voting_open"] = _effective_is_voting_open(r_data, round_obj)
+        return r_data
     try:
         is_completed = crud.round.is_round_completed(round_obj)
     except Exception as e:
