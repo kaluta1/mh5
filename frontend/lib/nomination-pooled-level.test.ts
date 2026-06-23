@@ -20,4 +20,9 @@ describe('nomination-pooled-level', () => {
   it('returns zero for empty rows', () => {
     expect(pooledNominationRosterCount([], 'regional')).toBe(0)
   })
+
+  it('accepts rows when season level is missing (legacy API rows)', () => {
+    const rows = [{ season: {} }, { season: {} }]
+    expect(rosterMatchesRequestedPooledLevel(rows, 'continental')).toBe(true)
+  })
 })

@@ -697,9 +697,17 @@ export default function ContestDetailPage() {
     return <ContestDetailSkeleton />
   }
 
-  // Allow unauthenticated users to view contest details (they just can't participate)
   if (!contest) {
-    return null
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-4">
+        <p className="text-gray-600 dark:text-gray-300 text-center">
+          {t('dashboard.contests.failed_to_load') || 'Could not load this contest. Please try again.'}
+        </p>
+        <Button type="button" variant="outline" onClick={() => router.back()}>
+          {t('common.back') || 'Back'}
+        </Button>
+      </div>
+    )
   }
 
   // Keep header count aligned with what the current page actually displays.

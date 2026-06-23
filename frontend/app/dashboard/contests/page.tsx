@@ -24,6 +24,7 @@ import {
   computeDisplayRounds,
   roundTabKey,
   voteLevelCohortHint,
+  type RoundTabKind,
   type VoteGeographyLevel,
 } from '@/lib/contest-round-tabs'
 import { normalizeContestMode } from '@/lib/contest-mode'
@@ -122,6 +123,40 @@ function geoFiltersForVoteFetch(
     }
   }
   return {}
+}
+
+/** List fetch geo: Submit month = this country + round only (never continent/region from URL). */
+function listGeoParamsForFetch(opts: {
+  tabKind: RoundTabKind | undefined
+  activeNominationLevel: string | undefined
+  nominationMigrationLevel: NominationMigrationLevel
+  filterCountry: string
+  filterRegion: string
+  filterContinent: string
+}): { filterCountry?: string; filterRegion?: string; filterContinent?: string } {
+  const voteGeo =
+    opts.activeNominationLevel && opts.tabKind === 'vote'
+      ? geoFiltersForVoteFetch(
+          opts.nominationMigrationLevel,
+          opts.filterCountry,
+          opts.filterRegion,
+          opts.filterContinent,
+        )
+      : null
+  if (voteGeo) return voteGeo
+
+  if (opts.tabKind === 'nominate') {
+    const country =
+      opts.filterCountry && opts.filterCountry !== 'all' ? opts.filterCountry : undefined
+    return { filterCountry: country }
+  }
+
+  return {
+    filterCountry:
+      opts.filterCountry && opts.filterCountry !== 'all' ? opts.filterCountry : undefined,
+    filterContinent:
+      opts.filterContinent && opts.filterContinent !== 'all' ? opts.filterContinent : undefined,
+  }
 }
 
 const POOLED_NOMINATION_VOTE_LEVELS = new Set(['regional', 'continental', 'global'])
@@ -254,7 +289,6 @@ function ContestsPageContent() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [totalContests, setTotalContests] = useState(0)
   const loaderRef = useRef<HTMLDivElement>(null)
-  const lastDisplayedContestsRef = useRef<any[]>([])
   const voteNowRoundId = useMemo(() => {
     const voteRound = rounds.find((r: any) => isRoundVotingLive(r, rounds))
     return voteRound ? String(voteRound.id) : null
@@ -581,7 +615,6 @@ function ContestsPageContent() {
     setNominationMigrationLevel('all')
     setContestsData(null)
     setAllContests([])
-    lastDisplayedContestsRef.current = []
     clearContestsListCache()
   }
 
@@ -594,7 +627,6 @@ function ContestsPageContent() {
   useEffect(() => {
     setContestsData(null)
     setAllContests([])
-    lastDisplayedContestsRef.current = []
     clearContestsListCache()
   }, [effectiveRoundIdForFetch, categoryTab, activeDisplayTab?.kind, nominationMigrationLevel])
 
@@ -638,21 +670,17 @@ function ContestsPageContent() {
               filterContinent,
             )
           : null
-      const activeCountry = voteGeo
-        ? voteGeo.filterCountry
-        : filterCountry && filterCountry !== 'all'
-          ? filterCountry
-          : undefined
-      const activeRegion = voteGeo
-        ? voteGeo.filterRegion
-        : filterRegion && nominationMigrationLevel === 'regional'
-          ? filterRegion
-          : undefined
-      const activeContinent = voteGeo
-        ? voteGeo.filterContinent
-        : filterContinent && filterContinent !== 'all'
-          ? filterContinent
-          : undefined
+      const listGeo = listGeoParamsForFetch({
+        tabKind: activeDisplayTab?.kind,
+        activeNominationLevel,
+        nominationMigrationLevel,
+        filterCountry,
+        filterRegion,
+        filterContinent,
+      })
+      const activeCountry = voteGeo?.filterCountry ?? listGeo.filterCountry
+      const activeRegion = voteGeo?.filterRegion ?? listGeo.filterRegion
+      const activeContinent = voteGeo?.filterContinent ?? listGeo.filterContinent
 
       // Check cache first
       const authKey = userIdRef.current || 'anon'
@@ -822,21 +850,17 @@ function ContestsPageContent() {
             filterContinent,
           )
         : null
-    const activeCountry = voteGeo
-      ? voteGeo.filterCountry
-      : filterCountry && filterCountry !== 'all'
-        ? filterCountry
-        : undefined
-    const activeRegion = voteGeo
-      ? voteGeo.filterRegion
-      : filterRegion && nominationMigrationLevel === 'regional'
-        ? filterRegion
-        : undefined
-    const activeContinent = voteGeo
-      ? voteGeo.filterContinent
-      : filterContinent && filterContinent !== 'all'
-        ? filterContinent
-        : undefined
+    const listGeo = listGeoParamsForFetch({
+      tabKind: activeDisplayTab?.kind,
+      activeNominationLevel,
+      nominationMigrationLevel,
+      filterCountry,
+      filterRegion,
+      filterContinent,
+    })
+    const activeCountry = voteGeo?.filterCountry ?? listGeo.filterCountry
+    const activeRegion = voteGeo?.filterRegion ?? listGeo.filterRegion
+    const activeContinent = voteGeo?.filterContinent ?? listGeo.filterContinent
 
     try {
       const data = await ApiService.getRounds({
@@ -933,6 +957,10 @@ function ContestsPageContent() {
       const region = filterRegion || regionalPoolForCountry(filterCountry) || regionalPoolForCountry(user?.country)
       if (level === 'regional') {
         if (region) params.set('region', region)
+      } else if (level === 'continental' || level === 'global') {
+        if (filterContinent && filterContinent !== 'all') {
+          params.set('continent', filterContinent)
+        }
       } else if (shouldPassCountryNavParam(contestStatus)) {
         const countryValue =
           categoryTab === 'nomination'
@@ -941,9 +969,6 @@ function ContestsPageContent() {
         if (countryValue && countryValue !== 'all') params.set('country', countryValue)
       }
 
-      if (filterContinent && filterContinent !== 'all') {
-        params.set('continent', filterContinent)
-      }
       params.set('entryType', rowMode)
       return params
     },
@@ -952,7 +977,7 @@ function ContestsPageContent() {
 
   // Raw Contests List (Before filtering by type) - Now uses allContests for infinite scroll
   const rawContests = useMemo(() => {
-    if (!allContests || allContests.length === 0) return []
+    if (contestsLoading || !allContests || allContests.length === 0) return []
 
     return allContests.map((c: any) => {
       // Stats are now directly on the contest object in the new schema
@@ -996,7 +1021,7 @@ function ContestsPageContent() {
     })
 
     // Removed debug logs for performance
-  }, [allContests, contestsData])
+  }, [allContests, contestsData, contestsLoading])
 
   // Filter and Sort Contests for Display
   const displayedContests = useMemo(() => {
@@ -1066,12 +1091,7 @@ function ContestsPageContent() {
     return filtered
   }, [rawContests, committedSearch, sortBy, categoryTab, filterLevel, nominationMigrationLevel, activeDisplayTab?.kind])
 
-  if (displayedContests.length > 0) {
-    lastDisplayedContestsRef.current = displayedContests
-  }
-  const visibleContests = displayedContests.length > 0
-    ? displayedContests
-    : (contestsLoading ? lastDisplayedContestsRef.current : displayedContests)
+  const visibleContests = displayedContests
 
   // Infinite scroll: IO alone is unreliable on mobile (late ref, iOS). Add scroll/resize + rootMargin.
   useEffect(() => {
@@ -1434,7 +1454,7 @@ function ContestsPageContent() {
         )}
 
         {/* Contests Grid */}
-        {contestsLoading && !contestsData ? (
+        {contestsLoading || (visibleContests.length === 0 && !initialLoadComplete) ? (
           <ContestsSkeleton />
         ) : visibleContests.length > 0 ? (
           <>

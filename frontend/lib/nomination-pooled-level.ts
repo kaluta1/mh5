@@ -6,6 +6,7 @@ export function rosterMatchesRequestedPooledLevel(
   if (!rows.length) return true
   const req = requestedLevel.toLowerCase()
   const seasonLevel = String(rows[0]?.season?.level || '').toLowerCase()
+  if (!seasonLevel) return true
   if (req === 'regional' || req === 'region') {
     return seasonLevel === 'regional' || seasonLevel === 'region'
   }
