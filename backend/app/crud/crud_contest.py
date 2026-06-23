@@ -1091,6 +1091,8 @@ class CRUDContest:
             return func.count(Contestant.id.distinct())
 
         if count_by_active_season_members:
+            from app.services.contest_category_integrity import pooled_roster_contest_scope_clause
+
             active_member_ids = (
                 db.query(ContestantSeason.contestant_id)
                 .filter(
@@ -1105,6 +1107,7 @@ class CRUDContest:
                     Contestant.is_deleted == False,
                     _entries_entry_type_clause,
                     Contestant.id.in_(active_member_ids),
+                    pooled_roster_contest_scope_clause(db, contest),
                 )
         elif conditions:
             base_entries_query = db.query(_entries_count_agg())\
@@ -1125,6 +1128,8 @@ class CRUDContest:
 
         # Compter le nombre de participants selon la saison/round et la localisation
         if count_by_active_season_members:
+            from app.services.contest_category_integrity import pooled_roster_contest_scope_clause
+
             active_member_ids = (
                 db.query(ContestantSeason.contestant_id)
                 .filter(
@@ -1139,6 +1144,7 @@ class CRUDContest:
                     Contestant.is_deleted == False,
                     _entries_entry_type_clause,
                     Contestant.id.in_(active_member_ids),
+                    pooled_roster_contest_scope_clause(db, contest),
                 )
         elif conditions:
             entries_query = db.query(_entries_count_agg())\
@@ -1780,7 +1786,10 @@ class CRUDContest:
             entry_type=entry_type,
             round_id=round_id,
             requested_ui_level=requested_ui_level,
+            count_only=True,
         )
+        if data and data.get("roster_count") is not None:
+            return int(data["roster_count"])
         return len((data or {}).get("contestants") or [])
 
     def get_contest_with_enriched_contestants(
@@ -1790,6 +1799,7 @@ class CRUDContest:
         entry_type: Optional[str] = None,
         round_id: Optional[int] = None,
         requested_ui_level: Optional[str] = None,
+        count_only: bool = False,
     ) -> Dict[str, Any]:
         """
         Récupère un contest avec tous ses contestants enrichis de toutes les informations :
@@ -2100,14 +2110,17 @@ class CRUDContest:
                 ContestantSeason.is_active == True,
             )
             contestants_query = contestants_query.filter(Contestant.id.in_(active_season_member_ids))
-            # NOTE: We do NOT filter by Contestant.season_id == contest_id here.
-            # Promoted contestants retain their original season_id from the source
-            # contest. The ContestantSeason membership already scopes to the exact
-            # season, so duplicate same-category rows from other contests are
-            # naturally excluded.
+            # Shared pooled seasons can include members from every category; keep only
+            # rows whose legacy season_id belongs to this contest's category bucket.
+            from app.services.contest_category_integrity import pooled_roster_contest_scope_clause
+
+            contestants_query = contestants_query.filter(
+                pooled_roster_contest_scope_clause(db, contest_obj)
+            )
             logger.info(
                 f"[get_contest_with_enriched_contestants] Scoping visible roster to active "
-                f"ContestantSeason links for {season_level} season_id={season.id}"
+                f"ContestantSeason links for {season_level} season_id={season.id} "
+                f"(category-scoped via contest_id={contest_id})"
             )
             if (
                 contest_mode == "nomination"
@@ -2335,6 +2348,24 @@ class CRUDContest:
             # Log query details for debugging
             logger.info(f"[get_contest_with_enriched_contestants] Querying contestants for contest_id={contest_id}, filter_season_id={filter_season_id}")
             logger.info(f"[get_contest_with_enriched_contestants] Filter: season_id={filter_season_id}")
+            if count_only:
+                from sqlalchemy import func as sa_func
+
+                if contest_mode == "nomination":
+                    roster_count = (
+                        contestants_query.with_entities(
+                            sa_func.count(sa_func.distinct(Contestant.user_id))
+                        ).scalar()
+                        or 0
+                    )
+                else:
+                    roster_count = contestants_query.count()
+                contest_data["contestants"] = []
+                contest_data["roster_count"] = int(roster_count)
+                logger.info(
+                    f"[get_contest_with_enriched_contestants] count_only roster_count={roster_count}"
+                )
+                return contest_data
             contestants = contestants_query.all()
             logger.info(f"[get_contest_with_enriched_contestants] Found {len(contestants)} contestants")
             # DEBUG: dump countries of returned contestants

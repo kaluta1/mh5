@@ -313,6 +313,24 @@ def contest_ids_for_category(
     return [row[0] for row in q.all()]
 
 
+def pooled_roster_contest_scope_clause(db, contest: Any):
+    """
+    Pooled regional/continental/global seasons may link many contests to one
+    ContestSeason row. Scope visible roster/count rows to this contest's category
+    bucket via Contestant.season_id (legacy contest id on the row).
+    """
+    from app.models.contests import Contestant
+
+    ids = contest_ids_for_category(
+        db,
+        category_id=getattr(contest, "category_id", None),
+        contest_type=getattr(contest, "contest_type", "") or "",
+    )
+    if not ids:
+        return Contestant.season_id == int(contest.id)
+    return Contestant.season_id.in_([int(i) for i in ids])
+
+
 def nominator_has_nomination_in_category_round(
     db,
     *,

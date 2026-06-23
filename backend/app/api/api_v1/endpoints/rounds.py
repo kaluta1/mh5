@@ -361,15 +361,33 @@ def _lightweight_round_data(
                     .first()
                 )
                 if active_pool_season is not None:
-                    member_count = (
-                        db.query(func.count(ContestantSeason.contestant_id))
+                    from app.services.contest_category_integrity import (
+                        pooled_roster_contest_scope_clause,
+                    )
+
+                    member_q = (
+                        db.query(
+                            func.count(func.distinct(Contestant.id))
+                            if contest_mode_value == "nomination"
+                            else func.count(ContestantSeason.contestant_id)
+                        )
+                        .select_from(ContestantSeason)
+                        .join(Contestant, Contestant.id == ContestantSeason.contestant_id)
                         .filter(
                             ContestantSeason.season_id == active_pool_season.id,
                             ContestantSeason.is_active == True,
+                            Contestant.is_deleted == False,
+                            pooled_roster_contest_scope_clause(db, contest),
                         )
-                        .scalar()
-                        or 0
                     )
+                    if contest_mode_value == "nomination":
+                        member_q = member_q.filter(
+                            (Contestant.entry_type == "nomination")
+                            | (Contestant.entry_type.is_(None))
+                        )
+                    else:
+                        member_q = member_q.filter(Contestant.entry_type == "participation")
+                    member_count = member_q.scalar() or 0
                     return int(member_count)
             except Exception as e:
                 db.rollback()
@@ -411,9 +429,7 @@ def _lightweight_round_data(
                 )
 
             participant_count = _round_entry_count(contest, contest_mode_value)
-            if contest_mode_value == "nomination" and crud.contest.nomination_card_uses_exact_roster(
-                filter_country, filter_region, filter_continent, contest_level
-            ):
+            if contest_mode_value == "nomination":
                 try:
                     participant_count = crud.contest.count_nomination_roster_for_card(
                         db,

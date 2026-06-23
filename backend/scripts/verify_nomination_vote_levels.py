@@ -99,6 +99,7 @@ def main() -> int:
             for token in (
                 "nomination-migration-fix",
                 "nomination-roster-fix",
+                "nomination-category-scope",
                 "rounds-list-perf-fix",
             )
         ):
