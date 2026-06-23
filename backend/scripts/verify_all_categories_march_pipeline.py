@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Verify March-start nomination pipeline for every category (list vs detail).
 
-March cohort (round 3): continental vote stage for May live vote round.
-April cohort (round 4): regional.
-May cohort (round 21): country vote (live).
+March cohort (round 3): continental vote when calendar anchor is June 2026.
+April cohort (round 4): regional vote in June.
+May cohort (round 21): country vote in June.
 June cohort (round 26): submit — expect zero nominations when empty.
 
 Usage:
@@ -35,9 +35,10 @@ def main() -> int:
 
     stages = [
         ("submit_june", 26, None, {"filterCountry": args.filter_country}),
-        ("vote_country_may", 21, "country", {"filterCountry": args.filter_country}),
-        ("vote_regional_april", 4, "regional", {"filterRegion": args.filter_region}),
-        ("vote_continental_march", 3, "continental", {"filterContinent": args.filter_continent}),
+        # June vote anchor V=June: Country=May, Regional=April, Continental=March
+        ("vote_country_june", 21, "country", {"filterCountry": args.filter_country}),
+        ("vote_regional_june", 4, "regional", {"filterRegion": args.filter_region}),
+        ("vote_continental_june", 3, "continental", {"filterContinent": args.filter_continent}),
     ]
 
     failures = 0

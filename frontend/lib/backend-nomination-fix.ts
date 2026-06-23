@@ -21,7 +21,8 @@ export async function backendHasNominationRosterFix(): Promise<boolean> {
       cachedHasFix =
         bid.includes('nomination-roster-fix') ||
         bid.includes('nomination-category-scope') ||
-        bid.includes('march-cohort-align')
+        bid.includes('march-cohort-align') ||
+        bid.includes('march-cohort-calendar')
       return cachedHasFix
     } catch {
       cachedHasFix = false

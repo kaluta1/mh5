@@ -160,6 +160,11 @@ def _contest_eligible_at_ui_level(
     if mode != "nomination":
         return wl == "city"
 
+    from app.core.nomination_calendar import is_official_nomination_cohort_round
+
+    if not is_official_nomination_cohort_round(round_obj):
+        return False
+
     from app.models.contests import ContestSeason, ContestSeasonLink
     from app.services.season_migration import SeasonMigrationService
 

@@ -326,15 +326,20 @@ def _season_pair_for_requested_ui_level(
     if not target_enum:
         return None, None
 
+    from app.core.nomination_calendar import is_official_nomination_cohort_round
+    from app.models.round import Round
+
+    round_row = db.query(Round).filter(Round.id == target_round_id).first()
+    if round_row is not None and not is_official_nomination_cohort_round(round_row):
+        return None, None
+
     round_obj = (
         db.query(ContestSeason)
         .filter(ContestSeason.round_id == target_round_id)
         .first()
     )
-    round_row = round_obj.round if round_obj else None
+    round_row = round_obj.round if round_obj else round_row
     if round_row is None:
-        from app.models.round import Round
-
         round_row = db.query(Round).filter(Round.id == target_round_id).first()
 
     # Explicit UI geography chip: use migrated season rows when they exist, even if

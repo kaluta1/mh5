@@ -15,18 +15,26 @@ export function roundTabKey(kind: RoundTabKind, roundId: number): string {
   return `${kind}:${roundId}`
 }
 
-/** Geography chip under the Vote pill → which calendar cohort (submission month). */
+/** Geography chip under the Vote pill → which nomination cohort month (M), not the vote month V. */
 export type VoteGeographyLevel = "country" | "regional" | "continental" | "global"
 
+/** Official nomination launch — cohorts before this month are ignored in Vote UI. */
+export const OFFICIAL_NOMINATION_START = new Date(2026, 2, 1) // 1 March 2026
+
 /**
- * Months to subtract from the live vote round's submission month.
- * May vote + Country → May cohort; Regional → April; Continental → March; Global → Feb.
+ * Vote month V shows cohort M where M + phaseOffset = V (backend nomination calendar).
+ *   Country vote for cohort M opens M+1  → offset 1
+ *   Regional for M opens M+2             → offset 2
+ *   Continental for M opens M+3        → offset 3
+ *   Global for M opens M+4               → offset 4
+ *
+ * Example: Vote anchor June 2026 → Country=May, Regional=April, Continental=March; Global from July.
  */
 const VOTE_LEVEL_SUBMISSION_MONTH_OFFSET: Record<VoteGeographyLevel, number> = {
-  country: 0,
-  regional: 1,
-  continental: 2,
-  global: 3,
+  country: 1,
+  regional: 2,
+  continental: 3,
+  global: 4,
 }
 
 function addCalendarMonths(d: Date, deltaMonths: number): Date {
@@ -71,9 +79,75 @@ function roundMatchesMonthYear(round: Round, target: Date): boolean {
   return anchor.getFullYear() === target.getFullYear() && anchor.getMonth() === target.getMonth()
 }
 
+function monthStart(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), 1)
+}
+
+/**
+ * Vote geography anchor V = **current calendar month** when a round exists (June in June 2026).
+ * Cohort chips then resolve correctly:
+ *   Country → May, Regional → April, Continental → March, Global hidden until July.
+ * Falls back to the live DB vote round only when no current-month round exists.
+ */
+export function resolveVoteCalendarAnchorRound(
+  rounds: Round[],
+  now: Date = new Date(),
+): Round | undefined {
+  const currentMonth = monthStart(now)
+  const matches = rounds.filter((r) => {
+    const anchor = cohortAnchorDate(r)
+    return anchor && monthStart(anchor).getTime() === currentMonth.getTime()
+  })
+  if (matches.length) {
+    return [...matches].sort((a, b) => Number(b.id) - Number(a.id))[0]
+  }
+  return rounds.find((r) => isRoundVotingLive(r, rounds))
+}
+
+/** @deprecated alias — use resolveVoteCalendarAnchorRound for cohort math */
+export function voteCalendarAnchorRound(
+  rounds: Round[],
+  now?: Date,
+): Round | undefined {
+  return resolveVoteCalendarAnchorRound(rounds, now)
+}
+
+/** Nomination cohort month (M) for a vote-round month V and geography chip. */
+export function cohortMonthForVoteGeographyLevel(
+  voteRound: Round | undefined,
+  level: VoteGeographyLevel,
+): Date | null {
+  if (!voteRound) return null
+  const anchor = cohortAnchorDate(voteRound)
+  if (!anchor) return null
+  const offset = VOTE_LEVEL_SUBMISSION_MONTH_OFFSET[level]
+  return addCalendarMonths(anchor, offset)
+}
+
+/**
+ * True when this Vote chip should appear: cohort on/after March 2026 and a matching round exists.
+ * Global for the March cohort first opens in July (M+4) — hidden in May/June.
+ */
+export function isVoteGeographyLevelAvailable(
+  voteRound: Round | undefined,
+  level: VoteGeographyLevel,
+  rounds: Round[],
+): boolean {
+  const cohortMonth = cohortMonthForVoteGeographyLevel(voteRound, level)
+  if (!cohortMonth) return false
+  if (cohortMonth < OFFICIAL_NOMINATION_START) return false
+  const hasRound = rounds.some((r) => roundMatchesMonthYear(r, cohortMonth))
+  if (!hasRound) return false
+  const voteMonth = cohortAnchorDate(voteRound!)
+  if (!voteMonth) return false
+  // Country vote for M opens in M+1 = vote month when offset is 1, etc.
+  const phaseOpenMonth = addCalendarMonths(cohortMonth, VOTE_LEVEL_SUBMISSION_MONTH_OFFSET[level])
+  return monthStart(voteMonth).getTime() >= monthStart(phaseOpenMonth).getTime()
+}
+
 /**
  * Under **Vote**, each level chip is a different nomination cohort month, not the same round id.
- * Vote pill stays on the live vote round (e.g. May); Country uses that month, Regional uses M-1, etc.
+ * Vote anchor is the current calendar month (e.g. June); Country uses May cohort, Regional April, …
  */
 export function cohortRoundForVoteGeographyLevel(
   voteRound: Round | undefined,
@@ -82,14 +156,11 @@ export function cohortRoundForVoteGeographyLevel(
 ): Round | undefined {
   if (!voteRound || !rounds.length) return voteRound
   if (!level || level === "all") return voteRound
+  if (!isVoteGeographyLevelAvailable(voteRound, level, rounds)) return undefined
 
-  const offset = VOTE_LEVEL_SUBMISSION_MONTH_OFFSET[level]
-  const anchor = cohortAnchorDate(voteRound)
-  if (!anchor) return voteRound
-
-  const targetMonth = addCalendarMonths(anchor, offset)
-  const match = rounds.find((r) => roundMatchesMonthYear(r, targetMonth))
-  return match ?? voteRound
+  const cohortMonth = cohortMonthForVoteGeographyLevel(voteRound, level)
+  if (!cohortMonth) return undefined
+  return rounds.find((r) => roundMatchesMonthYear(r, cohortMonth))
 }
 
 export function voteLevelCohortHint(
@@ -129,12 +200,20 @@ function bestRoundForMonth(rounds: Round[], target: Date, notVote: (r: Round) =>
   return pool.sort((a, b) => Number(b.id) - Number(a.id))[0]
 }
 
-/** Submit-month round: current calendar month (highest id if duplicates) — never the live vote round. */
-function pickNominationRound(rounds: Round[], voteRound: Round | undefined): Round | undefined {
+/** Submit-month round: current calendar month — may share round id with Vote in same month. */
+function pickNominationRound(
+  rounds: Round[],
+  voteRound: Round | undefined,
+  calendarAnchor: Round | undefined,
+): Round | undefined {
   const now = new Date()
   const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1)
   const currentMonthStr = now.toLocaleDateString("en-US", { month: "long", year: "numeric" }).toLowerCase()
-  const notVote = (r: Round) => !voteRound || Number(r.id) !== Number(voteRound.id)
+  const notVote = (r: Round) => {
+    if (!voteRound) return true
+    if (calendarAnchor && Number(r.id) === Number(calendarAnchor.id)) return true
+    return Number(r.id) !== Number(voteRound.id)
+  }
 
   const byMonth = bestRoundForMonth(rounds, currentMonth, notVote)
   if (byMonth) return byMonth
@@ -158,8 +237,10 @@ function pickNominationRound(rounds: Round[], voteRound: Round | undefined): Rou
  */
 export function computeDisplayRounds(rounds: Round[]): DisplayRoundTab[] {
   if (!rounds?.length) return []
-  const voteRound = rounds.find((r: Round) => isRoundVotingLive(r, rounds))
-  const nominationRound = pickNominationRound(rounds, voteRound)
+  const liveVote = rounds.find((r: Round) => isRoundVotingLive(r, rounds))
+  const calendarAnchor = resolveVoteCalendarAnchorRound(rounds)
+  const voteRound = calendarAnchor ?? liveVote
+  const nominationRound = pickNominationRound(rounds, voteRound, calendarAnchor)
 
   const out: DisplayRoundTab[] = []
   const seen = new Set<string>()

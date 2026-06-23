@@ -22,6 +22,8 @@ import {
   cohortAnchorDate,
   cohortRoundForVoteGeographyLevel,
   computeDisplayRounds,
+  isVoteGeographyLevelAvailable,
+  resolveVoteCalendarAnchorRound,
   roundTabKey,
   voteLevelCohortHint,
   type RoundTabKind,
@@ -338,6 +340,11 @@ function ContestsPageContent() {
     return false
   }, [activeDisplayTab, activeRoundId, rounds, voteNowRoundId])
 
+  const voteRoundRow = useMemo(
+    () => resolveVoteCalendarAnchorRound(rounds),
+    [rounds],
+  )
+
   const nominationStageOptions = useMemo(() => {
     const allStages: Array<{
       value: Exclude<NominationMigrationLevel, 'all'>
@@ -346,12 +353,20 @@ function ContestsPageContent() {
     }> = [
       { value: 'country', label: t('dashboard.contests.country'), icon: 'country' },
       { value: 'regional', label: t('dashboard.contests.regional'), icon: 'regional' },
-      // City omitted: vote-round Nominate tab only (participations still has City).
       { value: 'continental', label: t('dashboard.contests.continental'), icon: 'continent' },
       { value: 'global', label: t('dashboard.contests.global'), icon: 'global' },
     ]
-    return allStages
-  }, [t])
+    if (!showVoteGeographyLevels || !voteRoundRow) {
+      return allStages.filter((s) => s.value !== 'global')
+    }
+    return allStages.filter((stage) =>
+      isVoteGeographyLevelAvailable(
+        voteRoundRow,
+        stage.value as VoteGeographyLevel,
+        rounds,
+      ),
+    )
+  }, [t, showVoteGeographyLevels, voteRoundRow, rounds])
 
   const participationLevelOptions = useMemo(() => {
     type Opt = { value: string; label: string; icon: GeographyLevelIconKey }
@@ -377,13 +392,15 @@ function ContestsPageContent() {
     }
   }, [showVoteGeographyLevels, nominationMigrationLevel])
 
-  // Vote tab: always pick a geography stage (default Country) so cohort month + level reach the API.
+  // Vote tab: default Country; if current chip is unavailable (e.g. Global before July), pick first available.
   useEffect(() => {
-    if (activeDisplayTab?.kind !== 'vote') return
-    if (nominationMigrationLevel === 'all') {
-      setNominationMigrationLevel('country')
+    if (activeDisplayTab?.kind !== 'vote' || !voteRoundRow) return
+    const available = nominationStageOptions.map((s) => s.value)
+    if (!available.length) return
+    if (nominationMigrationLevel === 'all' || !available.includes(nominationMigrationLevel as typeof available[number])) {
+      setNominationMigrationLevel(available[0] ?? 'country')
     }
-  }, [activeDisplayTab?.kind, nominationMigrationLevel])
+  }, [activeDisplayTab?.kind, nominationMigrationLevel, nominationStageOptions, voteRoundRow])
 
   // Submit tab: geography chips hidden — scope is current month nominations only.
   useEffect(() => {
@@ -432,14 +449,9 @@ function ContestsPageContent() {
     }
   }, [activeDisplayTab?.kind, activeRoundId])
 
-  const voteRoundRow = useMemo(
-    () => rounds.find((r: Round) => isRoundVotingLive(r, rounds)),
-    [rounds],
-  )
-
   /**
    * Submit pill → that round only. Vote pill → cohort month per level chip
-   * (May/country, April/regional, March/continental, …).
+   * (June anchor: Country=May, Regional=April, Continental=March; Global from July).
    */
   const effectiveRoundIdForFetch = useMemo(() => {
     if (!activeRoundId) return null
@@ -450,7 +462,7 @@ function ContestsPageContent() {
       nominationMigrationLevel as VoteGeographyLevel,
       rounds,
     )
-    return cohort ? String(cohort.id) : activeRoundId
+    return cohort ? String(cohort.id) : null
   }, [activeRoundId, activeDisplayTab?.kind, nominationMigrationLevel, voteRoundRow, rounds])
 
   const roundIdNav = effectiveRoundIdForFetch
@@ -1433,14 +1445,15 @@ function ContestsPageContent() {
                 {' · '}
                 {nominationMigrationLevel === 'country'
                   ? (t('dashboard.contests.vote_level_country_hint') ||
-                      'Nominees from the live vote month (e.g. May)')
+                      'Country vote for last month’s nominees (e.g. April cohort while voting in May)')
                   : nominationMigrationLevel === 'regional'
                     ? (t('dashboard.contests.vote_level_regional_hint') ||
-                        'Country winners from the previous month, now regional')
+                        'Country winners from two months ago, now in regional pools (e.g. March cohort in May)')
                     : nominationMigrationLevel === 'continental'
                       ? (t('dashboard.contests.vote_level_continental_hint') ||
-                          'Regional winners from earlier cohort, now continental')
-                      : (t('dashboard.contests.vote_level_global_hint') || 'Continental winners, global stage')}
+                          'Regional winners from three months ago, now continental (e.g. March cohort in June)')
+                      : (t('dashboard.contests.vote_level_global_hint') ||
+                          'Continental winners from four months ago, now global (e.g. March cohort in July)')}
               </p>
             )}
           <div className="flex items-center gap-2 flex-wrap">
