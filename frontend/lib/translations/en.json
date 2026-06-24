@@ -129,6 +129,12 @@
     }
   },
   "auth": {
+    "email": "Email",
+    "username": "Username",
+    "password": "Password",
+    "referral_bonus": "You were referred!",
+    "referral_code": "Code",
+    "registerError": "Registration failed. Please try again.",
     "login": {
       "title": "Welcome Back",
       "subtitle": "Sign in to your MyHigh5 account",
@@ -147,8 +153,41 @@
       }
     },
     "register": {
-      "title": "Join MyFav",
-      "subtitle": "Create your account and start competing"
+      "title": "Join MyHigh5",
+      "subtitle": "Create your account and start competing",
+      "email_placeholder": "your@email.com",
+      "username_placeholder": "Choose a username",
+      "password_placeholder": "Create a password",
+      "confirm_password_placeholder": "Confirm password",
+      "username_hint": "Only letters, numbers, and underscores are allowed",
+      "username_space_not_allowed": "Spaces are not allowed",
+      "username_no_spaces_warning": "Invalid characters",
+      "password_requirements_title": "Password must include:",
+      "password_requirement_length": "At least 8 characters",
+      "password_requirement_uppercase": "One uppercase letter (A-Z)",
+      "password_requirement_lowercase": "One lowercase letter (a-z)",
+      "password_requirement_number": "One number (0-9)",
+      "password_requirement_special": "One special character (*_/@=)",
+      "terms_accept": "I agree to the Terms of Service and Privacy Policy",
+      "loading": "Creating account...",
+      "submit": "Create Account",
+      "have_account": "Already have an account?",
+      "login_link": "Sign in",
+      "success_title": "Registration successful!",
+      "success_message": "Welcome! Your account has been created.",
+      "continue_button": "Sign in",
+      "errors": {
+        "required_fields": "Please fill in all required fields",
+        "location_required": "Please select your country",
+        "password_mismatch": "Passwords do not match",
+        "password_min_length": "Password must be at least 8 characters",
+        "password_requirements": "Password must include uppercase, lowercase, number, and special character",
+        "username_invalid_chars": "Only letters, numbers, and underscores are allowed",
+        "invalid_email": "Invalid email format",
+        "terms_required": "You must accept the terms to continue",
+        "email_exists": "This email is already registered",
+        "username_exists": "This username is already taken"
+      }
     }
   },
   "features": {

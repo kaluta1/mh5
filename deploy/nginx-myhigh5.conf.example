@@ -44,7 +44,7 @@ server {
 
     # FastAPI — must come before location /
     location /api/ {
-        proxy_pass http://127.0.0.1:8000;
+        proxy_pass http://127.0.0.1:8001;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -55,7 +55,7 @@ server {
 
     # Optional: media files served by backend
     location /media/ {
-        proxy_pass http://127.0.0.1:8000;
+        proxy_pass http://127.0.0.1:8001;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Proto $scheme;
     }

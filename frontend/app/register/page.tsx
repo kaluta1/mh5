@@ -12,10 +12,24 @@ import { LanguageSelector } from '@/components/ui/language-selector'
 import { LocationSelectorSimple } from '@/components/auth/location-selector-simple'
 import { authService } from '@/lib/api'
 import { useLanguage } from '@/contexts/language-context'
+import { REGISTER_COPY } from '@/lib/register-copy'
 import { useToast } from '@/components/ui/toast'
 
-function RegisterPageContent() {
+function useRegisterText() {
   const { t } = useLanguage()
+  const pick = useCallback(
+    (key: string, fallback: string) => {
+      const value = t(key)
+      return value && value.trim() ? value : fallback
+    },
+    [t],
+  )
+  return pick
+}
+
+function RegisterPageContent() {
+  const t = useLanguage().t
+  const pick = useRegisterText()
   const router = useRouter()
   const searchParams = useSearchParams()
   const { addToast } = useToast()
@@ -422,10 +436,10 @@ function RegisterPageContent() {
           {/* Logo et titre */}
           <div className="text-center mb-2">
             <h1 className="text-4xl font-bold dsm-title mb-3">
-              {t('auth.register.title')}
+              {pick('auth.register.title', REGISTER_COPY.title)}
             </h1>
             <p className="text-lg text-gray-700 dark:text-gray-200 max-w-md mx-auto">
-              {t('auth.register.subtitle')}
+              {pick('auth.register.subtitle', REGISTER_COPY.subtitle)}
             </p>
           </div>
 
@@ -484,13 +498,13 @@ function RegisterPageContent() {
                 {/* Email */}
                 <div>
                   <label className={`block text-sm font-semibold mb-2 ${fieldErrors.email ? 'text-red-500' : 'text-gray-700 dark:text-gray-200'}`}>
-                    {t('auth.email')} *
+                    {pick('auth.email', REGISTER_COPY.email)} *
                   </label>
                   <div className="relative">
                     <Mail className={`absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 ${fieldErrors.email ? 'text-red-400' : 'text-gray-400'}`} />
                     <Input
                       type="email"
-                      placeholder={t('auth.register.email_placeholder')}
+                      placeholder={pick('auth.register.email_placeholder', REGISTER_COPY.emailPlaceholder)}
                       value={formData.email}
                       onChange={(e) => handleInputChange('email', e.target.value)}
                       className={`pl-10 h-12 rounded-xl dsm-input ${fieldErrors.email ? 'border-red-500 focus:border-red-500 focus:ring-red-500 bg-red-50 dark:bg-red-900/10' : 'border-gray-200 dark:border-gray-600 focus:border-myhigh5-primary focus:ring-myhigh5-primary'}`}
@@ -508,13 +522,13 @@ function RegisterPageContent() {
                 {/* Username */}
                 <div>
                   <label className={`block text-sm font-semibold mb-2 ${fieldErrors.username ? 'text-red-500' : 'text-gray-700 dark:text-gray-200'}`}>
-                    {t('auth.username')} *
+                    {pick('auth.username', REGISTER_COPY.username)} *
                   </label>
                   <div className="relative">
                     <User className={`absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 ${fieldErrors.username ? 'text-red-400' : 'text-gray-400'}`} />
                     <Input
                       type="text"
-                      placeholder={t('auth.register.username_placeholder')}
+                      placeholder={pick('auth.register.username_placeholder', REGISTER_COPY.usernamePlaceholder)}
                       value={formData.username}
                       onChange={(e) => {
                         const originalValue = e.target.value
@@ -573,7 +587,7 @@ function RegisterPageContent() {
                       </p>
                     ) : (
                       <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {t('auth.register.username_hint') || 'Seules les lettres, chiffres et underscores sont autorisés'}
+                        {pick('auth.register.username_hint', REGISTER_COPY.usernameHint)}
                       </p>
                     )}
                   </div>
@@ -582,13 +596,13 @@ function RegisterPageContent() {
                 {/* Password */}
                 <div>
                   <label className={`block text-sm font-semibold mb-2 ${fieldErrors.password || (formData.password && !isPasswordValid()) ? 'text-red-500' : 'text-gray-700 dark:text-gray-200'}`}>
-                    {t('auth.password')} *
+                    {pick('auth.password', REGISTER_COPY.password)} *
                   </label>
                   <div className="relative">
                     <Lock className={`absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 ${fieldErrors.password || (formData.password && !isPasswordValid()) ? 'text-red-400' : 'text-gray-400'}`} />
                     <Input
                       type={showPassword ? 'text' : 'password'}
-                      placeholder={t('auth.register.password_placeholder')}
+                      placeholder={pick('auth.register.password_placeholder', REGISTER_COPY.passwordPlaceholder)}
                       value={formData.password}
                       onChange={(e) => handleInputChange('password', e.target.value)}
                       className={`pl-10 pr-10 h-12 rounded-xl dsm-input ${fieldErrors.password || (formData.password && !isPasswordValid()) ? 'border-red-500 focus:border-red-500 focus:ring-red-500 bg-red-50 dark:bg-red-900/10' : 'border-gray-200 dark:border-gray-600 focus:border-myhigh5-primary focus:ring-myhigh5-primary'}`}
@@ -637,13 +651,13 @@ function RegisterPageContent() {
                 {/* Confirm Password */}
                 <div>
                   <label className={`block text-sm font-semibold mb-2 ${fieldErrors.confirmPassword ? 'text-red-500' : 'text-gray-700 dark:text-gray-200'}`}>
-                    {t('auth.register.confirm_password_placeholder')} *
+                    {pick('auth.register.confirm_password_placeholder', REGISTER_COPY.confirmPasswordPlaceholder)} *
                   </label>
                   <div className="relative">
                     <Lock className={`absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 ${fieldErrors.confirmPassword ? 'text-red-400' : 'text-gray-400'}`} />
                     <Input
                       type={showConfirmPassword ? 'text' : 'password'}
-                      placeholder={t('auth.register.confirm_password_placeholder')}
+                      placeholder={pick('auth.register.confirm_password_placeholder', REGISTER_COPY.confirmPasswordPlaceholder)}
                       value={formData.confirmPassword}
                       onChange={(e) => handleInputChange('confirmPassword', e.target.value)}
                       className={`pl-10 pr-10 h-12 rounded-xl dsm-input ${fieldErrors.confirmPassword ? 'border-red-500 focus:border-red-500 focus:ring-red-500 bg-red-50 dark:bg-red-900/10' : 'border-gray-200 dark:border-gray-600 focus:border-myhigh5-primary focus:ring-myhigh5-primary'}`}
@@ -683,7 +697,7 @@ function RegisterPageContent() {
                   htmlFor="terms"
                   className="text-sm text-gray-700 dark:text-gray-200 cursor-pointer leading-relaxed"
                 >
-                  {t('auth.register.terms_accept')}
+                  {pick('auth.register.terms_accept', REGISTER_COPY.termsAccept)}
                 </label>
               </div>
 
@@ -696,12 +710,12 @@ function RegisterPageContent() {
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                    {t('auth.register.loading')}
+                    {pick('auth.register.loading', REGISTER_COPY.loading)}
                   </>
                 ) : (
                   <>
                     <Heart className="mr-2 h-5 w-5" />
-                    {t('auth.register.submit')}
+                    {pick('auth.register.submit', REGISTER_COPY.submit)}
                   </>
                 )}
               </Button>
@@ -709,13 +723,13 @@ function RegisterPageContent() {
               {/* Login Link */}
               <div className="text-center pt-4">
                 <span className="text-sm text-gray-700 dark:text-gray-200">
-                  {t('auth.register.have_account')}{' '}
+                  {pick('auth.register.have_account', REGISTER_COPY.haveAccount)}{' '}
                 </span>
                 <Link
                   href={postAuthReturnUrl ? `/login?returnUrl=${encodeURIComponent(postAuthReturnUrl)}` : '/login'}
                   className="text-sm font-semibold text-myhigh5-primary hover:text-myhigh5-primary-dark dark:text-myhigh5-blue-400 dark:hover:text-myhigh5-blue-300 transition-colors"
                 >
-                  {t('auth.register.login_link')}
+                  {pick('auth.register.login_link', REGISTER_COPY.loginLink)}
                 </Link>
               </div>
             </form>
