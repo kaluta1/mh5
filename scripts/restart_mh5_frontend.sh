@@ -28,54 +28,23 @@ export NODE_ENV=production
 export NEXT_TELEMETRY_DISABLED=1
 node --max-old-space-size=4096 node_modules/next/dist/bin/next build
 
-restart_or_recreate_pm2() {
-  local name="$1"
-  if ! command -v pm2 >/dev/null 2>&1; then
-    return 1
-  fi
-
-  if pm2 describe "$name" >/dev/null 2>&1; then
-    local app_cwd=""
-    app_cwd="$(pm2 jlist 2>/dev/null | node -e "
-      const fs = require('fs')
-      const name = process.argv[1]
-      const expected = process.argv[2]
-      const apps = JSON.parse(fs.readFileSync(0, 'utf8'))
-      const app = apps.find((a) => a?.name === name)
-      process.stdout.write((app?.pm2_env?.pm_cwd || '').trim())
-    " "$name" "$FRONTEND")"
-
-    if [ "$app_cwd" != "$FRONTEND" ]; then
-      echo "    pm2 app $name points to '$app_cwd' (expected '$FRONTEND') — recreating"
-      pm2 delete "$name" >/dev/null 2>&1 || true
-      cd "$FRONTEND"
-      PORT="$PORT" pm2 start npm --name "$name" -- run start:vps
-      pm2 save 2>/dev/null || true
-      return 0
-    fi
-
-    echo "    pm2 restart $name"
-    pm2 restart "$name"
-    pm2 save 2>/dev/null || true
-    return 0
-  fi
-
-  return 1
-}
-
-for app in mh5-frontend myhigh5-web myhigh5-frontend mh5-web; do
-  if restart_or_recreate_pm2 "$app"; then
-    sleep 3
-    echo "    OK pm2 app $app started from $FRONTEND"
-    exit 0
-  fi
-done
-
-echo "    no pm2 frontend app found — starting myhigh5-web"
 if command -v pm2 >/dev/null 2>&1; then
+  # Avoid serving mixed Next builds: remove old/errored PM2 entries and any
+  # unmanaged process still listening on the frontend port.
+  pm2 delete mh5-frontend myhigh5-web myhigh5-frontend mh5-web >/dev/null 2>&1 || true
+  if command -v lsof >/dev/null 2>&1; then
+    while IFS= read -r pid; do
+      [ -n "$pid" ] && kill "$pid" >/dev/null 2>&1 || true
+    done < <(lsof -tiTCP:"$PORT" -sTCP:LISTEN 2>/dev/null || true)
+  elif command -v fuser >/dev/null 2>&1; then
+    fuser -k "${PORT}/tcp" >/dev/null 2>&1 || true
+  fi
+
   cd "$FRONTEND"
-  PORT="$PORT" pm2 start npm --name myhigh5-web -- run start:vps
+  PORT="$PORT" pm2 start npm --name mh5-frontend -- run start:vps
   pm2 save 2>/dev/null || true
+  sleep 3
+  pm2 status mh5-frontend
   exit 0
 fi
 
