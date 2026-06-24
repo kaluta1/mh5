@@ -2338,15 +2338,6 @@ class CRUDContest:
             logger.info(f"[get_contest_with_enriched_contestants] Effective Country: '{effective_country}'")
             logger.info(f"[get_contest_with_enriched_contestants] Effective Region: '{effective_region}'")
             logger.info(f"[get_contest_with_enriched_contestants] Effective Continent: '{effective_continent}'")
-            # DEBUG: First check what contestants actually exist
-            debug_sample = db.query(
-                Contestant.id,
-                Contestant.season_id,
-                Contestant.round_id,
-                Contestant.is_deleted
-            ).filter(Contestant.is_deleted == False).limit(20).all()
-            logger.info(f"[DEBUG] Sample of all contestants in DB: {[(c.id, c.season_id, c.round_id) for c in debug_sample]}")
-            
             # Log query details for debugging
             logger.info(f"[get_contest_with_enriched_contestants] Querying contestants for contest_id={contest_id}, filter_season_id={filter_season_id}")
             logger.info(f"[get_contest_with_enriched_contestants] Filter: season_id={filter_season_id}")

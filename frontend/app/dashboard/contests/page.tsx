@@ -962,7 +962,8 @@ function ContestsPageContent() {
       if (roundIdNav) params.set('roundId', String(roundIdNav))
       const activeRoundEntry = displayRounds.find((d) => d.tabKey === activeTabKey)
       const rowMode = normalizeContestMode(contestModeFromRow)
-      if (rowMode === 'nomination' && activeRoundEntry?.kind === 'nominate') {
+      if (rowMode === 'nomination') {
+        // View Nominator from Submit or Vote — browse roster only (lighter API).
         params.set('viewOnly', 'true')
       }
 

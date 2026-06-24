@@ -766,66 +766,69 @@ def read_contest(
             detail="Concours non trouvé"
         )
     
-    # Enrich with current user participation
+    # Enrich with current user participation (non-fatal — roster already loaded)
     if current_user and enriched_contest:
-        from app.crud import contestant as crud_contestant
-        from app.models.contests import ContestSeasonLink, ContestSeason
-        
-        # 1. Try to find active ContestSeason via ContestSeasonLink
-        season_link = db.query(ContestSeasonLink).filter(
-            ContestSeasonLink.contest_id == contest_id,
-            ContestSeasonLink.is_active == True
-        ).first()
+        try:
+            from app.crud import contestant as crud_contestant
+            from app.models.contests import ContestSeasonLink, ContestSeason
+            
+            # 1. Try to find active ContestSeason via ContestSeasonLink
+            season_link = db.query(ContestSeasonLink).filter(
+                ContestSeasonLink.contest_id == contest_id,
+                ContestSeasonLink.is_active == True
+            ).first()
 
-        from app import crud
-        # Use the same calendar round as the roster (display_round_id), not a stale URL round.
-        display_rid = enriched_contest.get("display_round_id") if isinstance(enriched_contest, dict) else None
-        target_round_id = display_rid
-        if target_round_id is None:
-            active_round = crud.round.get_active_round_for_contest(db, contest_id)
-            target_round_id = active_round.id if active_round else None
+            from app import crud
+            # Use the same calendar round as the roster (display_round_id), not a stale URL round.
+            display_rid = enriched_contest.get("display_round_id") if isinstance(enriched_contest, dict) else None
+            target_round_id = display_rid
+            if target_round_id is None:
+                active_round = crud.round.get_active_round_for_contest(db, contest_id)
+                target_round_id = active_round.id if active_round else None
 
-        expected_entry_type = _entry_type_from_contest_mode(getattr(contest_obj, "contest_mode", "participation"))
-        participation = crud_contestant.get_latest_entry_in_contest(
-            db=db,
-            contest_id=contest_id,
-            user_id=current_user.id,
-            entry_type=expected_entry_type,
-            round_id=target_round_id,
-        )
-        if participation is None and expected_entry_type == "nomination" and target_round_id is None:
+            expected_entry_type = _entry_type_from_contest_mode(getattr(contest_obj, "contest_mode", "participation"))
             participation = crud_contestant.get_latest_entry_in_contest(
                 db=db,
                 contest_id=contest_id,
                 user_id=current_user.id,
                 entry_type=expected_entry_type,
-                round_id=None,
+                round_id=target_round_id,
             )
+            if participation is None and expected_entry_type == "nomination" and target_round_id is None:
+                participation = crud_contestant.get_latest_entry_in_contest(
+                    db=db,
+                    contest_id=contest_id,
+                    user_id=current_user.id,
+                    entry_type=expected_entry_type,
+                    round_id=None,
+                )
 
-        if participation:
-            try:
-                participation_dict = {
-                    "id": participation.id,
-                    "user_id": participation.user_id,
-                    "title": getattr(participation, 'title', None),
-                    "description": getattr(participation, 'description', None),
-                    "image_media_ids": getattr(participation, 'image_media_ids', None),
-                    "video_media_ids": getattr(participation, 'video_media_ids', None),
-                    "total_score": getattr(participation, 'total_score', None),
-                    "rank": getattr(participation, 'rank', None),
-                    "entry_type": getattr(participation, 'entry_type', 'participation'),
-                    "round_id": getattr(participation, 'round_id', None),
-                    "season_id": getattr(participation, 'season_id', None),
-                    "nominator_country": getattr(participation, 'nominator_country', None),
-                    "nominator_city": getattr(participation, 'nominator_city', None),
-                }
-                enriched_contest["current_user_participation"] = participation_dict
-                enriched_contest["current_user_contesting"] = True
-                if getattr(participation, "round_id", None) is not None:
-                    enriched_contest["user_entry_round_id"] = participation.round_id
-            except Exception as e:
-                logger.warning(f"Error enriching user participation for contest {contest_id}: {str(e)}")
-                logger.debug(traceback.format_exc())
+            if participation:
+                try:
+                    participation_dict = {
+                        "id": participation.id,
+                        "user_id": participation.user_id,
+                        "title": getattr(participation, 'title', None),
+                        "description": getattr(participation, 'description', None),
+                        "image_media_ids": getattr(participation, 'image_media_ids', None),
+                        "video_media_ids": getattr(participation, 'video_media_ids', None),
+                        "total_score": getattr(participation, 'total_score', None),
+                        "rank": getattr(participation, 'rank', None),
+                        "entry_type": getattr(participation, 'entry_type', 'participation'),
+                        "round_id": getattr(participation, 'round_id', None),
+                        "season_id": getattr(participation, 'season_id', None),
+                        "nominator_country": getattr(participation, 'nominator_country', None),
+                        "nominator_city": getattr(participation, 'nominator_city', None),
+                    }
+                    enriched_contest["current_user_participation"] = participation_dict
+                    enriched_contest["current_user_contesting"] = True
+                    if getattr(participation, "round_id", None) is not None:
+                        enriched_contest["user_entry_round_id"] = participation.round_id
+                except Exception as e:
+                    logger.warning(f"Error enriching user participation for contest {contest_id}: {str(e)}")
+                    logger.debug(traceback.format_exc())
+        except Exception as e:
+            logger.warning(f"Skipping user participation enrichment for contest {contest_id}: {e}")
 
     return enriched_contest
 
