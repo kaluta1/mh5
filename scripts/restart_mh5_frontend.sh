@@ -38,6 +38,14 @@ if command -v pm2 >/dev/null 2>&1; then
     done < <(lsof -tiTCP:"$PORT" -sTCP:LISTEN 2>/dev/null || true)
   elif command -v fuser >/dev/null 2>&1; then
     fuser -k "${PORT}/tcp" >/dev/null 2>&1 || true
+  elif command -v ss >/dev/null 2>&1; then
+    while IFS= read -r pid; do
+      [ -n "$pid" ] && kill "$pid" >/dev/null 2>&1 || true
+    done < <(
+      ss -ltnp "sport = :$PORT" 2>/dev/null \
+        | sed -nE 's/.*pid=([0-9]+).*/\1/p' \
+        | sort -u
+    )
   fi
 
   cd "$FRONTEND"
