@@ -9,11 +9,20 @@ PORT="${MH5_FRONTEND_PORT:-3000}"
 echo "==> rebuild mh5 frontend (port ${PORT})"
 cd "$FRONTEND"
 
-if [ -f package-lock.json ]; then
-  npm ci --no-audit --no-fund
-else
+rm -rf .next
+
+install_deps() {
+  if [ -f package-lock.json ]; then
+    if npm ci --no-audit --no-fund; then
+      return 0
+    fi
+    echo "    WARN: npm ci failed (lockfile/npm version mismatch) — falling back to npm install"
+    rm -rf node_modules
+  fi
   npm install --no-audit --no-fund
-fi
+}
+
+install_deps
 
 export NODE_ENV=production
 export NEXT_TELEMETRY_DISABLED=1
