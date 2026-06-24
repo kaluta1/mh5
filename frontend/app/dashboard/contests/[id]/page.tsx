@@ -981,14 +981,14 @@ export default function ContestDetailPage() {
                     <div className="space-y-2">
                       <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">
                         {isNomination
-                          ? (t('dashboard.contests.be_first_to_nominate') || 'Soyez le premier à nommer !')
-                          : (t('dashboard.contests.be_first_to_participate') || 'Soyez le premier à participer !')
+                          ? (t('dashboard.contests.be_first_to_nominate') || 'Be the first to nominate!')
+                          : (t('dashboard.contests.be_first_to_participate') || 'Be the first to participate!')
                         }
                       </h2>
                       <p className="text-gray-600 dark:text-gray-300 text-lg">
                         {isNomination
-                          ? (t('dashboard.contests.empty_nomination_message') || 'Aucune nomination pour le moment. Commencez en nommant quelqu\'un de votre pays !')
-                          : (t('dashboard.contests.empty_participation_message') || 'Aucun participant pour le moment. Soyez le premier à participer à ce concours !')
+                          ? (t('dashboard.contests.empty_nomination_message') || 'No nominations yet. Start by nominating someone from your country!')
+                          : (t('dashboard.contests.empty_participation_message') || 'No participants yet. Be the first to enter this contest!')
                         }
                       </p>
                     </div>
@@ -1017,16 +1017,16 @@ export default function ContestDetailPage() {
                     >
                       {(() => {
                         return userHasEntry
-                          ? (t('dashboard.contests.edit') || 'Modifier')
+                          ? (t('dashboard.contests.edit') || 'Edit')
                           : isNomination
-                            ? (t('dashboard.contests.nominate') || 'Nommer')
-                            : (t('dashboard.contests.participate') || 'Participer')
+                            ? (t('dashboard.contests.nominate') || 'Nominate')
+                            : (t('dashboard.contests.participate') || 'Participate')
                       })()}
                       <ExternalLink className="w-5 h-5 ml-2" />
                     </Button>
                     ) : (
                     <p className="text-gray-500 dark:text-gray-400 text-sm italic">
-                      {t('dashboard.contests.select_your_country') || 'Sélectionnez votre pays pour participer ou nommer'}
+                      {t('dashboard.contests.select_your_country') || 'Select your country to nominate or participate'}
                     </p>
                     )}
 
@@ -1035,7 +1035,7 @@ export default function ContestDetailPage() {
                       <div className="flex items-center justify-center gap-2 mb-6">
                         <Lightbulb className="w-5 h-5 text-yellow-500" />
                         <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                          {t('dashboard.contests.tips') || 'Astuces'}
+                          {t('dashboard.contests.tips') || 'Tips'}
                         </h3>
                       </div>
 
@@ -1050,10 +1050,10 @@ export default function ContestDetailPage() {
                                 </div>
                                 <div>
                                   <h4 className="font-semibold text-gray-900 dark:text-white mb-1">
-                                    {t('dashboard.contests.tip_nomination_video') || 'Importez du contenu vidéo'}
+                                    {t('dashboard.contests.tip_nomination_video') || 'Import video content'}
                                   </h4>
                                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                                    {t('dashboard.contests.tip_nomination_video_desc') || 'Vous pouvez importer du contenu d\'un utilisateur depuis YouTube ou Vimeo de votre pays.'}
+                                    {t('dashboard.contests.tip_nomination_video_desc') || 'You can import content from YouTube or Vimeo from your country.'}
                                   </p>
                                 </div>
                               </div>
@@ -1066,10 +1066,10 @@ export default function ContestDetailPage() {
                                 </div>
                                 <div>
                                   <h4 className="font-semibold text-gray-900 dark:text-white mb-1">
-                                    {t('dashboard.contests.tip_nomination_country') || 'Même pays requis'}
+                                    {t('dashboard.contests.tip_nomination_country') || 'Same country required'}
                                   </h4>
                                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                                    {t('dashboard.contests.tip_nomination_country_desc') || 'Le contenu doit provenir d\'un utilisateur de votre pays.'}
+                                    {t('dashboard.contests.tip_nomination_country_desc') || 'Content must be from someone in your country.'}
                                   </p>
                                 </div>
                               </div>
@@ -1082,10 +1082,10 @@ export default function ContestDetailPage() {
                                 </div>
                                 <div>
                                   <h4 className="font-semibold text-gray-900 dark:text-white mb-1">
-                                    {t('dashboard.contests.tip_nomination_required') || 'Vidéo obligatoire'}
+                                    {t('dashboard.contests.tip_nomination_required') || 'Video required'}
                                   </h4>
                                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                                    {t('dashboard.contests.tip_nomination_required_desc') || 'Les vidéos sont obligatoires pour les nominations. Les images sont optionnelles.'}
+                                    {t('dashboard.contests.tip_nomination_required_desc') || 'Videos are required for nominations. Images are optional.'}
                                   </p>
                                 </div>
                               </div>
@@ -1098,10 +1098,10 @@ export default function ContestDetailPage() {
                                 </div>
                                 <div>
                                   <h4 className="font-semibold text-gray-900 dark:text-white mb-1">
-                                    {t('dashboard.contests.tip_nomination_platforms') || 'Plateformes supportées'}
+                                    {t('dashboard.contests.tip_nomination_platforms') || 'Supported platforms'}
                                   </h4>
                                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                                    {t('dashboard.contests.tip_nomination_platforms_desc') || 'YouTube (y compris YouTube Shorts), TikTok, ou liens vidéo directs. Facebook et Vimeo ne sont pas autorisés.'}
+                                    {t('dashboard.contests.tip_nomination_platforms_desc') || 'YouTube (including Shorts), TikTok, or direct video links. Facebook and Vimeo are not allowed.'}
                                   </p>
                                 </div>
                               </div>
@@ -1117,10 +1117,10 @@ export default function ContestDetailPage() {
                                 </div>
                                 <div>
                                   <h4 className="font-semibold text-gray-900 dark:text-white mb-1">
-                                    {t('dashboard.contests.tip_participation_content') || 'Utilisez votre propre contenu'}
+                                    {t('dashboard.contests.tip_participation_content') || 'Use your own content'}
                                   </h4>
                                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                                    {t('dashboard.contests.tip_participation_content_desc') || 'Partagez vos propres photos et vidéos pour participer au concours.'}
+                                    {t('dashboard.contests.tip_participation_content_desc') || 'Share your own photos and videos to enter the contest.'}
                                   </p>
                                 </div>
                               </div>
@@ -1133,10 +1133,10 @@ export default function ContestDetailPage() {
                                 </div>
                                 <div>
                                   <h4 className="font-semibold text-gray-900 dark:text-white mb-1">
-                                    {t('dashboard.contests.tip_participation_media') || 'Médias requis'}
+                                    {t('dashboard.contests.tip_participation_media') || 'Media required'}
                                   </h4>
                                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                                    {t('dashboard.contests.tip_participation_media_desc') || 'Vérifiez les exigences en matière d\'images et de vidéos pour ce concours.'}
+                                    {t('dashboard.contests.tip_participation_media_desc') || 'Check the image and video requirements for this contest.'}
                                   </p>
                                 </div>
                               </div>

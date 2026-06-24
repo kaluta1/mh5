@@ -29,6 +29,8 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 const SUPPORTED_LANGUAGES = LANGUAGE_CODES as readonly Language[]
 type TranslationsMap = Record<string, any>
 
+const LANG_DEFAULT_EN_MIGRATION = 'myhigh5-default-lang-en-v1'
+
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
   // English is bundled synchronously so labels never render blank on first paint.
   const [language, setLanguageState] = useState<Language>("en")
@@ -42,6 +44,12 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
 
   /** Load saved language before paint so the persist effect does not clobber localStorage with a stray `en`. */
   useLayoutEffect(() => {
+    if (!localStorage.getItem(LANG_DEFAULT_EN_MIGRATION)) {
+      localStorage.setItem(LANGUAGE_PREFERENCE_KEY, 'en')
+      localStorage.setItem(LANG_DEFAULT_EN_MIGRATION, '1')
+      setLanguageState('en')
+      return
+    }
     const savedLanguage = localStorage.getItem(LANGUAGE_PREFERENCE_KEY) as Language
     if (savedLanguage && SUPPORTED_LANGUAGES.includes(savedLanguage)) {
       setLanguageState(savedLanguage)

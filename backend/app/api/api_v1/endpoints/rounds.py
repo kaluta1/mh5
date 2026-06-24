@@ -272,6 +272,132 @@ def _schema_value(value: Any) -> Any:
     return value.value if hasattr(value, "value") else value
 
 
+def _batch_user_contest_participation(
+    db: Session,
+    *,
+    user_id: Optional[int],
+    valid_contest_ids: set,
+    valid_contests_by_id: dict,
+    contest_mode: Optional[str],
+    round_id: int,
+) -> tuple[set, dict]:
+    """
+    Contests where the signed-in user already has an entry for this round.
+    Nomination: one row per category per round — round_id must match (NULL allowed for legacy).
+    """
+    contested_ids: set = set()
+    entry_round_by_contest: dict = {}
+    if not user_id or not valid_contest_ids:
+        return contested_ids, entry_round_by_contest
+
+    try:
+        from app.models.contests import Contestant, ContestSeason, ContestSeasonLink
+        from app.api.api_v1.endpoints import contestant as contestant_ep
+
+        def _entry_type_for_contest(cid: int) -> str:
+            c = valid_contests_by_id.get(cid)
+            if not c:
+                return "participation"
+            cm = _normalize_contest_mode(getattr(c, "contest_mode", "participation"))
+            return "nomination" if cm == "nomination" else "participation"
+
+        expected_type = "nomination" if contest_mode == "nomination" else "participation"
+
+        season_by_contest_id: dict = {}
+        try:
+            rows = (
+                db.query(ContestSeasonLink.contest_id, ContestSeason)
+                .join(ContestSeason, ContestSeason.id == ContestSeasonLink.season_id)
+                .filter(
+                    ContestSeasonLink.contest_id.in_(list(valid_contest_ids)),
+                    ContestSeasonLink.is_active == True,
+                )
+                .all()
+            )
+            for cid, s in rows:
+                if cid is not None and s is not None and cid not in season_by_contest_id:
+                    season_by_contest_id[cid] = s
+        except Exception as season_err:
+            db.rollback()
+            logger.warning(f"Error fetching season lines: {season_err}")
+
+        for cid in valid_contest_ids:
+            season_by_contest_id.setdefault(cid, None)
+
+        unique_seasons: dict = {}
+        for _se in season_by_contest_id.values():
+            if _se is not None and _se.id not in unique_seasons:
+                unique_seasons[_se.id] = _se
+
+        all_user_contestants = []
+        try:
+            all_user_contestants = db.query(Contestant).filter(
+                Contestant.user_id == user_id,
+                Contestant.is_deleted == False,
+            ).all()
+        except Exception as e:
+            db.rollback()
+            logger.warning(f"Error loading user contestants: {e}")
+            return contested_ids, entry_round_by_contest
+
+        def _uc_entry_matches(uc) -> bool:
+            raw_et = getattr(uc, "entry_type", None)
+            if expected_type == "nomination":
+                if raw_et is None:
+                    return True
+                return str(raw_et).strip().lower() == "nomination"
+            return (raw_et or "participation") == expected_type
+
+        def _uc_round_matches(uc) -> bool:
+            rid = getattr(uc, "round_id", None)
+            if expected_type == "nomination":
+                return rid is None or int(rid) == int(round_id)
+            return rid is not None and int(rid) == int(round_id)
+
+        pool = [
+            uc for uc in all_user_contestants
+            if _uc_entry_matches(uc) and _uc_round_matches(uc)
+        ]
+
+        for uc in pool:
+            cid_direct = getattr(uc, "season_id", None)
+            if (
+                cid_direct in valid_contest_ids
+                and _entry_type_for_contest(cid_direct) == expected_type
+            ):
+                contested_ids.add(cid_direct)
+                rid = getattr(uc, "round_id", None)
+                if rid is not None:
+                    prev = entry_round_by_contest.get(cid_direct)
+                    if prev is None or int(rid) >= int(prev):
+                        entry_round_by_contest[cid_direct] = int(rid)
+                continue
+            for _s in unique_seasons.values():
+                try:
+                    resolved = contestant_ep._resolve_contest_for_contestant_vote(
+                        db, uc, _s
+                    )
+                    if (
+                        resolved
+                        and resolved.id in valid_contest_ids
+                        and _entry_type_for_contest(resolved.id) == expected_type
+                    ):
+                        contested_ids.add(resolved.id)
+                        rid = getattr(uc, "round_id", None)
+                        if rid is not None:
+                            prev = entry_round_by_contest.get(resolved.id)
+                            if prev is None or int(rid) >= int(prev):
+                                entry_round_by_contest[resolved.id] = int(rid)
+                        break
+                except Exception as inner_res:
+                    db.rollback()
+                    continue
+    except Exception as e:
+        logger.warning(f"Error batch-checking user participation for round {round_id}: {e}")
+
+    return contested_ids, entry_round_by_contest
+
+
 def _lightweight_round_data(
     db: Session,
     round_obj: Round,
@@ -305,6 +431,7 @@ def _lightweight_round_data(
 
     contests_data = []
     contests_count = 0
+    user_contested_contest_ids: set = set()
     try:
         from app.models.contest import Contest as ContestModel
         from app.models.round import round_contests
@@ -352,6 +479,17 @@ def _lightweight_round_data(
 
         contests_count = len(all_contests)
         contests = all_contests[contest_skip:contest_skip + contest_limit]
+
+        valid_contests_by_id = {c.id: c for c in contests}
+        valid_contest_ids = set(valid_contests_by_id.keys())
+        user_contested_contest_ids, entry_round_by_contest = _batch_user_contest_participation(
+            db,
+            user_id=user_id,
+            valid_contest_ids=valid_contest_ids,
+            valid_contests_by_id=valid_contests_by_id,
+            contest_mode=contest_mode,
+            round_id=int(round_obj.id),
+        )
 
         from app.models.contests import Contestant, ContestantSeason, ContestSeasonLink, ContestSeason, SeasonLevel
 
@@ -491,7 +629,8 @@ def _lightweight_round_data(
                 "entries_count": participant_count,
                 "participants_count": participant_count,
                 "votes_count": 0,
-                "current_user_contesting": False,
+                "current_user_contesting": contest.id in user_contested_contest_ids,
+                "user_entry_round_id": entry_round_by_contest.get(contest.id),
             })
     except Exception as e:
         logger.warning(f"Error building lightweight contests for round {round_obj.id}: {str(e)}")
@@ -501,7 +640,7 @@ def _lightweight_round_data(
         "participants_count": 0,
         "contests_count": contests_count,
         "votes_count": 0,
-        "current_user_participated": False,
+        "current_user_participated": bool(user_contested_contest_ids),
         "is_completed": is_completed,
         "top_contestants": [],
         "contests": contests_data,
@@ -825,116 +964,14 @@ def _enrich_round_data(
             )
             
             # Batch query: find all contests where current user has participated in this round
-            # IMPORTANT: "Edit" must be shown only for the exact contest/category where
-            # the user already has a nomination/participation, not every contest sharing voting_type.
-            user_contested_contest_ids: set = set()
-            entry_round_by_contest: dict = {}
-            if user_id:
-                try:
-                    from app.models.contests import Contestant, ContestSeason, ContestSeasonLink
-                    from app.api.api_v1.endpoints import contestant as contestant_ep
-
-                    def _entry_type_for_contest(cid: int) -> str:
-                        c = valid_contests_by_id.get(cid)
-                        if not c:
-                            return "participation"
-                        cm = _normalize_contest_mode(getattr(c, "contest_mode", "participation"))
-                        return "nomination" if cm == "nomination" else "participation"
-
-                    season_by_contest_id: dict = {}
-                    if valid_contest_ids:
-                        try:
-                            rows = (
-                                db.query(ContestSeasonLink.contest_id, ContestSeason)
-                                .join(
-                                    ContestSeason,
-                                    ContestSeason.id == ContestSeasonLink.season_id,
-                                )
-                                .filter(
-                                    ContestSeasonLink.contest_id.in_(list(valid_contest_ids)),
-                                    ContestSeasonLink.is_active == True,
-                                )
-                                .all()
-                            )
-                            for cid, s in rows:
-                                if cid is not None and s is not None and cid not in season_by_contest_id:
-                                    season_by_contest_id[cid] = s
-                        except Exception as season_err:
-                            db.rollback()
-                            logger.warning(f"Error fetching season lines: {season_err}")
-                            
-                        for cid in valid_contest_ids:
-                            season_by_contest_id.setdefault(cid, None)
-
-                    unique_seasons: dict = {}
-                    for _cid, _se in season_by_contest_id.items():
-                        if _se is not None and _se.id not in unique_seasons:
-                            unique_seasons[_se.id] = _se
-
-                    all_user_contestants = []
-                    try:
-                        all_user_contestants = db.query(Contestant).filter(
-                            Contestant.user_id == user_id,
-                            Contestant.is_deleted == False,
-                        ).all()
-                    except Exception as e:
-                        db.rollback()
-                        logger.warning(f"Error loading user contestants: {e}")
-
-                    if valid_contests and all_user_contestants:
-                        expected_type = "nomination" if contest_mode == "nomination" else "participation"
-                        contested_ids: set = set()
-
-                        def _uc_entry_matches(uc) -> bool:
-                            raw_et = getattr(uc, "entry_type", None)
-                            if expected_type == "nomination":
-                                if raw_et is None:
-                                    return True
-                                return str(raw_et).strip().lower() == "nomination"
-                            return (raw_et or "participation") == expected_type
-
-                        pool = all_user_contestants
-                        if expected_type != "nomination":
-                            pool = [uc for uc in all_user_contestants if uc.round_id == round_id]
-
-                        for uc in pool:
-                            if not _uc_entry_matches(uc):
-                                continue
-                            cid_direct = getattr(uc, "season_id", None)
-                            if (
-                                cid_direct in valid_contest_ids
-                                and _entry_type_for_contest(cid_direct) == expected_type
-                            ):
-                                contested_ids.add(cid_direct)
-                                rid = getattr(uc, "round_id", None)
-                                if rid is not None:
-                                    prev = entry_round_by_contest.get(cid_direct)
-                                    if prev is None or int(rid) >= int(prev):
-                                        entry_round_by_contest[cid_direct] = int(rid)
-                                continue
-                            for _s in unique_seasons.values():
-                                try:
-                                    resolved = contestant_ep._resolve_contest_for_contestant_vote(
-                                        db, uc, _s
-                                    )
-                                    if (
-                                        resolved
-                                        and resolved.id in valid_contest_ids
-                                        and _entry_type_for_contest(resolved.id) == expected_type
-                                    ):
-                                        contested_ids.add(resolved.id)
-                                        rid = getattr(uc, "round_id", None)
-                                        if rid is not None:
-                                            prev = entry_round_by_contest.get(resolved.id)
-                                            if prev is None or int(rid) >= int(prev):
-                                                entry_round_by_contest[resolved.id] = int(rid)
-                                        break
-                                except Exception as inner_res:
-                                    db.rollback()
-                                    continue
-                        user_contested_contest_ids = contested_ids
-                except Exception as e:
-                    logger.warning(f"Error batch-checking user participation for round {round_id}: {str(e)}")
+            user_contested_contest_ids, entry_round_by_contest = _batch_user_contest_participation(
+                db,
+                user_id=user_id,
+                valid_contest_ids=valid_contest_ids,
+                valid_contests_by_id=valid_contests_by_id,
+                contest_mode=contest_mode,
+                round_id=int(round_id),
+            )
 
             # Build contest data
             for contest in paginated_contests:

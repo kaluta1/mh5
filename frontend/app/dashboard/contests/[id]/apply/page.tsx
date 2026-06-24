@@ -426,6 +426,9 @@ function ApplyToContestPageContent() {
     else if (Number.isFinite(activeR)) params.set('roundId', String(activeR))
     const mode = normalizeContestMode(contest?.contest_mode)
     params.set('entryType', mode === 'nomination' ? 'nomination' : 'participation')
+    if (mode === 'nomination') {
+      params.set('viewOnly', 'true')
+    }
     if (user?.country) params.set('country', user.country)
     const qs = params.toString()
     return contestId
@@ -636,7 +639,7 @@ function ApplyToContestPageContent() {
         /* ignore */
       }
       if (typeof window !== 'undefined') {
-        sessionStorage.setItem(`mh5-nominated-${contestId}`, '1')
+        sessionStorage.setItem(`mh5-nominated-${contestId}`, String(savedRound ?? roundIdUsed ?? ''))
       }
       window.dispatchEvent(new Event('contestant-submitted'))
 
@@ -667,8 +670,10 @@ function ApplyToContestPageContent() {
       // Afficher un toast de succès
       addToast(
         isEditingParticipation
-          ? t('dashboard.contests.participation_form.success')
-          : t('dashboard.contests.participation_form.success'),
+          ? t('dashboard.contests.participation_form.success_edit')
+          : isNomination
+            ? t('dashboard.contests.participation_form.success')
+            : t('dashboard.contests.participation_form.success_participation'),
         'success'
       )
     } catch (err: any) {
@@ -804,7 +809,7 @@ function ApplyToContestPageContent() {
           className="mb-4 flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          {t('common.back') || 'Retour'}
+          {t('common.back') || 'Back'}
         </button>
 
         {/* Participation Form - Always visible, no skeleton wrapper */}
@@ -822,7 +827,7 @@ function ApplyToContestPageContent() {
                   }}
                   className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition text-sm"
                 >
-                  ✏️ {t('dashboard.contests.participation_form.edit_participation') || 'Modifier ma candidature'}
+                  {t('dashboard.contests.participation_form.edit_participation') || 'Edit my submission'}
                 </button>
               )}
             </div>
@@ -964,12 +969,14 @@ function ApplyToContestPageContent() {
                 </div>
                 <div>
                   <p className="text-green-200 font-semibold">
-                    {t('dashboard.contests.participation_form.success_title') || '✅ Candidature soumise avec succès !'}
+                    {t('dashboard.contests.participation_form.success_title') || 'Submission successful'}
                   </p>
                   <p className="text-green-300 text-sm mt-1">
                     {isEditingParticipation
-                      ? t('dashboard.contests.participation_form.success_edit') || 'Votre candidature a été mise à jour avec succès.'
-                      : t('dashboard.contests.participation_form.success') || 'Votre candidature a été soumise avec succès. Elle sera examinée par notre équipe.'}
+                      ? t('dashboard.contests.participation_form.success_edit') || 'Your nomination was updated successfully.'
+                      : isNomination
+                        ? t('dashboard.contests.participation_form.success') || 'Your nomination was submitted. You can view it in the category list or edit it until the deadline.'
+                        : t('dashboard.contests.participation_form.success_participation') || 'Your entry was submitted successfully.'}
                   </p>
                 </div>
               </div>
@@ -992,7 +999,7 @@ function ApplyToContestPageContent() {
                     }}
                     className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition text-sm"
                   >
-                    ✏️ {t('dashboard.contests.participation_form.edit_participation') || 'Modifier ma candidature'}
+                    {t('dashboard.contests.participation_form.edit_participation') || 'Edit my submission'}
                   </button>
                 )}
               </div>

@@ -256,6 +256,7 @@ function ContestsPageContent() {
     return 'nomination'
   })
   const [showSuggestDialog, setShowSuggestDialog] = useState(false)
+  const [listRefreshKey, setListRefreshKey] = useState(0)
   const [showPastArchiveOpen, setShowPastArchiveOpen] = useState(false)
 
   // Filter States
@@ -530,6 +531,7 @@ function ContestsPageContent() {
   useEffect(() => {
     const onContestantSubmitted = () => {
       clearContestsListCache()
+      setListRefreshKey((k) => k + 1)
     }
     window.addEventListener('contestant-submitted', onContestantSubmitted)
     return () => window.removeEventListener('contestant-submitted', onContestantSubmitted)
@@ -649,7 +651,7 @@ function ContestsPageContent() {
   // after the first (and every) page load and would overwrite setHasMore from the fetch with false.
   useEffect(() => {
     setHasMore(false)
-  }, [activeRoundId, effectiveRoundIdForFetch, categoryTab, activeDisplayTab?.kind, filterCountry, filterRegion, filterContinent, nominationMigrationLevel, committedSearch])
+  }, [activeRoundId, effectiveRoundIdForFetch, categoryTab, activeDisplayTab?.kind, filterCountry, filterRegion, filterContinent, nominationMigrationLevel, committedSearch, listRefreshKey])
 
   useEffect(() => {
     setContestsData(null)
@@ -848,7 +850,7 @@ function ContestsPageContent() {
     }
     // isAuthenticated/user removed: prevents race condition where auth resolve
     // aborts in-flight request. userIdRef handles cache key without re-triggering.
-  }, [activeRoundId, effectiveRoundIdForFetch, categoryTab, activeDisplayTab?.kind, filterCountry, filterRegion, filterContinent, nominationMigrationLevel, committedSearch])
+  }, [activeRoundId, effectiveRoundIdForFetch, categoryTab, activeDisplayTab?.kind, filterCountry, filterRegion, filterContinent, nominationMigrationLevel, committedSearch, listRefreshKey])
 
   // Load more contests function
   const loadMoreContests = useCallback(async () => {
@@ -1492,12 +1494,18 @@ function ContestsPageContent() {
                 const isNominationCard = rowMode === 'nomination'
                 const selectedRoundId = roundIdNav ? String(roundIdNav) : null
                 const entryRoundId = contest.userEntryRoundId != null ? String(contest.userEntryRoundId) : null
+                let pendingNomRound: string | null = null
+                if (typeof window !== 'undefined' && isNominationCard) {
+                  pendingNomRound = sessionStorage.getItem(`mh5-nominated-${contest.id}`)
+                }
                 const hasEntryInSelectedRound = Boolean(
                   isNominationCard &&
-                  contest.currentUserContesting &&
                   selectedRoundId &&
-                  entryRoundId &&
-                  entryRoundId === selectedRoundId,
+                  (
+                    (contest.currentUserContesting && entryRoundId && entryRoundId === selectedRoundId) ||
+                    (contest.currentUserContesting && !entryRoundId) ||
+                    (pendingNomRound && pendingNomRound === selectedRoundId)
+                  )
                 )
                 const isCurrentUserInThisCardRound = isNominationCard
                   ? hasEntryInSelectedRound
