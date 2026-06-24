@@ -1287,11 +1287,8 @@ class CRUDContest:
                         conds.append(Contestant.country.ilike(pat))
                         conds.append(Contestant.nominator_country.ilike(pat))
                         conds.append(User.country.ilike(pat))
-                    # outerjoin(User) matches get_contest_with_enriched_contestants so counts
-                    # stay aligned when a contestant row has no matching users row.
-                    entries_query = entries_query.outerjoin(
-                        User, Contestant.user_id == User.id
-                    ).filter(or_(*conds))
+                    # User is already outer-joined in the base entries query.
+                    entries_query = entries_query.filter(or_(*conds))
                     applied_location_filter = True
             elif season_level_lower in ("regional", "region"):
                 # Regional pool already respects the regional ContestantSeason membership;
@@ -1823,6 +1820,8 @@ class CRUDContest:
 
             round_row = db.query(RoundModel).filter(RoundModel.id == round_id).first()
             if nomination_vote_list_blocked(round_row, entry_type, requested_ui_level):
+                if count_only:
+                    return {"id": contest_obj.id, "contestants": [], "roster_count": 0}
                 empty = self.enrich_contest_with_stats(
                     db,
                     contest_obj,
@@ -1837,18 +1836,21 @@ class CRUDContest:
                 empty["contestants"] = []
                 return empty
         
-        # Enrichir le contest avec les stats
-        contest_data = self.enrich_contest_with_stats(
-            db,
-            contest_obj,
-            current_user=current_user,
-            filter_country=filter_country,
-            filter_region=filter_region,
-            filter_continent=filter_continent,
-            entry_type=entry_type,
-            round_id=round_id,
-            requested_ui_level=requested_ui_level,
-        )
+        # Roster card counts only need the scoped query below — skip heavy stats/social joins.
+        if count_only:
+            contest_data = {"id": contest_obj.id}
+        else:
+            contest_data = self.enrich_contest_with_stats(
+                db,
+                contest_obj,
+                current_user=current_user,
+                filter_country=filter_country,
+                filter_region=filter_region,
+                filter_continent=filter_continent,
+                entry_type=entry_type,
+                round_id=round_id,
+                requested_ui_level=requested_ui_level,
+            )
         
         # Récupérer la saison active d'abord (alignée sur enrich pour ce round)
         from app.models.contests import ContestantSeason, SeasonLevel

@@ -3,7 +3,7 @@
 # Run as root ON THE VPS: bash scripts/vps_full_deploy.sh
 set -euo pipefail
 
-EXPECTED_BUILD="march-cohort-calendar-20260623b"
+EXPECTED_BUILD="march-cohort-calendar-20260624a"
 
 find_repo() {
   if [ -f "$(pwd)/backend/main.py" ] && [ -d "$(pwd)/.git" ]; then
