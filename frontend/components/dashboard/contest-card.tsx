@@ -56,6 +56,7 @@ interface ContestCardProps {
   minAge?: number | null
   maxAge?: number | null
   isNomination?: boolean  // Indique si on est dans l'onglet Nomination
+  isVoteMode?: boolean  // Vote pill active — hide nominate/participate actions
   contest_mode?: string | null
   currentUserContesting?: boolean  // Indique si l'utilisateur connecté a déjà participé
   onViewContestants: () => void
@@ -98,6 +99,7 @@ export function ContestCard({
   minAge = null,
   maxAge = null,
   isNomination = false,
+  isVoteMode = false,
   contest_mode = null,
   currentUserContesting = false,
   onViewContestants,
@@ -105,7 +107,7 @@ export function ContestCard({
   onParticipate,
   onOpenDetails
 }: ContestCardProps) {
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
   const currentTime = useClock()
   const [imageError, setImageError] = useState(false)
   const [showInfoDialog, setShowInfoDialog] = useState(false)
@@ -275,8 +277,8 @@ export function ContestCard({
                       <Clock className="w-3 h-3 text-myhigh5-secondary animate-pulse flex-shrink-0" />
                       <span className="text-white text-[10px] font-medium truncate flex-1">
                         {isNomination
-                          ? (t('dashboard.contests.time_remaining_to_nominate') || 'Temps restant pour nommer')
-                          : (t('dashboard.contests.time_remaining_to_participate') || 'Temps restant pour concourir')
+                          ? (t('dashboard.contests.time_remaining_to_nominate') || 'Time remaining to nominate')
+                          : (t('dashboard.contests.time_remaining_to_participate') || 'Time remaining to participate')
                         }
                       </span>
                       <span className="text-white font-bold font-mono text-[10px] flex-shrink-0">{getCountdownText()}</span>
@@ -286,8 +288,8 @@ export function ContestCard({
                 <TooltipContent className="bg-white text-gray-900 border-gray-200 shadow-lg dark:bg-gray-800 dark:text-white dark:border-gray-700 max-w-xs">
                   <p className="text-xs">
                     {participationEndDate
-                      ? `${t('dashboard.contests.tooltip_time_remaining') || 'Temps restant avant la fin des inscriptions'}: ${new Date(participationEndDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`
-                      : t('dashboard.contests.tooltip_time_remaining') || 'Temps restant pour participer au concours'}
+                      ? `${t('dashboard.contests.tooltip_time_remaining') || 'Time remaining before entries close'}: ${new Date(participationEndDate).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`
+                      : t('dashboard.contests.tooltip_time_remaining') || 'Time remaining to participate'}
                   </p>
                 </TooltipContent>
               </Tooltip>
@@ -672,7 +674,7 @@ export function ContestCard({
 
         {/* Action Buttons */}
         <div className="mt-4 flex gap-2.5">
-          {canParticipate() && onParticipate && !isRoundClosed ? (
+          {canParticipate() && onParticipate && !isRoundClosed && !isVoteMode ? (
             <>
               <Button
                 onClick={(e) => {
@@ -684,10 +686,10 @@ export function ContestCard({
                 <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover/btn:translate-x-full transition-transform duration-500" />
                 <Sparkles className="w-3.5 h-3.5 mr-1.5 group-hover/btn:scale-110 group-hover/btn:rotate-12 transition-all duration-300" />
                 {currentUserContesting
-                  ? (t('dashboard.contests.edit') || 'Modifier')
+                  ? (t('dashboard.contests.edit') || 'Edit')
                   : isNomination
-                    ? (t('dashboard.contests.nominate') || 'Nommer')
-                    : (t('dashboard.contests.participate') || 'Participer')
+                    ? (t('dashboard.contests.nominate') || 'Nominate')
+                    : (t('dashboard.contests.participate') || 'Participate')
                 }
                 <ArrowRight className="w-3.5 h-3.5 ml-1.5 group-hover/btn:translate-x-1 group-hover/btn:scale-110 transition-all duration-300" />
               </Button>

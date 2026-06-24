@@ -306,12 +306,6 @@ export default function ContestDetailPage() {
           ? []
           : dedupedRaw
 
-      // #region agent log
-      const listAuditKey = `mh5-list-count-${contestId}-${contestLevelFromUrl || 'none'}-${roundIdFromUrl || 'none'}`
-      const listCardCount = typeof window !== 'undefined' ? sessionStorage.getItem(listAuditKey) : null
-      fetch('http://127.0.0.1:7349/ingest/df627543-d3e3-49ba-9975-89e66fb57ed0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e34593'},body:JSON.stringify({sessionId:'e34593',hypothesisId:'F',location:'contests/[id]/page.tsx:fetchContestDetails',message:'detail roster loaded',data:{runId:'frontend-season-guard',contestId,contestLevel:contestLevelFromUrl,roundId:roundIdFromUrl,rosterCount:rosterRows.length,rawCount:dedupedRaw.length,seasonFiltered:rosterRows.length!==dedupedRaw.length,seasonLevel:dedupedRaw[0]?.season?.level,listCardCount:listCardCount?Number(listCardCount):null},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
-
       const mappedContestants: Contestant[] = rosterRows.map((ct: any, index: number) => {
         const images = parseMediaIds(ct.image_media_ids, 'image') // snake_case from python
         const videos = parseMediaIds(ct.video_media_ids, 'video')

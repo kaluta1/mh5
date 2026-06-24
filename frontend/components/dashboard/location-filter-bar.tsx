@@ -11,22 +11,21 @@ import { countries } from '@/lib/countries'
 
 // Liste des continents disponibles
 const CONTINENTS = [
-    { value: 'all', label: 'Tous les continents' },
-    { value: 'Africa', label: 'Afrique' },
-    { value: 'Asia', label: 'Asie' },
+    { value: 'all', label: 'All continents' },
+    { value: 'Africa', label: 'Africa' },
+    { value: 'Asia', label: 'Asia' },
     { value: 'Europe', label: 'Europe' },
-    { value: 'North America', label: 'Amérique du Nord' },
-    { value: 'South America', label: 'Amérique du Sud' },
-    { value: 'Oceania', label: 'Océanie' },
-    { value: 'Antarctica', label: 'Antarctique' }
+    { value: 'North America', label: 'North America' },
+    { value: 'South America', label: 'South America' },
+    { value: 'Oceania', label: 'Oceania' },
+    { value: 'Antarctica', label: 'Antarctica' }
 ]
 
-// Options de tri
 const SORT_OPTIONS = [
-    { value: 'participants', labelKey: 'dashboard.contests.sort_participants', defaultLabel: 'Plus de participants' },
-    { value: 'votes', labelKey: 'dashboard.contests.sort_votes', defaultLabel: 'Plus de votes' },
-    { value: 'date', labelKey: 'dashboard.contests.sort_date', defaultLabel: 'Plus récent' },
-    { value: 'name', labelKey: 'dashboard.contests.sort_name', defaultLabel: 'Nom (A-Z)' }
+    { value: 'participants', labelKey: 'dashboard.contests.sort_participants', defaultLabel: 'Most participants' },
+    { value: 'votes', labelKey: 'dashboard.contests.sort_votes', defaultLabel: 'Most votes' },
+    { value: 'date', labelKey: 'dashboard.contests.sort_date', defaultLabel: 'Newest' },
+    { value: 'name', labelKey: 'dashboard.contests.sort_name', defaultLabel: 'Name (A-Z)' }
 ]
 
 export interface LocationFilterBarProps {
@@ -106,7 +105,7 @@ export function LocationFilterBar({
             // Let's put it as second option (after 'all')
             options.splice(1, 0, {
                 value: user.continent,
-                label: `${t('dashboard.contests.my_continent') || 'Mon continent'} (${label})`
+                label: `${t('dashboard.contests.my_continent') || 'My continent'} (${label})`
             })
         }
         return options
@@ -120,7 +119,7 @@ export function LocationFilterBar({
             const myCountryOption = {
                 code: 'MY_COUNTRY',
                 name: user.country,
-                label: `${t('dashboard.contests.my_country') || 'Mon pays'} (${user.country})`
+                label: `${t('dashboard.contests.my_country') || 'My country'} (${user.country})`
             }
             return { hasMyCountry: true, myCountry: myCountryOption, all: options }
         }
@@ -137,7 +136,7 @@ export function LocationFilterBar({
     // Label affiché dans le trigger du sélecteur de pays
     const countryDisplayLabel = React.useMemo(() => {
         if (!filterCountry || filterCountry === 'all') {
-            return t('dashboard.contests.all_countries') || 'Tous les pays'
+            return t('dashboard.contests.all_countries') || 'All countries'
         }
         if (countryOptions.hasMyCountry && countryOptions.myCountry && filterCountry === countryOptions.myCountry.name) {
             return countryOptions.myCountry.label
@@ -159,7 +158,7 @@ export function LocationFilterBar({
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                     <Input
                         type="text"
-                        placeholder={searchPlaceholder || t('dashboard.contests.search_placeholder') || 'Rechercher...'}
+                        placeholder={searchPlaceholder || t('dashboard.contests.search_placeholder') || 'Search...'}
                         value={searchTerm}
                         onChange={(e) => onSearchChange?.(e.target.value)}
                         onKeyPress={handleKeyPress}
@@ -215,7 +214,7 @@ export function LocationFilterBar({
                                     <input
                                         ref={countrySearchRef}
                                         type="text"
-                                        placeholder={t('dashboard.contests.search_country_placeholder') || 'Rechercher un pays...'}
+                                        placeholder={t('dashboard.contests.search_country_placeholder') || 'Search for a country...'}
                                         value={countrySearch}
                                         onChange={(e) => setCountrySearch(e.target.value)}
                                         className="w-full h-9 pl-8 pr-3 rounded-md bg-gray-50 border border-gray-200 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:border-blue-500 dark:bg-gray-900 dark:border-gray-700 dark:text-white"
@@ -305,7 +304,7 @@ export function LocationFilterBar({
                     className="bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-white px-6"
                 >
                     <Search className="w-4 h-4 mr-2" />
-                    {t('dashboard.contests.search_button') || 'Rechercher'}
+                    {t('dashboard.contests.search_button') || 'Search'}
                 </Button>
             )}
         </div>

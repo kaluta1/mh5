@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { logger } from '@/lib/logger'
 import { LocationFilterBar } from '@/components/dashboard/location-filter-bar'
-import { getEffectiveApiUrl } from '@/lib/config'
+import { normalizeMediaUrl } from '@/lib/media-url'
 import { COUNTRIES_DATA } from '@/lib/countries-data'
 import { regionalPoolForCountry } from '@/lib/regional-pool'
 import {
@@ -771,11 +771,6 @@ function ContestsPageContent() {
           setHasMore(false)
         }
 
-        // #region agent log
-        if (activeNominationLevel) {
-          fetch('http://127.0.0.1:7349/ingest/df627543-d3e3-49ba-9975-89e66fb57ed0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e34593'},body:JSON.stringify({sessionId:'e34593',hypothesisId:'G',location:'contests/page.tsx:fetchContestsForRound',message:'vote list loaded',data:{runId:'frontend-fallback',contestLevel:activeNominationLevel,roundId:effectiveRoundIdForFetch,usedFallback,contestCount:contests.length,contests:contests.slice(0,10).map((c:any)=>({id:c.id,participants_count:c.participants_count}))},timestamp:Date.now()})}).catch(()=>{});
-        }
-        // #endregion
       } catch (error: any) {
         if (error.name === 'AbortError' || abortController.signal.aborted) {
           return
@@ -936,9 +931,6 @@ function ContestsPageContent() {
   const loadMoreContestsRef = useRef(loadMoreContests)
   loadMoreContestsRef.current = loadMoreContests
 
-  // Cache API_BASE_URL to avoid repeated lookups
-  const API_BASE_URL = useMemo(() => getEffectiveApiUrl(), [])
-
   // Canonical: opening a pooled REGIONAL/+ contest must not attach ?country= from the grid,
   // or the detail API filters to Tanzania-only while the card count shows full East Africa pool.
   const shouldPassCountryNavParam = React.useCallback(
@@ -1010,13 +1002,18 @@ function ContestsPageContent() {
       // Stats are now directly on the contest object in the new schema
       // Fallback multiple pour l'image
       // Use emoji as fallback instead of missing placeholder.png
-      const rawImage = c.cover_image_url || c.image_url || '💎'
-
-      const isEmoji = rawImage?.length <= 4 && rawImage?.codePointAt(0) > 0x1F000
+      const rawImage = c.cover_image_url || c.image_url || c.category_image_url || ''
+      const isEmoji =
+        rawImage &&
+        rawImage.length <= 8 &&
+        !rawImage.includes('/') &&
+        !rawImage.startsWith('http') &&
+        [...rawImage].some((ch) => (ch.codePointAt(0) ?? 0) > 0x1f000)
       let coverImage = rawImage
-
-      if (!isEmoji && coverImage && !coverImage.startsWith('http') && !coverImage.startsWith('data:') && !coverImage.startsWith('/')) {
-        coverImage = `${API_BASE_URL}/${coverImage}`
+      if (!isEmoji && coverImage) {
+        coverImage = normalizeMediaUrl(coverImage)
+      } else if (!coverImage) {
+        coverImage = '💎'
       }
 
       return {
@@ -1355,7 +1352,8 @@ function ContestsPageContent() {
           />
         </div>
 
-        {/* Main Category Tabs (Nomination / Participations) */}
+        {/* Main Category Tabs — hidden on Vote pill (vote uses geography chips only) */}
+        {activeDisplayTab?.kind !== 'vote' && (
         <div className="mb-6 border-b border-gray-200 dark:border-gray-800">
           <div className="flex space-x-1">
             <button
@@ -1407,6 +1405,7 @@ function ContestsPageContent() {
             </button>
           </div>
         </div>
+        )}
 
         {/* Level filters directly under tabs: Vote / Nominate & Vote rounds show Country, Regional, … on Nominate; Participations uses same when voting round selected */}
         {categoryTab === 'participations' && (
@@ -1510,6 +1509,7 @@ function ContestsPageContent() {
                   isKycVerified={!!user?.identity_verified}
                   isFavorite={false}
                   isNomination={isNominationCard}
+                  isVoteMode={activeDisplayTab?.kind === 'vote'}
                   contest_mode={contest.contest_mode}
                   currentUserContesting={Boolean(isCurrentUserInThisCardRound)}
                   onToggleFavorite={() => { }}
