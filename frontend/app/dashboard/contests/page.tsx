@@ -55,9 +55,9 @@ const PastContestsArchiveDialog = dynamic(
 
 const CONTESTS_PER_PAGE = 12
 const INITIAL_CONTESTS = 12
-/** Vote tab lists every category with promoted winners — must not truncate at 12. */
-const VOTE_TAB_CONTEST_LIMIT = 200
-const CACHE_TTL = 5 * 1000 // 5 seconds cache, preventing stale states for participants
+/** Vote tab: paginate in chunks; backend exact-counts only the visible page. */
+const VOTE_TAB_CONTEST_LIMIT = 60
+const CACHE_TTL = 60 * 1000 // 60s — stale-while-revalidate for list navigation
 
 // Simple in-memory cache for contests data
 const contestsCache = new Map<string, { data: any; timestamp: number }>()
@@ -197,7 +197,7 @@ async function fetchPooledVoteContestsWithLegacyFallback(
   const broad = await ApiService.getRounds({
     ...roundsParams,
     contestLevel: undefined,
-    contestLimit: 200,
+    contestLimit: Math.max(limit, 60),
   })
   const pool: any[] = broad?.[0]?.contests ?? []
   const enriched: any[] = []
@@ -1212,8 +1212,8 @@ function ContestsPageContent() {
     router.push(`/dashboard/contests/${id}/apply${q ? `?${q}` : ''}`)
   }
 
-  // Show skeleton only if we have no data at all
-  if (isLoading || (roundsLoading && rounds.length === 0 && !allContests.length)) {
+  // Show skeleton only when rounds haven't loaded yet — don't block on auth refresh.
+  if (roundsLoading && rounds.length === 0 && !allContests.length) {
     return <ContestsSkeleton />
   }
   // Allow unauthenticated users to view contests (they just can't participate)

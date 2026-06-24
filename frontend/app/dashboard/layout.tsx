@@ -3,12 +3,17 @@
 import * as React from "react"
 import { useState, useEffect } from "react"
 import { useRouter, usePathname } from "next/navigation"
+import dynamic from "next/dynamic"
 import { DashboardSidebar } from "@/components/dashboard/dashboard-sidebar"
 import { AdminSidebar } from "@/components/dashboard/admin-sidebar"
 import { DashboardNavbar } from "@/components/dashboard/dashboard-navbar"
-import { MobileMenu } from "@/components/dashboard/mobile-menu"
 import { useAuth } from "@/hooks/use-auth"
 import { Skeleton } from "@/components/ui/skeleton"
+
+const MobileMenu = dynamic(
+  () => import("@/components/dashboard/mobile-menu").then((m) => ({ default: m.MobileMenu })),
+  { ssr: false },
+)
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -86,8 +91,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     )
   }
 
-  // Ne pas afficher le layout si non authentifié
-  if (!isAuthenticated) {
+  // Ne pas afficher le layout si non authentifié (sauf session en cours de restauration)
+  if (!isAuthenticated && !hasStoredToken) {
     return null
   }
 

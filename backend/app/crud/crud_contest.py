@@ -2100,19 +2100,6 @@ class CRUDContest:
                 ContestantSeason.season_id == season.id,
                 ContestantSeason.is_active == True,
             )
-            # DEBUG: log the raw member IDs so we can verify promotion links exist
-            _raw_member_ids = [r[0] for r in active_season_member_ids.all()]
-            logger.info(
-                f"[DEBUG-CONTINENTAL] contest_id={contest_id} | "
-                f"season_id={season.id} | level={season_level} | "
-                f"active_member_count={len(_raw_member_ids)} | "
-                f"member_ids={_raw_member_ids[:50]}"
-            )
-            # Re-create the subquery for the actual filter (do not reuse .all() cursor)
-            active_season_member_ids = db.query(ContestantSeason.contestant_id).filter(
-                ContestantSeason.season_id == season.id,
-                ContestantSeason.is_active == True,
-            )
             contestants_query = contestants_query.filter(Contestant.id.in_(active_season_member_ids))
             # Shared pooled seasons can include members from every category; keep only
             # rows whose legacy season_id belongs to this contest's category bucket.

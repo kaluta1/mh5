@@ -65,7 +65,91 @@ interface ContestCardProps {
   onOpenDetails?: () => void
 }
 
-export function ContestCard({
+interface ContestCardCountdownProps {
+  participationEndDate?: Date
+  votingStartDate?: Date
+  isNomination: boolean
+  language: string
+  labelNominate: string
+  labelParticipate: string
+  tooltipRemaining: string
+}
+
+const ContestCardCountdown = React.memo(function ContestCardCountdown({
+  participationEndDate,
+  votingStartDate,
+  isNomination,
+  language,
+  labelNominate,
+  labelParticipate,
+  tooltipRemaining,
+}: ContestCardCountdownProps) {
+  const currentTime = useClock()
+
+  const countdownText = React.useMemo(() => {
+    const now = currentTime
+
+    if (votingStartDate) {
+      const votingStart = new Date(votingStartDate)
+      if (now >= votingStart) return ''
+    }
+
+    let endDate: Date | null = null
+    if (participationEndDate) {
+      endDate = new Date(participationEndDate)
+    }
+    if (votingStartDate) {
+      const votingStart = new Date(votingStartDate)
+      if (!endDate || votingStart < endDate) {
+        endDate = votingStart
+      }
+    }
+    if (!endDate || now > endDate) return ''
+
+    const diffMs = endDate.getTime() - now.getTime()
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+    const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+    const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
+    const diffSeconds = Math.floor((diffMs % (1000 * 60)) / 1000)
+
+    if (diffDays > 0) return `${diffDays}d ${diffHours}h`
+    if (diffHours > 0) return `${diffHours}h ${diffMinutes}m`
+    if (diffMinutes > 0) return `${diffMinutes}m ${diffSeconds}s`
+    if (diffSeconds > 0) return `${diffSeconds}s`
+    return '0s'
+  }, [currentTime, participationEndDate, votingStartDate])
+
+  if (!countdownText) return null
+
+  return (
+    <div className="absolute bottom-3 left-3 right-3 z-10">
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="bg-black/80 backdrop-blur-md rounded-lg px-2.5 py-1.5 border border-white/20 cursor-help">
+              <div className="flex items-center gap-1.5">
+                <Clock className="w-3 h-3 text-myhigh5-secondary animate-pulse flex-shrink-0" />
+                <span className="text-white text-[10px] font-medium truncate flex-1">
+                  {isNomination ? labelNominate : labelParticipate}
+                </span>
+                <span className="text-white font-bold font-mono text-[10px] flex-shrink-0">{countdownText}</span>
+              </div>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent className="bg-white text-gray-900 border-gray-200 shadow-lg dark:bg-gray-800 dark:text-white dark:border-gray-700 max-w-xs">
+            <p className="text-xs">
+              {participationEndDate
+                ? `${tooltipRemaining}: ${new Date(participationEndDate).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`
+                : tooltipRemaining}
+            </p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </div>
+  )
+})
+
+export const ContestCard = React.memo(function ContestCard({
   id,
   title,
   description,
@@ -108,7 +192,6 @@ export function ContestCard({
   onOpenDetails
 }: ContestCardProps) {
   const { t, language } = useLanguage()
-  const currentTime = useClock()
   const [imageError, setImageError] = useState(false)
   const [showInfoDialog, setShowInfoDialog] = useState(false)
 
@@ -193,52 +276,6 @@ export function ContestCard({
     return true
   }
 
-  const getCountdownText = () => {
-    const now = currentTime
-
-    if (votingStartDate) {
-      const votingStart = new Date(votingStartDate)
-      if (now >= votingStart) return ''
-    }
-
-    let endDate: Date | null = null
-
-    if (participationEndDate) {
-      endDate = new Date(participationEndDate)
-    }
-
-    if (votingStartDate) {
-      const votingStart = new Date(votingStartDate)
-      if (!endDate || votingStart < endDate) {
-        endDate = votingStart
-      }
-    }
-
-    if (!endDate || now > endDate) return ''
-
-    const diffMs = endDate.getTime() - now.getTime()
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-    const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
-    const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
-    const diffSeconds = Math.floor((diffMs % (1000 * 60)) / 1000)
-
-    const daysUnit = t('dashboard.contests.time_unit_days') || 'j'
-    const hoursUnit = t('dashboard.contests.time_unit_hours') || 'h'
-    const minutesUnit = t('dashboard.contests.time_unit_minutes') || 'm'
-    const secondsUnit = t('dashboard.contests.time_unit_seconds') || 's'
-
-    if (diffDays > 0) {
-      return `${diffDays}${daysUnit} ${diffHours}${hoursUnit}`
-    } else if (diffHours > 0) {
-      return `${diffHours}${hoursUnit} ${diffMinutes}${minutesUnit}`
-    } else if (diffMinutes > 0) {
-      return `${diffMinutes}${minutesUnit} ${diffSeconds}${secondsUnit}`
-    } else if (diffSeconds > 0) {
-      return `${diffSeconds}${secondsUnit}`
-    } else {
-      return `0${secondsUnit}`
-    }
-  }
 
   return (
     <div
@@ -267,34 +304,18 @@ export function ContestCard({
           </div>
         )}
 
-        {/* Time remaining overlay on photo */}
-        {isParticipationOngoing() && getCountdownText() && (
-          <div className="absolute bottom-3 left-3 right-3 z-10" onClick={(e) => e.stopPropagation()}>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className="bg-black/80 backdrop-blur-md rounded-lg px-2.5 py-1.5 border border-white/20 cursor-help">
-                    <div className="flex items-center gap-1.5">
-                      <Clock className="w-3 h-3 text-myhigh5-secondary animate-pulse flex-shrink-0" />
-                      <span className="text-white text-[10px] font-medium truncate flex-1">
-                        {isNomination
-                          ? (t('dashboard.contests.time_remaining_to_nominate') || 'Time remaining to nominate')
-                          : (t('dashboard.contests.time_remaining_to_participate') || 'Time remaining to participate')
-                        }
-                      </span>
-                      <span className="text-white font-bold font-mono text-[10px] flex-shrink-0">{getCountdownText()}</span>
-                    </div>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent className="bg-white text-gray-900 border-gray-200 shadow-lg dark:bg-gray-800 dark:text-white dark:border-gray-700 max-w-xs">
-                  <p className="text-xs">
-                    {participationEndDate
-                      ? `${t('dashboard.contests.tooltip_time_remaining') || 'Time remaining before entries close'}: ${new Date(participationEndDate).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`
-                      : t('dashboard.contests.tooltip_time_remaining') || 'Time remaining to participate'}
-                  </p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+        {/* Time remaining overlay — isolated so the clock does not re-render the whole card */}
+        {isParticipationOngoing() && (participationEndDate || votingStartDate) && (
+          <div onClick={(e) => e.stopPropagation()}>
+            <ContestCardCountdown
+              participationEndDate={participationEndDate}
+              votingStartDate={votingStartDate}
+              isNomination={!!isNomination}
+              language={language}
+              labelNominate={t('dashboard.contests.time_remaining_to_nominate') || 'Time remaining to nominate'}
+              labelParticipate={t('dashboard.contests.time_remaining_to_participate') || 'Time remaining to participate'}
+              tooltipRemaining={t('dashboard.contests.tooltip_time_remaining') || 'Time remaining before entries close'}
+            />
           </div>
         )}
 
@@ -736,4 +757,4 @@ export function ContestCard({
       </div>
     </div>
   )
-}
+})

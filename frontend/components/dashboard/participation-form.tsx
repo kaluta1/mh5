@@ -102,8 +102,9 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
   useEffect(() => {
     let mounted = true
     import('react-quill')
-      .then((mod) => {
+      .then(async (mod) => {
         if (!mounted) return
+        await import('@/styles/quill-snow.css')
         setReactQuillComponent(() => mod.default)
       })
       .catch((err) => {

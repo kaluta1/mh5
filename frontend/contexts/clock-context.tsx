@@ -12,21 +12,35 @@ export function ClockProvider({ children }: { children: React.ReactNode }) {
   const [now, setNow] = useState<Date>(() => new Date())
 
   useEffect(() => {
-    // Sync to the start of the next second to keep all consumers aligned.
-    const ms = 1000 - (Date.now() % 1000)
     let timeoutId: ReturnType<typeof setTimeout>
     let intervalId: ReturnType<typeof setInterval>
 
     const tick = () => setNow(new Date())
 
-    timeoutId = setTimeout(() => {
-      tick()
-      intervalId = setInterval(tick, 1000)
-    }, ms)
+    const start = () => {
+      const ms = 1000 - (Date.now() % 1000)
+      timeoutId = setTimeout(() => {
+        tick()
+        intervalId = setInterval(tick, 1000)
+      }, ms)
+    }
 
-    return () => {
+    const stop = () => {
       clearTimeout(timeoutId)
       clearInterval(intervalId)
+    }
+
+    const onVisibility = () => {
+      stop()
+      if (!document.hidden) start()
+    }
+
+    if (!document.hidden) start()
+    document.addEventListener('visibilitychange', onVisibility)
+
+    return () => {
+      stop()
+      document.removeEventListener('visibilitychange', onVisibility)
     }
   }, [])
 

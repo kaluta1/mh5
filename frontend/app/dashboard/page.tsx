@@ -91,7 +91,7 @@ export default function DashboardPage() {
     }
   }, [isAuthenticated])
 
-  if (isLoading || analyticsLoading) {
+  if (isLoading) {
     return <DashboardSkeleton />
   }
 
