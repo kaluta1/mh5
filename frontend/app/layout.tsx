@@ -204,12 +204,11 @@ export default function RootLayout({
                 // Load ads after the first page paint so third-party JS doesn't
                 // compete with route hydration and API requests.
                 function loadAds() {
-                  if (document.querySelector('script[data-myhigh5-ads]')) return;
+                  if (document.querySelector('script[src^="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"]')) return;
                   var s = document.createElement('script');
                   s.async = true;
                   s.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5582556318526474';
                   s.crossOrigin = 'anonymous';
-                  s.setAttribute('data-myhigh5-ads', 'true');
                   document.head.appendChild(s);
                 }
                 window.addEventListener('load', function() {
