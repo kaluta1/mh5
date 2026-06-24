@@ -55,6 +55,8 @@ const PastContestsArchiveDialog = dynamic(
 
 const CONTESTS_PER_PAGE = 12
 const INITIAL_CONTESTS = 12
+/** Vote tab lists every category with promoted winners — must not truncate at 12. */
+const VOTE_TAB_CONTEST_LIMIT = 200
 const CACHE_TTL = 5 * 1000 // 5 seconds cache, preventing stale states for participants
 
 // Simple in-memory cache for contests data
@@ -684,6 +686,10 @@ function ContestsPageContent() {
       setContestsLoading(true)
       const contestMode = categoryTab === 'nomination' ? 'nomination' : categoryTab === 'participations' ? 'participation' : undefined
       const activeSearch = committedSearch || undefined
+      const fetchLimit =
+        activeDisplayTab?.kind === 'vote' || activeSearch
+          ? VOTE_TAB_CONTEST_LIMIT
+          : INITIAL_CONTESTS
       const activeNominationLevel =
         categoryTab === 'nomination' &&
         activeDisplayTab?.kind === 'vote' &&
@@ -734,12 +740,12 @@ function ContestsPageContent() {
           filterContinent: activeContinent,
           contestLevel: activeNominationLevel,
           searchTerm: activeSearch,
-          contestLimit: INITIAL_CONTESTS,
+          contestLimit: fetchLimit,
         }
 
         const { contests, usedFallback, roundRow } =
           activeNominationLevel && POOLED_NOMINATION_VOTE_LEVELS.has(activeNominationLevel)
-            ? await fetchPooledVoteContestsWithLegacyFallback(roundsParams, INITIAL_CONTESTS)
+            ? await fetchPooledVoteContestsWithLegacyFallback(roundsParams, fetchLimit)
             : await (async () => {
                 const data = await ApiService.getRounds(roundsParams)
                 return {
@@ -789,11 +795,11 @@ function ContestsPageContent() {
               filterContinent: activeContinent,
               contestLevel: activeNominationLevel,
               searchTerm: activeSearch,
-              contestLimit: INITIAL_CONTESTS,
+              contestLimit: fetchLimit,
             }
             const retryResult =
               activeNominationLevel && POOLED_NOMINATION_VOTE_LEVELS.has(activeNominationLevel)
-                ? await fetchPooledVoteContestsWithLegacyFallback(retryParams, INITIAL_CONTESTS)
+                ? await fetchPooledVoteContestsWithLegacyFallback(retryParams, fetchLimit)
                 : await (async () => {
                     const retryData = await ApiService.getRounds(retryParams)
                     return {

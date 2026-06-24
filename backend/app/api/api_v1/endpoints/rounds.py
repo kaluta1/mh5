@@ -58,6 +58,20 @@ def _normalize_contest_level(level: Any) -> Optional[str]:
     return token
 
 
+def _pooled_season_levels_for_ui(wanted_level: Optional[str]) -> set:
+    """Map vote-tab UI level to the ContestSeason.level rows used for roster counts."""
+    from app.models.contests import SeasonLevel
+
+    wl = _normalize_contest_level(wanted_level)
+    if wl in ("regional", "region"):
+        return {SeasonLevel.REGIONAL}
+    if wl in ("continental", "continent"):
+        return {SeasonLevel.CONTINENT}
+    if wl == "global":
+        return {SeasonLevel.GLOBAL}
+    return {SeasonLevel.REGIONAL, SeasonLevel.CONTINENT, SeasonLevel.GLOBAL}
+
+
 def _to_date_value(value: Any) -> Optional[date]:
     """Normalize ORM/JSON dates to date for comparisons."""
     if value is None:
@@ -451,7 +465,7 @@ def _lightweight_round_data(
                 (ContestModel.description.ilike(search_like))
             )
 
-        all_contests = query.order_by(ContestModel.participant_count.desc(), ContestModel.id.desc()).all()
+        all_contests = query.order_by(ContestModel.id.desc()).all()
         if contest_mode is not None:
             # Apply normalized filtering in Python to support enum/string drift
             # like "ContestMode.PARTICIPATION" across environments.
@@ -477,27 +491,11 @@ def _lightweight_round_data(
             all_contests, contest_mode_filter=contest_mode
         )
 
-        contests_count = len(all_contests)
-        contests = all_contests[contest_skip:contest_skip + contest_limit]
-
-        valid_contests_by_id = {c.id: c for c in contests}
-        valid_contest_ids = set(valid_contests_by_id.keys())
-        user_contested_contest_ids, entry_round_by_contest = _batch_user_contest_participation(
-            db,
-            user_id=user_id,
-            valid_contest_ids=valid_contest_ids,
-            valid_contests_by_id=valid_contests_by_id,
-            contest_mode=contest_mode,
-            round_id=int(round_obj.id),
-        )
-
         from app.models.contests import Contestant, ContestantSeason, ContestSeasonLink, ContestSeason, SeasonLevel
 
         def _round_entry_count(contest: Any, contest_mode_value: str) -> int:
             """Round-specific card count; never use stale all-time Contest.participant_count."""
-            # Pooled phases (regional/continental/global): roster is driven by
-            # ContestantSeason membership, not by season_id + round_id.
-            pooled_levels = {SeasonLevel.REGIONAL, SeasonLevel.CONTINENT, SeasonLevel.GLOBAL}
+            target_pool_levels = _pooled_season_levels_for_ui(wanted_level)
             try:
                 active_pool_season = (
                     db.query(ContestSeason)
@@ -505,10 +503,11 @@ def _lightweight_round_data(
                     .filter(
                         ContestSeasonLink.contest_id == contest.id,
                         ContestSeasonLink.is_active == True,
-                        ContestSeason.level.in_(pooled_levels),
+                        ContestSeason.level.in_(target_pool_levels),
                         ContestSeason.round_id == round_obj.id,
                         ContestSeason.is_deleted == False,
                     )
+                    .order_by(ContestSeason.id.desc())
                     .first()
                 )
                 if active_pool_season is not None:
@@ -566,19 +565,10 @@ def _lightweight_round_data(
                 logger.warning(f"Error running round entry count query: {e}")
                 return 0
 
-        for contest in contests:
-            contest_mode_value = _normalize_contest_mode(getattr(contest, "contest_mode", "participation"))
-            try:
-                display_level = (
-                    wanted_level
-                    or _contest_card_level_for_round(db, round_obj, contest, contest_mode_value)
-                )
-            except Exception as e:
-                logger.warning(f"Error resolving lightweight contest level {contest.id}: {str(e)}")
-                display_level = wanted_level or getattr(contest, "level", None) or (
-                    "country" if contest_mode_value == "nomination" else "city"
-                )
-
+        def _participant_count_for_contest(contest: Any) -> int:
+            contest_mode_value = _normalize_contest_mode(
+                getattr(contest, "contest_mode", "participation")
+            )
             participant_count = _round_entry_count(contest, contest_mode_value)
             if contest_mode_value == "nomination":
                 try:
@@ -596,7 +586,38 @@ def _lightweight_round_data(
                 except Exception as e:
                     db.rollback()
                     logger.warning(f"Failed count_nomination_roster_for_card in fast path: {e}")
-                    
+            return int(participant_count)
+
+        scored_contests = [
+            (contest, _participant_count_for_contest(contest)) for contest in all_contests
+        ]
+        scored_contests.sort(key=lambda item: (-item[1], -item[0].id))
+        contests_count = len(scored_contests)
+        page_contests = scored_contests[contest_skip : contest_skip + contest_limit]
+
+        valid_contests_by_id = {c.id: c for c, _ in page_contests}
+        valid_contest_ids = set(valid_contests_by_id.keys())
+        user_contested_contest_ids, entry_round_by_contest = _batch_user_contest_participation(
+            db,
+            user_id=user_id,
+            valid_contest_ids=valid_contest_ids,
+            valid_contests_by_id=valid_contests_by_id,
+            contest_mode=contest_mode,
+            round_id=int(round_obj.id),
+        )
+
+        for contest, participant_count in page_contests:
+            contest_mode_value = _normalize_contest_mode(getattr(contest, "contest_mode", "participation"))
+            try:
+                display_level = (
+                    wanted_level
+                    or _contest_card_level_for_round(db, round_obj, contest, contest_mode_value)
+                )
+            except Exception as e:
+                logger.warning(f"Error resolving lightweight contest level {contest.id}: {str(e)}")
+                display_level = wanted_level or getattr(contest, "level", None) or (
+                    "country" if contest_mode_value == "nomination" else "city"
+                )
             contests_data.append({
                 "id": contest.id,
                 "name": contest.name,
@@ -892,18 +913,15 @@ def _enrich_round_data(
                 vc.id: int(getattr(vc, "participant_count", 0) or 0)
                 for vc in valid_contests
             }
-            valid_contests_by_id = {vc.id: vc for vc in valid_contests}
-            valid_contest_ids = set(valid_contests_by_id.keys())
 
-            valid_contests.sort(
-                key=lambda c: contest_participant_counts.get(c.id, 0),
-                reverse=True,
+            use_exact_nomination_counts = (
+                contest_mode == "nomination"
+                and crud.contest.nomination_card_uses_exact_roster(
+                    filter_country, filter_region, filter_continent, contest_level
+                )
             )
 
-            # Apply pagination BEFORE expensive per-contest stats (geo-filter list path).
-            paginated_contests = valid_contests[contest_skip:contest_skip + contest_limit]
-
-            if paginated_contests:
+            if valid_contests and (use_exact_nomination_counts or contest_mode == "nomination"):
                 current_user_obj = None
                 if user_id:
                     try:
@@ -916,15 +934,11 @@ def _enrich_round_data(
                         db.rollback()
                         logger.warning(f"Failed to fetch user in enrich: {user_err}")
 
-                for vc in paginated_contests:
+                for vc in valid_contests:
                     c_mode = _normalize_contest_mode(getattr(vc, "contest_mode", "participation"))
                     entry_type = "nomination" if c_mode == "nomination" else "participation"
-                    
-                    # 🛠️ FIXED: try-except and db.rollback inside the loop to prevent thread deadlock
                     try:
-                        if c_mode == "nomination" and crud.contest.nomination_card_uses_exact_roster(
-                            filter_country, filter_region, filter_continent, contest_level
-                        ):
+                        if c_mode == "nomination" and use_exact_nomination_counts:
                             contest_participant_counts[vc.id] = crud.contest.count_nomination_roster_for_card(
                                 db,
                                 contest_id=vc.id,
@@ -937,7 +951,10 @@ def _enrich_round_data(
                                 requested_ui_level=contest_level,
                             )
                             continue
-                        
+
+                        if c_mode != "nomination":
+                            continue
+
                         stats = crud.contest.enrich_contest_with_stats(
                             db,
                             vc,
@@ -954,14 +971,65 @@ def _enrich_round_data(
                             stats.get("participants_count", stats.get("entries_count", 0))
                         )
                     except Exception as inner_err:
-                        db.rollback() # Safely unlock transaction
-                        logger.warning(f"Enrichment error for contest {vc.id} (falling back to model count): {inner_err}")
-                        contest_participant_counts[vc.id] = int(getattr(vc, "participant_count", 0) or 0)
+                        db.rollback()
+                        logger.warning(
+                            f"Enrichment error for contest {vc.id} (falling back to model count): {inner_err}"
+                        )
+                        contest_participant_counts[vc.id] = int(
+                            getattr(vc, "participant_count", 0) or 0
+                        )
 
-            paginated_contests.sort(
+            valid_contests.sort(
                 key=lambda c: contest_participant_counts.get(c.id, 0),
                 reverse=True,
             )
+
+            # Apply pagination after accurate counts so low-count categories are not dropped.
+            paginated_contests = valid_contests[contest_skip:contest_skip + contest_limit]
+            valid_contests_by_id = {vc.id: vc for vc in paginated_contests}
+            valid_contest_ids = set(valid_contests_by_id.keys())
+
+            if paginated_contests and contest_mode != "nomination":
+                current_user_obj = None
+                if user_id:
+                    try:
+                        current_user_obj = (
+                            db.query(models.User)
+                            .filter(models.User.id == user_id)
+                            .first()
+                        )
+                    except Exception as user_err:
+                        db.rollback()
+                        logger.warning(f"Failed to fetch user in enrich: {user_err}")
+
+                for vc in paginated_contests:
+                    c_mode = _normalize_contest_mode(getattr(vc, "contest_mode", "participation"))
+                    entry_type = "nomination" if c_mode == "nomination" else "participation"
+                    try:
+                        stats = crud.contest.enrich_contest_with_stats(
+                            db,
+                            vc,
+                            current_user=current_user_obj,
+                            filter_country=filter_country,
+                            filter_region=filter_region,
+                            filter_continent=filter_continent,
+                            include_top_contestants=False,
+                            entry_type=entry_type,
+                            round_id=round_id,
+                            requested_ui_level=contest_level,
+                        )
+                        contest_participant_counts[vc.id] = int(
+                            stats.get("participants_count", stats.get("entries_count", 0))
+                        )
+                    except Exception as inner_err:
+                        db.rollback()
+                        logger.warning(f"Enrichment error for contest {vc.id} (falling back to model count): {inner_err}")
+                        contest_participant_counts[vc.id] = int(getattr(vc, "participant_count", 0) or 0)
+
+                paginated_contests.sort(
+                    key=lambda c: contest_participant_counts.get(c.id, 0),
+                    reverse=True,
+                )
             
             # Batch query: find all contests where current user has participated in this round
             user_contested_contest_ids, entry_round_by_contest = _batch_user_contest_participation(

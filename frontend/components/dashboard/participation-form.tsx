@@ -92,7 +92,7 @@ const VIDEO_PLATFORMS = [
 ]
 
 export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting: externalIsSubmitting, isEditing = false, initialData, mediaRequirements, isNomination = false, roundData, roundId, contestantId }: ParticipationFormProps) {
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
   const router = useRouter()
   const { addToast } = useToast()
   const [ReactQuillComponent, setReactQuillComponent] = useState<ReactQuillComponent | null>(null)
@@ -119,7 +119,8 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
 
   // Stepper state
   const [currentStep, setCurrentStep] = useState(0)
-  const totalSteps = isNomination ? 3 : 3
+  const totalSteps = 3
+  const dateLocale = language === 'fr' ? 'fr-FR' : 'en-US'
 
   const hasAppliedInitialData = useRef(false)
   const [title, setTitle] = useState<string>(initialData?.title || '')
@@ -287,7 +288,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
       // Extra safety: never accept image uploads in nomination mode.
       if (isNomination) return
       setImageUrls(prev => [...prev, result.url])
-      addToast(t('participation.image_added') || 'Image ajoutée', 'success')
+      addToast(t('participation.image_added') || 'Image added', 'success')
     },
     onError: (error, flags) => {
       if (flags && flags.length > 0) {
@@ -305,7 +306,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
     onSuccess: (result) => {
       setVideoDuplicateError('')
       setVideoUrl(result.url)
-      addToast(t('participation.video_added') || 'Vidéo ajoutée', 'success')
+      addToast(t('participation.video_added') || 'Video added', 'success')
     },
     onError: (error, flags) => {
       if (flags && flags.length > 0) {
@@ -334,7 +335,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
     const file = e.target.files?.[0]
     if (!file) return
     if (isNomination) {
-      addToast(t('participation.video_file_not_allowed') || 'Les fichiers vidéo ne sont pas autorisés pour les nominations. Veuillez utiliser une URL vidéo.', 'error')
+      addToast(t('participation.video_file_not_allowed') || 'Video files are not allowed for nominations. Please use a video URL.', 'error')
       if (videoInputRef.current) videoInputRef.current.value = ''
       return
     }
@@ -357,18 +358,18 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
   }
 
   const handleAddImageByUrl = () => {
-    if (!imageUrlInput.trim()) { addToast(t('participation.url_required') || 'URL requise', 'error'); return }
-    if (!isValidUrl(imageUrlInput)) { addToast(t('participation.invalid_url') || 'URL invalide', 'error'); return }
+    if (!imageUrlInput.trim()) { addToast(t('participation.url_required') || 'URL is required', 'error'); return }
+    if (!isValidUrl(imageUrlInput)) { addToast(t('participation.invalid_url') || 'Invalid URL', 'error'); return }
     if (imageUrls.length >= maxImages) { addToast(t('participation.max_images_reached') || `Maximum ${maxImages} images`, 'error'); return }
     setImageUrls([...imageUrls, imageUrlInput.trim()])
     setImageUrlInput('')
     setShowImageUrlInput(false)
-    addToast(t('participation.image_added') || 'Image ajoutée', 'success')
+    addToast(t('participation.image_added') || 'Image added', 'success')
   }
 
   const handleAddVideoByUrl = async () => {
-    if (!videoUrlInput.trim()) { addToast(t('participation.url_required') || 'URL requise', 'error'); return }
-    if (!isValidUrl(videoUrlInput)) { addToast(t('participation.invalid_url') || 'URL invalide', 'error'); return }
+    if (!videoUrlInput.trim()) { addToast(t('participation.url_required') || 'URL is required', 'error'); return }
+    if (!isValidUrl(videoUrlInput)) { addToast(t('participation.invalid_url') || 'Invalid URL', 'error'); return }
     // Plateformes vidéo acceptées : YouTube et TikTok (pas de connexion requise pour visionner)
     if (!isVideoUrlValid(videoUrlInput)) { addToast(t('participation.invalid_video_url'), 'error'); return }
 
@@ -396,7 +397,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
       setVideoUrlInput('')
       setShowVideoUrlInput(false)
       setVideoDuplicateError('')
-      addToast(t('participation.video_added') || 'Vidéo ajoutée', 'success')
+      addToast(t('participation.video_added') || 'Video added', 'success')
     } catch (error: any) {
       const detail = error?.response?.data?.detail || error?.message || 'Unable to validate this video link.'
       setVideoDuplicateError(detail)
@@ -426,15 +427,15 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault()
 
-    if (!title.trim()) { addToast(t('participation.errors.content_title_required') || 'Le titre est requis', 'error'); return }
-    if (title.trim().length < MIN_CONTENT_TITLE_LENGTH) { addToast(t('participation.errors.content_title_min_length') || `Le titre doit contenir au moins ${MIN_CONTENT_TITLE_LENGTH} caractères`, 'error'); return }
-    if (title.trim().length > MAX_CONTENT_TITLE_LENGTH) { addToast(t('participation.errors.content_title_max_length') || `Le titre ne doit pas dépasser ${MAX_CONTENT_TITLE_LENGTH} caractères`, 'error'); return }
-    if (plainDescriptionLength < MIN_CONTENT_DESCRIPTION_LENGTH) { addToast(t('participation.errors.content_description_min_length') || `La description doit contenir au moins ${MIN_CONTENT_DESCRIPTION_LENGTH} caractères`, 'error'); return }
-    if (plainDescriptionLength > MAX_CONTENT_DESCRIPTION_LENGTH) { addToast(t('participation.errors.content_description_max_length') || `La description ne doit pas dépasser ${MAX_CONTENT_DESCRIPTION_LENGTH} caractères`, 'error'); return }
-    if (!isNomination && imageUrls.length === 0) { addToast(t('participation.errors.content_image_required') || 'Au moins une image est requise', 'error'); return }
+    if (!title.trim()) { addToast(t('participation.errors.content_title_required') || 'Title is required', 'error'); return }
+    if (title.trim().length < MIN_CONTENT_TITLE_LENGTH) { addToast(t('participation.errors.content_title_min_length') || `Title must be at least ${MIN_CONTENT_TITLE_LENGTH} characters`, 'error'); return }
+    if (title.trim().length > MAX_CONTENT_TITLE_LENGTH) { addToast(t('participation.errors.content_title_max_length') || `Title must not exceed ${MAX_CONTENT_TITLE_LENGTH} characters`, 'error'); return }
+    if (plainDescriptionLength < MIN_CONTENT_DESCRIPTION_LENGTH) { addToast(t('participation.errors.content_description_min_length') || `Description must be at least ${MIN_CONTENT_DESCRIPTION_LENGTH} characters`, 'error'); return }
+    if (plainDescriptionLength > MAX_CONTENT_DESCRIPTION_LENGTH) { addToast(t('participation.errors.content_description_max_length') || `Description must not exceed ${MAX_CONTENT_DESCRIPTION_LENGTH} characters`, 'error'); return }
+    if (!isNomination && imageUrls.length === 0) { addToast(t('participation.errors.content_image_required') || 'At least one image is required', 'error'); return }
     if (videoDuplicateError) { addToast(videoDuplicateError, 'error'); return }
-    if (requiresVideo && !videoUrl) { addToast(t('participation.errors.content_video_required') || 'Une vidéo est requise', 'error'); return }
-    if (isNomination && !nominatorCountry) { addToast(t('participation.errors.nominator_country_required') || 'Le pays est obligatoire', 'error'); return }
+    if (requiresVideo && !videoUrl) { addToast(t('participation.errors.content_video_required') || 'A video is required', 'error'); return }
+    if (isNomination && !nominatorCountry) { addToast(t('participation.errors.nominator_country_required') || 'Country is required', 'error'); return }
 
     try {
       setIsSubmitting(true)
@@ -453,7 +454,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
       }
     } catch (err: any) {
       console.error('Erreur lors de la soumission:', err)
-      const errorDetail = err?.response?.data?.detail || err?.message || 'Erreur lors de la soumission'
+      const errorDetail = err?.response?.data?.detail || err?.message || 'Submission failed'
       addToast(errorDetail, 'error')
     } finally {
       setIsSubmitting(false)
@@ -502,7 +503,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
     tiktok: 'TikTok',
 
     vimeo: 'Vimeo',
-    direct: 'Vidéo directe'
+    direct: 'Direct video'
   }
 
   return (
@@ -532,14 +533,16 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
           <div className="flex items-center gap-2 mb-2 sm:mb-3">
             <Clock className="w-5 h-5 text-blue-400" />
             <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">
-              {t('participation.time_remaining') || 'Temps de participation restant'}
+              {isNomination
+                ? (t('participation.time_remaining_nomination') || t('dashboard.contests.time_remaining_to_nominate') || 'Time remaining to nominate')
+                : (t('participation.time_remaining') || t('dashboard.contests.time_remaining_to_participate') || 'Time remaining to participate')}
             </span>
           </div>
           <div className="flex items-center justify-center gap-2 sm:gap-3">
             {countdown.days > 0 && (
               <div className="text-center">
                 <div className="px-3 py-1.5 sm:px-4 sm:py-2 bg-blue-600 rounded-lg font-bold text-lg sm:text-2xl text-white">{countdown.days}</div>
-                <span className="text-xs text-gray-400 mt-1">{t('dashboard.contests.time_unit_days') || 'j'}</span>
+                <span className="text-xs text-gray-400 mt-1">{t('dashboard.contests.time_unit_days') || 'd'}</span>
               </div>
             )}
             <div className="text-center">
@@ -559,8 +562,8 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
           </div>
           {nominationDeadlineMs != null && (
             <p className="text-xs text-gray-500 dark:text-gray-400 text-center mt-2">
-              {t('participation.deadline') || 'Date limite'} :{' '}
-              {new Date(nominationDeadlineMs).toLocaleString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+              {t('participation.deadline') || 'Deadline'}:{' '}
+              {new Date(nominationDeadlineMs).toLocaleString(dateLocale, { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
             </p>
           )}
         </div>
@@ -568,8 +571,8 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
 
       {countdown?.isClosed && (
         <div className="p-3 sm:p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700/50 rounded-xl text-center">
-          <span className="text-red-400 font-bold text-lg">{t('dashboard.contests.closed') || 'Fermé'}</span>
-          <p className="text-red-300/70 text-sm mt-1">{t('participation.submission_period_ended') || 'La période de soumission est terminée'}</p>
+          <span className="text-red-400 font-bold text-lg">{t('dashboard.contests.closed') || 'Closed'}</span>
+          <p className="text-red-300/70 text-sm mt-1">{t('participation.submission_period_ended') || 'The submission period has ended'}</p>
         </div>
       )}
 
@@ -611,13 +614,13 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
           {/* Title */}
           <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 sm:p-5 border border-gray-200 dark:border-gray-700/50">
             <h3 className="text-sm sm:text-base font-bold text-gray-900 dark:text-white mb-2 sm:mb-3">
-              {t('participation.content_title') || 'Titre du contenu'} *
+              {t('participation.content_title') || 'Content title'} *
             </h3>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder={t('participation.content_title_placeholder') || `Entrez le titre (${MIN_CONTENT_TITLE_LENGTH}-${MAX_CONTENT_TITLE_LENGTH} caractères)`}
+              placeholder={t('participation.content_title_placeholder') || `Enter a title (${MIN_CONTENT_TITLE_LENGTH}-${MAX_CONTENT_TITLE_LENGTH} characters)`}
               maxLength={MAX_CONTENT_TITLE_LENGTH}
               className={`w-full px-4 py-3 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-400 focus:outline-none focus:ring-2 ${
                 hasTitleError ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 dark:border-gray-600 focus:ring-blue-500'
@@ -638,7 +641,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
           <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 sm:p-5 border border-gray-200 dark:border-gray-700/50">
             <h3 className="text-sm sm:text-base font-bold text-gray-900 dark:text-white mb-2 sm:mb-3 flex items-center gap-2">
               <FileText className="w-4 h-4" />
-              {t('participation.content_description') || 'Description du contenu'} *
+              {t('participation.content_description') || 'Content description'} *
             </h3>
             {ReactQuillComponent && !quillLoadFailed ? (
               <ReactQuillComponent
@@ -647,14 +650,14 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
                 onChange={setDescription}
                 modules={QUILL_MODULES}
                 formats={QUILL_FORMATS}
-                placeholder={t('participation.content_description_placeholder') || `Décrivez votre candidature (${MIN_CONTENT_DESCRIPTION_LENGTH}-${MAX_CONTENT_DESCRIPTION_LENGTH} caractères)`}
+                placeholder={t('participation.content_description_placeholder') || `Describe your entry (${MIN_CONTENT_DESCRIPTION_LENGTH}-${MAX_CONTENT_DESCRIPTION_LENGTH} characters)`}
                 readOnly={isSubmitting}
               />
             ) : (
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder={t('participation.content_description_placeholder') || `Décrivez votre candidature (${MIN_CONTENT_DESCRIPTION_LENGTH}-${MAX_CONTENT_DESCRIPTION_LENGTH} caractères)`}
+                placeholder={t('participation.content_description_placeholder') || `Describe your entry (${MIN_CONTENT_DESCRIPTION_LENGTH}-${MAX_CONTENT_DESCRIPTION_LENGTH} characters)`}
                 disabled={isSubmitting}
                 rows={6}
                 className="w-full px-4 py-3 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-400 focus:outline-none focus:ring-2 border-gray-300 dark:border-gray-600 focus:ring-blue-500"
@@ -680,20 +683,20 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
             <div className={`bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 sm:p-5 border ${hasNominatorCountryError ? 'border-red-500' : 'border-gray-200 dark:border-gray-700/50'}`}>
               <h3 className="text-base font-bold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
                 <Globe className="w-4 h-4" />
-                {t('participation.nominator_location') || 'Localisation du candidat'}
+                {t('participation.nominator_location') || 'Nominee location'}
               </h3>
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                {t('participation.nominator_location_description') || 'Indiquez la localisation de la personne que vous nominez.'}
+                {t('participation.nominator_location_description') || 'Enter the location of the person you are nominating.'}
               </p>
               <div className="mb-3 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/50 rounded-lg">
                 <p className="text-xs text-blue-700 dark:text-blue-300">
-                  <strong>Note :</strong> {t('participation.nominator_country_note') || 'Le pays doit correspondre à votre pays de profil.'}
+                  <strong>Note:</strong> {t('participation.nominator_country_note') || 'Country must match your profile country.'}
                 </p>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    {t('participation.nominator_country') || 'Pays'} *
+                    {t('participation.nominator_country') || 'Country'} *
                   </label>
                   <select
                     value={nominatorCountry}
@@ -703,7 +706,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
                     }`}
                     disabled={isSubmitting}
                   >
-                    <option value="">{t('participation.select_country') || 'Sélectionnez un pays'}</option>
+                    <option value="">{t('participation.select_country') || 'Select a country'}</option>
                     {countries.map((country) => (
                       <option key={country.code} value={country.name}>{country.name}</option>
                     ))}
@@ -712,7 +715,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     <MapPin className="w-4 h-4 inline mr-1" />
-                    {t('participation.nominator_city') || 'Ville'} ({t('common.optional') || 'optionnel'})
+                    {t('participation.nominator_city') || 'City'} ({t('common.optional') || 'Optional'})
                   </label>
                   {nominatorCountry ? (
                     <select
@@ -721,7 +724,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
                       className="w-full px-4 py-2 border rounded-lg bg-white text-gray-900 border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white dark:border-gray-600"
                       disabled={isSubmitting || loadingCities}
                     >
-                      <option value="">{loadingCities ? (t('common.loading') || 'Chargement...') : (t('participation.select_city') || 'Sélectionnez une ville')}</option>
+                      <option value="">{loadingCities ? (t('common.loading') || 'Loading...') : (t('participation.select_city') || 'Select a city')}</option>
                       {availableCities.map((city) => (
                         <option key={city} value={city}>{city}</option>
                       ))}
@@ -759,22 +762,22 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
                       ) : (
                         <>
                           <Upload className="w-7 h-7 text-gray-400 mb-2" />
-                          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('dashboard.contests.participation_form.click_add_images') || 'Cliquez pour ajouter des images'}</p>
+                          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('dashboard.contests.participation_form.click_add_images') || 'Click to add images'}</p>
                           <p className="text-xs text-gray-500 mt-1">JPG, PNG, GIF, WebP</p>
                         </>
                       )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-gray-400 dark:text-gray-500">{t('participation.or') || 'ou'}</span>
+                    <span className="text-sm text-gray-400 dark:text-gray-500">{t('participation.or') || 'or'}</span>
                     <Button type="button" variant="outline" size="sm" onClick={() => setShowImageUrlInput(!showImageUrlInput)} className="gap-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
-                      <Link className="w-4 h-4" /> {t('participation.add_by_url') || 'Ajouter par URL'}
+                      <Link className="w-4 h-4" /> {t('participation.add_by_url') || 'Add by URL'}
                     </Button>
                   </div>
                   {showImageUrlInput && (
                     <div className="flex flex-col sm:flex-row gap-2">
                       <Input type="url" value={imageUrlInput} onChange={(e) => setImageUrlInput(e.target.value)} placeholder="https://exemple.com/image.jpg" className="flex-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white" />
-                      <Button type="button" onClick={handleAddImageByUrl} className="gap-1 w-full sm:w-auto"><Plus className="w-4 h-4" /> {t('participation.add') || 'Ajouter'}</Button>
+                      <Button type="button" onClick={handleAddImageByUrl} className="gap-1 w-full sm:w-auto"><Plus className="w-4 h-4" /> {t('participation.add') || 'Add'}</Button>
                     </div>
                   )}
                 </div>
@@ -801,13 +804,13 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
             <h3 className="text-sm sm:text-base font-bold text-gray-900 dark:text-white mb-2 sm:mb-3 flex items-center gap-2">
               <Video className="w-4 h-4" />
               {requiresVideo
-                ? (t('participation.content_video_required') || 'Vidéo *')
-                : (t('participation.content_video_optional') || 'Vidéo (optionnel)')}
+                ? (t('participation.content_video_required') || 'Video *')
+                : (t('participation.content_video_optional') || 'Video (optional)')}
             </h3>
 
             {/* Plateformes supportées */}
             <div className="mb-3 sm:mb-4 p-2.5 sm:p-3 bg-gray-50 dark:bg-gray-700/30 border border-gray-200 dark:border-gray-600/50 rounded-lg">
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{t('participation.supported_platforms') || 'Plateformes supportées'} :</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{t('participation.supported_platforms') || 'Supported platforms'}:</p>
               <div className="flex flex-wrap gap-1.5">
                 {VIDEO_PLATFORMS.map((p) => (
                   <a
@@ -838,7 +841,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
                       ) : (
                         <>
                           <Video className="w-7 h-7 text-gray-400 mb-2" />
-                          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('dashboard.contests.participation_form.click_add_video') || 'Cliquez pour ajouter une vidéo'}</p>
+                          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('dashboard.contests.participation_form.click_add_video') || 'Click to add a video'}</p>
                           <p className="text-xs text-gray-500 mt-1">MP4, WebM, MOV</p>
                         </>
                       )}
@@ -847,9 +850,9 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
                 )}
 
                 <div className="flex items-center gap-2">
-                  {!isNomination && <span className="text-sm text-gray-400 dark:text-gray-500">{t('participation.or') || 'ou'}</span>}
+                  {!isNomination && <span className="text-sm text-gray-400 dark:text-gray-500">{t('participation.or') || 'or'}</span>}
                   <Button type="button" variant="outline" size="sm" onClick={() => setShowVideoUrlInput(!showVideoUrlInput)} className="gap-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
-                    <Link className="w-4 h-4" /> {t('participation.add_video_by_url') || 'Ajouter par URL'}
+                    <Link className="w-4 h-4" /> {t('participation.add_video_by_url') || 'Add video URL'}
                   </Button>
                 </div>
 
@@ -864,7 +867,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
                         className="flex-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white" />
                       <Button type="button" onClick={handleAddVideoByUrl} disabled={isValidatingVideoLink} className="gap-1 w-full sm:w-auto">
                         {isValidatingVideoLink ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                        {isValidatingVideoLink ? (t('common.loading') || 'Loading...') : (t('participation.add') || 'Ajouter')}
+                        {isValidatingVideoLink ? (t('common.loading') || 'Loading...') : (t('participation.add') || 'Add')}
                       </Button>
                     </div>
                     {videoUrlInput && isValidUrl(videoUrlInput) && (
@@ -872,12 +875,12 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
                         {isVideoUrlValid(videoUrlInput) ? (
                           <span className="text-green-400 flex items-center gap-1">
                             <CheckCircle className="w-3 h-3" />
-                            {platformLabel[detectVideoPlatform(videoUrlInput)] || 'Lien reconnu'}
+                            {platformLabel[detectVideoPlatform(videoUrlInput)] || 'Recognized link'}
                           </span>
                         ) : (
                           <span className="text-red-400 flex items-center gap-1">
                             <AlertCircle className="w-3 h-3" />
-                            {t('participation.unrecognized_video_link') || 'Lien vidéo non reconnu'}
+                            {t('participation.unrecognized_video_link') || 'Unrecognized video link'}
                           </span>
                         )}
                       </div>
@@ -921,17 +924,17 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
       {currentStep === 2 && (
         <div className="space-y-4 sm:space-y-5 animate-in fade-in duration-300">
           <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 sm:p-5 border border-gray-200 dark:border-gray-700/50">
-            <h3 className="text-sm sm:text-base font-bold text-gray-900 dark:text-white mb-3 sm:mb-4">{t('participation.review_title') || 'Vérifiez votre candidature'}</h3>
+            <h3 className="text-sm sm:text-base font-bold text-gray-900 dark:text-white mb-3 sm:mb-4">{t('participation.review_title') || 'Review your submission'}</h3>
 
             {/* Title review */}
             <div className="space-y-4">
               <div className="flex items-start gap-2 sm:gap-3 p-2.5 sm:p-3 bg-gray-50 dark:bg-gray-700/30 rounded-lg">
                 <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-500 mt-0.5 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">{t('participation.content_title') || 'Titre'}</p>
+                  <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">{t('participation.content_title') || 'Title'}</p>
                   <p className="text-gray-900 dark:text-white font-medium truncate">{title}</p>
                 </div>
-                <button type="button" onClick={() => setCurrentStep(0)} className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300">{t('common.edit') || 'Modifier'}</button>
+                <button type="button" onClick={() => setCurrentStep(0)} className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300">{t('common.edit') || 'Edit'}</button>
               </div>
 
               {/* Description review */}
@@ -941,7 +944,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
                   <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">{t('participation.content_description') || 'Description'}</p>
                   <div className="text-white text-sm prose dark:prose-invert prose-sm max-w-none [&>*]:m-0" dangerouslySetInnerHTML={{ __html: description }} />
                 </div>
-                <button type="button" onClick={() => setCurrentStep(0)} className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300">{t('common.edit') || 'Modifier'}</button>
+                <button type="button" onClick={() => setCurrentStep(0)} className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300">{t('common.edit') || 'Edit'}</button>
               </div>
 
               {/* Location review (nominations) */}
@@ -949,10 +952,10 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
                 <div className="flex items-start gap-2 sm:gap-3 p-2.5 sm:p-3 bg-gray-50 dark:bg-gray-700/30 rounded-lg">
                   <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-500 mt-0.5 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">{t('participation.nominator_location') || 'Localisation'}</p>
+                    <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">{t('participation.nominator_location') || 'Location'}</p>
                     <p className="text-gray-900 dark:text-white">{nominatorCity ? `${nominatorCity}, ` : ''}{nominatorCountry}</p>
                   </div>
-                  <button type="button" onClick={() => setCurrentStep(1)} className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300">{t('common.edit') || 'Modifier'}</button>
+                  <button type="button" onClick={() => setCurrentStep(1)} className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300">{t('common.edit') || 'Edit'}</button>
                 </div>
               )}
 
@@ -968,7 +971,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
                       ))}
                     </div>
                   </div>
-                  <button type="button" onClick={() => setCurrentStep(1)} className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300">{t('common.edit') || 'Modifier'}</button>
+                  <button type="button" onClick={() => setCurrentStep(1)} className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300">{t('common.edit') || 'Edit'}</button>
                 </div>
               )}
 
@@ -977,14 +980,14 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
                 <div className="flex items-start gap-2 sm:gap-3 p-2.5 sm:p-3 bg-gray-50 dark:bg-gray-700/30 rounded-lg">
                   <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-500 mt-0.5 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">{t('participation.content_video') || 'Vidéo'}</p>
+                    <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">{t('participation.content_video') || 'Video'}</p>
                     <div className="flex items-center gap-2 mt-1">
                       <Video className="w-4 h-4 text-gray-400" />
                       <span className="text-gray-900 dark:text-white text-sm truncate">{videoUrl}</span>
                       {detectedPlatform && <span className="text-xs text-gray-400 px-2 py-0.5 bg-gray-700 rounded-full">{platformLabel[detectedPlatform] || ''}</span>}
                     </div>
                   </div>
-                  <button type="button" onClick={() => setCurrentStep(1)} className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300">{t('common.edit') || 'Modifier'}</button>
+                  <button type="button" onClick={() => setCurrentStep(1)} className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300">{t('common.edit') || 'Edit'}</button>
                 </div>
               )}
             </div>
@@ -995,7 +998,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
             <div className="flex gap-3">
               <AlertCircle className="w-5 h-5 text-amber-500 dark:text-amber-400 flex-shrink-0 mt-0.5" />
               <p className="text-sm text-amber-700 dark:text-amber-300">
-                {t('participation.ad_revenue_warning') || 'Avertissement : Vous ne serez pas rémunéré pour les revenus publicitaires si nous détectons que le contenu ne provient pas de votre pays.'}
+                {t('participation.ad_revenue_warning') || 'You will not earn ad revenue if we detect that the content is not from your country.'}
               </p>
             </div>
           </div>
@@ -1006,17 +1009,17 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
       <div className="flex gap-2 sm:gap-3 pt-2">
         {currentStep === 0 ? (
           <Button type="button" onClick={() => onCancel ? onCancel() : router.back()} variant="outline" className="flex-1 h-11 sm:h-10 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700" disabled={isSubmitting}>
-            {t('dashboard.contests.participation_form.cancel') || 'Annuler'}
+            {t('dashboard.contests.participation_form.cancel') || 'Cancel'}
           </Button>
         ) : (
           <Button type="button" onClick={goPrev} variant="outline" className="flex-1 h-11 sm:h-10 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 gap-2" disabled={isSubmitting}>
-            <ChevronLeft className="w-4 h-4" /> {t('common.previous') || 'Précédent'}
+            <ChevronLeft className="w-4 h-4" /> {t('common.previous') || 'Previous'}
           </Button>
         )}
 
         {currentStep < totalSteps - 1 ? (
           <Button type="button" onClick={goNext} disabled={!canGoNext() || isSubmitting || isValidatingVideoLink} className="flex-1 h-11 sm:h-10 bg-blue-600 hover:bg-blue-700 text-white font-bold gap-2">
-            {t('common.next') || 'Suivant'} <ChevronRight className="w-4 h-4" />
+            {t('common.next') || 'Next'} <ChevronRight className="w-4 h-4" />
           </Button>
         ) : (
           <Button
@@ -1026,10 +1029,10 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
             className="flex-1 h-11 sm:h-10 bg-green-600 hover:bg-green-700 text-white font-bold gap-2"
           >
             {isSubmitting
-              ? <><Loader2 className="w-4 h-4 animate-spin" /> {t('common.submitting') || 'Envoi...'}</>
+              ? <><Loader2 className="w-4 h-4 animate-spin" /> {t('common.submitting') || 'Submitting...'}</>
               : isEditing
-                ? (t('dashboard.contests.participation_form.edit_participation') || 'Modifier ma candidature')
-                : <><Check className="w-4 h-4" /> {t('participation.submit') || 'Soumettre'}</>
+                ? (t('dashboard.contests.participation_form.edit_participation') || 'Edit my submission')
+                : <><Check className="w-4 h-4" /> {t('participation.submit') || 'Submit'}</>
             }
           </Button>
         )}
