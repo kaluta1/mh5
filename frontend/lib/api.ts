@@ -348,30 +348,35 @@ export const apiService = {
   async get<T>(endpoint: string, params?: Record<string, unknown>, useCache?: boolean): Promise<T> {
     // Le cache est maintenant géré côté backend avec Redis
     const response = await api.get(endpoint, { params })
+    throwIfApiError(response)
     return response.data
   },
 
   // POST request
   async post<T>(endpoint: string, data?: unknown, invalidateCache?: string, config?: Record<string, unknown>): Promise<T> {
     const response = await api.post(endpoint, data, config)
+    throwIfApiError(response)
     return response.data
   },
 
   // PUT request
   async put<T>(endpoint: string, data?: unknown, invalidateCache?: string): Promise<T> {
     const response = await api.put(endpoint, data)
+    throwIfApiError(response)
     return response.data
   },
 
   // PATCH request
   async patch<T>(endpoint: string, data?: unknown): Promise<T> {
     const response = await api.patch(endpoint, data)
+    throwIfApiError(response)
     return response.data
   },
 
   // DELETE request
   async delete<T>(endpoint: string, invalidateCache?: string): Promise<T> {
     const response = await api.delete(endpoint)
+    throwIfApiError(response)
     return response.data
   }
 }
