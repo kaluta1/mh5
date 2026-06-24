@@ -125,6 +125,8 @@ export const ApiService = {
         roundId?: number;
         /** Nomination migration UI level: country | regional | continental | global */
         contestLevel?: string;
+        /** Lightweight roster — skips heavy social joins (default for nomination on backend) */
+        rosterOnly?: boolean;
         /** Bust caches after vote / replace (client-only query param) */
         _t?: number;
     }) => {
@@ -137,6 +139,7 @@ export const ApiService = {
                 entryType: normalizeEntryTypeQueryParam(params?.entryType),
                 roundId: params?.roundId,
                 contestLevel: params?.contestLevel,
+                rosterOnly: params?.rosterOnly,
                 // Keep legacy keys for backward-compatible backends/routes
                 country: params?.filterCountry,
                 region: params?.filterRegion,

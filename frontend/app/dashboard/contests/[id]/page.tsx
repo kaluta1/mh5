@@ -251,6 +251,7 @@ export default function ContestDetailPage() {
         entryType: entryType,
         roundId: roundIdFromUrl ? parseInt(roundIdFromUrl, 10) : undefined,
         contestLevel: contestLevelFromUrl || undefined,
+        rosterOnly: entryType === 'nomination' || viewOnly,
         _t: Date.now(),
       }
 

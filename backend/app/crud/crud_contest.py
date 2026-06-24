@@ -1778,6 +1778,7 @@ class CRUDContest:
         round_id: Optional[int] = None,
         requested_ui_level: Optional[str] = None,
         count_only: bool = False,
+        roster_only: bool = False,
     ) -> Dict[str, Any]:
         """
         Récupère un contest avec tous ses contestants enrichis de toutes les informations :
@@ -1787,7 +1788,10 @@ class CRUDContest:
         - Favoris avec utilisateurs
         - Partages avec utilisateurs
         - Saison
-        
+
+        When roster_only=True (nominator browse / view-only), skip heavy social joins and
+        return a lightweight roster to avoid DB pool exhaustion and 503 errors.
+
         Si filter_country ou filter_continent sont fournis, ils ont priorité sur les filtres automatiques.
         Si aucun filtre n'est fourni, on utilise la localisation de l'utilisateur connecté par défaut.
         """
@@ -2423,13 +2427,53 @@ class CRUDContest:
         contestant_ids = [c.id for c in contestants]
         logger.info(f"[get_contest_with_enriched_contestants] Returning {len(contestant_ids)} contestant IDs")
         
-        # Récupérer tous les votes avec utilisateurs (depuis ContestantVoting).
-        # Scope by active ContestSeason when available so users can vote again at
-        # REGIONAL after having voted in COUNTRY, and the regional leaderboard
-        # starts from regional votes only.
-        votes_data = []
-        try:
-            if contestant_ids:
+        votes_by_contestant: Dict[int, list] = {}
+        comments_by_contestant: Dict[int, list] = {}
+        reactions_by_contestant: Dict[int, dict] = {}
+        favorites_by_contestant: Dict[int, list] = {}
+        shares_by_contestant: Dict[int, list] = {}
+        author_favorites: set = set()
+        reported_contestants: set = set()
+        user_votes_in_season: Dict[int, Any] = {}
+        votes_count_by_contestant = {cid: 0 for cid in contestant_ids}
+        points_by_contestant = {cid: 0 for cid in contestant_ids}
+
+        if contestant_ids and roster_only:
+            try:
+                agg_q = db.query(
+                    ContestantVoting.contestant_id,
+                    func.count(ContestantVoting.id),
+                    func.coalesce(func.sum(ContestantVoting.points), 0),
+                ).filter(
+                    ContestantVoting.contestant_id.in_(contestant_ids),
+                    ContestantVoting.contest_id == contest_id,
+                )
+                if season:
+                    agg_q = agg_q.filter(ContestantVoting.season_id == season.id)
+                for cid, vote_count, total_pts in agg_q.group_by(ContestantVoting.contestant_id).all():
+                    votes_count_by_contestant[cid] = int(vote_count or 0)
+                    points_by_contestant[cid] = int(total_pts or 0)
+            except Exception as e:
+                logger.warning(f"roster_only vote aggregate failed: {e}")
+            if current_user_id:
+                try:
+                    user_votes_query = db.query(ContestantVoting).filter(
+                        ContestantVoting.user_id == current_user_id,
+                        ContestantVoting.contest_id == contest_id,
+                        ContestantVoting.contestant_id.in_(contestant_ids),
+                    )
+                    if season:
+                        user_votes_query = user_votes_query.filter(
+                            ContestantVoting.season_id == season.id
+                        )
+                    user_votes = user_votes_query.all()
+                    user_votes_in_season = {vote.contestant_id: vote for vote in user_votes}
+                except Exception as e:
+                    logger.warning(f"roster_only user votes failed: {e}")
+        elif contestant_ids:
+            # Récupérer tous les votes avec utilisateurs (depuis ContestantVoting).
+            votes_data = []
+            try:
                 votes_query = db.query(ContestantVoting, User)\
                     .join(User, ContestantVoting.user_id == User.id)\
                     .filter(
@@ -2439,170 +2483,179 @@ class CRUDContest:
                 if season:
                     votes_query = votes_query.filter(ContestantVoting.season_id == season.id)
                 votes_data = votes_query.all()
-        except Exception as e:
-            logger.warning(f"Error fetching votes: {e}")
-            votes_data = []
-        
-        # Grouper les votes par contestant_id
-        votes_by_contestant = {}
-        for voting, user in votes_data:
-            if voting.contestant_id not in votes_by_contestant:
-                votes_by_contestant[voting.contestant_id] = []
-            votes_by_contestant[voting.contestant_id].append({
-                "id": voting.id,  # ID du vote dans contestant_voting
-                "user_id": user.id,
-                "username": user.username,
-                "full_name": user.full_name,
-                "avatar_url": user.avatar_url,
-                "points": voting.points if voting.points is not None else 0,
-                "vote_date": voting.vote_date,
-                "contest_id": voting.contest_id,  # ID du contest
-                "season_id": voting.season_id  # ID de la saison
-            })
-        
-        # Récupérer tous les commentaires avec utilisateurs
-        comments_data = []
-        try:
-            if contestant_ids:
+            except Exception as e:
+                logger.warning(f"Error fetching votes: {e}")
+                votes_data = []
+
+            for voting, user in votes_data:
+                if voting.contestant_id not in votes_by_contestant:
+                    votes_by_contestant[voting.contestant_id] = []
+                votes_by_contestant[voting.contestant_id].append({
+                    "id": voting.id,
+                    "user_id": user.id,
+                    "username": user.username,
+                    "full_name": user.full_name,
+                    "avatar_url": user.avatar_url,
+                    "points": voting.points if voting.points is not None else 0,
+                    "vote_date": voting.vote_date,
+                    "contest_id": voting.contest_id,
+                    "season_id": voting.season_id,
+                })
+
+            comments_data = []
+            try:
                 comments_data = db.query(Comment, User)\
                     .join(User, Comment.user_id == User.id)\
                     .filter(
                         Comment.contestant_id.in_(contestant_ids),
                         Comment.is_hidden == False,
-                        Comment.is_deleted == False
+                        Comment.is_deleted == False,
                     )\
                     .order_by(Comment.created_at.desc())\
                     .all()
-        except Exception as e:
-            logger.warning(f"Error fetching comments: {e}")
-            comments_data = []
-        
-        # Grouper les commentaires par contestant_id
-        comments_by_contestant = {}
-        for comment, user in comments_data:
-            if comment.contestant_id not in comments_by_contestant:
-                comments_by_contestant[comment.contestant_id] = []
-            comments_by_contestant[comment.contestant_id].append({
-                "id": comment.id,  # ID du commentaire
-                "user_id": user.id,
-                "username": user.username,
-                "full_name": user.full_name,
-                "avatar_url": user.avatar_url,
-                "content": comment.content,
-                "created_at": comment.created_at,
-                "parent_id": comment.parent_id
-            })
-        
-        # Récupérer toutes les réactions avec utilisateurs
-        reactions_data = db.query(ContestantReaction, User)\
-            .join(User, ContestantReaction.user_id == User.id)\
-            .filter(ContestantReaction.contestant_id.in_(contestant_ids))\
-            .all()
-        
-        # Grouper les réactions par contestant_id et type
-        reactions_by_contestant = {}
-        for reaction, user in reactions_data:
-            if reaction.contestant_id not in reactions_by_contestant:
-                reactions_by_contestant[reaction.contestant_id] = {}
-            reaction_type = reaction.reaction_type
-            if reaction_type not in reactions_by_contestant[reaction.contestant_id]:
-                reactions_by_contestant[reaction.contestant_id][reaction_type] = []
-            reactions_by_contestant[reaction.contestant_id][reaction_type].append({
-                "id": reaction.id,  # ID de la réaction
-                "user_id": user.id,
-                "username": user.username,
-                "full_name": user.full_name,
-                "avatar_url": user.avatar_url,
-                "reaction_type": reaction_type
-            })
-        
-        # Récupérer tous les favoris avec utilisateurs
-        favorites_data = db.query(MyFavorites, User)\
-            .join(User, MyFavorites.user_id == User.id)\
-            .filter(MyFavorites.contestant_id.in_(contestant_ids))\
-            .all()
-        
-        # Grouper les favoris par contestant_id
-        favorites_by_contestant = {}
-        for favorite, user in favorites_data:
-            if favorite.contestant_id not in favorites_by_contestant:
-                favorites_by_contestant[favorite.contestant_id] = []
-            favorites_by_contestant[favorite.contestant_id].append({
-                "id": favorite.id,  # ID du favori
-                "user_id": user.id,
-                "username": user.username,
-                "full_name": user.full_name,
-                "avatar_url": user.avatar_url,
-                "position": favorite.position,
-                "added_date": favorite.added_date
-            })
-        
-        # Récupérer tous les partages avec utilisateurs
-        shares_data = db.query(ContestantShare, User)\
-            .outerjoin(User, ContestantShare.user_id == User.id)\
-            .filter(ContestantShare.contestant_id.in_(contestant_ids))\
-            .all()
-        
-        # Grouper les partages par contestant_id
-        shares_by_contestant = {}
-        for share, user in shares_data:
-            if share.contestant_id not in shares_by_contestant:
-                shares_by_contestant[share.contestant_id] = []
-            shares_by_contestant[share.contestant_id].append({
-                "id": share.id,  # ID du partage
-                "user_id": user.id if user else None,
-                "username": user.username if user else None,
-                "full_name": user.full_name if user else None,
-                "avatar_url": user.avatar_url if user else None,
-                "platform": share.platform,
-                "share_link": share.share_link,
-                "created_at": share.created_at
-            })
-        
-        # Vérifier si l'auteur a ajouté chaque contestant en favoris
-        author_favorites = {}
-        # Récupérer les signalements de l'utilisateur courant pour les contestants
-        reported_contestants = set()
-        if current_user_id:
+            except Exception as e:
+                logger.warning(f"Error fetching comments: {e}")
+                comments_data = []
+
+            for comment, user in comments_data:
+                if comment.contestant_id not in comments_by_contestant:
+                    comments_by_contestant[comment.contestant_id] = []
+                comments_by_contestant[comment.contestant_id].append({
+                    "id": comment.id,
+                    "user_id": user.id,
+                    "username": user.username,
+                    "full_name": user.full_name,
+                    "avatar_url": user.avatar_url,
+                    "content": comment.content,
+                    "created_at": comment.created_at,
+                    "parent_id": comment.parent_id,
+                })
+
+            reactions_data = []
             try:
-                from app.models.comment import Report
-                from sqlalchemy import inspect as sa_inspect
-                # Vérifier si la colonne contestant_id existe dans la table report
-                insp = sa_inspect(db.bind)
-                report_columns = [col['name'] for col in insp.get_columns('report')]
-                if 'contestant_id' in report_columns:
-                    user_reports = db.query(Report.contestant_id).filter(
-                        Report.reporter_id == current_user_id,
-                        Report.status == "pending",
-                        Report.contestant_id.isnot(None)
-                    ).all()
-                    reported_contestants = {report[0] for report in user_reports if report[0] is not None}
-            except Exception:
-                # Si la colonne n'existe pas, on ignore les signalements
-                pass
-        
-        if current_user_id:
-            author_favs = db.query(MyFavorites.contestant_id)\
-                .filter(
-                    MyFavorites.user_id == current_user_id,
-                    MyFavorites.contestant_id.in_(contestant_ids)
-                )\
-                .all()
-            author_favorites = {fav[0] for fav in author_favs}
-        
-        # Votes de l'utilisateur pour ce concours (même clé que l'enregistrement du vote API)
-        user_votes_in_season = {}
-        if current_user_id and contestant_ids:
-            user_votes_query = db.query(ContestantVoting).filter(
-                ContestantVoting.user_id == current_user_id,
-                ContestantVoting.contest_id == contest_id,
-                ContestantVoting.contestant_id.in_(contestant_ids),
-            )
-            if season:
-                user_votes_query = user_votes_query.filter(ContestantVoting.season_id == season.id)
-            user_votes = user_votes_query.all()
-            user_votes_in_season = {vote.contestant_id: vote for vote in user_votes}
-        
+                reactions_data = db.query(ContestantReaction, User)\
+                    .join(User, ContestantReaction.user_id == User.id)\
+                    .filter(ContestantReaction.contestant_id.in_(contestant_ids))\
+                    .all()
+            except Exception as e:
+                logger.warning(f"Error fetching reactions: {e}")
+                reactions_data = []
+
+            for reaction, user in reactions_data:
+                if reaction.contestant_id not in reactions_by_contestant:
+                    reactions_by_contestant[reaction.contestant_id] = {}
+                reaction_type = reaction.reaction_type
+                if reaction_type not in reactions_by_contestant[reaction.contestant_id]:
+                    reactions_by_contestant[reaction.contestant_id][reaction_type] = []
+                reactions_by_contestant[reaction.contestant_id][reaction_type].append({
+                    "id": reaction.id,
+                    "user_id": user.id,
+                    "username": user.username,
+                    "full_name": user.full_name,
+                    "avatar_url": user.avatar_url,
+                    "reaction_type": reaction_type,
+                })
+
+            favorites_data = []
+            try:
+                favorites_data = db.query(MyFavorites, User)\
+                    .join(User, MyFavorites.user_id == User.id)\
+                    .filter(MyFavorites.contestant_id.in_(contestant_ids))\
+                    .all()
+            except Exception as e:
+                logger.warning(f"Error fetching favorites: {e}")
+                favorites_data = []
+
+            for favorite, user in favorites_data:
+                if favorite.contestant_id not in favorites_by_contestant:
+                    favorites_by_contestant[favorite.contestant_id] = []
+                favorites_by_contestant[favorite.contestant_id].append({
+                    "id": favorite.id,
+                    "user_id": user.id,
+                    "username": user.username,
+                    "full_name": user.full_name,
+                    "avatar_url": user.avatar_url,
+                    "position": favorite.position,
+                    "added_date": favorite.added_date,
+                })
+
+            shares_data = []
+            try:
+                shares_data = db.query(ContestantShare, User)\
+                    .outerjoin(User, ContestantShare.user_id == User.id)\
+                    .filter(ContestantShare.contestant_id.in_(contestant_ids))\
+                    .all()
+            except Exception as e:
+                logger.warning(f"Error fetching shares: {e}")
+                shares_data = []
+
+            for share, user in shares_data:
+                if share.contestant_id not in shares_by_contestant:
+                    shares_by_contestant[share.contestant_id] = []
+                shares_by_contestant[share.contestant_id].append({
+                    "id": share.id,
+                    "user_id": user.id if user else None,
+                    "username": user.username if user else None,
+                    "full_name": user.full_name if user else None,
+                    "avatar_url": user.avatar_url if user else None,
+                    "platform": share.platform,
+                    "share_link": share.share_link,
+                    "created_at": share.created_at,
+                })
+
+            if current_user_id:
+                try:
+                    from app.models.comment import Report
+                    from sqlalchemy import inspect as sa_inspect
+
+                    insp = sa_inspect(db.bind)
+                    report_columns = [col['name'] for col in insp.get_columns('report')]
+                    if 'contestant_id' in report_columns:
+                        user_reports = db.query(Report.contestant_id).filter(
+                            Report.reporter_id == current_user_id,
+                            Report.status == "pending",
+                            Report.contestant_id.isnot(None),
+                        ).all()
+                        reported_contestants = {
+                            report[0] for report in user_reports if report[0] is not None
+                        }
+                except Exception:
+                    pass
+
+                try:
+                    author_favs = db.query(MyFavorites.contestant_id)\
+                        .filter(
+                            MyFavorites.user_id == current_user_id,
+                            MyFavorites.contestant_id.in_(contestant_ids),
+                        )\
+                        .all()
+                    author_favorites = {fav[0] for fav in author_favs}
+                except Exception as e:
+                    logger.warning(f"Error fetching author favorites: {e}")
+
+                try:
+                    user_votes_query = db.query(ContestantVoting).filter(
+                        ContestantVoting.user_id == current_user_id,
+                        ContestantVoting.contest_id == contest_id,
+                        ContestantVoting.contestant_id.in_(contestant_ids),
+                    )
+                    if season:
+                        user_votes_query = user_votes_query.filter(
+                            ContestantVoting.season_id == season.id
+                        )
+                    user_votes = user_votes_query.all()
+                    user_votes_in_season = {vote.contestant_id: vote for vote in user_votes}
+                except Exception as e:
+                    logger.warning(f"Error fetching user votes: {e}")
+
+        if not roster_only:
+            for contestant_id in contestant_ids:
+                votes_list = votes_by_contestant.get(contestant_id, [])
+                votes_count_by_contestant[contestant_id] = len(votes_list)
+                points_by_contestant[contestant_id] = sum(
+                    v.get("points", 0) for v in votes_list
+                )
+
         # Déterminer le niveau de la saison (city, country, regional, continent, global, etc.)
         season_level = None
         if season and hasattr(season, "level") and season.level is not None:
@@ -2615,14 +2668,6 @@ class CRUDContest:
             getattr(contest_obj, "contest_mode", None)
         ) == "nomination":
             season_level = "country"
-
-        # Compter les votes et sommer les points pour chaque contestant
-        votes_count_by_contestant = {}
-        points_by_contestant = {}
-        for contestant_id in contestant_ids:
-            votes_list = votes_by_contestant.get(contestant_id, [])
-            votes_count_by_contestant[contestant_id] = len(votes_list)
-            points_by_contestant[contestant_id] = sum(v.get("points", 0) for v in votes_list)
 
         # One roster row per user_id: participation entrant OR nomination nominator (never two
         # cards for the same person in one category/round — fixes legacy duplicate contest rows).
@@ -2781,6 +2826,8 @@ class CRUDContest:
             return start_dt <= now_vote <= end_dt
 
         # Helper : vote ouvert pour le round (même logique que round_voting_open_at : grâce nomination, etc.)
+        _round_cache: Dict[int, Any] = {}
+
         def _is_voting_open_for_round(c):
             now_vote = contest_status_service._utc_now()
             # Prefer primary voting calendar on the season's round (e.g. May vote for April pool)
@@ -2797,7 +2844,10 @@ class CRUDContest:
                 return True  # Pas de round = pas de restriction
             from app.models.round import Round as RoundModel
 
-            r = db.query(RoundModel).filter(RoundModel.id == c.round_id).first()
+            rid = int(c.round_id)
+            if rid not in _round_cache:
+                _round_cache[rid] = db.query(RoundModel).filter(RoundModel.id == rid).first()
+            r = _round_cache[rid]
             if not r or not r.voting_start_date or not r.voting_end_date:
                 return True
             return contest_status_service.round_voting_open_at(r, now_vote)
@@ -2844,8 +2894,20 @@ class CRUDContest:
             can_vote = False
             has_voted = False
             vote_restriction_reason = None
-            
-            if current_user_id:
+
+            if roster_only:
+                if not current_user_id:
+                    vote_restriction_reason = "not_authenticated"
+                elif current_user_id == contestant.user_id:
+                    vote_restriction_reason = "own_contestant"
+                elif user_votes_in_season.get(contestant.id):
+                    has_voted = True
+                    vote_restriction_reason = "already_voted"
+                elif _is_voting_open_for_round(contestant):
+                    can_vote = True
+                else:
+                    vote_restriction_reason = "voting_not_open"
+            elif current_user_id:
                 if not current_user:
                     # Si current_user n'est pas chargé, le charger
                     current_user = db.query(User).filter(User.id == current_user_id).first()

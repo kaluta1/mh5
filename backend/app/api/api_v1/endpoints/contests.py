@@ -676,6 +676,11 @@ def read_contest(
         alias="contestLevel",
         description="Nomination UI level: country, regional, continental, global (selects season roster).",
     ),
+    roster_only: Optional[bool] = Query(
+        None,
+        alias="rosterOnly",
+        description="Lightweight roster (skip heavy social joins). Default true for nomination entryType.",
+    ),
     current_user: Optional[Any] = Depends(get_current_active_user_optional),
 ) -> Any:
     """
@@ -701,6 +706,13 @@ def read_contest(
     
     merged_country = filter_country if filter_country is not None else country
     merged_continent = filter_continent if filter_continent is not None else continent_q
+    entry_type_norm = _entry_type_from_contest_mode(getattr(contest_obj, "contest_mode", "participation"))
+    if entry_type:
+        from app.crud.crud_contest import _normalize_entry_type_query
+        parsed = _normalize_entry_type_query(entry_type)
+        if parsed:
+            entry_type_norm = parsed
+    use_roster_only = roster_only if roster_only is not None else (entry_type_norm == "nomination")
 
     # Utiliser la méthode simplifiée qui utilise directement les champs du Contestant
     current_user_id = current_user.id if current_user else None
@@ -714,6 +726,7 @@ def read_contest(
         entry_type=entry_type,
         round_id=round_id,
         requested_ui_level=contest_level,
+        roster_only=use_roster_only,
     )
 
     # #region agent log

@@ -17,8 +17,8 @@ engine = create_engine(
     database_url,
     pool_pre_ping=True,  # Check connection before use
     pool_recycle=300,    # Recycle connections after 5 minutes (Neon timeout ~10 min)
-    pool_size=5,         # Connection pool size
-    max_overflow=10,     # Maximum number of additional connections
+    pool_size=10,         # Connection pool size
+    max_overflow=20,     # Maximum number of additional connections
     pool_timeout=10,     # Timeout to get a connection from the pool (10 seconds)
     connect_args={
         "connect_timeout": 10,  # Initial connection timeout (10 seconds)
