@@ -44,6 +44,10 @@ export function Header({ user, onLoginClick, onLogout }: HeaderProps) {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false)
   const [isScrolled, setIsScrolled] = useState(false)
   const { t } = useLanguage()
+  const label = (key: string, fallback: string) => {
+    const value = t(key)
+    return value && value.trim() ? value : fallback
+  }
 
   const handleLogout = async () => {
     // Sauvegarder l'URL actuelle avant de déconnecter
@@ -69,13 +73,15 @@ export function Header({ user, onLoginClick, onLogout }: HeaderProps) {
   }, [])
 
   const navigationItems = [
-    { name: t('navigation.home'), href: "/", icon: Home },
-    ...(isAuthenticated ? [{ name: t('navigation.dashboard'), href: "/dashboard", icon: LayoutDashboard }] : []),
+    { name: label('navigation.home', 'Home'), href: "/", icon: Home },
+    ...(isAuthenticated
+      ? [{ name: label('navigation.dashboard', 'Dashboard'), href: "/dashboard", icon: LayoutDashboard }]
+      : []),
     // ...(isAuthenticated ? [{ name: 'Feed', href: "/dashboard/feed", icon: MessageSquare }] : []),
-    { name: t('navigation.contests'), href: isAuthenticated ? "/dashboard/contests" : "/contests", icon: Trophy },
-    { name: t('navigation.pitching') || 'Pitching', href: "/pitching", icon: MessageSquare },
-    { name: t('navigation.about'), href: "/about", icon: Info },
-    { name: t('navigation.contact'), href: "/contact", icon: Mail }
+    { name: label('navigation.contests', 'Contests'), href: isAuthenticated ? "/dashboard/contests" : "/contests", icon: Trophy },
+    { name: label('navigation.pitching', 'Pitching'), href: "/pitching", icon: MessageSquare },
+    { name: label('navigation.about', 'About'), href: "/about", icon: Info },
+    { name: label('navigation.contact', 'Contact'), href: "/contact", icon: Mail },
   ]
 
   const isActiveLink = (href: string) => {
@@ -140,7 +146,7 @@ export function Header({ user, onLoginClick, onLogout }: HeaderProps) {
                 className="hidden lg:flex items-center gap-2 font-semibold text-sm text-gray-700 dark:text-gray-300 hover:text-myhigh5-primary dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full px-4"
               >
                 <Smartphone className="w-4 h-4" />
-                <span>{t('navigation.download_app') || 'Télécharger l\'app'}</span>
+                <span>{label('navigation.download_app', 'Download App')}</span>
               </Button>
 
               {/* Settings (Desktop) */}
@@ -164,14 +170,14 @@ export function Header({ user, onLoginClick, onLogout }: HeaderProps) {
                     onClick={() => setIsLoginModalOpen(true)}
                     className="font-semibold text-sm text-gray-700 dark:text-gray-300 hover:text-myhigh5-primary dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full px-5"
                   >
-                    {t('navigation.login')}
+                    {label('navigation.login', 'Login')}
                   </Button>
                   <Button
                     onClick={() => router.push('/register')}
                     className="font-semibold text-sm text-white rounded-full px-5 bg-gradient-to-r from-myhigh5-primary to-myhigh5-secondary hover:shadow-xl hover:shadow-myhigh5-primary/25 transition-all duration-300 hover:-translate-y-0.5"
                   >
                     <Sparkles className="w-4 h-4 mr-1.5" />
-                    {t('navigation.register')}
+                    {label('navigation.register', 'Register')}
                   </Button>
                 </div>
               )}
@@ -237,11 +243,11 @@ export function Header({ user, onLoginClick, onLogout }: HeaderProps) {
             {/* Mobile Settings */}
             <div className="flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
               <div className="flex items-center gap-3">
-                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">{t('header.language')}</span>
+                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">{label('header.language', 'Language')}</span>
                 <LanguageSelector />
               </div>
               <div className="flex items-center gap-3">
-                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">{t('header.theme')}</span>
+                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">{label('header.theme', 'Theme')}</span>
                 <ThemeToggle />
               </div>
             </div>
@@ -260,7 +266,7 @@ export function Header({ user, onLoginClick, onLogout }: HeaderProps) {
                 className="w-full h-12 rounded-xl font-semibold border-2 border-gray-200 dark:border-gray-700 flex items-center justify-center gap-2"
               >
                 <Smartphone className="w-5 h-5" />
-                {t('navigation.download_app') || 'Télécharger l\'app'}
+                {label('navigation.download_app', 'Download App')}
               </Button>
             </div>
 
@@ -275,7 +281,7 @@ export function Header({ user, onLoginClick, onLogout }: HeaderProps) {
                   }}
                   className="h-12 rounded-xl font-semibold border-2 border-gray-200 dark:border-gray-700"
                 >
-                  {t('navigation.login')}
+                  {label('navigation.login', 'Login')}
                 </Button>
                 <Button
                   onClick={() => {
@@ -285,7 +291,7 @@ export function Header({ user, onLoginClick, onLogout }: HeaderProps) {
                   className="h-12 rounded-xl font-semibold text-white bg-gradient-to-r from-myhigh5-primary to-myhigh5-secondary"
                 >
                   <Sparkles className="w-4 h-4 mr-1.5" />
-                  {t('navigation.register')}
+                  {label('navigation.register', 'Register')}
                 </Button>
               </div>
             )}
