@@ -14,7 +14,9 @@
     "next": "Next",
     "previous": "Previous",
     "close": "Close",
-    "or": "Or"
+    "or": "Or",
+    "back": "Back",
+    "try_again": "Try again"
   },
   "navigation": {
     "home": "Home",
@@ -480,6 +482,7 @@
       "no_global_migration": "No global migration.",
       "no_country_migration": "No country migration.",
       "no_nomination_contests": "No nomination contests found for this selection.",
+      "failed_to_load": "Could not load this contest. Please try again.",
       "edit_nomination": "Edit your Nomination",
       "edit_participation": "Edit your Participation",
       "nominate": "Nominate",

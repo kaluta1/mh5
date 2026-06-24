@@ -129,6 +129,8 @@ export default function ContestDetailPage() {
   const [contest, setContest] = useState<ContestDetail | null>(null)
   const [favorites, setFavorites] = useState<string[]>([])
   const [pageLoading, setPageLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const fetchGenerationRef = React.useRef(0)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
   const [showInfoDialog, setShowInfoDialog] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -215,14 +217,18 @@ export default function ContestDetailPage() {
   // REST Data Fetching - Optimized for speed
   // silent: do not show full-page skeleton (avoids remounting contestant cards and losing "Voted" UI after vote)
   const fetchContestDetails = React.useCallback(async (options?: { silent?: boolean }) => {
-    if (!contestId) return
+    if (!contestId) {
+      setPageLoading(false)
+      return
+    }
 
-    const abortController = new AbortController()
+    const fetchId = ++fetchGenerationRef.current
     const silent = options?.silent === true
 
     try {
       if (!silent) {
         setPageLoading(true)
+        setLoadError(null)
       }
       // Fetch contest data
       const justSubmitted =
@@ -238,7 +244,7 @@ export default function ContestDetailPage() {
         !filterRegion || filterRegion === 'all' ? undefined : filterRegion
       const apiFilterContinent =
         !filterContinent || filterContinent === 'all' ? undefined : filterContinent
-      const c = await ApiService.getContest(parseInt(contestId), {
+      const contestParams = {
         filterCountry: apiFilterCountry,
         filterRegion: apiFilterRegion,
         filterContinent: apiFilterContinent,
@@ -246,13 +252,32 @@ export default function ContestDetailPage() {
         roundId: roundIdFromUrl ? parseInt(roundIdFromUrl, 10) : undefined,
         contestLevel: contestLevelFromUrl || undefined,
         _t: Date.now(),
-      }) as any
+      }
+
+      let c: any = null
+      let lastError: unknown = null
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          c = await ApiService.getContest(parseInt(contestId, 10), contestParams)
+          lastError = null
+          break
+        } catch (error) {
+          lastError = error
+          if (attempt < 2) {
+            await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)))
+          }
+        }
+      }
+      if (!c) {
+        throw lastError ?? new Error('Failed to load contest')
+      }
+
+      if (fetchId !== fetchGenerationRef.current) return
       if (justSubmitted && typeof window !== 'undefined') {
         sessionStorage.removeItem(`mh5-nominated-${contestId}`)
       }
 
-      // Check if aborted
-      if (abortController.signal.aborted) return
+      if (fetchId !== fetchGenerationRef.current) return
 
       // Map data
       const parseMediaIds = (mediaIds: string | undefined, type: 'image' | 'video'): Media[] => {
@@ -356,6 +381,7 @@ export default function ContestDetailPage() {
       }
 
       setContest(contestData)
+      setLoadError(null)
 
       if (user?.id) {
         const ownRow = mappedContestants.some(
@@ -373,14 +399,16 @@ export default function ContestDetailPage() {
       setFavorites(mappedContestants.filter(ct => ct.isFavorite).map(ct => ct.id))
 
     } catch (error: any) {
-      // Ignore aborted requests
-      if (error?.name === 'AbortError' || abortController.signal.aborted) {
-        return
-      }
-      // Failed to fetch contest
-      setToast({ message: "Failed to load contest", type: "error" })
+      if (fetchId !== fetchGenerationRef.current) return
+      const message =
+        error?.response?.data?.detail ||
+        error?.message ||
+        t('dashboard.contests.failed_to_load') ||
+        'Could not load this contest. Please try again.'
+      setLoadError(typeof message === 'string' ? message : String(message))
+      setToast({ message: typeof message === 'string' ? message : 'Failed to load contest', type: 'error' })
     } finally {
-      if (!abortController.signal.aborted && !silent) {
+      if (fetchId === fetchGenerationRef.current && !silent) {
         setPageLoading(false)
       }
     }
@@ -695,11 +723,16 @@ export default function ContestDetailPage() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-4">
         <p className="text-gray-600 dark:text-gray-300 text-center">
-          {t('dashboard.contests.failed_to_load') || 'Could not load this contest. Please try again.'}
+          {loadError || t('dashboard.contests.failed_to_load') || 'Could not load this contest. Please try again.'}
         </p>
-        <Button type="button" variant="outline" onClick={() => router.back()}>
-          {t('common.back') || 'Back'}
-        </Button>
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <Button type="button" variant="default" onClick={() => void fetchContestDetails()}>
+            {t('common.try_again') || 'Try again'}
+          </Button>
+          <Button type="button" variant="outline" onClick={() => router.back()}>
+            {t('common.back') || 'Back'}
+          </Button>
+        </div>
       </div>
     )
   }

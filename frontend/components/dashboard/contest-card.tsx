@@ -255,6 +255,7 @@ export function ContestCard({
             fill
             className="object-cover"
             priority={false}
+            unoptimized
             sizes="(max-width: 768px) 100vw, 50vw"
             onError={() => {
               setImageError(true)
