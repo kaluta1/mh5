@@ -7,7 +7,7 @@ import { useLanguage } from '@/contexts/language-context'
 import { useToast } from '@/components/ui/toast'
 import { FileText, CheckCircle2, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import Link from 'next/link'
+import { resolvePublicApiBase } from '@/lib/config'
 
 export default function AffiliateAgreementPage() {
   const { user, isAuthenticated, isLoading } = useAuth()
@@ -43,7 +43,7 @@ export default function AffiliateAgreementPage() {
       const token = localStorage.getItem('access_token')
       const headers = token ? { 'Authorization': `Bearer ${token}` } : {}
       
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/user/me`, {
+      const response = await fetch(`${resolvePublicApiBase()}/api/v1/user/me`, {
         headers
       })
       
@@ -65,7 +65,7 @@ export default function AffiliateAgreementPage() {
     setIsSubmitting(true)
     try {
       const token = localStorage.getItem('access_token')
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/affiliates/accept-agreement`, {
+      const response = await fetch(`${resolvePublicApiBase()}/api/v1/affiliates/accept-agreement`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

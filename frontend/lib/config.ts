@@ -149,6 +149,36 @@ export const ANNUALADS_ROTATOR_SCRIPT_URL = stripEnvQuotes(
   process.env.NEXT_PUBLIC_ANNUALADS_ROTATOR_SCRIPT_URL || 'https://www.annualads.com/rotator.js'
 )
 
+/** Default public site origin when NEXT_PUBLIC_APP_URL is unset at build time. */
+export const DEFAULT_PUBLIC_APP_URL = 'https://myhigh5.com'
+
+const rawAppUrl = (process.env.NEXT_PUBLIC_APP_URL || '').trim().replace(/\/+$/, '')
+export const APP_URL = rawAppUrl || (isProduction ? DEFAULT_PUBLIC_APP_URL : 'http://localhost:3001')
+
+/**
+ * Effective site origin for share links, referrals, and wallet metadata.
+ * In the browser on myhigh5.com (or any public host), always use the current origin.
+ */
+export function getEffectiveAppUrl(): string {
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname
+    if (host !== 'localhost' && host !== '127.0.0.1') {
+      return window.location.origin.replace(/\/+$/, '')
+    }
+  }
+  return APP_URL
+}
+
+/**
+ * Resolve API base for fetch calls outside the axios client (sockets, one-off fetch).
+ */
+export function resolvePublicApiBase(): string {
+  if (typeof window !== 'undefined') {
+    return getEffectiveApiUrl().replace(/\/+$/, '')
+  }
+  return API_URL.replace(/\/+$/, '')
+}
+
 /** Origin only (for preconnect / dns-prefetch); works when API_URL includes /api/v1. */
 export const API_ORIGIN = (() => {
   try {

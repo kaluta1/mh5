@@ -26,6 +26,16 @@ install_deps
 
 export NODE_ENV=production
 export NEXT_TELEMETRY_DISABLED=1
+
+# Bake production public URLs into the client bundle (not localhost).
+if [ -f .env.production ]; then
+  set -a
+  # shellcheck disable=SC1091
+  source .env.production
+  set +a
+  echo "    loaded .env.production (NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-unset})"
+fi
+
 node --max-old-space-size=4096 node_modules/next/dist/bin/next build
 
 port_pids() {

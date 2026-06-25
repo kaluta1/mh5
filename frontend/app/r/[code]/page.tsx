@@ -5,6 +5,7 @@ import { useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { logger } from '@/lib/logger'
+import { resolvePublicApiBase } from '@/lib/config'
 
 function ReferralRedirectPageContent() {
   const router = useRouter()
@@ -17,7 +18,7 @@ function ReferralRedirectPageContent() {
       localStorage.setItem('referral_code', code)
 
       // Tracker le clic sur le lien de parrainage (optionnel)
-      fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/affiliates/track-click/${code}`, {
+      fetch(`${resolvePublicApiBase()}/api/v1/affiliates/track-click/${code}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

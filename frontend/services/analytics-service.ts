@@ -1,6 +1,9 @@
 import axios from 'axios'
+import { resolvePublicApiBase } from '@/lib/config'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+function analyticsApiBase(): string {
+  return resolvePublicApiBase()
+}
 
 // Types
 export interface ContestPerformance {
@@ -57,12 +60,16 @@ export interface DashboardAnalytics {
   engagement_change: number
 }
 
-// API instance with auth
+// API instance with auth — base URL resolved at request time (avoids localhost in production builds)
 const api = axios.create({
-  baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json',
   },
+})
+
+api.interceptors.request.use((config) => {
+  config.baseURL = analyticsApiBase()
+  return config
 })
 
 // Add auth token to requests

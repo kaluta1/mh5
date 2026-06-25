@@ -36,7 +36,7 @@ def verify_user_email_from_token(db: Session, token: str) -> Tuple[bool, Optiona
 
 def build_email_verify_redirect(db: Session, token: str) -> RedirectResponse:
     """GET-friendly verification: redirect to frontend login with outcome in query string."""
-    base = (settings.FRONTEND_URL or "").rstrip("/") or "http://localhost:3000"
+    base = (settings.FRONTEND_URL or "").rstrip("/") or "https://myhigh5.com"
     ok, err, _email = verify_user_email_from_token(db, token)
     if ok:
         return RedirectResponse(

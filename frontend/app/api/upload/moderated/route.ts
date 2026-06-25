@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerApiBase } from '@/lib/share-preview-server'
 import { UTApi } from 'uploadthing/server'
 
 // Configuration Sightengine
@@ -39,7 +40,7 @@ export async function POST(request: NextRequest) {
 
     // Vérifier le token avec le backend
     const token = authHeader?.replace('Bearer ', '') || accessToken
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+    const apiUrl = getServerApiBase()
     
     const authResponse = await fetch(`${apiUrl}/api/v1/auth/me`, {
       headers: { 'Authorization': `Bearer ${token}` }

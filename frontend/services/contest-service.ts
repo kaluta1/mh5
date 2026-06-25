@@ -1,4 +1,5 @@
 import api, { apiService } from '@/lib/api'
+import { resolvePublicApiBase } from '@/lib/config'
 import { cacheService } from '@/lib/cache-service'
 
 /** axios validateStatus accepts 4xx — treat as errors so nominate/participate UI can show messages. */
@@ -414,7 +415,7 @@ class ContestService {
 
       if (!isEmoji && !coverImage.startsWith('http')) {
         // If it's not an emoji and not a complete URL, prepend base URL
-        const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        const API_BASE_URL = resolvePublicApiBase();
         if (coverImage.startsWith('/')) {
           coverImage = `${API_BASE_URL}${coverImage}`;
         } else if (coverImage.trim() !== '') {

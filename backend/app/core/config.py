@@ -111,8 +111,15 @@ class Settings(BaseModel):
     )
     ANNUALADS_WEBHOOK_SECRET: str = _first_nonempty_env("ANNUALADS_WEBHOOK_SECRET", "annualads_webhook_secret")
     
-    # FRONTEND
-    FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3001")
+    # FRONTEND — public site URL for emails, redirects, share links (never localhost on production VPS)
+    FRONTEND_URL: str = (
+        _first_nonempty_env("FRONTEND_URL", "NEXT_PUBLIC_APP_URL")
+        or (
+            "http://localhost:3001"
+            if os.getenv("ENVIRONMENT", "").lower() in ("development", "dev", "local")
+            else "https://myhigh5.com"
+        )
+    )
     # Public base URL of this API (no trailing slash), e.g. https://myhigh5.com or https://api.example.com.
     # Used to default Shufti callback/redirect when SHUFTI_CALLBACK_URL / SHUFTI_REDIRECT_URL are unset.
     BACKEND_PUBLIC_URL: str = _first_nonempty_env("BACKEND_PUBLIC_URL", "PUBLIC_BACKEND_URL")

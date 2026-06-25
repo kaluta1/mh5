@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useCallback, useState } from 'react'
+import { resolvePublicApiBase } from '@/lib/config'
 
 interface SocketMessage {
   message_id: number
@@ -45,7 +46,7 @@ export function useSocket(options: UseSocketOptions = {}) {
       if (!mounted) return
 
       const io = ioModule.io
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      const apiUrl = resolvePublicApiBase()
       
       socket = io(apiUrl, {
         transports: ['websocket', 'polling'],

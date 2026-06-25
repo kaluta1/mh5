@@ -2,7 +2,11 @@
  * Service pour la gestion des vérifications utilisateur
  */
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+import { resolvePublicApiBase } from '@/lib/config'
+
+function verificationApiBase(): string {
+  return resolvePublicApiBase()
+}
 
 export type VerificationType = 
   | 'selfie' 
@@ -79,7 +83,7 @@ class VerificationService {
    * Créer une nouvelle vérification
    */
   async createVerification(data: VerificationCreate): Promise<Verification> {
-    const response = await fetch(`${API_URL}/api/v1/verifications/`, {
+    const response = await fetch(`${verificationApiBase()}/api/v1/verifications/`, {
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify(data)
@@ -97,7 +101,7 @@ class VerificationService {
    * Récupérer le statut de mes vérifications
    */
   async getMyVerificationsStatus(): Promise<UserVerificationsStatus> {
-    const response = await fetch(`${API_URL}/api/v1/verifications/me`, {
+    const response = await fetch(`${verificationApiBase()}/api/v1/verifications/me`, {
       headers: this.getAuthHeaders()
     })
 
@@ -113,8 +117,8 @@ class VerificationService {
    */
   async getMyVerifications(type?: VerificationType): Promise<Verification[]> {
     const url = type 
-      ? `${API_URL}/api/v1/verifications/me/all?verification_type=${type}`
-      : `${API_URL}/api/v1/verifications/me/all`
+      ? `${verificationApiBase()}/api/v1/verifications/me/all?verification_type=${type}`
+      : `${verificationApiBase()}/api/v1/verifications/me/all`
     
     const response = await fetch(url, {
       headers: this.getAuthHeaders()
@@ -131,7 +135,7 @@ class VerificationService {
    * Supprimer une vérification
    */
   async deleteVerification(id: number): Promise<void> {
-    const response = await fetch(`${API_URL}/api/v1/verifications/${id}`, {
+    const response = await fetch(`${verificationApiBase()}/api/v1/verifications/${id}`, {
       method: 'DELETE',
       headers: this.getAuthHeaders()
     })

@@ -1,4 +1,4 @@
-import { API_URL } from '@/lib/config'
+import { resolvePublicApiBase } from '@/lib/config'
 import { logger } from '@/lib/logger'
 
 export interface KYCSubmissionData {
@@ -71,7 +71,9 @@ export class KYCPaymentRequiredError extends Error {
 }
 
 class KYCService {
-  private baseUrl = API_URL || 'http://localhost:8000'
+  private get baseUrl(): string {
+    return resolvePublicApiBase()
+  }
 
   /**
    * Initier une vérification KYC avec Shufti Pro

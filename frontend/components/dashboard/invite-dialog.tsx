@@ -20,6 +20,7 @@ import {
   Link as LinkIcon,
   X
 } from 'lucide-react'
+import { resolvePublicApiBase } from '@/lib/config'
 
 interface InviteDialogProps {
   isOpen: boolean
@@ -64,7 +65,7 @@ export function InviteDialog({
     try {
       const token = localStorage.getItem('access_token')
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/affiliates/invitations`,
+        `${resolvePublicApiBase()}/api/v1/affiliates/invitations`,
         {
           method: 'POST',
           headers: {

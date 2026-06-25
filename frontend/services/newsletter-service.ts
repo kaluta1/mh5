@@ -1,4 +1,8 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+import { resolvePublicApiBase } from '@/lib/config'
+
+function apiBase(): string {
+  return resolvePublicApiBase()
+}
 
 export interface NewsletterSubscriptionData {
   email: string
@@ -28,7 +32,9 @@ export interface NewsletterSubscriptionResponse {
 }
 
 class NewsletterService {
-  private baseUrl = `${API_BASE_URL}/api/v1/newsletter`
+  private get baseUrl(): string {
+    return `${apiBase()}/api/v1/newsletter`
+  }
 
   async subscribe(data: NewsletterSubscriptionData): Promise<NewsletterSubscriptionResponse> {
     const response = await fetch(`${this.baseUrl}/subscribe`, {

@@ -46,4 +46,14 @@ if ! grep -qE '^ENVIRONMENT=' "$ENV_FILE"; then
   echo "    added ENVIRONMENT=production"
 fi
 
+if ! grep -qE '^FRONTEND_URL=' "$ENV_FILE"; then
+  echo "FRONTEND_URL=https://myhigh5.com" >> "$ENV_FILE"
+  echo "    added FRONTEND_URL=https://myhigh5.com"
+fi
+
+if ! grep -qE '^BACKEND_PUBLIC_URL=' "$ENV_FILE"; then
+  echo "BACKEND_PUBLIC_URL=https://myhigh5.com" >> "$ENV_FILE"
+  echo "    added BACKEND_PUBLIC_URL=https://myhigh5.com"
+fi
+
 echo "    OK required secrets present in backend/.env"

@@ -1,4 +1,4 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+import { resolvePublicApiBase } from '@/lib/config'
 
 export interface LocationData {
   id: number
@@ -7,6 +7,10 @@ export interface LocationData {
 
 class LocationService {
   private token: string | null = null
+
+  private apiBase(): string {
+    return resolvePublicApiBase()
+  }
 
   setToken(token: string) {
     this.token = token
@@ -21,7 +25,7 @@ class LocationService {
 
   // Continents
   async getContinents(): Promise<LocationData[]> {
-    const response = await fetch(`${API_BASE}/api/v1/geography/continents`, {
+    const response = await fetch(`${this.apiBase()}/api/v1/geography/continents`, {
       headers: this.getHeaders(),
     })
     if (!response.ok) throw new Error('Failed to fetch continents')
@@ -29,7 +33,7 @@ class LocationService {
   }
 
   async createOrGetContinent(name: string): Promise<LocationData> {
-    const response = await fetch(`${API_BASE}/api/v1/geography/continents`, {
+    const response = await fetch(`${this.apiBase()}/api/v1/geography/continents`, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify({ name }),
@@ -40,7 +44,7 @@ class LocationService {
 
   // Regions
   async getRegionsByContinent(continentId: number): Promise<LocationData[]> {
-    const response = await fetch(`${API_BASE}/api/v1/geography/continents/${continentId}/regions`, {
+    const response = await fetch(`${this.apiBase()}/api/v1/geography/continents/${continentId}/regions`, {
       headers: this.getHeaders(),
     })
     if (!response.ok) throw new Error('Failed to fetch regions')
@@ -48,7 +52,7 @@ class LocationService {
   }
 
   async createOrGetRegion(name: string, continentId: number): Promise<LocationData> {
-    const response = await fetch(`${API_BASE}/api/v1/geography/regions`, {
+    const response = await fetch(`${this.apiBase()}/api/v1/geography/regions`, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify({ name, continent_id: continentId }),
@@ -59,7 +63,7 @@ class LocationService {
 
   // Countries
   async getCountriesByRegion(regionId: number): Promise<LocationData[]> {
-    const response = await fetch(`${API_BASE}/api/v1/geography/regions/${regionId}/countries`, {
+    const response = await fetch(`${this.apiBase()}/api/v1/geography/regions/${regionId}/countries`, {
       headers: this.getHeaders(),
     })
     if (!response.ok) throw new Error('Failed to fetch countries')
@@ -67,7 +71,7 @@ class LocationService {
   }
 
   async createOrGetCountry(name: string, regionId: number): Promise<LocationData> {
-    const response = await fetch(`${API_BASE}/api/v1/geography/countries`, {
+    const response = await fetch(`${this.apiBase()}/api/v1/geography/countries`, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify({ name, region_id: regionId }),
@@ -78,7 +82,7 @@ class LocationService {
 
   // Cities
   async getCitiesByCountry(countryId: number): Promise<LocationData[]> {
-    const response = await fetch(`${API_BASE}/api/v1/geography/countries/${countryId}/cities`, {
+    const response = await fetch(`${this.apiBase()}/api/v1/geography/countries/${countryId}/cities`, {
       headers: this.getHeaders(),
     })
     if (!response.ok) throw new Error('Failed to fetch cities')
@@ -86,7 +90,7 @@ class LocationService {
   }
 
   async createOrGetCity(name: string, countryId: number): Promise<LocationData> {
-    const response = await fetch(`${API_BASE}/api/v1/geography/cities`, {
+    const response = await fetch(`${this.apiBase()}/api/v1/geography/cities`, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify({ name, country_id: countryId }),

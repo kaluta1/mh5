@@ -1,5 +1,6 @@
 import { createUploadthing, type FileRouter } from "uploadthing/next";
 import { UploadThingError } from "uploadthing/server";
+import { getServerApiBase } from "@/lib/share-preview-server";
 import { 
   moderateImage, 
   moderateVideo, 
@@ -56,7 +57,7 @@ const auth = async (req: Request) => {
 
     // Appeler l'endpoint /me pour vérifier le token et récupérer l'utilisateur
     // Ensure API URL doesn't have trailing slash
-    let apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    let apiUrl = getServerApiBase();
     apiUrl = apiUrl.replace(/\/+$/, ''); // Remove trailing slashes
     
     // Construct the full auth endpoint URL

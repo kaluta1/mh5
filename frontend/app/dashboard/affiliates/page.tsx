@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { useLanguage } from '@/contexts/language-context'
 import { useToast } from '@/components/ui/toast'
 import { Button } from '@/components/ui/button'
+import { getEffectiveAppUrl } from '@/lib/config'
 import {
   Dialog,
   DialogContent,
@@ -118,12 +119,7 @@ export default function AffiliatesPage() {
     }
   }, [isLoading, isAuthenticated, router])
 
-  const getBaseUrl = () => {
-    if (typeof window !== 'undefined') {
-      return window.location.origin
-    }
-    return process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-  }
+  const getBaseUrl = () => getEffectiveAppUrl()
 
   const generateReferralLinks = (code: string) => {
     const baseUrl = getBaseUrl()

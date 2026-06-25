@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation'
 import { FavoritesSkeleton } from '@/components/ui/skeleton'
 import { contestService } from '@/services/contest-service'
 import { GripVertical, Trash2, Star, Heart } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { resolvePublicApiBase } from '@/lib/config'
 
 export default function FavoritesPage() {
   const { t } = useLanguage()
@@ -164,7 +164,7 @@ export default function FavoritesPage() {
                       : contestant.image_media_ids
                     const firstImage = Array.isArray(images) && images.length > 0 ? images[0] : null
                     if (firstImage) {
-                      const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+                      const API_BASE = resolvePublicApiBase()
                       const imgUrl = firstImage.startsWith('http') ? firstImage : `${API_BASE}${firstImage.startsWith('/') ? '' : '/'}${firstImage}`
                       return <img src={imgUrl} alt={contestant.title} className="w-full h-full object-cover" />
                     }
