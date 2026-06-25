@@ -1,3 +1,3 @@
 """Backend build identifier — bump when deploying nomination/API fixes."""
 
-BACKEND_BUILD_ID = "english-vote-tophigh5-20260626"
+BACKEND_BUILD_ID = "continental-vote-calendar-20260626"

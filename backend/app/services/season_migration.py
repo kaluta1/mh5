@@ -76,6 +76,26 @@ class SeasonMigrationService:
         return SeasonMigrationService._add_months(month_start, offset)
 
     @staticmethod
+    def _nomination_vote_open_date_for_level(round_obj: Round, level: SeasonLevel) -> Optional[date]:
+        """
+        First calendar day when voting opens for nomination cohort month M at level L.
+        March cohort: country vote April (M+1), regional May (M+2), continental June (M+3), global July (M+4).
+        """
+        month_start = SeasonMigrationService._round_month_start(round_obj)
+        if not month_start:
+            return None
+        vote_offsets = {
+            SeasonLevel.COUNTRY: 1,
+            SeasonLevel.REGIONAL: 2,
+            SeasonLevel.CONTINENT: 3,
+            SeasonLevel.GLOBAL: 4,
+        }
+        offset = vote_offsets.get(level)
+        if offset is None:
+            return None
+        return SeasonMigrationService._add_months(month_start, offset)
+
+    @staticmethod
     def _nomination_country_init_ready(round_obj: Round, today: date) -> bool:
         """True when nomination contests may attach to COUNTRY season (from round month start)."""
         month_start = SeasonMigrationService._round_month_start(round_obj)

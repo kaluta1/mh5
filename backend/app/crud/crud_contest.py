@@ -2790,15 +2790,15 @@ class CRUDContest:
             }.get((level_lower or "").lower())
 
         def _nomination_calendar_vote_open(round_obj, level_lower: str, when) -> bool:
-            """Nomination contests: level L voting opens on M+offset from cohort round month."""
+            """Nomination contests: level L voting opens on M+1/2/3/4 from cohort month."""
             sl = _season_level_enum(level_lower)
             if not round_obj or not sl:
                 return False
-            min_start = SeasonMigrationService._nomination_min_start_for_level(round_obj, sl)
-            if not min_start:
+            vote_open = SeasonMigrationService._nomination_vote_open_date_for_level(round_obj, sl)
+            if not vote_open:
                 return False
             today = when.date() if hasattr(when, "date") else date_type.today()
-            return today >= min_start
+            return today >= vote_open
 
         _round_cache: Dict[int, Any] = {}
 
