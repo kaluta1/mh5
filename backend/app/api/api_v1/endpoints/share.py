@@ -15,27 +15,17 @@ from app.models.contests import Contestant
 from app.models.user import User
 from app.models.post import Post, PostVisibility, PostMedia
 from app.models.media import Media
-from app.core.config import settings
+from app.core.public_urls import absolutize_media_path, public_site_base
 
 router = APIRouter()
 
-_SITE_BASE = (settings.FRONTEND_URL or "https://myhigh5.com").rstrip("/")
+_SITE_BASE = public_site_base()
 _DEFAULT_OG_IMAGE = f"{_SITE_BASE}/opengraph-image"
 
 
 def _absolutize_url(url: Optional[str]) -> Optional[str]:
     """Ensure crawlers (Facebook, etc.) receive an absolute https URL."""
-    if not url:
-        return None
-    cleaned = str(url).strip()
-    if not cleaned:
-        return None
-    if cleaned.startswith(("http://", "https://")):
-        return cleaned.replace("http://", "https://", 1)
-    api_base = (settings.BACKEND_PUBLIC_URL or settings.FRONTEND_URL or _SITE_BASE).rstrip("/")
-    if cleaned.startswith("/"):
-        return f"{api_base}{cleaned}"
-    return cleaned
+    return absolutize_media_path(url)
 
 
 def _resolve_media_ref(db: Session, media_ref: Any) -> Optional[str]:
@@ -44,16 +34,16 @@ def _resolve_media_ref(db: Session, media_ref: Any) -> Optional[str]:
         if not cleaned:
             return None
         if cleaned.startswith(("http://", "https://")):
-            return cleaned
+            return absolutize_media_path(cleaned)
         try:
             media_id = int(cleaned)
         except ValueError:
             return None
         media = db.query(Media).filter(Media.id == media_id).first()
-        return media.url if media else None
+        return absolutize_media_path(media.url) if media and media.url else None
     if isinstance(media_ref, int):
         media = db.query(Media).filter(Media.id == media_ref).first()
-        return media.url if media else None
+        return absolutize_media_path(media.url) if media and media.url else None
     return None
 
 

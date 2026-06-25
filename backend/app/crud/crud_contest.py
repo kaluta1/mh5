@@ -1469,10 +1469,8 @@ class CRUDContest:
                 cover_image_url = image_to_use
             # Si c'est un chemin relatif, construire l'URL complète
             elif image_to_use.startswith('/'):
-                import os
-                # Utiliser NEXT_PUBLIC_API_URL ou API_BASE_URL ou localhost par défaut
-                api_base_url = os.getenv("NEXT_PUBLIC_API_URL") or os.getenv("API_BASE_URL") or "http://localhost:8000"
-                cover_image_url = f"{api_base_url}{image_to_use}"
+                from app.core.public_urls import absolutize_media_path
+                cover_image_url = absolutize_media_path(image_to_use) or image_to_use
             else:
                 # Sinon, utiliser tel quel (peut être un emoji ou autre)
                 cover_image_url = image_to_use
@@ -1483,9 +1481,8 @@ class CRUDContest:
             if contest.image_url.startswith('http://') or contest.image_url.startswith('https://'):
                 image_url_processed = contest.image_url
             elif contest.image_url.startswith('/'):
-                import os
-                api_base_url = os.getenv("NEXT_PUBLIC_API_URL") or os.getenv("API_BASE_URL") or "http://localhost:8000"
-                image_url_processed = f"{api_base_url}{contest.image_url}"
+                from app.core.public_urls import absolutize_media_path
+                image_url_processed = absolutize_media_path(contest.image_url) or contest.image_url
             else:
                 image_url_processed = contest.image_url
         

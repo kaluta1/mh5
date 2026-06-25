@@ -3,6 +3,8 @@
  * For lightning-fast page loads across the entire application
  */
 
+import { resolvePublicApiBase } from '@/lib/config'
+
 // Prefetch links on hover for instant navigation
 export function setupLinkPrefetching() {
   if (typeof window === 'undefined') return
@@ -89,7 +91,7 @@ export function preloadCriticalResources() {
   if (typeof window === 'undefined') return
 
   // Preload API endpoint
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://mh5-hbjp.onrender.com'
+  const apiUrl = resolvePublicApiBase() || 'https://myhigh5.com'
   const link = document.createElement('link')
   link.rel = 'preconnect'
   link.href = apiUrl

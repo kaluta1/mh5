@@ -1,3 +1,3 @@
 """Backend build identifier — bump when deploying nomination/API fixes."""
 
-BACKEND_BUILD_ID = "march-cohort-calendar-20260624b"
+BACKEND_BUILD_ID = "localhost-url-hardening-20260625"

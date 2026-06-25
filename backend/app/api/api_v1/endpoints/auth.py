@@ -20,6 +20,7 @@ from app.core.security import (
     validate_access_token,
     get_user_id_from_token
 )
+from app.core.public_urls import public_site_base
 from app.core.config import settings
 from app.db.session import get_db
 from app.crud import user as crud_user
@@ -101,7 +102,8 @@ def register_user(
         db.commit()
     
     # Envoyer l'email de bienvenue avec token de vérification
-    verify_url = f"{settings.FRONTEND_URL}/verify-email?token={create_email_verification_token(user.email)}"
+    site_base = public_site_base()
+    verify_url = f"{site_base}/verify-email?token={create_email_verification_token(user.email)}"
     background_tasks.add_task(
         email_service.send_welcome_email,
         to_email=user.email,
@@ -273,7 +275,8 @@ def request_password_reset(
         reset_token = create_password_reset_token(user.email)
         
         # Construire l'URL de réinitialisation
-        reset_url = f"{settings.FRONTEND_URL}/reset-password?token={reset_token}"
+        site_base = public_site_base()
+        reset_url = f"{site_base}/reset-password?token={reset_token}"
         
         # Récupérer la langue préférée de l'utilisateur
         user_lang = getattr(user, 'preferred_language', 'en') or 'en'
@@ -344,7 +347,8 @@ def confirm_password_reset(
     
     # Envoyer l'email de notification de sécurité
     user_lang = getattr(user, 'preferred_language', 'en') or 'en'
-    support_url = f"{settings.FRONTEND_URL}/contact"
+    site_base = public_site_base()
+    support_url = f"{site_base}/contact"
     background_tasks.add_task(
         email_service.send_password_change_security_email,
         to_email=user.email,
@@ -454,7 +458,8 @@ def change_password(
     
     # Envoyer l'email de sécurité
     user_lang = getattr(current_user, 'preferred_language', 'en') or 'en'
-    support_url = f"{settings.FRONTEND_URL}/contact"
+    site_base = public_site_base()
+    support_url = f"{site_base}/contact"
     background_tasks.add_task(
         email_service.send_password_change_security_email,
         to_email=current_user.email,

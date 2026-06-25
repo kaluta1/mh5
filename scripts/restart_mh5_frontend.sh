@@ -36,6 +36,11 @@ if [ -f .env.production ]; then
   echo "    loaded .env.production (NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-unset})"
 fi
 
+if [ "${NEXT_PUBLIC_API_URL:-}" != "https://myhigh5.com" ] && [ "${NEXT_PUBLIC_API_URL:-}" != "https://myhigh5.com/" ]; then
+  echo "    ERROR: NEXT_PUBLIC_API_URL must be https://myhigh5.com for VPS (got: ${NEXT_PUBLIC_API_URL:-unset})" >&2
+  exit 1
+fi
+
 node --max-old-space-size=4096 node_modules/next/dist/bin/next build
 
 port_pids() {

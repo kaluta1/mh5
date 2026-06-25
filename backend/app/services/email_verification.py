@@ -5,7 +5,7 @@ from fastapi import status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
+from app.core.public_urls import public_site_base
 from app.core.security import verify_email_verification_token
 from app.crud import user as crud_user
 
@@ -36,7 +36,7 @@ def verify_user_email_from_token(db: Session, token: str) -> Tuple[bool, Optiona
 
 def build_email_verify_redirect(db: Session, token: str) -> RedirectResponse:
     """GET-friendly verification: redirect to frontend login with outcome in query string."""
-    base = (settings.FRONTEND_URL or "").rstrip("/") or "https://myhigh5.com"
+    base = public_site_base()
     ok, err, _email = verify_user_email_from_token(db, token)
     if ok:
         return RedirectResponse(

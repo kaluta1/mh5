@@ -1,4 +1,4 @@
-import { API_URL, DEFAULT_PUBLIC_API_URL, DEFAULT_PUBLIC_APP_URL } from '@/lib/config'
+import { API_URL, DEFAULT_PUBLIC_API_URL, DEFAULT_PUBLIC_APP_URL, rewriteLocalhostUrl } from '@/lib/config'
 
 export const SITE_ORIGIN = (
   process.env.NEXT_PUBLIC_APP_URL || DEFAULT_PUBLIC_APP_URL
@@ -68,7 +68,7 @@ export function absolutizeShareImage(url: string | null | undefined): string {
   const trimmed = (url || '').trim()
   if (!trimmed) return DEFAULT_OG_IMAGE
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-    return trimmed.replace(/^http:\/\//i, 'https://')
+    return rewriteLocalhostUrl(trimmed.replace(/^http:\/\//i, 'https://'))
   }
   if (trimmed.startsWith('/')) {
     return `${SITE_ORIGIN}${trimmed}`

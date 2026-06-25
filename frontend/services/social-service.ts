@@ -1,5 +1,5 @@
 import api, { apiService } from '@/lib/api'
-import { API_URL } from '@/lib/config'
+import { getEffectiveApiUrl, rewriteLocalhostUrl } from '@/lib/config'
 
 export interface Post {
   id: number
@@ -202,12 +202,19 @@ export interface CreateGroupRequest {
 }
 
 function getApiOrigin(): string {
-  try {
-    return new URL(API_URL).origin
-  } catch {
-    if (typeof window !== 'undefined') return window.location.origin
-    return 'https://myhigh5.com'
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname
+    if (host !== 'localhost' && host !== '127.0.0.1') {
+      return window.location.origin.replace(/\/+$/, '')
+    }
   }
+  try {
+    const fromApi = new URL(getEffectiveApiUrl()).origin
+    if (!/(localhost|127\.0\.0\.1)/i.test(fromApi)) return fromApi
+  } catch {
+    /* fall through */
+  }
+  return 'https://myhigh5.com'
 }
 
 function normalizeMediaUrl(rawUrl: unknown): string {
@@ -229,7 +236,7 @@ function normalizeMediaUrl(rawUrl: unknown): string {
   if (value.startsWith('/')) return `${origin}${value}`
   if (value.startsWith('api/')) return `${origin}/${value}`
 
-  return value
+  return rewriteLocalhostUrl(value)
 }
 
 function normalizePost(post: any): Post {

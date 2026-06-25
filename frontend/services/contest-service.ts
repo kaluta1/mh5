@@ -1,5 +1,5 @@
 import api, { apiService } from '@/lib/api'
-import { resolvePublicApiBase } from '@/lib/config'
+import { resolvePublicApiBase, rewriteLocalhostUrl } from '@/lib/config'
 import { cacheService } from '@/lib/cache-service'
 
 /** axios validateStatus accepts 4xx — treat as errors so nominate/participate UI can show messages. */
@@ -421,6 +421,8 @@ class ContestService {
         } else if (coverImage.trim() !== '') {
           coverImage = `${API_BASE_URL}/${coverImage}`;
         }
+      } else if (coverImage.startsWith('http')) {
+        coverImage = rewriteLocalhostUrl(coverImage)
       }
 
       // If still no valid image, use an emoji

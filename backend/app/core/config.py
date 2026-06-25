@@ -120,9 +120,15 @@ class Settings(BaseModel):
             else "https://myhigh5.com"
         )
     )
-    # Public base URL of this API (no trailing slash), e.g. https://myhigh5.com or https://api.example.com.
-    # Used to default Shufti callback/redirect when SHUFTI_CALLBACK_URL / SHUFTI_REDIRECT_URL are unset.
-    BACKEND_PUBLIC_URL: str = _first_nonempty_env("BACKEND_PUBLIC_URL", "PUBLIC_BACKEND_URL")
+    # Public base URL of this API (no trailing slash), e.g. https://myhigh5.com
+    BACKEND_PUBLIC_URL: str = (
+        _first_nonempty_env("BACKEND_PUBLIC_URL", "PUBLIC_BACKEND_URL")
+        or (
+            "http://localhost:8001"
+            if os.getenv("ENVIRONMENT", "").lower() in ("development", "dev", "local")
+            else "https://myhigh5.com"
+        )
+    )
     
     # SHUFTI PRO KYC (accept UPPER_SNAKE and lowercase aliases from .env)
     SHUFTI_CLIENT_ID: str = _first_nonempty_env("SHUFTI_CLIENT_ID", "shufti_client_id")
