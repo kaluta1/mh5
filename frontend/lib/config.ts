@@ -176,17 +176,18 @@ const LOOPBACK_ORIGIN_RE = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i
  * On myhigh5.com in the browser, uses the current origin; on the server, production default.
  */
 export function rewriteLocalhostUrl(url: string): string {
-  if (!url || !LOOPBACK_ORIGIN_RE.test(url)) return url
+  const value = (url || '').trim()
+  if (!value || !LOOPBACK_ORIGIN_RE.test(value)) return value
   if (typeof window !== 'undefined') {
     const host = window.location.hostname
     if (host !== 'localhost' && host !== '127.0.0.1') {
-      return url.replace(LOOPBACK_ORIGIN_RE, window.location.origin.replace(/\/+$/, ''))
+      return value.replace(LOOPBACK_ORIGIN_RE, window.location.origin.replace(/\/+$/, ''))
     }
   }
   if (isProduction) {
-    return url.replace(LOOPBACK_ORIGIN_RE, DEFAULT_PUBLIC_APP_URL)
+    return value.replace(LOOPBACK_ORIGIN_RE, DEFAULT_PUBLIC_APP_URL)
   }
-  return url
+  return value
 }
 
 /**
@@ -197,27 +198,6 @@ export function resolvePublicApiBase(): string {
     return getEffectiveApiUrl().replace(/\/+$/, '')
   }
   return API_URL.replace(/\/+$/, '')
-}
-
-/**
- * Rewrite loopback URLs baked into old API responses or builds when viewed on production.
- */
-export function rewriteLocalhostUrl(url: string): string {
-  const value = (url || '').trim()
-  if (!value) return value
-  const loopback = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i
-  if (!loopback.test(value)) return value
-
-  if (typeof window !== 'undefined') {
-    const host = window.location.hostname
-    if (host !== 'localhost' && host !== '127.0.0.1') {
-      return value.replace(loopback, window.location.origin.replace(/\/+$/, ''))
-    }
-  }
-  if (isProduction) {
-    return value.replace(loopback, DEFAULT_PUBLIC_APP_URL)
-  }
-  return value
 }
 
 /** Origin only (for preconnect / dns-prefetch); works when API_URL includes /api/v1. */
