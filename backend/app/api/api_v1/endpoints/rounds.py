@@ -7,6 +7,7 @@ import logging
 import traceback
 import os
 
+from app.core.public_urls import absolutize_media_path
 from app import crud, models
 from app.schemas import round as round_schema
 from app.api import deps
@@ -16,6 +17,18 @@ from app.services.contest_category_integrity import dedupe_contests_one_per_cate
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def _public_cover_url(contest: Any) -> Optional[str]:
+    raw = getattr(contest, "cover_image_url", None) or getattr(contest, "image_url", None)
+    if not raw:
+        return None
+    text = str(raw).strip()
+    if not text:
+        return None
+    if not (text.startswith("http") or text.startswith("/")) and len(text) <= 8:
+        return text
+    return absolutize_media_path(text) or text
 
 
 def _normalize_contest_mode(mode: Any) -> str:
@@ -656,7 +669,7 @@ def _lightweight_round_data(
                 "name": contest.name,
                 "description": getattr(contest, "description", None),
                 "contest_type": getattr(contest, "contest_type", None),
-                "cover_image_url": getattr(contest, "cover_image_url", None) or getattr(contest, "image_url", None),
+                "cover_image_url": _public_cover_url(contest),
                 "is_active": getattr(contest, "is_active", True),
                 "is_submission_open": getattr(contest, "is_submission_open", True),
                 "is_voting_open": getattr(contest, "is_voting_open", False),
@@ -677,7 +690,7 @@ def _lightweight_round_data(
                 "requires_content_verification": getattr(contest, "requires_content_verification", False),
                 "min_age": getattr(contest, "min_age", None),
                 "max_age": getattr(contest, "max_age", None),
-                "image_url": getattr(contest, "image_url", None),
+                "image_url": _public_cover_url(contest),
                 "created_at": getattr(contest, "created_at", None),
                 "updated_at": getattr(contest, "updated_at", None),
                 "entries_count": participant_count,
@@ -1096,11 +1109,11 @@ def _enrich_round_data(
                         "name": contest.name,
                         "description": getattr(contest, 'description', None),
                         "contest_type": getattr(contest, 'contest_type', None),
-                        "cover_image_url": getattr(contest, 'cover_image_url', None) or getattr(contest, 'image_url', None),
+                        "cover_image_url": _public_cover_url(contest),
                         "level": display_level,
                         "participants_count": participant_count,
                         "votes_count": 0,
-                        "image_url": getattr(contest, 'image_url', None),
+                        "image_url": _public_cover_url(contest),
                         "created_at": getattr(contest, 'created_at', None),
                         "updated_at": getattr(contest, 'updated_at', None),
                         "contest_mode": contest_mode_value,

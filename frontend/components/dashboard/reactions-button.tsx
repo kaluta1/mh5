@@ -88,7 +88,7 @@ export function ReactionsButton({ contestantId, selectedReaction, onReactionSele
         }`}
       >
         <IconComponent className={`w-4 h-4 flex-shrink-0 ${selectedReaction ? 'fill-current' : ''}`} />
-        <span className="hidden sm:inline">{t('dashboard.contests.reaction') || 'Réaction'}</span>
+        <span className="hidden sm:inline">{t('dashboard.contests.reaction') || 'Reaction'}</span>
         {reactionsCount > 0 && (
           <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
             {reactionsCount}
@@ -105,7 +105,7 @@ export function ReactionsButton({ contestantId, selectedReaction, onReactionSele
         >
           <div className="p-3">
             <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-3">
-              {t('dashboard.contests.reactions') || 'Réactions'}
+              {t('dashboard.contests.reactions') || 'Reactions'}
             </h4>
             {loadingDetails ? (
               <div className="text-sm text-gray-500 dark:text-gray-400 py-2">
@@ -184,7 +184,7 @@ export function ReactionsButton({ contestantId, selectedReaction, onReactionSele
           >
             <div className="p-2">
               <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2 px-2">
-                {t('dashboard.contests.reactions') || 'Réactions'}
+                {t('dashboard.contests.reactions') || 'Reactions'}
               </h4>
               <div className="space-y-1">
                 {reactions.map(({ key, icon: Icon, color, label }) => (

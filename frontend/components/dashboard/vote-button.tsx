@@ -89,7 +89,7 @@ export function VoteButton({ contestantId, canVote, hasVoted, isVoting, onVote, 
         case 'geographic_restriction':
           return t('dashboard.contests.restriction_geographic_desc') || 'You cannot vote due to geographic restrictions'
         case 'voting_not_open':
-          return t('dashboard.contests.voting_not_open') || "Le vote n'est pas encore ouvert"
+          return t('dashboard.contests.voting_not_open') || 'Voting is not open yet'
         case 'user_not_found':
           return t('dashboard.contests.restriction_user_not_found_desc') || 'User not found'
         default:
@@ -221,7 +221,7 @@ export function VoteButton({ contestantId, canVote, hasVoted, isVoting, onVote, 
               </div>
             ) : (
               <div className="text-sm text-gray-500 dark:text-gray-400 py-2">
-                {t('dashboard.contests.no_votes') || 'Aucun vote'}
+                {t('dashboard.contests.no_votes') || 'No votes yet'}
               </div>
             )}
           </div>
@@ -240,10 +240,10 @@ export function VoteButton({ contestantId, canVote, hasVoted, isVoting, onVote, 
               <AlertCircle className="w-4 h-4 text-red-500 dark:text-red-400 flex-shrink-0 mt-0.5" />
               <div className="flex-1">
                 <h4 className="text-xs font-semibold text-red-600 dark:text-red-400 mb-1">
-                  {t('dashboard.contests.vote_restriction') || 'Restriction de vote'}
+                  {t('dashboard.contests.vote_restriction') || 'Vote restriction'}
                 </h4>
                 <p className="text-sm text-gray-700 dark:text-gray-300">
-                  {getVoteButtonTitle() || t('dashboard.contests.cannot_vote') || 'Vous ne pouvez pas voter pour ce participant.'}
+                  {getVoteButtonTitle() || t('dashboard.contests.cannot_vote') || 'You cannot vote for this participant.'}
                 </p>
               </div>
             </div>

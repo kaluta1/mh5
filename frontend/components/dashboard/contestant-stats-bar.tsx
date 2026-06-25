@@ -69,14 +69,14 @@ export function ContestantStatsBar({
     {
       key: 'reactions',
       value: reactions,
-      label: t('dashboard.contests.reactions') || 'Réactions',
+      label: t('dashboard.contests.reactions') || 'Reactions',
       icon: <Heart className="w-4 h-4 text-white" />,
       bg: 'bg-pink-600'
     },
     {
       key: 'favorites',
       value: favorites,
-      label: t('dashboard.contests.favorites') || 'Favoris',
+      label: t('dashboard.contests.favorites') || 'Favorites',
       icon: <Heart className="w-4 h-4 text-white" />,
       bg: 'bg-rose-500'
     },

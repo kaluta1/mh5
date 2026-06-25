@@ -67,7 +67,7 @@ export function FavoriteButton({ contestantId, isFavorite, onToggle, isAuthor = 
         }`}
       >
         <Heart className={`w-4 h-4 flex-shrink-0 ${isFavorite ? 'fill-current' : ''}`} />
-        <span className="hidden sm:inline">{t('dashboard.contests.favorite') || 'Favori'}</span>
+        <span className="hidden sm:inline">{t('dashboard.contests.favorite') || 'Favorite'}</span>
         {favoritesCount > 0 && (
           <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
             {favoritesCount}
@@ -84,7 +84,7 @@ export function FavoriteButton({ contestantId, isFavorite, onToggle, isAuthor = 
         >
           <div className="p-3">
             <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-3">
-              {t('dashboard.contests.favorites') || 'Favoris'}
+              {t('dashboard.contests.favorites') || 'Favorites'}
             </h4>
             {loadingDetails ? (
               <div className="text-sm text-gray-500 dark:text-gray-400 py-2">

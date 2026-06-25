@@ -157,6 +157,9 @@ export default function ContestDetailPage() {
   const roundIdFromUrl = searchParams.get('roundId')
   const contestLevelFromUrl = searchParams.get('contestLevel')
   const viewOnly = searchParams.get('viewOnly') === 'true'
+  const rosterOnlyParam = searchParams.get('rosterOnly')
+  const rosterOnly =
+    rosterOnlyParam === 'false' ? false : rosterOnlyParam === 'true' ? true : viewOnly
 
   // Sync state from URL when params change (e.g. navigation from list with country=Uganda)
   React.useEffect(() => {
@@ -251,7 +254,7 @@ export default function ContestDetailPage() {
         entryType: entryType,
         roundId: roundIdFromUrl ? parseInt(roundIdFromUrl, 10) : undefined,
         contestLevel: contestLevelFromUrl || undefined,
-        rosterOnly: entryType === 'nomination' || viewOnly,
+        rosterOnly,
         _t: Date.now(),
       }
 
@@ -413,7 +416,7 @@ export default function ContestDetailPage() {
         setPageLoading(false)
       }
     }
-  }, [contestId, filterCountry, filterRegion, filterContinent, entryType, roundIdFromUrl, contestLevelFromUrl, viewOnly, user?.id, t])
+  }, [contestId, filterCountry, filterRegion, filterContinent, entryType, roundIdFromUrl, contestLevelFromUrl, viewOnly, rosterOnly, user?.id, t])
 
   // Decide if the current user already submitted (so the CTA should show "Edit").
   // This is needed because `current_user_contesting` from the API can be inaccurate for nominations.

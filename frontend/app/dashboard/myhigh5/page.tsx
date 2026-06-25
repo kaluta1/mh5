@@ -133,7 +133,7 @@ function formatMyHigh5SeasonBadge(level: string | null | undefined): string {
   if (!level) return ''
   const s = String(level).toLowerCase().trim()
   if (s === 'region') return 'Regional'
-  if (s === 'continental') return 'Continent'
+  if (s === 'continental' || s === 'continent') return 'Continental'
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
@@ -277,20 +277,13 @@ export default function MyHigh5Page() {
     icon: GeographyLevelIconKey
   }> = [
     { value: 'city', label: t('dashboard.contests.level_city') || 'City', icon: 'city' },
-    { value: 'country', label: 'Country', icon: 'country' },
-    { value: 'regional', label: 'Regional', icon: 'regional' },
-    { value: 'continent', label: 'Continent', icon: 'continent' },
-    { value: 'global', label: 'Global', icon: 'global' },
+    { value: 'country', label: t('dashboard.contests.country') || 'Country', icon: 'country' },
+    { value: 'regional', label: t('dashboard.contests.regional') || 'Regional', icon: 'regional' },
+    { value: 'continent', label: t('dashboard.contests.continental') || 'Continental', icon: 'continent' },
+    { value: 'global', label: t('dashboard.contests.global') || 'Global', icon: 'global' },
   ]
 
-  const visibleLevelTabs = React.useMemo(
-    () => levelTabs.filter((item) => item.value !== 'continent'),
-    [levelTabs],
-  )
-
-  useEffect(() => {
-    if (activeLevel === 'continent') setActiveLevel('country')
-  }, [activeLevel])
+  const visibleLevelTabs = levelTabs
 
   // Redirection si non authentifié
   useEffect(() => {
@@ -766,7 +759,7 @@ export default function MyHigh5Page() {
               ? (t('dashboard.myhigh5.archive_description') ||
                 'Your MyHigh5 votes for this contest period (read only).')
               : (t('dashboard.myhigh5.description') ||
-                'Vos 5 votes par concours et par saison — chaque catégorie apparaît dans sa propre section.')}
+                'Your 5 votes per contest and season — each category appears in its own section.')}
           </p>
         </div>
       </div>
@@ -786,11 +779,11 @@ export default function MyHigh5Page() {
         <TabsList className="grid w-full max-w-md grid-cols-2">
           <TabsTrigger value="active">
             <Hand className="w-4 h-4 mr-2" />
-            {t('dashboard.myhigh5.active_tab') || 'Actifs'}
+            {t('dashboard.myhigh5.active_tab') || 'Active'}
           </TabsTrigger>
           <TabsTrigger value="history">
             <History className="w-4 h-4 mr-2" />
-            {t('dashboard.myhigh5.history_tab') || 'Historique'}
+            {t('dashboard.myhigh5.history_tab') || 'History'}
           </TabsTrigger>
         </TabsList>
 
@@ -865,7 +858,7 @@ export default function MyHigh5Page() {
           <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">
             {categorySearch.trim()
               ? (t('dashboard.myhigh5.no_search_results') || 'No matching categories')
-              : (t('dashboard.myhigh5.no_votes') || 'Aucun vote')}
+              : (t('dashboard.myhigh5.no_votes') || 'No votes yet')}
           </h3>
           <p className="text-gray-500 dark:text-gray-400 mb-6">
             {categorySearch.trim()
@@ -878,7 +871,7 @@ export default function MyHigh5Page() {
               className="bg-gradient-to-r from-myhigh5-primary to-myhigh5-secondary hover:opacity-90 text-white"
             >
               <Trophy className="w-4 h-4 mr-2" />
-              {t('dashboard.myhigh5.explore_contests') || 'Explorer les concours'}
+              {t('dashboard.myhigh5.explore_contests') || 'Explore contests'}
             </Button>
           )}
         </div>
@@ -956,7 +949,7 @@ export default function MyHigh5Page() {
           {filteredSeasonsData.some((s) => s.votes_count > 0) && (
             <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4">
               <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
-                {t('dashboard.myhigh5.points_legend') || 'Système de points'}
+                {t('dashboard.myhigh5.points_legend') || 'Points system'}
               </h3>
               <div className="flex flex-wrap gap-4">
                 {[1, 2, 3, 4, 5].map((rank) => (
@@ -990,12 +983,12 @@ export default function MyHigh5Page() {
               <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">
                 {categorySearch.trim()
                   ? (t('dashboard.myhigh5.no_search_results') || 'No matching categories')
-                  : (t('dashboard.myhigh5.no_history') || 'Aucun historique')}
+                  : (t('dashboard.myhigh5.no_history') || 'No history')}
               </h3>
               <p className="text-gray-500 dark:text-gray-400">
                 {categorySearch.trim()
                   ? (t('dashboard.myhigh5.no_search_results_description') || 'Try another category, contest, or nominee name.')
-                  : (t('dashboard.myhigh5.no_history_description') || "Vous n'avez pas encore d'historique de votes.")}
+                  : (t('dashboard.myhigh5.no_history_description') || "You don't have any vote history yet.")}
               </p>
             </div>
           ) : (
@@ -1031,7 +1024,7 @@ export default function MyHigh5Page() {
                             </span>
                             {!season.is_active && (
                               <span className="inline-block px-2 py-1 text-xs font-medium bg-gray-300 dark:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-full">
-                                {t('dashboard.myhigh5.inactive') || 'Terminé'}
+                                {t('dashboard.myhigh5.inactive') || 'Completed'}
                               </span>
                             )}
                           </div>

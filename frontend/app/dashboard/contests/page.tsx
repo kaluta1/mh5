@@ -16,13 +16,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { logger } from '@/lib/logger'
 import { LocationFilterBar } from '@/components/dashboard/location-filter-bar'
 import { normalizeMediaUrl } from '@/lib/media-url'
+import { rewriteLocalhostUrl } from '@/lib/config'
 import { COUNTRIES_DATA } from '@/lib/countries-data'
 import { regionalPoolForCountry } from '@/lib/regional-pool'
 import {
   cohortAnchorDate,
   cohortRoundForVoteGeographyLevel,
   computeDisplayRounds,
-  isVoteGeographyLevelAvailable,
   resolveVoteCalendarAnchorRound,
   roundTabKey,
   voteLevelCohortHint,
@@ -359,17 +359,12 @@ function ContestsPageContent() {
       { value: 'continental', label: t('dashboard.contests.continental'), icon: 'continent' },
       { value: 'global', label: t('dashboard.contests.global'), icon: 'global' },
     ]
-    if (!showVoteGeographyLevels || !voteRoundRow) {
+    if (!showVoteGeographyLevels) {
       return allStages.filter((s) => s.value !== 'global')
     }
-    return allStages.filter((stage) =>
-      isVoteGeographyLevelAvailable(
-        voteRoundRow,
-        stage.value as VoteGeographyLevel,
-        rounds,
-      ),
-    )
-  }, [t, showVoteGeographyLevels, voteRoundRow, rounds])
+    // Vote tab: always show country → global; cohort resolution picks the round per chip.
+    return allStages
+  }, [t, showVoteGeographyLevels])
 
   const participationLevelOptions = useMemo(() => {
     type Opt = { value: string; label: string; icon: GeographyLevelIconKey }
@@ -970,9 +965,12 @@ function ContestsPageContent() {
       if (roundIdNav) params.set('roundId', String(roundIdNav))
       const activeRoundEntry = displayRounds.find((d) => d.tabKey === activeTabKey)
       const rowMode = normalizeContestMode(contestModeFromRow)
-      if (rowMode === 'nomination') {
-        // View Nominator from Submit or Vote — browse roster only (lighter API).
+      if (rowMode === 'nomination' && activeDisplayTab?.kind === 'nominate') {
+        // Submit tab: browse nominators only (lighter API).
         params.set('viewOnly', 'true')
+      } else if (activeDisplayTab?.kind === 'vote') {
+        // Vote tab: full roster with can_vote / vote buttons.
+        params.set('rosterOnly', 'false')
       }
 
       const level =
@@ -1000,7 +998,7 @@ function ContestsPageContent() {
       params.set('entryType', rowMode)
       return params
     },
-    [roundIdNav, displayRounds, activeTabKey, filterRegion, filterCountry, user?.country, shouldPassCountryNavParam, filterContinent, categoryTab, nominationMigrationLevel]
+    [roundIdNav, displayRounds, activeTabKey, activeDisplayTab?.kind, filterRegion, filterCountry, user?.country, shouldPassCountryNavParam, filterContinent, categoryTab, nominationMigrationLevel]
   )
 
   // Raw Contests List (Before filtering by type) - Now uses allContests for infinite scroll
@@ -1020,9 +1018,16 @@ function ContestsPageContent() {
         [...rawImage].some((ch) => (ch.codePointAt(0) ?? 0) > 0x1f000)
       let coverImage = rawImage
       if (!isEmoji && coverImage) {
-        coverImage = normalizeMediaUrl(coverImage)
+        coverImage = rewriteLocalhostUrl(normalizeMediaUrl(coverImage))
       } else if (!coverImage) {
-        coverImage = '💎'
+        const typeEmoji: Record<string, string> = {
+          beauty: '👑',
+          handsome: '🤴',
+          latest_hits: '🌟',
+          talent: '✨',
+          photography: '📸',
+        }
+        coverImage = typeEmoji[String(c.contest_type || '').toLowerCase()] || '🏆'
       }
 
       return {

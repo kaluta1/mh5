@@ -218,7 +218,7 @@ export const ContestCard = React.memo(function ContestCard({
   const getStatusLabel = (status: string) => {
     switch (status) {
       case 'city':
-        return t('dashboard.contests.city') || 'Ville'
+        return t('dashboard.contests.city') || 'City'
       case 'country':
         return t('dashboard.contests.country')
       case 'regional':
