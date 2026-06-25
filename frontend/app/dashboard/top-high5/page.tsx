@@ -9,6 +9,13 @@ import { useLanguage } from "@/contexts/language-context"
 import { contestService, TopHigh5Contest, TopHigh5Level, TopHigh5Response } from "@/services/contest-service"
 import ApiService, { Round } from "@/lib/api-service"
 import { isRoundVotingLive } from "@/lib/is-round-voting-live"
+import {
+  cohortAnchorDate,
+  cohortMonthForVoteGeographyLevel,
+  cohortRoundForVoteGeographyLevel,
+  resolveVoteCalendarAnchorRound,
+  type VoteGeographyLevel,
+} from "@/lib/contest-round-tabs"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -53,6 +60,45 @@ function getTopHigh5EmptyMessage(level: TopHigh5Level, t: (key: string) => strin
 
 const topHigh5Cache = new Map<string, { data: TopHigh5Response; timestamp: number }>()
 const TOP_HIGH5_CACHE_TTL = 30 * 1000
+
+function topHigh5LevelToVoteGeo(level: TopHigh5Level): VoteGeographyLevel | null {
+  switch (level) {
+    case "country":
+      return "country"
+    case "regional":
+      return "regional"
+    case "continent":
+      return "continental"
+    case "global":
+      return "global"
+    default:
+      return null
+  }
+}
+
+function resolveTopHigh5RoundId(level: TopHigh5Level, rounds: Round[]): number | undefined {
+  if (!rounds.length) return undefined
+  const voteAnchor = resolveVoteCalendarAnchorRound(rounds)
+  const geo = topHigh5LevelToVoteGeo(level)
+  if (voteAnchor && geo) {
+    const cohort = cohortRoundForVoteGeographyLevel(voteAnchor, geo, rounds)
+    if (cohort?.id) return Number(cohort.id)
+    const cohortMonth = cohortMonthForVoteGeographyLevel(voteAnchor, geo)
+    if (cohortMonth) {
+      const byMonth = rounds.find((r) => {
+        const anchor = cohortAnchorDate(r)
+        return (
+          anchor &&
+          anchor.getFullYear() === cohortMonth.getFullYear() &&
+          anchor.getMonth() === cohortMonth.getMonth()
+        )
+      })
+      if (byMonth?.id) return Number(byMonth.id)
+    }
+  }
+  const live = rounds.find((r) => isRoundVotingLive(r, rounds))
+  return live?.id ? Number(live.id) : Number(rounds[0]?.id)
+}
 
 function topHigh5CacheKey(country: string, level: TopHigh5Level, roundId?: number, regionQuery?: string) {
   return `${level}-${roundId || "auto"}-${country.trim().toLowerCase() || "global"}-${(regionQuery || "").trim().toLowerCase()}`
@@ -139,31 +185,19 @@ export default function TopHigh5Page() {
         setRoundIdInput(parsedRoundId ? String(parsedRoundId) : urlRoundIdRaw)
         setActiveLevel(initialLevel)
         setDidSeedCountry(true)
-        void fetchData({ country: initialCountry, roundId: parsedRoundId, level: initialLevel })
 
         try {
-          const rounds = await ApiService.getRounds({ contestLimit: 1, limit: 24 }) as Round[]
-          const liveRound = rounds.find((round) => isRoundVotingLive(round, rounds))
-          const regionalRound = rounds.find(
-            (round) => liveRound?.id && Number(round.id) === Number(liveRound.id) - 1,
-          )
-          if (liveRound?.id) {
-            setDefaultCountryRoundId(Number(liveRound.id))
-          }
-          if (regionalRound?.id) {
-            setDefaultRegionalRoundId(Number(regionalRound.id))
-          }
-          if (!parsedRoundId && liveRound?.id) {
-            parsedRoundId = initialLevel === "regional"
-              ? (regionalRound?.id || liveRound.id)
-              : liveRound.id
-          }
+          const rounds = (await ApiService.getRounds({ contestLimit: 1, limit: 24 })) as Round[]
+          const cohortRoundId = resolveTopHigh5RoundId(initialLevel, rounds)
+          parsedRoundId = cohortRoundId ?? parsedRoundId
+          setDefaultCountryRoundId(resolveTopHigh5RoundId("country", rounds))
+          setDefaultRegionalRoundId(resolveTopHigh5RoundId("regional", rounds))
           if (parsedRoundId) {
             setRoundIdInput(String(parsedRoundId))
-            void fetchData({ country: initialCountry, roundId: parsedRoundId, level: initialLevel, silent: true })
           }
+          void fetchData({ country: initialCountry, roundId: parsedRoundId, level: initialLevel })
         } catch {
-          // Backend can still choose a fallback if rounds cannot be loaded here.
+          void fetchData({ country: initialCountry, roundId: parsedRoundId, level: initialLevel })
         }
       }
       void seed()
@@ -230,19 +264,21 @@ export default function TopHigh5Page() {
     }
   }
 
-  const handleLevelChange = (next: string) => {
+  const handleLevelChange = async (next: string) => {
     const nextLevel = next as TopHigh5Level
     if (nextLevel === activeLevel) return
     setActiveLevel(nextLevel)
-    let parsed = roundIdInput && !Number.isNaN(Number(roundIdInput)) ? Number(roundIdInput) : undefined
-    if (nextLevel === "country" && defaultCountryRoundId) {
-      parsed = defaultCountryRoundId
-      setRoundIdInput(String(defaultCountryRoundId))
-    } else if (nextLevel === "regional" && defaultRegionalRoundId) {
-      parsed = defaultRegionalRoundId
-      setRoundIdInput(String(defaultRegionalRoundId))
+    try {
+      const rounds = (await ApiService.getRounds({ contestLimit: 1, limit: 24 })) as Round[]
+      const parsed = resolveTopHigh5RoundId(nextLevel, rounds)
+      if (parsed) {
+        setRoundIdInput(String(parsed))
+      }
+      fetchData({ country: countryInput, level: nextLevel, roundId: parsed })
+    } catch {
+      const parsed = roundIdInput && !Number.isNaN(Number(roundIdInput)) ? Number(roundIdInput) : undefined
+      fetchData({ country: countryInput, level: nextLevel, roundId: parsed })
     }
-    fetchData({ country: countryInput, level: nextLevel, roundId: parsed })
   }
 
   const isLikelyRegionalSearch = (value: string) => {

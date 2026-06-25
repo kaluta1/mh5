@@ -195,7 +195,7 @@ export function CommentsSection({
             {t('dashboard.contests.comments')} ({currentCount})
           </DialogTitle>
           <DialogDescription className="text-gray-600 dark:text-gray-400">
-            {t('dashboard.contests.comments_description') || 'Partagez vos pensées sur ce participant'}
+            {t('dashboard.contests.comments_description') || 'Share your thoughts on this participant'}
           </DialogDescription>
         </DialogHeader>
         
@@ -225,7 +225,7 @@ export function CommentsSection({
             </>
           ) : !loading ? (
             <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-              {t('dashboard.contests.no_comments') || 'Aucun commentaire pour le moment'}
+              {t('dashboard.contests.no_comments') || 'No comments yet'}
             </div>
           ) : (
             <div className="text-center py-8 text-gray-500 dark:text-gray-400">
@@ -246,20 +246,20 @@ export function CommentsSection({
                     // La mention est déjà ajoutée par le composant
                   }}
                   users={commenters}
-                  placeholder={t('dashboard.contests.add_comment_placeholder') || 'Ajouter un commentaire...'}
+                  placeholder={t('dashboard.contests.add_comment_placeholder') || 'Add a comment...'}
                   className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-full bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myhigh5-primary focus:border-transparent transition-all"
                   disabled={isSubmitting}
                 />
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {t('dashboard.contests.mention_hint') || 'Tapez @ pour mentionner quelqu\'un'}
+                    {t('dashboard.contests.mention_hint') || 'Type @ to mention someone'}
                   </p>
                   <Button
                     onClick={handleAddComment}
                     disabled={!newComment.trim() || isSubmitting}
                     className="px-6 py-2 bg-myhigh5-primary hover:bg-myhigh5-primary-dark text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {isSubmitting ? t('dashboard.contests.sending') || 'Envoi...' : t('dashboard.contests.send') || 'Envoyer'}
+                    {isSubmitting ? t('dashboard.contests.sending') || 'Sending...' : t('dashboard.contests.send') || 'Send'}
                   </Button>
                 </div>
               </div>

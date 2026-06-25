@@ -285,8 +285,8 @@ export default function WalletPage() {
           transactions={transactions.slice(0, 5)}
           showActions={true}
           onPaymentCompleted={loadWalletData}
-          emptyTitle={t('dashboard.wallet.no_transactions') || 'Aucune transaction'}
-          emptyDescription={t('dashboard.wallet.no_transactions_desc') || "Vous n'avez pas encore de transactions"}
+          emptyTitle={t('dashboard.wallet.no_transactions') || 'No transactions yet'}
+          emptyDescription={t('dashboard.wallet.no_transactions_desc') || "You don't have any transactions yet"}
         />
       </div>
       

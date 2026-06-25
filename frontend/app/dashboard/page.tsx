@@ -119,10 +119,10 @@ export default function DashboardPage() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <p className="text-gray-500 dark:text-gray-400 text-sm">
-              {t('dashboard.analytics.hello') || 'Bonjour'}, {firstName} 👋
+              {t('dashboard.analytics.hello') || 'Hello'}, {firstName} 👋
             </p>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
-              {t('dashboard.analytics.overview') || "Vue d'ensemble"}
+              {t('dashboard.analytics.overview') || 'Overview'}
             </h1>
           </div>
           
@@ -132,7 +132,7 @@ export default function DashboardPage() {
               className="inline-flex items-center gap-2 bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors"
             >
               <Trophy className="h-4 w-4" />
-              {t('dashboard.nav.contests') || 'Concours'}
+              {t('dashboard.nav.contests') || 'Contests'}
               <ChevronRight className="h-4 w-4" />
             </Link>
             <Link
@@ -140,7 +140,7 @@ export default function DashboardPage() {
               className="inline-flex items-center gap-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors"
             >
               <Users className="h-4 w-4" />
-              {t('dashboard.nav.affiliates') || 'Affiliés'}
+              {t('dashboard.nav.affiliates') || 'Affiliates'}
             </Link>
           </div>
         </div>
@@ -157,16 +157,16 @@ export default function DashboardPage() {
                 </div>
                 <div>
                   <p className="font-medium text-amber-900 dark:text-amber-200">
-                    {t('contests.profile_incomplete_title') || 'Profil incomplet'}
+                    {t('contests.profile_incomplete_title') || 'Incomplete profile'}
                   </p>
                   <p className="text-sm text-amber-700 dark:text-amber-300">
-                    {t('contests.profile_incomplete_message') || 'Complétez votre profil pour pouvoir participer aux concours.'}
+                    {t('contests.profile_incomplete_message') || 'Complete your profile to participate in contests.'}
                   </p>
                 </div>
               </div>
               <Link href="/dashboard/settings">
                 <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white rounded-lg">
-                  {t('contests.complete_profile') || 'Compléter'}
+                  {t('contests.complete_profile') || 'Complete profile'}
                   <ChevronRight className="w-4 h-4 ml-1" />
                 </Button>
               </Link>
@@ -186,16 +186,16 @@ export default function DashboardPage() {
               </div>
               <div>
                 <p className="font-medium text-blue-900 dark:text-blue-200">
-                  {t('contests.kyc_recommended_title') || 'Vérification d\'identité recommandée'}
-                </p>
-                <p className="text-sm text-blue-700 dark:text-blue-300">
-                  {t('contests.kyc_recommended_message') || 'Certains concours exigent la vérification KYC pour participer.'}
-                </p>
+                  {t('contests.kyc_recommended_title') || 'Identity verification recommended'}
+                  </p>
+                  <p className="text-sm text-blue-700 dark:text-blue-300">
+                  {t('contests.kyc_recommended_message') || 'Some contests require KYC verification to participate.'}
+                  </p>
+                </div>
               </div>
-            </div>
-            <Link href="/dashboard/kyc">
-              <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg">
-                {t('contests.verify_identity') || 'Vérifier'}
+              <Link href="/dashboard/kyc">
+                <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg">
+                {t('contests.verify_identity') || 'Verify'}
                 <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
             </Link>
@@ -213,10 +213,10 @@ export default function DashboardPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-gray-900 dark:text-white text-sm">
-                  {t('contests.profile_incomplete_title') || 'Profil incomplet'}
+                  {t('contests.profile_incomplete_title') || 'Incomplete profile'}
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">
-                  {t('contests.profile_incomplete_message') || 'Complétez votre profil pour participer.'}
+                  {t('contests.profile_incomplete_message') || 'Complete your profile to participate in contests.'}
                 </p>
               </div>
               <button
@@ -228,7 +228,7 @@ export default function DashboardPage() {
             </div>
             <Link href="/dashboard/settings" className="block mt-3">
               <Button size="sm" className="w-full bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-sm">
-                {t('contests.complete_profile') || 'Compléter mon profil'}
+                {t('contests.complete_profile') || 'Complete profile'}
                 <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
             </Link>
@@ -259,7 +259,7 @@ export default function DashboardPage() {
             }`}
           >
             <UserPlus className="h-4 w-4" />
-            {t('dashboard.analytics.affiliates') || 'Affiliés'}
+            {t('dashboard.analytics.affiliates') || 'Affiliates'}
           </button>
         </div>
       </div>
@@ -342,7 +342,7 @@ export default function DashboardPage() {
                 </p>
                 <div className="flex items-center justify-between mt-1">
                   <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {t('dashboard.analytics.comments') || 'Commentaires'}
+                    {t('dashboard.analytics.comments') || 'Comments'}
                   </p>
                   {data.comments_change !== 0 && (
                     <span className={`text-xs font-medium ${data.comments_change > 0 ? 'text-green-600' : 'text-red-600'}`}>
@@ -361,7 +361,7 @@ export default function DashboardPage() {
                 </p>
                 <div className="flex items-center justify-between mt-1">
                   <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {t('dashboard.analytics.total_views') || 'Vues'}
+                    {t('dashboard.analytics.total_views') || 'Views'}
                   </p>
                   {data.views_change !== 0 && (
                     <span className={`text-xs font-medium ${data.views_change > 0 ? 'text-green-600' : 'text-red-600'}`}>
@@ -380,7 +380,7 @@ export default function DashboardPage() {
                 </p>
                 <div className="flex items-center justify-between mt-1">
                   <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {t('dashboard.analytics.reactions') || 'Réactions'}
+                    {t('dashboard.analytics.reactions') || 'Reactions'}
                   </p>
                   {data.reactions_change !== 0 && (
                     <span className={`text-xs font-medium ${data.reactions_change > 0 ? 'text-green-600' : 'text-red-600'}`}>
@@ -467,7 +467,7 @@ export default function DashboardPage() {
           </p>
           <div className="flex items-center justify-between mt-1">
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              {t('dashboard.analytics.comments') || 'Commentaires'}
+              {t('dashboard.analytics.comments') || 'Comments'}
             </p>
             {data.comments_change !== 0 && (
               <span className={`text-xs font-medium ${data.comments_change > 0 ? 'text-green-600' : 'text-red-600'}`}>
@@ -488,7 +488,7 @@ export default function DashboardPage() {
           </p>
           <div className="flex items-center justify-between mt-1">
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              {t('dashboard.analytics.total_views') || 'Vues'}
+              {t('dashboard.analytics.total_views') || 'Views'}
             </p>
             {data.views_change !== 0 && (
               <span className={`text-xs font-medium ${data.views_change > 0 ? 'text-green-600' : 'text-red-600'}`}>
@@ -509,7 +509,7 @@ export default function DashboardPage() {
           </p>
           <div className="flex items-center justify-between mt-1">
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              {t('dashboard.analytics.reactions') || 'Réactions'}
+              {t('dashboard.analytics.reactions') || 'Reactions'}
             </p>
             {data.reactions_change !== 0 && (
               <span className={`text-xs font-medium ${data.reactions_change > 0 ? 'text-green-600' : 'text-red-600'}`}>
@@ -595,7 +595,7 @@ export default function DashboardPage() {
               </div>
               <p className="text-2xl font-bold text-gray-900 dark:text-white">{data.affiliates_stats.direct_count}</p>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                {t('dashboard.analytics.direct_affiliates') || 'Affiliés directs'}
+                {t('dashboard.analytics.direct_affiliates') || 'Direct affiliates'}
               </p>
             </div>
 
@@ -607,7 +607,7 @@ export default function DashboardPage() {
               </div>
               <p className="text-2xl font-bold text-gray-900 dark:text-white">{data.affiliates_stats.total_network}</p>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                {t('dashboard.analytics.total_network') || 'Réseau total'}
+                {t('dashboard.analytics.total_network') || 'Total network'}
               </p>
             </div>
 
@@ -647,10 +647,10 @@ export default function DashboardPage() {
             <div className="flex flex-col md:flex-row items-center justify-between gap-4">
               <div className="text-center md:text-left">
                 <h3 className="text-xl font-bold text-white mb-2">
-                  {t('affiliates.grow_network') || 'Développez votre réseau'}
+                  {t('affiliates.grow_network') || 'Grow your network'}
                 </h3>
                 <p className="text-white/80 text-sm max-w-md">
-                  {t('affiliates.invite_friends') || 'Invitez vos amis et gagnez des commissions sur leurs activités'}
+                  {t('affiliates.invite_friends') || 'Invite friends and earn commissions on their activity'}
                 </p>
               </div>
               <Link

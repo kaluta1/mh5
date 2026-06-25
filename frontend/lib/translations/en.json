@@ -18,7 +18,17 @@
     "back": "Back",
     "try_again": "Try again",
     "optional": "Optional",
-    "submitting": "Submitting..."
+    "submitting": "Submitting...",
+    "comments": "Comments",
+    "follow": "Follow"
+  },
+  "contests": {
+    "profile_incomplete_title": "Incomplete profile",
+    "profile_incomplete_message": "Complete your profile to participate in contests.",
+    "complete_profile": "Complete profile",
+    "kyc_recommended_title": "Identity verification recommended",
+    "kyc_recommended_message": "Some contests require KYC verification to participate.",
+    "verify_identity": "Verify"
   },
   "navigation": {
     "home": "Home",
@@ -559,7 +569,43 @@
       "voting_not_open": "Voting is not open yet",
       "cannot_vote": "Cannot vote",
       "no_votes": "No votes yet",
-      "comments": "Comments"
+      "comments": "Comments",
+      "comments_description": "Share your thoughts on this participant",
+      "no_comments": "No comments yet",
+      "add_comment_placeholder": "Add a comment...",
+      "mention_hint": "Type @ to mention someone",
+      "sending": "Sending...",
+      "send": "Send",
+      "loading": "Loading...",
+      "level_country": "Country",
+      "level_regional": "Regional",
+      "level_continental": "Continental",
+      "level_global": "Global",
+      "empty_nomination_country": "No country winners found for this selection.",
+      "empty_nomination_regional": "No regional winners found for this selection.",
+      "empty_nomination_continental": "No continental winners found for this selection.",
+      "empty_nomination_global": "No global winners found for this selection.",
+      "empty_nomination_city": "No nominees found for this city."
+    },
+    "nav": {
+      "contests": "Contests",
+      "affiliates": "Affiliates"
+    },
+    "analytics": {
+      "hello": "Hello",
+      "overview": "Overview",
+      "comments": "Comments",
+      "views": "Views",
+      "reactions": "Reactions",
+      "votes": "Votes",
+      "total_views": "Views",
+      "affiliates": "Affiliates",
+      "direct_affiliates": "Direct affiliates",
+      "total_network": "Total network"
+    },
+    "wallet": {
+      "no_transactions": "No transactions yet",
+      "no_transactions_desc": "You don't have any transactions yet"
     },
     "myhigh5": {
       "title": "MyHigh5",

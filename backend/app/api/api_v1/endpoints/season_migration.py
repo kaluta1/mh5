@@ -669,15 +669,18 @@ def get_top_high5_by_country(
             if not rnd:
                 raise HTTPException(status_code=404, detail=f"Round id={round_id} not found")
             contests_out = _build_for_round(rnd, allow_inactive_links=True)
-            return {
-                "round_id": rnd.id,
-                "round_name": rnd.name,
-                "country": selected_country,
-                "level": requested_level.value,
-                "contests": contests_out,
-                "fallback_applied": False,
-                "diagnostics": _diagnostics_for_round(rnd),
-            }
+            if contests_out:
+                return {
+                    "round_id": rnd.id,
+                    "round_name": rnd.name,
+                    "country": selected_country,
+                    "level": requested_level.value,
+                    "contests": contests_out,
+                    "fallback_applied": False,
+                    "diagnostics": _diagnostics_for_round(rnd),
+                }
+            # Stale/wrong round id (e.g. old May 2024) — auto-pick the best round for this level.
+            round_id = None
 
         candidate_rounds = (
             db.query(Round)

@@ -2775,50 +2775,56 @@ class CRUDContest:
                 return True
 
         from app.services.contest_status import contest_status_service
+        from app.services.season_migration import SeasonMigrationService
+        from app.models.contests import SeasonLevel
+        from datetime import date as date_type
 
-        def _is_voting_open_for_active_season() -> bool:
-            """Prefer stage-specific season windows for migrated levels."""
-            if not season or not getattr(season, "round", None):
-                return False
-            lvl = (season_level or "").lower()
-            window_fields = {
-                "city": ("city_season_start_date", "city_season_end_date"),
-                "country": ("country_season_start_date", "country_season_end_date"),
-                "regional": ("regional_start_date", "regional_end_date"),
-                "region": ("regional_start_date", "regional_end_date"),
-                "continent": ("continental_start_date", "continental_end_date"),
-                "global": ("global_start_date", "global_end_date"),
-            }.get(lvl)
-            if not window_fields:
-                return False
-            round_obj = season.round
-            start_date = getattr(round_obj, window_fields[0], None)
-            end_date = getattr(round_obj, window_fields[1], None)
-            if not start_date or not end_date:
-                return False
-            now_vote = contest_status_service._utc_now()
-            from datetime import datetime, time as time_type
-            start_dt = datetime.combine(start_date, time_type.min)
-            end_dt = datetime.combine(end_date, time_type(23, 59, 59))
-            return start_dt <= now_vote <= end_dt
+        def _season_level_enum(level_lower: str):
+            return {
+                "country": SeasonLevel.COUNTRY,
+                "regional": SeasonLevel.REGIONAL,
+                "region": SeasonLevel.REGIONAL,
+                "continent": SeasonLevel.CONTINENT,
+                "continental": SeasonLevel.CONTINENT,
+                "global": SeasonLevel.GLOBAL,
+            }.get((level_lower or "").lower())
 
-        # Helper : vote ouvert pour le round (même logique que round_voting_open_at : grâce nomination, etc.)
+        def _nomination_calendar_vote_open(round_obj, level_lower: str, when) -> bool:
+            """Nomination contests: level L voting opens on M+offset from cohort round month."""
+            sl = _season_level_enum(level_lower)
+            if not round_obj or not sl:
+                return False
+            min_start = SeasonMigrationService._nomination_min_start_for_level(round_obj, sl)
+            if not min_start:
+                return False
+            today = when.date() if hasattr(when, "date") else date_type.today()
+            return today >= min_start
+
         _round_cache: Dict[int, Any] = {}
 
         def _is_voting_open_for_round(c):
             now_vote = contest_status_service._utc_now()
-            # Prefer primary voting calendar on the season's round (e.g. May vote for April pool)
-            # before narrow country_season_* slices that can end before voting_start_date.
+            lvl = (season_level or "").lower()
             ro_season = getattr(season, "round", None) if season else None
-            if ro_season and getattr(ro_season, "voting_start_date", None) and getattr(
-                ro_season, "voting_end_date", None
-            ):
-                if contest_status_service.round_voting_open_at(ro_season, now_vote):
+
+            if ro_season:
+                stage_open, _ = contest_status_service.season_stage_voting_status(
+                    ro_season, lvl, now_vote
+                )
+                if stage_open is True:
                     return True
-            if _is_voting_open_for_active_season():
-                return True
+                if _nomination_calendar_vote_open(ro_season, lvl, now_vote):
+                    return True
+                if stage_open is False:
+                    return False
+                if getattr(ro_season, "voting_start_date", None) and getattr(
+                    ro_season, "voting_end_date", None
+                ):
+                    if contest_status_service.round_voting_open_at(ro_season, now_vote):
+                        return True
+
             if not c.round_id:
-                return True  # Pas de round = pas de restriction
+                return True
             from app.models.round import Round as RoundModel
 
             rid = int(c.round_id)
@@ -2826,7 +2832,7 @@ class CRUDContest:
                 _round_cache[rid] = db.query(RoundModel).filter(RoundModel.id == rid).first()
             r = _round_cache[rid]
             if not r or not r.voting_start_date or not r.voting_end_date:
-                return True
+                return _nomination_calendar_vote_open(ro_season, lvl, now_vote) if ro_season else True
             return contest_status_service.round_voting_open_at(r, now_vote)
 
         # Construire la liste des contestants enrichis
