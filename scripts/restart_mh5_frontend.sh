@@ -26,6 +26,8 @@ install_deps
 
 export NODE_ENV=production
 export NEXT_TELEMETRY_DISABLED=1
+export MAINTENANCE_MODE=false
+export IS_MAINTENANCE_MODE=false
 
 # Bake production public URLs into the client bundle (not localhost).
 if [ -f .env.production ]; then
