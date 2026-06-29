@@ -9,6 +9,21 @@ PORT="${MH5_FRONTEND_PORT:-3000}"
 echo "==> rebuild mh5 frontend (port ${PORT})"
 cd "$FRONTEND"
 
+# Old VPS .env.local can set MAINTENANCE_MODE=true and bake a gated build — force open.
+fix_maintenance_env() {
+  local f="$1"
+  [ -f "$f" ] || return 0
+  if grep -qE '^(IS_MAINTENANCE_MODE|MAINTENANCE_MODE)=' "$f" 2>/dev/null; then
+    local tmp
+    tmp="$(mktemp)"
+    sed -E 's/^(IS_MAINTENANCE_MODE|MAINTENANCE_MODE)=.*/\1=false/' "$f" > "$tmp"
+    mv "$tmp" "$f"
+    echo "    forced maintenance flags off in $f"
+  fi
+}
+fix_maintenance_env .env.local
+fix_maintenance_env .env
+
 rm -rf .next
 
 install_deps() {

@@ -1,6 +1,5 @@
 /**
  * Static hero copy — bundled synchronously (no LanguageProvider / async chunks).
- * Mobile preview via maintenance bypass must never show icon-only buttons.
  */
 import en from './translations/en.json'
 

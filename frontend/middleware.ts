@@ -8,6 +8,10 @@ import type { NextRequest } from 'next/server'
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
+  if (pathname === '/maintenance' || pathname.startsWith('/maintenance/')) {
+    return NextResponse.redirect(new URL('/', request.url))
+  }
+
   if (pathname.startsWith('/s/f/') || pathname.startsWith('/s/c/')) {
     const response = NextResponse.next()
     response.headers.set('x-myhigh5-share-route', '1')

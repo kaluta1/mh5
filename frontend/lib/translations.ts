@@ -6,8 +6,7 @@
  *
  * Import from `@/lib/locale-registry` for types/language list,
  * `@/lib/translations-loader` for runtime bundles, or
- * `@/lib/maintenance-translations` / `@/lib/seo-translations` for specific
- * static catalogs.
+ * `@/lib/seo-translations` for specific static catalogs.
  */
 export {
   languages,
