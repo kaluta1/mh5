@@ -64,51 +64,46 @@ class SeasonMigrationScheduler:
             await asyncio.sleep(self.check_interval)
     
     async def _process_migrations(self):
-        """Process all pending season migrations"""
-        # Exécuter la fonction synchrone dans un thread pour ne pas bloquer l'event loop
+        """Process season migrations; on the 1st run full calendar ops (round + multi-pass promote)."""
+        from datetime import date as date_cls
+        from app.services.monthly_calendar_ops import (
+            run_monthly_calendar_ops_sync,
+            run_season_migrations,
+        )
+
         def run_migration():
-            db: Session = SessionLocal()
+            logger.info("Starting season migration check...")
+            print("[SeasonMigrationScheduler] Starting migration check...")
+            if date_cls.today().day == 1:
+                return run_monthly_calendar_ops_sync()
+            db = SessionLocal()
             try:
-                logger.info("Starting season migration check...")
-                print("[SeasonMigrationScheduler] Starting migration check...")
-                result = season_migration_service.check_and_process_migrations(db)
-                # Les fonctions de migration font déjà leurs propres commits
-                # Mais on s'assure qu'il n'y a pas de transaction en attente
-                try:
-                    db.commit()
-                except Exception:
-                    pass  # Ignorer si déjà commité
-                return result
-            except Exception as e:
-                logger.error(f"Error in migration function: {e}", exc_info=True)
-                print(f"[SeasonMigrationScheduler] Error in migration: {e}")
-                try:
-                    db.rollback()
-                except Exception:
-                    pass
-                raise
+                return run_season_migrations(db)
             finally:
-                try:
-                    db.close()
-                except Exception:
-                    pass
-        
+                db.close()
+
         try:
-            # Exécuter dans un thread pour ne pas bloquer (compatible Python 3.7+)
             import sys
             if sys.version_info >= (3, 9):
                 result = await asyncio.to_thread(run_migration)
             else:
-                # Fallback pour Python < 3.9
                 from concurrent.futures import ThreadPoolExecutor
                 loop = asyncio.get_event_loop()
                 with ThreadPoolExecutor() as executor:
                     result = await loop.run_in_executor(executor, run_migration)
-            
-            if result and isinstance(result, dict) and result.get("processed", 0) > 0:
-                print(f"[SeasonMigrationScheduler] Processed {result['processed']} migrations")
-                logger.info(f"Processed {result['processed']} season migrations: {result['results']}")
-                for item in result.get('results', []):
+
+            mig = result
+            if isinstance(result, dict) and "migration" in result:
+                mig = result.get("migration") or {}
+
+            if mig and isinstance(mig, dict) and int(mig.get("processed") or 0) > 0:
+                print(f"[SeasonMigrationScheduler] Processed {mig.get('processed')} migrations")
+                logger.info(
+                    "Processed %s season migrations (passes=%s)",
+                    mig.get("processed"),
+                    mig.get("passes"),
+                )
+                for item in mig.get('results', []):
                     contest_id = item.get('contest_id')
                     action = item.get('action')
                     migration_result = item.get('result', {})

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { API_URL } from '@/lib/config'
 
-const VALID_TASKS = ['payments', 'contest-status', 'season-migration', 'monthly-round']
+const VALID_TASKS = ['payments', 'contest-status', 'season-migration', 'monthly-round', 'monthly-ops']
 
 export async function POST(
   request: NextRequest,

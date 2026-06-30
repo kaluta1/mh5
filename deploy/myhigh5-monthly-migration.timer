@@ -1,0 +1,10 @@
+[Unit]
+Description=Run MyHigh5 season migrations on the 1st of each month at 00:05 UTC
+
+[Timer]
+OnCalendar=*-*-01 00:05:00 UTC
+Persistent=true
+Unit=myhigh5-monthly-migration.service
+
+[Install]
+WantedBy=timers.target

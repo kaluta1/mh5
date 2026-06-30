@@ -210,15 +210,19 @@ class MonthlyRoundScheduler:
         logger.info("Monthly round scheduler stopped")
     
     async def _check_loop(self):
-        """Main loop that checks and creates rounds periodically"""
+        """Main loop — run calendar ops immediately, then daily."""
+        try:
+            await self._create_monthly_round_if_needed()
+        except Exception as e:
+            logger.error(f"[MonthlyRoundScheduler] Initial calendar ops failed: {e}", exc_info=True)
+
         while self.running:
             try:
-                logger.info(f"[MonthlyRoundScheduler] Running check at {datetime.utcnow()}")
-                await self._create_monthly_round_if_needed()
-
+                await asyncio.sleep(self.check_interval)
                 if not self.running:
                     break
-                await asyncio.sleep(self.check_interval)
+                logger.info(f"[MonthlyRoundScheduler] Running daily check at {datetime.utcnow()}")
+                await self._create_monthly_round_if_needed()
             except asyncio.CancelledError:
                 logger.info("[MonthlyRoundScheduler] Task cancelled")
                 break
@@ -226,36 +230,38 @@ class MonthlyRoundScheduler:
                 logger.error(f"[MonthlyRoundScheduler] Error: {e}", exc_info=True)
     
     async def _create_monthly_round_if_needed(self):
-        """Create a round for the current month if it doesn't exist"""
-        db = SessionLocal()
+        """Ensure current-month round exists and run all due season migrations."""
+        import sys
+        from app.services.monthly_calendar_ops import run_monthly_calendar_ops_sync
+
+        def run():
+            return run_monthly_calendar_ops_sync()
+
         try:
-            today = date.today()
-            
-            # Check if round for current month already exists
-            month_name = today.strftime("%B %Y")
-            round_name = f"Round {month_name}"
-            
-            existing_round = db.query(Round).filter(
-                Round.name == round_name
-            ).first()
-            
-            if existing_round:
-                logger.info(f"[MonthlyRoundScheduler] Round '{round_name}' already exists (id={existing_round.id})")
-                sync_round_calendar_flags(db, existing_round)
-                link_active_contests_to_round(db, existing_round.id)
-                return
-
-            logger.info(f"[MonthlyRoundScheduler] Creating round for {month_name}...")
-            new_round = generate_monthly_round(db, target_date=today)
-            sync_round_calendar_flags(db, new_round)
-
-            logger.info(f"[MonthlyRoundScheduler] ✅ Round '{round_name}' created successfully (id={new_round.id})")
-            
+            if sys.version_info >= (3, 9):
+                summary = await asyncio.to_thread(run)
+            else:
+                from concurrent.futures import ThreadPoolExecutor
+                loop = asyncio.get_event_loop()
+                with ThreadPoolExecutor() as executor:
+                    summary = await loop.run_in_executor(executor, run)
+            mig = (summary or {}).get("migration") or {}
+            processed = int(mig.get("processed") or 0)
+            if processed:
+                logger.info(
+                    "[MonthlyRoundScheduler] Migrations processed=%s passes=%s",
+                    processed,
+                    mig.get("passes"),
+                )
+            else:
+                logger.info("[MonthlyRoundScheduler] No migrations needed today")
         except Exception as e:
-            logger.error(f"[MonthlyRoundScheduler] Error creating monthly round: {e}", exc_info=True)
-            db.rollback()
-        finally:
-            db.close()
+            logger.error(f"[MonthlyRoundScheduler] Calendar ops failed: {e}", exc_info=True)
+            raise
+
+    async def ensure_month_and_run_migrations(self):
+        """Cron/scheduler entry: round + migrations in one shot."""
+        await self._create_monthly_round_if_needed()
     
     def create_round_for_month(self, year: int, month: int) -> Optional[Round]:
         """

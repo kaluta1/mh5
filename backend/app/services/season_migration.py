@@ -1889,7 +1889,11 @@ class SeasonMigrationService:
     
 
     @staticmethod
-    def check_and_process_migrations(db: Session) -> dict:
+    def check_and_process_migrations(
+        db: Session,
+        *,
+        allow_multi_hop: bool = False,
+    ) -> dict:
         """
         Vérifie et traite toutes les migrations nécessaires pour tous les rounds actifs.
         Utilise round_contests (N:N) car Round.contest_id est toujours NULL.
@@ -1910,8 +1914,10 @@ class SeasonMigrationService:
         
         results = []
         today = date.today()
-        logger.info(f"Checking season migrations for date: {today}")
-        print(f"[Migration] Checking migrations for {today}")
+        if allow_multi_hop is False and today.day == 1:
+            allow_multi_hop = True
+        logger.info(f"Checking season migrations for date: {today} (multi_hop={allow_multi_hop})")
+        print(f"[Migration] Checking migrations for {today} (multi_hop={allow_multi_hop})")
         
         # ============================================================
         # STEP 0: Auto-close submission / open voting on rounds
@@ -2142,8 +2148,8 @@ class SeasonMigrationService:
                     continue
 
                 # Prevent multiple stage promotions for the same contest+round
-                # in one execution (e.g. country->regional then regional->continent).
-                if promotion_key in promoted_contests_this_run:
+                # in one execution — except on the 1st when all due levels run.
+                if not allow_multi_hop and promotion_key in promoted_contests_this_run:
                     continue
 
                 # Vérifier qu'on n'a pas déjà promu CE contest vers ce niveau.

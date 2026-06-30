@@ -1,0 +1,12 @@
+[Unit]
+Description=MyHigh5 monthly round + season migration (1st of month)
+After=network.target myhigh5-backend.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/mh5
+ExecStart=/bin/bash /root/mh5/scripts/run_monthly_migration_cron.sh
+User=root
+
+[Install]
+WantedBy=multi-user.target

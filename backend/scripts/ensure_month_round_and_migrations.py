@@ -49,15 +49,7 @@ def main() -> int:
     from app.db.session import SessionLocal
     from app.models.round import Round
     from app.scripts.generate_monthly_rounds import generate_monthly_round
-    from app.services.monthly_round_scheduler import (
-        close_stale_voting_rounds,
-        dedupe_submission_month_rounds,
-        link_active_contests_to_round,
-        monthly_round_scheduler,
-        resolve_live_nomination_vote_round,
-        sync_round_calendar_flags,
-    )
-    from app.services.season_migration import season_migration_service
+    from app.services.monthly_calendar_ops import run_monthly_calendar_ops
 
     if args.june_2026_only:
         db = SessionLocal()
@@ -70,63 +62,30 @@ def main() -> int:
             db.close()
         return 0
 
-    logger.info("=== Step 1: ensure current month round ===")
-    rnd = monthly_round_scheduler.ensure_current_month_round()
-    if not rnd:
-        logger.error("Failed to ensure current month round")
-        return 1
+    logger.info("=== Monthly calendar ops (round + migrations) ===")
+    summary = run_monthly_calendar_ops()
+    rnd_info = summary.get("round") or {}
+    mig = summary.get("migration") or {}
+    processed = int(mig.get("processed") or 0)
     print(
-        f"Round: id={rnd.id} name={rnd.name!r} "
-        f"submission={rnd.submission_start_date}..{rnd.submission_end_date} "
-        f"is_submission_open={rnd.is_submission_open} is_voting_open={rnd.is_voting_open}"
+        f"Round: {rnd_info!r} | migrations processed: {processed} "
+        f"(passes={mig.get('passes')}) first_of_month={summary.get('is_first_of_month')}"
     )
+    for item in mig.get("results", []) or []:
+        cid = item.get("contest_id")
+        action = item.get("action")
+        res = item.get("result") or {}
+        if isinstance(res, dict) and res.get("error"):
+            print(f"  contest {cid} {action}: ERROR {res.get('error')}")
+        elif isinstance(res, dict) and res.get("skipped"):
+            print(f"  contest {cid} {action}: skip {res.get('message', '')[:80]}")
+        else:
+            n = len(res.get("promoted_contestant_ids") or []) if isinstance(res, dict) else 0
+            print(f"  contest {cid} {action}: promoted={n}")
 
-    logger.info("=== Step 1b: dedupe June / close stale vote flags ===")
     db = SessionLocal()
     try:
-        from datetime import date as date_cls
-
-        today = date_cls.today()
-        n_dup = dedupe_submission_month_rounds(db, today)
-        n_vote = close_stale_voting_rounds(db, today)
-        live = resolve_live_nomination_vote_round(db, today)
-        print(f"Deduped duplicate month rounds: {n_dup}; closed stale vote flags: {n_vote}")
-        if live:
-            print(f"Live vote round: id={live.id} name={live.name!r}")
-    finally:
-        db.close()
-
-    logger.info("=== Step 2: sync contest submission/voting flags from rounds ===")
-    db = SessionLocal()
-    try:
-        from app.services.contest_status import contest_status_service
-
-        contest_status_service.update_contest_statuses(db)
-        db.commit()
-    except Exception as e:
-        logger.warning("contest status sync: %s", e)
-        db.rollback()
-
-    logger.info("=== Step 3: season migrations (all levels) ===")
-    try:
-        result = season_migration_service.check_and_process_migrations(db)
-        processed = result.get("processed", 0) if isinstance(result, dict) else 0
-        print(f"Migrations processed: {processed}")
-        for item in result.get("results", []) or []:
-            cid = item.get("contest_id")
-            action = item.get("action")
-            res = item.get("result") or {}
-            if isinstance(res, dict) and res.get("error"):
-                print(f"  contest {cid} {action}: ERROR {res.get('error')}")
-            elif isinstance(res, dict) and res.get("skipped"):
-                print(f"  contest {cid} {action}: skip {res.get('message', '')[:80]}")
-            else:
-                n = 0
-                if isinstance(res, dict):
-                    n = len(res.get("promoted_contestant_ids") or [])
-                print(f"  contest {cid} {action}: promoted={n}")
-
-        logger.info("=== Step 4: round snapshot ===")
+        logger.info("=== Round snapshot ===")
         rows = (
             db.query(Round)
             .filter(Round.name.ilike("%2026%"))

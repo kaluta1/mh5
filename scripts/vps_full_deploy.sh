@@ -100,17 +100,14 @@ if [ "$OK_LOCAL" -eq 0 ]; then
 fi
 
 echo "==> run season migrations (sync + promote)"
-cd "$REPO_ROOT/backend"
-PYTHONPATH=. python3 -c "
-from app.db.session import SessionLocal
-from app.services.season_migration import season_migration_service
-db = SessionLocal()
-try:
-    out = season_migration_service.check_and_process_migrations(db)
-    print('processed:', out.get('processed', 0))
-finally:
-    db.close()
-"
+bash "$REPO_ROOT/backend/scripts/run_ensure_month_round_and_migrations.sh" || {
+  echo "    WARN: ensure_month_round_and_migrations failed — check logs"
+}
+
+echo "==> install monthly migration timer (1st of month)"
+if [ -f "$REPO_ROOT/scripts/install_monthly_migration_timer.sh" ]; then
+  bash "$REPO_ROOT/scripts/install_monthly_migration_timer.sh" || echo "    WARN: timer install failed"
+fi
 
 echo "==> optional: March round regional backfill"
 for round_name in "Round March 2026" "Round March 2025"; do

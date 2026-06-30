@@ -20,7 +20,8 @@ _SCHEDULER_CONFIG: Dict[str, tuple[Any, str]] = {
     "payments": (PaymentScheduler(), "_check_pending_payments"),
     "contest-status": (ContestStatusScheduler(), "_check_contest_statuses"),
     "season-migration": (SeasonMigrationScheduler(), "_process_migrations"),
-    "monthly-round": (MonthlyRoundScheduler(), "ensure_current_month_round"),
+    "monthly-round": (MonthlyRoundScheduler(), "ensure_month_and_run_migrations"),
+    "monthly-ops": (MonthlyRoundScheduler(), "ensure_month_and_run_migrations"),
 }
 
 
