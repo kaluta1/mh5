@@ -2203,49 +2203,6 @@ def create_contestant(
                         detail=error_message
                     )
     
-    # Vérifier les restrictions de genre si le contest existe
-    if contest:
-        # Récupérer la restriction de genre (peut venir de gender_restriction ou voting_restriction)
-        gender_restriction = contest.gender_restriction
-        
-        # Si pas de gender_restriction directe, vérifier voting_restriction
-        if not gender_restriction and hasattr(contest, 'voting_restriction') and contest.voting_restriction:
-            # Accéder à la valeur de l'enum de manière sécurisée
-            voting_restriction_value = contest.voting_restriction.value if hasattr(contest.voting_restriction, 'value') else str(contest.voting_restriction)
-            voting_restriction_str = voting_restriction_value.lower().strip()
-            
-            # MALE_ONLY signifie que seuls les hommes peuvent participer
-            if voting_restriction_str == 'male_only':
-                gender_restriction = 'male'
-            # FEMALE_ONLY signifie que seules les femmes peuvent participer
-            elif voting_restriction_str == 'female_only':
-                gender_restriction = 'female'
-        
-        # Vérifier si l'utilisateur respecte la restriction de genre pour participer
-        if gender_restriction:
-            if not current_user.gender:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Your profile does not contain gender information. Please complete your profile to participate in this contest."
-                )
-            
-            # Récupérer le genre de l'utilisateur de manière sécurisée
-            user_gender = current_user.gender.value.lower() if hasattr(current_user.gender, 'value') else str(current_user.gender).lower()
-            gender_restriction_lower = gender_restriction.lower()
-            
-            # Vérifier la correspondance : si le contest est MALE_ONLY, seuls les hommes peuvent participer
-            # Si le contest est FEMALE_ONLY, seules les femmes peuvent participer
-            if gender_restriction_lower == 'male' and user_gender != 'male':
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="This contest is reserved for male participants only."
-                )
-            elif gender_restriction_lower == 'female' and user_gender != 'female':
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="This contest is reserved for female participants only."
-                )
-    
     # Determine the target round before checking participation
     target_round_id = contestant_data.round_id
     from app.models.round import Round
@@ -3565,46 +3522,6 @@ def vote_for_contestant(
         )
     
     # Vérifier les restrictions de genre pour le vote
-    # Si le contest est MALE_ONLY (réservé aux hommes pour participer), seules les femmes peuvent voter
-    # Si le contest est FEMALE_ONLY (réservé aux femmes pour participer), seuls les hommes peuvent voter
-    gender_restriction = contest.gender_restriction
-    
-    # Si pas de gender_restriction directe, vérifier voting_restriction
-    if not gender_restriction and hasattr(contest, 'voting_restriction') and contest.voting_restriction:
-        voting_restriction_str = str(contest.voting_restriction).lower().strip()
-        if voting_restriction_str == 'male_only':
-            gender_restriction = 'male'
-        elif voting_restriction_str == 'female_only':
-            gender_restriction = 'female'
-    
-    # Vérifier si l'utilisateur respecte la restriction de genre pour voter
-    if gender_restriction:
-        if not current_user.gender:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Your profile does not contain gender information. Please complete your profile to vote in this contest."
-            )
-        
-        user_gender = current_user.gender.value.lower() if hasattr(current_user.gender, 'value') else str(current_user.gender).lower()
-        gender_restriction_lower = gender_restriction.lower()
-        
-        # Logique inverse : si le contest est réservé aux hommes (pour participer), seules les femmes peuvent voter
-        # Si le contest est réservé aux femmes (pour participer), seuls les hommes peuvent voter
-        if gender_restriction_lower == 'male':
-            # Contest réservé aux hommes pour participer, donc seules les femmes peuvent voter
-            if user_gender != 'female':
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="This contest is reserved for male participants. Only female participants can vote."
-                )
-        elif gender_restriction_lower == 'female':
-            # Contest réservé aux femmes pour participer, donc seuls les hommes peuvent voter
-            if user_gender != 'male':
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="This contest is reserved for female participants. Only male participants can vote."
-                )
-    
     # Vérifier si l'utilisateur a déjà voté pour ce contestant dans cette saison active
     # IMPORTANT: Un utilisateur peut voter pour plusieurs contestants différents dans la même saison
     # Mais il ne peut pas voter deux fois pour le même contestant dans la même saison

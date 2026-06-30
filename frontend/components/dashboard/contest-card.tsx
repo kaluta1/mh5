@@ -243,28 +243,9 @@ export const ContestCard = React.memo(function ContestCard({
   }
 
   const isEligibleForContest = () => {
-    // Vérifier que la participation est en cours
     if (!isParticipationOngoing()) {
       return false
     }
-
-    // Vérifier les restrictions de genre
-    if (genderRestriction) {
-      // Si l'utilisateur n'a pas de genre défini, il ne peut pas participer
-      if (!userGender) {
-        return false
-      }
-
-      // Vérifier que le genre de l'utilisateur correspond à la restriction
-      if (genderRestriction === 'male' && userGender !== 'male') {
-        return false
-      }
-
-      if (genderRestriction === 'female' && userGender !== 'female') {
-        return false
-      }
-    }
-
     return true
   }
 
@@ -513,23 +494,6 @@ export const ContestCard = React.memo(function ContestCard({
                           </div>
                         </div>
                       )}
-                      {genderRestriction && (
-                        <div className="flex items-center gap-2 bg-pink-500/20 border border-pink-500/30 rounded-lg p-3">
-                          <span className="text-2xl">{genderRestriction === 'female' ? '♀' : '♂'}</span>
-                          <div>
-                            <p className="text-pink-300 font-medium text-sm">
-                              {genderRestriction === 'female'
-                                ? (t('dashboard.contests.female_only') || 'Femmes uniquement')
-                                : (t('dashboard.contests.male_only') || 'Hommes uniquement')}
-                            </p>
-                            <p className="text-gray-500 dark:text-gray-400 text-xs">
-                              {genderRestriction === 'female'
-                                ? (t('dashboard.contests.gender_restriction_female_description') || 'Seules les participantes féminines sont autorisées à participer à ce concours')
-                                : (t('dashboard.contests.gender_restriction_male_description') || 'Seuls les participants masculins sont autorisés à participer à ce concours')}
-                            </p>
-                          </div>
-                        </div>
-                      )}
                       {(minAge || maxAge) && (
                         <div className="flex items-center gap-2 bg-orange-500/20 border border-orange-500/30 rounded-lg p-3">
                           <Calendar className="w-5 h-5 text-orange-300" />
@@ -563,29 +527,8 @@ export const ContestCard = React.memo(function ContestCard({
           {title}
         </h3>
 
-        {/* Status badges + Gender */}
+        {/* Status badges */}
         <div className="flex items-center gap-2 flex-wrap mt-3">
-          {/* Gender restriction before level */}
-          {genderRestriction && (genderRestriction === 'male' || genderRestriction === 'female') && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="inline-flex items-center gap-1 bg-pink-500/15 text-pink-400 px-2.5 py-1 rounded-full text-xs font-medium border border-pink-500/25 whitespace-nowrap cursor-help">
-                    {genderRestriction === 'female' ? '♀' : '♂'} {genderRestriction === 'female'
-                      ? (t('dashboard.contests.female_only') || 'Femmes')
-                      : (t('dashboard.contests.male_only') || 'Hommes')}
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent className="bg-white text-gray-900 border-gray-200 shadow-lg dark:bg-gray-800 dark:text-white dark:border-gray-700">
-                  <p className="text-xs">
-                    {genderRestriction === 'female'
-                      ? (t('dashboard.contests.tooltip_gender_restriction_female') || 'Ce concours est réservé aux femmes uniquement')
-                      : (t('dashboard.contests.tooltip_gender_restriction_male') || 'Ce concours est réservé aux hommes uniquement')}
-                  </p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>

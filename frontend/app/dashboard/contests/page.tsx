@@ -79,6 +79,53 @@ function setToCache(key: string, data: any) {
   contestsCache.set(key, { data, timestamp: Date.now() })
 }
 
+function contestCategoryKey(c: {
+  id?: number
+  contest_type?: string
+  title?: string
+  contest_mode?: unknown
+}) {
+  const type = String(c.contest_type || c.title || c.id || '').trim().toLowerCase()
+  const mode = normalizeContestMode(c.contest_mode)
+  return `${type}:${mode}`
+}
+
+function dedupeContestsByCategory<
+  T extends {
+    id?: number
+    contest_type?: string
+    title?: string
+    contest_mode?: unknown
+    participants_count?: number
+    contestants?: number
+  },
+>(contests: T[]): T[] {
+  const byId = new Map<number, T>()
+  for (const c of contests) {
+    const id = Number(c.id)
+    if (!Number.isFinite(id)) continue
+    if (!byId.has(id)) byId.set(id, c)
+  }
+  const unique = Array.from(byId.values())
+  const best = new Map<string, T>()
+  for (const c of unique) {
+    const key = contestCategoryKey(c)
+    const prev = best.get(key)
+    if (!prev) {
+      best.set(key, c)
+      continue
+    }
+    const aCount =
+      Number(c.participants_count ?? c.contestants) || 0
+    const bCount =
+      Number(prev.participants_count ?? prev.contestants) || 0
+    if (aCount > bCount || (aCount === bCount && Number(c.id) > Number(prev.id))) {
+      best.set(key, c)
+    }
+  }
+  return Array.from(best.values())
+}
+
 function clearContestsListCache() {
   contestsCache.clear()
 }
@@ -905,7 +952,7 @@ function ContestsPageContent() {
         const totalCount = data[0].contests_count || 0
         // Append new contests and re-sort entire list by participants (descending)
         setAllContests(prev => {
-          const combined = [...prev, ...newContests]
+          const combined = dedupeContestsByCategory([...prev, ...newContests])
           // Sort by participants_count descending (most participants first)
           combined.sort((a, b) => {
             const aCount = Number(a.participants_count) || 0
@@ -1126,7 +1173,7 @@ function ContestsPageContent() {
       }
     })
 
-    return filtered
+    return dedupeContestsByCategory(filtered)
   }, [rawContests, committedSearch, sortBy, categoryTab, filterLevel, nominationMigrationLevel, activeDisplayTab?.kind])
 
   const visibleContests = displayedContests

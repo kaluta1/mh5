@@ -47,6 +47,7 @@ interface UserDetails {
   bio?: string
   gender?: string
   sponsor_id?: number | null
+  sponsor_name?: string | null
   sponsor?: {
     id: number
     full_name?: string
@@ -81,7 +82,7 @@ interface UserDetails {
 }
 
 export default function AdminUsers() {
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
   const { addToast } = useToast()
   const [users, setUsers] = useState<UserDetails[]>([])
   const [loading, setLoading] = useState(true)
@@ -97,6 +98,12 @@ export default function AdminUsers() {
   const [loadingAction, setLoadingAction] = useState<'hide' | 'delete' | null>(null)
   const [loadingDetails, setLoadingDetails] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
+
+  const dateLocale =
+    language === 'fr' ? 'fr-FR' : language === 'es' ? 'es-ES' : language === 'de' ? 'de-DE' : 'en-US'
+
+  const formatUserDate = (iso?: string | null) =>
+    iso ? new Date(iso).toLocaleDateString(dateLocale) : t('admin.users.not_available') || '—'
 
   useEffect(() => {
     fetchUsers()
@@ -135,13 +142,13 @@ export default function AdminUsers() {
       const isTimeout = error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')
       if (status === 403) {
         setLoadError('access_denied')
-        addToast(t('admin.users.access_denied') || 'Vous n\'avez pas les permissions pour accéder à cette section', 'error')
+        addToast(t('admin.users.access_denied') || 'You do not have permission to access this section', 'error')
       } else if (isTimeout) {
         setLoadError('timeout')
-        addToast(t('admin.users.timeout_error') || 'Le chargement a pris trop de temps. Réessayez.', 'error')
+        addToast(t('admin.users.timeout_error') || 'Loading took too long. Please try again.', 'error')
       } else {
         setLoadError('error')
-        addToast(t('admin.users.load_error') || 'Erreur lors du chargement des utilisateurs', 'error')
+        addToast(t('admin.users.load_error') || 'Error loading users', 'error')
       }
     } finally {
       setLoading(false)
@@ -150,12 +157,15 @@ export default function AdminUsers() {
 
   const fetchUserDetails = async (userId: number) => {
     try {
+      setLoadingDetails(true)
       const response = await api.get(`/api/v1/admin/users/${userId}`)
       setSelectedUser(response.data)
       setShowDetails(true)
     } catch (error) {
-      console.error('Erreur lors du chargement des détails:', error)
-      addToast(t('admin.users.load_details_error') || 'Erreur lors du chargement des détails', 'error')
+      console.error('Error loading user details:', error)
+      addToast(t('admin.users.load_details_error') || 'Error loading user details', 'error')
+    } finally {
+      setLoadingDetails(false)
     }
   }
 
@@ -166,11 +176,11 @@ export default function AdminUsers() {
       })
       // Invalider le cache des utilisateurs
       cacheService.invalidate('/api/v1/admin/users')
-      addToast(t('admin.users.toggle_admin_success') || 'Droits admin modifiés', 'success')
+      addToast(t('admin.users.toggle_admin_success') || 'Admin rights updated', 'success')
       fetchUsers()
     } catch (error) {
       console.error('Erreur lors de la modification du rôle:', error)
-      addToast(t('admin.users.toggle_admin_error') || 'Erreur lors de la modification du rôle', 'error')
+      addToast(t('admin.users.toggle_admin_error') || 'Error updating admin role', 'error')
     }
   }
 
@@ -182,13 +192,13 @@ export default function AdminUsers() {
       // Invalider le cache des utilisateurs
       cacheService.invalidate('/api/v1/admin/users')
       const message = currentStatus 
-        ? t('admin.users.toggle_active_success_deactivate') || 'Utilisateur désactivé'
-        : t('admin.users.toggle_active_success_activate') || 'Utilisateur activé'
+        ? t('admin.users.toggle_active_success_deactivate') || 'User deactivated'
+        : t('admin.users.toggle_active_success_activate') || 'User activated'
       addToast(message, 'success')
       fetchUsers()
     } catch (error) {
       console.error('Erreur lors de la modification du statut:', error)
-      addToast(t('admin.users.toggle_active_error') || 'Erreur lors de la modification du statut', 'error')
+      addToast(t('admin.users.toggle_active_error') || 'Error updating user status', 'error')
     }
   }
 
@@ -300,7 +310,7 @@ export default function AdminUsers() {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div className="flex-1 w-full">
             <Input
-              placeholder="Rechercher par email, nom ou pseudo..."
+              placeholder={t('admin.users.search_placeholder') || 'Search by email, name, or username...'}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="dark:bg-gray-700 dark:border-gray-600 dark:text-white border-gray-300 focus:border-myhigh5-primary focus:ring-myhigh5-primary"
@@ -312,7 +322,7 @@ export default function AdminUsers() {
               onClick={() => setFilter('all')}
               className={filter === 'all' ? 'bg-myhigh5-primary hover:bg-myhigh5-primary/90' : ''}
             >
-              {t('admin.users.all') || 'Tous'}
+              {t('admin.users.all') || 'All'}
             </Button>
             <Button
               variant={filter === 'admins' ? 'default' : 'outline'}
@@ -326,14 +336,14 @@ export default function AdminUsers() {
               onClick={() => setFilter('verified')}
               className={filter === 'verified' ? 'bg-green-600 hover:bg-green-700' : ''}
             >
-              {t('admin.users.verified') || 'Vérifiés'}
+              {t('admin.users.verified') || 'Verified'}
             </Button>
             <Button
               variant={filter === 'inactive' ? 'default' : 'outline'}
               onClick={() => setFilter('inactive')}
               className={filter === 'inactive' ? 'bg-red-600 hover:bg-red-700' : ''}
             >
-              {t('admin.users.inactive') || 'Inactifs'}
+              {t('admin.users.inactive') || 'Inactive'}
             </Button>
           </div>
         </div>
@@ -348,20 +358,20 @@ export default function AdminUsers() {
         <Card>
           <CardContent className="pt-6 text-center text-gray-500">
             {loadError === 'access_denied' ? (
-              t('admin.users.access_denied') || 'Vous n\'avez pas les permissions pour accéder à cette section'
+              t('admin.users.access_denied') || 'You do not have permission to access this section'
             ) : loadError ? (
               <span className="flex flex-col items-center gap-3">
-                <span>{t('admin.users.load_error') || 'Erreur lors du chargement des utilisateurs.'}</span>
+                <span>{t('admin.users.load_error') || 'Error loading users.'}</span>
                 <Button
                   variant="outline"
                   onClick={() => fetchUsers()}
                   className="border-myhigh5-primary text-myhigh5-primary hover:bg-myhigh5-primary/10"
                 >
-                  Réessayer
+                  {t('admin.users.retry') || 'Retry'}
                 </Button>
               </span>
             ) : (
-              t('admin.users.no_users') || 'Aucun utilisateur trouvé'
+              t('admin.users.no_users') || 'No users found'
             )}
           </CardContent>
         </Card>
@@ -371,13 +381,14 @@ export default function AdminUsers() {
             <table className="w-full">
               <thead className="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700">
                 <tr>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900 dark:text-white">{t('admin.users.table_user') || 'Utilisateur'}</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900 dark:text-white">{t('admin.users.table_user') || 'User'}</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900 dark:text-white">{t('admin.users.table_email') || 'Email'}</th>
                   <th className="px-6 py-4 text-center text-sm font-semibold text-gray-900 dark:text-white">{t('admin.users.table_participations') || 'Participations'}</th>
-                  <th className="px-6 py-4 text-center text-sm font-semibold text-gray-900 dark:text-white">{t('admin.users.table_prizes') || 'Prix'}</th>
-                  <th className="px-6 py-4 text-center text-sm font-semibold text-gray-900 dark:text-white">{t('admin.users.table_candidates') || 'Candidats'}</th>
+                  <th className="px-6 py-4 text-center text-sm font-semibold text-gray-900 dark:text-white">{t('admin.users.table_prizes') || 'Prizes'}</th>
+                  <th className="px-6 py-4 text-center text-sm font-semibold text-gray-900 dark:text-white">{t('admin.users.table_candidates') || 'Candidates'}</th>
                   <th className="px-6 py-4 text-center text-sm font-semibold text-gray-900 dark:text-white">{t('admin.users.table_contests') || 'Contests'}</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900 dark:text-white">{t('admin.users.table_status') || 'Statut'}</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900 dark:text-white">{t('admin.users.table_status') || 'Status'}</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900 dark:text-white min-w-[200px]">{t('admin.users.table_details') || 'Details'}</th>
                   <th className="px-6 py-4 text-right text-sm font-semibold text-gray-900 dark:text-white">{t('admin.users.table_actions') || 'Actions'}</th>
                 </tr>
               </thead>
@@ -400,7 +411,7 @@ export default function AdminUsers() {
                         )}
                         <div>
                           <p className="font-semibold text-gray-900 dark:text-white text-sm">
-                            {user.full_name || user.username || 'Utilisateur'}
+                            {user.full_name || user.username || t('admin.users.default_user') || 'User'}
                           </p>
                           {user.username && (
                             <p className="text-xs text-gray-500 dark:text-gray-400">@{user.username}</p>
@@ -454,7 +465,7 @@ export default function AdminUsers() {
                         {user.is_verified && (
                           <span className="inline-flex items-center gap-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 px-2 py-1 rounded-full text-xs font-semibold">
                             <CheckCircle className="h-3 w-3" />
-                            Vérifié
+                            {t('admin.users.verified_badge') || 'Verified'}
                           </span>
                         )}
                         {user.kyc_status === 'verified' && (
@@ -466,9 +477,29 @@ export default function AdminUsers() {
                         {!user.is_active && (
                           <span className="inline-flex items-center gap-1 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 px-2 py-1 rounded-full text-xs font-semibold">
                             <Ban className="h-3 w-3" />
-                            Inactif
+                            {t('admin.users.inactive_badge') || 'Inactive'}
                           </span>
                         )}
+                      </div>
+                    </td>
+
+                    {/* Details summary card */}
+                    <td className="px-4 py-4">
+                      <div className="min-w-[190px] rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/40 p-3 space-y-1.5 text-xs text-gray-700 dark:text-gray-300">
+                        <div className="flex items-start gap-1.5">
+                          <MapPin className="h-3.5 w-3.5 shrink-0 mt-0.5 text-myhigh5-primary" />
+                          <span>{user.country || t('admin.users.no_country') || 'No country'}</span>
+                        </div>
+                        <div className="flex items-start gap-1.5">
+                          <Users className="h-3.5 w-3.5 shrink-0 mt-0.5 text-myhigh5-primary" />
+                          <span className="truncate max-w-[150px]" title={user.sponsor_name || undefined}>
+                            {user.sponsor_name || t('admin.users.not_referred') || 'Not referred'}
+                          </span>
+                        </div>
+                        <div className="flex items-start gap-1.5">
+                          <Calendar className="h-3.5 w-3.5 shrink-0 mt-0.5 text-myhigh5-primary" />
+                          <span>{formatUserDate(user.created_at)}</span>
+                        </div>
                       </div>
                     </td>
 
@@ -490,7 +521,7 @@ export default function AdminUsers() {
                             className="gap-2 cursor-pointer"
                           >
                             <Eye className="h-4 w-4" />
-                            <span>{t('admin.users.details') || 'Voir les détails'}</span>
+                            <span>{t('admin.users.details') || 'View details'}</span>
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => {
@@ -500,7 +531,7 @@ export default function AdminUsers() {
                             className="gap-2 cursor-pointer"
                           >
                             <MessageCircle className="h-4 w-4" />
-                            <span>{t('admin.users.view_comments') || 'Voir les commentaires'}</span>
+                            <span>{t('admin.users.view_comments') || 'View comments'}</span>
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
@@ -508,7 +539,7 @@ export default function AdminUsers() {
                             className="gap-2 cursor-pointer"
                           >
                             <Shield className="h-4 w-4" />
-                            <span>{user.is_admin ? t('admin.users.remove_admin') || 'Retirer admin' : t('admin.users.make_admin') || 'Faire admin'}</span>
+                            <span>{user.is_admin ? t('admin.users.remove_admin') || 'Remove admin' : t('admin.users.make_admin') || 'Make admin'}</span>
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => handleToggleActive(user.id, user.is_active)}
@@ -517,12 +548,12 @@ export default function AdminUsers() {
                             {user.is_active ? (
                               <>
                                 <Ban className="h-4 w-4" />
-                                <span>{t('admin.users.deactivate') || 'Désactiver'}</span>
+                                <span>{t('admin.users.deactivate') || 'Deactivate'}</span>
                               </>
                             ) : (
                               <>
                                 <CheckCircle className="h-4 w-4" />
-                                <span>{t('admin.users.activate') || 'Activer'}</span>
+                                <span>{t('admin.users.activate') || 'Activate'}</span>
                               </>
                             )}
                           </DropdownMenuItem>
@@ -568,7 +599,7 @@ export default function AdminUsers() {
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
           <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto dark:bg-gray-800">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4 border-b dark:border-gray-700">
-              <CardTitle className="text-xl">{t('admin.users.details') || 'Détails de l\'utilisateur'}</CardTitle>
+              <CardTitle className="text-xl">{t('admin.users.details_title') || 'User details'}</CardTitle>
               <button
                 onClick={() => setShowDetails(false)}
                 className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
@@ -592,17 +623,17 @@ export default function AdminUsers() {
                 )}
                 <div>
                   <h3 className="font-bold text-lg text-gray-900 dark:text-white">
-                    {selectedUser.full_name || selectedUser.username || 'Utilisateur'}
+                    {selectedUser.full_name || selectedUser.username || t('admin.users.default_user') || 'User'}
                   </h3>
                   <p className="text-sm text-gray-600 dark:text-gray-400">{selectedUser.email}</p>
                   {selectedUser.username && (
                     <p className="text-sm text-gray-500 dark:text-gray-500">@{selectedUser.username}</p>
                   )}
                   <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">
-                    <span className="font-semibold">Referred by:</span>{" "}
+                    <span className="font-semibold">{t('admin.users.referred_by') || 'Referred by'}:</span>{" "}
                     {selectedUser.sponsor
                       ? (selectedUser.sponsor.full_name || selectedUser.sponsor.username || selectedUser.sponsor.email || `User #${selectedUser.sponsor.id}`)
-                      : 'Not referred'}
+                      : (t('admin.users.not_referred') || 'Not referred')}
                   </p>
                 </div>
               </div>
@@ -610,54 +641,54 @@ export default function AdminUsers() {
               {/* Stats Grid */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
-                  <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 mb-1">Participations</p>
+                  <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 mb-1">{t('admin.users.table_participations') || 'Participations'}</p>
                   <p className="text-lg font-bold text-gray-900 dark:text-white">{selectedUser.participations_count}</p>
                 </div>
                 <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-3">
-                  <p className="text-xs font-semibold text-yellow-600 dark:text-yellow-400 mb-1">Prix</p>
+                  <p className="text-xs font-semibold text-yellow-600 dark:text-yellow-400 mb-1">{t('admin.users.table_prizes') || 'Prizes'}</p>
                   <p className="text-lg font-bold text-gray-900 dark:text-white">{selectedUser.prizes_count}</p>
                 </div>
                 <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-3">
-                  <p className="text-xs font-semibold text-purple-600 dark:text-purple-400 mb-1">Candidats</p>
+                  <p className="text-xs font-semibold text-purple-600 dark:text-purple-400 mb-1">{t('admin.users.table_candidates') || 'Candidates'}</p>
                   <p className="text-lg font-bold text-gray-900 dark:text-white">{selectedUser.contestants_count}</p>
                 </div>
                 <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3">
-                  <p className="text-xs font-semibold text-green-600 dark:text-green-400 mb-1">Contests</p>
+                  <p className="text-xs font-semibold text-green-600 dark:text-green-400 mb-1">{t('admin.users.table_contests') || 'Contests'}</p>
                   <p className="text-lg font-bold text-gray-900 dark:text-white">{selectedUser.contests_participated}</p>
                 </div>
               </div>
 
               {/* Personal Information */}
               <div className="border-t dark:border-gray-700 pt-4">
-                <h4 className="font-semibold text-gray-900 dark:text-white mb-3">{t('admin.users.personal_info') || 'Informations personnelles'}</h4>
+                <h4 className="font-semibold text-gray-900 dark:text-white mb-3">{t('admin.users.personal_info') || 'Personal information'}</h4>
                 <div className="grid grid-cols-2 gap-4">
                   {selectedUser.date_of_birth && (
                     <div>
-                      <p className="text-xs font-semibold text-gray-600 dark:text-gray-400">{t('admin.users.date_of_birth') || 'Date de naissance'}</p>
-                      <p className="text-sm text-gray-900 dark:text-white">{new Date(selectedUser.date_of_birth).toLocaleDateString('fr-FR')}</p>
+                      <p className="text-xs font-semibold text-gray-600 dark:text-gray-400">{t('admin.users.date_of_birth') || 'Date of birth'}</p>
+                      <p className="text-sm text-gray-900 dark:text-white">{formatUserDate(selectedUser.date_of_birth)}</p>
                     </div>
                   )}
                   {selectedUser.phone_number && (
                     <div>
-                      <p className="text-xs font-semibold text-gray-600 dark:text-gray-400">{t('admin.users.phone') || 'Téléphone'}</p>
+                      <p className="text-xs font-semibold text-gray-600 dark:text-gray-400">{t('admin.users.phone') || 'Phone'}</p>
                       <p className="text-sm text-gray-900 dark:text-white">{selectedUser.phone_number}</p>
                     </div>
                   )}
                   {selectedUser.city && (
                     <div>
-                      <p className="text-xs font-semibold text-gray-600 dark:text-gray-400">{t('admin.users.city') || 'Ville'}</p>
+                      <p className="text-xs font-semibold text-gray-600 dark:text-gray-400">{t('admin.users.city') || 'City'}</p>
                       <p className="text-sm text-gray-900 dark:text-white">{selectedUser.city}</p>
                     </div>
                   )}
                   {selectedUser.country && (
                     <div>
-                      <p className="text-xs font-semibold text-gray-600 dark:text-gray-400">{t('admin.users.country') || 'Pays'}</p>
+                      <p className="text-xs font-semibold text-gray-600 dark:text-gray-400">{t('admin.users.country') || 'Country'}</p>
                       <p className="text-sm text-gray-900 dark:text-white">{selectedUser.country}</p>
                     </div>
                   )}
                   {selectedUser.region && (
                     <div>
-                      <p className="text-xs font-semibold text-gray-600 dark:text-gray-400">{t('admin.users.region') || 'Région'}</p>
+                      <p className="text-xs font-semibold text-gray-600 dark:text-gray-400">{t('admin.users.region') || 'Region'}</p>
                       <p className="text-sm text-gray-900 dark:text-white">{selectedUser.region}</p>
                     </div>
                   )}
@@ -672,16 +703,16 @@ export default function AdminUsers() {
 
               {/* Account Status */}
               <div className="border-t dark:border-gray-700 pt-4">
-                <h4 className="font-semibold text-gray-900 dark:text-white mb-3">{t('admin.users.account_status') || 'Statut du compte'}</h4>
+                <h4 className="font-semibold text-gray-900 dark:text-white mb-3">{t('admin.users.account_status') || 'Account status'}</h4>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">{t('admin.users.joined') || 'Inscrit'}</p>
-                    <p className="text-sm text-gray-900 dark:text-white">{new Date(selectedUser.created_at).toLocaleDateString('fr-FR')}</p>
+                    <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">{t('admin.users.joined') || 'Joined'}</p>
+                    <p className="text-sm text-gray-900 dark:text-white">{formatUserDate(selectedUser.created_at)}</p>
                   </div>
                   {selectedUser.last_login && (
                     <div>
-                      <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">{t('admin.users.last_login') || 'Dernière connexion'}</p>
-                      <p className="text-sm text-gray-900 dark:text-white">{new Date(selectedUser.last_login).toLocaleDateString('fr-FR')}</p>
+                      <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">{t('admin.users.last_login') || 'Last login'}</p>
+                      <p className="text-sm text-gray-900 dark:text-white">{formatUserDate(selectedUser.last_login)}</p>
                     </div>
                   )}
                   <div>
@@ -692,7 +723,7 @@ export default function AdminUsers() {
                         : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300'
                     }`}>
                       <FileCheck className="h-3 w-3" />
-                      {selectedUser.kyc_status === 'verified' ? t('admin.users.kyc_verified') || 'Vérifié' : t('admin.users.kyc_pending') || 'En attente'}
+                      {selectedUser.kyc_status === 'verified' ? t('admin.users.kyc_verified') || 'Verified' : t('admin.users.kyc_pending') || 'Pending'}
                     </span>
                   </div>
                 </div>
@@ -704,7 +735,7 @@ export default function AdminUsers() {
                   variant="outline"
                   onClick={() => setShowDetails(false)}
                 >
-                  {t('admin.users.cancel') || 'Fermer'}
+                  {t('admin.users.close') || 'Close'}
                 </Button>
               </div>
             </CardContent>
@@ -717,7 +748,7 @@ export default function AdminUsers() {
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
           <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto dark:bg-gray-800">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4 border-b dark:border-gray-700">
-              <CardTitle className="text-xl">{t('admin.users.comments') || 'Commentaires'} - {selectedUser.full_name || selectedUser.username}</CardTitle>
+              <CardTitle className="text-xl">{t('admin.users.comments') || 'Comments'} - {selectedUser.full_name || selectedUser.username}</CardTitle>
               <button
                 onClick={() => setShowComments(false)}
                 className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
@@ -733,18 +764,18 @@ export default function AdminUsers() {
                       <div className="flex justify-between items-start mb-3">
                         <div className="flex-1">
                           <div className="mb-2">
-                            <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('admin.users.contest_label') || 'Concours'}</p>
-                            <p className="text-sm font-semibold text-gray-900 dark:text-white">{comment.contest?.name || 'Concours supprimé'}</p>
+                            <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('admin.users.contest_label') || 'Contest'}</p>
+                            <p className="text-sm font-semibold text-gray-900 dark:text-white">{comment.contest?.name || t('admin.users.deleted_contest') || 'Deleted contest'}</p>
                           </div>
                           <div>
-                            <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('admin.users.contestant_label') || 'Candidat'}</p>
-                            <p className="text-sm font-semibold text-gray-900 dark:text-white">{comment.contestant?.title || 'Candidat supprimé'}</p>
+                            <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('admin.users.contestant_label') || 'Candidate'}</p>
+                            <p className="text-sm font-semibold text-gray-900 dark:text-white">{comment.contestant?.title || t('admin.users.deleted_candidate') || 'Deleted candidate'}</p>
                           </div>
                           {comment.is_hidden && (
-                            <p className="text-xs text-orange-500 font-medium mt-2">Masqué</p>
+                            <p className="text-xs text-orange-500 font-medium mt-2">{t('admin.users.hidden') || 'Hidden'}</p>
                           )}
                         </div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap ml-4">{new Date(comment.created_at).toLocaleDateString('fr-FR')}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap ml-4">{formatUserDate(comment.created_at)}</p>
                       </div>
                       <p className="text-sm text-gray-700 dark:text-gray-300 mb-3 bg-white dark:bg-gray-800 p-2 rounded border border-gray-200 dark:border-gray-700">{comment.content}</p>
                       <div className="flex gap-2">
@@ -758,10 +789,10 @@ export default function AdminUsers() {
                           {loadingCommentId === comment.id && loadingAction === 'hide' ? (
                             <div className="flex items-center gap-1">
                               <div className="w-3 h-3 border-2 border-gray-400 border-t-gray-700 rounded-full animate-spin" />
-                              <span>{comment.is_hidden ? t('admin.users.show_comment') || 'Afficher' : t('admin.users.hide_comment') || 'Masquer'}</span>
+                              <span>{comment.is_hidden ? t('admin.users.show_comment') || 'Show' : t('admin.users.hide_comment') || 'Hide'}</span>
                             </div>
                           ) : (
-                            <span>{comment.is_hidden ? t('admin.users.show_comment') || 'Afficher' : t('admin.users.hide_comment') || 'Masquer'}</span>
+                            <span>{comment.is_hidden ? t('admin.users.show_comment') || 'Show' : t('admin.users.hide_comment') || 'Hide'}</span>
                           )}
                         </Button>
                         <Button
@@ -774,7 +805,7 @@ export default function AdminUsers() {
                           {loadingCommentId === comment.id && loadingAction === 'delete' ? (
                             <div className="flex items-center gap-1">
                               <div className="w-3 h-3 border-2 border-white border-t-red-700 rounded-full animate-spin" />
-                              <span>{t('admin.users.delete_comment') || 'Supprimer'}</span>
+                              <span>{t('admin.users.delete_comment') || 'Delete'}</span>
                             </div>
                           ) : (
                             <span>{t('admin.users.delete_comment') || 'Supprimer'}</span>
@@ -787,7 +818,7 @@ export default function AdminUsers() {
               ) : (
                 <div className="text-center py-8">
                   <MessageCircle className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                  <p className="text-gray-500 dark:text-gray-400">{t('admin.users.no_comments') || 'Aucun commentaire'}</p>
+                  <p className="text-gray-500 dark:text-gray-400">{t('admin.users.no_comments') || 'No comments'}</p>
                 </div>
               )}
               <div className="flex justify-end pt-4 border-t dark:border-gray-700 mt-4">
@@ -795,7 +826,7 @@ export default function AdminUsers() {
                   variant="outline"
                   onClick={() => setShowComments(false)}
                 >
-                  {t('admin.users.cancel') || 'Fermer'}
+                  {t('admin.users.close') || 'Close'}
                 </Button>
               </div>
             </CardContent>
@@ -807,10 +838,10 @@ export default function AdminUsers() {
       <ConfirmDialog
         open={showDeleteDialog}
         onOpenChange={setShowDeleteDialog}
-        title={t('admin.users.confirm_delete_title') || "Supprimer l'utilisateur"}
-        message={t('admin.users.confirm_delete_message') || "Êtes-vous sûr de vouloir supprimer cet utilisateur ? Cette action est irréversible."}
-        confirmText={t('admin.users.delete') || "Supprimer"}
-        cancelText={t('admin.users.cancel') || "Annuler"}
+        title={t('admin.users.confirm_delete_title') || 'Delete user'}
+        message={t('admin.users.confirm_delete_message') || 'Are you sure you want to delete this user? This action cannot be undone.'}
+        confirmText={t('admin.users.delete') || 'Delete'}
+        cancelText={t('admin.users.cancel') || 'Cancel'}
         onConfirm={handleConfirmDelete}
         isLoading={isDeleting}
         isDangerous={true}

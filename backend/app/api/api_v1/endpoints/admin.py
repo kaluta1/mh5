@@ -2480,6 +2480,19 @@ async def get_all_users(
         except Exception:
             users = query.order_by(User.id.desc()).all()
         
+        # Batch-load sponsor labels for list view (country / joined / sponsor summary column).
+        sponsor_ids = {
+            int(u.sponsor_id)
+            for u in users
+            if getattr(u, "sponsor_id", None)
+        }
+        sponsors_by_id: dict = {}
+        if sponsor_ids:
+            for sponsor in db.query(User).filter(User.id.in_(sponsor_ids)).all():
+                sponsors_by_id[sponsor.id] = (
+                    sponsor.full_name or sponsor.username or sponsor.email
+                )
+
         # Enrichir avec les statistiques (safe getattr pour colonnes optionnelles)
         result = []
         for user in users:
@@ -2519,7 +2532,11 @@ async def get_all_users(
                 'prizes_count': prizes_count,
                 'contestants_count': contestants_count,
                 'contests_participated': contests_participated,
-                'max_level_reached': None
+                'max_level_reached': None,
+                'sponsor_id': getattr(user, 'sponsor_id', None),
+                'sponsor_name': sponsors_by_id.get(getattr(user, 'sponsor_id', None))
+                if getattr(user, 'sponsor_id', None)
+                else None,
             }
             result.append(user_dict)
         

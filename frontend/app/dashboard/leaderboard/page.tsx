@@ -211,7 +211,7 @@ export default function LeaderboardPage() {
             </div>
             <div>
               <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-                {t('dashboard.leaderboard.title') || 'Classement des Sponsors'}
+                {t('dashboard.leaderboard.title') || 'Sponsor Leaderboard'}
               </h1>
               <p className="text-gray-600 dark:text-gray-400 mt-1">
                 {leaderboardType === 'mfm'
@@ -234,7 +234,7 @@ export default function LeaderboardPage() {
                   : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
               }`}
             >
-              {t('dashboard.leaderboard.regular_tab') || 'Classement Général'}
+              {t('dashboard.leaderboard.regular_tab') || 'General Leaderboard'}
             </button>
             <button
               onClick={() => setLeaderboardType('mfm')}
@@ -244,7 +244,7 @@ export default function LeaderboardPage() {
                   : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
               }`}
             >
-              {t('dashboard.leaderboard.mfm_tab') || 'Classement MFM'}
+              {t('dashboard.leaderboard.mfm_tab') || 'MFM Leaderboard'}
             </button>
           </div>
         </div>
@@ -271,7 +271,7 @@ export default function LeaderboardPage() {
               ) : (
                 <>
                   <p className="text-gray-600 dark:text-gray-400 text-lg">
-                    {t('dashboard.leaderboard.no_data') || 'Aucun sponsor trouvé'}
+                    {t('dashboard.leaderboard.no_data') || 'No sponsors found'}
                   </p>
                   <p className="text-sm text-gray-500 dark:text-gray-400 max-w-xl mx-auto">
                     {leaderboardType === 'mfm'
@@ -357,7 +357,7 @@ export default function LeaderboardPage() {
                             {sponsor.referrals_count}
                           </div>
                           <div className="text-xs text-gray-600 dark:text-gray-400">
-                            {t('dashboard.leaderboard.referrals') || 'Référents'}
+                            {t('dashboard.leaderboard.referrals') || 'Referrals'}
                           </div>
                         </div>
                         {/* Benefits */}
@@ -379,7 +379,7 @@ export default function LeaderboardPage() {
                               </button>
                             </div>
                             <div className="text-xs text-gray-600 dark:text-gray-400">
-                              {t('dashboard.leaderboard.benefit') || 'Bénéfice'}
+                              {t('dashboard.leaderboard.benefit') || 'Benefit'}
                             </div>
                           </div>
                         )}
@@ -398,14 +398,16 @@ export default function LeaderboardPage() {
             <Award className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
             <div>
               <h3 className="font-semibold text-blue-900 dark:text-blue-300 mb-1">
-                {t('dashboard.leaderboard.info_title') || 'Comment fonctionne le classement ?'}
+                {t('dashboard.leaderboard.info_title') || 'How does the leaderboard work?'}
               </h3>
               <p className="text-sm text-blue-800 dark:text-blue-200/80">
                 <LeaderboardHowItWorksBody
-                  text={
+                    text={
                     leaderboardType === 'mfm'
-                      ? t('dashboard.leaderboard.info_description_mfm')
-                      : t('dashboard.leaderboard.info_description_general')
+                      ? t('dashboard.leaderboard.info_description_mfm') ||
+                        'Sponsors are ranked by the number of direct referrals with a validated MFM membership deposit. Top positions earn DSP rewards redeemable on Digital Shopping Mall\'s platform.'
+                      : t('dashboard.leaderboard.info_description_general') ||
+                        'Sponsors are ranked by the number of direct referrals who paid a validated KYC verification fee. Top positions earn DSP rewards redeemable on Digital Shopping Mall\'s platform.'
                   }
                 />
               </p>
