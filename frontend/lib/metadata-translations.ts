@@ -87,7 +87,6 @@ export function getMetadataTranslations(lang: Language = 'en'): MetadataTranslat
  * Détecte la langue depuis les headers de la requête
  */
 export function detectLanguageFromHeaders(headers: Headers): Language {
-  const acceptLanguage = headers.get('accept-language') || ''
   const rawCookie = headers.get('cookie')?.match(
     new RegExp(`${LANGUAGE_PREFERENCE_KEY}=([^;]+)`)
   )?.[1]
@@ -104,16 +103,7 @@ export function detectLanguageFromHeaders(headers: Headers): Language {
     return cookieLanguage as Language
   }
 
-  if (acceptLanguage) {
-    const langs = acceptLanguage.split(',').map((l) => l.split(';')[0].trim().toLowerCase())
-    for (const lang of langs) {
-      const prefix = lang.split('-')[0]
-      if ((SUPPORTED_LANGUAGE_CODES as string[]).includes(prefix)) {
-        return prefix as Language
-      }
-    }
-  }
-
+  // Default to English — do not infer locale from Accept-Language (avoids French UI for EN visitors).
   return 'en'
 }
 

@@ -269,12 +269,12 @@ export default function AffiliatesPage() {
       if (linkType) {
         setCopiedLink(linkType)
       }
-      addToast(t('dashboard.affiliates.copied') || 'Lien copié !', 'success')
+      addToast(t('dashboard.affiliates.copied') || 'Link copied!', 'success')
       setTimeout(() => {
         setCopiedLink(null)
       }, 2000)
     } catch (error) {
-      addToast(t('dashboard.affiliates.copy_error') || 'Erreur lors de la copie', 'error')
+      addToast(t('dashboard.affiliates.copy_error') || 'Error copying link', 'error')
     }
   }
 
@@ -297,13 +297,13 @@ export default function AffiliatesPage() {
           ...prev,
           pending: prev.pending - 1,
         }))
-        addToast(t('dashboard.affiliates.invitation_cancelled') || 'Invitation annulée', 'success')
+        addToast(t('dashboard.affiliates.invitation_cancelled') || 'Invitation cancelled', 'success')
       } else {
-        addToast(t('dashboard.affiliates.cancel_error') || 'Erreur lors de l\'annulation', 'error')
+        addToast(t('dashboard.affiliates.cancel_error') || 'Error cancelling invitation', 'error')
       }
     } catch (error) {
       console.error('Error cancelling invitation:', error)
-      addToast('Erreur lors de l\'annulation', 'error')
+      addToast(t('dashboard.affiliates.cancel_error') || 'Error cancelling invitation', 'error')
     }
   }
 
@@ -842,7 +842,7 @@ export default function AffiliatesPage() {
                       <button
                         onClick={() => cancelInvitation(invitation.id)}
                         className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                        title={t('dashboard.affiliates.cancel') || 'Annuler'}
+                        title={t('dashboard.affiliates.cancel') || 'Cancel'}
                       >
                         <X className="w-4 h-4" />
                       </button>

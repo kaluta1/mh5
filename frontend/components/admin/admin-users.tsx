@@ -581,7 +581,7 @@ export default function AdminUsers() {
                             className="gap-2 cursor-pointer text-red-600 dark:text-red-400 focus:bg-red-50 dark:focus:bg-red-900/20"
                           >
                             <Trash2 className="h-4 w-4" />
-                            <span>{t('admin.users.delete') || 'Supprimer'}</span>
+                            <span>{t('admin.users.delete') || 'Delete'}</span>
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -808,7 +808,7 @@ export default function AdminUsers() {
                               <span>{t('admin.users.delete_comment') || 'Delete'}</span>
                             </div>
                           ) : (
-                            <span>{t('admin.users.delete_comment') || 'Supprimer'}</span>
+                            <span>{t('admin.users.delete_comment') || 'Delete'}</span>
                           )}
                         </Button>
                       </div>

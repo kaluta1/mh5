@@ -251,7 +251,7 @@ export function SelfieVerificationDialog({
               <div className="flex gap-3">
                 <Button variant="outline" onClick={() => { stopCamera(); setMode('select'); }} className="flex-1">
                   <X className="w-4 h-4 mr-2" />
-                  {t('common.cancel') || 'Annuler'}
+                  {t('common.cancel') || 'Cancel'}
                 </Button>
                 <Button onClick={capturePhoto} className="flex-1 bg-myhigh5-primary hover:bg-myhigh5-primary-dark">
                   <Camera className="w-4 h-4 mr-2" />

@@ -197,7 +197,7 @@ export default function VoteHistoryPage() {
                 <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 pt-4 border-t border-gray-200 dark:border-gray-700">
                   <Calendar className="w-4 h-4" />
                   <span>
-                    {new Date(item.vote_date).toLocaleDateString('fr-FR', {
+                    {new Date(item.vote_date).toLocaleDateString('en-US', {
                       year: 'numeric',
                       month: 'long',
                       day: 'numeric',

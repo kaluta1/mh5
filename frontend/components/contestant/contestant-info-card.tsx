@@ -50,7 +50,7 @@ export function ContestantInfoCard({
                 {t('contestant_detail.registered_on')}
               </p>
               <p className="text-sm text-gray-900 dark:text-white mt-1">
-                {new Date(registration_date).toLocaleDateString('fr-FR')}
+                {new Date(registration_date).toLocaleDateString('en-US')}
               </p>
             </div>
           )}

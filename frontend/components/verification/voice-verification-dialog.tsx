@@ -320,7 +320,7 @@ export function VoiceVerificationDialog({
           {mode === 'idle' && (
             <div className="mt-4">
               <Button variant="outline" onClick={handleClose} className="w-full">
-                {t('common.cancel') || 'Annuler'}
+                {t('common.cancel') || 'Cancel'}
               </Button>
             </div>
           )}

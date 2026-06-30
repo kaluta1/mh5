@@ -442,7 +442,7 @@ function UserProfilePage() {
                       <div className="flex items-center gap-3 mt-1 text-xs text-gray-500 dark:text-gray-400">
                         {entry.round_id && <span>Round {entry.round_id}</span>}
                         {entry.registration_date && (
-                          <span>{new Date(entry.registration_date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                          <span>{new Date(entry.registration_date).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                         )}
                       </div>
                     </div>

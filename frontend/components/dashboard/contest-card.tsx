@@ -139,7 +139,7 @@ const ContestCardCountdown = React.memo(function ContestCardCountdown({
           <TooltipContent className="bg-white text-gray-900 border-gray-200 shadow-lg dark:bg-gray-800 dark:text-white dark:border-gray-700 max-w-xs">
             <p className="text-xs">
               {participationEndDate
-                ? `${tooltipRemaining}: ${new Date(participationEndDate).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`
+                ? `${tooltipRemaining}: ${new Date(participationEndDate).toLocaleDateString(language === 'fr' ? 'fr-FR' : language === 'es' ? 'es-ES' : language === 'de' ? 'de-DE' : 'en-US', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`
                 : tooltipRemaining}
             </p>
           </TooltipContent>
@@ -410,7 +410,7 @@ export const ContestCard = React.memo(function ContestCard({
                           <Calendar className="w-5 h-5 text-blue-400" />
                           <div>
                             <p className="text-gray-500 dark:text-gray-400 text-xs mb-1">{t('dashboard.contests.submission_start') || 'Début des inscriptions'}</p>
-                            <p className="text-gray-800 dark:text-white font-medium text-sm">{new Date(participationStartDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                            <p className="text-gray-800 dark:text-white font-medium text-sm">{new Date(participationStartDate).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
                           </div>
                         </div>
                       )}
@@ -419,7 +419,7 @@ export const ContestCard = React.memo(function ContestCard({
                           <Calendar className="w-5 h-5 text-orange-400" />
                           <div>
                             <p className="text-gray-500 dark:text-gray-400 text-xs mb-1">{t('dashboard.contests.submission_end') || 'Fin des inscriptions'}</p>
-                            <p className="text-gray-800 dark:text-white font-medium text-sm">{new Date(participationEndDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                            <p className="text-gray-800 dark:text-white font-medium text-sm">{new Date(participationEndDate).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
                           </div>
                         </div>
                       )}
@@ -428,7 +428,7 @@ export const ContestCard = React.memo(function ContestCard({
                           <Calendar className="w-5 h-5 text-purple-400" />
                           <div>
                             <p className="text-gray-500 dark:text-gray-400 text-xs mb-1">{t('dashboard.contests.voting_start') || 'Début du vote'}</p>
-                            <p className="text-gray-800 dark:text-white font-medium text-sm">{new Date(votingStartDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                            <p className="text-gray-800 dark:text-white font-medium text-sm">{new Date(votingStartDate).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
                           </div>
                         </div>
                       )}

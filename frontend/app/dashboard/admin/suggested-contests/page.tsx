@@ -228,7 +228,7 @@ export default function SuggestedContestsPage() {
                     <Calendar className="h-3 w-3" />
                     <span>
                       {suggestion.created_at 
-                        ? new Date(suggestion.created_at).toLocaleDateString('fr-FR')
+                        ? new Date(suggestion.created_at).toLocaleDateString('en-US')
                         : (t('admin.suggested_contests.unknown_date') || 'Date inconnue')}
                     </span>
                   </div>
@@ -313,9 +313,9 @@ export default function SuggestedContestsPage() {
                 <h4 className="font-semibold mb-2">{t('admin.suggested_contests.dates') || 'Dates'}</h4>
                 <div className="text-sm space-y-1">
                   <p className="text-gray-600 dark:text-gray-400">
-                    <span className="font-medium">{t('admin.suggested_contests.created_at') || 'Créé le'}:</span>{' '}
+                    <span className="font-medium">{t('admin.suggested_contests.created_at') || 'Created on'}:</span>{' '}
                     {selectedSuggestion.created_at 
-                      ? new Date(selectedSuggestion.created_at).toLocaleDateString('fr-FR', {
+                      ? new Date(selectedSuggestion.created_at).toLocaleDateString('en-US', {
                           year: 'numeric',
                           month: 'long',
                           day: 'numeric',
@@ -327,7 +327,7 @@ export default function SuggestedContestsPage() {
                   {selectedSuggestion.updated_at && (
                     <p className="text-gray-600 dark:text-gray-400">
                       <span className="font-medium">{t('admin.suggested_contests.updated_at') || 'Modifié le'}:</span>{' '}
-                      {new Date(selectedSuggestion.updated_at).toLocaleDateString('fr-FR', {
+                      {new Date(selectedSuggestion.updated_at).toLocaleDateString('en-US', {
                         year: 'numeric',
                         month: 'long',
                         day: 'numeric',

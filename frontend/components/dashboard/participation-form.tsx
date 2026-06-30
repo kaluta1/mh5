@@ -121,7 +121,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
   // Stepper state
   const [currentStep, setCurrentStep] = useState(0)
   const totalSteps = 3
-  const dateLocale = language === 'fr' ? 'fr-FR' : 'en-US'
+  const dateLocale = language === 'fr' ? 'fr-FR' : language === 'es' ? 'es-ES' : language === 'de' ? 'de-DE' : 'en-US'
 
   const hasAppliedInitialData = useRef(false)
   const [title, setTitle] = useState<string>(initialData?.title || '')

@@ -107,7 +107,7 @@ export function MediaComments({
                   </div>
                   <div className="flex items-center gap-3 mt-1 px-2 text-xs text-gray-400">
                     <span>
-                      {new Date(comment.created_at).toLocaleDateString('fr-FR', {
+                      {new Date(comment.created_at).toLocaleDateString('en-US', {
                         month: 'short',
                         day: 'numeric',
                         hour: '2-digit',

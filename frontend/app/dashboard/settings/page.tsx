@@ -79,7 +79,7 @@ function calculateAge(dateOfBirth: string): number | null {
 // Formatage de la date
 function formatDate(dateString: string | null): string {
   if (!dateString) return '-'
-  return new Date(dateString).toLocaleDateString('fr-FR', {
+  return new Date(dateString).toLocaleDateString('en-US', {
     day: 'numeric',
     month: 'long',
     year: 'numeric'

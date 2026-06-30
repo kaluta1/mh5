@@ -163,11 +163,11 @@ export default function AffiliatesListPage() {
         setKycStats(data.kyc_stats || null)
       } else {
         console.error('Error fetching affiliates:', response.status)
-        addToast(t('common.error') || 'Erreur lors du chargement des données', 'error')
+        addToast(t('common.error') || 'Error loading data', 'error')
       }
     } catch (error) {
       console.error('Error loading affiliates data:', error)
-      addToast(t('common.error') || 'Erreur lors du chargement des données', 'error')
+      addToast(t('common.error') || 'Error loading data', 'error')
     } finally {
       setPageLoading(false)
     }

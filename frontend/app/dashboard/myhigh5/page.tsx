@@ -431,12 +431,12 @@ export default function MyHigh5Page() {
         position: index + 1,
       }))
       await contestService.reorderMyHigh5Votes(votesToReorder, season.season_id, season.contest_id)
-      addToast(t('dashboard.myhigh5.order_saved') || 'Ordre sauvegardé !', 'success')
+      addToast(t('dashboard.myhigh5.order_saved') || 'Order saved!', 'success')
       // Notify other panels (e.g. Top High5) so leaderboards refresh immediately.
       window.dispatchEvent(new Event('vote-changed'))
     } catch (error) {
       console.error('Erreur lors de la sauvegarde de l\'ordre:', error)
-      addToast(t('dashboard.myhigh5.order_error') || 'Erreur lors de la sauvegarde', 'error')
+      addToast(t('dashboard.myhigh5.order_error') || 'Error saving order', 'error')
       const response = (await contestService.getMyHigh5Votes(
         activeLevel,
         undefined,

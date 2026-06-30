@@ -114,7 +114,7 @@ export default function WalletPage() {
       }
     } catch (error) {
       console.error('Error loading wallet data:', error)
-      addToast(t('common.error') || 'Erreur lors du chargement des données', 'error')
+      addToast(t('common.error') || 'Error loading data', 'error')
     } finally {
       setPageLoading(false)
     }

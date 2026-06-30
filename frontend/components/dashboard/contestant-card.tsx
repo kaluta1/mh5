@@ -526,7 +526,7 @@ export function ContestantCard({
                         <div className={`w-full h-full bg-gradient-to-br ${_platformColors[_platform] || 'from-gray-800 to-gray-900'} flex items-center justify-center`}>
                           <div className="text-center">
                             <div className="text-4xl mb-2 opacity-30">▶</div>
-                            <span className="text-white/40 text-xs font-medium uppercase tracking-wider">{_platformLabels[_platform] || 'Vidéo'}</span>
+                            <span className="text-white/40 text-xs font-medium uppercase tracking-wider">{_platformLabels[_platform] || 'Video'}</span>
                           </div>
                         </div>
                       )}
@@ -546,7 +546,7 @@ export function ContestantCard({
                           _platform === 'facebook' ? 'bg-blue-600' :
                           'bg-gray-700'
                         }`}>
-                          {_platformLabels[_platform] || 'Vidéo'}
+                          {_platformLabels[_platform] || 'Video'}
                         </span>
                       </div>
                     </div>
@@ -893,10 +893,10 @@ export function ContestantCard({
       <ConfirmDialog
         open={showDeleteDialog}
         onOpenChange={setShowDeleteDialog}
-        title={t('dashboard.contests.delete') || 'Supprimer'}
+        title={t('dashboard.contests.delete') || 'Delete'}
         message={t('dashboard.contests.my_applications.delete_confirm_message') || 'Êtes-vous sûr de vouloir supprimer cette candidature ? Cette action ne peut pas être annulée.'}
-        confirmText={t('dashboard.contests.delete') || 'Supprimer'}
-        cancelText={t('common.cancel') || 'Annuler'}
+        confirmText={t('dashboard.contests.delete') || 'Delete'}
+        cancelText={t('common.cancel') || 'Cancel'}
         onConfirm={async () => {
           if (onDelete) {
             setIsDeleting(true)

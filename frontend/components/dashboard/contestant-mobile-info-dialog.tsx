@@ -88,7 +88,7 @@ export function ContestantMobileInfoDialog({
                     {t('contestant_detail.registered_on')}
                   </p>
                   <p className="text-sm font-medium text-gray-900 dark:text-white">
-                    {new Date(registrationDate).toLocaleDateString('fr-FR')}
+                    {new Date(registrationDate).toLocaleDateString('en-US')}
                   </p>
                 </div>
               )}

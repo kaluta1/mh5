@@ -308,7 +308,7 @@ export default function ProfileSetupPage() {
                 disabled={isLoading}
                 className="flex-1"
               >
-                {t('common.cancel') || 'Annuler'}
+                {t('common.cancel') || 'Cancel'}
               </Button>
               <Button
                 type="submit"

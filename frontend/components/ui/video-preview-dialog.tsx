@@ -382,7 +382,7 @@ export function VideoPreviewDialog({
                             <p className="text-xs text-gray-700 dark:text-gray-300 mt-0.5 break-words">{c.content || c.text}</p>
                           </div>
                           <p className="text-[10px] text-gray-400 mt-1 px-1">
-                            {new Date(c.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                            {new Date(c.created_at).toLocaleDateString('en-US', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                           </p>
                         </div>
                       </div>

@@ -174,7 +174,7 @@ export default function MyApplicationsPage() {
 
   const formatDate = (dateString: string) => {
     if (!dateString) return '-'
-    return new Date(dateString).toLocaleDateString('fr-FR', {
+    return new Date(dateString).toLocaleDateString('en-US', {
       day: 'numeric',
       month: 'short',
       year: 'numeric'
@@ -393,7 +393,7 @@ export default function MyApplicationsPage() {
               setDeleteConfirmId(app.id)
             }}
             className="h-8 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20"
-            title={t('common.delete') || 'Supprimer'}
+            title={t('common.delete') || 'Delete'}
           >
             <Trash2 className="w-4 h-4" />
           </Button>

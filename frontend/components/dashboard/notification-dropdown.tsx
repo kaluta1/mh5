@@ -140,7 +140,7 @@ export function NotificationDropdown({ className }: NotificationDropdownProps) {
   const formatDate = (dateString: string) => {
     try {
       const date = new Date(dateString)
-      return date.toLocaleDateString(localeMap[language] || 'fr-FR', {
+      return date.toLocaleDateString(localeMap[language] || 'en-US', {
         day: 'numeric',
         month: 'short',
         year: 'numeric',

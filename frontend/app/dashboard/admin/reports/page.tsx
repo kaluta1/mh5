@@ -170,7 +170,7 @@ export default function ReportsPage() {
         'de': 'de-DE'
       }
       // S'assurer que language est défini et valide
-      const currentLanguage = language && typeof language === 'string' ? language : 'fr'
+      const currentLanguage = language && typeof language === 'string' ? language : 'en'
       const locale = languageMap[currentLanguage] || 'en-US'
 
       return date.toLocaleDateString(locale, {

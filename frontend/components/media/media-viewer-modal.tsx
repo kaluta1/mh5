@@ -61,7 +61,7 @@ export function MediaViewerModal({
           <button
             onClick={onClose}
             className="text-white hover:bg-white/20 p-2.5 rounded-full transition-all backdrop-blur-sm border border-white/10 hover:border-white/20"
-            title={t('contestant_detail.close') || 'Fermer'}
+            title={t('contestant_detail.close') || 'Close'}
           >
             <X className="w-5 h-5 md:w-6 md:h-6" />
           </button>

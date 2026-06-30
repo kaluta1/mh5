@@ -91,7 +91,7 @@ class VerificationService {
 
     if (!response.ok) {
       const error = await response.json()
-      throw new Error(error.detail || 'Erreur lors de la création de la vérification')
+      throw new Error(error.detail || 'Error creating verification')
     }
 
     return response.json()
@@ -106,7 +106,7 @@ class VerificationService {
     })
 
     if (!response.ok) {
-      throw new Error('Erreur lors de la récupération des vérifications')
+      throw new Error('Error fetching verifications')
     }
 
     return response.json()
@@ -125,7 +125,7 @@ class VerificationService {
     })
 
     if (!response.ok) {
-      throw new Error('Erreur lors de la récupération des vérifications')
+      throw new Error('Error fetching verifications')
     }
 
     return response.json()
@@ -141,7 +141,7 @@ class VerificationService {
     })
 
     if (!response.ok) {
-      throw new Error('Erreur lors de la suppression')
+      throw new Error('Error deleting verification')
     }
   }
 
@@ -177,7 +177,7 @@ class VerificationService {
 
     if (!uploadResponse.ok) {
       const error = await uploadResponse.json()
-      throw new Error(error.error || error.details || "Erreur lors de l'upload")
+      throw new Error(error.error || error.details || 'Error uploading file')
     }
 
     const uploadResult = await uploadResponse.json()

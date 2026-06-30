@@ -76,7 +76,7 @@ export function CommentItem({
               {author_name}
             </h4>
             <span className="text-xs text-gray-500 dark:text-gray-400">
-              {new Date(created_at).toLocaleDateString('fr-FR', {
+              {new Date(created_at).toLocaleDateString('en-US', {
                 year: 'numeric',
                 month: 'short',
                 day: 'numeric',

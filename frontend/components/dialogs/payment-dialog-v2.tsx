@@ -748,7 +748,7 @@ function PaymentDialogInner({
               {/* Continue button */}
               <div className="flex gap-3 pt-2">
                 <Button variant="outline" onClick={handleClose} className="flex-1">
-                  {t('common.cancel') || 'Annuler'}
+                  {t('common.cancel') || 'Cancel'}
                 </Button>
                 <Button
                   onClick={() => setStep('method')}
@@ -1069,7 +1069,7 @@ function PaymentDialogInner({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>
-              {t('common.cancel') || 'Annuler'}
+              {t('common.cancel') || 'Cancel'}
             </AlertDialogCancel>
             <AlertDialogAction onClick={resetAndClose}>
               {t('common.confirm') || 'Confirmer'}

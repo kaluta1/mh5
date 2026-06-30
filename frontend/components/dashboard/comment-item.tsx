@@ -195,7 +195,7 @@ export function CommentItem({
             {/* Actions bar */}
             <div className="flex items-center gap-3 mt-2 text-xs text-gray-500 dark:text-gray-400">
               <span className="text-xs">
-                {new Date(comment.created_at).toLocaleDateString('fr-FR', {
+                {new Date(comment.created_at).toLocaleDateString('en-US', {
                   day: 'numeric',
                   month: 'short',
                   hour: '2-digit',
@@ -243,7 +243,7 @@ export function CommentItem({
                     }}
                     className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                   >
-                    {t('dashboard.contests.cancel') || 'Annuler'}
+                    {t('dashboard.contests.cancel') || 'Cancel'}
                   </button>
                   <button
                     onClick={handleReply}

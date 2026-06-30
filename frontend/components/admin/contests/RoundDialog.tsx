@@ -317,7 +317,7 @@ export function RoundDialog({
                                 onClick={onClose}
                                 className="dark:bg-gray-700 dark:text-white dark:hover:bg-gray-600"
                             >
-                                {t('common.cancel') || 'Annuler'}
+                                {t('common.cancel') || 'Cancel'}
                             </Button>
                             <Button
                                 type="submit"

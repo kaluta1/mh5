@@ -243,7 +243,7 @@ export function ReportContestantDialog({
                 disabled={isSubmitting}
                 className="flex-1 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               >
-                {t('dashboard.contests.report_contestant.cancel') || 'Annuler'}
+                {t('dashboard.contests.report_contestant.cancel') || 'Cancel'}
               </Button>
               <Button
                 type="submit"

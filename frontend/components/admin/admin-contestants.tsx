@@ -444,7 +444,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
       await fetchContestants()
     } catch (error: any) {
       console.error('Erreur lors de la sauvegarde:', error)
-      const errorMessage = error.response?.data?.detail || error.message || (t('admin.contestants.save_error') || 'Erreur lors de la sauvegarde')
+      const errorMessage = error.response?.data?.detail || error.message || (t('admin.contestants.save_error') || 'Error saving order')
       addToast(errorMessage, 'error')
     } finally {
       setIsSubmitting(false)
@@ -861,7 +861,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
                   onClick={handleCancel}
                   disabled={isSubmitting}
                 >
-                  {t('common.cancel') || 'Annuler'}
+                  {t('common.cancel') || 'Cancel'}
                 </Button>
                 <Button
                   type="submit"
@@ -965,7 +965,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
                           </span>
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
-                          {new Date(contestant.registration_date).toLocaleDateString('fr-FR')}
+                          {new Date(contestant.registration_date).toLocaleDateString('en-US')}
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex gap-2 flex-wrap">
@@ -1106,7 +1106,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
                 </div>
                 <div>
                   <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">{t('admin.contestants.registration_date') || 'Date d\'inscription'}</p>
-                  <p className="text-sm text-gray-900 dark:text-white">{new Date(selectedContestant.registration_date).toLocaleDateString('fr-FR')}</p>
+                  <p className="text-sm text-gray-900 dark:text-white">{new Date(selectedContestant.registration_date).toLocaleDateString('en-US')}</p>
                 </div>
               </div>
 
@@ -1184,7 +1184,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
                           <div>
                             <p className="text-sm font-semibold text-gray-900 dark:text-white">{comment.author_name}</p>
                             <p className="text-xs text-gray-500 dark:text-gray-400">
-                              {new Date(comment.created_at).toLocaleDateString('fr-FR')}
+                              {new Date(comment.created_at).toLocaleDateString('en-US')}
                               {comment.is_hidden && ' • Caché'}
                             </p>
                           </div>
@@ -1228,7 +1228,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
                   onClick={() => setShowDialog(false)}
                   className="flex-1"
                 >
-                  {t('admin.contestants.close') || 'Fermer'}
+                  {t('admin.contestants.close') || 'Close'}
                 </Button>
                 {selectedContestant.verification_status === 'pending' && (
                   <>

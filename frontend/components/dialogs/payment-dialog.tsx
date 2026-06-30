@@ -684,7 +684,7 @@ export function PaymentDialog({
                   }}
                   className="flex-1 bg-myhigh5-primary hover:bg-myhigh5-primary/90"
                 >
-                  {t('common.close') || 'Fermer'}
+                  {t('common.close') || 'Close'}
                 </Button>
               )}
             </div>

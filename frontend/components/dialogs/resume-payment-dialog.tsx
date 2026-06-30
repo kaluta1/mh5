@@ -263,7 +263,7 @@ export function ResumePaymentDialog({
               </p>
             </div>
             <Button onClick={() => onOpenChange(false)} className="w-full">
-              {t('common.close') || 'Fermer'}
+              {t('common.close') || 'Close'}
             </Button>
           </div>
         )}

@@ -153,7 +153,7 @@ export function ContestantInfoSidebar({
             <div>
               <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('contestant_detail.registered_on')}</p>
               <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                {new Date(registrationDate).toLocaleDateString('fr-FR')}
+                {new Date(registrationDate).toLocaleDateString('en-US')}
               </p>
             </div>
             <div className="text-lg">📅</div>

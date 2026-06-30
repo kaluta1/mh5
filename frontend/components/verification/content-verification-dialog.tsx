@@ -257,7 +257,7 @@ export function ContentVerificationDialog({
         {/* Actions */}
         <div className="flex gap-3">
           <Button variant="outline" onClick={handleClose} className="flex-1">
-            {t('common.cancel') || 'Annuler'}
+            {t('common.cancel') || 'Cancel'}
           </Button>
           <Button 
             onClick={handleSubmit}

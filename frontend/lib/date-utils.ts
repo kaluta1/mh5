@@ -215,14 +215,14 @@ const monthMap: Record<string, Partial<Record<Language, string>>> = {
 /**
  * Traduit un nom de jour selon la langue
  */
-export function translateDay(day: string, language: Language = 'fr'): string {
+export function translateDay(day: string, language: Language = 'en'): string {
   return dayMap[day]?.[language] || day
 }
 
 /**
  * Traduit un nom de mois selon la langue
  */
-export function translateMonth(month: string, language: Language = 'fr'): string {
+export function translateMonth(month: string, language: Language = 'en'): string {
   return monthMap[month]?.[language] || month
 }
 
@@ -249,7 +249,7 @@ export const LOCALE_BY_LANG: Partial<Record<Language, string>> = {
   ko: 'ko-KR',
 }
 
-export function formatDate(date: Date | string, language: Language = 'fr', options?: Intl.DateTimeFormatOptions): string {
+export function formatDate(date: Date | string, language: Language = 'en', options?: Intl.DateTimeFormatOptions): string {
   const dateObj = typeof date === 'string' ? new Date(date) : date
   const defaultOptions: Intl.DateTimeFormatOptions = {
     year: 'numeric',
@@ -262,7 +262,7 @@ export function formatDate(date: Date | string, language: Language = 'fr', optio
 /**
  * Formate une date courte (jour/mois) selon la langue
  */
-export function formatShortDate(date: Date | string, language: Language = 'fr'): string {
+export function formatShortDate(date: Date | string, language: Language = 'en'): string {
   const dateObj = typeof date === 'string' ? new Date(date) : date
   return dateObj.toLocaleDateString(LOCALE_BY_LANG[language] || 'en-US', {
     day: 'numeric',

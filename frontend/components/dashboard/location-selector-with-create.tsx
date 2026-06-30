@@ -94,7 +94,7 @@ export function LocationSelectorWithCreate({
       const data = await locationService.getRegionsByContinent(continentId)
       setRegions(data)
     } catch (err) {
-      addToast('Erreur lors du chargement des régions', 'error')
+      addToast(t('common.error') || 'Error loading regions', 'error')
     } finally {
       setIsLoadingData(false)
     }
@@ -159,7 +159,7 @@ export function LocationSelectorWithCreate({
       setContinents([...continents, newContinent])
       handleContinentSelect(newContinent)
     } catch (err) {
-      addToast('Erreur lors de la création du continent', 'error')
+      addToast(t('common.error') || 'Error creating continent', 'error')
     }
   }
 
@@ -170,7 +170,7 @@ export function LocationSelectorWithCreate({
       setRegions([...regions, newRegion])
       handleRegionSelect(newRegion)
     } catch (err) {
-      addToast('Erreur lors de la création de la région', 'error')
+      addToast(t('common.error') || 'Error creating region', 'error')
     }
   }
 
@@ -181,7 +181,7 @@ export function LocationSelectorWithCreate({
       setCountries([...countries, newCountry])
       handleCountrySelect(newCountry)
     } catch (err) {
-      addToast('Erreur lors de la création du pays', 'error')
+      addToast(t('common.error') || 'Error creating country', 'error')
     }
   }
 
@@ -192,7 +192,7 @@ export function LocationSelectorWithCreate({
       setCities([...cities, newCity])
       handleCitySelect(newCity)
     } catch (err) {
-      addToast('Erreur lors de la création de la ville', 'error')
+      addToast(t('common.error') || 'Error creating city', 'error')
     }
   }
 

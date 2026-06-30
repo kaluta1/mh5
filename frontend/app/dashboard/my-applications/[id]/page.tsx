@@ -398,7 +398,7 @@ function MyApplicationDetailPage() {
                   className="flex items-center gap-2 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20"
                 >
                   <Trash2 className="w-4 h-4" />
-                  {t('common.delete') || 'Supprimer'}
+                  {t('common.delete') || 'Delete'}
                 </Button>
               </div>
             )}
@@ -786,8 +786,8 @@ function MyApplicationDetailPage() {
         onOpenChange={setShowDeleteDialog}
         title={`⚠️ ${t('common.confirm_delete') || 'Confirmer la suppression'}`}
         message={t('dashboard.contests.my_applications.delete_confirm_message') || 'Êtes-vous sûr de vouloir supprimer cette candidature ? Cette action ne peut pas être annulée.'}
-        confirmText={t('common.delete') || 'Supprimer'}
-        cancelText={t('common.cancel') || 'Annuler'}
+        confirmText={t('common.delete') || 'Delete'}
+        cancelText={t('common.cancel') || 'Cancel'}
         onConfirm={handleDelete}
         isLoading={isDeleting}
         isDangerous={true}

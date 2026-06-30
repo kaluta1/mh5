@@ -32,7 +32,7 @@ export function UserProgressChart({ data, title, period = 'week', onPeriodChange
     { value: 'yesterday', label: t('admin.dashboard.periods.yesterday') || 'Hier' },
     { value: 'week', label: t('admin.dashboard.periods.week') || 'Semaine' },
     { value: 'month', label: t('admin.dashboard.periods.month') || 'Mois' },
-    { value: 'year', label: t('admin.dashboard.periods.year') || 'Année' }
+    { value: 'year', label: t('admin.dashboard.periods.year') || 'Year' }
   ]
 
   return (

@@ -401,12 +401,12 @@ export default function TransactionsPage() {
                   <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
                     <div className="flex items-center gap-1">
                       <Calendar className="h-3 w-3" />
-                      <span>{t('admin.transactions.created_at') || 'Créé le'} {new Date(transaction.created_at).toLocaleDateString('fr-FR')}</span>
+                      <span>{t('admin.transactions.created_at') || 'Created on'} {new Date(transaction.created_at).toLocaleDateString('en-US')}</span>
                     </div>
                     {transaction.processed_at && (
                       <div className="flex items-center gap-1">
                         <CheckCircle2 className="h-3 w-3" />
-                        <span>{t('admin.transactions.processed_at') || 'Traité le'} {new Date(transaction.processed_at).toLocaleDateString('fr-FR')}</span>
+                        <span>{t('admin.transactions.processed_at') || 'Processed on'} {new Date(transaction.processed_at).toLocaleDateString('en-US')}</span>
                       </div>
                     )}
                     {transaction.reference && (
@@ -529,12 +529,12 @@ export default function TransactionsPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <h4 className="font-semibold mb-2">{t('admin.transactions.created_at') || 'Créé le'}</h4>
+                  <h4 className="font-semibold mb-2">{t('admin.transactions.created_at') || 'Created on'}</h4>
                   <p className="text-sm">{new Date(selectedTransaction.created_at).toLocaleString('fr-FR')}</p>
                 </div>
                 {selectedTransaction.processed_at && (
                   <div>
-                    <h4 className="font-semibold mb-2">{t('admin.transactions.processed_at') || 'Traité le'}</h4>
+                    <h4 className="font-semibold mb-2">{t('admin.transactions.processed_at') || 'Processed on'}</h4>
                     <p className="text-sm">{new Date(selectedTransaction.processed_at).toLocaleString('fr-FR')}</p>
                   </div>
                 )}

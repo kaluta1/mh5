@@ -80,7 +80,7 @@ export function LocationSelector({ onLocationSelected, isLoading }: LocationSele
       const data = await geographyService.getRegionsByContinent(continentId)
       setRegions(data)
     } catch (err) {
-      addToast('Erreur lors du chargement des régions', 'error')
+      addToast(t('common.error') || 'Error loading regions', 'error')
     } finally {
       setIsLoadingData(false)
     }

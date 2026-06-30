@@ -170,7 +170,7 @@ export function ContestInfoDialog({
               <div className="bg-white/60 dark:bg-gray-800/60 rounded-lg p-4">
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{t('dashboard.contests.start')}</p>
                 <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                  {new Date(contest.submission_start_date).toLocaleDateString('fr-FR', {
+                  {new Date(contest.submission_start_date).toLocaleDateString('en-US', {
                     year: 'numeric',
                     month: 'short',
                     day: 'numeric'
@@ -180,7 +180,7 @@ export function ContestInfoDialog({
               <div className="bg-white/60 dark:bg-gray-800/60 rounded-lg p-4">
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{t('dashboard.contests.end')}</p>
                 <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                  {new Date(contest.submission_end_date).toLocaleDateString('fr-FR', {
+                  {new Date(contest.submission_end_date).toLocaleDateString('en-US', {
                     year: 'numeric',
                     month: 'short',
                     day: 'numeric'
@@ -199,7 +199,7 @@ export function ContestInfoDialog({
               <div className="bg-white/60 dark:bg-gray-800/60 rounded-lg p-4">
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{t('dashboard.contests.start')}</p>
                 <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                  {new Date(contest.voting_start_date).toLocaleDateString('fr-FR', {
+                  {new Date(contest.voting_start_date).toLocaleDateString('en-US', {
                     year: 'numeric',
                     month: 'short',
                     day: 'numeric'
@@ -209,7 +209,7 @@ export function ContestInfoDialog({
               <div className="bg-white/60 dark:bg-gray-800/60 rounded-lg p-4">
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{t('dashboard.contests.end')}</p>
                 <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                  {new Date(contest.voting_end_date).toLocaleDateString('fr-FR', {
+                  {new Date(contest.voting_end_date).toLocaleDateString('en-US', {
                     year: 'numeric',
                     month: 'short',
                     day: 'numeric'

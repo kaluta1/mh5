@@ -220,7 +220,7 @@ export function SuggestContestDialog({ open, onOpenChange }: SuggestContestDialo
               disabled={isSubmitting}
               className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             >
-              {t('dashboard.contests.suggest_contest.cancel') || 'Annuler'}
+              {t('dashboard.contests.suggest_contest.cancel') || 'Cancel'}
             </Button>
             <Button
               type="submit"

@@ -305,7 +305,7 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
                   onClick={async () => await handleAvatarChange('')}
                   className="px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors"
                 >
-                  {t('settings.remove') || 'Supprimer'}
+                  {t('settings.remove') || 'Delete'}
                 </button>
               </div>
             </div>

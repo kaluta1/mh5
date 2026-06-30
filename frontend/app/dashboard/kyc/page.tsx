@@ -416,7 +416,7 @@ function KYCPageContent() {
                 className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
               >
                 <XCircle className="w-4 h-4 mr-1" />
-                {t('common.cancel') || 'Annuler'}
+                {t('common.cancel') || 'Cancel'}
               </Button>
             </div>
           </div>
@@ -646,7 +646,7 @@ function KYCPageContent() {
             
             {kycData?.submitted_at && (
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                {t('kyc.submitted_on') || 'Soumis le'}: {new Date(kycData.submitted_at).toLocaleDateString('fr-FR', {
+                {t('kyc.submitted_on') || 'Submitted on'}: {new Date(kycData.submitted_at).toLocaleDateString('en-US', {
                   day: 'numeric',
                   month: 'long',
                   year: 'numeric',
@@ -923,7 +923,7 @@ function KYCPageContent() {
                 ) : (
                   <>
                     <RefreshCw className="w-4 h-4 mr-2" />
-                    {t('kyc.submit_again') || 'Réessayer'}
+                    {t('kyc.submit_again') || 'Retry'}
                   </>
                 )}
               </Button>

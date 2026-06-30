@@ -101,10 +101,10 @@ export function InviteDialog({
     try {
       await navigator.clipboard.writeText(referralLink)
       setCopiedLink(true)
-      addToast(t('dashboard.affiliates.link_copied') || 'Lien copié !', 'success')
+      addToast(t('dashboard.affiliates.link_copied') || 'Link copied!', 'success')
       setTimeout(() => setCopiedLink(false), 2000)
     } catch (error) {
-      addToast(t('dashboard.affiliates.copy_error') || 'Erreur lors de la copie', 'error')
+      addToast(t('dashboard.affiliates.copy_error') || 'Error copying link', 'error')
     }
   }
 

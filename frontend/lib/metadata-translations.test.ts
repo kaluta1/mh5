@@ -24,9 +24,9 @@ describe('metadata-translations', () => {
     expect(detectLanguageFromHeaders(headers)).toBe('fr')
   })
 
-  it('detects language from accept-language header', () => {
+  it('defaults to English when only accept-language is set', () => {
     const headers = new Headers({ 'accept-language': 'es-ES,es;q=0.9' })
-    expect(detectLanguageFromHeaders(headers)).toBe('es')
+    expect(detectLanguageFromHeaders(headers)).toBe('en')
   })
 
   it('returns keywords', () => {
