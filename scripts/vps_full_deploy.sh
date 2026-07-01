@@ -109,6 +109,10 @@ if [ -f "$REPO_ROOT/scripts/install_monthly_migration_timer.sh" ]; then
   bash "$REPO_ROOT/scripts/install_monthly_migration_timer.sh" || echo "    WARN: timer install failed"
 fi
 
+echo "==> contest media storage + S3 sync"
+bash "$REPO_ROOT/scripts/ensure_contest_media.sh" || echo "    WARN: media sync failed"
+bash "$REPO_ROOT/scripts/fix_nginx_myhigh5.sh" || echo "    WARN: nginx media paths failed"
+
 echo "==> optional: March round regional backfill"
 for round_name in "Round March 2026" "Round March 2025"; do
   if PYTHONPATH=. python3 scripts/diagnose_round_regional_migration.py --round-name "$round_name" 2>/dev/null | head -3; then

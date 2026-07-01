@@ -24,6 +24,21 @@ def local_media_path(user_id: int, filename: str) -> str:
     return os.path.join(settings.LOCAL_STORAGE_PATH, str(user_id), safe_name)
 
 
+def media_storage_roots() -> list[str]:
+    """Candidate directories for locally stored uploads (VPS + Docker + dev)."""
+    roots: list[str] = []
+    for candidate in (
+        settings.LOCAL_STORAGE_PATH,
+        "/var/lib/myhigh5/media",
+        "/app/storage",
+        os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "media"),
+    ):
+        text = str(candidate or "").strip()
+        if text and text not in roots:
+            roots.append(text)
+    return roots
+
+
 def resolve_media_for_serving(
     user_id: int, filename: str
 ) -> Tuple[Optional[str], Optional[str], str]:
@@ -35,9 +50,10 @@ def resolve_media_for_serving(
     content_type, _ = mimetypes.guess_type(safe_name)
     content_type = content_type or "application/octet-stream"
 
-    local_path = local_media_path(user_id, safe_name)
-    if os.path.isfile(local_path):
-        return "local", local_path, content_type
+    for root in media_storage_roots():
+        local_path = os.path.join(root, str(user_id), safe_name)
+        if os.path.isfile(local_path):
+            return "local", local_path, content_type
 
     bucket = (settings.S3_BUCKET_NAME or settings.AWS_S3_BUCKET or "").strip()
     if bucket and settings.AWS_ACCESS_KEY_ID and settings.AWS_SECRET_ACCESS_KEY:

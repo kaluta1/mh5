@@ -10,8 +10,17 @@ SITE_ENABLED="/etc/nginx/sites-enabled/${DOMAIN}"
 CERT_DIR="/etc/letsencrypt/live/${DOMAIN}"
 FRONTEND_PORT="${MH5_FRONTEND_PORT:-3000}"
 BACKEND_PORT="${MH5_BACKEND_PORT:-8001}"
+MEDIA_ROOT="${MH5_MEDIA_ROOT:-/var/lib/myhigh5/media}"
 
-echo "=== fix nginx for ${DOMAIN} ==="
+if [ -f "${ROOT}/backend/.env" ]; then
+  _env_media="$(grep -E '^LOCAL_STORAGE_PATH=' "${ROOT}/backend/.env" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '"'"'"'"' || true)"
+  if [ -n "${_env_media}" ]; then
+    MEDIA_ROOT="${_env_media}"
+  fi
+fi
+mkdir -p "${MEDIA_ROOT}"
+
+echo "=== fix nginx for ${DOMAIN} (media root: ${MEDIA_ROOT}) ==="
 
 if ! command -v nginx >/dev/null 2>&1; then
   echo "    installing nginx..."
@@ -68,6 +77,14 @@ server {
 
     client_max_body_size 64M;
 
+    location ~ ^/api/v1/media/file/([0-9]+)/(.+)$ {
+        alias ${MEDIA_ROOT}/\$1/\$2;
+        access_log off;
+        expires 30d;
+        add_header Cache-Control "public, max-age=86400";
+        add_header Access-Control-Allow-Origin "*";
+    }
+
     location ^~ /_next/ {
         proxy_pass http://127.0.0.1:${FRONTEND_PORT};
         proxy_http_version 1.1;
@@ -91,9 +108,11 @@ server {
     }
 
     location /media/ {
-        proxy_pass http://127.0.0.1:${BACKEND_PORT};
-        proxy_set_header Host \$host;
-        proxy_set_header X-Forwarded-Proto \$scheme;
+        alias ${MEDIA_ROOT}/;
+        access_log off;
+        expires 30d;
+        add_header Cache-Control "public, max-age=86400";
+        add_header Access-Control-Allow-Origin "*";
     }
 
     location / {
@@ -118,6 +137,14 @@ server {
 
     client_max_body_size 64M;
 
+    location ~ ^/api/v1/media/file/([0-9]+)/(.+)$ {
+        alias ${MEDIA_ROOT}/\$1/\$2;
+        access_log off;
+        expires 30d;
+        add_header Cache-Control "public, max-age=86400";
+        add_header Access-Control-Allow-Origin "*";
+    }
+
     location ^~ /_next/ {
         proxy_pass http://127.0.0.1:${FRONTEND_PORT};
         proxy_http_version 1.1;
@@ -138,9 +165,11 @@ server {
     }
 
     location /media/ {
-        proxy_pass http://127.0.0.1:${BACKEND_PORT};
-        proxy_set_header Host \$host;
-        proxy_set_header X-Forwarded-Proto \$scheme;
+        alias ${MEDIA_ROOT}/;
+        access_log off;
+        expires 30d;
+        add_header Cache-Control "public, max-age=86400";
+        add_header Access-Control-Allow-Origin "*";
     }
 
     location / {

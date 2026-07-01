@@ -255,6 +255,17 @@ app.add_middleware(BuildIdMiddleware)
 # Inclusion des routes API
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
+# Public media files — registered on the app so contest/category images always resolve
+# (some older deployments missed the router-mounted /media/file/... route).
+from app.api.api_v1.endpoints.media import serve_media_file
+
+app.add_api_route(
+    f"{settings.API_V1_STR}/media/file/{{user_id}}/{{filename}}",
+    serve_media_file,
+    methods=["GET"],
+    tags=["Médias"],
+)
+
 # GraphQL endpoint
 try:
     from app.graphql.schema import graphql_app
@@ -265,9 +276,18 @@ except ImportError as e:
     print("   Continuing without GraphQL support...")
 
 
-# Servir les fichiers statiques (médias)
-if os.path.exists(settings.LOCAL_STORAGE_PATH):
-    app.mount("/media", StaticFiles(directory=settings.LOCAL_STORAGE_PATH), name="media")
+# Servir les fichiers statiques (médias) — always mount primary storage dir
+from app.core.storage import media_storage_roots
+
+_media_root = next(
+    (p for p in media_storage_roots() if os.path.isdir(p)),
+    settings.LOCAL_STORAGE_PATH,
+)
+try:
+    os.makedirs(_media_root, exist_ok=True)
+    app.mount("/media", StaticFiles(directory=_media_root), name="media")
+except Exception as mount_err:
+    logger.warning("Static /media mount skipped: %s", mount_err)
 
 # Intégration Socket.IO
 socketio_app = create_socketio_app(app)
