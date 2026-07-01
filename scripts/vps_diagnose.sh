@@ -68,8 +68,15 @@ fi
 echo ""
 echo "=== nginx /api proxy ==="
 if command -v nginx >/dev/null 2>&1; then
+  systemctl is-active nginx 2>/dev/null && echo "nginx: active" || echo "nginx: INACTIVE — run: bash scripts/fix_nginx_myhigh5.sh"
   nginx -t 2>&1 | tail -2 || true
+  echo "listeners :80 :443:"
+  ss -ltnp 2>/dev/null | grep -E ':80 |:443 ' || echo "  (none — site cannot be reached from internet)"
   grep -R "proxy_pass.*800" /etc/nginx/sites-enabled/ 2>/dev/null | head -5 || echo "(could not read nginx sites-enabled)"
+  echo "via nginx localhost:"
+  curl -sS -o /dev/null -w "  http://127.0.0.1/ Host:myhigh5.com → %{http_code}\n" -H "Host: myhigh5.com" http://127.0.0.1/ 2>/dev/null || echo "  FAIL"
+else
+  echo "nginx not installed — run: bash scripts/fix_nginx_myhigh5.sh"
 fi
 
 echo ""

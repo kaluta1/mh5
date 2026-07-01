@@ -16,17 +16,11 @@ free -h 2>/dev/null || true
 df -h / /var 2>/dev/null | tail -3 || true
 
 echo ""
-echo "=== nginx ==="
-if command -v nginx >/dev/null 2>&1; then
-  if ! nginx -t 2>&1; then
-    echo "    ERROR: nginx config invalid — fix /etc/nginx/sites-enabled/ before reload"
-  fi
-  systemctl enable nginx 2>/dev/null || true
-  systemctl restart nginx
-  systemctl is-active nginx && echo "    nginx: active" || echo "    nginx: FAILED"
-else
-  echo "    WARN: nginx not installed"
-fi
+echo "=== nginx (public gateway :80 / :443) ==="
+bash "$ROOT/scripts/fix_nginx_myhigh5.sh" || {
+  echo "    nginx fix failed — see journalctl -u nginx"
+  exit 1
+}
 
 echo ""
 echo "=== backend (systemd :8001) ==="
