@@ -2112,6 +2112,43 @@ class CRUDContest:
             )
             if (
                 contest_mode == "nomination"
+                and str(season_level or "").lower() == "global"
+            ):
+                from app.services.season_migration import SeasonMigrationService
+
+                prior_season = SeasonMigrationService.find_prior_season_for_contest(
+                    db, contest_id, season
+                )
+                if prior_season is not None:
+                    prior_members = (
+                        db.query(Contestant)
+                        .join(ContestantSeason, ContestantSeason.contestant_id == Contestant.id)
+                        .filter(
+                            ContestantSeason.season_id == prior_season.id,
+                            ContestantSeason.is_active == True,
+                            Contestant.is_active == True,
+                            Contestant.is_deleted == False,
+                        )
+                        .all()
+                    )
+                    canonical_global_ids = (
+                        SeasonMigrationService.rank_contestant_ids_like_top_high5(
+                            db,
+                            contest_obj,
+                            prior_season,
+                            prior_members,
+                        )[:5]
+                    )
+                    if canonical_global_ids:
+                        contestants_query = contestants_query.filter(
+                            Contestant.id.in_(canonical_global_ids)
+                        )
+                        logger.info(
+                            "[get_contest_with_enriched_contestants] Global nomination roster "
+                            f"constrained to canonical prior-stage winners: {canonical_global_ids}"
+                        )
+            if (
+                contest_mode == "nomination"
                 and season_level in ("regional", "region")
             ):
                 pool_pred = regional_voting_pools_sql_predicate()
