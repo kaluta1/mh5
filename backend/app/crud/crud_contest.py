@@ -2093,11 +2093,7 @@ class CRUDContest:
         # Nominations stay on Contestant rows until promotion; pooling hid everyone
         # except ContestantSeason members + the signed-in user's own nominations.
         if pooled_season_membership_scope:
-            active_season_member_ids = db.query(ContestantSeason.contestant_id).filter(
-                ContestantSeason.season_id == season.id,
-                ContestantSeason.is_active == True,
-            )
-            contestants_query = contestants_query.filter(Contestant.id.in_(active_season_member_ids))
+            canonical_global_ids: list[int] = []
             # Shared pooled seasons can include members from every category; keep only
             # rows whose legacy season_id belongs to this contest's category bucket.
             from app.services.contest_category_integrity import pooled_roster_contest_scope_clause
@@ -2139,14 +2135,27 @@ class CRUDContest:
                             prior_members,
                         )[:5]
                     )
-                    if canonical_global_ids:
-                        contestants_query = contestants_query.filter(
-                            Contestant.id.in_(canonical_global_ids)
-                        )
-                        logger.info(
-                            "[get_contest_with_enriched_contestants] Global nomination roster "
-                            f"constrained to canonical prior-stage winners: {canonical_global_ids}"
-                        )
+            if canonical_global_ids:
+                contestants_query = contestants_query.filter(
+                    Contestant.id.in_(canonical_global_ids)
+                )
+                logger.info(
+                    "[get_contest_with_enriched_contestants] Global nomination roster "
+                    f"constrained to canonical prior-stage winners: {canonical_global_ids}"
+                )
+            else:
+                active_season_member_ids = db.query(ContestantSeason.contestant_id).filter(
+                    ContestantSeason.season_id == season.id,
+                    ContestantSeason.is_active == True,
+                )
+                contestants_query = contestants_query.filter(
+                    Contestant.id.in_(active_season_member_ids)
+                )
+                logger.info(
+                    f"[get_contest_with_enriched_contestants] Scoping visible roster to active "
+                    f"ContestantSeason links for {season_level} season_id={season.id} "
+                    f"(category-scoped via contest_id={contest_id})"
+                )
             if (
                 contest_mode == "nomination"
                 and season_level in ("regional", "region")
