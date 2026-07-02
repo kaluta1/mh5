@@ -872,15 +872,27 @@ class SeasonMigrationService:
         id_set = set(contestant_ids) if contestant_ids else None
         rank_map: Dict[int, int] = {}
 
-        if prior_level in (
+        if prior_level == SeasonLevel.CONTINENT:
+            members = SeasonMigrationService._contestants_for_contest_in_season(
+                db,
+                prior_season.id,
+                contest_id,
+                active_only=False,
+                qualified_only=False,
+            )
+            ordered = SeasonMigrationService.rank_contestant_ids_like_top_high5(
+                db, contest, prior_season, members
+            )
+            for position, cid in enumerate(ordered, start=1):
+                if id_set is None or cid in id_set:
+                    rank_map[cid] = position
+        elif prior_level in (
             SeasonLevel.COUNTRY,
             SeasonLevel.REGIONAL,
-            SeasonLevel.CONTINENT,
         ):
             location_field = {
                 SeasonLevel.COUNTRY: "country",
                 SeasonLevel.REGIONAL: "region",
-                SeasonLevel.CONTINENT: "continent",
             }[prior_level]
             grouped = SeasonMigrationService.get_top_contestants_by_location(
                 db,
