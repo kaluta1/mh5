@@ -850,7 +850,7 @@ class SeasonMigrationService:
         1-based ranks from the previous UI stage (Past tab / Top High5 rules).
         Unranked pool members are omitted so they sort after ranked ones.
         """
-        if not contestant_ids or not season.round_id:
+        if not season.round_id:
             return {}
 
         prior_level = SeasonMigrationService.prior_level_for(
@@ -869,7 +869,7 @@ class SeasonMigrationService:
         if not prior_season:
             return {}
 
-        id_set = set(contestant_ids)
+        id_set = set(contestant_ids) if contestant_ids else None
         rank_map: Dict[int, int] = {}
 
         if prior_level in (
@@ -897,7 +897,7 @@ class SeasonMigrationService:
                     db, contest, prior_season, members
                 )
                 for position, cid in enumerate(ordered, start=1):
-                    if cid in id_set:
+                    if id_set is None or cid in id_set:
                         rank_map[cid] = min(rank_map.get(cid, position), position)
         else:
             members = (
@@ -914,7 +914,7 @@ class SeasonMigrationService:
                 db, contest, prior_season, members
             )
             for position, cid in enumerate(ordered, start=1):
-                if cid in id_set:
+                if id_set is None or cid in id_set:
                     rank_map[cid] = position
 
         return rank_map

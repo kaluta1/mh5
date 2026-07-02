@@ -2112,29 +2112,20 @@ class CRUDContest:
             ):
                 from app.services.season_migration import SeasonMigrationService
 
-                prior_season = SeasonMigrationService.find_prior_season_for_contest(
-                    db, contest_id, season
+                prior_rank_map = SeasonMigrationService.prior_stage_rank_map(
+                    db,
+                    contest_id,
+                    season,
+                    contestant_ids=[],
                 )
-                if prior_season is not None:
-                    prior_members = (
-                        db.query(Contestant)
-                        .join(ContestantSeason, ContestantSeason.contestant_id == Contestant.id)
-                        .filter(
-                            ContestantSeason.season_id == prior_season.id,
-                            ContestantSeason.is_active == True,
-                            Contestant.is_active == True,
-                            Contestant.is_deleted == False,
-                        )
-                        .all()
-                    )
-                    canonical_global_ids = (
-                        SeasonMigrationService.rank_contestant_ids_like_top_high5(
-                            db,
-                            contest_obj,
-                            prior_season,
-                            prior_members,
+                if prior_rank_map:
+                    canonical_global_ids = [
+                        cid
+                        for cid, _rank in sorted(
+                            prior_rank_map.items(),
+                            key=lambda item: (item[1], item[0]),
                         )[:5]
-                    )
+                    ]
             if canonical_global_ids:
                 contestants_query = contestants_query.filter(
                     Contestant.id.in_(canonical_global_ids)
