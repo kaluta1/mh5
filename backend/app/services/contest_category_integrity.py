@@ -51,14 +51,57 @@ def category_scope_key(contest: Any) -> str:
     return "ty:unknown"
 
 
-def _level_rank_for_mode(contest: Any, mode: str) -> Tuple[int, int, int]:
+def _contest_cover_raw(contest: Any) -> Optional[str]:
+    raw = getattr(contest, "cover_image_url", None) or getattr(contest, "image_url", None)
+    if raw is None:
+        return None
+    text = str(raw).strip()
+    return text or None
+
+
+def _level_rank_for_mode(contest: Any, mode: str) -> Tuple[int, int, int, int]:
     """Higher is better when picking canonical row among duplicates."""
     lv = (getattr(contest, "level", None) or "").strip().lower()
     want = "country" if mode == "nomination" else "city"
     level_match = 1 if lv == want else 0
+    has_image = 1 if _contest_cover_raw(contest) else 0
     pc = int(getattr(contest, "participant_count", 0) or 0)
     cid = int(getattr(contest, "id", 0) or 0)
-    return (level_match, pc, cid)
+    return (level_match, has_image, pc, cid)
+
+
+def resolve_contest_cover_image(db, contest: Any) -> Optional[str]:
+    """Return cover/image for a contest, falling back to sibling category rows."""
+    direct = _contest_cover_raw(contest)
+    if direct:
+        return direct
+    if db is None:
+        return None
+    sibling_ids = contest_ids_for_category(
+        db,
+        category_id=getattr(contest, "category_id", None),
+        contest_type=getattr(contest, "contest_type", "") or "",
+    )
+    if not sibling_ids:
+        return None
+    from app.models.contest import Contest
+
+    siblings = (
+        db.query(Contest)
+        .filter(Contest.id.in_(sibling_ids), Contest.is_deleted == False)
+        .all()
+    )
+    mode = normalize_contest_mode(getattr(contest, "contest_mode", "participation"))
+    ranked = sorted(
+        siblings,
+        key=lambda row: _level_rank_for_mode(row, mode),
+        reverse=True,
+    )
+    for row in ranked:
+        cover = _contest_cover_raw(row)
+        if cover:
+            return cover
+    return None
 
 
 def dedupe_contests_one_per_category_mode(
@@ -235,6 +278,23 @@ def repair_category_mode_duplicates(db, *, apply: bool = False) -> List[dict]:
             db.commit()
 
     return actions
+
+
+def nomination_category_roster_season_clause(db, contest: Any):
+    """
+    Nomination roster/count scope across every contest row in the same category bucket.
+    Duplicate contest ids must not hide last month's nominees from card counts.
+    """
+    from app.models.contests import Contestant
+
+    ids = contest_ids_for_category(
+        db,
+        category_id=getattr(contest, "category_id", None),
+        contest_type=getattr(contest, "contest_type", "") or "",
+    )
+    if not ids:
+        return Contestant.season_id == int(contest.id)
+    return Contestant.season_id.in_([int(i) for i in ids])
 
 
 def contestant_roster_season_clause(

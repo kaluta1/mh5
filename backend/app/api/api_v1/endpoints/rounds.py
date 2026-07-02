@@ -19,8 +19,12 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-def _public_cover_url(contest: Any) -> Optional[str]:
-    raw = getattr(contest, "cover_image_url", None) or getattr(contest, "image_url", None)
+def _public_cover_url(contest: Any, db: Optional[Session] = None) -> Optional[str]:
+    from app.services.contest_category_integrity import resolve_contest_cover_image
+
+    raw = resolve_contest_cover_image(db, contest) if db is not None else (
+        getattr(contest, "cover_image_url", None) or getattr(contest, "image_url", None)
+    )
     if not raw:
         return None
     text = str(raw).strip()
@@ -669,7 +673,7 @@ def _lightweight_round_data(
                 "name": contest.name,
                 "description": getattr(contest, "description", None),
                 "contest_type": getattr(contest, "contest_type", None),
-                "cover_image_url": _public_cover_url(contest),
+                "cover_image_url": _public_cover_url(contest, db),
                 "is_active": getattr(contest, "is_active", True),
                 "is_submission_open": getattr(contest, "is_submission_open", True),
                 "is_voting_open": getattr(contest, "is_voting_open", False),
@@ -690,7 +694,7 @@ def _lightweight_round_data(
                 "requires_content_verification": getattr(contest, "requires_content_verification", False),
                 "min_age": getattr(contest, "min_age", None),
                 "max_age": getattr(contest, "max_age", None),
-                "image_url": _public_cover_url(contest),
+                "image_url": _public_cover_url(contest, db),
                 "created_at": getattr(contest, "created_at", None),
                 "updated_at": getattr(contest, "updated_at", None),
                 "entries_count": participant_count,
@@ -1109,11 +1113,11 @@ def _enrich_round_data(
                         "name": contest.name,
                         "description": getattr(contest, 'description', None),
                         "contest_type": getattr(contest, 'contest_type', None),
-                        "cover_image_url": _public_cover_url(contest),
+                        "cover_image_url": _public_cover_url(contest, db),
                         "level": display_level,
                         "participants_count": participant_count,
                         "votes_count": 0,
-                        "image_url": _public_cover_url(contest),
+                        "image_url": _public_cover_url(contest, db),
                         "created_at": getattr(contest, 'created_at', None),
                         "updated_at": getattr(contest, 'updated_at', None),
                         "contest_mode": contest_mode_value,

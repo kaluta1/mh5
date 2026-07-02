@@ -157,6 +157,7 @@ function geoFiltersForVoteFetch(
   filterCountry: string,
   filterRegion: string,
   filterContinent: string,
+  userCountry?: string | null,
 ): { filterCountry?: string; filterRegion?: string; filterContinent?: string } {
   if (level === 'regional') {
     return {
@@ -169,8 +170,11 @@ function geoFiltersForVoteFetch(
     }
   }
   if (level === 'country') {
+    const country =
+      (filterCountry && filterCountry !== 'all' ? filterCountry : undefined) ||
+      (userCountry && userCountry !== 'all' ? userCountry : undefined)
     return {
-      filterCountry: filterCountry && filterCountry !== 'all' ? filterCountry : undefined,
+      filterCountry: country,
     }
   }
   return {}
@@ -184,6 +188,7 @@ function listGeoParamsForFetch(opts: {
   filterCountry: string
   filterRegion: string
   filterContinent: string
+  userCountry?: string | null
 }): { filterCountry?: string; filterRegion?: string; filterContinent?: string } {
   const voteGeo =
     opts.activeNominationLevel && opts.tabKind === 'vote'
@@ -192,6 +197,7 @@ function listGeoParamsForFetch(opts: {
           opts.filterCountry,
           opts.filterRegion,
           opts.filterContinent,
+          opts.userCountry,
         )
       : null
   if (voteGeo) return voteGeo
@@ -695,7 +701,7 @@ function ContestsPageContent() {
   // after the first (and every) page load and would overwrite setHasMore from the fetch with false.
   useEffect(() => {
     setHasMore(false)
-  }, [activeRoundId, effectiveRoundIdForFetch, categoryTab, activeDisplayTab?.kind, filterCountry, filterRegion, filterContinent, nominationMigrationLevel, committedSearch, listRefreshKey])
+  }, [activeRoundId, effectiveRoundIdForFetch, categoryTab, activeDisplayTab?.kind, filterCountry, filterRegion, filterContinent, nominationMigrationLevel, committedSearch, listRefreshKey, user?.country])
 
   useEffect(() => {
     setContestsData(null)
@@ -745,6 +751,7 @@ function ContestsPageContent() {
               filterCountry,
               filterRegion,
               filterContinent,
+              user?.country,
             )
           : null
       const listGeo = listGeoParamsForFetch({
@@ -754,6 +761,7 @@ function ContestsPageContent() {
         filterCountry,
         filterRegion,
         filterContinent,
+        userCountry: user?.country,
       })
       const activeCountry = voteGeo?.filterCountry ?? listGeo.filterCountry
       const activeRegion = voteGeo?.filterRegion ?? listGeo.filterRegion
@@ -898,7 +906,7 @@ function ContestsPageContent() {
     }
     // isAuthenticated/user removed: prevents race condition where auth resolve
     // aborts in-flight request. userIdRef handles cache key without re-triggering.
-  }, [activeRoundId, effectiveRoundIdForFetch, categoryTab, activeDisplayTab?.kind, filterCountry, filterRegion, filterContinent, nominationMigrationLevel, committedSearch, listRefreshKey])
+  }, [activeRoundId, effectiveRoundIdForFetch, categoryTab, activeDisplayTab?.kind, filterCountry, filterRegion, filterContinent, nominationMigrationLevel, committedSearch, listRefreshKey, user?.country])
 
   // Load more contests function
   const loadMoreContests = useCallback(async () => {
@@ -920,6 +928,7 @@ function ContestsPageContent() {
             filterCountry,
             filterRegion,
             filterContinent,
+            user?.country,
           )
         : null
     const listGeo = listGeoParamsForFetch({
@@ -929,6 +938,7 @@ function ContestsPageContent() {
       filterCountry,
       filterRegion,
       filterContinent,
+      userCountry: user?.country,
     })
     const activeCountry = voteGeo?.filterCountry ?? listGeo.filterCountry
     const activeRegion = voteGeo?.filterRegion ?? listGeo.filterRegion

@@ -2000,7 +2000,10 @@ class CRUDContest:
         # For pooled phases (regional/continental/global), the roster is driven by
         # ContestantSeason membership, NOT Contestant.season_id. Promoted contestants
         # retain their original season_id, so filtering by season_id would exclude them.
-        from app.services.contest_category_integrity import contestant_roster_season_clause
+        from app.services.contest_category_integrity import (
+            contestant_roster_season_clause,
+            nomination_category_roster_season_clause,
+        )
 
         if pooled_season_membership_scope:
             # Pooled phases: base query without season_id filter.
@@ -2016,14 +2019,19 @@ class CRUDContest:
                 "skipping contestant_roster_season_clause (season_id filter)"
             )
         else:
+            roster_scope_clause = (
+                nomination_category_roster_season_clause(db, contest_obj)
+                if contest_mode == "nomination"
+                else contestant_roster_season_clause(
+                    db,
+                    contest_obj,
+                    current_user_id=current_user_id,
+                )
+            )
             contestants_query = db.query(Contestant)\
                 .filter(
                     Contestant.is_deleted == False,
-                    contestant_roster_season_clause(
-                        db,
-                        contest_obj,
-                        current_user_id=current_user_id,
-                    ),
+                    roster_scope_clause,
                 )\
                 .outerjoin(User, Contestant.user_id == User.id) \
                 .options(
@@ -2164,10 +2172,13 @@ class CRUDContest:
 
         # Country nomination roster should only contain contestants that have not
         # already advanced to higher active levels for this contest.
+        # Vote-tab geography chips (requested_ui_level) must still show the prior
+        # month's nominees for that cohort even if migration already ran.
         if (
             contest_mode == "nomination"
             and str(season_level or "").lower() in ("country", "city")
             and season is not None
+            and not _normalize_requested_ui_level(requested_ui_level)
         ):
             promoted_ids = (
                 db.query(ContestantSeason.contestant_id)
