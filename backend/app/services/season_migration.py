@@ -1983,9 +1983,9 @@ class SeasonMigrationService:
         selected_contestants = []
         
         if to_level == SeasonLevel.GLOBAL:
-            # For GLOBAL: rank all active contestants in the source season.
-            # Votes in the current season may be zero; in that case, tie-break
-            # still relies on shares/likes/comments/views and then lowest id.
+            # GLOBAL must preserve the canonical Past/Top High5 winner order from
+            # the continental season. Reuse the same ranking helper so promotion
+            # and display stay aligned.
             season_contestants = db.query(Contestant).join(
                 ContestantSeason
             ).filter(
@@ -2000,36 +2000,18 @@ class SeasonMigrationService:
 
             contestant_ids = [c.id for c in season_contestants]
             if contestant_ids:
-                vote_counts = db.query(
-                    ContestantVoting.contestant_id,
-                    func.coalesce(func.sum(ContestantVoting.points), 0).label('total_points')
-                ).filter(
-                    and_(
-                        ContestantVoting.season_id == from_season.id,
-                        ContestantVoting.contestant_id.in_(contestant_ids)
-                    )
-                ).group_by(
-                    ContestantVoting.contestant_id
-                ).all()
-                points_dict = {vc.contestant_id: vc.total_points for vc in vote_counts}
-                engagement_by_id = SeasonMigrationService._engagement_by_contestant(db, contestant_ids)
-
-                ranked = sorted(
+                ranked_ids = SeasonMigrationService.rank_contestant_ids_like_top_high5(
+                    db,
+                    contest,
+                    from_season,
                     season_contestants,
-                    key=lambda c: (
-                        points_dict.get(c.id, 0),
-                        engagement_by_id.get(c.id, {}).get("shares", 0),
-                        engagement_by_id.get(c.id, {}).get("likes", 0),
-                        engagement_by_id.get(c.id, {}).get("comments", 0),
-                        engagement_by_id.get(c.id, {}).get("views", 0),
-                        -(c.id or 0),
-                    ),
-                    reverse=True
                 )
-                from app.services.contest_category_integrity import dedupe_contestants_by_nominator
-
-                ranked = dedupe_contestants_by_nominator(ranked, points_by_contestant=points_dict)
-                selected_contestants = ranked[:limit]
+                contestants_by_id = {c.id: c for c in season_contestants if c.id is not None}
+                selected_contestants = [
+                    contestants_by_id[cid]
+                    for cid in ranked_ids[:limit]
+                    if cid in contestants_by_id
+                ]
             else:
                 selected_contestants = []
 
@@ -2147,6 +2129,34 @@ class SeasonMigrationService:
         )
         logger.info(f"  - Destination season: {to_season.id} (level {to_level.value})")
         print(f"[Migration]   Destination season: {to_season.id}")
+
+        # Re-running a promotion must converge on the current winner set. Shared
+        # pooled seasons can retain stale active rows from older migrations, so
+        # prune this contest's destination membership before re-activating the
+        # newly selected winners.
+        existing_destination_members = SeasonMigrationService._contestants_for_contest_in_season(
+            db,
+            to_season.id,
+            contest_id,
+            active_only=True,
+            qualified_only=False,
+        )
+        selected_ids = {c.id for c in selected_contestants}
+        for contestant in existing_destination_members:
+            if contestant.id not in selected_ids:
+                stale_link = db.query(ContestantSeason).filter(
+                    and_(
+                        ContestantSeason.contestant_id == contestant.id,
+                        ContestantSeason.season_id == to_season.id,
+                        ContestantSeason.is_active == True,
+                    )
+                ).first()
+                if stale_link:
+                    stale_link.is_active = False
+                    logger.info(
+                        f"  - Désactivation du lien destination obsolète pour contestant "
+                        f"{contestant.id} dans saison {to_season.id}"
+                    )
         
         # Désactiver les liens dans l'ancienne saison pour les promus et créer les nouveaux liens
         promoted_contestant_ids = []
