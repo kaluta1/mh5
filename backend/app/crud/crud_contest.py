@@ -2633,6 +2633,54 @@ class CRUDContest:
                     v.get("points", 0) for v in votes_list
                 )
 
+        from app.models.contests import ContestantSeason
+        from app.services.season_migration import SeasonMigrationService
+
+        prior_points_by_contestant: Dict[int, int] = {}
+        prior_engagement_by_contestant: Dict[int, Dict[str, int]] = {}
+        joined_at_by_contestant: Dict[int, datetime] = {}
+        use_prior_stage_order = bool(
+            pooled_season_membership_scope and season and contestant_ids
+        )
+        if use_prior_stage_order:
+            prior_season = SeasonMigrationService.find_prior_season_for_contest(
+                db, contest_id, season
+            )
+            if prior_season:
+                prior_points_by_contestant, prior_engagement_by_contestant = (
+                    SeasonMigrationService.prior_stage_ranking_metrics(
+                        db, prior_season.id, contestant_ids
+                    )
+                )
+            link_rows = (
+                db.query(ContestantSeason.contestant_id, ContestantSeason.joined_at)
+                .filter(
+                    ContestantSeason.season_id == season.id,
+                    ContestantSeason.contestant_id.in_(contestant_ids),
+                    ContestantSeason.is_active == True,
+                )
+                .all()
+            )
+            joined_at_by_contestant = {
+                row.contestant_id: row.joined_at for row in link_rows
+            }
+
+        def _roster_order_key_for_id(cid: int) -> tuple:
+            if use_prior_stage_order:
+                return SeasonMigrationService.roster_order_key(
+                    cid,
+                    current_points=points_by_contestant.get(cid, 0),
+                    current_votes=votes_count_by_contestant.get(cid, 0),
+                    prior_points=prior_points_by_contestant.get(cid, 0),
+                    engagement=prior_engagement_by_contestant.get(cid),
+                    joined_at=joined_at_by_contestant.get(cid),
+                )
+            return (
+                -points_by_contestant.get(cid, 0),
+                -votes_count_by_contestant.get(cid, 0),
+                cid or 0,
+            )
+
         # Déterminer le niveau de la saison (city, country, regional, continent, global, etc.)
         season_level = None
         if season and hasattr(season, "level") and season.level is not None:
@@ -2659,27 +2707,11 @@ class CRUDContest:
                 if prev is None:
                     best_by_uid[iu] = c
                     continue
-                prev_t = (
-                    points_by_contestant.get(prev.id, 0),
-                    votes_count_by_contestant.get(prev.id, 0),
-                    prev.id or 0,
-                )
-                cur_t = (
-                    points_by_contestant.get(c.id, 0),
-                    votes_count_by_contestant.get(c.id, 0),
-                    c.id or 0,
-                )
-                if cur_t > prev_t:
+                if _roster_order_key_for_id(c.id) < _roster_order_key_for_id(prev.id):
                     best_by_uid[iu] = c
             without_uid = [c for c in contestants if getattr(c, "user_id", None) is None]
             merged = without_uid + list(best_by_uid.values())
-            merged.sort(
-                key=lambda c: (
-                    -points_by_contestant.get(c.id, 0),
-                    -votes_count_by_contestant.get(c.id, 0),
-                    -(c.id or 0),
-                )
-            )
+            merged.sort(key=lambda c: _roster_order_key_for_id(c.id))
             contestants = merged
         
         ranks: Dict[int, int] = {}
@@ -2718,8 +2750,7 @@ class CRUDContest:
         for group_ids in groups.values():
             ranked_contestants = sorted(
                 group_ids,
-                key=lambda cid: (points_by_contestant.get(cid, 0), votes_count_by_contestant.get(cid, 0)),
-                reverse=True,
+                key=_roster_order_key_for_id,
             )
             for position, cid in enumerate(ranked_contestants, start=1):
                 ranks[cid] = position
@@ -2992,15 +3023,18 @@ class CRUDContest:
         
         # Sort by votes descending first (most votes first), then by rank
         # This ensures contestants with most participants/votes appear at top immediately
-        enriched_contestants.sort(key=lambda x: (
-            -x["total_points"],  # Points first (descending - most points first)
-            -x.get("shares_count", 0),
-            -x.get("favorites_count", 0),
-            -x.get("reactions_count", 0),
-            -x.get("comments_count", 0),
-            -x["votes_count"],   # Then votes (descending)
-            x.get("rank", float('inf'))  # Then by rank (lower is better)
-        ))
+        if use_prior_stage_order:
+            enriched_contestants.sort(key=lambda x: _roster_order_key_for_id(x["id"]))
+        else:
+            enriched_contestants.sort(key=lambda x: (
+                -x["total_points"],  # Points first (descending - most points first)
+                -x.get("shares_count", 0),
+                -x.get("favorites_count", 0),
+                -x.get("reactions_count", 0),
+                -x.get("comments_count", 0),
+                -x["votes_count"],   # Then votes (descending)
+                x.get("rank", float('inf'))  # Then by rank (lower is better)
+            ))
 
         # Nomination: one card per nominator (user_id). Legacy duplicate submissions
         # or duplicate contest rows can leave two active contestant records for one person.

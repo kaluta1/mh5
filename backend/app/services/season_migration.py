@@ -648,6 +648,95 @@ class SeasonMigrationService:
         return out
 
     @staticmethod
+    def prior_level_for(season_level: Optional[str]) -> Optional[SeasonLevel]:
+        """Map a pooled display level to the season that produced its roster."""
+        mapping = {
+            "regional": SeasonLevel.COUNTRY,
+            "region": SeasonLevel.COUNTRY,
+            "continent": SeasonLevel.REGIONAL,
+            "continental": SeasonLevel.REGIONAL,
+            "global": SeasonLevel.CONTINENT,
+        }
+        return mapping.get((season_level or "").lower())
+
+    @staticmethod
+    def find_prior_season_for_contest(
+        db: Session,
+        contest_id: int,
+        season: ContestSeason,
+    ) -> Optional[ContestSeason]:
+        """Contest season one level below ``season`` for the same calendar round."""
+        prior_level = SeasonMigrationService.prior_level_for(
+            season.level.value if hasattr(season.level, "value") else str(season.level)
+        )
+        if prior_level is None or not season.round_id:
+            return None
+        return (
+            db.query(ContestSeason)
+            .join(ContestSeasonLink, ContestSeasonLink.season_id == ContestSeason.id)
+            .filter(
+                ContestSeasonLink.contest_id == contest_id,
+                ContestSeason.round_id == season.round_id,
+                ContestSeason.level == prior_level,
+                ContestSeason.is_deleted == False,
+            )
+            .order_by(ContestSeasonLink.is_active.desc(), ContestSeason.id.desc())
+            .first()
+        )
+
+    @staticmethod
+    def prior_stage_ranking_metrics(
+        db: Session,
+        season_id: int,
+        contestant_ids: List[int],
+    ) -> tuple[Dict[int, int], Dict[int, Dict[str, int]]]:
+        """Points and engagement from the previous stage, used to preserve migration order."""
+        if not season_id or not contestant_ids:
+            return {}, {}
+        vote_rows = (
+            db.query(
+                ContestantVoting.contestant_id,
+                func.coalesce(func.sum(ContestantVoting.points), 0).label("total_points"),
+            )
+            .filter(
+                ContestantVoting.season_id == season_id,
+                ContestantVoting.contestant_id.in_(contestant_ids),
+            )
+            .group_by(ContestantVoting.contestant_id)
+            .all()
+        )
+        points = {row.contestant_id: int(row.total_points or 0) for row in vote_rows}
+        engagement = SeasonMigrationService._engagement_by_contestant(db, contestant_ids)
+        return points, engagement
+
+    @staticmethod
+    def roster_order_key(
+        contestant_id: int,
+        *,
+        current_points: int = 0,
+        current_votes: int = 0,
+        prior_points: int = 0,
+        engagement: Optional[Dict[str, int]] = None,
+        joined_at: Optional[datetime] = None,
+    ) -> tuple:
+        """
+        Sort key for pooled-phase rosters: current votes first, then prior-stage
+        standings (points + engagement), then migration join order.
+        """
+        eng = engagement or {}
+        return (
+            -int(current_points or 0),
+            -int(current_votes or 0),
+            -int(prior_points or 0),
+            -eng.get("shares", 0),
+            -eng.get("likes", 0),
+            -eng.get("comments", 0),
+            -eng.get("views", 0),
+            joined_at or datetime.max,
+            contestant_id or 0,
+        )
+
+    @staticmethod
     def _ensure_source_season_links(db: Session, contest_id: int, season_id: int) -> int:
         """
         Repair missing contestant-season links for a source season.
@@ -1819,7 +1908,9 @@ class SeasonMigrationService:
         
         # Désactiver les liens dans l'ancienne saison pour les promus et créer les nouveaux liens
         promoted_contestant_ids = []
-        for contestant in selected_contestants:
+        promotion_base = datetime.utcnow()
+        for rank_idx, contestant in enumerate(selected_contestants):
+            promotion_time = promotion_base + timedelta(seconds=rank_idx)
             # Marquer comme qualifié
             contestant.is_qualified = True
             
@@ -1847,7 +1938,7 @@ class SeasonMigrationService:
                 new_link = ContestantSeason(
                     contestant_id=contestant.id,
                     season_id=to_season.id,
-                    joined_at=datetime.utcnow(),
+                    joined_at=promotion_time,
                     is_active=True
                 )
                 db.add(new_link)
@@ -1856,7 +1947,7 @@ class SeasonMigrationService:
             else:
                 # Réactiver le lien s'il existe déjà et mettre à jour la date
                 existing_new_link.is_active = True
-                existing_new_link.joined_at = datetime.utcnow()  # Mettre à jour la date de migration
+                existing_new_link.joined_at = promotion_time
                 logger.info(f"  - Réactivation du lien ContestantSeason existant pour contestant {contestant.id} dans saison {to_season.id} (date mise à jour)")
                 promoted_contestant_ids.append(contestant.id)
         
