@@ -576,11 +576,14 @@ def _nomination_stage_voting_allowed(
     vote_open = SeasonMigrationService._nomination_vote_open_date_for_level(round_obj, sl)
     if vote_open:
         today = when.date() if hasattr(when, "date") else when
-        if today >= vote_open:
-            if stage_open is False:
-                return False
-            return True
-        return False
+        vote_close = SeasonMigrationService._nomination_vote_close_date_for_level(round_obj, sl)
+        if today < vote_open:
+            return False
+        if vote_close and today > vote_close:
+            return False
+        if stage_open is False:
+            return False
+        return True
 
     if stage_open is False:
         return False

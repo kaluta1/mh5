@@ -109,7 +109,14 @@ if [ -f "$REPO_ROOT/scripts/install_monthly_migration_timer.sh" ]; then
   bash "$REPO_ROOT/scripts/install_monthly_migration_timer.sh" || echo "    WARN: timer install failed"
 fi
 
-echo "==> contest media storage + S3 sync"
+echo "==> repair nomination level pools (country winners → regional, etc.)"
+cd "$REPO_ROOT/backend"
+if [ -f .venv/bin/activate ]; then
+  # shellcheck disable=SC1091
+  source .venv/bin/activate
+fi
+export PYTHONPATH=.
+python scripts/repair_all_nomination_migrations.py --apply || echo "    WARN: nomination repair had issues"
 bash "$REPO_ROOT/scripts/ensure_contest_media.sh" || echo "    WARN: media sync failed"
 bash "$REPO_ROOT/scripts/fix_nginx_myhigh5.sh" || echo "    WARN: nginx media paths failed"
 

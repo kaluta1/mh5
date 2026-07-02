@@ -2128,9 +2128,9 @@ class CRUDContest:
         # Country nomination roster should only contain contestants that have not
         # already advanced to higher active levels for this contest.
         if (
-            singeli_tanzania_scope
-            and contest_mode == "nomination"
+            contest_mode == "nomination"
             and str(season_level or "").lower() in ("country", "city")
+            and season is not None
         ):
             promoted_ids = (
                 db.query(ContestantSeason.contestant_id)

@@ -96,6 +96,27 @@ class SeasonMigrationService:
         return SeasonMigrationService._add_months(month_start, offset)
 
     @staticmethod
+    def _nomination_vote_close_date_for_level(round_obj: Round, level: SeasonLevel) -> Optional[date]:
+        """Last calendar day of the vote month for cohort M at level L (inclusive)."""
+        vote_open = SeasonMigrationService._nomination_vote_open_date_for_level(round_obj, level)
+        if not vote_open:
+            return None
+        month_start = date(vote_open.year, vote_open.month, 1)
+        next_month = SeasonMigrationService._add_months(month_start, 1)
+        return next_month - timedelta(days=1)
+
+    @staticmethod
+    def nomination_stage_voting_open(round_obj: Round, level: SeasonLevel, today: date) -> bool:
+        """True when nomination voting is open for cohort round M at geography level L on ``today``."""
+        vote_open = SeasonMigrationService._nomination_vote_open_date_for_level(round_obj, level)
+        if not vote_open or today < vote_open:
+            return False
+        vote_close = SeasonMigrationService._nomination_vote_close_date_for_level(round_obj, level)
+        if vote_close and today > vote_close:
+            return False
+        return True
+
+    @staticmethod
     def _nomination_country_init_ready(round_obj: Round, today: date) -> bool:
         """True when nomination contests may attach to COUNTRY season (from round month start)."""
         month_start = SeasonMigrationService._round_month_start(round_obj)
@@ -763,6 +784,7 @@ class SeasonMigrationService:
         active_links_only: bool = True,
         qualified_only: bool = True,
         strict_season_scope: bool = False,
+        uncapped: bool = False,
     ) -> Dict[str, List[Contestant]]:
         """
         Récupère les N meilleurs contestants groupés par localisation.
@@ -842,7 +864,7 @@ class SeasonMigrationService:
         # We still rank and dedupe later, so we keep a generous buffer above the
         # requested `limit` to preserve the true Top 5 while reducing load.
         candidate_limit = None
-        if limit is not None:
+        if limit is not None and not uncapped:
             candidate_limit = max(limit * 25, 200)  # e.g., limit=5 -> cap at 125; floor at 200
 
         if candidate_limit is not None:
@@ -1092,7 +1114,7 @@ class SeasonMigrationService:
             points_query = points_query.filter(ContestantVoting.season_id == season_id)
         points_data = points_query.group_by(ContestantVoting.contestant_id).all()
 
-        if not points_data and contest_id is not None and not strict_season_scope:
+        if not points_data and contest_id is not None and not strict_season_scope and not uncapped:
             if diagnostics:
                 logger.warning(
                     f"  - No vote points found with season+contest scope "
@@ -1595,6 +1617,22 @@ class SeasonMigrationService:
                     "promoted_contestant_ids": [],
                 }
 
+        contest = db.query(Contest).filter(Contest.id == contest_id).first()
+        contest_mode = (getattr(contest, "contest_mode", "") or "").strip().lower()
+        if contest_mode == "nomination" and from_season.round_id:
+            synced = SeasonMigrationService._sync_contestants_to_season(
+                db,
+                contest_id,
+                int(from_season.round_id),
+                from_season.id,
+            )
+            if synced:
+                logger.info(
+                    "  - Synced %s contestants into source season %s before promotion",
+                    len(synced),
+                    from_season.id,
+                )
+
         repaired_links = SeasonMigrationService._ensure_source_season_links(
             db=db,
             contest_id=contest_id,
@@ -1679,7 +1717,7 @@ class SeasonMigrationService:
                 return {"error": f"Invalid target level: {to_level.value}"}
 
             pool_qualified = source_qualified_only
-            strict_scope = False
+            strict_scope = contest_mode == "nomination"
             if (
                 from_level == SeasonLevel.COUNTRY
                 and to_level == SeasonLevel.REGIONAL
@@ -1687,7 +1725,6 @@ class SeasonMigrationService:
                 # Pool top‑N per country for this contest only (ignore flaky is_qualified
                 # churn from shared-country seasons).
                 pool_qualified = False
-                strict_scope = True
 
             logger.info(
                 f"  - Selecting top contestants by {location_field} (limit: {limit}, "
@@ -1703,6 +1740,7 @@ class SeasonMigrationService:
                 diagnostics=False,
                 qualified_only=pool_qualified,
                 strict_season_scope=strict_scope,
+                uncapped=contest_mode == "nomination",
             )
             
             logger.info(f"  - Groups found: {len(grouped_contestants)} locations")
@@ -1761,7 +1799,8 @@ class SeasonMigrationService:
                 contestant.is_qualified = False
         
         # Récupérer ou créer la saison destination
-        contest = db.query(Contest).filter(Contest.id == contest_id).first()
+        if not contest:
+            contest = db.query(Contest).filter(Contest.id == contest_id).first()
         
         # S'assurer de garder le round_id de la saison source
         round_id = from_season.round_id

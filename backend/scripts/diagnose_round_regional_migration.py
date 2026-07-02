@@ -179,6 +179,8 @@ def main() -> None:
                     diagnostics=False,
                     active_links_only=False,
                     qualified_only=False,
+                    strict_season_scope=True,
+                    uncapped=True,
                 )
                 expected_ids = {m.id for members in grouped.values() for m in members}
                 source_ids = {

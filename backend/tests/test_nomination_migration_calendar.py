@@ -99,6 +99,18 @@ def test_nomination_regional_to_continental_promotion_due(today, due):
     )
 
 
+def test_nomination_country_vote_window_march_cohort():
+    rnd = _march_round()
+    assert SeasonMigrationService._nomination_vote_open_date_for_level(rnd, SeasonLevel.COUNTRY) == date(
+        2026, 4, 1
+    )
+    assert SeasonMigrationService._nomination_vote_close_date_for_level(rnd, SeasonLevel.COUNTRY) == date(
+        2026, 4, 30
+    )
+    assert SeasonMigrationService.nomination_stage_voting_open(rnd, SeasonLevel.COUNTRY, date(2026, 4, 15))
+    assert not SeasonMigrationService.nomination_stage_voting_open(rnd, SeasonLevel.COUNTRY, date(2026, 5, 1))
+
+
 def test_participation_uses_round_stage_dates_not_nomination_calendar():
     rnd = _march_round()
     # Participation country→regional follows DB columns (June), not nomination May.
