@@ -660,6 +660,47 @@ class SeasonMigrationService:
         return mapping.get((season_level or "").lower())
 
     @staticmethod
+    def _top_high5_bucket_key_for_contest(contest: Contest) -> str:
+        if contest.category_id is not None:
+            return f"cat:{contest.category_id}"
+        return f"ty:{contest.contest_type or ''}:{contest.contest_mode or ''}"
+
+    @staticmethod
+    def _pick_contest_season_for_level(
+        db: Session,
+        contest_id: int,
+        round_id: int,
+        level: SeasonLevel,
+    ) -> Optional[ContestSeason]:
+        """Resolve a contest season row the same way Past / Top High5 does."""
+        for active_only in (True, False):
+            q = (
+                db.query(ContestSeason)
+                .join(ContestSeasonLink, ContestSeasonLink.season_id == ContestSeason.id)
+                .filter(
+                    ContestSeasonLink.contest_id == contest_id,
+                    ContestSeason.round_id == round_id,
+                    ContestSeason.level == level,
+                    ContestSeason.is_deleted == False,
+                )
+            )
+            if active_only:
+                q = q.filter(ContestSeasonLink.is_active == True)
+            row = q.order_by(ContestSeason.id.desc()).first()
+            if row:
+                return row
+        return (
+            db.query(ContestSeason)
+            .filter(
+                ContestSeason.round_id == round_id,
+                ContestSeason.level == level,
+                ContestSeason.is_deleted == False,
+            )
+            .order_by(ContestSeason.id.desc())
+            .first()
+        )
+
+    @staticmethod
     def find_prior_season_for_contest(
         db: Session,
         contest_id: int,
@@ -671,18 +712,212 @@ class SeasonMigrationService:
         )
         if prior_level is None or not season.round_id:
             return None
-        return (
-            db.query(ContestSeason)
-            .join(ContestSeasonLink, ContestSeasonLink.season_id == ContestSeason.id)
-            .filter(
-                ContestSeasonLink.contest_id == contest_id,
-                ContestSeason.round_id == season.round_id,
-                ContestSeason.level == prior_level,
-                ContestSeason.is_deleted == False,
-            )
-            .order_by(ContestSeasonLink.is_active.desc(), ContestSeason.id.desc())
-            .first()
+        return SeasonMigrationService._pick_contest_season_for_level(
+            db,
+            contest_id,
+            int(season.round_id),
+            prior_level,
         )
+
+    @staticmethod
+    def rank_contestant_ids_like_top_high5(
+        db: Session,
+        contest: Contest,
+        season: ContestSeason,
+        members: List[Contestant],
+    ) -> List[int]:
+        """Canonical Top High5 / Past-tab ordering for one location group."""
+        contestant_ids = [c.id for c in members if c.id is not None]
+        if not contestant_ids:
+            return []
+
+        bucket_key = SeasonMigrationService._top_high5_bucket_key_for_contest(contest)
+        points_season_ids = [season.id]
+        if season.level == SeasonLevel.REGIONAL:
+            sibling_rows = (
+                db.query(ContestSeason.id)
+                .filter(ContestSeason.round_id == season.round_id)
+                .filter(ContestSeason.is_deleted == False)
+                .filter(
+                    ContestSeason.level.in_(
+                        [SeasonLevel.CITY, SeasonLevel.COUNTRY, SeasonLevel.REGIONAL]
+                    )
+                )
+                .distinct()
+                .all()
+            )
+            sibling_ids = [r[0] for r in sibling_rows if r and r[0] is not None]
+            if sibling_ids:
+                points_season_ids = list({*points_season_ids, *sibling_ids})
+
+        points_rows = (
+            db.query(
+                ContestantVoting.contestant_id,
+                func.coalesce(func.sum(ContestantVoting.points), 0).label("total_points"),
+            )
+            .filter(
+                ContestantVoting.season_id.in_(points_season_ids),
+                or_(
+                    ContestantVoting.vote_bucket_key == bucket_key,
+                    ContestantVoting.contest_id == contest.id,
+                ),
+                ContestantVoting.contestant_id.in_(contestant_ids),
+            )
+            .group_by(ContestantVoting.contestant_id)
+            .all()
+        )
+        points_by_id = {
+            row.contestant_id: int(row.total_points or 0) for row in points_rows
+        }
+
+        if season.level == SeasonLevel.REGIONAL:
+            ranked_user_ids = [
+                getattr(c, "user_id", None)
+                for c in members
+                if getattr(c, "user_id", None) is not None
+            ]
+            if ranked_user_ids:
+                user_points_rows = (
+                    db.query(
+                        Contestant.user_id,
+                        func.coalesce(func.sum(ContestantVoting.points), 0).label(
+                            "total_points"
+                        ),
+                    )
+                    .join(Contestant, Contestant.id == ContestantVoting.contestant_id)
+                    .filter(
+                        ContestantVoting.season_id.in_(points_season_ids),
+                        or_(
+                            ContestantVoting.vote_bucket_key == bucket_key,
+                            ContestantVoting.contest_id == contest.id,
+                        ),
+                        Contestant.user_id.in_(ranked_user_ids),
+                    )
+                    .group_by(Contestant.user_id)
+                    .all()
+                )
+                points_by_user_id = {
+                    row.user_id: int(row.total_points or 0)
+                    for row in user_points_rows
+                    if row.user_id is not None
+                }
+                for candidate in members:
+                    candidate_user_id = getattr(candidate, "user_id", None)
+                    if candidate_user_id in points_by_user_id:
+                        points_by_id[candidate.id] = max(
+                            points_by_id.get(candidate.id, 0),
+                            points_by_user_id[candidate_user_id],
+                        )
+
+        engagement_by_id = SeasonMigrationService._engagement_by_contestant(
+            db, contestant_ids
+        )
+
+        sorted_ranked = sorted(
+            members,
+            key=lambda c: (
+                points_by_id.get(c.id, 0),
+                engagement_by_id.get(c.id, {}).get("shares", 0),
+                engagement_by_id.get(c.id, {}).get("likes", 0),
+                engagement_by_id.get(c.id, {}).get("comments", 0),
+                engagement_by_id.get(c.id, {}).get("views", 0),
+                -(c.id or 0),
+            ),
+            reverse=True,
+        )
+
+        seen_user_ids: set[int] = set()
+        deduped: List[Contestant] = []
+        for candidate in sorted_ranked:
+            uid = getattr(candidate, "user_id", None)
+            if uid is None:
+                deduped.append(candidate)
+                continue
+            if uid in seen_user_ids:
+                continue
+            seen_user_ids.add(uid)
+            deduped.append(candidate)
+        return [c.id for c in deduped if c.id is not None]
+
+    @staticmethod
+    def prior_stage_rank_map(
+        db: Session,
+        contest_id: int,
+        season: ContestSeason,
+        contestant_ids: List[int],
+    ) -> Dict[int, int]:
+        """
+        1-based ranks from the previous UI stage (Past tab / Top High5 rules).
+        Unranked pool members are omitted so they sort after ranked ones.
+        """
+        if not contestant_ids or not season.round_id:
+            return {}
+
+        prior_level = SeasonMigrationService.prior_level_for(
+            season.level.value if hasattr(season.level, "value") else str(season.level)
+        )
+        if prior_level is None:
+            return {}
+
+        contest = db.query(Contest).filter(Contest.id == contest_id).first()
+        if not contest:
+            return {}
+
+        prior_season = SeasonMigrationService.find_prior_season_for_contest(
+            db, contest_id, season
+        )
+        if not prior_season:
+            return {}
+
+        id_set = set(contestant_ids)
+        rank_map: Dict[int, int] = {}
+
+        if prior_level in (
+            SeasonLevel.COUNTRY,
+            SeasonLevel.REGIONAL,
+            SeasonLevel.CONTINENT,
+        ):
+            location_field = {
+                SeasonLevel.COUNTRY: "country",
+                SeasonLevel.REGIONAL: "region",
+                SeasonLevel.CONTINENT: "continent",
+            }[prior_level]
+            grouped = SeasonMigrationService.get_top_contestants_by_location(
+                db,
+                prior_season.id,
+                location_field,
+                contest_id=contest_id,
+                limit=None,
+                qualified_only=False,
+                strict_season_scope=True,
+                active_links_only=False,
+            )
+            for _group_key, members in grouped.items():
+                ordered = SeasonMigrationService.rank_contestant_ids_like_top_high5(
+                    db, contest, prior_season, members
+                )
+                for position, cid in enumerate(ordered, start=1):
+                    if cid in id_set:
+                        rank_map[cid] = min(rank_map.get(cid, position), position)
+        else:
+            members = (
+                db.query(Contestant)
+                .join(ContestantSeason, ContestantSeason.contestant_id == Contestant.id)
+                .filter(
+                    ContestantSeason.season_id == prior_season.id,
+                    Contestant.id.in_(contestant_ids),
+                    Contestant.is_deleted == False,
+                )
+                .all()
+            )
+            ordered = SeasonMigrationService.rank_contestant_ids_like_top_high5(
+                db, contest, prior_season, members
+            )
+            for position, cid in enumerate(ordered, start=1):
+                if cid in id_set:
+                    rank_map[cid] = position
+
+        return rank_map
 
     @staticmethod
     def prior_stage_ranking_metrics(
@@ -715,23 +950,30 @@ class SeasonMigrationService:
         *,
         current_points: int = 0,
         current_votes: int = 0,
+        prior_stage_rank: Optional[int] = None,
         prior_points: int = 0,
         engagement: Optional[Dict[str, int]] = None,
         joined_at: Optional[datetime] = None,
     ) -> tuple:
         """
         Sort key for pooled-phase rosters: current votes first, then prior-stage
-        standings (points + engagement), then migration join order.
+        rank (Past tab / Top High5), then migration join order.
         """
-        eng = engagement or {}
+        if prior_stage_rank is not None:
+            rank_slot = int(prior_stage_rank)
+        else:
+            eng = engagement or {}
+            rank_slot = 500_000
+            rank_slot -= int(prior_points or 0) * 1000
+            rank_slot -= eng.get("shares", 0) * 10
+            rank_slot -= eng.get("likes", 0)
+            rank_slot -= min(eng.get("comments", 0), 99)
+            rank_slot -= min(eng.get("views", 0), 99)
+
         return (
             -int(current_points or 0),
             -int(current_votes or 0),
-            -int(prior_points or 0),
-            -eng.get("shares", 0),
-            -eng.get("likes", 0),
-            -eng.get("comments", 0),
-            -eng.get("views", 0),
+            rank_slot,
             joined_at or datetime.max,
             contestant_id or 0,
         )

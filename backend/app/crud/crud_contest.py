@@ -2636,22 +2636,15 @@ class CRUDContest:
         from app.models.contests import ContestantSeason
         from app.services.season_migration import SeasonMigrationService
 
-        prior_points_by_contestant: Dict[int, int] = {}
-        prior_engagement_by_contestant: Dict[int, Dict[str, int]] = {}
+        prior_stage_rank_map: Dict[int, int] = {}
         joined_at_by_contestant: Dict[int, datetime] = {}
         use_prior_stage_order = bool(
             pooled_season_membership_scope and season and contestant_ids
         )
         if use_prior_stage_order:
-            prior_season = SeasonMigrationService.find_prior_season_for_contest(
-                db, contest_id, season
+            prior_stage_rank_map = SeasonMigrationService.prior_stage_rank_map(
+                db, contest_id, season, contestant_ids
             )
-            if prior_season:
-                prior_points_by_contestant, prior_engagement_by_contestant = (
-                    SeasonMigrationService.prior_stage_ranking_metrics(
-                        db, prior_season.id, contestant_ids
-                    )
-                )
             link_rows = (
                 db.query(ContestantSeason.contestant_id, ContestantSeason.joined_at)
                 .filter(
@@ -2671,8 +2664,7 @@ class CRUDContest:
                     cid,
                     current_points=points_by_contestant.get(cid, 0),
                     current_votes=votes_count_by_contestant.get(cid, 0),
-                    prior_points=prior_points_by_contestant.get(cid, 0),
-                    engagement=prior_engagement_by_contestant.get(cid),
+                    prior_stage_rank=prior_stage_rank_map.get(cid),
                     joined_at=joined_at_by_contestant.get(cid),
                 )
             return (
