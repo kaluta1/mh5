@@ -191,27 +191,37 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
     t('profile_setup.avatar_requirements') ||
     'Max file size: 2 MB. Accepted formats: JPG, PNG, GIF, WebP. Square images work best.'
 
-  const avatarDisplayUrl = normalizeMediaUrl(avatarUrl)
+  const avatarDisplayUrl = avatarUrl
+    ? withMediaCacheBust(normalizeMediaUrl(avatarUrl), avatarCacheBust)
+    : ''
   const showAvatarPreview =
     Boolean(avatarUrl?.trim()) && Boolean(avatarDisplayUrl) && !avatarImageFailed
 
-  const verifyAvatarReachable = (displayUrl: string): Promise<boolean> =>
-    new Promise((resolve) => {
-      const img = new window.Image()
-      img.onload = () => resolve(true)
-      img.onerror = () => resolve(false)
-      img.src = displayUrl
-    })
+  const verifyAvatarReachable = async (displayUrl: string): Promise<boolean> => {
+    if (!displayUrl) return false
+    const busted = withMediaCacheBust(displayUrl, Date.now())
+    try {
+      const head = await fetch(busted, { method: 'HEAD', cache: 'no-store' })
+      if (head.ok) return true
+      if (head.status !== 405 && head.status !== 501) return false
+      const getRes = await fetch(busted, { method: 'GET', cache: 'no-store' })
+      return getRes.ok
+    } catch {
+      return false
+    }
+  }
 
   const handleAvatarChange = async (url: string) => {
     if (!url) {
       setAvatarUrl('')
       setAvatarImageFailed(false)
+      setAvatarCacheBust(0)
       return
     }
 
-    const displayUrl = normalizeMediaUrl(url)
-    if (!displayUrl) {
+    const storedUrl = toStoredMediaUrl(url)
+    const displayUrl = normalizeMediaUrl(storedUrl)
+    if (!storedUrl || !displayUrl) {
       addToast(t('profile_setup.upload_error') || 'Upload failed', 'error')
       return
     }
@@ -227,8 +237,9 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
       return
     }
 
-    setAvatarUrl(url)
+    setAvatarUrl(storedUrl)
     setAvatarImageFailed(false)
+    setAvatarCacheBust(Date.now())
     if (errors.avatarUrl) {
       setErrors(prev => ({ ...prev, avatarUrl: undefined }))
     }
@@ -246,7 +257,7 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ avatar_url: url }),
+        body: JSON.stringify({ avatar_url: storedUrl }),
       })
 
       if (!response.ok) {

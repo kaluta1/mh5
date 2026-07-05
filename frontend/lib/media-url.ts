@@ -1,9 +1,15 @@
 import { API_URL, getEffectiveApiUrl } from "@/lib/config"
 
 function mediaApiOrigin(): string {
-  const base =
-    typeof window !== "undefined" ? getEffectiveApiUrl() : API_URL
-  return String(base || "").replace(/\/+$/, "")
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname
+    // Same-origin avoids broken cross-host media when NEXT_PUBLIC_API_URL ≠ page host.
+    if (host !== "localhost" && host !== "127.0.0.1") {
+      return window.location.origin.replace(/\/+$/, "")
+    }
+    return getEffectiveApiUrl().replace(/\/+$/, "")
+  }
+  return String(API_URL || "").replace(/\/+$/, "")
 }
 
 /** Extract portable path stored in DB (host-agnostic). */

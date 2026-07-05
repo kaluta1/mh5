@@ -77,13 +77,8 @@ server {
 
     client_max_body_size 64M;
 
-    location ~ ^/api/v1/media/file/([0-9]+)/(.+)$ {
-        alias ${MEDIA_ROOT}/\$1/\$2;
-        access_log off;
-        expires 30d;
-        add_header Cache-Control "public, max-age=86400";
-        add_header Access-Control-Allow-Origin "*";
-    }
+    # /api/v1/media/file/* must proxy to FastAPI (S3 + multi-root local lookup).
+    # Do NOT serve from disk here — uploads may live in S3 or a different LOCAL_STORAGE_PATH.
 
     location ^~ /_next/ {
         proxy_pass http://127.0.0.1:${FRONTEND_PORT};
@@ -137,13 +132,8 @@ server {
 
     client_max_body_size 64M;
 
-    location ~ ^/api/v1/media/file/([0-9]+)/(.+)$ {
-        alias ${MEDIA_ROOT}/\$1/\$2;
-        access_log off;
-        expires 30d;
-        add_header Cache-Control "public, max-age=86400";
-        add_header Access-Control-Allow-Origin "*";
-    }
+    # /api/v1/media/file/* must proxy to FastAPI (S3 + multi-root local lookup).
+    # Do NOT serve from disk here — uploads may live in S3 or a different LOCAL_STORAGE_PATH.
 
     location ^~ /_next/ {
         proxy_pass http://127.0.0.1:${FRONTEND_PORT};

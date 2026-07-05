@@ -1,4 +1,5 @@
 import os
+import shutil
 import uuid
 import mimetypes
 from typing import Dict, Any, Optional, Tuple, Iterator
@@ -22,6 +23,22 @@ def media_s3_key(user_id: int, filename: str) -> str:
 def local_media_path(user_id: int, filename: str) -> str:
     safe_name = os.path.basename(filename)
     return os.path.join(settings.LOCAL_STORAGE_PATH, str(user_id), safe_name)
+
+
+def _mirror_local_media_file(user_id: int, filename: str, source_path: str) -> None:
+    """Copy a freshly written upload to every known local media root."""
+    safe_name = os.path.basename(filename)
+    normalized_source = os.path.normpath(source_path)
+    for root in media_storage_roots():
+        dest_dir = os.path.join(root, str(user_id))
+        dest_path = os.path.normpath(os.path.join(dest_dir, safe_name))
+        if dest_path == normalized_source:
+            continue
+        try:
+            os.makedirs(dest_dir, exist_ok=True)
+            shutil.copy2(normalized_source, dest_path)
+        except OSError as exc:
+            logger.warning("Could not mirror media to %s: %s", dest_path, exc)
 
 
 def media_storage_roots() -> list[str]:
@@ -206,7 +223,9 @@ async def store_locally(file: UploadFile, filename: str, user_id: int) -> Dict[s
     async with aiofiles.open(file_path, "wb") as out_file:
         content = await file.read()
         await out_file.write(content)
-    
+
+    _mirror_local_media_file(user_id, filename, file_path)
+
     # Public URL served by backend API route
     url = _build_public_media_url(user_id, filename)
     
