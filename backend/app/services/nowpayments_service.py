@@ -51,6 +51,24 @@ def build_order_id() -> str:
     return f"mh5-{uuid.uuid4().hex}"
 
 
+# NOWPayments tickers (lowercase). BEP20 USDT on BSC is usdtbsc — not usdtbep20.
+_PAY_CURRENCY_ALIASES = {
+    "usdtbep20": "usdtbsc",
+    "usdtbep": "usdtbsc",
+    "usdtbsc": "usdtbsc",
+    "usdttrc20": "usdttrc20",
+    "usdterc20": "usdterc20",
+}
+
+
+def normalize_pay_currency(code: Optional[str]) -> Optional[str]:
+    """Map common labels to NOWPayments pay_currency tickers."""
+    if not code:
+        return None
+    compact = code.strip().lower().replace("-", "").replace("_", "")
+    return _PAY_CURRENCY_ALIASES.get(compact, code.strip().lower())
+
+
 def ipn_callback_url() -> str:
     base = (settings.BACKEND_PUBLIC_URL or "").rstrip("/")
     return f"{base}/api/v1/webhooks/nowpayments"
@@ -225,7 +243,7 @@ async def create_payment(
         "ipn_callback_url": ipn_callback_url(),
     }
     if pay_currency:
-        payload["pay_currency"] = pay_currency.lower()
+        payload["pay_currency"] = normalize_pay_currency(pay_currency) or pay_currency.lower()
     if success_url:
         payload["success_url"] = success_url
     if cancel_url:

@@ -42,7 +42,7 @@ services:
       - key: NOWPAYMENTS_SANDBOX
         value: false
       - key: NOWPAYMENTS_DEFAULT_PAY_CURRENCY
-        value: usdttrc20
+        value: usdtbsc
 
 databases:
   - name: mh5-database

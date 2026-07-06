@@ -19,6 +19,7 @@ from app.services.nowpayments_service import (
     create_payment as now_create_payment,
     deposit_status_payload,
     get_available_currencies,
+    normalize_pay_currency,
     sync_deposit_with_provider,
 )
 from app.core.config import settings
@@ -90,12 +91,12 @@ async def get_payment_currencies():
     try:
         currencies = await get_available_currencies()
         if not currencies:
-            default = (settings.NOWPAYMENTS_DEFAULT_PAY_CURRENCY or "usdttrc20").lower()
+            default = (settings.NOWPAYMENTS_DEFAULT_PAY_CURRENCY or "usdtbsc").lower()
             return {"currencies": [default]}
         return {"currencies": currencies}
     except NowPaymentsError as exc:
         logger.error("NOWPayments currencies error: %s", exc)
-        default = (settings.NOWPAYMENTS_DEFAULT_PAY_CURRENCY or "usdttrc20").lower()
+        default = (settings.NOWPAYMENTS_DEFAULT_PAY_CURRENCY or "usdtbsc").lower()
         return {"currencies": [default]}
 
 
@@ -115,11 +116,11 @@ async def create_payment(
     if request.product_code == "efm_membership" and request.amount < 100:
         raise HTTPException(status_code=400, detail="Minimum amount for EFM membership is $100")
 
-    pay_currency = (
+    pay_currency = normalize_pay_currency(
         request.pay_currency
         or settings.NOWPAYMENTS_DEFAULT_PAY_CURRENCY
-        or "usdttrc20"
-    ).lower()
+        or "usdtbsc"
+    ) or "usdtbsc"
 
     deposit = Deposit(
         user_id=current_user.id,

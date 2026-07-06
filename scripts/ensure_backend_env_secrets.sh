@@ -93,8 +93,14 @@ else
 fi
 
 if ! grep -qE '^NOWPAYMENTS_DEFAULT_PAY_CURRENCY=' "$ENV_FILE"; then
-  echo "NOWPAYMENTS_DEFAULT_PAY_CURRENCY=usdttrc20" >> "$ENV_FILE"
-  echo "    added NOWPAYMENTS_DEFAULT_PAY_CURRENCY=usdttrc20"
+  echo "NOWPAYMENTS_DEFAULT_PAY_CURRENCY=usdtbsc" >> "$ENV_FILE"
+  echo "    added NOWPAYMENTS_DEFAULT_PAY_CURRENCY=usdtbsc"
+else
+  NP_CUR="$(get_env NOWPAYMENTS_DEFAULT_PAY_CURRENCY)"
+  if echo "$NP_CUR" | grep -qiE '^usdtbep20$'; then
+    set_env_replace "NOWPAYMENTS_DEFAULT_PAY_CURRENCY" "usdtbsc"
+    echo "    (usdtbep20 is invalid for NOWPayments; BEP20 USDT = usdtbsc)"
+  fi
 fi
 
 if ! grep -qE '^NOWPAYMENTS_UNDERPAYMENT_TOLERANCE_USD=' "$ENV_FILE"; then

@@ -1,7 +1,7 @@
-"""Underpayment tolerance for NOWPayments partial payments."""
+"""Underpayment tolerance and pay currency normalization for NOWPayments."""
 from types import SimpleNamespace
 
-from app.services.nowpayments_service import within_underpayment_tolerance
+from app.services.nowpayments_service import normalize_pay_currency, within_underpayment_tolerance
 
 
 def _deposit(amount: float = 10.0):
@@ -40,3 +40,8 @@ def test_accepts_overpayment():
         "actually_paid": 10.5,
     }
     assert within_underpayment_tolerance(deposit, payload) is True
+
+
+def test_usdtbep20_maps_to_usdtbsc():
+    assert normalize_pay_currency("usdtbep20") == "usdtbsc"
+    assert normalize_pay_currency("USDT-BSC") == "usdtbsc"

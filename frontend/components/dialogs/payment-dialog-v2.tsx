@@ -76,10 +76,10 @@ const KYC_PRICE_USD = 10
 const getPaymentMethods = (t: (key: string) => string | undefined): PaymentMethod[] => [
   {
     id: 'crypto',
-    name: t('payment.crypto_nowpayments') || 'Cryptocurrency',
+    name: t('payment.crypto_nowpayments') || 'USDT (BEP20)',
     icon: <Bitcoin className="w-5 h-5 text-orange-500" />,
     category: 'crypto',
-    network: 'NOWPayments'
+    network: 'BNB Smart Chain (BSC)'
   },
   {
     id: 'card',
