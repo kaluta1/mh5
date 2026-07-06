@@ -2457,8 +2457,8 @@
     "amount_to_send": "Amount To Send",
     "receiving_address": "Receiving Address",
     "auto_checking": "Auto Checking",
-    "checking": "Checking",
-    "payment_done": "J"
+    "checking": "Checking...",
+    "check_status": "Check status"
   },
   "processing": "Traitement...",
   "annual_membership": "Annual Membership",

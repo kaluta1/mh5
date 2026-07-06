@@ -923,13 +923,6 @@ export function PaymentDialog({
                 {t('payment.order_id') || 'Reference'}: {payment.order_id}
               </div>
 
-              <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
-                <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
-                <p className="text-xs text-amber-800 dark:text-amber-200">
-                  {t('payment.network_warning') || 'Send the exact amount to the address above. Payment is processed by NOWPayments.'}
-                </p>
-              </div>
-
               {statusMessage && (
                 <div className="flex items-center justify-center gap-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                   <Clock className="w-4 h-4 text-blue-500" />
@@ -959,7 +952,7 @@ export function PaymentDialog({
                       {t('payment.checking') || 'Checking...'}
                     </>
                   ) : (
-                    t('payment.payment_done') || "I've sent the payment"
+                    t('payment.check_status') || 'Check status'
                   )}
                 </Button>
               </div>

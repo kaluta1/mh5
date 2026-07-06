@@ -323,15 +323,7 @@ export function ResumePaymentDialog({
 
             {/* Order ID */}
             <div className="text-center text-[10px] sm:text-xs text-gray-500 truncate">
-              {t('payment.order_id') || 'Réf'}: {paymentDetails.order_id}
-            </div>
-
-            {/* Warning */}
-            <div className="flex items-start gap-2 p-2 sm:p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
-              <AlertCircle className="w-3 h-3 sm:w-4 sm:h-4 text-red-500 mt-0.5 flex-shrink-0" />
-              <p className="text-[10px] sm:text-xs text-red-700 dark:text-red-300">
-                {t('payment.network_warning') || "Envoyez le montant exact sur le bon réseau."}
-              </p>
+              {t('payment.order_id') || 'Reference'}: {paymentDetails.order_id}
             </div>
 
             {/* Auto-check indicator */}
@@ -366,10 +358,10 @@ export function ResumePaymentDialog({
               {isCheckingPayment ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  {t('payment.checking') || 'Vérification...'}
+                  {t('payment.checking') || 'Checking...'}
                 </>
               ) : (
-                t('payment.payment_done') || "J'ai effectué le paiement"
+                t('payment.check_status') || 'Check status'
               )}
             </Button>
           </div>

@@ -53,6 +53,27 @@ wait_for_port_free() {
   done
 }
 
+wait_for_http() {
+  local url="$1"
+  local max_attempts="${2:-45}"
+  local attempt=0
+  local code=""
+  while [ "$attempt" -lt "$max_attempts" ]; do
+    attempt=$((attempt + 1))
+    code="$(curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 3 --max-time 10 "$url" 2>/dev/null || echo 000)"
+    if [ "$code" = "200" ] || [ "$code" = "301" ] || [ "$code" = "302" ] || [ "$code" = "307" ] || [ "$code" = "308" ]; then
+      echo "    HTTP ${code} from ${url} (attempt ${attempt})"
+      return 0
+    fi
+    if [ "$attempt" -eq 1 ] || [ $((attempt % 5)) -eq 0 ]; then
+      echo "    waiting for ${url} (attempt ${attempt}/${max_attempts}, last HTTP ${code})..."
+    fi
+    sleep 2
+  done
+  echo "    ERROR: ${url} not ready after ${max_attempts} attempts (last HTTP ${code})" >&2
+  return 1
+}
+
 stop_frontend_pm2() {
   if ! command -v pm2 >/dev/null 2>&1; then
     return 0
@@ -166,14 +187,18 @@ if command -v pm2 >/dev/null 2>&1; then
   PORT="$PORT" pm2 start node_modules/next/dist/bin/next \
     --name mh5-frontend \
     --cwd "$FRONTEND" \
-    --max-restarts 3 \
+    --max-restarts 5 \
+    --time \
     -- start -H 127.0.0.1 -p "$PORT"
   pm2 save 2>/dev/null || true
-  sleep 4
 
-  if ! curl -sf "http://127.0.0.1:${PORT}/" >/dev/null 2>&1; then
-    echo "    ERROR: frontend not responding on :${PORT} after start" >&2
-    pm2 logs mh5-frontend --lines 30 --nostream 2>/dev/null || true
+  if ! wait_for_http "http://127.0.0.1:${PORT}/" 45; then
+    echo "    pm2 status:" >&2
+    pm2 status mh5-frontend 2>/dev/null || true
+    echo "    port ${PORT} listeners:" >&2
+    ss -ltnp "sport = :$PORT" 2>/dev/null || true
+    echo "    recent logs:" >&2
+    pm2 logs mh5-frontend --lines 40 --nostream 2>/dev/null || true
     exit 1
   fi
 
