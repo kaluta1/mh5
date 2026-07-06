@@ -1,3 +1,3 @@
 """Backend build identifier — bump when deploying nomination/API fixes."""
 
-BACKEND_BUILD_ID = "nowpayments-20260706"
+BACKEND_BUILD_ID = "nowpayments-tolerance-20260706"

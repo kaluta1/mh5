@@ -27,6 +27,12 @@ from app.crud import crud_deposit
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+_SYNCABLE_DEPOSIT_STATUSES = (DepositStatus.PENDING, DepositStatus.PARTIALLY_PAID)
+
+
+def _should_sync_deposit_with_provider(deposit: Deposit) -> bool:
+    return bool(deposit.external_payment_id and deposit.status in _SYNCABLE_DEPOSIT_STATUSES)
+
 
 class PaymentRecipient(BaseModel):
     username_or_email: str
@@ -216,7 +222,7 @@ async def check_payment_status(
     if deposit.user_id != current_user.id and not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Not authorized")
 
-    if deposit.status == DepositStatus.PENDING and deposit.external_payment_id:
+    if _should_sync_deposit_with_provider(deposit):
         try:
             payload = await sync_deposit_with_provider(db, deposit)
             db.commit()
@@ -280,7 +286,7 @@ async def get_payment_status(
     if deposit.user_id != current_user.id and not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Not authorized")
 
-    if deposit.status == DepositStatus.PENDING and deposit.external_payment_id:
+    if _should_sync_deposit_with_provider(deposit):
         try:
             payload = await sync_deposit_with_provider(db, deposit)
             db.commit()

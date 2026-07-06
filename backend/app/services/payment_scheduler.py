@@ -72,29 +72,35 @@ class PaymentScheduler:
             # Expiration time: 1 hour
             expiration_time = datetime.utcnow() - timedelta(hours=1)
             
-            # Get only PENDING deposits with external payment ID
-            pending_deposits: List[Deposit] = db.query(Deposit).filter(
-                Deposit.status == DepositStatus.PENDING,
-                Deposit.external_payment_id.isnot(None)
+            # Pending / partial payments with a NOWPayments id
+            open_deposits: List[Deposit] = db.query(Deposit).filter(
+                Deposit.status.in_([DepositStatus.PENDING, DepositStatus.PARTIALLY_PAID]),
+                Deposit.external_payment_id.isnot(None),
             ).all()
-            
-            if not pending_deposits:
-                print("[PaymentScheduler] No pending deposits found")
+
+            if not open_deposits:
+                print("[PaymentScheduler] No open deposits to sync")
                 return
-            
-            print(f"[PaymentScheduler] Found {len(pending_deposits)} pending payments")
-            logger.info(f"Checking {len(pending_deposits)} pending payments...")
-            
-            for deposit in pending_deposits:
+
+            print(f"[PaymentScheduler] Found {len(open_deposits)} open payments")
+            logger.info("Checking %s open payments...", len(open_deposits))
+
+            for deposit in open_deposits:
                 try:
-                    # Check if payment is expired (older than 1 hour)
-                    if deposit.created_at < expiration_time:
+                    # Only expire untouched pending invoices (not partial payments)
+                    if (
+                        deposit.status == DepositStatus.PENDING
+                        and deposit.created_at < expiration_time
+                    ):
                         deposit.status = DepositStatus.EXPIRED
-                        logger.info(f"Deposit {deposit.id} marked as EXPIRED (created at {deposit.created_at})")
+                        logger.info(
+                            "Deposit %s marked as EXPIRED (created at %s)",
+                            deposit.id,
+                            deposit.created_at,
+                        )
                         print(f"[PaymentScheduler] Deposit {deposit.id} EXPIRED after 1 hour")
                         continue
-                    
-                    # Otherwise, check payment status with provider
+
                     await self._check_single_payment(db, deposit)
                 except Exception as e:
                     logger.error(f"Error checking deposit {deposit.id}: {e}")

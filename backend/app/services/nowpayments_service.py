@@ -69,6 +69,71 @@ def map_nowpayments_status(payment_status: str) -> DepositStatus:
     return DepositStatus.PENDING
 
 
+def _expected_fiat_amount(deposit: Deposit, payload: Dict[str, Any]) -> float:
+    if payload.get("price_amount") is not None:
+        return float(payload["price_amount"])
+    return float(deposit.amount or 0)
+
+
+def _received_fiat_amount(payload: Dict[str, Any], expected_fiat: float) -> Optional[float]:
+    """Estimate fiat received from NOWPayments payload (USD invoice amounts)."""
+    price_currency = str(payload.get("price_currency") or "usd").lower()
+    outcome_currency = str(payload.get("outcome_currency") or "").lower()
+
+    outcome_amount = payload.get("outcome_amount")
+    if outcome_amount is not None and outcome_currency in ("usd", price_currency):
+        return float(outcome_amount)
+
+    actually_paid = payload.get("actually_paid")
+    pay_amount = payload.get("pay_amount")
+    if actually_paid is not None and pay_amount:
+        pay_f = float(pay_amount)
+        if pay_f > 0:
+            price_base = (
+                float(payload["price_amount"])
+                if payload.get("price_amount") is not None
+                else expected_fiat
+            )
+            return price_base * (float(actually_paid) / pay_f)
+
+    return None
+
+
+def within_underpayment_tolerance(deposit: Deposit, payload: Dict[str, Any]) -> bool:
+    """
+    True when user underpaid by at most NOWPAYMENTS_UNDERPAYMENT_TOLERANCE_USD
+    (e.g. $9.50–$9.99 on a $10 invoice). Overpayments always pass.
+    """
+    expected = _expected_fiat_amount(deposit, payload)
+    if expected <= 0:
+        return False
+
+    received = _received_fiat_amount(payload, expected)
+    if received is None or received <= 0:
+        return False
+
+    tolerance = max(0.0, float(settings.NOWPAYMENTS_UNDERPAYMENT_TOLERANCE_USD))
+    shortfall = expected - received
+    return shortfall <= tolerance
+
+
+def resolve_deposit_status_from_provider(deposit: Deposit, payload: Dict[str, Any]) -> DepositStatus:
+    """Map provider status, with tolerance acceptance for small underpayments."""
+    mapped = map_nowpayments_status(
+        str(payload.get("payment_status") or payload.get("status") or "")
+    )
+    if mapped == DepositStatus.PARTIALLY_PAID and within_underpayment_tolerance(deposit, payload):
+        logger.info(
+            "Deposit %s accepted as paid: received ~$%.2f on $%.2f invoice (tolerance $%.2f)",
+            deposit.id,
+            _received_fiat_amount(payload, _expected_fiat_amount(deposit, payload)) or 0,
+            _expected_fiat_amount(deposit, payload),
+            settings.NOWPAYMENTS_UNDERPAYMENT_TOLERANCE_USD,
+        )
+        return DepositStatus.VALIDATED
+    return mapped
+
+
 def verify_ipn_signature(body: Dict[str, Any], signature: str) -> bool:
     secret = (settings.NOWPAYMENTS_IPN_SECRET or "").strip()
     if not secret or not signature:
@@ -79,8 +144,7 @@ def verify_ipn_signature(body: Dict[str, Any], signature: str) -> bool:
 
 
 def apply_nowpayments_payload_to_deposit(deposit: Deposit, payload: Dict[str, Any]) -> DepositStatus:
-    payment_status = str(payload.get("payment_status") or payload.get("status") or "")
-    new_status = map_nowpayments_status(payment_status)
+    new_status = resolve_deposit_status_from_provider(deposit, payload)
 
     pay_address = payload.get("pay_address")
     if pay_address:

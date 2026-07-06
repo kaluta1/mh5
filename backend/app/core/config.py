@@ -143,6 +143,10 @@ class Settings(BaseModel):
     NOWPAYMENTS_IPN_SECRET: str = os.getenv("NOWPAYMENTS_IPN_SECRET", "")
     NOWPAYMENTS_SANDBOX: bool = os.getenv("NOWPAYMENTS_SANDBOX", "false").lower() == "true"
     NOWPAYMENTS_DEFAULT_PAY_CURRENCY: str = os.getenv("NOWPAYMENTS_DEFAULT_PAY_CURRENCY", "usdttrc20")
+    # Accept partially_paid invoices when received fiat is within this USD shortfall (e.g. $9.50 on $10).
+    NOWPAYMENTS_UNDERPAYMENT_TOLERANCE_USD: float = float(
+        os.getenv("NOWPAYMENTS_UNDERPAYMENT_TOLERANCE_USD", "0.5")
+    )
     
     # CONTENT MODERATION (Sightengine)
     ENABLE_CONTENT_MODERATION: bool = os.getenv("ENABLE_CONTENT_MODERATION", "false").lower() == "true"
