@@ -82,4 +82,24 @@ for key in FRONTEND_URL BACKEND_PUBLIC_URL NEXT_PUBLIC_API_URL API_BASE_URL; do
   fi
 done
 
+# NOWPayments — must be set manually (cannot auto-generate)
+NP_KEY="$(get_env NOWPAYMENTS_API_KEY)"
+NP_IPN="$(get_env NOWPAYMENTS_IPN_SECRET)"
+if [ -z "$NP_KEY" ] || [ -z "$NP_IPN" ]; then
+  echo "    WARN: NOWPAYMENTS_API_KEY and/or NOWPAYMENTS_IPN_SECRET missing in backend/.env"
+  echo "          Crypto checkout will return 502 until both are set, then: systemctl restart myhigh5-backend"
+else
+  echo "    OK NOWPayments keys present"
+fi
+
+if ! grep -qE '^NOWPAYMENTS_DEFAULT_PAY_CURRENCY=' "$ENV_FILE"; then
+  echo "NOWPAYMENTS_DEFAULT_PAY_CURRENCY=usdttrc20" >> "$ENV_FILE"
+  echo "    added NOWPAYMENTS_DEFAULT_PAY_CURRENCY=usdttrc20"
+fi
+
+if ! grep -qE '^NOWPAYMENTS_UNDERPAYMENT_TOLERANCE_USD=' "$ENV_FILE"; then
+  echo "NOWPAYMENTS_UNDERPAYMENT_TOLERANCE_USD=0.5" >> "$ENV_FILE"
+  echo "    added NOWPAYMENTS_UNDERPAYMENT_TOLERANCE_USD=0.5"
+fi
+
 echo "    OK required secrets present in backend/.env"
