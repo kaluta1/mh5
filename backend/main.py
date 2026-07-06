@@ -53,14 +53,13 @@ def validate_critical_settings():
             "ENCRYPTION_KEY_DERIVATION_SALT is missing. Set a random salt in your .env file."
         )
 
-    # Optional Crypto Payment Check (If any crypto payment methods are missing, display a warning but keep the application running normally.)
-    if not settings.BSC_PAYMENT_CONTRACT:
+    if not settings.NOWPAYMENTS_API_KEY:
         payment_warnings.append(
-            "BSC_PAYMENT_CONTRACT is missing. On-chain crypto payments will not work."
+            "NOWPAYMENTS_API_KEY is missing. Crypto checkout will not work."
         )
-    if not settings.BSC_USDT_ADDRESS:
+    if not settings.NOWPAYMENTS_IPN_SECRET:
         payment_warnings.append(
-            "BSC_USDT_ADDRESS is missing. On-chain USDT payments will not work."
+            "NOWPAYMENTS_IPN_SECRET is missing. Payment webhooks cannot be verified."
         )
 
     # Cryptogriphic key missing, the app will shut down in production 

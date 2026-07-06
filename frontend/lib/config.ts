@@ -210,31 +210,8 @@ export const API_ORIGIN = (() => {
 })()
 
 // ============================================
-// Reown/WalletConnect Project ID
+// NOWPayments — crypto checkout (server-side)
 // ============================================
-// REQUIRED: Get from https://cloud.reown.com
-export const REOWN_PROJECT_ID = process.env.NEXT_PUBLIC_REOWN_PROJECT_ID || ''
-
-// ============================================
-// BSC — MyHigh5PaymentHub + USDT (must match backend BSC_* and deployed contract)
-// ============================================
-const BSC_DEFAULTS = {
-  PAYMENT_CONTRACT: '0x12Ccb74E7A8B8f0fDc14e55A82C8693145e36EdA',
-  USDT_ADDRESS: '0x55d398326f99059fF775485246999027B3197955',
-  CHAIN_ID: 56,
-  RPC_URL: 'https://bsc-dataseed.binance.org',
-  EXPLORER_URL: 'https://bscscan.com',
-  USDT_DECIMALS: 18
-} as const
-
-export const CONTRACTS = {
-  PAYMENT_CONTRACT: process.env.NEXT_PUBLIC_BSC_PAYMENT_CONTRACT || BSC_DEFAULTS.PAYMENT_CONTRACT,
-  USDT_ADDRESS: process.env.NEXT_PUBLIC_BSC_USDT_ADDRESS || BSC_DEFAULTS.USDT_ADDRESS,
-  CHAIN_ID: Number(process.env.NEXT_PUBLIC_BSC_CHAIN_ID ?? BSC_DEFAULTS.CHAIN_ID),
-  RPC_URL: process.env.NEXT_PUBLIC_BSC_RPC_URL || BSC_DEFAULTS.RPC_URL,
-  EXPLORER_URL: process.env.NEXT_PUBLIC_BSC_EXPLORER_URL || BSC_DEFAULTS.EXPLORER_URL,
-  USDT_DECIMALS: Number(process.env.NEXT_PUBLIC_BSC_USDT_DECIMALS ?? BSC_DEFAULTS.USDT_DECIMALS)
-}
 
 export const assertApiUrl = (): void => {
   if (!API_URL && typeof window !== 'undefined') {

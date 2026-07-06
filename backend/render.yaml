@@ -35,12 +35,14 @@ services:
         value: 10080
       - key: STORAGE_TYPE
         value: s3
-      - key: BSC_CHAIN_ID
-        value: 56
-      - key: BSC_USDT_DECIMALS
-        value: 18
-      - key: BSC_RPC_URL
-        value: https://bsc-dataseed.binance.org
+      - key: NOWPAYMENTS_API_KEY
+        sync: false
+      - key: NOWPAYMENTS_IPN_SECRET
+        sync: false
+      - key: NOWPAYMENTS_SANDBOX
+        value: false
+      - key: NOWPAYMENTS_DEFAULT_PAY_CURRENCY
+        value: usdttrc20
 
 databases:
   - name: mh5-database

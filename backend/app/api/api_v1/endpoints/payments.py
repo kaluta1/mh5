@@ -1,56 +1,58 @@
 """
-Payment API Endpoints
+Payment API Endpoints — NOWPayments crypto checkout.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
-import uuid
+import logging
 
 from app.api import deps
 from app.models.user import User
 from app.models.payment import Deposit, DepositStatus, ProductType
-from app.services.onchain_payment import onchain_payment_service, OnchainPaymentError
+from app.services.nowpayments_service import (
+    NowPaymentsError,
+    build_order_id,
+    create_payment as now_create_payment,
+    deposit_status_payload,
+    get_available_currencies,
+    sync_deposit_with_provider,
+)
 from app.core.config import settings
 from app.crud import crud_deposit
-from app.services.commission_distribution import process_payment_validation
-import logging
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-# Schemas
 class PaymentRecipient(BaseModel):
     username_or_email: str
-    product_code: str  # "kyc", "efm_membership"
+    product_code: str
     amount: float
 
 
 class CreatePaymentRequest(BaseModel):
     amount: float
     currency: str = "usd"
-    product_code: str  # "kyc", "efm_membership", etc.
-    recipients: Optional[list[PaymentRecipient]] = None  # For multi-user payments
-
-
-class VerifyPaymentRequest(BaseModel):
-    order_id: str
-    tx_hash: str
+    product_code: str
+    pay_currency: Optional[str] = None
+    recipients: Optional[list[PaymentRecipient]] = None
 
 
 class PaymentResponse(BaseModel):
-    deposit_id: int  # Local deposit ID for status checks
-    order_id: str  # Order ID for smart contract payment
-    contract_address: str  # Payment contract address
-    token_address: str  # USDT token address
-    amount_wei: str  # Amount in wei (as string for precision)
-    chain_id: int  # BSC chain ID
-    price_amount: float  # Amount in USD
+    deposit_id: int
+    order_id: str
+    payment_id: str
+    payment_status: str
+    pay_address: str
+    pay_amount: str
+    pay_currency: str
+    price_amount: float
     price_currency: str
+    invoice_url: Optional[str] = None
     status: str
 
 
@@ -58,190 +60,182 @@ class PaymentResponse(BaseModel):
 async def verify_user_exists(
     username_or_email: str,
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_user)
+    current_user: User = Depends(deps.get_current_user),
 ):
-    """Check if a user exists by username or email"""
+    """Check if a user exists by username or email."""
     user = db.query(User).filter(
         (User.username == username_or_email) | (User.email == username_or_email)
     ).first()
-    
+
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
+
     return {
         "id": user.id,
-        "username": user.username or user.email.split('@')[0],
+        "username": user.username or user.email.split("@")[0],
         "email": user.email,
-        "display_name": user.full_name or user.username or user.email.split('@')[0]
+        "display_name": user.full_name or user.username or user.email.split("@")[0],
     }
 
 
 @router.get("/currencies")
-async def get_available_currencies():
-    """Get list of available cryptocurrencies for payment"""
-    # Only USDT on BSC is supported
-    return {
-        "currencies": ["usdt"]
-    }
+async def get_payment_currencies():
+    """List cryptocurrencies available via NOWPayments."""
+    try:
+        currencies = await get_available_currencies()
+        if not currencies:
+            default = (settings.NOWPAYMENTS_DEFAULT_PAY_CURRENCY or "usdttrc20").lower()
+            return {"currencies": [default]}
+        return {"currencies": currencies}
+    except NowPaymentsError as exc:
+        logger.error("NOWPayments currencies error: %s", exc)
+        default = (settings.NOWPAYMENTS_DEFAULT_PAY_CURRENCY or "usdttrc20").lower()
+        return {"currencies": [default]}
 
 
 @router.post("/create", response_model=PaymentResponse)
 async def create_payment(
     request: CreatePaymentRequest,
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_user)
+    current_user: User = Depends(deps.get_current_user),
 ):
-    """
-    Create a payment order for smart contract payment
-    Returns order_id and payment details for frontend wallet integration
-    """
-    # Generate unique order ID (bytes32 format)
-    order_id = onchain_payment_service.build_order_id()
-    
-    # Get product info
+    """Create a NOWPayments invoice and local pending deposit."""
+    order_id = build_order_id()
+
     product = crud_deposit.product_type.get_by_code(db, code=request.product_code)
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
-    
-    # Validate minimum amount
+
     if request.product_code == "efm_membership" and request.amount < 100:
         raise HTTPException(status_code=400, detail="Minimum amount for EFM membership is $100")
-    
+
+    pay_currency = (
+        request.pay_currency
+        or settings.NOWPAYMENTS_DEFAULT_PAY_CURRENCY
+        or "usdttrc20"
+    ).lower()
+
+    deposit = Deposit(
+        user_id=current_user.id,
+        product_type_id=product.id,
+        amount=request.amount,
+        currency=request.currency.upper(),
+        order_id=order_id,
+        status=DepositStatus.PENDING,
+    )
+    db.add(deposit)
+    db.commit()
+    db.refresh(deposit)
+
     try:
-        # Convert amount to wei
-        amount_wei = onchain_payment_service.to_wei(request.amount, settings.BSC_USDT_DECIMALS)
-        
-        # Create deposit record in database
-        deposit = Deposit(
-            user_id=current_user.id,
-            product_type_id=product.id,
-            amount=request.amount,
-            currency=request.currency.upper(),
-            crypto_currency="USDT",
-            crypto_amount=str(amount_wei),
-            order_id=order_id,
-            status=DepositStatus.PENDING
-        )
-        db.add(deposit)
-        db.commit()
-        db.refresh(deposit)
-        
-        return PaymentResponse(
-            deposit_id=deposit.id,
-            order_id=order_id,
-            contract_address=settings.BSC_PAYMENT_CONTRACT,
-            token_address=settings.BSC_USDT_ADDRESS,
-            amount_wei=str(amount_wei),
-            chain_id=settings.BSC_CHAIN_ID,
+        provider_payload = await now_create_payment(
             price_amount=request.amount,
             price_currency=request.currency,
-            status="pending"
+            order_id=order_id,
+            order_description=f"MyHigh5 {product.name} — deposit {deposit.id}",
+            pay_currency=pay_currency,
+            success_url=f"{settings.FRONTEND_URL.rstrip('/')}/dashboard/wallet?payment=success",
+            cancel_url=f"{settings.FRONTEND_URL.rstrip('/')}/dashboard/wallet?payment=cancelled",
         )
-        
-    except Exception as e:
-        logger.error(f"Payment creation error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/verify", response_model=dict)
-async def verify_payment(
-    request: VerifyPaymentRequest,
-    db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_user)
-):
-    """
-    Verify a payment transaction on the blockchain
-    Called after user submits transaction hash
-    """
-    try:
-        # Find deposit by order_id
-        deposit = crud_deposit.deposit.get_by_order_id(db, order_id=request.order_id)
-        if not deposit:
-            raise HTTPException(status_code=404, detail="Deposit not found")
-        
-        # Verify ownership
-        if deposit.user_id != current_user.id and not current_user.is_admin:
-            raise HTTPException(status_code=403, detail="Not authorized")
-        
-        # Already validated
-        if deposit.status == DepositStatus.VALIDATED:
-            return {
-                "valid": True,
-                "deposit_id": deposit.id,
-                "status": "validated",
-                "message": "Payment already verified"
-            }
-        
-        # Get expected amount in wei
-        expected_amount_wei = int(deposit.crypto_amount) if deposit.crypto_amount else 0
-        
-        # Verify payment on blockchain
-        payment_details = onchain_payment_service.verify_payment(
-            order_id=request.order_id,
-            tx_hash=request.tx_hash,
-            expected_amount_wei=expected_amount_wei,
-            token_address=settings.BSC_USDT_ADDRESS
-        )
-        
-        # Update deposit status (single commit after commissions + accounting succeed)
-        deposit.status = DepositStatus.VALIDATED
-        deposit.validated_at = datetime.utcnow()
-        deposit.external_payment_id = request.tx_hash
-        deposit.payment_address = payment_details.payer
-
-        logger.info(f"Processing commission distribution for deposit {deposit.id}")
-        ok = process_payment_validation(db, deposit, defer_commit=True)
-        if not ok:
-            db.rollback()
-            raise HTTPException(
-                status_code=500,
-                detail=(
-                    "Payment verification failed while recording commissions or accounting "
-                    "(e.g. chart of accounts). The deposit was not finalized; retry after fixing configuration."
-                ),
-            )
+    except NowPaymentsError as exc:
+        deposit.status = DepositStatus.FAILED
         db.commit()
+        logger.error("NOWPayments create error: %s", exc)
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except Exception as exc:
+        deposit.status = DepositStatus.FAILED
+        db.commit()
+        logger.error("Payment creation error: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-        return {
-            "valid": True,
-            "deposit_id": deposit.id,
-            "status": "validated",
-            "payer": payment_details.payer,
-            "tx_hash": request.tx_hash
-        }
-        
-    except OnchainPaymentError as e:
-        logger.error(f"Payment verification error: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"Payment verification error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    deposit.external_payment_id = str(provider_payload.get("payment_id") or "")
+    deposit.payment_address = provider_payload.get("pay_address")
+    deposit.crypto_amount = (
+        str(provider_payload.get("pay_amount"))
+        if provider_payload.get("pay_amount") is not None
+        else None
+    )
+    deposit.crypto_currency = (
+        str(provider_payload.get("pay_currency")).upper()
+        if provider_payload.get("pay_currency")
+        else pay_currency.upper()
+    )
+    db.commit()
+    db.refresh(deposit)
+
+    status_payload = deposit_status_payload(deposit, provider_payload)
+    return PaymentResponse(
+        deposit_id=deposit.id,
+        order_id=order_id,
+        payment_id=deposit.external_payment_id or "",
+        payment_status=str(provider_payload.get("payment_status") or "waiting"),
+        pay_address=str(status_payload.get("pay_address") or ""),
+        pay_amount=str(status_payload.get("pay_amount") or ""),
+        pay_currency=str(status_payload.get("pay_currency") or pay_currency),
+        price_amount=request.amount,
+        price_currency=request.currency,
+        invoice_url=provider_payload.get("invoice_url"),
+        status="pending",
+    )
+
+
+@router.post("/sync/{deposit_id}")
+async def sync_payment(
+    deposit_id: int,
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_user),
+):
+    """Poll NOWPayments and update local deposit status (manual refresh / I've paid button)."""
+    deposit = db.query(Deposit).filter(Deposit.id == deposit_id).first()
+    if not deposit:
+        raise HTTPException(status_code=404, detail="Deposit not found")
+    if deposit.user_id != current_user.id and not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    try:
+        payload = await sync_deposit_with_provider(db, deposit)
+        db.commit()
+        return payload
+    except NowPaymentsError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/check/{deposit_id}")
 async def check_payment_status(
     deposit_id: int,
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_user)
+    current_user: User = Depends(deps.get_current_user),
 ):
-    """
-    Check payment status by deposit ID
-    """
-    # Get deposit and verify ownership
+    """Check payment status by deposit ID."""
     deposit = db.query(Deposit).filter(Deposit.id == deposit_id).first()
-    
+
     if not deposit:
         raise HTTPException(status_code=404, detail="Deposit not found")
-    
+
     if deposit.user_id != current_user.id and not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Not authorized")
-    
+
+    if deposit.status == DepositStatus.PENDING and deposit.external_payment_id:
+        try:
+            payload = await sync_deposit_with_provider(db, deposit)
+            db.commit()
+            return {
+                "deposit_id": deposit_id,
+                "status": payload["status"],
+                "is_confirmed": payload["is_confirmed"],
+                "order_id": deposit.order_id,
+                "payment_id": deposit.external_payment_id,
+            }
+        except NowPaymentsError:
+            db.rollback()
+
     return {
         "deposit_id": deposit_id,
         "status": deposit.status.value,
         "is_confirmed": deposit.status == DepositStatus.VALIDATED,
         "order_id": deposit.order_id,
-        "tx_hash": deposit.external_payment_id if deposit.external_payment_id else None
+        "payment_id": deposit.external_payment_id,
     }
 
 
@@ -249,17 +243,17 @@ async def check_payment_status(
 async def get_deposit_status(
     deposit_id: int,
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_user)
+    current_user: User = Depends(deps.get_current_user),
 ):
-    """Get the current status of a deposit"""
+    """Get the current status of a deposit."""
     deposit = db.query(Deposit).filter(Deposit.id == deposit_id).first()
-    
+
     if not deposit:
         raise HTTPException(status_code=404, detail="Deposit not found")
-    
+
     if deposit.user_id != current_user.id and not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Not authorized")
-    
+
     return {
         "deposit_id": deposit.id,
         "status": deposit.status.value,
@@ -267,7 +261,7 @@ async def get_deposit_status(
         "amount": deposit.amount,
         "currency": deposit.currency,
         "created_at": deposit.created_at.isoformat() if deposit.created_at else None,
-        "validated_at": deposit.validated_at.isoformat() if deposit.validated_at else None
+        "validated_at": deposit.validated_at.isoformat() if deposit.validated_at else None,
     }
 
 
@@ -275,31 +269,27 @@ async def get_deposit_status(
 async def get_payment_status(
     deposit_id: int,
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_user)
+    current_user: User = Depends(deps.get_current_user),
 ):
-    """
-    Get payment status and details for a deposit
-    """
+    """Get payment status and NOWPayments pay-in details for a deposit."""
     deposit = db.query(Deposit).filter(Deposit.id == deposit_id).first()
-    
+
     if not deposit:
         raise HTTPException(status_code=404, detail="Deposit not found")
-    
+
     if deposit.user_id != current_user.id and not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Not authorized")
-    
-    return {
-        "deposit_id": deposit.id,
-        "status": deposit.status.value,
-        "is_confirmed": deposit.status == DepositStatus.VALIDATED,
-        "order_id": deposit.order_id,
-        "tx_hash": deposit.external_payment_id if deposit.external_payment_id else None,
-        "amount": float(deposit.amount) if deposit.amount else 0,
-        "currency": deposit.currency or "usd",
-        "contract_address": settings.BSC_PAYMENT_CONTRACT,
-        "token_address": settings.BSC_USDT_ADDRESS,
-        "chain_id": settings.BSC_CHAIN_ID
-    }
+
+    if deposit.status == DepositStatus.PENDING and deposit.external_payment_id:
+        try:
+            payload = await sync_deposit_with_provider(db, deposit)
+            db.commit()
+            return payload
+        except NowPaymentsError as exc:
+            db.rollback()
+            logger.warning("NOWPayments sync failed for deposit %s: %s", deposit_id, exc)
+
+    return deposit_status_payload(deposit)
 
 
 @router.get("/invoice/{deposit_id}", response_class=HTMLResponse)
@@ -308,16 +298,12 @@ async def get_invoice(
     token: Optional[str] = None,
     lang: Optional[str] = "fr",
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_active_user_optional)
+    current_user: User = Depends(deps.get_current_active_user_optional),
 ):
-    """
-    Generate an invoice for a validated deposit.
-    Returns HTML that can be printed/saved as PDF.
-    Accepts token as query parameter for direct browser access.
-    """
-    # If token is provided as query param, decode it manually
+    """Generate an invoice for a validated deposit."""
     if token and not current_user:
         from jose import jwt, JWTError
+
         try:
             payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
             user_id = payload.get("sub")
@@ -325,29 +311,25 @@ async def get_invoice(
                 current_user = db.query(User).filter(User.id == int(user_id)).first()
         except JWTError:
             pass
-    
+
     if not current_user:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    
+
     deposit = db.query(Deposit).filter(Deposit.id == deposit_id).first()
-    
+
     if not deposit:
         raise HTTPException(status_code=404, detail="Deposit not found")
-    
+
     if deposit.user_id != current_user.id and not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Not authorized")
-    
+
     if deposit.status != DepositStatus.VALIDATED:
         raise HTTPException(status_code=400, detail="Invoice only available for validated payments")
-    
-    # Use user's preferred language if no lang parameter provided
-    user_lang = lang or getattr(current_user, 'preferred_language', 'fr') or 'fr'
-    
-    # Get product info
+
+    user_lang = lang or getattr(current_user, "preferred_language", "fr") or "fr"
     product = db.query(ProductType).filter(ProductType.id == deposit.product_type_id).first()
     product_name = product.name if product else "Service"
-    
-    # Translations
+
     translations = {
         "fr": {
             "invoice": "FACTURE",
@@ -363,9 +345,9 @@ async def get_invoice(
             "subtotal": "Sous-total",
             "vat": "TVA (0%)",
             "thank_you": "Merci pour votre confiance!",
-            "payment_method": "Paiement effectué par cryptomonnaie",
+            "payment_method": "Paiement effectué par cryptomonnaie (NOWPayments)",
             "reference": "Référence",
-            "online_services": "Services en ligne"
+            "online_services": "Services en ligne",
         },
         "en": {
             "invoice": "INVOICE",
@@ -381,51 +363,14 @@ async def get_invoice(
             "subtotal": "Subtotal",
             "vat": "VAT (0%)",
             "thank_you": "Thank you for your trust!",
-            "payment_method": "Payment made by cryptocurrency",
+            "payment_method": "Payment made by cryptocurrency (NOWPayments)",
             "reference": "Reference",
-            "online_services": "Online services"
+            "online_services": "Online services",
         },
-        "es": {
-            "invoice": "FACTURA",
-            "invoice_number": "N°",
-            "date": "Fecha",
-            "paid": "PAGADO",
-            "billed_to": "Facturado a",
-            "issuer": "Emisor",
-            "description": "Descripción",
-            "quantity": "Cantidad",
-            "unit_price": "Precio unitario",
-            "total": "Total",
-            "subtotal": "Subtotal",
-            "vat": "IVA (0%)",
-            "thank_you": "¡Gracias por su confianza!",
-            "payment_method": "Pago realizado con criptomoneda",
-            "reference": "Referencia",
-            "online_services": "Servicios en línea"
-        },
-        "de": {
-            "invoice": "RECHNUNG",
-            "invoice_number": "Nr.",
-            "date": "Datum",
-            "paid": "BEZAHLT",
-            "billed_to": "Rechnungsempfänger",
-            "issuer": "Aussteller",
-            "description": "Beschreibung",
-            "quantity": "Menge",
-            "unit_price": "Einzelpreis",
-            "total": "Gesamt",
-            "subtotal": "Zwischensumme",
-            "vat": "MwSt. (0%)",
-            "thank_you": "Vielen Dank für Ihr Vertrauen!",
-            "payment_method": "Zahlung per Kryptowährung",
-            "reference": "Referenz",
-            "online_services": "Online-Dienste"
-        }
     }
-    
+
     t = translations.get(user_lang, translations["fr"])
-    
-    # Generate invoice HTML
+
     invoice_html = f"""
     <!DOCTYPE html>
     <html>
@@ -468,7 +413,6 @@ async def get_invoice(
                     <span class="status">{t["paid"]}</span>
                 </div>
             </div>
-            
             <div class="parties">
                 <div class="party">
                     <h3>{t["billed_to"]}</h3>
@@ -482,7 +426,6 @@ async def get_invoice(
                     <p>infos@myhigh5.com</p>
                 </div>
             </div>
-            
             <table class="items">
                 <thead>
                     <tr>
@@ -501,7 +444,6 @@ async def get_invoice(
                     </tr>
                 </tbody>
             </table>
-            
             <div class="total">
                 <div class="total-row">
                     <span>{t["subtotal"]}:</span>
@@ -516,7 +458,6 @@ async def get_invoice(
                     <span>${float(deposit.amount):.2f} USD</span>
                 </div>
             </div>
-            
             <div class="footer">
                 <p>{t["thank_you"]}</p>
                 <p style="margin-top: 10px;">{t["payment_method"]}</p>
@@ -527,5 +468,5 @@ async def get_invoice(
     </body>
     </html>
     """
-    
+
     return HTMLResponse(content=invoice_html)

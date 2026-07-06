@@ -252,10 +252,10 @@ export function TransactionTable({
                 
                 {showActions && (
                   <div className="flex items-center gap-2">
-                    {/* Bouton Payer pour les dépôts en attente uniquement (pas expiré) */}
-                    {transaction.category === 'deposit' && 
-                     transaction.status === 'pending' && 
-                     transaction.external_payment_id && (
+                    {/* Pay only when NOWPayments invoice exists (skip orphaned failed creates) */}
+                    {transaction.category === 'deposit' &&
+                     transaction.status === 'pending' &&
+                     Boolean(transaction.external_payment_id?.trim()) && (
                       <Button
                         size="sm"
                         className="bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white rounded-lg"

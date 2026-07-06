@@ -1,5 +1,5 @@
 /**
- * Payment Service - Smart Contract payments integration (BSC)
+ * Payment Service — NOWPayments crypto checkout
  */
 import { API_URL, getEffectiveApiUrl } from '@/lib/config'
 
@@ -12,7 +12,8 @@ export interface PaymentRecipient {
 export interface PaymentRequest {
   amount: number
   currency: string
-  product_code: string // kyc, efm_membership, etc.
+  product_code: string
+  pay_currency?: string
   recipients?: PaymentRecipient[]
 }
 
@@ -24,29 +25,33 @@ export interface VerifiedUser {
 }
 
 export interface PaymentResponse {
-  deposit_id: number  // Local deposit ID for status checks
-  order_id: string  // Order ID for smart contract payment
-  contract_address: string  // Payment contract address
-  token_address: string  // USDT token address
-  amount_wei: string  // Amount in wei (as string for precision)
-  chain_id: number  // BSC chain ID
-  price_amount: number  // Amount in USD
+  deposit_id: number
+  order_id: string
+  payment_id: string
+  payment_status: string
+  pay_address: string
+  pay_amount: string
+  pay_currency: string
+  price_amount: number
   price_currency: string
+  invoice_url?: string | null
   status: string
 }
 
-export interface VerifyPaymentRequest {
-  order_id: string
-  tx_hash: string
-}
-
-export interface VerifyPaymentResponse {
-  valid: boolean
+export interface PaymentStatusResponse {
   deposit_id: number
   status: string
-  payer?: string
+  payment_status: string
+  is_confirmed: boolean
+  order_id?: string
+  payment_id?: string
+  pay_address?: string
+  pay_amount?: string
+  pay_currency?: string
+  price_amount: number
+  price_currency: string
   tx_hash?: string
-  message?: string
+  invoice_url?: string | null
 }
 
 class PaymentService {
@@ -58,17 +63,14 @@ class PaymentService {
   private getHeaders(token: string): HeadersInit {
     return {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
+      Authorization: `Bearer ${token}`,
     }
   }
 
-  /**
-   * Verify if a user exists by username or email
-   */
   async verifyUser(token: string, usernameOrEmail: string): Promise<VerifiedUser> {
     const params = new URLSearchParams({ username_or_email: usernameOrEmail })
     const response = await fetch(`${this.getBaseUrl()}/verify-user?${params}`, {
-      headers: this.getHeaders(token)
+      headers: this.getHeaders(token),
     })
 
     if (!response.ok) {
@@ -81,12 +83,9 @@ class PaymentService {
     return response.json()
   }
 
-  /**
-   * Get available cryptocurrencies for payment
-   */
   async getAvailableCurrencies(token: string): Promise<string[]> {
     const response = await fetch(`${this.getBaseUrl()}/currencies`, {
-      headers: this.getHeaders(token)
+      headers: this.getHeaders(token),
     })
 
     if (!response.ok) {
@@ -97,18 +96,11 @@ class PaymentService {
     return data.currencies || []
   }
 
-  /**
-   * Create a payment order for smart contract payment
-   * Returns order_id and payment details for frontend wallet integration
-   */
-  async createPayment(
-    token: string,
-    request: PaymentRequest
-  ): Promise<PaymentResponse> {
+  async createPayment(token: string, request: PaymentRequest): Promise<PaymentResponse> {
     const response = await fetch(`${this.getBaseUrl()}/create`, {
       method: 'POST',
       headers: this.getHeaders(token),
-      body: JSON.stringify(request)
+      body: JSON.stringify(request),
     })
 
     if (!response.ok) {
@@ -119,40 +111,33 @@ class PaymentService {
     return response.json()
   }
 
-  /**
-   * Verify a payment transaction on the blockchain
-   */
-  async verifyPayment(
-    token: string,
-    request: VerifyPaymentRequest
-  ): Promise<VerifyPaymentResponse> {
-    const response = await fetch(`${this.getBaseUrl()}/verify`, {
+  async syncPayment(token: string, depositId: number): Promise<PaymentStatusResponse> {
+    const response = await fetch(`${this.getBaseUrl()}/sync/${depositId}`, {
       method: 'POST',
       headers: this.getHeaders(token),
-      body: JSON.stringify(request)
     })
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({}))
-      throw new Error(error.detail || 'Failed to verify payment')
+      throw new Error(error.detail || 'Failed to sync payment')
     }
 
     return response.json()
   }
 
-  /**
-   * Check payment status by deposit ID
-   */
-  async checkDepositStatus(token: string, depositId: number): Promise<{
+  async checkDepositStatus(
+    token: string,
+    depositId: number
+  ): Promise<{
     deposit_id: number
     status: string
     is_confirmed: boolean
     order_id?: string
-    tx_hash?: string
+    payment_id?: string
   }> {
     const response = await fetch(`${this.getBaseUrl()}/check/${depositId}`, {
       method: 'POST',
-      headers: this.getHeaders(token)
+      headers: this.getHeaders(token),
     })
 
     if (!response.ok) {
@@ -163,23 +148,9 @@ class PaymentService {
     return response.json()
   }
 
-  /**
-   * Get payment status and details for a deposit
-   */
-  async getPaymentStatus(token: string, depositId: number): Promise<{
-    deposit_id: number
-    status: string
-    is_confirmed: boolean
-    order_id?: string
-    tx_hash?: string
-    amount: number
-    currency: string
-    contract_address: string
-    token_address: string
-    chain_id: number
-  }> {
+  async getPaymentStatus(token: string, depositId: number): Promise<PaymentStatusResponse> {
     const response = await fetch(`${this.getBaseUrl()}/check-status/${depositId}`, {
-      headers: this.getHeaders(token)
+      headers: this.getHeaders(token),
     })
 
     if (!response.ok) {

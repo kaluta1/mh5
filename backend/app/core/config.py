@@ -137,20 +137,12 @@ class Settings(BaseModel):
     SHUFTI_REDIRECT_URL: str = _first_nonempty_env("SHUFTI_REDIRECT_URL", "shufti_redirect_url")
     
     # ============================================
-    # Reown/WalletConnect Configuration
+    # NOWPayments (crypto checkout)
     # ============================================
-    REOWN_PROJECT_ID: str = os.getenv("REOWN_PROJECT_ID", "")
-    
-    # ============================================
-    # BSC On-chain Payment Configuration
-    # ============================================
-    BSC_RPC_URL: str = os.getenv("BSC_RPC_URL", "https://bsc-dataseed.binance.org")
-    BSC_CHAIN_ID: int = int(os.getenv("BSC_CHAIN_ID", "56"))
-    BSC_PAYMENT_CONTRACT: str = os.getenv("BSC_PAYMENT_CONTRACT", "")
-    BSC_CONFIRMATIONS: int = int(os.getenv("BSC_CONFIRMATIONS", "1"))
-    BSC_EXPLORER_URL: str = os.getenv("BSC_EXPLORER_URL", "https://bscscan.com")
-    BSC_USDT_ADDRESS: str = os.getenv("BSC_USDT_ADDRESS", "")
-    BSC_USDT_DECIMALS: int = int(os.getenv("BSC_USDT_DECIMALS", "18"))
+    NOWPAYMENTS_API_KEY: str = os.getenv("NOWPAYMENTS_API_KEY", "")
+    NOWPAYMENTS_IPN_SECRET: str = os.getenv("NOWPAYMENTS_IPN_SECRET", "")
+    NOWPAYMENTS_SANDBOX: bool = os.getenv("NOWPAYMENTS_SANDBOX", "false").lower() == "true"
+    NOWPAYMENTS_DEFAULT_PAY_CURRENCY: str = os.getenv("NOWPAYMENTS_DEFAULT_PAY_CURRENCY", "usdttrc20")
     
     # CONTENT MODERATION (Sightengine)
     ENABLE_CONTENT_MODERATION: bool = os.getenv("ENABLE_CONTENT_MODERATION", "false").lower() == "true"

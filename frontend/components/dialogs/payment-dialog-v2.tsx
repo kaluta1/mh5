@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useLanguage } from '@/contexts/language-context'
 import { useAuth } from '@/hooks/use-auth'
 import { logger } from '@/lib/logger'
@@ -32,7 +32,6 @@ import {
 } from '@/components/ui/select'
 import {
   CreditCard,
-  Wallet,
   Building2,
   Bitcoin,
   Copy,
@@ -49,12 +48,10 @@ import {
   Crown,
   Calendar,
   CheckCircle2,
-  ExternalLink
+  Clock
 } from 'lucide-react'
+import { QRCodeSVG } from 'qrcode.react'
 import { paymentService, PaymentResponse, VerifiedUser, PaymentRecipient } from '@/services/payment-service'
-import { useWalletPayment } from '@/hooks/use-wallet-payment'
-import { CONTRACTS } from '@/lib/config'
-import { ReownAppKitProvider } from '@/components/reown-appkit-provider'
 
 interface PaymentMethod {
   id: string
@@ -78,11 +75,11 @@ const KYC_PRICE_USD = 10
 
 const getPaymentMethods = (t: (key: string) => string | undefined): PaymentMethod[] => [
   {
-    id: 'usdt',
-    name: 'USDT (BSC)',
-    icon: <Wallet className="w-5 h-5 text-yellow-500" />,
+    id: 'crypto',
+    name: t('payment.crypto_nowpayments') || 'Cryptocurrency',
+    icon: <Bitcoin className="w-5 h-5 text-orange-500" />,
     category: 'crypto',
-    network: 'BNB Smart Chain'
+    network: 'NOWPayments'
   },
   {
     id: 'card',
@@ -102,19 +99,11 @@ interface PaymentDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   initialProductCode?: string
-  /** Fires once after on-chain payment + backend verify succeed (may be async). */
+  /** Fires once after NOWPayments confirms payment (may be async). */
   onPaymentInitiated?: () => void | Promise<void>
 }
 
-export function PaymentDialog(props: PaymentDialogProps) {
-  return (
-    <ReownAppKitProvider>
-      <PaymentDialogInner {...props} />
-    </ReownAppKitProvider>
-  )
-}
-
-function PaymentDialogInner({
+export function PaymentDialog({
   open,
   onOpenChange,
   initialProductCode = 'kyc',
@@ -122,11 +111,6 @@ function PaymentDialogInner({
 }: PaymentDialogProps) {
   const { t } = useLanguage()
   const { user } = useAuth()
-
-  const text = useCallback((key: string, fallback: string) => {
-    const translated = t(key)
-    return translated && translated !== key ? translated : fallback
-  }, [t])
   
   // Get payment methods with translations
   const paymentMethods = getPaymentMethods(t)
@@ -141,17 +125,9 @@ function PaymentDialogInner({
   const [isLoading, setIsLoading] = useState(false)
   const [payment, setPayment] = useState<PaymentResponse | null>(null)
   const [paymentError, setPaymentError] = useState<string | null>(null)
-  const [txHash, setTxHash] = useState<string | null>(null)
+  const [isCheckingPayment, setIsCheckingPayment] = useState(false)
+  const [statusMessage, setStatusMessage] = useState<string | null>(null)
   
-  // Wallet payment hook
-  const {
-    isConnecting,
-    isProcessing,
-    connectedAddress,
-    error: walletError,
-    connectWallet,
-    executePayment
-  } = useWalletPayment()
   const [copied, setCopied] = useState(false)
   const [showCloseConfirm, setShowCloseConfirm] = useState(false)
   const [includeMyself, setIncludeMyself] = useState(true)
@@ -161,6 +137,81 @@ function PaymentDialogInner({
     initialProductCode === 'annual_membership' ? 50 : 100
   )
   const [paymentConfirmed, setPaymentConfirmed] = useState(false)
+
+  // Poll NOWPayments while on payment step
+  useEffect(() => {
+    if (!open || step !== 'payment' || !payment?.deposit_id || paymentConfirmed) {
+      return
+    }
+
+    const token = localStorage.getItem('access_token')
+    if (!token) return
+
+    const poll = async () => {
+      try {
+        const status = await paymentService.getPaymentStatus(token, payment.deposit_id)
+        if (status.is_confirmed) {
+          setPaymentConfirmed(true)
+          setStep('success')
+          if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current)
+            pollingIntervalRef.current = null
+          }
+          try {
+            await Promise.resolve(onPaymentInitiated?.())
+          } catch (callbackErr) {
+            logger.error('onPaymentInitiated error', callbackErr)
+          }
+        } else if (status.payment_status === 'confirming') {
+          setStatusMessage(t('payment.confirming') || 'Payment detected, confirming...')
+        } else if (status.payment_status === 'partially_paid') {
+          setStatusMessage(t('payment.partially_paid') || 'Partial payment received')
+        }
+      } catch (err) {
+        logger.error('Payment polling error', err)
+      }
+    }
+
+    poll()
+    pollingIntervalRef.current = setInterval(poll, 30000)
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current)
+        pollingIntervalRef.current = null
+      }
+    }
+  }, [open, step, payment?.deposit_id, paymentConfirmed, onPaymentInitiated, t])
+
+  const checkPaymentNow = async () => {
+    if (!payment?.deposit_id) return
+    const token = localStorage.getItem('access_token')
+    if (!token) return
+
+    setIsCheckingPayment(true)
+    setPaymentError(null)
+    try {
+      const status = await paymentService.syncPayment(token, payment.deposit_id)
+      if (status.is_confirmed) {
+        setPaymentConfirmed(true)
+        setStep('success')
+        try {
+          await Promise.resolve(onPaymentInitiated?.())
+        } catch (callbackErr) {
+          logger.error('onPaymentInitiated error', callbackErr)
+        }
+      } else {
+        setStatusMessage(
+          status.payment_status === 'waiting'
+            ? (t('payment.waiting_payment') || 'Waiting for payment...')
+            : (t('payment.confirming') || 'Checking payment status...')
+        )
+      }
+    } catch (error) {
+      setPaymentError(error instanceof Error ? error.message : 'Failed to check payment')
+    } finally {
+      setIsCheckingPayment(false)
+    }
+  }
 
   // Generate unique ID
   const generateId = () => Math.random().toString(36).substr(2, 9)
@@ -256,95 +307,58 @@ function PaymentDialogInner({
     setSelectedMethod(methodId)
     setPaymentError(null)
 
-    const method = paymentMethods.find(m => m.id === methodId)
-    
-    if (method?.category === 'crypto') {
-      setIsLoading(true)
-      try {
-        const token = localStorage.getItem('access_token')
-        if (!token) {
-          setPaymentError(t('common.login_required') || 'Veuillez vous connecter')
-          setIsLoading(false)
-          return
-        }
-
-        // Prepare recipients for API (include myself + others)
-        const apiRecipients: PaymentRecipient[] = []
-        
-        // Add myself first if included
-        if (includeMyself && user) {
-          apiRecipients.push({
-            username_or_email: user.username || user.email,
-            product_code: myselfProduct,
-            amount: myselfAmount
-          })
-        }
-        
-        // Add other recipients
-        recipients.forEach(r => {
-          if (r.verifiedUser) {
-            apiRecipients.push({
-              username_or_email: r.verifiedUser.username,
-              product_code: r.productCode,
-              amount: r.amount
-            })
-          }
-        })
-
-        // Create payment order
-        const paymentOrder = await paymentService.createPayment(token, {
-          amount: totalAmount,
-          currency: 'usd',
-          product_code: apiRecipients[0]?.product_code || 'kyc',
-          recipients: apiRecipients
-        })
-
-        setPayment(paymentOrder)
-        setStep('payment')
-      } catch (error) {
-        logger.error('Payment creation error', error)
-        setPaymentError(error instanceof Error ? error.message : 'Erreur lors de la création du paiement')
-      } finally {
-        setIsLoading(false)
-      }
-    } else if (method?.category === 'card') {
+    const method = paymentMethods.find((m) => m.id === methodId)
+    if (method?.category === 'card') {
       alert(t('payment.card_coming_soon') || 'Paiement par carte bientôt disponible')
-    } else if (method?.category === 'bank') {
-      setStep('payment')
+      return
     }
-  }
+    if (method?.category === 'bank') {
+      alert(t('payment.bank_coming_soon') || 'Bank transfer coming soon')
+      return
+    }
 
-  // Handle wallet connection and payment execution
-  const handleWalletPayment = async () => {
-    if (!payment) return
-
+    setIsLoading(true)
     try {
-      setPaymentError(null)
-      
-      // Connect wallet if not connected
-      if (!connectedAddress) {
-        await connectWallet()
-      }
-
-      // Get auth token
       const token = localStorage.getItem('access_token')
       if (!token) {
-        throw new Error(t('common.login_required') || 'Veuillez vous connecter')
+        setPaymentError(t('common.login_required') || 'Veuillez vous connecter')
+        return
       }
 
-      // Execute payment
-      const hash = await executePayment(payment, token)
-      setTxHash(hash)
-      setPaymentConfirmed(true)
-      setStep('success')
-      try {
-        await Promise.resolve(onPaymentInitiated?.())
-      } catch (callbackErr) {
-        logger.error('onPaymentInitiated error', callbackErr)
+      const apiRecipients: PaymentRecipient[] = []
+
+      if (includeMyself && user) {
+        apiRecipients.push({
+          username_or_email: user.username || user.email,
+          product_code: myselfProduct,
+          amount: myselfAmount,
+        })
       }
+
+      recipients.forEach((r) => {
+        if (r.verifiedUser) {
+          apiRecipients.push({
+            username_or_email: r.verifiedUser.username,
+            product_code: r.productCode,
+            amount: r.amount,
+          })
+        }
+      })
+
+      const paymentOrder = await paymentService.createPayment(token, {
+        amount: totalAmount,
+        currency: 'usd',
+        product_code: apiRecipients[0]?.product_code || 'kyc',
+        recipients: apiRecipients,
+      })
+
+      setPayment(paymentOrder)
+      setStep('payment')
     } catch (error) {
-      logger.error('Wallet payment error', error)
-      setPaymentError(error instanceof Error ? error.message : 'Erreur lors du paiement')
+      logger.error('Payment creation error', error)
+      setPaymentError(error instanceof Error ? error.message : 'Erreur lors de la création du paiement')
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -375,7 +389,8 @@ function PaymentDialogInner({
     setSelectedMethod(null)
     setPayment(null)
     setPaymentError(null)
-    setTxHash(null)
+    setStatusMessage(null)
+    setIsCheckingPayment(false)
     setPaymentConfirmed(false)
     setShowCloseConfirm(false)
     setIncludeMyself(true)
@@ -385,7 +400,6 @@ function PaymentDialogInner({
       initialProductCode === 'annual_membership' ? 50 : 100
     )
     setPaymentConfirmed(false)
-    setTxHash(null)
     onOpenChange(false)
   }
 
@@ -861,151 +875,93 @@ function PaymentDialogInner({
             </div>
           )}
 
-          {/* Step 3: Wallet Payment */}
+          {/* Step 3: NOWPayments checkout */}
           {step === 'payment' && payment && (
             <div className="space-y-4">
-              {/* Payment Amount */}
               <div className="bg-myhigh5-primary/5 dark:bg-myhigh5-primary/10 rounded-xl p-4 text-center border border-myhigh5-primary/20">
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
-                  {t('Amount to pay') || 'Montant à payer'}
+                  {t('payment.amount_to_send') || 'Amount to send'}
                 </p>
-                <p className="text-2xl font-bold text-myhigh5-primary">
-                  ${payment.price_amount.toFixed(2)} {payment.price_currency.toUpperCase()}
+                <p className="text-2xl font-bold text-myhigh5-primary break-all">
+                  {payment.pay_amount} {payment.pay_currency.toUpperCase()}
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  ≈ {(parseFloat(payment.amount_wei) / 1e18).toFixed(6)} USDT
+                  ≈ ${payment.price_amount.toFixed(2)} {payment.price_currency.toUpperCase()}
                 </p>
               </div>
 
-              {/* Wallet Connection Status */}
-              {connectedAddress ? (
-                <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-                  <CheckCircle2 className="w-5 h-5 text-green-500" />
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-green-700 dark:text-green-300">
-                      {text('payment.wallet_connected', 'Wallet connected')}
-                    </p>
-                    <p className="text-xs text-green-600 dark:text-green-400 font-mono">
-                      {connectedAddress.slice(0, 6)}...{connectedAddress.slice(-4)}
-                    </p>
+              {payment.pay_address && (
+                <div className="flex justify-center">
+                  <div className="p-3 bg-white rounded-xl border border-gray-200">
+                    <QRCodeSVG value={payment.pay_address} size={140} level="H" includeMargin />
                   </div>
                 </div>
-              ) : (
-                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                  <p className="text-sm text-blue-700 dark:text-blue-300 text-center">
-                    {text('payment.connect_wallet_first', 'Connect your wallet to continue')}
+              )}
+
+              {payment.pay_address && (
+                <div>
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    {t('payment.receiving_address') || 'Receiving address'}
                   </p>
+                  <div className="flex items-start gap-2 p-3 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                    <code className="text-xs flex-1 break-all text-gray-900 dark:text-white font-mono">
+                      {payment.pay_address}
+                    </code>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="flex-shrink-0 h-8 w-8 p-0"
+                      onClick={() => copyToClipboard(payment.pay_address)}
+                    >
+                      {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                    </Button>
+                  </div>
                 </div>
               )}
 
-              {!connectedAddress && (
-                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/60">
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">
-                    {text('payment.reown_connect_title', 'Choose a wallet with Reown')}
-                  </p>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    {text('payment.reown_connect_desc', 'Tap the button below and Reown will open its wallet list so the user can choose any supported wallet on desktop or mobile.')}
-                  </p>
-                  <p className="mt-3 text-xs text-gray-600 dark:text-gray-300">
-                    {text('payment.reown_step_1', 'After choosing a wallet, approve the connection inside that wallet to continue.')}
-                  </p>
-                </div>
-              )}
-
-              {/* Network Info */}
-              <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
-                  {t('payment.network') || 'Réseau'}
-                </p>
-                <p className="text-sm font-medium text-gray-900 dark:text-white">
-                  BNB Smart Chain (BSC)
-                </p>
-              </div>
-
-              {/* Order ID */}
               <div className="break-all px-2 text-center text-xs text-gray-500 dark:text-gray-400">
-                {t('payment.order_id') || 'Référence'}: {payment.order_id}
+                {t('payment.order_id') || 'Reference'}: {payment.order_id}
               </div>
 
-              {/* Error Messages */}
-              {(paymentError || walletError) && (
+              <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
+                <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
+                <p className="text-xs text-amber-800 dark:text-amber-200">
+                  {t('payment.network_warning') || 'Send the exact amount to the address above. Payment is processed by NOWPayments.'}
+                </p>
+              </div>
+
+              {statusMessage && (
+                <div className="flex items-center justify-center gap-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                  <Clock className="w-4 h-4 text-blue-500" />
+                  <p className="text-xs text-blue-700 dark:text-blue-300">{statusMessage}</p>
+                </div>
+              )}
+
+              {paymentError && (
                 <div className="flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
                   <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
-                  <p className="text-sm text-red-700 dark:text-red-300">
-                    {paymentError || walletError}
-                  </p>
+                  <p className="text-sm text-red-700 dark:text-red-300">{paymentError}</p>
                 </div>
               )}
 
-              {/* Transaction Hash (if payment completed) */}
-              {txHash && (
-                <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-                  <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
-                    {t('payment.transaction_hash') || 'Hash de transaction'}
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <code className="text-xs flex-1 break-all text-gray-900 dark:text-white font-mono">
-                      {txHash}
-                    </code>
-                    <a
-                      href={`${CONTRACTS.EXPLORER_URL}/tx/${txHash}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-shrink-0"
-                    >
-                      <ExternalLink className="w-4 h-4 text-blue-500" />
-                    </a>
-                  </div>
-                </div>
-              )}
-
-              {/* Actions */}
               <div className="flex flex-col gap-3 pt-2 sm:flex-row">
-                <Button variant="outline" onClick={handleBack} className="flex-1" disabled={isProcessing || isConnecting}>
-                  {t('common.back') || 'Retour'}
+                <Button variant="outline" onClick={handleBack} className="flex-1" disabled={isCheckingPayment}>
+                  {t('common.back') || 'Back'}
                 </Button>
-                {!connectedAddress ? (
-                  <Button
-                    onClick={connectWallet}
-                    disabled={isConnecting}
-                    className="flex-1 bg-myhigh5-primary hover:bg-myhigh5-primary/90"
-                  >
-                    {isConnecting ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        {text('payment.connecting_wallet', 'Connecting wallet...')}
-                      </>
-                    ) : (
-                      <>
-                        <Wallet className="w-4 h-4 mr-2" />
-                        {text('payment.connect_wallet', 'Open Reown wallet list')}
-                      </>
-                    )}
-                  </Button>
-                ) : (
-                  <Button
-                    onClick={handleWalletPayment}
-                    disabled={isProcessing || paymentConfirmed}
-                    className="flex-1 bg-myhigh5-primary hover:bg-myhigh5-primary/90"
-                  >
-                    {isProcessing ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        {t('processing') || 'Traitement...'}
-                      </>
-                    ) : paymentConfirmed ? (
-                      <>
-                        <CheckCircle2 className="w-4 h-4 mr-2" />
-                        {t('payment.completed') || 'Terminé'}
-                      </>
-                    ) : (
-                      <>
-                        <Wallet className="w-4 h-4 mr-2" />
-                        {t('pay now') || 'Payer maintenant'}
-                      </>
-                    )}
-                  </Button>
-                )}
+                <Button
+                  onClick={checkPaymentNow}
+                  disabled={isCheckingPayment}
+                  className="flex-1 bg-myhigh5-primary hover:bg-myhigh5-primary/90"
+                >
+                  {isCheckingPayment ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      {t('payment.checking') || 'Checking...'}
+                    </>
+                  ) : (
+                    t('payment.payment_done') || "I've sent the payment"
+                  )}
+                </Button>
               </div>
             </div>
           )}

@@ -78,21 +78,23 @@ export function ResumePaymentDialog({
       setPaymentConfirmed(false)
       setLastCheckTime(null)
       setStatusMessage(null)
+
+      if (!externalPaymentId?.trim()) {
+        setError(
+          t('payment.no_payment_id') ||
+            'No payment address is available for this deposit. Please create a new payment.'
+        )
+        setIsLoading(false)
+      }
     }
-  }, [open, depositId])
+  }, [open, depositId, externalPaymentId, t])
 
   // Fetch payment details
   const fetchPaymentDetails = useCallback(async () => {
-    if (!externalPaymentId) {
-      setError(t('payment.no_payment_id') || 'Aucun identifiant de paiement')
-      setIsLoading(false)
-      return
-    }
-
     try {
       const token = localStorage.getItem('access_token')
       const apiUrl = getEffectiveApiUrl()
-      
+
       const response = await fetch(
         `${apiUrl}/api/v1/payments/check-status/${depositId}`,
         {
@@ -114,6 +116,16 @@ export function ResumePaymentDialog({
         onPaymentCompleted?.()
       } else if (data.status === 'expired') {
         setError(t('payment.payment_expired') || 'Ce paiement a expiré')
+      } else if (data.status === 'failed') {
+        setError(
+          t('payment.creation_failed') ||
+            'This payment could not be created. Please start a new checkout from the wallet page.'
+        )
+      } else if (!data.pay_address?.trim()) {
+        setError(
+          t('payment.no_payment_id') ||
+            'No payment address is available for this deposit. Please create a new payment.'
+        )
       } else {
         setPaymentDetails(data)
       }
@@ -125,7 +137,7 @@ export function ResumePaymentDialog({
     } finally {
       setIsLoading(false)
     }
-  }, [depositId, externalPaymentId, t, onPaymentCompleted])
+  }, [depositId, t, onPaymentCompleted])
 
   // Check payment status
   const checkPaymentStatus = useCallback(async () => {
@@ -189,12 +201,12 @@ export function ResumePaymentDialog({
   }, [])
 
   useEffect(() => {
-    if (open && !paymentConfirmed) {
+    if (open && !paymentConfirmed && externalPaymentId?.trim()) {
       fetchPaymentDetails()
       startPolling()
     }
     return () => stopPolling()
-  }, [open, depositId, paymentConfirmed, fetchPaymentDetails, startPolling, stopPolling])
+  }, [open, depositId, paymentConfirmed, externalPaymentId, fetchPaymentDetails, startPolling, stopPolling])
 
   const copyToClipboard = async (text: string) => {
     await navigator.clipboard.writeText(text)

@@ -12,8 +12,7 @@ from app.db.session import SessionLocal
 from app.models.payment import Deposit, DepositStatus, ProductType
 from app.models.affiliate import CommissionType
 from app.crud.crud_affiliate import affiliate_commission
-# Note: Smart contract payments are verified on-demand via /verify endpoint
-# This scheduler only handles expiration of pending payments
+# Note: Crypto payments use NOWPayments; verified via IPN webhook + scheduler polling.
 from app.services.commission_distribution import process_payment_validation
 
 logger = logging.getLogger(__name__)
@@ -106,11 +105,24 @@ class PaymentScheduler:
             db.close()
     
     async def _check_single_payment(self, db: Session, deposit: Deposit):
-        """Check and update a single payment"""
-        # For smart contract payments, verification is done on-demand
-        # This function only handles expiration
-        # If deposit has a tx_hash (external_payment_id), it should be verified via /verify endpoint
-        pass
+        """Poll NOWPayments and finalize deposit when finished."""
+        if not deposit.external_payment_id:
+            return
+        if deposit.status != DepositStatus.PENDING and deposit.status != DepositStatus.PARTIALLY_PAID:
+            return
+
+        from app.services.nowpayments_service import (
+            finalize_deposit_from_nowpayments,
+            get_payment_status,
+        )
+
+        try:
+            payload = await get_payment_status(deposit.external_payment_id)
+            ok = finalize_deposit_from_nowpayments(db, deposit, payload, defer_commit=True)
+            if not ok:
+                logger.warning("Commission/accounting failed for deposit %s during scheduler sync", deposit.id)
+        except Exception as exc:
+            logger.error("NOWPayments sync failed for deposit %s: %s", deposit.id, exc)
     
     def _create_sponsor_commission(self, db: Session, deposit: Deposit):
         """Crée les commissions pour les parrains quand un paiement est validé"""
@@ -136,30 +148,45 @@ payment_scheduler = PaymentScheduler()
 
 
 async def check_payment_now(db: Session, deposit_id: int) -> dict:
-    """
-    Check payment status (for smart contracts, verification is done via /verify endpoint)
-    This function only checks expiration
-    """
+    """Check payment status via NOWPayments (or return current deposit state)."""
+    from app.services.nowpayments_service import NowPaymentsError, sync_deposit_with_provider
+
     deposit = db.query(Deposit).filter(Deposit.id == deposit_id).first()
     if not deposit:
         return {"error": "Deposit not found", "status": None}
-    
-    # Check if expired (older than 1 hour)
+
     expiration_time = datetime.utcnow() - timedelta(hours=1)
-    if deposit.created_at < expiration_time:
+    if deposit.created_at < expiration_time and deposit.status == DepositStatus.PENDING:
         deposit.status = DepositStatus.EXPIRED
         db.commit()
         return {
             "status": "expired",
             "payment_status": "expired",
             "is_confirmed": False,
-            "message": "Payment expired after 1 hour"
+            "message": "Payment expired after 1 hour",
         }
-    
+
+    if deposit.external_payment_id and deposit.status in (
+        DepositStatus.PENDING,
+        DepositStatus.PARTIALLY_PAID,
+    ):
+        try:
+            payload = await sync_deposit_with_provider(db, deposit)
+            db.commit()
+            return payload
+        except NowPaymentsError as exc:
+            db.rollback()
+            return {
+                "status": deposit.status.value,
+                "payment_status": deposit.status.value,
+                "is_confirmed": False,
+                "message": str(exc),
+            }
+
     return {
-        "status": str(deposit.status.value),
+        "status": deposit.status.value,
         "payment_status": deposit.status.value,
-        "is_confirmed": deposit.status == DepositStatus.VALIDATED
+        "is_confirmed": deposit.status == DepositStatus.VALIDATED,
     }
 
 
