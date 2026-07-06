@@ -49,7 +49,6 @@ export function ResumePaymentDialog({
   open,
   onOpenChange,
   depositId,
-  externalPaymentId,
   productCode,
   amount,
   onPaymentCompleted
@@ -78,16 +77,8 @@ export function ResumePaymentDialog({
       setPaymentConfirmed(false)
       setLastCheckTime(null)
       setStatusMessage(null)
-
-      if (!externalPaymentId?.trim()) {
-        setError(
-          t('payment.no_payment_id') ||
-            'No payment address is available for this deposit. Please create a new payment.'
-        )
-        setIsLoading(false)
-      }
     }
-  }, [open, depositId, externalPaymentId, t])
+  }, [open, depositId])
 
   // Fetch payment details
   const fetchPaymentDetails = useCallback(async () => {
@@ -179,6 +170,8 @@ export function ResumePaymentDialog({
         setStatusMessage(t('payment.waiting_payment') || 'En attente de paiement...')
       } else if (data.payment_status === 'confirming') {
         setStatusMessage(t('payment.confirming') || 'Paiement détecté, confirmation...')
+      } else if (data.pay_address?.trim()) {
+        setPaymentDetails((prev) => prev ?? data)
       }
     } catch (err) {
       console.error('Error checking payment:', err)
@@ -201,12 +194,12 @@ export function ResumePaymentDialog({
   }, [])
 
   useEffect(() => {
-    if (open && !paymentConfirmed && externalPaymentId?.trim()) {
+    if (open && depositId && !paymentConfirmed) {
       fetchPaymentDetails()
       startPolling()
     }
     return () => stopPolling()
-  }, [open, depositId, paymentConfirmed, externalPaymentId, fetchPaymentDetails, startPolling, stopPolling])
+  }, [open, depositId, paymentConfirmed, fetchPaymentDetails, startPolling, stopPolling])
 
   const copyToClipboard = async (text: string) => {
     await navigator.clipboard.writeText(text)

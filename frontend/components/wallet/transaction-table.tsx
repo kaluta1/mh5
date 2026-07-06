@@ -252,10 +252,10 @@ export function TransactionTable({
                 
                 {showActions && (
                   <div className="flex items-center gap-2">
-                    {/* Pay only when NOWPayments invoice exists (skip orphaned failed creates) */}
+                    {/* Pay: resume by deposit_id; backend is source of truth for payment details */}
                     {transaction.category === 'deposit' &&
                      transaction.status === 'pending' &&
-                     Boolean(transaction.external_payment_id?.trim()) && (
+                     Boolean(transaction.deposit_id) && (
                       <Button
                         size="sm"
                         className="bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white rounded-lg"
