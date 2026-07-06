@@ -1,3 +1,3 @@
 """Backend build identifier — bump when deploying nomination/API fixes."""
 
-BACKEND_BUILD_ID = "nowpayments-usdtbsc-20260706"
+BACKEND_BUILD_ID = "english-only-20260706"

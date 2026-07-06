@@ -146,7 +146,7 @@ export default function TransactionsPage() {
               <div className="w-10 h-10 rounded-xl bg-myhigh5-primary flex items-center justify-center shadow-lg shadow-myhigh5-primary/25">
                 <History className="w-5 h-5 text-white" />
               </div>
-              {t('dashboard.wallet.all_transactions') || 'Toutes les transactions'}
+              {t('dashboard.wallet.all_transactions') || 'All transactions'}
             </h1>
             <p className="text-gray-500 dark:text-gray-400 mt-1">
               {t('dashboard.wallet.transactions_subtitle') || 'Historique complet de vos transactions'}
@@ -181,7 +181,7 @@ export default function TransactionsPage() {
               >
                 {type === 'all' && (t('dashboard.wallet.all') || 'Tout')}
                 {type === 'commission' && (t('dashboard.wallet.commissions') || 'Commissions')}
-                {type === 'deposit' && (t('dashboard.wallet.purchases') || 'Achats')}
+                {type === 'deposit' && (t('dashboard.wallet.purchases') || 'Purchases')}
               </button>
             ))}
           </div>
@@ -199,7 +199,7 @@ export default function TransactionsPage() {
                 }`}
               >
                 {status === 'all' && (t('dashboard.wallet.all') || 'Tout')}
-                {status === 'completed' && (t('dashboard.wallet.completed') || 'Payé')}
+                {status === 'completed' && (t('dashboard.wallet.completed') || 'Completed')}
                 {status === 'approved' && (t('dashboard.wallet.approved') || 'Approuvé')}
                 {status === 'pending' && (t('dashboard.wallet.pending') || 'En attente')}
               </button>

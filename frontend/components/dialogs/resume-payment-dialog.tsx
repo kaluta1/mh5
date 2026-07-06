@@ -167,7 +167,7 @@ export function ResumePaymentDialog({
       } else if (data.payment_status === 'partially_paid') {
         setStatusMessage(t('payment.partially_paid') || 'Paiement partiel reçu')
       } else if (data.payment_status === 'waiting') {
-        setStatusMessage(t('payment.waiting_payment') || 'En attente de paiement...')
+        setStatusMessage(t('payment.waiting_payment') || 'Waiting for payment...')
       } else if (data.payment_status === 'confirming') {
         setStatusMessage(t('payment.confirming') || 'Paiement détecté, confirmation...')
       } else if (data.pay_address?.trim()) {

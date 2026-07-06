@@ -152,17 +152,10 @@ export default function RootLayout({
                   try { return decodeURIComponent(m[1]); } catch (e) { return m[1]; }
                 }
                 try {
-                  var fromStorage = null;
-                  try { fromStorage = localStorage.getItem(KEY); } catch (e) {}
-                  var fromCookie = readCookie();
-                  var lang = valid(fromStorage) ? fromStorage : (valid(fromCookie) ? fromCookie : ${serverLangJson});
-                  if (valid(lang)) {
-                    document.documentElement.setAttribute('lang', lang);
-                    document.documentElement.setAttribute('dir', lang === 'ar' ? 'rtl' : 'ltr');
-                    if (valid(fromStorage) && fromStorage !== fromCookie) {
-                      document.cookie = KEY + '=' + encodeURIComponent(fromStorage) + '; path=/; max-age=31536000; SameSite=Lax';
-                    }
-                  }
+                  localStorage.setItem(KEY, 'en');
+                  document.documentElement.setAttribute('lang', 'en');
+                  document.documentElement.setAttribute('dir', 'ltr');
+                  document.cookie = KEY + '=en; path=/; max-age=31536000; SameSite=Lax';
                 } catch (e) {}
               })();
             `,

@@ -5,7 +5,6 @@
  */
 import type { Language } from './locale-registry'
 import { getSeoString } from './seo-translations'
-import { LANGUAGE_PREFERENCE_KEY, SUPPORTED_LANGUAGE_CODES } from './language-cookie'
 
 export interface MetadataTranslations {
   siteName: string
@@ -86,24 +85,8 @@ export function getMetadataTranslations(lang: Language = 'en'): MetadataTranslat
 /**
  * Détecte la langue depuis les headers de la requête
  */
-export function detectLanguageFromHeaders(headers: Headers): Language {
-  const rawCookie = headers.get('cookie')?.match(
-    new RegExp(`${LANGUAGE_PREFERENCE_KEY}=([^;]+)`)
-  )?.[1]
-  let cookieLanguage: string | undefined
-  if (rawCookie) {
-    try {
-      cookieLanguage = decodeURIComponent(rawCookie)
-    } catch {
-      cookieLanguage = rawCookie
-    }
-  }
-
-  if (cookieLanguage && (SUPPORTED_LANGUAGE_CODES as string[]).includes(cookieLanguage)) {
-    return cookieLanguage as Language
-  }
-
-  // Default to English — do not infer locale from Accept-Language (avoids French UI for EN visitors).
+export function detectLanguageFromHeaders(_headers: Headers): Language {
+  // English-only site — ignore saved locale cookies.
   return 'en'
 }
 

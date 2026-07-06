@@ -4,18 +4,13 @@ import React, {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useLayoutEffect,
   useMemo,
   useState,
 } from "react"
-import { type Language, LANGUAGE_CODES, languages } from "@/lib/locale-registry"
+import { type Language } from "@/lib/locale-registry"
 import { LANGUAGE_PREFERENCE_KEY, setLanguagePreferenceClient } from "@/lib/language-cookie"
-import {
-  ENGLISH_TRANSLATIONS,
-  loadTranslations,
-  lookupTranslation,
-} from "@/lib/translations-loader"
+import { ENGLISH_TRANSLATIONS, lookupTranslation } from "@/lib/translations-loader"
 
 interface LanguageContextType {
   language: Language
@@ -26,75 +21,34 @@ interface LanguageContextType {
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined)
 
-const SUPPORTED_LANGUAGES = LANGUAGE_CODES as readonly Language[]
 type TranslationsMap = Record<string, any>
 
-const LANG_DEFAULT_EN_MIGRATION = 'myhigh5-default-lang-en-v1'
+/** Bump when forcing English-only so saved fr/sw/etc. preferences reset once. */
+const ENGLISH_ONLY_MIGRATION = 'myhigh5-english-only-v2'
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
-  // English is bundled synchronously so labels never render blank on first paint.
-  const [language, setLanguageState] = useState<Language>("en")
-  const [translationsBundle, setTranslationsBundle] =
-    useState<TranslationsMap>(ENGLISH_TRANSLATIONS)
-  const [aiTranslationPending, setAiTranslationPending] = useState(false)
+  const [language] = useState<Language>("en")
+  const [translationsBundle] = useState<TranslationsMap>(ENGLISH_TRANSLATIONS)
 
-  const setLanguage = useCallback((lang: Language) => {
-    setLanguageState(lang)
-  }, [])
-
-  /** Load saved language before paint so the persist effect does not clobber localStorage with a stray `en`. */
+  /** Site is English-only: reset any saved locale and keep html lang=en. */
   useLayoutEffect(() => {
-    if (!localStorage.getItem(LANG_DEFAULT_EN_MIGRATION)) {
+    if (!localStorage.getItem(ENGLISH_ONLY_MIGRATION)) {
       localStorage.setItem(LANGUAGE_PREFERENCE_KEY, 'en')
-      localStorage.setItem(LANG_DEFAULT_EN_MIGRATION, '1')
-      setLanguageState('en')
-      return
-    }
-    const savedLanguage = localStorage.getItem(LANGUAGE_PREFERENCE_KEY) as Language
-    if (savedLanguage && SUPPORTED_LANGUAGES.includes(savedLanguage)) {
-      setLanguageState(savedLanguage)
+      localStorage.setItem(ENGLISH_ONLY_MIGRATION, '1')
     } else {
-      setLanguageState("en")
-      localStorage.setItem(LANGUAGE_PREFERENCE_KEY, "en")
+      localStorage.setItem(LANGUAGE_PREFERENCE_KEY, 'en')
+    }
+    setLanguagePreferenceClient('en')
+    const html = document.documentElement
+    if (html) {
+      html.setAttribute('lang', 'en')
+      html.setAttribute('dir', 'ltr')
     }
   }, [])
 
-  useEffect(() => {
-    let active = true
-    setAiTranslationPending(language !== "en")
-
-    loadTranslations(language)
-      .then((bundle) => {
-        if (active) {
-          setTranslationsBundle(bundle)
-          setAiTranslationPending(false)
-        }
-      })
-      .catch(() => {
-        // Never clear labels — keep English (or the last good bundle).
-        if (active) {
-          setTranslationsBundle(ENGLISH_TRANSLATIONS)
-          setAiTranslationPending(false)
-        }
-      })
-
-    return () => {
-      active = false
-    }
-  }, [language])
-
-  useEffect(() => {
-    localStorage.setItem(LANGUAGE_PREFERENCE_KEY, language)
-    setLanguagePreferenceClient(language)
-    if (typeof document !== "undefined") {
-      const meta = languages[language]
-      const html = document.documentElement
-      if (html) {
-        html.setAttribute("lang", language)
-        html.setAttribute("dir", meta?.rtl ? "rtl" : "ltr")
-      }
-    }
-  }, [language])
+  const setLanguage = useCallback((_lang: Language) => {
+    // English-only — language selector is hidden; ignore switches.
+  }, [])
 
   const t = useCallback(
     (key: string): string => {
@@ -110,8 +64,8 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   )
 
   const value = useMemo(
-    () => ({ language, setLanguage, t, aiTranslationPending }),
-    [language, setLanguage, t, aiTranslationPending],
+    () => ({ language, setLanguage, t, aiTranslationPending: false }),
+    [language, setLanguage, t],
   )
 
   return (

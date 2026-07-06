@@ -101,9 +101,6 @@ export default function AffiliatesListPage() {
   }, [searchQuery, affiliates])
 
   const formatGroupedLevelLabel = (level: number, count: number) => {
-    if (language === 'fr') return `Niveau ${level} parrainages (total : ${count})`
-    if (language === 'es') return `Nivel ${level} referidos (total: ${count})`
-    if (language === 'de') return `Stufe ${level} Empfehlungen (gesamt: ${count})`
     return `Level ${level} referrals (total: ${count})`
   }
 

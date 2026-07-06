@@ -55,31 +55,12 @@ export function TransactionTable({
   emptyTitle,
   emptyDescription
 }: TransactionTableProps) {
-  const { t, language } = useLanguage()
+  const { t } = useLanguage()
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
   const [showResumeDialog, setShowResumeDialog] = useState(false)
 
-  // Mapping des langues vers les locales
-  const localeMap: Record<string, string> = {
-    fr: 'fr-FR',
-    en: 'en-US',
-    es: 'es-ES',
-    de: 'de-DE',
-    pt: 'pt-PT',
-    sw: 'sw-TZ',
-    ar: 'ar-SA',
-    zh: 'zh-CN',
-    hi: 'hi-IN',
-    ru: 'ru-RU',
-    it: 'it-IT',
-    nl: 'nl-NL',
-    tr: 'tr-TR',
-    ja: 'ja-JP',
-    ko: 'ko-KR',
-  }
-
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat(localeMap[language] || 'en-US', { 
+    return new Intl.NumberFormat('en-US', { 
       style: 'currency', 
       currency: 'USD',
       minimumFractionDigits: 2
@@ -88,7 +69,7 @@ export function TransactionTable({
 
   const formatDate = (dateString: string) => {
     if (!dateString) return '-'
-    return new Date(dateString).toLocaleDateString(localeMap[language] || 'en-US', {
+    return new Date(dateString).toLocaleDateString('en-US', {
       day: 'numeric',
       month: 'long',
       year: 'numeric',
@@ -115,35 +96,35 @@ export function TransactionTable({
         return (
           <span className="flex items-center gap-1 text-xs font-medium text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/30 px-2 py-1 rounded-full">
             <CheckCircle className="w-3 h-3" />
-            {t('dashboard.wallet.completed') || 'Payé'}
+            {t('dashboard.wallet.completed') || 'Completed'}
           </span>
         )
       case 'approved':
         return (
           <span className="flex items-center gap-1 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/30 px-2 py-1 rounded-full">
             <CheckCircle className="w-3 h-3" />
-            {t('dashboard.wallet.approved') || 'Approuvé'}
+            {t('dashboard.wallet.approved') || 'Approved'}
           </span>
         )
       case 'pending':
         return (
           <span className="flex items-center gap-1 text-xs font-medium text-orange-600 dark:text-orange-400 bg-orange-100 dark:bg-orange-900/30 px-2 py-1 rounded-full">
             <Clock className="w-3 h-3" />
-            {t('dashboard.wallet.pending') || 'En attente'}
+            {t('dashboard.wallet.pending') || 'Pending'}
           </span>
         )
       case 'failed':
         return (
           <span className="flex items-center gap-1 text-xs font-medium text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/30 px-2 py-1 rounded-full">
             <XCircle className="w-3 h-3" />
-            {t('dashboard.wallet.failed') || 'Échoué'}
+            {t('dashboard.wallet.failed') || 'Failed'}
           </span>
         )
       case 'expired':
         return (
           <span className="flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-full">
             <Clock className="w-3 h-3" />
-            {t('dashboard.wallet.expired') || 'Expiré'}
+            {t('dashboard.wallet.expired') || 'Expired'}
           </span>
         )
       default:
@@ -161,7 +142,7 @@ export function TransactionTable({
     } else if (category === 'deposit') {
       return (
         <span className="text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/30 px-2 py-0.5 rounded-full">
-          {t('dashboard.wallet.purchase') || 'Achat'}
+          {t('dashboard.wallet.purchase') || 'Purchase'}
         </span>
       )
     }
@@ -187,7 +168,7 @@ export function TransactionTable({
     const depositId = transaction.deposit_id || transaction.id.replace('dep_', '')
     
     // Open invoice in new tab with language parameter
-    window.open(`${apiUrl}/api/v1/payments/invoice/${depositId}?token=${token}&lang=${language}`, '_blank')
+    window.open(`${apiUrl}/api/v1/payments/invoice/${depositId}?token=${token}&lang=en`, '_blank')
   }
 
   if (transactions.length === 0) {
@@ -197,10 +178,10 @@ export function TransactionTable({
           {emptyIcon || <History className="w-8 h-8 text-gray-400" />}
         </div>
         <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-          {emptyTitle || t('dashboard.wallet.no_transactions') || 'Aucune transaction'}
+          {emptyTitle || t('dashboard.wallet.no_transactions') || 'No transactions yet'}
         </h3>
         <p className="text-gray-500 dark:text-gray-400">
-          {emptyDescription || t('dashboard.wallet.no_transactions_desc') || "Vous n'avez pas encore de transactions"}
+          {emptyDescription || t('dashboard.wallet.no_transactions_desc') || "You don't have any transactions yet"}
         </p>
       </div>
     )
@@ -262,7 +243,7 @@ export function TransactionTable({
                         onClick={() => handlePayClick(transaction)}
                       >
                         <CreditCard className="w-4 h-4 mr-1" />
-                        {t('dashboard.wallet.pay') || 'Payer'}
+                        {t('dashboard.wallet.pay') || 'Pay'}
                       </Button>
                     )}
                     
@@ -276,7 +257,7 @@ export function TransactionTable({
                         onClick={() => openInvoice(transaction)}
                       >
                         <FileText className="w-4 h-4 mr-1" />
-                        {t('dashboard.wallet.invoice') || 'Facture'}
+                        {t('dashboard.wallet.invoice') || 'Invoice'}
                       </Button>
                     )}
                   </div>
