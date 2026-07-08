@@ -29,6 +29,26 @@ if [ ! -x "$BACKEND/.venv/bin/uvicorn" ]; then
   pip install -q -r "$BACKEND/requirements.txt"
 fi
 
+# Apply database migrations (the systemd unit runs uvicorn directly and does NOT
+# migrate, so prod schema drifts without this). 'heads' handles multiple branches.
+VENV_PY="$BACKEND/.venv/bin/python3"
+if [ -x "$VENV_PY" ]; then
+  echo "==> applying database migrations (alembic upgrade heads)"
+  # script_location in alembic.ini is relative to cwd, so run from backend/.
+  if ( cd "$BACKEND" && PYTHONPATH="$BACKEND" "$VENV_PY" -m alembic upgrade heads ); then
+    echo "    OK migrations applied"
+  else
+    echo "    WARN alembic upgrade failed — check DB and: cd backend && .venv/bin/python -m alembic upgrade heads" >&2
+  fi
+
+  # Safety net: alembic may be stamped past migrations that never actually ran
+  # (old start.py could `alembic stamp heads` without applying them). This
+  # idempotent check adds any missing KYC/payment columns + enum values.
+  echo "==> ensuring KYC/payment schema (idempotent)"
+  ( cd "$BACKEND" && PYTHONPATH="$BACKEND" "$VENV_PY" scripts/ensure_kyc_payment_schema.py ) \
+    || echo "    WARN schema-ensure failed — run manually: cd backend && .venv/bin/python scripts/ensure_kyc_payment_schema.py" >&2
+fi
+
 # Always sync systemd unit from repo (paths may differ from /root/mh5)
 if [ -f "$UNIT_SRC" ]; then
   echo "    syncing $UNIT_NAME from deploy/"
