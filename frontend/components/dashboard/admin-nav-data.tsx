@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react"
 import {
+  BadgeCheck,
   Calendar,
   CreditCard,
   FileCheck,
@@ -32,6 +33,7 @@ export const adminNavSections: DashboardNavSection[] = [
       { name: "admin.nav.contests", label: "Contests", href: "/dashboard/admin/contests", icon: Zap },
       { name: "admin.nav.contestants", label: "Contestants", href: "/dashboard/admin/contestants", icon: Users },
       { name: "admin.nav.users", label: "Users", href: "/dashboard/admin/users", icon: Settings },
+      { name: "admin.nav.mark_paid", label: "Mark as paid", href: "/dashboard/admin/mark-paid", icon: BadgeCheck },
       { name: "admin.nav.accounting", label: "Accounting", href: "/dashboard/admin/accounting", icon: Banknote },
       { name: "admin.nav.kyc", label: "KYC", href: "/dashboard/admin/kyc", icon: FileCheck },
       { name: "admin.nav.reports", label: "Reports", href: "/dashboard/admin/reports", icon: Flag },

@@ -3647,6 +3647,201 @@ async def unverify_user_kyc(
         )
 
 
+# ============================================
+# ADMIN: MARK USER AS PAID (grant a service credit)
+# ============================================
+
+# Products an admin can grant manually. Maps to product_types.code.
+GRANTABLE_PRODUCT_CODES = ["kyc", "mfm_membership", "annual_membership", "founding_membership"]
+
+
+class GrantPaymentRequest(BaseModel):
+    product_code: str = "kyc"
+    amount: Optional[float] = None
+    notes: Optional[str] = None
+    verify_identity: bool = False  # Also mark the user's identity as verified (skips Shufti)
+
+
+def _valid_deposit_counts(db: Session, user_id: int) -> Dict[str, int]:
+    """Count validated, unused, non-expired deposits per grantable product for a user."""
+    from app.crud import crud_deposit
+    return {
+        code: crud_deposit.deposit.count_valid_deposits_for_product(
+            db, user_id=user_id, product_code=code
+        )
+        for code in GRANTABLE_PRODUCT_CODES
+    }
+
+
+@router.get("/users/{user_id}/payment-status")
+async def get_user_payment_status(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return the user's available (validated, unused) service credits per product (admin only)."""
+    check_admin(current_user)
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    counts = _valid_deposit_counts(db, user_id)
+    return {
+        "user_id": user.id,
+        "email": user.email,
+        "username": getattr(user, "username", None),
+        "full_name": getattr(user, "full_name", None),
+        "identity_verified": getattr(user, "identity_verified", False),
+        "available_credits": counts,
+    }
+
+
+@router.post("/users/{user_id}/grant-payment")
+async def grant_user_payment(
+    user_id: int,
+    request: GrantPaymentRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Mark a user as paid for a service (admin only).
+
+    Use when a user paid but the deposit was never validated (e.g. failed callback),
+    so they can proceed to the next step (KYC verification, membership) without paying again.
+
+    Behaviour:
+    - If the user already has a valid unused credit for the product, no new credit is created.
+    - Otherwise, an existing PENDING/PARTIALLY_PAID deposit for the product is validated,
+      or a new validated deposit is created.
+    - Runs the standard validation pipeline (commissions, accounting, confirmation email).
+    """
+    check_admin(current_user)
+
+    from app.crud import crud_deposit
+    from app.models.payment import Deposit, DepositStatus
+    from app.services.commission_distribution import process_payment_validation
+    import uuid as _uuid
+
+    product_code = (request.product_code or "kyc").strip().lower()
+    if product_code not in GRANTABLE_PRODUCT_CODES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported product_code. Allowed: {', '.join(GRANTABLE_PRODUCT_CODES)}",
+        )
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    product = db.query(ProductType).filter(ProductType.code == product_code).first()
+    if not product:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Product type '{product_code}' not found",
+        )
+
+    def _maybe_verify_identity() -> bool:
+        """Optionally flag the user's identity as verified (admin override, skips Shufti)."""
+        if not request.verify_identity:
+            return False
+        user.identity_verified = True
+        user.verification_date = datetime.utcnow()
+        db.commit()
+        db.refresh(user)
+        return True
+
+    # Already has a usable credit → nothing to do (avoids double-granting).
+    existing_valid = crud_deposit.deposit.get_valid_deposit_for_product(
+        db, user_id=user_id, product_code=product_code
+    )
+    if existing_valid:
+        identity_verified = _maybe_verify_identity()
+        return {
+            "status": "already_paid",
+            "message": "User already has a valid credit for this product",
+            "deposit_id": existing_valid.id,
+            "product_code": product_code,
+            "identity_verified": identity_verified or getattr(user, "identity_verified", False),
+            "available_credits": _valid_deposit_counts(db, user_id),
+        }
+
+    validity_days = getattr(product, "validity_days", 0) or 0
+    expires_at = datetime.utcnow() + timedelta(days=validity_days) if validity_days > 0 else None
+    amount = request.amount if request.amount is not None else float(product.price)
+    admin_note = request.notes or f"Manually marked as paid by admin #{current_user.id}"
+
+    try:
+        # Prefer validating an existing unfinished deposit (keeps history/accounting accurate).
+        deposit = (
+            db.query(Deposit)
+            .filter(
+                Deposit.user_id == user_id,
+                Deposit.product_type_id == product.id,
+                Deposit.status.in_([DepositStatus.PENDING, DepositStatus.PARTIALLY_PAID]),
+            )
+            .order_by(Deposit.created_at.desc())
+            .first()
+        )
+
+        created_new = False
+        if deposit:
+            deposit.status = DepositStatus.VALIDATED
+            deposit.validated_at = datetime.utcnow()
+            deposit.validated_by = current_user.id
+            deposit.expires_at = expires_at
+            deposit.admin_notes = admin_note
+        else:
+            created_new = True
+            deposit = Deposit(
+                user_id=user_id,
+                product_type_id=product.id,
+                amount=amount,
+                currency=(getattr(product, "currency", None) or "USD"),
+                order_id=f"ADMIN-{_uuid.uuid4().hex}",
+                status=DepositStatus.VALIDATED,
+                validated_at=datetime.utcnow(),
+                validated_by=current_user.id,
+                expires_at=expires_at,
+                admin_notes=admin_note,
+            )
+            db.add(deposit)
+
+        db.flush()
+
+        ok = process_payment_validation(db, deposit, defer_commit=True)
+        if not ok:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to process payment validation",
+            )
+
+        db.commit()
+        db.refresh(deposit)
+
+        identity_verified = _maybe_verify_identity()
+
+        return {
+            "status": "granted",
+            "message": "User marked as paid successfully",
+            "deposit_id": deposit.id,
+            "product_code": product_code,
+            "created_new_deposit": created_new,
+            "identity_verified": identity_verified or getattr(user, "identity_verified", False),
+            "available_credits": _valid_deposit_counts(db, user_id),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error("grant_user_payment failed for user %s: %s", user_id, e)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to grant payment: {str(e)}",
+        )
+
+
 # Modèles de réponse pour les transactions
 class TransactionEnriched(BaseModel):
     id: int
