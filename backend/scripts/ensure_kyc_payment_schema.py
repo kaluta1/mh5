@@ -62,9 +62,13 @@ COLUMNS: dict[str, dict[str, str]] = {
     },
 }
 
-# enum type -> values that must exist
+# enum type -> labels that must exist.
+# NOTE: KYCVerification.status uses the default SQLEnum (no values_callable), so
+# SQLAlchemy stores the enum *name* (e.g. PENDING_PROOF_OF_ADDRESS). Deposit.status
+# uses values_callable, so it stores the *value* (lowercase). The labels below must
+# match what SQLAlchemy actually sends for each column.
 ENUM_VALUES: dict[str, list[str]] = {
-    "kycstatus": ["pending_proof_of_address"],
+    "kycstatus": ["PENDING_PROOF_OF_ADDRESS"],
     "depositstatus": ["partially_paid", "failed"],
 }
 

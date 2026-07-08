@@ -32,18 +32,18 @@ def upgrade() -> None:
     )
     op.alter_column("users", "address_verified", server_default=None)
 
+    # KYCVerification.status uses the default SQLEnum (stores the enum *name*),
+    # so the label must be the uppercase name PENDING_PROOF_OF_ADDRESS — not the
+    # lowercase value. Add both for safety on DBs that previously got the value.
     bind = op.get_bind()
-    try:
-        bind.execute(
-            text(
-                "ALTER TYPE kycstatus ADD VALUE IF NOT EXISTS 'pending_proof_of_address'"
-            )
-        )
-    except Exception:
+    for label in ("PENDING_PROOF_OF_ADDRESS", "pending_proof_of_address"):
         try:
-            bind.execute(text("ALTER TYPE kycstatus ADD VALUE 'pending_proof_of_address'"))
+            bind.execute(text(f"ALTER TYPE kycstatus ADD VALUE IF NOT EXISTS '{label}'"))
         except Exception:
-            pass
+            try:
+                bind.execute(text(f"ALTER TYPE kycstatus ADD VALUE '{label}'"))
+            except Exception:
+                pass
 
     bind.execute(
         text(
