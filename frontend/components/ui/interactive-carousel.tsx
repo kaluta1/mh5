@@ -149,6 +149,13 @@ export function InteractiveCarousel() {
   const { language } = useLanguage()
   const [currentSlide, setCurrentSlide] = useState(0)
   const [isAutoPlaying, setIsAutoPlaying] = useState(true)
+  const [isAnimating, setIsAnimating] = useState(false)
+
+  useEffect(() => {
+    if (!isAnimating) return
+    const timeout = setTimeout(() => setIsAnimating(false), 450)
+    return () => clearTimeout(timeout)
+  }, [isAnimating])
 
   // Auto-play functionality
   useEffect(() => {
@@ -162,16 +169,22 @@ export function InteractiveCarousel() {
   }, [isAutoPlaying])
 
   const nextSlide = () => {
+    if (isAnimating) return
+    setIsAnimating(true)
     setCurrentSlide((prev) => (prev + 1) % carouselSlides.length)
     setIsAutoPlaying(false) // Stop auto-play when user interacts
   }
 
   const prevSlide = () => {
+    if (isAnimating) return
+    setIsAnimating(true)
     setCurrentSlide((prev) => (prev - 1 + carouselSlides.length) % carouselSlides.length)
     setIsAutoPlaying(false) // Stop auto-play when user interacts
   }
 
   const goToSlide = (index: number) => {
+    if (isAnimating || index === currentSlide) return
+    setIsAnimating(true)
     setCurrentSlide(index)
     setIsAutoPlaying(false) // Stop auto-play when user interacts
   }
@@ -225,6 +238,7 @@ export function InteractiveCarousel() {
         size="icon"
         className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-blue-500 hover:bg-blue-600 rounded-full shadow-lg transition-all duration-200 hover:scale-110"
         onClick={prevSlide}
+        disabled={isAnimating}
       >
         <ChevronLeft className="h-5 w-5 text-white" />
       </Button>
@@ -234,6 +248,7 @@ export function InteractiveCarousel() {
         size="icon"
         className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-blue-500 hover:bg-blue-600 rounded-full shadow-lg transition-all duration-200 hover:scale-110"
         onClick={nextSlide}
+        disabled={isAnimating}
       >
         <ChevronRight className="h-5 w-5 text-white" />
       </Button>

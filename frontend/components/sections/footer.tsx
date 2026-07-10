@@ -273,7 +273,9 @@ export function Footer() {
         <div className="py-6 border-t border-gray-200 dark:border-gray-800">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-500">
-              <span>{t('footer.copyright')}</span>
+              <span>
+                © {new Date().getFullYear()} MyHigh5. {t('footer.all_rights_reserved') || 'All rights reserved.'}
+              </span>
               <span className="mx-2">•</span>
               <a 
                 href="https://eminilabs.com" 

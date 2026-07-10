@@ -10,6 +10,7 @@ from app.models.affiliate import (
     CommissionStatus, CommissionType
 )
 from app.models.user import User
+from app.core.commission_config import level_rate, MAX_LEVELS
 
 
 class CRUDAffiliateTree:
@@ -277,18 +278,8 @@ class CRUDAffiliateTree:
 
 class CRUDAffiliateCommission:
     # Taux de commission par niveau (niveau 1 = parrain direct = 20%, niveaux 2-10 = 2%)
-    COMMISSION_RATES = {
-        1: 0.20,   # 20% pour le parrain direct
-        2: 0.02,   # 2% pour le niveau 2
-        3: 0.02,   # 2% pour le niveau 3
-        4: 0.02,   # 2% pour le niveau 4
-        5: 0.02,   # 2% pour le niveau 5
-        6: 0.02,   # 2% pour le niveau 6
-        7: 0.02,   # 2% pour le niveau 7
-        8: 0.02,   # 2% pour le niveau 8
-        9: 0.02,   # 2% pour le niveau 9
-        10: 0.02,  # 2% pour le niveau 10
-    }
+    # Canonical rates: see app.core.commission_config (10% direct, 1% indirect).
+    COMMISSION_RATES = {i: level_rate(i) for i in range(1, MAX_LEVELS + 1)}
     
     def create_commission(
         self, db: Session, 
@@ -313,8 +304,8 @@ class CRUDAffiliateCommission:
         current_sponsor_id = source_user.sponsor_id
         level = 1
         
-        while current_sponsor_id and level <= len(self.COMMISSION_RATES):
-            rate = self.COMMISSION_RATES.get(level, 0)
+        while current_sponsor_id and level <= MAX_LEVELS:
+            rate = level_rate(level)
             if rate <= 0:
                 break
             

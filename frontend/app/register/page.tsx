@@ -226,14 +226,14 @@ function RegisterPageContent() {
       errorMessage = t('auth.register.errors.password_mismatch')
     }
 
-    if (formData.password && formData.password.length < 8) {
+    if (formData.password && formData.password.length < 12) {
       errors.password = true
       errorMessage = t('auth.register.errors.password_min_length')
     }
     
     // Vérifier les exigences du mot de passe
     if (formData.password) {
-      if (formData.password.length < 8) {
+      if (formData.password.length < 12) {
         errors.password = true
         errorMessage = t('auth.register.errors.password_min_length')
       } else {

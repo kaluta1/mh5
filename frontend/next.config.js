@@ -131,6 +131,20 @@ const nextConfig = {
   },
 
   async headers() {
+    const securityHeaders = [
+      { key: 'X-Frame-Options', value: 'DENY' },
+      { key: 'X-Content-Type-Options', value: 'nosniff' },
+      { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+      {
+        key: 'Permissions-Policy',
+        value: 'camera=(), microphone=(), geolocation=(self), payment=(self)',
+      },
+      {
+        key: 'Strict-Transport-Security',
+        value: 'max-age=31536000; includeSubDomains',
+      },
+    ]
+
     return [
       {
         source: '/.well-known/assetlinks.json',
@@ -142,15 +156,31 @@ const nextConfig = {
         ],
       },
       {
-        // Prevent stale HTML after deploy (bypass-link preview on fresh devices).
         source: '/((?!_next/static|_next/image|api/).*)',
         headers: [
+          ...securityHeaders,
           {
             key: 'Cache-Control',
             value: 'no-store, must-revalidate',
           },
         ],
       },
+      {
+        source: '/_next/static/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
+    ];
+  },
+  async redirects() {
+    return [
+      { source: '/terms-of-services', destination: '/terms', permanent: true },
+      { source: '/terms-of-service', destination: '/terms', permanent: true },
+      { source: '/privacy-policy', destination: '/privacy', permanent: true },
     ];
   },
   async rewrites() {

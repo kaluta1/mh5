@@ -224,7 +224,7 @@
         "required_fields": "Please fill in all required fields",
         "location_required": "Please select your country",
         "password_mismatch": "Passwords do not match",
-        "password_min_length": "Password must be at least 8 characters",
+        "password_min_length": "Password must be at least 12 characters",
         "password_requirements": "Password must include uppercase, lowercase, number, and special character",
         "username_invalid_chars": "Only letters, numbers, and underscores are allowed",
         "invalid_email": "Invalid email format",
@@ -233,25 +233,26 @@
         "username_exists": "This username is already taken"
       },
       "country": "Country",
-      "country_placeholder": "Country Placeholder",
-      "full_name_placeholder": "Full Name Placeholder",
-      "phone_placeholder": "Phone Placeholder",
-      "referral_code_placeholder": "Referral Code Placeholder",
+      "country_placeholder": "Select your country",
+      "region_placeholder": "Select your region",
+      "city_placeholder": "Enter your city",
+      "full_name_placeholder": "Your full name",
+      "phone_placeholder": "Your phone number",
+      "referral_code_placeholder": "Referral code (optional)",
       "city": "City",
-      "city_placeholder": "City Placeholder",
-      "password_requirement_min_length": "Password Requirement Min Length"
+      "password_requirement_min_length": "At least 12 characters with uppercase, lowercase, number, and special character"
     },
     "forgot_password": {
       "email_required": "Email is required",
-      "success": "Success",
-      "error": "Error",
-      "success_title": "Success Title",
-      "success_message": "Success Message",
-      "check_spam": "Check Spam",
-      "title": "Title",
-      "description": "Description",
-      "send_reset_link": "Send Reset Link",
-      "remember_password": "Remember Password"
+      "success": "A reset link has been sent if this email is registered",
+      "error": "Could not send reset email. Please try again.",
+      "success_title": "Check your email",
+      "success_message": "If this email exists in our system, you will receive a password reset link shortly.",
+      "check_spam": "Check your spam folder if you do not see the email within a few minutes.",
+      "title": "Forgot your password?",
+      "description": "Enter your email address and we will send you a link to reset your password.",
+      "send_reset_link": "Send reset link",
+      "remember_password": "Remember your password?"
     },
     "verify_email": {
       "success_toast": "Your email has been verified. You can sign in.",
@@ -427,6 +428,7 @@
   },
   "footer": {
     "description": "Join the world's largest contest community. Compete, vote and earn through our revolutionary 10-level affiliate program.",
+    "all_rights_reserved": "All rights reserved.",
     "newsletter": {
       "badge": "Newsletter",
       "title": "Stay updated",
@@ -582,6 +584,7 @@
       "contestant": "Contestant",
       "nominator": "Nominator",
       "nominators": "Nominators",
+      "be_first_nominator": "Be the first nominator!",
       "open": "Open",
       "no_nominated_yet": "No nominated yet.",
       "no_regional_migration": "No regional migration.",
@@ -1411,10 +1414,15 @@
       "form": {
         "title": "Send us a message",
         "name": "Full name",
+        "name_placeholder": "Your name",
         "email": "Email",
+        "email_placeholder": "you@example.com",
         "category": "Category",
+        "category_placeholder": "Select a category",
         "subject": "Subject",
+        "subject_placeholder": "Subject of your message",
         "message": "Message",
+        "message_placeholder": "Describe your request in detail...",
         "submit": "Send message"
       },
       "faq": {

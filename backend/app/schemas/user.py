@@ -1,6 +1,8 @@
 from typing import List, Optional
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from datetime import datetime
+
+from app.core.security_validators import sanitize_username, validate_password_strength
 
 
 # Schémas de base
@@ -25,6 +27,18 @@ class UserCreate(UserBase):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
 
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        return sanitize_username(v)
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        return validate_password_strength(v)
+
 
 class UserUpdate(UserBase):
     password: Optional[str] = None
@@ -42,6 +56,20 @@ class UserUpdate(UserBase):
     country_id: Optional[int] = None
     region_id: Optional[int] = None
     continent_id: Optional[int] = None
+
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        return sanitize_username(v)
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        return validate_password_strength(v)
 
 
 # Schéma pour afficher un rôle
@@ -80,6 +108,24 @@ class User(UserBase):
     region_id: Optional[int] = None
     continent_id: Optional[int] = None
     
+    class Config:
+        from_attributes = True
+
+
+# Public profile — safe to expose to other authenticated users (no email/phone/admin flags).
+class PublicUserProfile(BaseModel):
+    id: int
+    username: Optional[str] = None
+    full_name: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    avatar_url: Optional[str] = None
+    bio: Optional[str] = None
+    country: Optional[str] = None
+    city: Optional[str] = None
+    identity_verified: Optional[bool] = False
+    address_verified: Optional[bool] = False
+
     class Config:
         from_attributes = True
 

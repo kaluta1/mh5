@@ -33,7 +33,7 @@ export default function PrivacyPage() {
   }> = {
     en: {
       title: "Privacy Policy",
-      lastUpdated: "Last Updated: January 2026",
+      lastUpdated: "Last Updated: July 2026",
       intro: "At MyHigh5.com, we value your privacy. This policy explains how we collect, use, and protect your personal information.",
       sections: [
         {

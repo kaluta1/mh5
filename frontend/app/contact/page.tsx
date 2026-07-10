@@ -536,7 +536,7 @@ export default function ContactPage() {
                         value={formData.name}
                         onChange={handleChange}
                         onBlur={handleBlur}
-                        placeholder="Votre nom"
+                        placeholder={t('pages.contact.form.name_placeholder') || 'Your name'}
                         required
                         className={`h-12 ${touched.name && errors.name ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''}`}
                       />
@@ -555,7 +555,7 @@ export default function ContactPage() {
                         value={formData.email}
                         onChange={handleChange}
                         onBlur={handleBlur}
-                        placeholder="votre@email.com"
+                        placeholder={t('pages.contact.form.email_placeholder') || 'you@example.com'}
                         required
                         className={`h-12 ${touched.email && errors.email ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''}`}
                       />
@@ -605,7 +605,7 @@ export default function ContactPage() {
                       value={formData.subject}
                       onChange={handleChange}
                       onBlur={handleBlur}
-                      placeholder="Sujet de votre message"
+                      placeholder={t('pages.contact.form.subject_placeholder') || 'Subject of your message'}
                       required
                       className={`h-12 ${touched.subject && errors.subject ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''}`}
                     />
@@ -624,7 +624,7 @@ export default function ContactPage() {
                       value={formData.message}
                       onChange={handleChange}
                       onBlur={handleBlur}
-                      placeholder="Décrivez votre demande en détail..."
+                      placeholder={t('pages.contact.form.message_placeholder') || 'Describe your request in detail...'}
                       required
                       rows={5}
                       className={`w-full px-4 py-3 rounded-lg border bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-myhigh5-primary focus:border-transparent resize-none ${

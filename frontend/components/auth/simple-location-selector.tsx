@@ -82,7 +82,7 @@ export function SimpleLocationSelector({
           className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myhigh5-primary"
           required
         >
-          <option value="">{t('auth.register.country_placeholder') || 'Sélectionner un pays'}</option>
+          <option value="">{t('auth.register.country_placeholder') || 'Select your country'}</option>
           {countries.map((country) => (
             <option key={country.code} value={country.code}>
               {country.name}

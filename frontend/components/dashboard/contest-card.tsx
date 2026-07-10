@@ -669,10 +669,16 @@ export const ContestCard = React.memo(function ContestCard({
                 <div className="absolute inset-0 bg-gradient-to-r from-myhigh5-primary/10 via-myhigh5-primary/20 to-myhigh5-primary/10 opacity-0 group-hover/view:opacity-100 transition-opacity duration-300" />
                 <Eye className="w-3.5 h-3.5 mr-1.5 group-hover/view:scale-110 group-hover/view:text-myhigh5-secondary transition-all duration-300 relative z-10 flex-shrink-0" />
                 <span className="relative z-10 font-semibold group-hover/view:text-white transition-colors duration-300">
-                  {t('dashboard.contests.view') || 'View'}{' '}
-                  {isNomination
-                    ? (contestants > 1 ? t('dashboard.contests.nominators') : t('dashboard.contests.nominator'))
-                    : `${t('dashboard.contests.contestant') || 'Participant'}${contestants > 1 ? 's' : ''}`}
+                  {contestants === 0 && isNomination
+                    ? (t('dashboard.contests.be_first_nominator') || 'Be the first nominator!')
+                    : (
+                      <>
+                        {t('dashboard.contests.view') || 'View'}{' '}
+                        {isNomination
+                          ? (contestants !== 1 ? t('dashboard.contests.nominators') : t('dashboard.contests.nominator'))
+                          : `${t('dashboard.contests.contestant') || 'Participant'}${contestants !== 1 ? 's' : ''}`}
+                      </>
+                    )}
                 </span>
                 <ArrowRight className="w-3.5 h-3.5 ml-1.5 group-hover/view:translate-x-1 group-hover/view:text-myhigh5-secondary transition-all duration-300 relative z-10 flex-shrink-0" />
               </Button>
@@ -688,10 +694,16 @@ export const ContestCard = React.memo(function ContestCard({
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover/view:translate-x-full transition-transform duration-500" />
               <Eye className="w-3.5 h-3.5 mr-1.5 relative z-10 group-hover/view:scale-110 transition-transform duration-300 flex-shrink-0" />
               <span className="relative z-10 font-semibold group-hover/view:drop-shadow-sm transition-all duration-300">
-                {t('dashboard.contests.view') || 'View'} {contestants}{' '}
-                {isNomination
-                  ? (contestants > 1 ? t('dashboard.contests.nominators') : t('dashboard.contests.nominator'))
-                  : `${t('dashboard.contests.contestant') || 'Participant'}${contestants > 1 ? 's' : ''}`}
+                {contestants === 0 && isNomination
+                  ? (t('dashboard.contests.be_first_nominator') || 'Be the first nominator!')
+                  : (
+                    <>
+                      {t('dashboard.contests.view') || 'View'} {contestants}{' '}
+                      {isNomination
+                        ? (contestants !== 1 ? t('dashboard.contests.nominators') : t('dashboard.contests.nominator'))
+                        : `${t('dashboard.contests.contestant') || 'Participant'}${contestants !== 1 ? 's' : ''}`}
+                    </>
+                  )}
               </span>
               <ArrowRight className="w-3.5 h-3.5 ml-1.5 group-hover/view:translate-x-1 group-hover/view:scale-110 transition-all duration-300 relative z-10 flex-shrink-0" />
             </Button>

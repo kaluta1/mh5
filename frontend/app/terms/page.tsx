@@ -33,7 +33,7 @@ export default function TermsPage() {
   }> = {
     en: {
       title: "Terms of Service",
-      lastUpdated: "Last Updated: January 2026",
+      lastUpdated: "Last Updated: July 2026",
       intro: "Welcome to MyHigh5.com! By using our platform, you agree to comply with these Terms of Service. Please read them carefully.",
       sections: [
         {

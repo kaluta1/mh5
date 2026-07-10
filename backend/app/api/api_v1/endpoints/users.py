@@ -1,4 +1,4 @@
-from typing import Any, List
+from typing import Any, List, Union
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy import func, or_
@@ -11,7 +11,7 @@ from app.models.follow import Follow
 from app.models.post import Post
 from app.models.user import User as UserModel
 from app.schemas.follow import FollowUserResponse
-from app.schemas.user import User, UserUpdate
+from app.schemas.user import User, UserUpdate, PublicUserProfile
 
 router = APIRouter()
 
@@ -195,22 +195,27 @@ def get_following(
 
     return _build_follow_users(db, users, current_user.id)
 
-@router.get("/{user_id}", response_model=User)
+@router.get("/{user_id}", response_model=Union[User, PublicUserProfile])
 def read_user_by_id(
     user_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
     """
-    Récupérer un utilisateur par ID.
+    Get a user by ID. Users may only view their own full profile; admins may view any.
+    Other users receive a scrubbed public profile (no email, phone, or admin flags).
     """
     user = crud_user.get(db, id=user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Utilisateur non trouvé"
+            detail="User not found",
         )
-    return user
+
+    if current_user.is_admin or current_user.id == user_id:
+        return user
+
+    return PublicUserProfile.model_validate(user)
 
 @router.get("/", response_model=List[User])
 def read_users(
