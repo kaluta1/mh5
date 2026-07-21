@@ -16,6 +16,16 @@ interface ErrorBoundaryState {
   errorInfo: React.ErrorInfo | null
 }
 
+function isChunkLoadError(error: Error | null): boolean {
+  if (!error) return false
+  const msg = `${error.name} ${error.message}`.toLowerCase()
+  return (
+    msg.includes('loading chunk') ||
+    msg.includes('failed to fetch dynamically imported module') ||
+    msg.includes('chunkloaderror')
+  )
+}
+
 export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props)
@@ -34,14 +44,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    // Log error to console in development
-    if (process.env.NODE_ENV === 'development') {
-      console.error('ErrorBoundary caught an error:', error, errorInfo)
-    }
-
-    // In production, you might want to send this to an error tracking service
-    // e.g., Sentry.captureException(error, { contexts: { react: errorInfo } })
-
+    console.error('ErrorBoundary caught an error:', error, errorInfo)
     this.setState({
       error,
       errorInfo,
@@ -49,6 +52,11 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   }
 
   handleReset = () => {
+    // Stale Next.js chunks after deploy need a full reload, not just remount.
+    if (isChunkLoadError(this.state.error) || typeof window !== 'undefined') {
+      window.location.reload()
+      return
+    }
     this.setState({
       hasError: false,
       error: null,
@@ -63,6 +71,8 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
         return <FallbackComponent {...this.state} />
       }
 
+      const message = this.state.error?.message || 'An unexpected error occurred. Please try again.'
+
       return (
         <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
           <Card className="w-full max-w-md">
@@ -72,25 +82,15 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
                 <CardTitle>Something went wrong</CardTitle>
               </div>
               <CardDescription>
-                An unexpected error occurred. Please try again.
+                {isChunkLoadError(this.state.error)
+                  ? 'The app was updated. Reload to continue.'
+                  : 'An unexpected error occurred. Please try again.'}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {process.env.NODE_ENV === 'development' && this.state.error && (
+              {this.state.error && (
                 <div className="p-3 bg-destructive/10 rounded-md">
-                  <p className="text-sm font-mono text-destructive">
-                    {this.state.error.toString()}
-                  </p>
-                  {this.state.errorInfo && (
-                    <details className="mt-2">
-                      <summary className="text-xs cursor-pointer text-muted-foreground">
-                        Stack trace
-                      </summary>
-                      <pre className="mt-2 text-xs overflow-auto">
-                        {this.state.errorInfo.componentStack}
-                      </pre>
-                    </details>
-                  )}
+                  <p className="text-sm font-mono text-destructive break-words">{message}</p>
                 </div>
               )}
               <div className="flex gap-2">

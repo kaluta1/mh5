@@ -301,18 +301,22 @@ function ContestsPageContent() {
   /** `${kind}:${roundId}` — keeps Submit and Vote as separate pills even when they share a round row. */
   const [activeTabKey, setActiveTabKey] = useState<string | null>(null)
   const [pendingSubmitRoundId, setPendingSubmitRoundId] = useState<string>('')
-  const [categoryTab, setCategoryTab] = useState<'nomination' | 'participations'>(() => {
-    if (typeof window !== 'undefined') {
-      const savedTab = localStorage.getItem('contests_category_tab')
-      if (savedTab === 'nomination' || savedTab === 'participations') {
-        return savedTab as 'nomination' | 'participations'
-      }
-    }
-    return 'nomination'
-  })
+  const [categoryTab, setCategoryTab] = useState<'nomination' | 'participations'>('nomination')
   const [showSuggestDialog, setShowSuggestDialog] = useState(false)
   const [listRefreshKey, setListRefreshKey] = useState(0)
   const [showPastArchiveOpen, setShowPastArchiveOpen] = useState(false)
+
+  // Hydrate category tab from localStorage after mount (avoids SSR/client mismatch).
+  useEffect(() => {
+    try {
+      const savedTab = localStorage.getItem('contests_category_tab')
+      if (savedTab === 'nomination' || savedTab === 'participations') {
+        setCategoryTab(savedTab)
+      }
+    } catch {
+      // ignore
+    }
+  }, [])
 
   // Filter States
   const [searchTerm, setSearchTerm] = useState('')
@@ -1068,11 +1072,12 @@ function ContestsPageContent() {
       // Use emoji as fallback instead of missing placeholder.png
       const rawImage = c.cover_image_url || c.image_url || c.category_image_url || ''
       const isEmoji =
-        rawImage &&
+        typeof rawImage === 'string' &&
+        rawImage.length > 0 &&
         rawImage.length <= 8 &&
         !rawImage.includes('/') &&
         !rawImage.startsWith('http') &&
-        [...rawImage].some((ch) => (ch.codePointAt(0) ?? 0) > 0x1f000)
+        Array.from(rawImage).some((ch) => (ch.codePointAt(0) ?? 0) > 0x1f000)
       let coverImage = rawImage
       if (!isEmoji && coverImage) {
         coverImage = rewriteLocalhostUrl(normalizeMediaUrl(coverImage))
@@ -1089,13 +1094,15 @@ function ContestsPageContent() {
 
       return {
         id: String(c.id),
-        title: c.name,
+        title: String(c.name || c.title || `Contest ${c.id}`),
         description: c.description,
         coverImage: coverImage,
         startDate: new Date(),
         status: c.level || 'country',
         received: Number(c.votes_count) || 0,
         contestants: Number(c.participants_count ?? c.entries_count ?? 0),
+        likes: 0,
+        comments: 0,
         isOpen: contestsData?.is_submission_open || contestsData?.is_voting_open || false,
         contestType: c.contest_type,
         isSubmissionOpen: contestsData?.is_submission_open,
@@ -1125,7 +1132,7 @@ function ContestsPageContent() {
     // 1. Filter by Search
     if (committedSearch) {
       const lower = committedSearch.toLowerCase()
-      filtered = filtered.filter(c => c.title.toLowerCase().includes(lower))
+      filtered = filtered.filter(c => String(c.title || '').toLowerCase().includes(lower))
     }
 
     // 1b. Tab vs contest_mode: never show participation contests on Nominate or vice versa
@@ -1171,7 +1178,7 @@ function ContestsPageContent() {
           // Secondary sort by participants if votes are equal
           return (Number(b.contestants) || 0) - (Number(a.contestants) || 0)
         case 'name':
-          return a.title.localeCompare(b.title)
+          return String(a.title || '').localeCompare(String(b.title || ''))
         default:
           // Default: sort by participants (descending - most first)
           const aContestantsDefault = Number(a.contestants) || 0
@@ -1254,7 +1261,19 @@ function ContestsPageContent() {
 
   // Déterminer si le round actif est fermé (soumissions terminées)
   const activeRoundData = rounds.find((r: any) => String(r.id) === activeRoundId)
-  const isRoundClosed = activeRoundData ? new Date(activeRoundData.submission_end_date + 'T23:59:59') < new Date() : false
+  const isRoundClosed = (() => {
+    const end = activeRoundData?.submission_end_date
+    if (!end || typeof end !== 'string') return false
+    const closedAt = new Date(end.includes('T') ? end : `${end}T23:59:59`)
+    return !Number.isNaN(closedAt.getTime()) && closedAt < new Date()
+  })()
+
+  const submitRoundSelectValue = useMemo(() => {
+    const optionIds = new Set(submitRoundOptions.map((r) => String(r.id)))
+    const preferred = String(pendingSubmitRoundId || activeRoundId || '')
+    if (preferred && optionIds.has(preferred)) return preferred
+    return submitRoundOptions[0] ? String(submitRoundOptions[0].id) : undefined
+  }, [submitRoundOptions, pendingSubmitRoundId, activeRoundId])
 
   const handleParticipate = (
     id: string,
@@ -1361,7 +1380,7 @@ function ContestsPageContent() {
           </div>
         </div>
 
-        {categoryTab === 'nomination' && activeDisplayTab?.kind === 'nominate' && (
+        {categoryTab === 'nomination' && activeDisplayTab?.kind === 'nominate' && submitRoundOptions.length > 0 && (
           <div className="mb-6 rounded-2xl border border-blue-100 bg-blue-50/70 p-3 shadow-sm dark:border-blue-900/50 dark:bg-blue-950/20">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -1375,7 +1394,7 @@ function ContestsPageContent() {
               </div>
               <div className="flex w-full gap-2 sm:w-auto">
                 <Select
-                  value={pendingSubmitRoundId || activeRoundId || ''}
+                  value={submitRoundSelectValue}
                   onValueChange={setPendingSubmitRoundId}
                 >
                   <SelectTrigger className="h-10 min-w-0 flex-1 bg-white sm:w-64 dark:bg-gray-900">

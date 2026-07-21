@@ -170,7 +170,12 @@ export function LocationFilterBar({
             {/* Sélecteur de continent */}
             {showContinentFilter && (
                 <div className="w-full sm:w-48">
-                    <Select value={filterContinent} onValueChange={(value) => onContinentChange?.(value)}>
+                    <Select
+                        value={CONTINENTS.some((c) => c.value === filterContinent) || filterContinent === user?.continent
+                            ? filterContinent
+                            : 'all'}
+                        onValueChange={(value) => onContinentChange?.(value)}
+                    >
                         <SelectTrigger className="bg-white border-gray-200 text-gray-900 dark:bg-gray-800 dark:border-gray-700 dark:text-white">
                             <Globe className="w-4 h-4 mr-2" />
                             <SelectValue placeholder={t('dashboard.contests.filter_continent') || 'Continent'} />
