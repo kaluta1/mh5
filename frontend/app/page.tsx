@@ -21,10 +21,6 @@ const FAQ = dynamicImport(() => import("@/components/sections/faq").then(mod => 
   loading: () => <div className="min-h-[400px] animate-pulse bg-gray-100 dark:bg-gray-800 rounded-lg" />
 })
 
-const DownloadApp = dynamicImport(() => import("@/components/sections/download-app").then(mod => ({ default: mod.DownloadApp })), {
-  loading: () => <div className="min-h-[300px] animate-pulse bg-gray-100 dark:bg-gray-800 rounded-lg" />
-})
-
 const Footer = dynamicImport(() => import("@/components/sections/footer").then(mod => ({ default: mod.Footer })), {
   loading: () => <div className="min-h-[200px] animate-pulse bg-gray-100 dark:bg-gray-800" />
 })
@@ -86,7 +82,6 @@ function HomePageContent() {
         <Features />
         <WaysToEarn />
         <FAQ />
-        <DownloadApp />
       </main>
       
       <Footer />

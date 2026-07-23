@@ -107,7 +107,6 @@ export default function MyHigh5LandingPage() {
       { label: "About", href: "/about" },
       { label: "Contact", href: "/contact" },
       { label: "FAQ", href: "/faq" },
-      { label: "Download App", href: "/#download-app" },
     ],
     Legal: [
       { label: "Privacy Policy", href: "/privacy" },
