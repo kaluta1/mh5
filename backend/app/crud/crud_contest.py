@@ -342,30 +342,44 @@ def _season_pair_for_requested_ui_level(
     if round_row is None:
         round_row = db.query(Round).filter(Round.id == target_round_id).first()
 
-    # Explicit UI geography chip: use migrated season rows when they exist, even if
-    # calendar min_start for that level is still in the future (e.g. continental pool in June).
-
-    for active_only in (True, False):
-        q = (
-            db.query(ContestSeasonLink, ContestSeason)
-            .join(ContestSeason, ContestSeason.id == ContestSeasonLink.season_id)
-            .filter(
-                ContestSeasonLink.contest_id == contest_id,
-                ContestSeason.round_id == target_round_id,
-                ContestSeason.level == target_enum,
-                ContestSeason.is_deleted == False,
-            )
-            .order_by(
-                ContestSeasonLink.is_active.desc(),
-                ContestSeasonLink.linked_at.desc(),
-                ContestSeason.id.desc(),
-            )
+    # Explicit UI geography chip: only use an ACTIVE season for that level.
+    # Do not fall back to inactive links — that resurfaced prior-stage pools after
+    # promotion and made nominees appear in country and regional at once.
+    # Also respect nomination calendar: a June cohort must not show a regional
+    # roster in July (regional opens at M+2).
+    today = date.today()
+    if round_row is not None:
+        contest_mode_row = (
+            db.query(Contest).filter(Contest.id == contest_id).first()
         )
-        if active_only:
-            q = q.filter(ContestSeasonLink.is_active == True)
-        row = q.first()
-        if row:
-            return row[0], row[1]
+        mode = (
+            getattr(contest_mode_row, "contest_mode", "") or ""
+        ).strip().lower() if contest_mode_row else ""
+        if mode == "nomination" and target_enum != SeasonLevel.COUNTRY:
+            vote_open = SeasonMigrationService._nomination_vote_open_date_for_level(
+                round_row, target_enum
+            )
+            if vote_open and today < vote_open:
+                return None, None
+
+    q = (
+        db.query(ContestSeasonLink, ContestSeason)
+        .join(ContestSeason, ContestSeason.id == ContestSeasonLink.season_id)
+        .filter(
+            ContestSeasonLink.contest_id == contest_id,
+            ContestSeasonLink.is_active == True,
+            ContestSeason.round_id == target_round_id,
+            ContestSeason.level == target_enum,
+            ContestSeason.is_deleted == False,
+        )
+        .order_by(
+            ContestSeasonLink.linked_at.desc(),
+            ContestSeason.id.desc(),
+        )
+    )
+    row = q.first()
+    if row:
+        return row[0], row[1]
 
     # Pooled phases are cohort-scoped: March continental ≠ June continental.
     # Do not reuse an older round's season when this calendar round has none yet.
@@ -1936,32 +1950,10 @@ class CRUDContest:
             if regional_pair:
                 season_link, season = regional_pair
             else:
-                # No regional season in this exact round: fallback to the nearest
-                # available active regional season for this contest, so regional
-                # URLs never reuse country-level rosters.
-                nearest_regional_pair = (
-                    db.query(ContestSeasonLink, ContestSeason)
-                    .join(ContestSeason, ContestSeason.id == ContestSeasonLink.season_id)
-                    .filter(
-                        ContestSeasonLink.contest_id == contest_id,
-                        ContestSeasonLink.is_active == True,
-                        ContestSeason.level == SeasonLevel.REGIONAL,
-                        ContestSeason.is_deleted == False,
-                    )
-                    .order_by(
-                        case(
-                            (ContestSeason.round_id <= target_round_id, 0),
-                            else_=1,
-                        ),
-                        ContestSeason.round_id.desc(),
-                        ContestSeason.id.desc(),
-                    )
-                    .first()
-                )
-                if nearest_regional_pair:
-                    season_link, season = nearest_regional_pair
-                else:
-                    regional_context_without_season = True
+                # No regional season for this exact cohort round yet — empty roster.
+                # Never fall back to another month's regional pool (that mixed June
+                # country nominees into May East Africa regional voting).
+                regional_context_without_season = True
         
         # FIXED: Query contestants by the ACTIVE SEASON ID (not contest_id)
         from sqlalchemy import or_, and_
@@ -2171,31 +2163,27 @@ class CRUDContest:
             pass
 
         # Country nomination roster should only contain contestants that have not
-        # already advanced to higher active levels for this contest.
-        # Vote-tab geography chips (requested_ui_level) must still show the prior
-        # month's nominees for that cohort even if migration already ran.
+        # already advanced to higher active levels for this contest+round.
+        # Always apply for country Vote chips — showing promoted nominees in both
+        # country and regional stages was the Zali la Mentali dual-visibility bug.
         if (
             contest_mode == "nomination"
             and str(season_level or "").lower() in ("country", "city")
             and season is not None
-            and not _normalize_requested_ui_level(requested_ui_level)
+            and getattr(season, "round_id", None) is not None
         ):
-            promoted_ids = (
-                db.query(ContestantSeason.contestant_id)
-                .join(ContestSeason, ContestSeason.id == ContestantSeason.season_id)
-                .join(ContestSeasonLink, ContestSeasonLink.season_id == ContestSeason.id)
-                .filter(
-                    ContestSeasonLink.contest_id == contest_id,
-                    ContestSeasonLink.is_active == True,
-                    ContestSeason.level.in_(
-                        [SeasonLevel.REGIONAL, SeasonLevel.CONTINENT, SeasonLevel.GLOBAL]
-                    ),
-                    ContestSeason.is_deleted == False,
-                    ContestantSeason.is_active == True,
-                )
+            from app.services.season_migration import SeasonMigrationService
+
+            promoted_ids = SeasonMigrationService.contestant_ids_active_beyond_level(
+                db,
+                contest_id,
+                int(season.round_id),
+                SeasonLevel.COUNTRY,
             )
-            contestants_query = contestants_query.filter(~Contestant.id.in_(promoted_ids))
-        
+            if promoted_ids:
+                contestants_query = contestants_query.filter(
+                    ~Contestant.id.in_(list(promoted_ids))
+                )
         # =====================================================
         # FILTRAGE GÉOGRAPHIQUE
         # Priorité: 1) Filtres explicites, 2) Localisation utilisateur, 3) Pas de filtre

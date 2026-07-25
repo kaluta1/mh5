@@ -126,6 +126,73 @@ class SeasonMigrationService:
         return bool(sub_start and sub_start <= today)
 
     @staticmethod
+    def _higher_levels_than(level: SeasonLevel) -> List[SeasonLevel]:
+        order = [
+            SeasonLevel.CITY,
+            SeasonLevel.COUNTRY,
+            SeasonLevel.REGIONAL,
+            SeasonLevel.CONTINENT,
+            SeasonLevel.GLOBAL,
+        ]
+        try:
+            idx = order.index(level)
+        except ValueError:
+            return []
+        return order[idx + 1 :]
+
+    @staticmethod
+    def contest_has_active_higher_level_link(
+        db: Session,
+        contest_id: int,
+        round_id: int,
+        from_level: SeasonLevel,
+    ) -> bool:
+        """True when this contest+round already has an active link beyond ``from_level``."""
+        higher = SeasonMigrationService._higher_levels_than(from_level)
+        if not higher:
+            return False
+        return (
+            db.query(ContestSeasonLink.id)
+            .join(ContestSeason, ContestSeason.id == ContestSeasonLink.season_id)
+            .filter(
+                ContestSeasonLink.contest_id == contest_id,
+                ContestSeasonLink.is_active == True,
+                ContestSeason.round_id == round_id,
+                ContestSeason.level.in_(higher),
+                ContestSeason.is_deleted == False,
+            )
+            .first()
+            is not None
+        )
+
+    @staticmethod
+    def contestant_ids_active_beyond_level(
+        db: Session,
+        contest_id: int,
+        round_id: int,
+        from_level: SeasonLevel,
+    ) -> set:
+        """Contestant ids with an active ContestantSeason membership above ``from_level``."""
+        higher = SeasonMigrationService._higher_levels_than(from_level)
+        if not higher:
+            return set()
+        rows = (
+            db.query(ContestantSeason.contestant_id)
+            .join(ContestSeason, ContestSeason.id == ContestantSeason.season_id)
+            .join(Contestant, Contestant.id == ContestantSeason.contestant_id)
+            .filter(
+                Contestant.season_id == contest_id,
+                Contestant.round_id == round_id,
+                ContestSeason.round_id == round_id,
+                ContestSeason.level.in_(higher),
+                ContestSeason.is_deleted == False,
+                ContestantSeason.is_active == True,
+            )
+            .all()
+        )
+        return {int(r[0]) for r in rows if r and r[0] is not None}
+
+    @staticmethod
     def _promotion_due_for_contest(
         round_obj: Round,
         from_level: SeasonLevel,
@@ -135,11 +202,25 @@ class SeasonMigrationService:
     ) -> bool:
         """
         Whether one contest should promote from from_level to to_level today.
-        Nomination uses M+offset calendar; participation uses round stage date columns.
+
+        Nomination: promote on the first day of the destination vote month
+        (after the source stage's calendar month has ended), e.g. June cohort
+        country→regional on August 1 after July country voting.
+
+        Participation: uses round stage date columns.
         """
         mode = (contest_mode or "").strip().lower()
         if mode == "nomination":
-            min_start = SeasonMigrationService._nomination_min_start_for_level(round_obj, to_level)
+            # Prefer destination vote-open date (end-of-month handoff). Fall back to
+            # legacy min_start offsets when vote calendar cannot be derived.
+            vote_open = SeasonMigrationService._nomination_vote_open_date_for_level(
+                round_obj, to_level
+            )
+            if vote_open:
+                return today >= vote_open
+            min_start = SeasonMigrationService._nomination_min_start_for_level(
+                round_obj, to_level
+            )
             return bool(min_start and today >= min_start)
 
         participation_triggers = {
@@ -1707,7 +1788,21 @@ class SeasonMigrationService:
         round_id: int,
         target_season_id: int,
     ) -> list[int]:
-        """Ensure every active contestant for this contest+round has an active ContestantSeason row."""
+        """
+        Ensure every active contestant for this contest+round has an active ContestantSeason row.
+
+        Never re-activate membership for contestants that already advanced to a higher
+        active stage for this round — that was causing dual country+regional visibility.
+        """
+        target_season = (
+            db.query(ContestSeason).filter(ContestSeason.id == target_season_id).first()
+        )
+        promoted_beyond: set = set()
+        if target_season and target_season.level is not None:
+            promoted_beyond = SeasonMigrationService.contestant_ids_active_beyond_level(
+                db, contest_id, round_id, target_season.level
+            )
+
         contestants = db.query(Contestant).filter(
             and_(
                 Contestant.season_id == contest_id,
@@ -1718,6 +1813,19 @@ class SeasonMigrationService:
         ).all()
         synced: list[int] = []
         for contestant in contestants:
+            if contestant.id in promoted_beyond:
+                # Keep prior-stage link inactive so Vote UI cannot show them twice.
+                stale = db.query(ContestantSeason).filter(
+                    and_(
+                        ContestantSeason.contestant_id == contestant.id,
+                        ContestantSeason.season_id == target_season_id,
+                        ContestantSeason.is_active == True,
+                    )
+                ).first()
+                if stale:
+                    stale.is_active = False
+                continue
+
             contestant.is_qualified = True
             existing_contestant_season = db.query(ContestantSeason).filter(
                 and_(
@@ -1838,13 +1946,49 @@ class SeasonMigrationService:
     ) -> Optional[int]:
         """
         Guarantee a ContestSeasonLink exists and is ACTIVE for nomination contests at
-        COUNTRY for this round. Shared country seasons omit inactive links from the
-        promotion queue; callers use this before COUNTRY→REGIONAL.
+        COUNTRY for this round — but only while the contest has not yet advanced.
+
+        Callers use this before COUNTRY→REGIONAL. After promotion, reactivating the
+        country link (and re-syncing ContestantSeason rows) put nominees in both
+        country and regional Vote stages; that must not happen.
         """
         contest = db.query(Contest).filter(Contest.id == contest_id).first()
         if not contest:
             return None
         if (getattr(contest, "contest_mode", None) or "").strip().lower() != "nomination":
+            return None
+
+        if SeasonMigrationService.contest_has_active_higher_level_link(
+            db, contest_id, round_id, SeasonLevel.COUNTRY
+        ):
+            # Already at regional/continental/global for this cohort — leave country inactive.
+            row = (
+                db.query(ContestSeasonLink, ContestSeason)
+                .join(ContestSeason, ContestSeasonLink.season_id == ContestSeason.id)
+                .filter(
+                    ContestSeasonLink.contest_id == contest_id,
+                    ContestSeason.round_id == round_id,
+                    ContestSeason.level == SeasonLevel.COUNTRY,
+                    ContestSeason.is_deleted == False,
+                )
+                .order_by(
+                    ContestSeasonLink.is_active.desc(),
+                    ContestSeasonLink.linked_at.desc(),
+                    ContestSeasonLink.id.desc(),
+                )
+                .first()
+            )
+            if row:
+                link_rec, seas = row
+                if link_rec.is_active:
+                    link_rec.is_active = False
+                    db.flush()
+                # Keep promoted nominees out of the country ContestantSeason pool.
+                SeasonMigrationService._sync_contestants_to_season(
+                    db, contest_id, round_id, seas.id
+                )
+                db.commit()
+                return seas.id
             return None
 
         row = (
@@ -1940,25 +2084,39 @@ class SeasonMigrationService:
         print(f"[Migration]   Source season: {from_season.id}")
 
         if from_season.round is not None:
-            min_target_start = SeasonMigrationService._nomination_min_start_for_level(
-                from_season.round,
-                to_level,
-            )
-            today = date.today()
-            if min_target_start and today < min_target_start:
-                msg = (
-                    f"{to_level.value} is too early for round {from_season.round_id}; "
-                    f"earliest start is {min_target_start}"
+            contest_preview = db.query(Contest).filter(Contest.id == contest_id).first()
+            preview_mode = (
+                getattr(contest_preview, "contest_mode", "") or ""
+            ).strip().lower()
+            # Nomination calendar gate only — participation uses round stage columns
+            # via _promotion_due_for_contest in the scheduler.
+            if preview_mode == "nomination":
+                today = date.today()
+                vote_open = SeasonMigrationService._nomination_vote_open_date_for_level(
+                    from_season.round,
+                    to_level,
                 )
-                logger.warning(msg)
-                print(f"[Migration] WARNING: {msg}")
-                return {
-                    "message": msg,
-                    "skipped": True,
-                    "from_season_id": from_season.id,
-                    "promoted_count": 0,
-                    "promoted_contestant_ids": [],
-                }
+                min_target_start = (
+                    vote_open
+                    or SeasonMigrationService._nomination_min_start_for_level(
+                        from_season.round,
+                        to_level,
+                    )
+                )
+                if min_target_start and today < min_target_start:
+                    msg = (
+                        f"{to_level.value} is too early for round {from_season.round_id}; "
+                        f"earliest start is {min_target_start}"
+                    )
+                    logger.warning(msg)
+                    print(f"[Migration] WARNING: {msg}")
+                    return {
+                        "message": msg,
+                        "skipped": True,
+                        "from_season_id": from_season.id,
+                        "promoted_count": 0,
+                        "promoted_contestant_ids": [],
+                    }
 
         contest = db.query(Contest).filter(Contest.id == contest_id).first()
         contest_mode = (getattr(contest, "contest_mode", "") or "").strip().lower()
@@ -2492,6 +2650,20 @@ class SeasonMigrationService:
                         .strip()
                         .lower()
                         != "nomination"
+                    ):
+                        continue
+                    # Do not touch country links unless this hop is due — otherwise
+                    # hourly/daily runs re-activate country after a prior promotion.
+                    if not SeasonMigrationService._promotion_due_for_contest(
+                        round_obj,
+                        SeasonLevel.COUNTRY,
+                        SeasonLevel.REGIONAL,
+                        "nomination",
+                        today,
+                    ):
+                        continue
+                    if SeasonMigrationService.contest_has_active_higher_level_link(
+                        db, cid, round_obj.id, SeasonLevel.COUNTRY
                     ):
                         continue
                     eff_sid = (

@@ -290,8 +290,9 @@ def _contest_eligible_at_ui_level(
     """
     True when the user may browse/vote this contest at the UI geography chip level.
 
-    Uses an active (or relaxed) ContestSeason row at that level on this round — not the
-    auto "highest migrated" card label — so May+Country and March+Continental work correctly.
+    Requires an ACTIVE ContestSeasonLink at that level for this round when one exists.
+    Contests already promoted past this level must not stay visible on the prior chip
+    (e.g. country Vote after COUNTRY→REGIONAL).
     """
     wl = _normalize_contest_level(wanted_level)
     if not wl:
@@ -316,37 +317,50 @@ def _contest_eligible_at_ui_level(
             == wl
         )
 
-    row = (
+    today = date.today()
+
+    # Already at a higher active stage for this cohort → hide on this chip.
+    if SeasonMigrationService.contest_has_active_higher_level_link(
+        db, contest.id, int(round_obj.id), target_enum
+    ):
+        return False
+
+    # Pooled stages must respect nomination vote-open calendar (June cohort ≠ regional in July).
+    if wl in ("regional", "region", "continental", "continent", "global"):
+        vote_open = SeasonMigrationService._nomination_vote_open_date_for_level(
+            round_obj, target_enum
+        )
+        if vote_open and today < vote_open:
+            return False
+
+    active_row = (
         db.query(ContestSeasonLink.id)
         .join(ContestSeason, ContestSeason.id == ContestSeasonLink.season_id)
         .filter(
             ContestSeasonLink.contest_id == contest.id,
+            ContestSeasonLink.is_active == True,
             ContestSeason.round_id == round_obj.id,
             ContestSeason.level == target_enum,
             ContestSeason.is_deleted == False,
         )
-        .order_by(ContestSeasonLink.is_active.desc(), ContestSeasonLink.linked_at.desc())
         .first()
     )
-    if row:
+    if active_row:
         return True
 
-    # Pooled phases: season may exist on an earlier calendar round (same as detail roster).
+    # Pooled phases: only the exact cohort season (calendar-gated in crud helper).
     if wl in ("regional", "region", "continental", "continent", "global"):
         from app.crud.crud_contest import _season_pair_for_requested_ui_level
 
         _, pooled_season = _season_pair_for_requested_ui_level(
             db, contest.id, round_obj.id, wl
         )
-        if pooled_season is not None:
-            return True
+        return pooled_season is not None
 
-    min_start = SeasonMigrationService._nomination_min_start_for_level(round_obj, target_enum)
-    if min_start and date.today() < min_start:
-        return False
-
+    # Country: visible during nomination/country-vote months even before the link row exists.
     if wl == "country":
-        return True
+        return SeasonMigrationService._nomination_country_init_ready(round_obj, today)
+
     return False
 
 
