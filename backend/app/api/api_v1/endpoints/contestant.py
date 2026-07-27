@@ -1621,6 +1621,11 @@ def get_contest_contestants(
         alias="roundId",
         description="When set, only contestants for this calendar round (plus legacy NULL round_id rows for the same user_id filter).",
     ),
+    contest_level: Optional[str] = Query(
+        None,
+        alias="contestLevel",
+        description="Nomination vote stage: country, regional, continental, global",
+    ),
     current_user: Optional[User] = Depends(deps.get_current_active_user_optional)
 ) -> List[ContestantWithAuthorAndStats]:
     """
@@ -1733,15 +1738,76 @@ def get_contest_contestants(
         # Step 2: Build simplified query - try season_id first (most common)
         query = db.query(Contestant).filter(Contestant.is_deleted == False)
 
-        # Resolve active season to detect pooled phases (regional/continental/global)
+        # Resolve season for nomination rosters (never pick highest active link blindly).
         from sqlalchemy import case
         from app.models.contests import ContestSeasonLink as CSLink, ContestSeason as CSeason, ContestantSeason as CSeas, SeasonLevel
+        from app.crud.crud_contest import (
+            resolve_nomination_display_season_for_contest_round,
+            _normalize_requested_ui_level,
+            _get_country_match_patterns,
+        )
+        from app.core.nomination_calendar import nomination_vote_list_blocked
+
+        merged_country = filter_country if filter_country is not None else country
+        merged_region = filter_region if filter_region is not None else region
+        merged_continent = filter_continent if filter_continent is not None else continent
+        merged_city = filter_city if filter_city is not None else city
+
+        fc = (merged_country or "").strip()
+        fr = (merged_region or "").strip()
+        fco = (merged_continent or "").strip()
+        fci = (merged_city or "").strip()
+        fc_norm = fc.lower()
+        fr_norm = fr.lower()
+        fco_norm = fco.lower()
+        fci_norm = fci.lower()
+        has_country_filter = bool(fc and fc_norm != "all")
+        has_region_filter = bool(fr and fr_norm != "all")
+        has_continent_filter = bool(fco and fco_norm != "all")
+        has_city_filter = bool(fci and fci_norm != "all")
+
         season_link_for_pool = None
         season_for_pool = None
         season_level_for_pool = None
         pooled_membership_scope = False
-        if contest:
-            # Find the active season link for this contest
+        ui_level_norm = _normalize_requested_ui_level(contest_level)
+        if contest and not ui_level_norm:
+            if has_region_filter:
+                ui_level_norm = "regional"
+            elif has_country_filter:
+                ui_level_norm = "country"
+
+        _is_nomination_contest_round = bool(
+            contest and _norm_cm_round(getattr(contest, "contest_mode", None)) == "nomination"
+        )
+
+        if contest and _is_nomination_contest_round and round_id is not None and user_id is None:
+            round_row = db.query(Round).filter(Round.id == round_id).first()
+            if ui_level_norm and nomination_vote_list_blocked(
+                round_row, "nomination", ui_level_norm
+            ):
+                return []
+            sl_res, seas_res = resolve_nomination_display_season_for_contest_round(
+                db, contest, int(round_id), ui_level_norm
+            )
+            if ui_level_norm in ("regional", "continental", "global") and seas_res is None:
+                return []
+            if seas_res is not None:
+                season_link_for_pool, season_for_pool = sl_res, seas_res
+                season_level_for_pool = (
+                    seas_res.level.value
+                    if hasattr(seas_res.level, "value")
+                    else str(seas_res.level)
+                )
+                if isinstance(season_level_for_pool, str):
+                    season_level_for_pool = season_level_for_pool.lower()
+                if season_level_for_pool == "city":
+                    season_level_for_pool = "country"
+                pooled_membership_scope = season_level_for_pool in (
+                    "regional", "region", "continent", "continental", "global"
+                )
+        elif contest:
+            # Participation / legacy: highest active season for pooled membership.
             sl = db.query(CSLink, CSeason).join(
                 CSeason, CSeason.id == CSLink.season_id
             ).filter(
@@ -1791,9 +1857,6 @@ def get_contest_contestants(
         else:
             query = query.filter(Contestant.season_id == real_contest_id)
 
-        _is_nomination_contest_round = bool(
-            contest and _norm_cm_round(getattr(contest, "contest_mode", None)) == "nomination"
-        )
         if round_id is not None and not pooled_membership_scope:
             if user_id is not None:
                 # When loading only this user's rows (apply/edit), always include their entries
@@ -1815,6 +1878,15 @@ def get_contest_contestants(
             else:
                 query = query.filter(Contestant.round_id == round_id)
 
+            if _is_nomination_contest_round and user_id is None:
+                from app.services.season_migration import SeasonMigrationService
+
+                promoted = SeasonMigrationService.contestant_ids_active_beyond_level(
+                    db, contest.id, int(round_id), SeasonLevel.COUNTRY
+                )
+                if promoted:
+                    query = query.filter(~Contestant.id.in_(list(promoted)))
+
         pooled_card_levels = frozenset(
             {"regional", "region", "continent", "continental", "global"}
         )
@@ -1822,28 +1894,6 @@ def get_contest_contestants(
             contest
             and str(getattr(contest, "level", None) or "").lower() in pooled_card_levels
         ) or pooled_membership_scope
-
-        # Normalize filters from both modern keys (filterCountry,...) and
-        # legacy keys (country,...) used by some detail page routes.
-        merged_country = filter_country if filter_country is not None else country
-        merged_region = filter_region if filter_region is not None else region
-        merged_continent = filter_continent if filter_continent is not None else continent
-        merged_city = filter_city if filter_city is not None else city
-
-        fc = (merged_country or "").strip()
-        fr = (merged_region or "").strip()
-        fco = (merged_continent or "").strip()
-        fci = (merged_city or "").strip()
-        fc_norm = fc.lower()
-        fr_norm = fr.lower()
-        fco_norm = fco.lower()
-        fci_norm = fci.lower()
-        has_country_filter = bool(fc and fc_norm != "all")
-        has_region_filter = bool(fr and fr_norm != "all")
-        has_continent_filter = bool(fco and fco_norm != "all")
-        has_city_filter = bool(fci and fci_norm != "all")
-
-        from app.crud.crud_contest import _get_country_match_patterns
 
         if has_country_filter and not suppress_geo_filters:
             pats = _get_country_match_patterns(fc) or [f"%{fc_norm}%"]

@@ -30,8 +30,6 @@ import {
   type VoteGeographyLevel,
 } from '@/lib/contest-round-tabs'
 import { normalizeContestMode } from '@/lib/contest-mode'
-import { pooledNominationRosterCount } from '@/lib/nomination-pooled-level'
-import { backendHasNominationRosterFix } from '@/lib/backend-nomination-fix'
 
 // GraphQL
 // REST API
@@ -218,7 +216,7 @@ function listGeoParamsForFetch(opts: {
 
 const POOLED_NOMINATION_VOTE_LEVELS = new Set(['regional', 'continental', 'global'])
 
-/** When backend lacks cross-round list eligibility, detail API still returns the correct roster. */
+/** Fetch contests for Vote tab — always uses contestLevel (no broad-list fallback). */
 async function fetchPooledVoteContestsWithLegacyFallback(
   roundsParams: {
     roundId: number
@@ -230,64 +228,11 @@ async function fetchPooledVoteContestsWithLegacyFallback(
     searchTerm?: string
     contestLimit: number
   },
-  limit: number,
+  _limit: number,
 ): Promise<{ contests: any[]; usedFallback: boolean; roundRow: any | null }> {
-  const level = roundsParams.contestLevel
-  if (!level || !POOLED_NOMINATION_VOTE_LEVELS.has(level)) {
-    const data = await ApiService.getRounds(roundsParams)
-    const roundRow = data?.[0] ?? null
-    return { contests: roundRow?.contests ?? [], usedFallback: false, roundRow }
-  }
-
-  const hasBackendFix = await backendHasNominationRosterFix()
-  if (hasBackendFix) {
-    const data = await ApiService.getRounds(roundsParams)
-    const roundRow = data?.[0] ?? null
-    return { contests: roundRow?.contests ?? [], usedFallback: false, roundRow }
-  }
-
-  // Old backend: list with contestLevel is empty — skip that call, use broad list + detail counts.
-  const broad = await ApiService.getRounds({
-    ...roundsParams,
-    contestLevel: undefined,
-    contestLimit: Math.max(limit, 60),
-  })
-  const pool: any[] = broad?.[0]?.contests ?? []
-  const enriched: any[] = []
-  const chunkSize = 15
-  for (let i = 0; i < pool.length && enriched.length < limit; i += chunkSize) {
-    const slice = pool.slice(i, i + chunkSize)
-    const batch = await Promise.all(
-      slice.map(async (c) => {
-        try {
-          const detail = await ApiService.getContest(c.id, {
-            entryType: 'nomination',
-            roundId: roundsParams.roundId,
-            contestLevel: level,
-            filterCountry: roundsParams.filterRegion ? undefined : roundsParams.filterCountry,
-            filterRegion: roundsParams.filterRegion,
-            filterContinent: roundsParams.filterContinent,
-          })
-          const rows = (detail as { contestants?: { season?: { level?: string } }[] })?.contestants ?? []
-          const count = pooledNominationRosterCount(rows, level)
-          if (count <= 0) return null
-          return { ...c, participants_count: count }
-        } catch {
-          return null
-        }
-      }),
-    )
-    enriched.push(...batch.filter(Boolean))
-  }
-  enriched.sort(
-    (a, b) => (Number(b.participants_count) || 0) - (Number(a.participants_count) || 0),
-  )
-  const page = enriched.slice(0, limit)
-  return {
-    contests: page,
-    usedFallback: true,
-    roundRow: broad?.[0] ?? null,
-  }
+  const data = await ApiService.getRounds(roundsParams)
+  const roundRow = data?.[0] ?? null
+  return { contests: roundRow?.contests ?? [], usedFallback: false, roundRow }
 }
 
 function ContestsPageContent() {

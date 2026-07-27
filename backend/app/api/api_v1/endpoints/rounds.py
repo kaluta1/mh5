@@ -97,7 +97,16 @@ def _cheap_round_entry_count(
     wanted_level: Optional[str],
 ) -> int:
     """Fast per-contest count for list sorting — not the exact nomination roster count."""
-    from app.models.contests import Contestant, ContestantSeason, ContestSeasonLink, ContestSeason
+    from app.models.contests import (
+        Contestant,
+        ContestantSeason,
+        ContestSeason,
+        ContestSeasonLink,
+        SeasonLevel,
+    )
+
+    wl = _normalize_contest_level(wanted_level)
+    pooled_ui = wl in ("regional", "continental", "global")
 
     target_pool_levels = _pooled_season_levels_for_ui(wanted_level)
     try:
@@ -114,6 +123,8 @@ def _cheap_round_entry_count(
             .order_by(ContestSeason.id.desc())
             .first()
         )
+        if pooled_ui and active_pool_season is None:
+            return 0
         if active_pool_season is not None:
             from app.services.contest_category_integrity import pooled_roster_contest_scope_clause
 
@@ -144,6 +155,9 @@ def _cheap_round_entry_count(
         db.rollback()
         logger.warning(f"Error checking active pool season: {e}")
 
+    if pooled_ui:
+        return 0
+
     try:
         q = db.query(Contestant).filter(
             Contestant.season_id == contest.id,
@@ -154,6 +168,14 @@ def _cheap_round_entry_count(
             q = q.filter(
                 (Contestant.entry_type == "nomination") | (Contestant.entry_type.is_(None))
             )
+            if wl == "country" or wl is None:
+                from app.services.season_migration import SeasonMigrationService
+
+                promoted = SeasonMigrationService.contestant_ids_active_beyond_level(
+                    db, contest.id, int(round_obj.id), SeasonLevel.COUNTRY
+                )
+                if promoted:
+                    q = q.filter(~Contestant.id.in_(list(promoted)))
             return int(
                 q.with_entities(func.count(func.distinct(Contestant.user_id))).scalar() or 0
             )

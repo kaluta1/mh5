@@ -18,11 +18,14 @@ export async function backendHasNominationRosterFix(): Promise<boolean> {
       }
       const data = (await res.json()) as { build_id?: string }
       const bid = String(data?.build_id ?? '')
+      // Any backend with build-info after mid-2026 migration fixes uses strict roster routing.
       cachedHasFix =
+        bid.includes('migration-dual-stage') ||
         bid.includes('nomination-roster-fix') ||
         bid.includes('nomination-category-scope') ||
         bid.includes('march-cohort-align') ||
-        bid.includes('march-cohort-calendar')
+        bid.includes('march-cohort-calendar') ||
+        bid.includes('2026072')
       return cachedHasFix
     } catch {
       cachedHasFix = false
