@@ -386,6 +386,47 @@ def _season_pair_for_requested_ui_level(
     return None, None
 
 
+def _country_season_pair_for_round(
+    db: Session,
+    contest_id: int,
+    target_round_id: int,
+) -> tuple[Any, Any]:
+    """
+    Country season for one contest+round. Prefer active link; accept inactive only when
+    the contest has not advanced to regional+ (country vote roster without dual visibility).
+    """
+    from app.models.contests import ContestSeason, ContestSeasonLink, SeasonLevel
+    from app.services.season_migration import SeasonMigrationService
+
+    if SeasonMigrationService.contest_has_active_higher_level_link(
+        db, contest_id, target_round_id, SeasonLevel.COUNTRY
+    ):
+        return None, None
+
+    for active_only in (True, False):
+        q = (
+            db.query(ContestSeasonLink, ContestSeason)
+            .join(ContestSeason, ContestSeason.id == ContestSeasonLink.season_id)
+            .filter(
+                ContestSeasonLink.contest_id == contest_id,
+                ContestSeason.round_id == target_round_id,
+                ContestSeason.level == SeasonLevel.COUNTRY,
+                ContestSeason.is_deleted == False,
+            )
+            .order_by(
+                ContestSeasonLink.is_active.desc(),
+                ContestSeasonLink.linked_at.desc(),
+                ContestSeason.id.desc(),
+            )
+        )
+        if active_only:
+            q = q.filter(ContestSeasonLink.is_active == True)
+        row = q.first()
+        if row:
+            return row[0], row[1]
+    return None, None
+
+
 def resolve_nomination_display_season_for_contest_round(
     db: Session,
     contest_obj: Contest,
@@ -394,26 +435,25 @@ def resolve_nomination_display_season_for_contest_round(
 ) -> tuple[Any, Any]:
     """
     Pick the ContestSeason (+ link) driving visible roster/counts/timeline for one contest round.
-    Mirrors get_contest_with_enriched_contestants so participant_count matches the opened list.
 
-    Uses the first arbitrary active ContestSeasonLink only when no season exists for this contest
-    and calendar round (even inactive links). Avoids picking another contest phase's season when
-    the correct round link is only inactive or missing the active flag.
+    When the UI sends an explicit geography level (country/regional/…), never cross-resolve
+    to another level — that caused the same nominee to appear in country and regional Vote.
     """
     from app.models.contests import ContestSeasonLink, ContestSeason
 
     contest_id = contest_obj.id
 
-    naive_sl = (
-        db.query(ContestSeasonLink)
-        .filter(
-            ContestSeasonLink.contest_id == contest_id,
-            ContestSeasonLink.is_active == True,
+    if target_round_id is None:
+        naive_sl = (
+            db.query(ContestSeasonLink)
+            .filter(
+                ContestSeasonLink.contest_id == contest_id,
+                ContestSeasonLink.is_active == True,
+            )
+            .first()
         )
-        .first()
-    )
-    naive_season = None
-    if naive_sl is not None:
+        if naive_sl is None:
+            return None, None
         naive_season = (
             db.query(ContestSeason)
             .filter(
@@ -422,8 +462,6 @@ def resolve_nomination_display_season_for_contest_round(
             )
             .first()
         )
-
-    if target_round_id is None:
         return naive_sl, naive_season
 
     ui_level = _normalize_requested_ui_level(requested_ui_level)
@@ -436,10 +474,9 @@ def resolve_nomination_display_season_for_contest_round(
                 return forced
             return None, None
         if ui_level == "country":
-            pass
-        else:
-            # Pooled vote chip with no migrated season: do not fall back to country season.
-            return None, None
+            return _country_season_pair_for_round(db, contest_id, int(target_round_id))
+        # Pooled vote chip with no migrated season / vote month not open yet.
+        return None, None
 
     pairs = (
         db.query(ContestSeasonLink, ContestSeason)
@@ -457,7 +494,7 @@ def resolve_nomination_display_season_for_contest_round(
         if sl_r is not None:
             pairs = [(sl_r, ss_r)]
         else:
-            return naive_sl, naive_season
+            return None, None
 
     if _normalize_contest_mode(getattr(contest_obj, "contest_mode", "participation")) == "nomination":
         from app.services.season_migration import SeasonMigrationService
@@ -476,11 +513,7 @@ def resolve_nomination_display_season_for_contest_round(
         pairs = allowed_pairs
 
     if not pairs:
-        sl_r, ss_r = _contest_season_link_for_round_relaxed(db, contest_id, target_round_id)
-        if sl_r is not None:
-            pairs = [(sl_r, ss_r)]
-        else:
-            return naive_sl, naive_season
+        return None, None
 
     round_obj_sel = pairs[0][1].round if pairs else None
     dashboard_level = "country"
@@ -505,12 +538,6 @@ def resolve_nomination_display_season_for_contest_round(
 
     selection_pool = matched if matched else list(pairs)
     is_nomination = _normalize_contest_mode(getattr(contest_obj, "contest_mode", None)) == "nomination"
-    # When the dashboard is still country/city but no ContestSeason row matches that level:
-    # - If some linked rows are city/country, use the lowest tier among them.
-    # - If ONLY REGIONAL+ rows exist for this round, min(pairs) still picked REGIONAL and
-    #   turned on ContestantSeason pooling (UI showed 1 nomination while DB had many).
-    #   In that case ignore those rows for display season so roster/count use plain
-    #   contestant rows for this round (season=None → contest.level drives geo, no pool).
     if matched:
         season_link, season = max(selection_pool, key=_season_level_rank)
     elif is_nomination and dashboard_level in ("country", "city") and selection_pool:
@@ -988,6 +1015,35 @@ class CRUDContest:
             display_round_for_scope,
             requested_ui_level=ui_level_norm,
         )
+
+        # Pooled Vote chip before migration / vote month: do not count country rows as regional.
+        if (
+            _nomination_contest
+            and ui_level_norm in ("regional", "continental", "global")
+            and season is None
+        ):
+            level_value = contest.level
+            if hasattr(level_value, "value"):
+                level_value = level_value.value
+            return {
+                "id": contest.id,
+                "name": contest.name,
+                "description": contest.description,
+                "contest_type": contest.contest_type,
+                "contest_mode": getattr(contest, "contest_mode", "nomination"),
+                "level": level_value,
+                "season_level": ui_level_norm,
+                "entries_count": 0,
+                "participants_count": 0,
+                "total_votes": 0,
+                "total_points": 0,
+                "top_contestants": [],
+                "current_user_contesting": False,
+                "is_active": contest.is_active,
+                "is_submission_open": getattr(contest, "is_submission_open", False),
+                "is_voting_open": getattr(contest, "is_voting_open", False),
+            }
+
         if season is not None:
             season_level = (
                 season.level.value
@@ -1159,34 +1215,27 @@ class CRUDContest:
             base_entries_query = base_entries_query.filter(regional_voting_pools_sql_predicate())
             entries_query = entries_query.filter(regional_voting_pools_sql_predicate())
 
-        # Keep country nomination card counts aligned with opened roster:
-        # once a contestant is active in higher levels, they should no longer
-        # count in country-level visible participants for this contest.
-        country_filter_norm_for_count = str(filter_country or "").strip().lower()
-        singeli_tanzania_scope_for_count = (
-            contest.id == 17 and country_filter_norm_for_count in {"tanzania", "tz"}
-        )
+        # Once a nominee is active at regional+, exclude from country-level counts/lists.
         if (
-            singeli_tanzania_scope_for_count
-            and contest_mode == "nomination"
+            contest_mode == "nomination"
             and season_level_lower_for_count in ("country", "city")
+            and display_round_for_scope is not None
         ):
-            promoted_ids_for_count = (
-                db.query(ContestantSeason.contestant_id)
-                .join(ContestSeason, ContestSeason.id == ContestantSeason.season_id)
-                .join(ContestSeasonLink, ContestSeasonLink.season_id == ContestSeason.id)
-                .filter(
-                    ContestSeasonLink.contest_id == contest.id,
-                    ContestSeasonLink.is_active == True,
-                    ContestSeason.level.in_(
-                        [SeasonLevel.REGIONAL, SeasonLevel.CONTINENT, SeasonLevel.GLOBAL]
-                    ),
-                    ContestSeason.is_deleted == False,
-                    ContestantSeason.is_active == True,
-                )
+            from app.services.season_migration import SeasonMigrationService
+
+            promoted_ids_for_count = SeasonMigrationService.contestant_ids_active_beyond_level(
+                db,
+                contest.id,
+                int(display_round_for_scope),
+                SeasonLevel.COUNTRY,
             )
-            base_entries_query = base_entries_query.filter(~Contestant.id.in_(promoted_ids_for_count))
-            entries_query = entries_query.filter(~Contestant.id.in_(promoted_ids_for_count))
+            if promoted_ids_for_count:
+                base_entries_query = base_entries_query.filter(
+                    ~Contestant.id.in_(list(promoted_ids_for_count))
+                )
+                entries_query = entries_query.filter(
+                    ~Contestant.id.in_(list(promoted_ids_for_count))
+                )
         
         # Get total count without location filters (for display purposes)
         total_entries_count = base_entries_query.scalar() or 0
@@ -1926,10 +1975,24 @@ class CRUDContest:
             filter_region and str(filter_region).strip().lower() not in ("", "all")
         )
         regional_context_without_season = False
-        # If user explicitly requests a regional bloc (e.g. East Africa), do not
-        # fallback to country-season roster. Use a true regional season for this
-        # round, otherwise return no contestants for this regional context.
+        # Regional Vote must use a true REGIONAL season for this cohort round — never country rows.
         if (
+            nomination_context
+            and ui_level_norm == "regional"
+            and target_round_id is not None
+        ):
+            resolved_level = None
+            if season is not None and hasattr(season, "level") and season.level is not None:
+                resolved_level = (
+                    season.level.value
+                    if hasattr(season.level, "value")
+                    else str(season.level)
+                )
+                if isinstance(resolved_level, str):
+                    resolved_level = resolved_level.lower()
+            if season is None or resolved_level not in ("regional", "region"):
+                regional_context_without_season = True
+        elif (
             singeli_east_africa_scope
             and nomination_context
             and explicit_region_requested
@@ -1950,9 +2013,6 @@ class CRUDContest:
             if regional_pair:
                 season_link, season = regional_pair
             else:
-                # No regional season for this exact cohort round yet — empty roster.
-                # Never fall back to another month's regional pool (that mixed June
-                # country nominees into May East Africa regional voting).
                 regional_context_without_season = True
         
         # FIXED: Query contestants by the ACTIVE SEASON ID (not contest_id)
@@ -2164,20 +2224,20 @@ class CRUDContest:
 
         # Country nomination roster should only contain contestants that have not
         # already advanced to higher active levels for this contest+round.
-        # Always apply for country Vote chips — showing promoted nominees in both
-        # country and regional stages was the Zali la Mentali dual-visibility bug.
         if (
             contest_mode == "nomination"
-            and str(season_level or "").lower() in ("country", "city")
-            and season is not None
-            and getattr(season, "round_id", None) is not None
+            and target_round_id is not None
+            and (
+                str(season_level or "").lower() in ("country", "city")
+                or ui_level_norm == "country"
+            )
         ):
             from app.services.season_migration import SeasonMigrationService
 
             promoted_ids = SeasonMigrationService.contestant_ids_active_beyond_level(
                 db,
                 contest_id,
-                int(season.round_id),
+                int(target_round_id),
                 SeasonLevel.COUNTRY,
             )
             if promoted_ids:

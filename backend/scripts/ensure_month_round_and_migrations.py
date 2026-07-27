@@ -71,6 +71,15 @@ def main() -> int:
         f"Round: {rnd_info!r} | migrations processed: {processed} "
         f"(passes={mig.get('passes')}) first_of_month={summary.get('is_first_of_month')}"
     )
+
+    # Repair stale country links/memberships after promotion (idempotent).
+    try:
+        from scripts.repair_dual_stage_visibility import main as repair_dual_visibility
+
+        logger.info("=== Repair dual country+regional visibility ===")
+        repair_dual_visibility(apply=True)
+    except Exception as exc:
+        logger.warning("Dual-stage repair skipped or failed: %s", exc)
     for item in mig.get("results", []) or []:
         cid = item.get("contest_id")
         action = item.get("action")

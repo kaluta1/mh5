@@ -42,11 +42,32 @@ def nomination_vote_list_blocked(
     """
     True when a nomination Vote list/detail request must return an empty roster.
 
-    Blocks pre-March placeholder rounds (Jan/Feb 2026) even if legacy seasons exist.
+    Blocks pre-March placeholder rounds and pooled stages before their vote month opens.
     """
     if (contest_mode or "").strip().lower() != "nomination":
         return False
     level = (wanted_level or "").strip().lower()
     if level not in {"country", "regional", "continental", "global", "continent", "region"}:
         return False
-    return not is_official_nomination_cohort_round(round_obj)
+    if not is_official_nomination_cohort_round(round_obj):
+        return True
+
+    if level in {"regional", "region", "continental", "continent", "global"}:
+        from app.models.contests import SeasonLevel
+        from app.services.season_migration import SeasonMigrationService
+
+        level_map = {
+            "regional": SeasonLevel.REGIONAL,
+            "region": SeasonLevel.REGIONAL,
+            "continental": SeasonLevel.CONTINENT,
+            "continent": SeasonLevel.CONTINENT,
+            "global": SeasonLevel.GLOBAL,
+        }
+        target = level_map.get(level)
+        if target is not None:
+            vote_open = SeasonMigrationService._nomination_vote_open_date_for_level(
+                round_obj, target
+            )
+            if vote_open and date.today() < vote_open:
+                return True
+    return False

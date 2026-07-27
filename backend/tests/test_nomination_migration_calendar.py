@@ -150,6 +150,27 @@ def test_june_cohort_country_only_in_july():
     )
 
 
+def test_june_cohort_regional_list_blocked_in_july():
+    """Regional Vote list must be empty before August for June cohort."""
+    from unittest.mock import patch
+
+    from app.core.nomination_calendar import nomination_vote_list_blocked
+    from app.models.round import Round, RoundStatus
+
+    rnd = Round(
+        id=2,
+        name="Round June 2026",
+        status=RoundStatus.ACTIVE,
+        submission_start_date=date(2026, 6, 1),
+        submission_end_date=date(2026, 6, 30),
+    )
+    with patch("app.core.nomination_calendar.date") as mock_date:
+        mock_date.today.return_value = date(2026, 7, 15)
+        assert nomination_vote_list_blocked(rnd, "nomination", "regional") is True
+        mock_date.today.return_value = date(2026, 8, 1)
+        assert nomination_vote_list_blocked(rnd, "nomination", "regional") is False
+
+
 def test_participation_uses_round_stage_dates_not_nomination_calendar():
     rnd = _march_round()
     # Participation country→regional follows DB columns (June), not nomination May.
