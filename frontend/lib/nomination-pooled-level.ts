@@ -3,17 +3,19 @@ export function rosterMatchesRequestedPooledLevel(
   rows: { season?: { level?: string } }[],
   requestedLevel: string,
 ): boolean {
-  if (!rows.length) return true
   const req = requestedLevel.toLowerCase()
-  const seasonLevel = String(rows[0]?.season?.level || '').toLowerCase()
-  if (!seasonLevel) return true
-  if (req === 'regional' || req === 'region') {
-    return seasonLevel === 'regional' || seasonLevel === 'region'
+  if (req === 'regional' || req === 'region' || req === 'continental' || req === 'continent' || req === 'global') {
+    if (!rows.length) return true
+    const seasonLevel = String(rows[0]?.season?.level || '').toLowerCase()
+    if (!seasonLevel) return false
+    if (req === 'regional' || req === 'region') {
+      return seasonLevel === 'regional' || seasonLevel === 'region'
+    }
+    if (req === 'continental' || req === 'continent') {
+      return seasonLevel === 'continental' || seasonLevel === 'continent'
+    }
+    if (req === 'global') return seasonLevel === 'global'
   }
-  if (req === 'continental' || req === 'continent') {
-    return seasonLevel === 'continental' || seasonLevel === 'continent'
-  }
-  if (req === 'global') return seasonLevel === 'global'
   return true
 }
 

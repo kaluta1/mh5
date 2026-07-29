@@ -21,8 +21,10 @@ describe('nomination-pooled-level', () => {
     expect(pooledNominationRosterCount([], 'regional')).toBe(0)
   })
 
-  it('accepts rows when season level is missing (legacy API rows)', () => {
+  it('rejects rows without season metadata on pooled tabs', () => {
     const rows = [{ season: {} }, { season: {} }]
-    expect(rosterMatchesRequestedPooledLevel(rows, 'continental')).toBe(true)
+    expect(rosterMatchesRequestedPooledLevel(rows, 'continental')).toBe(false)
+    expect(rosterMatchesRequestedPooledLevel(rows, 'regional')).toBe(false)
+    expect(pooledNominationRosterCount(rows, 'continental')).toBe(0)
   })
 })

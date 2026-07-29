@@ -116,6 +116,47 @@ def _normalize_entry_type_query(value: Optional[str]) -> Optional[str]:
     return None
 
 
+def _infer_nomination_ui_level_from_geo(
+    requested_ui_level: Optional[str],
+    filter_country: Optional[str] = None,
+    filter_region: Optional[str] = None,
+) -> Optional[str]:
+    """Map explicit geo filters to nomination vote stage when contestLevel is omitted."""
+    ui = _normalize_requested_ui_level(requested_ui_level)
+    if ui:
+        return ui
+    region = str(filter_region or "").strip().lower()
+    if region and region not in ("", "all", "unknown", "none", "null"):
+        return "regional"
+    country = str(filter_country or "").strip().lower()
+    if country and country not in ("", "all", "unknown", "none", "null"):
+        return "country"
+    return None
+
+
+def _regional_season_pair_for_nomination_round(
+    db: Session,
+    contest_id: int,
+    target_round_id: int,
+) -> tuple[Any, Any]:
+    """Active REGIONAL ContestSeason (+ link) for one contest calendar round."""
+    from app.models.contests import ContestSeason, ContestSeasonLink, SeasonLevel
+
+    row = (
+        db.query(ContestSeasonLink, ContestSeason)
+        .join(ContestSeason, ContestSeason.id == ContestSeasonLink.season_id)
+        .filter(
+            ContestSeasonLink.contest_id == contest_id,
+            ContestSeasonLink.is_active == True,
+            ContestSeason.round_id == target_round_id,
+            ContestSeason.level == SeasonLevel.REGIONAL,
+            ContestSeason.is_deleted == False,
+        )
+        .first()
+    )
+    return row if row else (None, None)
+
+
 def _nomination_row_entry_type_clause(effective_entry_type: str, contest_mode: str):
     """SQLAlchemy filter: rows that count as nominations for this contest."""
     from sqlalchemy import or_
@@ -997,6 +1038,12 @@ class CRUDContest:
         season_level = None
         _nomination_contest = _normalize_contest_mode(getattr(contest, "contest_mode", None)) == "nomination"
         ui_level_norm = _normalize_requested_ui_level(requested_ui_level)
+        if not ui_level_norm and _nomination_contest:
+            ui_level_norm = _infer_nomination_ui_level_from_geo(
+                requested_ui_level,
+                filter_country=filter_country,
+                filter_region=filter_region,
+            )
         prefer_submit = _nomination_contest and not ui_level_norm
         display_round_for_scope = crud_round.round.resolve_display_round_id_for_contest(
             db,
@@ -1017,6 +1064,38 @@ class CRUDContest:
         )
 
         # Pooled Vote chip before migration / vote month: do not count country rows as regional.
+        if _nomination_contest and display_round_for_scope and ui_level_norm:
+            from app.models.round import Round as RoundModel
+            from app.core.nomination_calendar import nomination_vote_list_blocked
+
+            round_row_enrich = db.query(RoundModel).filter(
+                RoundModel.id == display_round_for_scope
+            ).first()
+            if nomination_vote_list_blocked(
+                round_row_enrich, "nomination", ui_level_norm
+            ):
+                level_value = contest.level
+                if hasattr(level_value, "value"):
+                    level_value = level_value.value
+                return {
+                    "id": contest.id,
+                    "name": contest.name,
+                    "description": contest.description,
+                    "contest_type": contest.contest_type,
+                    "contest_mode": getattr(contest, "contest_mode", "nomination"),
+                    "level": level_value,
+                    "season_level": ui_level_norm,
+                    "entries_count": 0,
+                    "participants_count": 0,
+                    "total_votes": 0,
+                    "total_points": 0,
+                    "top_contestants": [],
+                    "current_user_contesting": False,
+                    "is_active": contest.is_active,
+                    "is_submission_open": getattr(contest, "is_submission_open", False),
+                    "is_voting_open": getattr(contest, "is_voting_open", False),
+                }
+
         if (
             _nomination_contest
             and ui_level_norm in ("regional", "continental", "global")
@@ -1868,18 +1947,28 @@ class CRUDContest:
             return None
 
         entry_type = _normalize_entry_type_query(entry_type)
+        contest_mode_early = _normalize_contest_mode(
+            getattr(contest_obj, "contest_mode", "participation")
+        )
+        ui_level_for_block = _infer_nomination_ui_level_from_geo(
+            requested_ui_level,
+            filter_country=filter_country,
+            filter_region=filter_region,
+        )
         
         # Récupérer l'utilisateur si current_user_id est fourni
         current_user = None
         if current_user_id:
             current_user = db.query(User).filter(User.id == current_user_id).first()
 
-        if round_id and entry_type == "nomination" and requested_ui_level:
+        if round_id and contest_mode_early == "nomination" and ui_level_for_block:
             from app.models.round import Round as RoundModel
             from app.core.nomination_calendar import nomination_vote_list_blocked
 
             round_row = db.query(RoundModel).filter(RoundModel.id == round_id).first()
-            if nomination_vote_list_blocked(round_row, entry_type, requested_ui_level):
+            if nomination_vote_list_blocked(
+                round_row, "nomination", ui_level_for_block
+            ):
                 if count_only:
                     return {"id": contest_obj.id, "contestants": [], "roster_count": 0}
                 empty = self.enrich_contest_with_stats(
@@ -1916,8 +2005,13 @@ class CRUDContest:
         from app.models.contests import ContestantSeason, SeasonLevel
         from app.crud import crud_round
 
-        contest_mode_early = _normalize_contest_mode(getattr(contest_obj, "contest_mode", "participation"))
         ui_level_norm = _normalize_requested_ui_level(requested_ui_level)
+        if not ui_level_norm and contest_mode_early == "nomination":
+            ui_level_norm = _infer_nomination_ui_level_from_geo(
+                requested_ui_level,
+                filter_country=filter_country,
+                filter_region=filter_region,
+            )
         prefer_submit = contest_mode_early == "nomination" and not ui_level_norm
         target_round_id = crud_round.round.resolve_display_round_id_for_contest(
             db,
@@ -1969,51 +2063,48 @@ class CRUDContest:
         nomination_context = contest_mode == "nomination" or requested_entry_type == "nomination"
         country_filter_norm = str(filter_country or "").strip().lower()
         region_filter_norm = str(filter_region or "").strip().lower()
-        singeli_tanzania_scope = contest_id == 17 and country_filter_norm in {"tanzania", "tz"}
-        singeli_east_africa_scope = contest_id == 17 and region_filter_norm in {"east africa", "east_africa"}
         explicit_region_requested = bool(
             filter_region and str(filter_region).strip().lower() not in ("", "all")
         )
         regional_context_without_season = False
         # Regional Vote must use a true REGIONAL season for this cohort round — never country rows.
-        if (
+        wants_regional_roster = bool(
             nomination_context
-            and ui_level_norm == "regional"
             and target_round_id is not None
-        ):
-            resolved_level = None
-            if season is not None and hasattr(season, "level") and season.level is not None:
-                resolved_level = (
-                    season.level.value
-                    if hasattr(season.level, "value")
-                    else str(season.level)
-                )
-                if isinstance(resolved_level, str):
-                    resolved_level = resolved_level.lower()
-            if season is None or resolved_level not in ("regional", "region"):
-                regional_context_without_season = True
-        elif (
-            singeli_east_africa_scope
-            and nomination_context
-            and explicit_region_requested
-            and target_round_id is not None
-        ):
-            regional_pair = (
-                db.query(ContestSeasonLink, ContestSeason)
-                .join(ContestSeason, ContestSeason.id == ContestSeasonLink.season_id)
-                .filter(
-                    ContestSeasonLink.contest_id == contest_id,
-                    ContestSeasonLink.is_active == True,
-                    ContestSeason.round_id == target_round_id,
-                    ContestSeason.level == SeasonLevel.REGIONAL,
-                    ContestSeason.is_deleted == False,
-                )
-                .first()
+            and (
+                ui_level_norm == "regional"
+                or (explicit_region_requested and ui_level_norm != "country")
             )
-            if regional_pair:
-                season_link, season = regional_pair
-            else:
+        )
+        if wants_regional_roster:
+            from app.models.round import Round as RoundModel
+            from app.core.nomination_calendar import nomination_vote_list_blocked
+
+            round_row_reg = db.query(RoundModel).filter(
+                RoundModel.id == target_round_id
+            ).first()
+            if nomination_vote_list_blocked(round_row_reg, "nomination", "regional"):
                 regional_context_without_season = True
+            else:
+                resolved_level = None
+                if season is not None and hasattr(season, "level") and season.level is not None:
+                    resolved_level = (
+                        season.level.value
+                        if hasattr(season.level, "value")
+                        else str(season.level)
+                    )
+                    if isinstance(resolved_level, str):
+                        resolved_level = resolved_level.lower()
+                if resolved_level in ("regional", "region"):
+                    pass
+                else:
+                    regional_pair = _regional_season_pair_for_nomination_round(
+                        db, contest_id, int(target_round_id)
+                    )
+                    if regional_pair[1] is not None:
+                        season_link, season = regional_pair
+                    else:
+                        regional_context_without_season = True
         
         # FIXED: Query contestants by the ACTIVE SEASON ID (not contest_id)
         from sqlalchemy import or_, and_
@@ -2099,7 +2190,7 @@ class CRUDContest:
             contestants_query = contestants_query.filter(Contestant.entry_type == effective_entry_type)
         logger.info(f"[get_contest_with_enriched_contestants] Querying by season_id={filter_season_id}, entry_type={effective_entry_type}")
 
-        if singeli_east_africa_scope and regional_context_without_season:
+        if regional_context_without_season:
             contestants_query = contestants_query.filter(Contestant.id == -1)
         
         # Appliquer le filtrage géographique selon le niveau de la saison et l'utilisateur connecté

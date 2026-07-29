@@ -24,7 +24,9 @@ if str(ROOT) not in sys.path:
 from app.db.session import SessionLocal
 from app.models.contest import Contest
 from app.models.contests import ContestSeason, ContestSeasonLink, ContestantSeason, SeasonLevel
+from app.models.round import Round
 from app.services.season_migration import SeasonMigrationService
+from datetime import date
 
 
 HIGHER = (SeasonLevel.REGIONAL, SeasonLevel.CONTINENT, SeasonLevel.GLOBAL)
@@ -39,7 +41,44 @@ def main(apply: bool = False) -> int:
     db = SessionLocal()
     fixed_links = 0
     fixed_memberships = 0
+    fixed_premature_regional = 0
     try:
+        today = date.today()
+        premature_links = (
+            db.query(ContestSeasonLink, ContestSeason)
+            .join(ContestSeason, ContestSeason.id == ContestSeasonLink.season_id)
+            .filter(
+                ContestSeasonLink.is_active == True,
+                ContestSeason.level == SeasonLevel.REGIONAL,
+                ContestSeason.is_deleted == False,
+                ContestSeason.round_id.isnot(None),
+            )
+            .all()
+        )
+        for link, seas in premature_links:
+            contest = db.query(Contest).filter(Contest.id == link.contest_id).first()
+            if not contest or (getattr(contest, "contest_mode", "") or "").lower() != "nomination":
+                continue
+            round_obj = db.query(Round).filter(Round.id == seas.round_id).first()
+            if not round_obj:
+                continue
+            vote_open = SeasonMigrationService._nomination_vote_open_date_for_level(
+                round_obj, SeasonLevel.REGIONAL
+            )
+            if vote_open and today < vote_open:
+                print(
+                    f"premature regional link contest={link.contest_id} "
+                    f"round={seas.round_id} season={seas.id} (vote opens {vote_open})"
+                )
+                if apply:
+                    link.is_active = False
+                    db.query(ContestantSeason).filter(
+                        ContestantSeason.season_id == seas.id,
+                        ContestantSeason.is_active == True,
+                    ).update({"is_active": False}, synchronize_session=False)
+                fixed_premature_regional += 1
+                fixed_links += 1
+
         higher_links = (
             db.query(ContestSeasonLink, ContestSeason)
             .join(ContestSeason, ContestSeason.id == ContestSeasonLink.season_id)
@@ -152,9 +191,15 @@ def main(apply: bool = False) -> int:
 
         if apply:
             db.commit()
-            print(f"Applied: links={fixed_links}, memberships_touched={fixed_memberships}")
+            print(
+                f"Applied: links={fixed_links}, memberships_touched={fixed_memberships}, "
+                f"premature_regional={fixed_premature_regional}"
+            )
         else:
-            print(f"Dry-run: would deactivate {fixed_links} country links")
+            print(
+                f"Dry-run: would deactivate {fixed_links} links "
+                f"(premature_regional={fixed_premature_regional})"
+            )
         return 0
     except Exception as exc:
         db.rollback()
