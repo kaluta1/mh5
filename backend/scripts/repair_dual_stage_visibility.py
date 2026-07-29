@@ -42,8 +42,74 @@ def main(apply: bool = False) -> int:
     fixed_links = 0
     fixed_memberships = 0
     fixed_premature_regional = 0
+    fixed_mismatched_cohort = 0
     try:
         today = date.today()
+
+        # Stale pooled memberships: active regional+ on round 1 while nominee is round 21.
+        from app.models.contests import Contestant
+
+        mismatched = (
+            db.query(ContestantSeason, ContestSeason, Contestant, ContestSeasonLink)
+            .join(ContestSeason, ContestSeason.id == ContestantSeason.season_id)
+            .join(Contestant, Contestant.id == ContestantSeason.contestant_id)
+            .join(
+                ContestSeasonLink,
+                ContestSeasonLink.season_id == ContestSeason.id,
+            )
+            .join(Contest, Contest.id == ContestSeasonLink.contest_id)
+            .filter(
+                ContestantSeason.is_active == True,
+                ContestSeason.level != SeasonLevel.COUNTRY,
+                ContestSeason.round_id.isnot(None),
+                Contestant.round_id.isnot(None),
+                Contestant.round_id != ContestSeason.round_id,
+                ContestSeason.is_deleted == False,
+            )
+            .all()
+        )
+        for cs_row, seas, cont, _link in mismatched:
+            c_obj = db.query(Contest).filter(Contest.id == cont.season_id).first()
+            if not c_obj or (getattr(c_obj, "contest_mode", "") or "").lower() != "nomination":
+                continue
+            print(
+                f"mismatched cohort membership contestant={cs_row.contestant_id} "
+                f"contestant.round_id={cont.round_id} season.round_id={seas.round_id} "
+                f"level={seas.level} season_id={seas.id}"
+            )
+            if apply:
+                cs_row.is_active = False
+            fixed_mismatched_cohort += 1
+            fixed_memberships += 1
+
+        # Also deactivate active country rows on the wrong calendar round.
+        mismatched_country = (
+            db.query(ContestantSeason, ContestSeason, Contestant)
+            .join(ContestSeason, ContestSeason.id == ContestantSeason.season_id)
+            .join(Contestant, Contestant.id == ContestantSeason.contestant_id)
+            .filter(
+                ContestantSeason.is_active == True,
+                ContestSeason.level == SeasonLevel.COUNTRY,
+                ContestSeason.round_id.isnot(None),
+                Contestant.round_id.isnot(None),
+                Contestant.round_id != ContestSeason.round_id,
+                ContestSeason.is_deleted == False,
+            )
+            .all()
+        )
+        for cs_row, seas, cont in mismatched_country:
+            c_obj = db.query(Contest).filter(Contest.id == cont.season_id).first()
+            if not c_obj or (getattr(c_obj, "contest_mode", "") or "").lower() != "nomination":
+                continue
+            print(
+                f"mismatched country membership contestant={cs_row.contestant_id} "
+                f"contestant.round_id={cont.round_id} season.round_id={seas.round_id}"
+            )
+            if apply:
+                cs_row.is_active = False
+            fixed_mismatched_cohort += 1
+            fixed_memberships += 1
+
         premature_links = (
             db.query(ContestSeasonLink, ContestSeason)
             .join(ContestSeason, ContestSeason.id == ContestSeasonLink.season_id)
@@ -193,12 +259,13 @@ def main(apply: bool = False) -> int:
             db.commit()
             print(
                 f"Applied: links={fixed_links}, memberships_touched={fixed_memberships}, "
-                f"premature_regional={fixed_premature_regional}"
+                f"premature_regional={fixed_premature_regional}, mismatched_cohort={fixed_mismatched_cohort}"
             )
         else:
             print(
                 f"Dry-run: would deactivate {fixed_links} links "
-                f"(premature_regional={fixed_premature_regional})"
+                f"(premature_regional={fixed_premature_regional}, "
+                f"mismatched_cohort={fixed_mismatched_cohort})"
             )
         return 0
     except Exception as exc:

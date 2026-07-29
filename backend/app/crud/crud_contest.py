@@ -157,6 +157,41 @@ def _regional_season_pair_for_nomination_round(
     return row if row else (None, None)
 
 
+def nomination_cohort_member_ids_subquery(
+    db: Session,
+    *,
+    contest_id: int,
+    cohort_round_id: int,
+    season_id: int,
+):
+    """
+    Active ContestantSeason members for one pooled season who belong to this cohort.
+
+    Stale rows (regional active on round 1 while Contestant.round_id=21) must not
+    appear in regional Vote for round 21.
+    """
+    from app.models.contests import Contestant, ContestantSeason, ContestSeason, ContestSeasonLink
+
+    return (
+        db.query(ContestantSeason.contestant_id)
+        .join(Contestant, Contestant.id == ContestantSeason.contestant_id)
+        .join(ContestSeason, ContestSeason.id == ContestantSeason.season_id)
+        .join(
+            ContestSeasonLink,
+            ContestSeasonLink.season_id == ContestSeason.id,
+        )
+        .filter(
+            ContestSeasonLink.contest_id == contest_id,
+            ContestSeason.id == season_id,
+            ContestSeason.round_id == cohort_round_id,
+            ContestantSeason.season_id == season_id,
+            ContestantSeason.is_active == True,
+            Contestant.is_deleted == False,
+            Contestant.round_id == cohort_round_id,
+        )
+    )
+
+
 def _nomination_row_entry_type_clause(effective_entry_type: str, contest_mode: str):
     """SQLAlchemy filter: rows that count as nominations for this contest."""
     from sqlalchemy import or_
@@ -1220,14 +1255,26 @@ class CRUDContest:
         if count_by_active_season_members:
             from app.services.contest_category_integrity import pooled_roster_contest_scope_clause
 
-            active_member_ids = (
-                db.query(ContestantSeason.contestant_id)
-                .filter(
-                    ContestantSeason.season_id == season_link.season_id,
-                    ContestantSeason.is_active == True,
+            if (
+                contest_mode == "nomination"
+                and display_round_for_scope is not None
+                and season_link is not None
+            ):
+                active_member_ids = nomination_cohort_member_ids_subquery(
+                    db,
+                    contest_id=contest.id,
+                    cohort_round_id=int(display_round_for_scope),
+                    season_id=season_link.season_id,
+                ).scalar_subquery()
+            else:
+                active_member_ids = (
+                    db.query(ContestantSeason.contestant_id)
+                    .filter(
+                        ContestantSeason.season_id == season_link.season_id,
+                        ContestantSeason.is_active == True,
+                    )
+                    .scalar_subquery()
                 )
-                .scalar_subquery()
-            )
             base_entries_query = db.query(_entries_count_agg())\
                 .outerjoin(User, Contestant.user_id == User.id)\
                 .filter(
@@ -1257,14 +1304,26 @@ class CRUDContest:
         if count_by_active_season_members:
             from app.services.contest_category_integrity import pooled_roster_contest_scope_clause
 
-            active_member_ids = (
-                db.query(ContestantSeason.contestant_id)
-                .filter(
-                    ContestantSeason.season_id == season_link.season_id,
-                    ContestantSeason.is_active == True,
+            if (
+                contest_mode == "nomination"
+                and display_round_for_scope is not None
+                and season_link is not None
+            ):
+                active_member_ids = nomination_cohort_member_ids_subquery(
+                    db,
+                    contest_id=contest.id,
+                    cohort_round_id=int(display_round_for_scope),
+                    season_id=season_link.season_id,
+                ).scalar_subquery()
+            else:
+                active_member_ids = (
+                    db.query(ContestantSeason.contestant_id)
+                    .filter(
+                        ContestantSeason.season_id == season_link.season_id,
+                        ContestantSeason.is_active == True,
+                    )
+                    .scalar_subquery()
                 )
-                .scalar_subquery()
-            )
             entries_query = db.query(_entries_count_agg())\
                 .outerjoin(User, Contestant.user_id == User.id)\
                 .filter(
@@ -2286,10 +2345,22 @@ class CRUDContest:
                     f"constrained to canonical prior-stage winners: {canonical_global_ids}"
                 )
             else:
-                active_season_member_ids = db.query(ContestantSeason.contestant_id).filter(
-                    ContestantSeason.season_id == season.id,
-                    ContestantSeason.is_active == True,
-                )
+                if (
+                    contest_mode == "nomination"
+                    and target_round_id is not None
+                    and season is not None
+                ):
+                    active_season_member_ids = nomination_cohort_member_ids_subquery(
+                        db,
+                        contest_id=contest_id,
+                        cohort_round_id=int(target_round_id),
+                        season_id=season.id,
+                    )
+                else:
+                    active_season_member_ids = db.query(ContestantSeason.contestant_id).filter(
+                        ContestantSeason.season_id == season.id,
+                        ContestantSeason.is_active == True,
+                    )
                 contestants_query = contestants_query.filter(
                     Contestant.id.in_(active_season_member_ids)
                 )

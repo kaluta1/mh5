@@ -208,12 +208,15 @@ class SeasonMigrationService:
                 ContestSeasonLink,
                 ContestSeasonLink.season_id == ContestSeason.id,
             )
+            .join(Contestant, Contestant.id == ContestantSeason.contestant_id)
             .filter(
                 ContestSeasonLink.contest_id == contest_id,
                 ContestSeason.round_id == round_id,
                 ContestSeason.level == SeasonLevel.REGIONAL,
                 ContestSeason.is_deleted == False,
                 ContestantSeason.is_active == True,
+                Contestant.is_deleted == False,
+                Contestant.round_id == round_id,
             )
             .all()
         )

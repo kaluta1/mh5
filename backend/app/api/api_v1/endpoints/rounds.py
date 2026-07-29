@@ -146,7 +146,8 @@ def _cheap_round_entry_count(
             if contest_mode_value == "nomination":
                 member_q = member_q.filter(
                     (Contestant.entry_type == "nomination")
-                    | (Contestant.entry_type.is_(None))
+                    | (Contestant.entry_type.is_(None)),
+                    Contestant.round_id == round_obj.id,
                 )
             else:
                 member_q = member_q.filter(Contestant.entry_type == "participation")

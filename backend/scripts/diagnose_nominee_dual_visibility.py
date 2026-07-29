@@ -89,6 +89,17 @@ def main() -> int:
                 )
                 print(f"  promoted_beyond_country={c.id in promoted}")
                 print(f"  in_regional_pool={c.id in regional}")
+                for cs_row, seas, _link in memberships:
+                    if not cs_row.is_active:
+                        continue
+                    lvl = seas.level.value if hasattr(seas.level, "value") else seas.level
+                    if str(lvl).lower() not in ("regional", "region"):
+                        continue
+                    aligned = int(seas.round_id or 0) == rid
+                    print(
+                        f"  active_regional season={seas.id} season.round={seas.round_id} "
+                        f"aligned_with_contestant={aligned}"
+                    )
         return 0
     finally:
         db.close()

@@ -1865,13 +1865,20 @@ def get_contest_contestants(
                 )
 
         if pooled_membership_scope and season_for_pool is not None:
-            # Pooled phase: roster is driven by ContestantSeason membership.
-            # Skip contestant_roster_season_clause (which filters by season_id)
-            # because promoted contestants retain their original season_id.
-            active_member_ids = db.query(CSeas.contestant_id).filter(
-                CSeas.season_id == season_for_pool.id,
-                CSeas.is_active == True,
-            )
+            from app.crud.crud_contest import nomination_cohort_member_ids_subquery
+
+            if _is_nomination_contest_round and round_id is not None:
+                active_member_ids = nomination_cohort_member_ids_subquery(
+                    db,
+                    contest_id=contest.id,
+                    cohort_round_id=int(round_id),
+                    season_id=season_for_pool.id,
+                )
+            else:
+                active_member_ids = db.query(CSeas.contestant_id).filter(
+                    CSeas.season_id == season_for_pool.id,
+                    CSeas.is_active == True,
+                )
             query = query.filter(Contestant.id.in_(active_member_ids))
         elif contest:
             from app.services.contest_category_integrity import contestant_roster_season_clause
