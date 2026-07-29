@@ -179,12 +179,39 @@ class SeasonMigrationService:
         rows = (
             db.query(ContestantSeason.contestant_id)
             .join(ContestSeason, ContestSeason.id == ContestantSeason.season_id)
-            .join(Contestant, Contestant.id == ContestantSeason.contestant_id)
+            .join(
+                ContestSeasonLink,
+                ContestSeasonLink.season_id == ContestSeason.id,
+            )
             .filter(
-                Contestant.season_id == contest_id,
-                Contestant.round_id == round_id,
+                ContestSeasonLink.contest_id == contest_id,
                 ContestSeason.round_id == round_id,
                 ContestSeason.level.in_(higher),
+                ContestSeason.is_deleted == False,
+                ContestantSeason.is_active == True,
+            )
+            .all()
+        )
+        return {int(r[0]) for r in rows if r and r[0] is not None}
+
+    @staticmethod
+    def contestant_ids_in_regional_season_for_round(
+        db: Session,
+        contest_id: int,
+        round_id: int,
+    ) -> set:
+        """Contestant ids with active REGIONAL ContestantSeason for one contest cohort."""
+        rows = (
+            db.query(ContestantSeason.contestant_id)
+            .join(ContestSeason, ContestSeason.id == ContestantSeason.season_id)
+            .join(
+                ContestSeasonLink,
+                ContestSeasonLink.season_id == ContestSeason.id,
+            )
+            .filter(
+                ContestSeasonLink.contest_id == contest_id,
+                ContestSeason.round_id == round_id,
+                ContestSeason.level == SeasonLevel.REGIONAL,
                 ContestSeason.is_deleted == False,
                 ContestantSeason.is_active == True,
             )

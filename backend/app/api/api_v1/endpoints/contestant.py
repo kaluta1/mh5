@@ -1781,16 +1781,44 @@ def get_contest_contestants(
             contest and _norm_cm_round(getattr(contest, "contest_mode", None)) == "nomination"
         )
 
-        if contest and _is_nomination_contest_round and round_id is not None and user_id is None:
-            round_row = db.query(Round).filter(Round.id == round_id).first()
-            if ui_level_norm and nomination_vote_list_blocked(
-                round_row, "nomination", ui_level_norm
-            ):
+        _pooled_ui_levels = frozenset(
+            {"regional", "region", "continental", "continent", "global"}
+        )
+        _wants_pooled_roster = bool(
+            ui_level_norm in _pooled_ui_levels
+            or (has_region_filter and ui_level_norm != "country")
+        )
+
+        if contest and _is_nomination_contest_round and user_id is None:
+            if _wants_pooled_roster and round_id is None:
                 return []
-            sl_res, seas_res = resolve_nomination_display_season_for_contest_round(
-                db, contest, int(round_id), ui_level_norm
-            )
+            if round_id is not None:
+                round_row = db.query(Round).filter(Round.id == round_id).first()
+                if ui_level_norm and nomination_vote_list_blocked(
+                    round_row, "nomination", ui_level_norm
+                ):
+                    return []
+                if _wants_pooled_roster and nomination_vote_list_blocked(
+                    round_row, "nomination", "regional"
+                ):
+                    return []
+            if round_id is not None:
+                sl_res, seas_res = resolve_nomination_display_season_for_contest_round(
+                    db, contest, int(round_id), ui_level_norm
+                )
+            else:
+                sl_res, seas_res = None, None
             if ui_level_norm in ("regional", "continental", "global") and seas_res is None:
+                return []
+            if _wants_pooled_roster and not (
+                seas_res is not None
+                and str(
+                    seas_res.level.value
+                    if hasattr(seas_res.level, "value")
+                    else seas_res.level
+                ).lower()
+                in _pooled_ui_levels
+            ):
                 return []
             if seas_res is not None:
                 season_link_for_pool, season_for_pool = sl_res, seas_res
@@ -1806,7 +1834,7 @@ def get_contest_contestants(
                 pooled_membership_scope = season_level_for_pool in (
                     "regional", "region", "continent", "continental", "global"
                 )
-        elif contest:
+        elif contest and not _is_nomination_contest_round:
             # Participation / legacy: highest active season for pooled membership.
             sl = db.query(CSLink, CSeason).join(
                 CSeason, CSeason.id == CSLink.season_id
@@ -1907,7 +1935,16 @@ def get_contest_contestants(
                 country_or = or_(country_or, Contestant.user_id == user_id)
             query = query.outerjoin(User, Contestant.user_id == User.id).filter(country_or)
         if has_region_filter and not suppress_geo_filters:
-            query = query.filter(func.lower(Contestant.region) == fr_norm)
+            if _is_nomination_contest_round and not pooled_membership_scope:
+                return []
+            from app.crud.crud_contest import regional_voting_pools_sql_predicate
+
+            if pooled_membership_scope and season_level_for_pool in ("regional", "region"):
+                query = query.outerjoin(User, Contestant.user_id == User.id).filter(
+                    regional_voting_pools_sql_predicate()
+                )
+            else:
+                query = query.filter(func.lower(Contestant.region) == fr_norm)
         if has_continent_filter and not suppress_geo_filters:
             query = query.filter(func.lower(Contestant.continent) == fco_norm)
         if has_city_filter and not suppress_geo_filters:
@@ -1926,8 +1963,8 @@ def get_contest_contestants(
             # Fallback: fetch without relations
             contestants = query.order_by(Contestant.registration_date.desc()).offset(skip).limit(limit * 2).all()
         
-        # If no contestants found, try simpler fallback
-        if not contestants:
+        # If no contestants found, try simpler fallback (participation only — never for nominations)
+        if not contestants and not _is_nomination_contest_round:
             logger.warning(f"[get_contest_contestants] No contestants found with filters. Trying fallback queries...")
             
             # Fallback 1: season_id only — never when a calendar round is requested, or nominations
